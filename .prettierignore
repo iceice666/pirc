@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+state
+data
+*.sqlite*
+package-lock.json
+plan.md

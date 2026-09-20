@@ -1,0 +1,100 @@
+#!/usr/bin/env node
+import { createInterface } from 'node:readline';
+
+const line = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
+const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
+let messages = [];
+let queue = { steering: [], followUp: [] };
+
+rl.on('line', (raw) => {
+  const command = JSON.parse(raw);
+  const response = (success = true, data, error) =>
+    line({
+      id: command.id,
+      type: 'response',
+      command: command.type,
+      success,
+      ...(data === undefined ? {} : { data }),
+      ...(error ? { error } : {}),
+    });
+  if (command.type === 'get_state')
+    return response(true, {
+      sessionId: 'fake-session',
+      thinkingLevel: 'medium',
+      isStreaming: false,
+      isCompacting: false,
+      steeringMode: 'one-at-a-time',
+      followUpMode: 'one-at-a-time',
+      autoCompactionEnabled: true,
+      messageCount: messages.length,
+      pendingMessageCount: 0,
+    });
+  if (command.type === 'get_messages') return response(true, { messages });
+  if (command.type === 'get_available_models')
+    return response(true, { models: [{ provider: 'fake', id: 'fake-model', name: 'Fake' }] });
+  if (
+    command.type === 'set_session_name' ||
+    command.type === 'set_model' ||
+    command.type === 'set_thinking_level'
+  )
+    return response();
+  if (command.type === 'clear_queue') {
+    const old = queue;
+    queue = { steering: [], followUp: [] };
+    line({ type: 'queue_update', ...queue });
+    return response(true, old);
+  }
+  if (command.type === 'abort') {
+    line({ type: 'agent_settled' });
+    return response();
+  }
+  if (command.type === 'steer') {
+    queue.steering.push(command.message);
+    line({ type: 'queue_update', ...queue });
+    return response();
+  }
+  if (command.type === 'follow_up') {
+    queue.followUp.push(command.message);
+    line({ type: 'queue_update', ...queue });
+    return response();
+  }
+  if (command.type === 'prompt') {
+    response();
+    if (command.message === 'crash') return process.exit(17);
+    line({ type: 'agent_start' });
+    line({ type: 'message_start', message: { role: 'assistant', content: [] } });
+    const utf8 = Buffer.from(
+      JSON.stringify({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'snowman ☃' },
+      }) + '\n',
+    );
+    process.stdout.write(utf8.subarray(0, utf8.length - 3));
+    const message = {
+      role: 'assistant',
+      content: [{ type: 'text', text: `echo:${command.message}` }],
+      stopReason: 'stop',
+    };
+    messages.push(message);
+    setTimeout(() => {
+      process.stdout.write(utf8.subarray(utf8.length - 3));
+      if (command.message === 'ask')
+        line({
+          type: 'extension_ui_request',
+          id: 'question-1',
+          method: 'confirm',
+          title: 'Continue?',
+          message: 'Confirm',
+          timeout: 5000,
+        });
+    }, 5);
+    setTimeout(() => {
+      line({ type: 'message_end', message });
+      line({ type: 'agent_end', messages: [message], willRetry: false });
+      line({ type: 'agent_settled' });
+    }, 10);
+    return;
+  }
+  if (command.type === 'extension_ui_response') return;
+  response(false, undefined, 'unsupported');
+});

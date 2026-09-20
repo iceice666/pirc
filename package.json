@@ -1,0 +1,28 @@
+{
+  "name": "pirc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private, forward-authenticated web client for persistent Pi RPC sessions",
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @pirc/gateway",
+    "dev:web": "npm run dev --workspace @pirc/web",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run format:check && npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2",
+    "prettier-plugin-svelte": "3.4.0",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

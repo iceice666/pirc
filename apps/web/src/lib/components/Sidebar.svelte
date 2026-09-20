@@ -1,0 +1,138 @@
+<script lang="ts">
+  import { ChevronDown, Command, Menu, MoreHorizontal, Plus, Search, X } from '@lucide/svelte';
+  import type { SessionSummary, Workspace } from '../types';
+
+  export let workspaces: Workspace[];
+  export let sessions: SessionSummary[];
+  export let activeSessionId: string | undefined;
+  export let open = false;
+  export let onselect: (id: string) => void;
+  export let onnew: (workspaceId?: string) => void;
+  export let onclose: () => void;
+
+  let query = '';
+  let collapsed = new Set<string>();
+
+  $: visibleSessions = sessions.filter((session) =>
+    session.name.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  function toggleWorkspace(id: string) {
+    const next = new Set(collapsed);
+    next.has(id) ? next.delete(id) : next.add(id);
+    collapsed = next;
+  }
+
+  function relativeTime(date: string): string {
+    const delta = Date.now() - new Date(date).getTime();
+    if (delta < 60_000) return 'now';
+    if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m`;
+    if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)}h`;
+    return `${Math.floor(delta / 86_400_000)}d`;
+  }
+</script>
+
+{#if open}<button
+    class="sidebar-scrim"
+    type="button"
+    aria-label="Close navigation"
+    on:click={onclose}
+  ></button>{/if}
+<aside class:open class="sidebar" aria-label="Sessions">
+  <div class="brand-row">
+    <a class="brand" href="/" aria-label="Relay home">
+      <span class="brand-mark"><Command size={18} /></span><span>Relay</span>
+    </a>
+    <button
+      class="mobile-close icon-button"
+      type="button"
+      aria-label="Close navigation"
+      on:click={onclose}><X size={19} /></button
+    >
+  </div>
+  <button class="new-session" type="button" on:click={() => onnew()}
+    ><Plus size={17} /> New session <span>⌘ N</span></button
+  >
+  <label class="search">
+    <Search size={16} />
+    <span class="sr-only">Search sessions</span>
+    <input bind:value={query} placeholder="Search sessions" />
+  </label>
+
+  <nav class="workspace-list">
+    {#each workspaces as workspace}
+      <section class="workspace-group">
+        <div class="workspace-heading">
+          <button
+            type="button"
+            on:click={() => toggleWorkspace(workspace.id)}
+            aria-expanded={!collapsed.has(workspace.id)}
+          >
+            <span class:collapsed={collapsed.has(workspace.id)} class="chevron">
+              <ChevronDown size={15} />
+            </span>
+            <span class="workspace-dot"></span>
+            <strong>{workspace.displayName}</strong>
+          </button>
+          <button
+            class="mini-action"
+            type="button"
+            aria-label="New session in {workspace.displayName}"
+            on:click={() => onnew(workspace.id)}><Plus size={15} /></button
+          >
+        </div>
+        {#if !collapsed.has(workspace.id)}
+          <div class="session-list">
+            {#each visibleSessions.filter((session) => session.workspaceId === workspace.id) as session}
+              <button
+                class:active={session.id === activeSessionId}
+                class="session-card"
+                type="button"
+                on:click={() => onselect(session.id)}
+                aria-current={session.id === activeSessionId ? 'page' : undefined}
+              >
+                <span class="session-card-top">
+                  <strong>{session.name}</strong>
+                  <small>{relativeTime(session.lastActivityAt)}</small>
+                </span>
+                <span class="session-preview">{session.preview ?? 'No messages yet'}</span>
+                <span class="session-meta">
+                  <span
+                    class:waiting={session.runStatus === 'waiting_input'}
+                    class:running={session.runStatus === 'running'}
+                    class="status-dot"
+                  ></span>
+                  <span
+                    >{session.runStatus === 'waiting_input'
+                      ? 'Needs input'
+                      : session.runStatus === 'running'
+                        ? 'Working'
+                        : (session.runStatus ?? session.runnerStatus)}</span
+                  >
+                  {#if session.unreadCount}<span class="unread">{session.unreadCount}</span>{/if}
+                </span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </section>
+    {/each}
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="host-status">
+      <span></span>
+      <div><strong>homolab</strong><small>Private tailnet</small></div>
+    </div>
+    <button class="icon-button" type="button" aria-label="More options"
+      ><MoreHorizontal size={19} /></button
+    >
+  </div>
+</aside>
+
+<button
+  class="mobile-menu icon-button"
+  type="button"
+  aria-label="Open navigation"
+  on:click={() => (open = true)}><Menu size={21} /></button
+>
