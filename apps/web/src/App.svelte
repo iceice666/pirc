@@ -33,12 +33,14 @@
     ConnectionState,
     InteractionAnswer,
     ModelOption,
+    NodeSummary,
     SessionSummary,
     ThinkingLevel,
     Workspace,
   } from './lib/types';
 
   let workspaces: Workspace[] = [];
+  let nodes: NodeSummary[] = [];
   let sessions: SessionSummary[] = [];
   let models: ModelOption[] = [];
   let activeSessionId: string | undefined;
@@ -97,7 +99,17 @@
           });
       }
     }, 10_000);
+    const nodeRefresh = setInterval(() => {
+      if (!usingDemo)
+        void Promise.all([api.nodes(), api.workspaces()])
+          .then(([online, available]) => {
+            nodes = online;
+            workspaces = available;
+          })
+          .catch(() => undefined);
+    }, 15_000);
     return () => {
+      clearInterval(nodeRefresh);
       if (leaseHeartbeat) clearInterval(leaseHeartbeat);
       events?.close();
       removePwa();
@@ -108,10 +120,11 @@
   async function bootstrap() {
     loading = true;
     try {
-      [workspaces, sessions, models] = await Promise.all([
+      [workspaces, sessions, models, nodes] = await Promise.all([
         api.workspaces(),
         api.sessions(),
         api.models(),
+        api.nodes(),
       ]);
       activeSessionId = sessions[0]?.id;
     } catch (error) {
@@ -359,7 +372,13 @@
   }
 
   function showNewSession(workspaceId?: string) {
-    newSessionWorkspace = workspaceId ?? workspaces[0]?.id ?? '';
+    newSessionWorkspace =
+      workspaceId ??
+      workspaces.find(
+        (workspace) =>
+          !workspace.id.includes(':') || nodes.some((node) => node.id === workspace.hostId),
+      )?.id ??
+      '';
     newSessionName = '';
     newSessionOpen = true;
   }
@@ -414,6 +433,7 @@
 <div class="app-shell">
   <Sidebar
     {workspaces}
+    {nodes}
     {sessions}
     {activeSessionId}
     open={sidebarOpen}
@@ -672,8 +692,14 @@
       </header>
       <label
         ><span>Workspace</span><select bind:value={newSessionWorkspace}
-          >{#each workspaces as workspace}<option value={workspace.id}
-              >{workspace.displayName} · {workspace.hostId}</option
+          >{#each workspaces as workspace}<option
+              value={workspace.id}
+              disabled={workspace.id.includes(':') &&
+                !nodes.some((node) => node.id === workspace.hostId)}
+              >{workspace.displayName} · {workspace.hostId}{workspace.id.includes(':') &&
+              !nodes.some((node) => node.id === workspace.hostId)
+                ? ' (offline)'
+                : ''}</option
             >{/each}</select
         ></label
       >
@@ -692,7 +718,13 @@
           class="button dark"
           type="button"
           on:click={createSession}
-          disabled={!newSessionWorkspace}>Create session</button
+          disabled={!newSessionWorkspace ||
+            (newSessionWorkspace.includes(':') &&
+              !nodes.some(
+                (node) =>
+                  node.id ===
+                  workspaces.find((workspace) => workspace.id === newSessionWorkspace)?.hostId,
+              ))}>Create session</button
         >
       </footer>
     </div>

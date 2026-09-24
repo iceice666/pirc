@@ -9,6 +9,9 @@ export type ErrorCode =
   | 'lost_control'
   | 'workspace_busy'
   | 'runner_unavailable'
+  | 'node_offline'
+  | 'node_timeout'
+  | 'node_error'
   | 'stale_interaction'
   | 'version_incompatible'
   | 'payload_too_large';

@@ -49,11 +49,20 @@ const migrations = [
     storage_name TEXT NOT NULL UNIQUE, sha256 TEXT NOT NULL, created_at INTEGER NOT NULL
   );
   `,
+  `
+  ALTER TABLE sessions ADD COLUMN node_id TEXT;
+  CREATE INDEX sessions_node_id ON sessions(node_id);
+  CREATE UNIQUE INDEX sessions_remote_identity ON sessions(node_id, pi_session_id) WHERE node_id IS NOT NULL;
+  ALTER TABLE leases ADD COLUMN owner_user TEXT;
+  ALTER TABLE sessions ADD COLUMN owner_user TEXT;
+  `,
 ];
 
 const RUNNING: RunStatus[] = ['queued', 'running', 'waiting_input', 'stopping'];
 
 export interface SessionRow extends SessionSummary {
+  nodeId: string | null;
+  ownerUser: string | null;
   privateSessionPath: string;
   piSessionId: string | null;
   partialOutputLost: boolean;
@@ -148,6 +157,26 @@ export class GatewayDatabase {
     })();
   }
 
+  syncRemoteWorkspaces(
+    nodeId: string,
+    workspaces: Array<{ id: string; displayName: string }>,
+  ): void {
+    const insert = this.raw.prepare(
+      'INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name',
+    );
+    this.raw.transaction(() => {
+      for (const workspace of workspaces)
+        insert.run(
+          `${nodeId}:${workspace.id}`,
+          nodeId,
+          workspace.displayName,
+          `node://${nodeId}/${workspace.id}`,
+          '{}',
+          now(),
+        );
+    })();
+  }
+
   listWorkspaces(): Workspace[] {
     return (this.raw.prepare('SELECT * FROM workspaces ORDER BY display_name').all() as any[]).map(
       (row) => ({
@@ -172,15 +201,32 @@ export class GatewayDatabase {
     };
   }
 
-  createSession(workspaceId: string, name: string, privateSessionPath: string): SessionRow {
+  createSession(
+    workspaceId: string,
+    name: string,
+    privateSessionPath: string,
+    nodeId: string | null = null,
+    remoteSessionId: string | null = null,
+    ownerUser: string | null = null,
+  ): SessionRow {
     this.getWorkspace(workspaceId);
     const sessionId = id('session');
     const stamp = now();
     this.raw
       .prepare(
-        'INSERT INTO sessions (id,workspace_id,private_session_path,name,created_at,updated_at) VALUES (?,?,?,?,?,?)',
+        'INSERT INTO sessions (id,workspace_id,private_session_path,name,node_id,pi_session_id,owner_user,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
       )
-      .run(sessionId, workspaceId, privateSessionPath, name, stamp, stamp);
+      .run(
+        sessionId,
+        workspaceId,
+        privateSessionPath,
+        name,
+        nodeId,
+        remoteSessionId,
+        ownerUser,
+        stamp,
+        stamp,
+      );
     return this.getSession(sessionId);
   }
 
@@ -188,6 +234,8 @@ export class GatewayDatabase {
     return {
       id: row.id,
       workspaceId: row.workspace_id,
+      nodeId: row.node_id ?? null,
+      ownerUser: row.owner_user ?? null,
       name: row.name,
       runnerState: row.runner_state,
       runStatus: row.run_status ?? null,
@@ -227,6 +275,45 @@ export class GatewayDatabase {
       .run(name, now(), sessionId);
     return this.getSession(sessionId);
   }
+  claimRemoteSession(sessionId: string, user: string, requireOwner = false): void {
+    const session = this.getSession(sessionId);
+    if ((session.nodeId || requireOwner) && session.ownerUser !== user)
+      throw new ApiError(403, 'forbidden', 'Remote session belongs to another user');
+  }
+
+  resolveRemoteSession(nodeId: string, remoteId: string): string | undefined {
+    return (
+      this.raw
+        .prepare('SELECT id FROM sessions WHERE node_id=? AND pi_session_id=?')
+        .get(nodeId, remoteId) as { id: string } | undefined
+    )?.id;
+  }
+
+  interruptRemoteSession(sessionId: string): void {
+    this.raw
+      .prepare(
+        "UPDATE commands SET status='outcome_unknown', error_text='node disconnected', updated_at=? WHERE session_id=? AND status='dispatched'",
+      )
+      .run(now(), sessionId);
+    this.raw
+      .prepare(
+        "UPDATE runs SET status='interrupted', ended_at=?, failure_reason='node disconnected' WHERE session_id=? AND status IN ('queued','running','waiting_input','stopping')",
+      )
+      .run(now(), sessionId);
+    this.raw
+      .prepare("UPDATE interactions SET status='stale' WHERE session_id=? AND status='pending'")
+      .run(sessionId);
+    this.raw.prepare('DELETE FROM leases WHERE session_id=?').run(sessionId);
+  }
+
+  remoteSessionIds(nodeId: string): string[] {
+    return (
+      this.raw.prepare('SELECT id FROM sessions WHERE node_id=?').all(nodeId) as Array<{
+        id: string;
+      }>
+    ).map(({ id }) => id);
+  }
+
   setRunnerState(sessionId: string, state: string): void {
     this.raw
       .prepare('UPDATE sessions SET runner_state=?, updated_at=? WHERE id=?')
@@ -421,6 +508,42 @@ export class GatewayDatabase {
         "UPDATE interactions SET status='stale' WHERE session_id=? AND status='pending' AND runner_epoch!=?",
       )
       .run(sessionId, epoch);
+  }
+
+  checkLeaseUser(sessionId: string, user: string, force: boolean): void {
+    const current = this.raw
+      .prepare(
+        'SELECT owner_user AS ownerUser, expires_at AS expiresAt FROM leases WHERE session_id=?',
+      )
+      .get(sessionId) as { ownerUser: string | null; expiresAt: number } | undefined;
+    if (current && current.expiresAt > now() && current.ownerUser !== user && !force)
+      throw new ApiError(409, 'lost_control', 'Another user holds control');
+  }
+
+  mirrorLease(
+    sessionId: string,
+    lease: { clientId: string; generation: number; expiresAt: number },
+    user: string,
+    force: boolean,
+  ): void {
+    this.checkLeaseUser(sessionId, user, force);
+    this.raw
+      .prepare(
+        'INSERT INTO leases (session_id,client_id,generation,expires_at,updated_at,owner_user) VALUES (?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET client_id=excluded.client_id,generation=excluded.generation,expires_at=excluded.expires_at,updated_at=excluded.updated_at,owner_user=excluded.owner_user',
+      )
+      .run(sessionId, lease.clientId, lease.generation, lease.expiresAt, now(), user);
+  }
+
+  clearRemoteLease(sessionId: string): void {
+    this.raw.prepare('DELETE FROM leases WHERE session_id=?').run(sessionId);
+  }
+
+  validateLeaseUser(sessionId: string, user: string): void {
+    const owner = this.raw
+      .prepare('SELECT owner_user AS ownerUser FROM leases WHERE session_id=?')
+      .get(sessionId) as { ownerUser: string | null } | undefined;
+    if (!owner || owner.ownerUser !== user)
+      throw new ApiError(409, 'lost_control', 'Control belongs to another user');
   }
 
   getLease(sessionId: string): Record<string, unknown> | null {

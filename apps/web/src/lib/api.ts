@@ -9,6 +9,7 @@ import type {
   GatewayEvent,
   InteractionAnswer,
   ModelOption,
+  NodeSummary,
   PendingInteraction,
   SessionCommandInput,
   SessionSnapshot,
@@ -163,6 +164,7 @@ async function normalizeSnapshot(raw: any): Promise<SessionSnapshot> {
 }
 
 export const api = {
+  nodes: async () => (await request<{ nodes: NodeSummary[] }>('/api/nodes')).nodes,
   workspaces: async () => (await request<any>('/api/workspaces')).workspaces as Workspace[],
   sessions: async () =>
     ((await request<any>('/api/sessions')).sessions as any[]).map(sessionSummary),
@@ -301,7 +303,15 @@ function normalizeEvent(raw: any): EventEnvelope {
     else if (pi.type === 'message_end')
       event = { type: 'message_completed', message: conversationMessage(pi.message) };
     else event = { type: 'reset', reason: 'cursor_expired' };
-  } else if (['interaction_created', 'interaction_answered', 'runner_exit'].includes(raw.type)) {
+  } else if (
+    [
+      'interaction_created',
+      'interaction_answered',
+      'runner_exit',
+      'node_offline',
+      'node_reconnected',
+    ].includes(raw.type)
+  ) {
     event = { type: 'reset', reason: 'cursor_expired' };
   }
   return {

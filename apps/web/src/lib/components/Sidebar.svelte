@@ -1,8 +1,9 @@
 <script lang="ts">
   import { ChevronDown, Command, Menu, MoreHorizontal, Plus, Search, X } from '@lucide/svelte';
-  import type { SessionSummary, Workspace } from '../types';
+  import type { NodeSummary, SessionSummary, Workspace } from '../types';
 
   export let workspaces: Workspace[];
+  export let nodes: NodeSummary[] = [];
   export let sessions: SessionSummary[];
   export let activeSessionId: string | undefined;
   export let open = false;
@@ -73,6 +74,13 @@
             </span>
             <span class="workspace-dot"></span>
             <strong>{workspace.displayName}</strong>
+            <small
+              >· {workspace.hostId}{nodes.some((node) => node.id === workspace.hostId)
+                ? ' · online'
+                : workspace.id.includes(':')
+                  ? ' · offline'
+                  : ''}</small
+            >
           </button>
           <button
             class="mini-action"
@@ -122,7 +130,7 @@
   <div class="sidebar-footer">
     <div class="host-status">
       <span></span>
-      <div><strong>homolab</strong><small>Private tailnet</small></div>
+      <div><strong>Devices</strong><small>{nodes.length} online · Private VPN</small></div>
     </div>
     <button class="icon-button" type="button" aria-label="More options"
       ><MoreHorizontal size={19} /></button

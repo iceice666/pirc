@@ -2,7 +2,7 @@
 
 A private, forward-authenticated web client for persistent [Pi](https://github.com/earendil-works/pi) RPC sessions.
 
-This repository implements an M0–M3 MVP in which a Node.js gateway owns Pi subprocesses and exposes a narrow HTTP/WebSocket API to a responsive Svelte PWA.
+This repository implements an M0–M3 MVP with a Node.js gateway, Pi RPC subprocesses and a responsive Svelte PWA. An optional multi-node mode now connects Pi-equipped devices to one central daemon over private VPN, with local Pi execution and centrally routed sessions. See the [multi-node setup](./apps/gateway/README.md#multi-node-private-vpn-deployment) and its current limitations.
 
 ## Security model
 

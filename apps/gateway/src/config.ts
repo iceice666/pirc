@@ -19,7 +19,10 @@ const integer = (value: string | undefined, fallback: number) =>
     .parse(value ?? fallback);
 
 const workspaceInput = z.object({
-  id: z.string().min(1).optional(),
+  id: z
+    .string()
+    .regex(/^[a-zA-Z0-9_-]{1,100}$/)
+    .optional(),
   path: z.string().min(1),
   displayName: z.string().min(1).optional(),
   defaults: z.record(z.unknown()).optional(),
@@ -56,9 +59,11 @@ export interface GatewayConfig {
   interactionTtlMs: number;
   shutdownGraceMs: number;
   allowDefaultWorkspace: boolean;
+  nodeTokens?: Map<string, string>;
+  nodeAuthSecret?: string;
 }
 
-function parseWorkspaces(env: NodeJS.ProcessEnv): ConfigWorkspace[] {
+export function parseWorkspaces(env: NodeJS.ProcessEnv): ConfigWorkspace[] {
   const raw = env.PIRC_WORKSPACES;
   let inputs: z.infer<typeof workspaceInput>[];
   if (raw) inputs = z.array(workspaceInput).min(1).parse(JSON.parse(raw));
@@ -84,6 +89,19 @@ function parseWorkspaces(env: NodeJS.ProcessEnv): ConfigWorkspace[] {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig {
+  const nodeTokens = new Map<string, string>();
+  const configuredTokens = z
+    .record(z.string().min(32))
+    .parse(JSON.parse(env.PIRC_NODE_TOKENS ?? '{}'));
+  if (env.PIRC_NODE_ID && !/^[a-zA-Z0-9_-]{1,100}$/.test(env.PIRC_NODE_ID))
+    throw new Error('Invalid PIRC_NODE_ID');
+  if (env.PIRC_NODE_ID && (!env.PIRC_NODE_TOKEN || env.PIRC_NODE_TOKEN.length < 32))
+    throw new Error('PIRC_NODE_TOKEN must be at least 32 characters');
+  for (const [nodeId, token] of Object.entries(configuredTokens)) {
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(nodeId)) throw new Error('Invalid node ID');
+    if ([...nodeTokens.values()].includes(token)) throw new Error('Node tokens must be unique');
+    nodeTokens.set(nodeId, token);
+  }
   const stateDir = path.resolve(env.PIRC_STATE_DIR ?? path.join(process.cwd(), '.state'));
   const trustedProxies = new Set(csv(env.PIRC_TRUSTED_PROXIES));
   const allowedUsers = new Set(csv(env.PIRC_ALLOWED_USERS));
@@ -128,5 +146,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     interactionTtlMs: integer(env.PIRC_INTERACTION_TTL_MS, 3_600_000),
     shutdownGraceMs: integer(env.PIRC_SHUTDOWN_GRACE_MS, 5_000),
     allowDefaultWorkspace: bool(env.PIRC_ALLOW_DEFAULT_WORKSPACE, false),
+    nodeTokens,
+    ...(env.PIRC_NODE_ID && env.PIRC_NODE_TOKEN ? { nodeAuthSecret: env.PIRC_NODE_TOKEN } : {}),
   };
 }

@@ -34,6 +34,13 @@ export interface Workspace {
   activeSessionCount?: number;
 }
 
+export interface NodeSummary {
+  id: string;
+  connectedAt: number;
+  lastSeenAt: number;
+  workspaces: Array<{ id: string; displayName: string }>;
+}
+
 export interface SessionSummary {
   id: string;
   workspaceId: string;

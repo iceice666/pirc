@@ -21,6 +21,16 @@ npm start
 
 The production Pi binary must be version `0.85.1`; the fake integration fixture only checks gateway protocol behavior. `PIRC_WORKSPACES` is required in production. A cwd/default workspace is available only after explicitly setting `PIRC_ALLOW_DEFAULT_WORKSPACE=true`.
 
+## Multi-node private VPN deployment
+
+Configure the central daemon with `PIRC_NODE_TOKENS`, a JSON object mapping node IDs to **different randomly generated secrets of at least 32 characters**. Keep the daemon behind the existing authenticated reverse proxy; the proxy must pass `/node/connect` WebSocket upgrades without applying the browser identity-header authentication and must not expose the node token to browsers. Configure `PIRC_WORKSPACES` on the central daemon for any workspaces it runs locally.
+
+On **each** Pi-equipped device set `PIRC_NODE_ID`, its matching `PIRC_NODE_TOKEN`, `PIRC_DAEMON_URL=wss://your-private-vpn-host`, `PIRC_ALLOWED_USERS` and that device's `PIRC_WORKSPACES`, `PIRC_PI_COMMAND`, `PIRC_STATE_DIR`. Build and run `npm run start:node --workspace @pirc/gateway`. The agent keeps Pi processes, SQLite metadata, and JSONL sessions on its own disk and connects outbound to the daemon; it does not listen on a public port. The node connection must be protected with TLS even on a VPN; only local development should set `PIRC_ALLOW_INSECURE_NODE_TRANSPORT=true` for `ws://`.
+
+`GET /api/nodes` lists online devices. The daemon records remote workspaces as `<nodeId>:<workspaceId>` and assigns each new session permanently to its node; browsers continue to use the same session, control lease, command, snapshot and WebSocket event URLs. A disconnected node causes `503` on remote snapshots and stops new commands; any in-flight command that lost its acknowledgement is `outcome_unknown` and **is not automatically retried**. Node reconnect increments the event epoch, prompting clients to fetch a new snapshot. Only explicitly configured users can initiate node operations, and remote sessions remain visible only to their creator.
+
+**Current limitations:** remote image uploads are rejected (and daemon uploads are disabled when node tokens are configured), there is no cross-device session migration, and agent/node secrets and state directories need an external secret manager and backup policy. If the daemon loses a session-create acknowledgement while the node persists it, the remote session can be orphaned; inspect the node's local database before trying to create a replacement. The Pi workspace allowlist is not a sandbox.
+
 ## API
 
 - `GET /api/health`
