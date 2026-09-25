@@ -1,7 +1,25 @@
 #!/usr/bin/env node
 import { createInterface } from 'node:readline';
 
-const line = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
+// While a deliberately split line is half written, other output waits so it
+// cannot land in the middle of it (e.g. a get_state reply during a snapshot).
+let held = null;
+const line = (value) => {
+  const text = `${JSON.stringify(value)}\n`;
+  if (held) held.push(text);
+  else process.stdout.write(text);
+};
+const writeSplit = (bytes, splitAt, delayMs, after) => {
+  process.stdout.write(bytes.subarray(0, splitAt));
+  held = [];
+  setTimeout(() => {
+    process.stdout.write(bytes.subarray(splitAt));
+    const pending = held;
+    held = null;
+    for (const text of pending) process.stdout.write(text);
+    after();
+  }, delayMs);
+};
 const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
 let messages = [];
 let queue = { steering: [], followUp: [] };
@@ -69,15 +87,20 @@ rl.on('line', (raw) => {
         assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'snowman ☃' },
       }) + '\n',
     );
-    process.stdout.write(utf8.subarray(0, utf8.length - 3));
     const message = {
       role: 'assistant',
-      content: [{ type: 'text', text: `echo:${command.message}` }],
+      content: [
+        {
+          type: 'text',
+          text: command.images?.length
+            ? `echo:${command.message} images:${command.images.map((image) => image.mimeType).join(',')}`
+            : `echo:${command.message}`,
+        },
+      ],
       stopReason: 'stop',
     };
     messages.push(message);
-    setTimeout(() => {
-      process.stdout.write(utf8.subarray(utf8.length - 3));
+    writeSplit(utf8, utf8.length - 3, 5, () => {
       if (command.message === 'ask')
         line({
           type: 'extension_ui_request',
@@ -87,7 +110,7 @@ rl.on('line', (raw) => {
           message: 'Confirm',
           timeout: 5000,
         });
-    }, 5);
+    });
     setTimeout(() => {
       line({ type: 'message_end', message });
       line({ type: 'agent_end', messages: [message], willRetry: false });
