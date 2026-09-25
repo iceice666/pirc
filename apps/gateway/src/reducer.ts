@@ -77,5 +77,5 @@ export function reducePiEvent(state: ReducedSessionState, event: Record<string, 
   } else if (event.type === 'queue_update')
     state.queue = { steering: event.steering ?? [], followUp: event.followUp ?? [] };
   else if (event.type === 'extension_ui_request' && event.method === 'notify')
-    state.notifications.push(event);
+    state.notifications.push({ ...event, receivedAt: Date.now() });
 }
