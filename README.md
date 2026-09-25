@@ -1,8 +1,8 @@
-# Pi Remote Client
+# pirc
 
-A private, forward-authenticated web client for persistent [Pi](https://github.com/earendil-works/pi) RPC sessions.
+A private, forward-authenticated web client for persistent coding-agent sessions. It ships as one executable: gateway, remote node, and a built-in agent (originally a client for [Pi](https://github.com/earendil-works/pi), which it has replaced).
 
-This repository implements an M0–M3 MVP with a Node.js gateway, Pi RPC subprocesses and a responsive Svelte PWA. An optional multi-node mode now connects Pi-equipped devices to one central daemon over private VPN, with local Pi execution and centrally routed sessions. See the [multi-node setup](./apps/gateway/README.md#multi-node-private-vpn-deployment) and its current limitations.
+It consists of a Bun gateway, one built-in agent subprocess per session (speaking Pi-compatible JSONL RPC), and a responsive Svelte PWA. An optional multi-node mode connects devices to one central daemon over a private VPN: agents run locally on each device, and sessions are routed centrally. See the [multi-node setup](./apps/gateway/README.md#multi-node-private-vpn-deployment) and its current limitations.
 
 ## Security model
 
@@ -11,34 +11,65 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 - The gateway only accepts identity headers from explicitly configured proxy IP addresses.
 - Authenticated user identities, `Host`, and `Origin` are checked against exact allowlists.
 - There is no trust-all or unauthenticated production default.
-- Workspaces are allowlisted, but this is **not a sandbox**. Pi and its tools retain the operating-system permissions of the gateway account.
+- Workspaces are allowlisted, but this is **not a sandbox**. The agent and its tools retain the operating-system permissions of the gateway account.
 - Keep the gateway on loopback or a private interface reachable only by the trusted proxy. Do not expose it through Tailscale Funnel or the public Internet.
 
 ## Requirements
 
-- Node.js 22.19 or newer
-- Pi `0.85.1` available as `pi` (or configured with `PIRC_PI_BINARY`)
+- [Bun](https://bun.sh) 1.2 or newer (development/build only; the compiled `pirc` binary needs no runtime)
+- An OpenAI Chat Completions or Anthropic Messages compatible provider, configured in `~/.config/.pirc/config.json` (see [Agent](#agent))
 - A trusted forward-auth reverse proxy
 
 ## Development
 
 ```sh
-npm install
+bun install
 cp apps/gateway/.env.example apps/gateway/.env
 # Fill every security allowlist. Do not copy development values to production.
-npm run dev
-npm run dev:web
+bun run dev
+bun run dev:web
 ```
 
 The first configured workspace can point to this repository. See [`apps/gateway/README.md`](./apps/gateway/README.md) for configuration and API details, and [`apps/web/README.md`](./apps/web/README.md) for the client.
 
+## Single binary
+
+```sh
+bun run build            # produces apps/gateway/dist/pirc
+./apps/gateway/dist/pirc gateway   # central daemon / local gateway
+./apps/gateway/dist/pirc node      # remote node agent
+./apps/gateway/dist/pirc agent --session-dir DIR   # one agent session over JSONL RPC (started by the gateway)
+```
+
+The binary embeds the Bun runtime, SQLite, and the agent, and does not depend on Node.js, Pi, or `node_modules`.
+
+## Agent
+
+The built-in agent (`apps/gateway/src/agent/`) is configured in two layers:
+
+- **Global**: `~/.config/.pirc/config.json` (override the directory with `PIRC_CONFIG_DIR`). It holds providers (`openai-chat` / `anthropic-messages`), models, the default model, limits, features, and hooks. The global system prompt goes in `AGENTS.md` in the same directory. Reference API keys with `apiKeyEnv`, `apiKeyFile`, or `apiKeyCommand`.
+- **Project**: `<workspace>/.pirc/config.json` can only add `allowedPaths`, `env`, `hooks`, and a `defaultModel`. `<workspace>/.pirc/AGENTS.md` is appended to the system prompt. The agent's file tools cannot write to `.pirc/`.
+
+Hooks (`sessionStart`, `beforePrompt`, `beforeTool`, `afterTool`, `agentSettled`) are shell commands that receive JSON on stdin. A `beforeTool` hook can reject a tool call (exit 2) or rewrite its arguments.
+
+Built-in tools and features:
+
+- Tools: `read`/`write`/`edit`/`ls`/`find`/`grep`/`bash`.
+- PTC code mode (`code`: TS/JS run in a subprocess that can call the other tools).
+- `ask_user_question` and `todo`.
+- Compaction with prompt-cache warming, and observational memory with `recall`.
+- `background_task`.
+- Agent teams (`agent_spawn` and friends; children are `pirc agent --headless` subprocesses).
+
+The design and milestones are in [`plans/single-binary-agent.md`](./plans/single-binary-agent.md).
+
 ## Validation
 
 ```sh
-npm run check
+bun run check
 ```
 
-Real-model smoke tests are deliberately separate because they require credentials and incur provider cost. The automated integration suite uses a fake Pi RPC subprocess.
+Real-model smoke tests are deliberately separate because they require credentials and incur provider cost. The automated suite drives the real agent against a scripted fake OpenAI/Anthropic SSE server.
 
 ## Nix integration
 
@@ -49,7 +80,7 @@ nix develop
 nix build
 ```
 
-The NixOS module creates an unprivileged service account and can generate an nginx virtual host wired to an Authelia-compatible `auth_request` endpoint. Deployment-specific Pi packaging, secret management, TLS certificate ownership, workspace permissions, and host names remain explicit inputs rather than unsafe defaults.
+The NixOS module creates an unprivileged service account and can generate an nginx virtual host wired to an Authelia-compatible `auth_request` endpoint. The agent configuration (`services.pirc.agentConfig`), secret management, TLS certificate ownership, workspace permissions, and host names remain explicit inputs rather than unsafe defaults.
 
 ## Known deployment boundary
 
