@@ -699,38 +699,6 @@ select:disabled {
   display: flex;
   flex-direction: column;
 }
-.session-intro {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 24px;
-  color: var(--muted);
-}
-.intro-icon {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-.session-intro div {
-  min-width: 0;
-  display: grid;
-  gap: 1px;
-}
-.session-intro strong {
-  color: var(--text-2);
-  font-size: 13px;
-  font-weight: 500;
-}
-.session-intro span:not(.intro-icon) {
-  overflow: hidden;
-  font-size: 12px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
 
 /* ───────────── Messages ───────────── */
 .message {

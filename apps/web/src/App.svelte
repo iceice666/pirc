@@ -567,16 +567,6 @@
         <section class="conversation" aria-label="Conversation">
           <div class="timeline" bind:this={timeline} aria-live="polite">
             <div class="timeline-inner">
-              <div class="session-intro">
-                <span class="intro-icon"><Sparkles size={17} /></span>
-                <div>
-                  <strong>Session started</strong><span
-                    >{activeWorkspace?.canonicalPath ?? activeWorkspace?.displayName} · {models.find(
-                      (model) => model.id === selectedModel,
-                    )?.displayName}</span
-                  >
-                </div>
-              </div>
               {#each sessionState.messages as message (message.id)}<Message {message} />{/each}
               {#each pendingInteractions as interaction (interaction.id)}
                 <InteractionCard
