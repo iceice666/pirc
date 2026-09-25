@@ -63,14 +63,17 @@ stdenvNoCC.mkDerivation {
     export HOME=$TMPDIR
     cp -a ${nodeModules}/. .
     chmod -R u+w .
+    # No Node.js in the sandbox: let Bun stand in for `node`, then rewrite
+    # `#!/usr/bin/env node` (Linux sandboxes have no /usr/bin/env).
+    mkdir -p $TMPDIR/bin
+    ln -s ${lib.getExe bun} $TMPDIR/bin/node
+    export PATH=$TMPDIR/bin:$PATH
+    patchShebangs node_modules apps/*/node_modules
     runHook postConfigure
   '';
 
   buildPhase = ''
     runHook preBuild
-    # No Node.js in the sandbox: let Bun stand in for `node` shebangs.
-    mkdir -p $TMPDIR/bin
-    ln -s ${lib.getExe bun} $TMPDIR/bin/node
     export PATH=$TMPDIR/bin:$PATH
     bun run build
     runHook postBuild
