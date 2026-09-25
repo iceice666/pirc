@@ -1,8 +1,14 @@
 # pirc
 
-A private, forward-authenticated web client for persistent coding-agent sessions. It ships as one executable: gateway, remote node, and a built-in agent (originally a client for [Pi](https://github.com/earendil-works/pi), which it has replaced).
+A private, forward-authenticated web client for persistent coding-agent sessions. It ships as one executable: gateway, node, and a built-in agent (originally a client for [Pi](https://github.com/earendil-works/pi), which it has replaced).
 
-It consists of a Bun gateway, one built-in agent subprocess per session (speaking Pi-compatible JSONL RPC), and a responsive Svelte PWA. An optional multi-node mode connects devices to one central daemon over a private VPN: agents run locally on each device, and sessions are routed centrally. See the [multi-node setup](./apps/gateway/README.md#multi-node-private-vpn-deployment) and its current limitations.
+It consists of:
+
+- a **gateway** that browsers talk to: authentication, the session index, and routing;
+- one or more **nodes**, one per machine with workspaces, which connect out to the gateway and run one built-in agent subprocess per session (speaking Pi-compatible JSONL RPC), plus side-panel shells;
+- a responsive Svelte PWA.
+
+The gateway never runs agents. On a single machine, run the gateway and a node side by side; across devices, each device runs a node that connects to one central gateway over a private VPN. See [`apps/gateway/README.md`](./apps/gateway/README.md) for setup and the current limitations.
 
 ## Security model
 
@@ -11,8 +17,9 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 - The gateway only accepts identity headers from explicitly configured proxy IP addresses.
 - Authenticated user identities, `Host`, and `Origin` are checked against exact allowlists.
 - There is no trust-all or unauthenticated production default.
-- Workspaces are allowlisted, but this is **not a sandbox**. The agent and its tools retain the operating-system permissions of the gateway account.
-- The web side panel can browse workspace files, show Git changes and history, and open interactive shells in the workspace. Shells run as the gateway account, just like the agent's tools, and require holding session control; set `PIRC_TERMINALS=false` to disable them.
+- Nodes authenticate to the gateway with per-node secrets and connect outbound only; they listen on no port.
+- Workspaces are allowlisted, but this is **not a sandbox**. The agent and its tools retain the operating-system permissions of the node's account.
+- The web side panel can browse workspace files, show Git changes and history, and open interactive shells in the workspace. Shells run as the node's account, just like the agent's tools, and require holding session control; set `PIRC_TERMINALS=false` on the node to disable them.
 - Keep the gateway on loopback or a private interface reachable only by the trusted proxy. Do not expose it through Tailscale Funnel or the public Internet.
 
 ## Requirements
@@ -27,19 +34,21 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 bun install
 cp apps/gateway/.env.example apps/gateway/.env
 # Fill every security allowlist. Do not copy development values to production.
-bun run dev
+# The gateway and node take separate environments; see the file's two sections.
+bun run dev        # gateway
+bun run dev:node   # node, with PIRC_DAEMON_URL=ws://127.0.0.1:8787
 bun run dev:web
 ```
 
-The first configured workspace can point to this repository. See [`apps/gateway/README.md`](./apps/gateway/README.md) for configuration and API details, and [`apps/web/README.md`](./apps/web/README.md) for the client.
+The node's first workspace can point to this repository. See [`apps/gateway/README.md`](./apps/gateway/README.md) for configuration and API details, and [`apps/web/README.md`](./apps/web/README.md) for the client.
 
 ## Single binary
 
 ```sh
 bun run build            # produces apps/gateway/dist/pirc
-./apps/gateway/dist/pirc gateway   # central daemon / local gateway
-./apps/gateway/dist/pirc node      # remote node agent
-./apps/gateway/dist/pirc agent --session-dir DIR   # one agent session over JSONL RPC (started by the gateway)
+./apps/gateway/dist/pirc gateway   # browser API and routing
+./apps/gateway/dist/pirc node      # agents and shells for this machine
+./apps/gateway/dist/pirc agent --session-dir DIR   # one agent session over JSONL RPC (started by the node)
 ```
 
 The binary embeds the Bun runtime, SQLite, and the agent, and does not depend on Node.js, Pi, or `node_modules`.
@@ -82,7 +91,7 @@ nix develop
 nix build
 ```
 
-The NixOS module creates an unprivileged service account and can generate an nginx virtual host wired to an Authelia-compatible `auth_request` endpoint. The agent configuration (`services.pirc.agentConfig`), secret management, TLS certificate ownership, workspace permissions, and host names remain explicit inputs rather than unsafe defaults.
+The NixOS module runs the gateway (`pirc.service`) and, by default, a local node (`pirc-node.service`) under an unprivileged service account, and can generate an nginx virtual host wired to an Authelia-compatible `auth_request` endpoint. The agent configuration (`services.pirc.agentConfig`), secret management, TLS certificate ownership, workspace permissions, and host names remain explicit inputs rather than unsafe defaults.
 
 ## Known deployment boundary
 

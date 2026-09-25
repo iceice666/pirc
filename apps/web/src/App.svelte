@@ -335,6 +335,9 @@
   }
 
   async function uploadImages(files: FileList) {
+    // Images are stored on the node that runs the session's agent.
+    const sessionId = activeSessionId;
+    if (!sessionId) return;
     for (const file of Array.from(files)) {
       if (!file.type.startsWith('image/')) continue;
       const localId = `local-${crypto.randomUUID()}`;
@@ -353,7 +356,7 @@
       try {
         const attachment = usingDemo
           ? { id: localId, name: file.name, mimeType: file.type, size: file.size }
-          : await api.upload(file);
+          : await api.upload(sessionId, file);
         uploads = uploads.map((item) => (item.id === localId ? { ...attachment, preview } : item));
       } catch (error) {
         uploads = uploads.filter((item) => item.id !== localId);

@@ -15,7 +15,7 @@ import {
   statSync,
 } from 'node:fs';
 import path from 'node:path';
-import { ApiError } from './errors.js';
+import { ApiError } from '../errors.js';
 
 const GIT_TIMEOUT_MS = 15_000;
 const DIFF_LIMIT = 1_048_576;

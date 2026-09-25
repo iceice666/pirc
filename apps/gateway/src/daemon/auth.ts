@@ -1,13 +1,13 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import type { GatewayConfig } from './config.js';
-import { ApiError } from './errors.js';
+import type { BrowserAuthConfig } from '../config.js';
+import { ApiError } from '../errors.js';
 
 const singleHeader = (value: string | string[] | undefined) =>
   Array.isArray(value) ? undefined : value;
 
 export function validateRequest(
   request: FastifyRequest,
-  config: GatewayConfig,
+  config: BrowserAuthConfig,
   requireOrigin = false,
 ): void {
   const remoteAddress = request.socket.remoteAddress;
@@ -26,7 +26,7 @@ export function validateRequest(
   request.identity = { user: identity };
 }
 
-export function authHook(config: GatewayConfig) {
+export function authHook(config: BrowserAuthConfig) {
   return async (request: FastifyRequest, _reply: FastifyReply) =>
     validateRequest(request, config, !['GET', 'HEAD', 'OPTIONS'].includes(request.method));
 }

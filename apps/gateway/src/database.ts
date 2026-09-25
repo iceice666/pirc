@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import type { GatewayConfig } from './config.js';
+import type { ConfigWorkspace } from './config.js';
 import { ApiError } from './errors.js';
 import type {
   CommandStatus,
@@ -147,15 +147,16 @@ export class GatewayDatabase {
     })();
   }
 
-  syncWorkspaces(config: GatewayConfig): void {
+  /** Upsert a node's configured workspaces (`PIRC_WORKSPACES`). */
+  syncWorkspaces(hostId: string, workspaces: ConfigWorkspace[]): void {
     const insert = this.raw.prepare(
       'INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET host_id=excluded.host_id, display_name=excluded.display_name, canonical_path=excluded.canonical_path, defaults_json=excluded.defaults_json',
     );
     this.raw.transaction(() => {
-      for (const workspace of config.workspaces)
+      for (const workspace of workspaces)
         insert.run(
           workspace.id,
-          config.hostId,
+          hostId,
           workspace.displayName,
           workspace.path,
           JSON.stringify(workspace.defaults),
@@ -312,10 +313,12 @@ export class GatewayDatabase {
         .run(name, sessionId, name).changes > 0
     );
   }
-  claimRemoteSession(sessionId: string, user: string, requireOwner = false): void {
+  /** Every session belongs to the user who created it; nobody else may see or drive it. */
+  claimSession(sessionId: string, user: string): SessionRow {
     const session = this.getSession(sessionId);
-    if ((session.nodeId || requireOwner) && session.ownerUser !== user)
-      throw new ApiError(403, 'forbidden', 'Remote session belongs to another user');
+    if (session.ownerUser !== user)
+      throw new ApiError(403, 'forbidden', 'Session belongs to another user');
+    return session;
   }
 
   resolveRemoteSession(nodeId: string, remoteId: string): string | undefined {

@@ -258,8 +258,9 @@ export const api = {
       },
     );
   },
-  upload: async (file: File): Promise<Attachment> => {
-    const raw = await request<any>('/api/uploads', {
+  /** Stored on the session's node, where its agent reads it. */
+  upload: async (sessionId: string, file: File): Promise<Attachment> => {
+    const raw = await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/uploads`, {
       method: 'POST',
       headers: { 'content-type': file.type || 'application/octet-stream' },
       body: file,
@@ -271,7 +272,7 @@ export const api = {
       size: raw.upload.byteSize,
     };
   },
-  /** Models a session's agent can use; a daemon-only gateway lists none without one. */
+  /** Models a session's agent can use; without a session there are none. */
   models: async (sessionId?: string): Promise<ModelOption[]> => {
     const raw = await request<any>(
       sessionId ? `/api/models?sessionId=${encodeURIComponent(sessionId)}` : '/api/models',

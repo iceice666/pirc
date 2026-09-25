@@ -1,25 +1,28 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { mkdirSync, realpathSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../src/app.js';
-import { headers, testConfig, waitFor } from './helpers.js';
+import { buildNodeApp } from '../src/node/app.js';
+import { nodeHeaders as headers, testConfig, waitFor } from './helpers.js';
 
 const apps: FastifyInstance[] = [];
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
-describe('gateway integration', () => {
-  it('rejects untrusted identity and completes a fake Pi prompt', async () => {
-    const { app } = await buildApp(testConfig());
+describe('node router', () => {
+  it('rejects unknown users and completes a fake Pi prompt', async () => {
+    const { app } = await buildNodeApp(testConfig());
     apps.push(app);
 
     const denied = await app.inject({
-      method: 'GET',
-      url: '/api/workspaces',
-      headers: { host: 'test.example', 'x-pirc-user': 'mallory@example.com' },
+      method: 'POST',
+      url: '/api/sessions',
+      headers: { 'x-pirc-user': 'mallory@example.com' },
+      payload: { workspaceId: 'test' },
     });
     expect(denied.statusCode).toBe(403);
+    // Without the identity the node runtime sets, nothing is reachable.
+    expect((await app.inject({ method: 'POST', url: '/api/sessions' })).statusCode).toBe(403);
 
     const created = await app.inject({
       method: 'POST',
@@ -82,7 +85,7 @@ describe('gateway integration', () => {
     // Canonical paths, as the real config produces (macOS tmp is a /private symlink).
     const root = realpathSync(base.workspaces[0]!.path);
     const config = { ...base, workspaces: [{ ...base.workspaces[0]!, path: root }] };
-    const { app, services } = await buildApp(config);
+    const { app, services } = await buildNodeApp(config);
     apps.push(app);
     // A nested workspace overlaps the parent one, like ~/code and ~/code/project.
     const nested = `${root}/project`;

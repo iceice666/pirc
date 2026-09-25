@@ -10,8 +10,8 @@
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import type { Subprocess, Terminal } from 'bun';
-import { ApiError } from './errors.js';
-import { killGroup } from './agent/tools/bash.js';
+import { ApiError } from '../errors.js';
+import { killGroup } from '../agent/tools/bash.js';
 
 const SCROLLBACK_BYTES = 256 * 1024;
 const PER_SESSION = 4;

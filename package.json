@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "dev": "bun run --filter @pirc/gateway dev",
+    "dev:node": "bun run --filter @pirc/gateway dev:node",
     "dev:web": "bun run --filter @pirc/web dev",
     "build": "bun run --filter @pirc/web build && bun run --filter @pirc/gateway build",
     "typecheck": "bun run --filter \"*\" typecheck",

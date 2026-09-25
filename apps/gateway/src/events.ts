@@ -11,7 +11,14 @@ interface StreamState {
 
 export class EventHub {
   private readonly streams = new Map<string, StreamState>();
+  private readonly global = new Set<EventListener>();
   constructor(private readonly capacity: number) {}
+
+  /** Every event of every session (a node forwards them all to the daemon). */
+  subscribeAll(listener: EventListener): () => void {
+    this.global.add(listener);
+    return () => this.global.delete(listener);
+  }
 
   private stream(sessionId: string, epoch = 0): StreamState {
     let stream = this.streams.get(sessionId);
@@ -41,6 +48,7 @@ export class EventHub {
     if (stream.events.length > this.capacity)
       stream.events.splice(0, stream.events.length - this.capacity);
     for (const listener of stream.listeners) listener(event);
+    for (const listener of this.global) listener(event);
     return event;
   }
 

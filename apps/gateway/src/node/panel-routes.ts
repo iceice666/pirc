@@ -1,23 +1,25 @@
 /**
- * HTTP/WebSocket surface for the web side panel: workspace files, Git,
- * session memory / background tasks / team state, and interactive terminals.
+ * The web side panel on the node: workspace files, Git, session memory /
+ * background tasks / team state, and interactive terminals.
  *
- * Read-only routes proxy to the owning node for remote sessions. Terminals
- * run on this host only, and creating, typing into or closing one requires
- * the session's control lease (the same authority as prompting the agent).
+ * Terminal REST routes live on the router; the live terminal stream is not
+ * a route (the node has no WebSocket listener) but `TerminalStreams`, which
+ * the node runtime drives for streams the daemon relays. Creating, typing
+ * into or closing a terminal requires the session's control lease (the
+ * same authority as prompting the agent).
  */
 import { statSync } from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { validateRequest } from './auth.js';
-import { loadAgentConfig } from './agent/config.js';
-import { memoryConfigFrom } from './agent/features/memory/index.js';
-import { memoryPanel } from './agent/features/memory/panel.js';
-import { readSessionBranch, SESSION_FILE } from './agent/session-store.js';
-import type { GatewayConfig } from './config.js';
-import type { GatewayDatabase } from './database.js';
-import { ApiError } from './errors.js';
+import { loadAgentConfig } from '../agent/config.js';
+import { memoryConfigFrom } from '../agent/features/memory/index.js';
+import { memoryPanel } from '../agent/features/memory/panel.js';
+import { readSessionBranch, SESSION_FILE } from '../agent/session-store.js';
+import type { NodeConfig } from '../config.js';
+import type { GatewayDatabase, SessionRow } from '../database.js';
+import { ApiError } from '../errors.js';
+import { parse } from '../util.js';
 import {
   gitDiff,
   gitLog,
@@ -26,18 +28,9 @@ import {
   listDirectory,
   readWorkspaceFile,
 } from './inspect.js';
-import type { NodeRegistry } from './nodes.js';
 import type { RunnerManager } from './runner.js';
 import { TerminalManager } from './terminals.js';
 
-function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> {
-  const result = schema.safeParse(value);
-  if (!result.success)
-    throw new ApiError(400, 'invalid_input', 'Invalid request', result.error.flatten());
-  return result.data;
-}
-
-const sessionParams = z.object({ id: z.string().min(1) });
 const flag = z
   .enum(['1', '0', 'true', 'false'])
   .optional()
@@ -47,7 +40,7 @@ const leaseBody = z.object({
   generation: z.number().int().positive(),
 });
 
-/** Environment secrets the gateway holds that a user shell has no business seeing. */
+/** Environment secrets the node holds that a user shell has no business seeing. */
 const SECRET_ENV = /^(PIRC_NODE_TOKENS?|PIRC_.*SECRET.*)$/;
 
 /**
@@ -79,49 +72,61 @@ class BranchCache {
 }
 
 export interface PanelContext {
-  config: GatewayConfig;
+  config: NodeConfig;
   db: GatewayDatabase;
   runners: RunnerManager;
-  nodes: NodeRegistry;
-  claimSession(sessionId: string, user: string): void;
+  claim(request: FastifyRequest, sessionId?: string): SessionRow;
 }
 
-export function registerPanelRoutes(app: FastifyInstance, ctx: PanelContext): TerminalManager {
-  const { config, db, runners, nodes } = ctx;
+/** A frame sent to the browser's terminal socket. */
+export type TerminalFrame =
+  | { type: 'ready'; terminal: unknown; replay: string }
+  | { type: 'output'; data: string }
+  | { type: 'exit'; exitCode: number | null }
+  | { type: 'error'; code: string; message: string };
+
+export interface TerminalConnection {
+  /** Browser → terminal message (input/resize), checked against the lease per message. */
+  input(message: unknown): void;
+  detach(): void;
+}
+
+export interface TerminalStreams {
+  /**
+   * Attach to a terminal for `user`. Anyone who may view the session may
+   * watch; input and resize require the control lease. Throws ApiError
+   * when the session or terminal is not available.
+   */
+  open(
+    target: { user: string; sessionId: string; terminalId: string },
+    send: (frame: TerminalFrame) => void,
+    close: (code: number, reason: string) => void,
+  ): TerminalConnection;
+}
+
+export function registerPanelRoutes(
+  app: FastifyInstance,
+  ctx: PanelContext,
+): { terminals: TerminalManager; terminalStreams: TerminalStreams } {
+  const { config, db, runners, claim } = ctx;
   const branchCache = new BranchCache();
   const terminals = new TerminalManager(
     () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !SECRET_ENV.test(key))),
     config.terminalShell,
   );
 
-  /** Authorize, then either proxy to the owning node or resolve the local workspace. */
-  const target = async (request: FastifyRequest) => {
-    const { id: sessionId } = parse(sessionParams, request.params);
-    ctx.claimSession(sessionId, request.identity!.user);
-    const session = db.getSession(sessionId);
-    if (session.nodeId) {
-      if (!nodes.get(session.nodeId)) throw new ApiError(503, 'node_offline', 'Node is offline');
-      const rest = request.url.split('/').slice(4).join('/');
-      const remote = await nodes.request(session.nodeId, 'panel', {
-        method: 'GET',
-        url: `/api/sessions/${encodeURIComponent(session.piSessionId!)}/${rest}`,
-        user: request.identity!.user,
-      });
-      return { remote } as const;
-    }
-    const workspace = db.getWorkspace(session.workspaceId);
-    return { local: { session, root: workspace.canonicalPath } } as const;
-  };
   const local = <T>(
     handler: (
-      local: { session: ReturnType<GatewayDatabase['getSession']>; root: string },
+      local: { session: SessionRow; root: string },
       request: FastifyRequest,
     ) => T | Promise<T>,
   ) =>
     async function (request: FastifyRequest) {
-      const resolved = await target(request);
-      if ('remote' in resolved) return resolved.remote;
-      return handler(resolved.local, request);
+      const session = claim(request);
+      return handler(
+        { session, root: db.getWorkspace(session.workspaceId).canonicalPath },
+        request,
+      );
     };
 
   app.get(
@@ -250,27 +255,20 @@ export function registerPanelRoutes(app: FastifyInstance, ctx: PanelContext): Te
 
   // ---- terminals ----------------------------------------------------------
 
-  const localTerminalSession = (request: FastifyRequest) => {
+  const terminalsEnabled = () => {
     if (!config.terminalsEnabled)
-      throw new ApiError(403, 'forbidden', 'Terminals are disabled on this gateway');
-    const { id: sessionId } = parse(sessionParams, request.params);
-    ctx.claimSession(sessionId, request.identity!.user);
-    const session = db.getSession(sessionId);
-    if (session.nodeId)
-      throw new ApiError(
-        400,
-        'invalid_input',
-        'Terminals are not available for remote-node sessions',
-      );
-    return session;
+      throw new ApiError(403, 'forbidden', 'Terminals are disabled on this node');
+  };
+  const terminalSession = (request: FastifyRequest) => {
+    terminalsEnabled();
+    return claim(request);
   };
 
-  app.get('/api/sessions/:id/terminals', async (request) => {
-    const session = localTerminalSession(request);
-    return { terminals: terminals.list(session.id) };
-  });
+  app.get('/api/sessions/:id/terminals', async (request) => ({
+    terminals: terminals.list(terminalSession(request).id),
+  }));
   app.post('/api/sessions/:id/terminals', async (request, reply) => {
-    const session = localTerminalSession(request);
+    const session = terminalSession(request);
     const body = parse(
       leaseBody.extend({
         cols: z.number().int().optional(),
@@ -287,7 +285,7 @@ export function registerPanelRoutes(app: FastifyInstance, ctx: PanelContext): Te
     return reply.status(201).send({ terminal });
   });
   app.post('/api/sessions/:id/terminals/:terminalId/close', async (request, reply) => {
-    const session = localTerminalSession(request);
+    const session = terminalSession(request);
     const { terminalId } = parse(z.object({ terminalId: z.string().min(1) }), request.params);
     const body = parse(leaseBody, request.body);
     db.validateLease(session.id, body.clientId, body.generation);
@@ -295,40 +293,21 @@ export function registerPanelRoutes(app: FastifyInstance, ctx: PanelContext): Te
     return reply.status(204).send();
   });
 
-  /**
-   * Terminal stream. Anyone who may view the session may watch; input and
-   * resize require the control lease, checked per message.
-   */
-  app.get(
-    '/api/sessions/:id/terminals/:terminalId/stream',
-    { websocket: true },
-    (socket, request) => {
-      try {
-        validateRequest(request, config, true);
-        const session = localTerminalSession(request);
-        const { terminalId } = parse(z.object({ terminalId: z.string().min(1) }), request.params);
-        const send = (message: unknown) => {
-          if (socket.readyState !== socket.OPEN) return;
-          if (socket.bufferedAmount > config.websocketMaxBufferedBytes) {
-            // The client reconnects and gets the scrollback replayed.
-            socket.close(1013, 'resync required');
-            return;
-          }
-          socket.send(JSON.stringify(message));
-        };
-        const attached = terminals.attach(session.id, terminalId, (event) => {
-          send(event);
-          if (event.type === 'exit') socket.close(1000, 'terminal exited');
-        });
-        send({ type: 'ready', terminal: attached.info, replay: attached.replay });
-        if (attached.info.exited) send({ type: 'exit', exitCode: attached.info.exitCode });
-        socket.on('message', (raw) => {
-          let message: any;
-          try {
-            message = JSON.parse(String(raw));
-          } catch {
-            return;
-          }
+  const terminalStreams: TerminalStreams = {
+    open({ user, sessionId, terminalId }, send, close) {
+      terminalsEnabled();
+      if (!config.allowedUsers.has(user))
+        throw new ApiError(403, 'forbidden', 'User is not allowed on this node');
+      const session = db.claimSession(sessionId, user);
+      const attached = terminals.attach(session.id, terminalId, (event) => {
+        send(event);
+        if (event.type === 'exit') close(1000, 'terminal exited');
+      });
+      send({ type: 'ready', terminal: attached.info, replay: attached.replay });
+      if (attached.info.exited) send({ type: 'exit', exitCode: attached.info.exitCode });
+      return {
+        input(raw) {
+          const message = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
           try {
             db.validateLease(
               session.id,
@@ -347,18 +326,11 @@ export function registerPanelRoutes(app: FastifyInstance, ctx: PanelContext): Te
           } catch (error) {
             send({ type: 'error', code: 'not_found', message: (error as Error).message });
           }
-        });
-        socket.once('close', attached.detach);
-        socket.once('error', attached.detach);
-      } catch (error) {
-        const status = error instanceof ApiError ? error.statusCode : 500;
-        socket.close(
-          status === 401 ? 4401 : status === 403 ? 4403 : status === 404 ? 4404 : 4400,
-          error instanceof Error ? error.message.slice(0, 120) : 'invalid request',
-        );
-      }
+        },
+        detach: attached.detach,
+      };
     },
-  );
+  };
 
-  return terminals;
+  return { terminals, terminalStreams };
 }

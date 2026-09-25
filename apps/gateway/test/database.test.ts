@@ -7,7 +7,7 @@ describe('GatewayDatabase', () => {
   it('deduplicates commands, generations leases, and answers interactions once', () => {
     const config = testConfig();
     const db = new GatewayDatabase(config.databasePath);
-    db.syncWorkspaces(config);
+    db.syncWorkspaces(config.nodeId, config.workspaces);
     const session = db.createSession('test', `${config.sessionsDir}/one`);
     const payload = { type: 'prompt', message: 'hi' };
     const hash = payloadHash(payload);
@@ -42,7 +42,7 @@ describe('GatewayDatabase', () => {
   it('recovers unfinished work without replaying it', () => {
     const config = testConfig();
     const db = new GatewayDatabase(config.databasePath);
-    db.syncWorkspaces(config);
+    db.syncWorkspaces(config.nodeId, config.workspaces);
     const session = db.createSession('test', `${config.sessionsDir}/one`);
     const run = db.createRun(session.id);
     db.updateRun(run, 'running');
@@ -58,8 +58,9 @@ describe('GatewayDatabase', () => {
   });
 });
 
-it('lets a node start without configured workspaces', async () => {
+it('parses node workspaces, which may start empty', async () => {
   const { parseWorkspaces } = await import('../src/config.js');
-  expect(parseWorkspaces({ PIRC_NODE_ID: 'm5pro', PIRC_WORKSPACES: '[]' })).toEqual([]);
-  expect(() => parseWorkspaces({ PIRC_WORKSPACES: '[]' })).toThrow();
+  expect(parseWorkspaces({})).toEqual([]);
+  expect(parseWorkspaces({ PIRC_WORKSPACES: '[]' })).toEqual([]);
+  expect(parseWorkspaces({ PIRC_WORKSPACES: '[{"id":"a","path":"/tmp"}]' })[0]?.id).toBe('a');
 });

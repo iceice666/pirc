@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { JsonlParser } from '../src/rpc-framing.js';
+import { JsonlParser } from '../src/node/rpc-framing.js';
 
 describe('JsonlParser', () => {
   it('preserves split UTF-8 and treats only LF as framing', () => {

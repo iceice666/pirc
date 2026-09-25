@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { EventHub } from '../src/events.js';
-import { emptyReducedState, reducePiEvent } from '../src/reducer.js';
+import { emptyReducedState, reducePiEvent } from '../src/node/reducer.js';
 
 describe('events and reducer', () => {
   it('replays cursors and resets evicted or old epochs', () => {

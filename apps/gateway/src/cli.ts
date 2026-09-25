@@ -3,8 +3,8 @@
 const usage = `Usage: pirc <command>
 
 Commands:
-  gateway   Run the gateway / central daemon (configured via PIRC_* environment)
-  node      Run a remote node agent that connects out to PIRC_DAEMON_URL
+  gateway   Run the central daemon: browser API and routing, never runs agents
+  node      Run agents for this device; connects out to PIRC_DAEMON_URL
   agent     (internal) Run one agent session over JSONL RPC on stdin/stdout
   version   Print the version
 `;
@@ -18,7 +18,7 @@ process.argv.splice(2, 1 + rest.length, ...rest);
 
 switch (command) {
   case 'gateway':
-    await (await import('./gateway-main.js')).runGateway();
+    await (await import('./daemon/main.js')).runGateway();
     break;
   case 'agent':
     await (await import('./agent/main.js')).runAgent(process.argv.slice(2));
@@ -27,7 +27,7 @@ switch (command) {
     await (await import('./agent/ptc/worker.js')).runPtcWorker(process.argv.slice(2));
     break;
   case 'node':
-    await (await import('./node-main.js')).runNode();
+    await (await import('./node/main.js')).runNode();
     break;
   case 'version':
   case '--version':

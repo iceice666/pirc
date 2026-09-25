@@ -1,43 +1,26 @@
 import { afterEach, expect, it } from 'bun:test';
-import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../src/app.js';
-import { startNodeAgent } from '../src/agent-runtime.js';
-import { headers, testConfig, waitFor } from './helpers.js';
+import { headers, startCluster, waitFor, type Cluster } from './helpers.js';
 
-const apps: FastifyInstance[] = [];
-const agents: Array<{ close: () => Promise<void> }> = [];
+const clusters: Cluster[] = [];
 afterEach(async () => {
-  await Promise.all(agents.splice(0).map((agent) => agent.close()));
-  await Promise.all(apps.splice(0).map((app) => app.close()));
+  await Promise.all(clusters.splice(0).map((cluster) => cluster.close()));
 });
 
 it('routes sessions and Pi prompts through two independent outbound nodes', async () => {
-  const config = testConfig({
-    nodeTokens: new Map([
-      ['alpha', 'a'.repeat(32)],
-      ['beta', 'b'.repeat(32)],
-    ]),
+  // A second authenticated user who must not see the first user's sessions.
+  const cluster = await startCluster([{ nodeId: 'alpha' }, { nodeId: 'beta' }], {
+    allowedUsers: new Set(['test@example.com', 'other@example.com']),
   });
-  const { app, services } = await buildApp(config);
-  apps.push(app);
-  await app.listen({ host: '127.0.0.1', port: 0 });
-  const url = `ws://127.0.0.1:${(app.server.address() as { port: number }).port}`;
-  for (const [id, secret] of [
-    ['alpha', 'a'.repeat(32)],
-    ['beta', 'b'.repeat(32)],
-  ]) {
-    const nodeConfig = testConfig({
-      hostId: id!,
-      allowedHosts: new Set(['test.example']),
-      allowedOrigins: new Set(['https://test.example']),
-    });
-    agents.push(await startNodeAgent(nodeConfig, id!, secret!, url));
-  }
-  await waitFor(() => services.nodes.list().length, 2);
-  const existing = mkdtempSync(path.join(os.homedir(), 'pirc-ws-integration-'));
+  clusters.push(cluster);
+  const { app, services, url } = cluster;
+  // Workspaces added from the web must stay inside the node's $HOME; use a throwaway one.
+  const home = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'pirc-home-')));
+  const previousHome = process.env.HOME;
+  process.env.HOME = home;
+  const existing = mkdtempSync(path.join(home, 'pirc-ws-integration-'));
   const outside = mkdtempSync(path.join(os.tmpdir(), 'pirc-ws-outside-'));
   const link = path.join(existing, 'outside-link');
   symlinkSync(outside, link);
@@ -48,14 +31,16 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
       headers,
       payload: { nodeId: 'alpha', path: outside, displayName: 'Outside' },
     });
-    expect(denied.statusCode).toBe(503);
+    // The node's own refusal reaches the browser unchanged.
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json().error.message).toContain('home directory');
     const linked = await app.inject({
       method: 'POST',
       url: '/api/workspaces',
       headers,
       payload: { nodeId: 'alpha', path: link, displayName: 'Escaped link' },
     });
-    expect(linked.statusCode).toBe(503);
+    expect(linked.statusCode).toBe(403);
     const created = await app.inject({
       method: 'POST',
       url: '/api/workspaces',
@@ -83,8 +68,9 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
     expect(session.statusCode).toBe(201);
     expect(session.json().session.nodeId).toBe('alpha');
   } finally {
-    rmSync(link, { force: true });
-    rmSync(existing, { recursive: true, force: true });
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    rmSync(home, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
   }
   const ids: string[] = [];
@@ -162,7 +148,6 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
   }
   expect(services.db.getSession(ids[0]!).nodeId).toBe('alpha');
   const wrongUser = { ...headers, 'x-pirc-user': 'other@example.com' };
-  config.allowedUsers.add('other@example.com');
   expect(
     (await app.inject({ method: 'GET', url: '/api/sessions', headers: wrongUser })).json().sessions,
   ).toHaveLength(0);
@@ -222,8 +207,7 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
       })
     ).statusCode,
   ).toBe(204);
-  await agents[0]!.close();
-  agents.shift();
+  await cluster.nodes[0]!.close();
   await waitFor(() => services.nodes.list().length, 1);
   const offline = await app.inject({
     method: 'GET',

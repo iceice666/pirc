@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import WebSocket from 'ws';
-import { buildApp } from '../src/app.js';
-import { headers, testConfig, waitFor } from './helpers.js';
+import { buildDaemonApp } from '../src/daemon/app.js';
+import { NODE_PROTOCOL_VERSION } from '../src/protocol.js';
+import { daemonConfig, headers, waitFor } from './helpers.js';
 
 const apps: FastifyInstance[] = [];
 const sockets: WebSocket[] = [];
@@ -30,8 +31,8 @@ function receive(socket: WebSocket): Promise<any> {
 
 describe('node registrations', () => {
   it('registers independent nodes and removes them on disconnect', async () => {
-    const { app } = await buildApp(
-      testConfig({
+    const { app } = await buildDaemonApp(
+      daemonConfig({
         nodeTokens: new Map([
           ['node-a', 'a'.repeat(32)],
           ['node-b', 'b'.repeat(32)],
@@ -46,10 +47,22 @@ describe('node registrations', () => {
     const a = await open(url, 'node-a', 'a'.repeat(32));
     const b = await open(url, 'node-b', 'b'.repeat(32));
     const replyA = receive(a);
-    a.send(JSON.stringify({ type: 'register', workspaces: [{ id: 'project', displayName: 'A' }] }));
+    a.send(
+      JSON.stringify({
+        type: 'register',
+        protocol: NODE_PROTOCOL_VERSION,
+        workspaces: [{ id: 'project', displayName: 'A' }],
+      }),
+    );
     expect((await replyA).type).toBe('registered');
     const replyB = receive(b);
-    b.send(JSON.stringify({ type: 'register', workspaces: [{ id: 'project', displayName: 'B' }] }));
+    b.send(
+      JSON.stringify({
+        type: 'register',
+        protocol: NODE_PROTOCOL_VERSION,
+        workspaces: [{ id: 'project', displayName: 'B' }],
+      }),
+    );
     expect((await replyB).type).toBe('registered');
     expect(
       (await app.inject({ method: 'GET', url: '/api/nodes', headers }))
@@ -75,7 +88,11 @@ describe('node registrations', () => {
     const oldClosed = new Promise<void>((resolve) => b.once('close', () => resolve()));
     const replacementReply = receive(replacement);
     replacement.send(
-      JSON.stringify({ type: 'register', workspaces: [{ id: 'other', displayName: 'Updated' }] }),
+      JSON.stringify({
+        type: 'register',
+        protocol: NODE_PROTOCOL_VERSION,
+        workspaces: [{ id: 'other', displayName: 'Updated' }],
+      }),
     );
     expect((await replacementReply).type).toBe('registered');
     await oldClosed;
@@ -89,5 +106,19 @@ describe('node registrations', () => {
     expect(
       (await app.inject({ method: 'GET', url: '/api/nodes', headers })).json().nodes,
     ).toHaveLength(1);
+  });
+
+  it('refuses a node that speaks another protocol version', async () => {
+    const { app } = await buildDaemonApp(daemonConfig());
+    apps.push(app);
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const url = `ws://127.0.0.1:${(app.server.address() as { port: number }).port}/node/connect`;
+    const old = await open(url, 'test', 't'.repeat(32));
+    const closed = new Promise<number>((resolve) => old.once('close', resolve));
+    old.send(JSON.stringify({ type: 'register', workspaces: [] }));
+    expect(await closed).toBe(4426);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/nodes', headers })).json().nodes,
+    ).toHaveLength(0);
   });
 });

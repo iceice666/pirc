@@ -1,6 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
+import type { z } from 'zod';
+import { ApiError } from './errors.js';
+
+/** Validate request input; failures become a 400 with Zod's flattened details. */
+export function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> {
+  const result = schema.safeParse(value);
+  if (!result.success)
+    throw new ApiError(400, 'invalid_input', 'Invalid request', result.error.flatten());
+  return result.data;
+}
 
 export const now = () => Date.now();
 export const id = (prefix: string) => `${prefix}_${randomUUID()}`;

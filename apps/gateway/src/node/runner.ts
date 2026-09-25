@@ -1,15 +1,16 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import type { GatewayConfig } from './config.js';
-import type { GatewayDatabase, SessionRow } from './database.js';
-import { ApiError } from './errors.js';
-import type { EventHub } from './events.js';
+import type { NodeConfig } from '../config.js';
+import type { GatewayDatabase, SessionRow } from '../database.js';
+import { ApiError } from '../errors.js';
+import type { EventHub } from '../events.js';
+import { applySessionName } from '../session-name.js';
 import type { WorkspaceLocks } from './locks.js';
 import { emptyReducedState, reducePiEvent, type ReducedSessionState } from './reducer.js';
 import { JsonlParser } from './rpc-framing.js';
-import type { CommandPayload } from './types.js';
-import { id, now } from './util.js';
+import type { CommandPayload } from '../types.js';
+import { id, now } from '../util.js';
 
 interface PendingRequest {
   resolve: (value: Record<string, any>) => void;
@@ -17,32 +18,6 @@ interface PendingRequest {
 }
 
 const dialogMethods = new Set(['select', 'confirm', 'input', 'editor']);
-
-/**
- * Persist a name reported by the agent (or relayed from a node) and tell
- * clients. A generated (`auto`) title never replaces a name the user chose.
- */
-export function applySessionName(
-  db: GatewayDatabase,
-  events: EventHub,
-  sessionId: string,
-  epoch: number,
-  data: Record<string, unknown>,
-): void {
-  const name = typeof data.name === 'string' ? data.name.trim().slice(0, 200) : '';
-  if (!name) return;
-  if (data.source === 'auto') {
-    if (!db.autoRenameSession(sessionId, name)) return;
-  } else {
-    const session = db.getSession(sessionId);
-    if (session.name === name && session.nameSource === 'user') return;
-    db.renameSession(sessionId, name);
-  }
-  events.publish(sessionId, epoch, 'session_renamed', {
-    name,
-    source: data.source === 'auto' ? 'auto' : 'user',
-  });
-}
 
 class PiRunner {
   readonly state: ReducedSessionState = emptyReducedState();
@@ -56,7 +31,7 @@ class PiRunner {
 
   constructor(
     readonly session: SessionRow,
-    private readonly config: GatewayConfig,
+    private readonly config: NodeConfig,
     private readonly db: GatewayDatabase,
     private readonly events: EventHub,
     private readonly onExit: (runner: PiRunner) => void,
@@ -301,7 +276,7 @@ class PiRunner {
 export class RunnerManager {
   private readonly runners = new Map<string, PiRunner>();
   constructor(
-    private readonly config: GatewayConfig,
+    private readonly config: NodeConfig,
     private readonly db: GatewayDatabase,
     private readonly events: EventHub,
     private readonly locks: WorkspaceLocks,

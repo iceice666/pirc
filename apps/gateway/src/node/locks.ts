@@ -1,5 +1,5 @@
-import { ApiError } from './errors.js';
-import { pathsOverlap } from './util.js';
+import { ApiError } from '../errors.js';
+import { pathsOverlap } from '../util.js';
 
 export class WorkspaceLocks {
   private readonly held = new Map<string, string>();

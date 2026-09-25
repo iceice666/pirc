@@ -2,11 +2,11 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'bun:test';
-import { buildApp } from '../src/app.js';
+import { buildNodeApp } from '../src/node/app.js';
 import { defaultAgentCommand } from '../src/config.js';
 import { writeAgentConfig } from './agent-harness.js';
 import { startFakeLlm } from './fixtures/fake-llm.js';
-import { headers, testConfig, waitFor } from './helpers.js';
+import { nodeHeaders as headers, testConfig, waitFor } from './helpers.js';
 
 const cleanup: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
@@ -24,7 +24,7 @@ it('runs a real pirc agent subprocess end to end through the gateway', async () 
     if (previous === undefined) delete process.env.PIRC_CONFIG_DIR;
     else process.env.PIRC_CONFIG_DIR = previous;
   });
-  const { app } = await buildApp(testConfig(defaultAgentCommand({})));
+  const { app } = await buildNodeApp(testConfig(defaultAgentCommand({})));
   cleanup.push(() => app.close() as Promise<void>);
 
   const created = await app.inject({
@@ -93,7 +93,7 @@ it('answers and withdraws agent dialogs through gateway interactions', async () 
     if (previous === undefined) delete process.env.PIRC_CONFIG_DIR;
     else process.env.PIRC_CONFIG_DIR = previous;
   });
-  const { app } = await buildApp(testConfig(defaultAgentCommand({})));
+  const { app } = await buildNodeApp(testConfig(defaultAgentCommand({})));
   cleanup.push(() => app.close() as Promise<void>);
   const sessionId = (
     await app.inject({
@@ -175,7 +175,7 @@ async function realAgentSession(llm: ReturnType<typeof startFakeLlm>) {
     if (previous === undefined) delete process.env.PIRC_CONFIG_DIR;
     else process.env.PIRC_CONFIG_DIR = previous;
   });
-  const { app } = await buildApp(testConfig(defaultAgentCommand({})));
+  const { app } = await buildNodeApp(testConfig(defaultAgentCommand({})));
   cleanup.push(() => app.close() as Promise<void>);
   const created = await app.inject({
     method: 'POST',
@@ -249,7 +249,7 @@ it('titles an unnamed session from the first message and keeps a later user rena
     if (previous === undefined) delete process.env.PIRC_CONFIG_DIR;
     else process.env.PIRC_CONFIG_DIR = previous;
   });
-  const { app, services } = await buildApp(testConfig(defaultAgentCommand({})));
+  const { app, services } = await buildNodeApp(testConfig(defaultAgentCommand({})));
   cleanup.push(() => app.close() as Promise<void>);
   const isTitle = (body: any) => JSON.stringify(body.messages).includes('<user-message>');
   llm.route = (body) =>
@@ -277,10 +277,7 @@ it('titles an unnamed session from the first message and keeps a later user rena
       payload: { clientId: 'browser-1' },
     })
   ).json().lease.generation as number;
-  const name = async () =>
-    (await app.inject({ method: 'GET', url: '/api/sessions', headers }))
-      .json()
-      .sessions.find((session: any) => session.id === sessionId).name;
+  const name = () => services.db.getSession(sessionId).name;
   llm.push({ text: 'Sure.' });
   await app.inject({
     method: 'POST',
