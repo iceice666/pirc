@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it } from 'bun:test';
 import { buildApp } from '../src/app.js';
 import { loadConfig, parseWorkspaces } from '../src/config.js';
 import { headers, testConfig } from './helpers.js';

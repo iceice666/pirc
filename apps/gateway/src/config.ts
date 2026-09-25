@@ -1,3 +1,4 @@
+import { selfCommand } from './self.js';
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { z } from 'zod';
@@ -40,8 +41,10 @@ export interface GatewayConfig {
   databasePath: string;
   sessionsDir: string;
   uploadsDir: string;
-  piCommand: string;
-  piArgs: string[];
+  /** Executable for per-session agent processes (default: this binary). */
+  agentCommand: string;
+  /** Arguments placed before the agent flags (default: `agent`, or `<cli.ts> agent` when unbundled). */
+  agentArgs: string[];
   hostId: string;
   workspaces: ConfigWorkspace[];
   trustedProxies: Set<string>;
@@ -94,6 +97,23 @@ export function parseWorkspaces(env: NodeJS.ProcessEnv): ConfigWorkspace[] {
   });
 }
 
+/**
+ * The gateway re-executes itself as `pirc agent`. When running from source
+ * (`bun src/cli.ts`) the executable is bun, so the script path is prepended.
+ */
+export function defaultAgentCommand(env: NodeJS.ProcessEnv = process.env): {
+  agentCommand: string;
+  agentArgs: string[];
+} {
+  if (env.PIRC_AGENT_COMMAND)
+    return {
+      agentCommand: env.PIRC_AGENT_COMMAND,
+      agentArgs: env.PIRC_AGENT_ARGS ? (JSON.parse(env.PIRC_AGENT_ARGS) as string[]) : ['agent'],
+    };
+  const [agentCommand, ...prefix] = selfCommand();
+  return { agentCommand: agentCommand!, agentArgs: [...prefix, 'agent'] };
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig {
   const nodeTokens = new Map<string, string>();
   if (env.PIRC_DAEMON_ONLY === 'true' && env.PIRC_NODE_ID)
@@ -137,8 +157,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     databasePath: path.resolve(env.PIRC_DATABASE_PATH ?? path.join(stateDir, 'gateway.sqlite')),
     sessionsDir,
     uploadsDir,
-    piCommand: env.PIRC_PI_COMMAND ?? 'pi',
-    piArgs: env.PIRC_PI_ARGS ? (JSON.parse(env.PIRC_PI_ARGS) as string[]) : [],
+    ...defaultAgentCommand(env),
     hostId: env.PIRC_HOST_ID ?? 'local',
     workspaces: parseWorkspaces(env),
     trustedProxies,

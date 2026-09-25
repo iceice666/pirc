@@ -36,9 +36,15 @@ class PiRunner {
     this.epoch = db.incrementEpoch(session.id);
     db.staleEpochInteractions(session.id, this.epoch);
     const workspace = db.getWorkspace(session.workspaceId);
-    const args = [...config.piArgs, '--mode', 'rpc', '--session-dir', session.privateSessionPath];
+    const args = [
+      ...config.agentArgs,
+      '--mode',
+      'rpc',
+      '--session-dir',
+      session.privateSessionPath,
+    ];
     if (session.piSessionId) args.push('--continue');
-    this.child = spawn(config.piCommand, args, {
+    this.child = spawn(config.agentCommand, args, {
       cwd: workspace.canonicalPath,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, PI_CODING_AGENT_SESSION_DIR: session.privateSessionPath },
@@ -108,6 +114,20 @@ class PiRunner {
         );
         this.events.publish(this.session.id, this.epoch, 'interaction_created', interaction);
         if (this.currentRunId) this.db.updateRun(this.currentRunId, 'waiting_input');
+      } else if (message.method === 'cancel' && typeof message.targetId === 'string') {
+        const cancelled = this.db.cancelInteractionByRpcId(
+          this.session.id,
+          this.epoch,
+          message.targetId,
+        );
+        if (cancelled) {
+          this.events.publish(this.session.id, this.epoch, 'interaction_answered', {
+            interactionId: cancelled,
+            cancelled: true,
+          });
+          if (this.currentRunId) this.db.updateRun(this.currentRunId, 'running');
+        }
+        return;
       } else this.events.publish(this.session.id, this.epoch, 'notification', message);
     }
     reducePiEvent(this.state, message);

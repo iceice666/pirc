@@ -1,0 +1,167 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, expect, it } from 'bun:test';
+import { buildApp } from '../src/app.js';
+import { defaultAgentCommand } from '../src/config.js';
+import { writeAgentConfig } from './agent-harness.js';
+import { startFakeLlm } from './fixtures/fake-llm.js';
+import { headers, testConfig, waitFor } from './helpers.js';
+
+const cleanup: Array<() => Promise<void> | void> = [];
+afterEach(async () => {
+  for (const fn of cleanup.splice(0).reverse()) await fn();
+});
+
+it('runs a real pirc agent subprocess end to end through the gateway', async () => {
+  const llm = startFakeLlm();
+  cleanup.push(() => llm.stop());
+  const configDir = mkdtempSync(path.join(tmpdir(), 'pirc-gw-config-'));
+  writeAgentConfig(configDir, llm.url);
+  const previous = process.env.PIRC_CONFIG_DIR;
+  process.env.PIRC_CONFIG_DIR = configDir;
+  cleanup.push(() => {
+    if (previous === undefined) delete process.env.PIRC_CONFIG_DIR;
+    else process.env.PIRC_CONFIG_DIR = previous;
+  });
+  const { app } = await buildApp(testConfig(defaultAgentCommand({})));
+  cleanup.push(() => app.close() as Promise<void>);
+
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/sessions',
+    headers,
+    payload: { workspaceId: 'test', name: 'Real agent' },
+  });
+  const sessionId = created.json().session.id as string;
+  const lease = await app.inject({
+    method: 'POST',
+    url: `/api/sessions/${sessionId}/control/acquire`,
+    headers,
+    payload: { clientId: 'browser-1' },
+  });
+  const generation = lease.json().lease.generation as number;
+  llm.push(
+    { tool: { id: 'c1', name: 'bash', args: { command: 'echo from-bash' } } },
+    { text: 'All done.' },
+  );
+  const command = await app.inject({
+    method: 'POST',
+    url: `/api/sessions/${sessionId}/commands`,
+    headers,
+    payload: {
+      commandId: 'cmd-1',
+      clientId: 'browser-1',
+      generation,
+      payload: { type: 'prompt', message: 'run it' },
+    },
+  });
+  expect(command.statusCode).toBe(202);
+  const snapshot = async () =>
+    (
+      await app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/snapshot`, headers })
+    ).json();
+  await waitFor(async () => (await snapshot()).run?.status, 'succeeded', 10_000);
+  const final = await snapshot();
+  expect(final.history.map((m: any) => m.role)).toEqual([
+    'user',
+    'assistant',
+    'toolResult',
+    'assistant',
+  ]);
+  expect(final.history[2].content[0].text).toContain('from-bash');
+  expect(final.history.at(-1).content[0].text).toBe('All done.');
+
+  const models = await app.inject({
+    method: 'GET',
+    url: `/api/models?sessionId=${sessionId}`,
+    headers,
+  });
+  expect(models.json().models.map((m: any) => `${m.provider}/${m.id}`)).toContain(
+    'fake/fake-model',
+  );
+});
+
+it('answers and withdraws agent dialogs through gateway interactions', async () => {
+  const llm = startFakeLlm();
+  cleanup.push(() => llm.stop());
+  const configDir = mkdtempSync(path.join(tmpdir(), 'pirc-gw-config-'));
+  writeAgentConfig(configDir, llm.url);
+  const previous = process.env.PIRC_CONFIG_DIR;
+  process.env.PIRC_CONFIG_DIR = configDir;
+  cleanup.push(() => {
+    if (previous === undefined) delete process.env.PIRC_CONFIG_DIR;
+    else process.env.PIRC_CONFIG_DIR = previous;
+  });
+  const { app } = await buildApp(testConfig(defaultAgentCommand({})));
+  cleanup.push(() => app.close() as Promise<void>);
+  const sessionId = (
+    await app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      headers,
+      payload: { workspaceId: 'test', name: 'Dialogs' },
+    })
+  ).json().session.id as string;
+  const generation = (
+    await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/control/acquire`,
+      headers,
+      payload: { clientId: 'browser-1' },
+    })
+  ).json().lease.generation as number;
+  const send = (commandId: string, payload: Record<string, unknown>) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/commands`,
+      headers,
+      payload: { commandId, clientId: 'browser-1', generation, payload },
+    });
+  const snapshot = async () =>
+    (
+      await app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/snapshot`, headers })
+    ).json();
+  llm.push(
+    {
+      tool: {
+        id: 'q',
+        name: 'ask_user_question',
+        args: {
+          questions: [
+            {
+              question: 'Color?',
+              multiSelect: true,
+              options: [{ label: 'red' }, { label: 'blue' }],
+            },
+          ],
+        },
+      },
+    },
+    { text: 'noted' },
+    { tool: { id: 'q2', name: 'ask_user_question', args: { questions: [{ question: 'Name?' }] } } },
+  );
+  await send('c1', { type: 'prompt', message: 'ask' });
+  await waitFor(async () => (await snapshot()).interactions.length, 1);
+  const pending = (await snapshot()).interactions[0];
+  expect(pending.request.multiple).toBe(true);
+  const answered = await app.inject({
+    method: 'POST',
+    url: `/api/sessions/${sessionId}/interactions/${pending.id}/answer`,
+    headers,
+    payload: {
+      clientId: 'browser-1',
+      generation,
+      answer: { value: 'red, blue', values: ['red', 'blue'] },
+    },
+  });
+  expect(answered.statusCode).toBe(200);
+  await waitFor(async () => (await snapshot()).run?.status, 'succeeded', 10_000);
+  const result = (await snapshot()).history.find((m: any) => m.role === 'toolResult');
+  expect(result.details.answers[0].selected).toEqual(['red', 'blue']);
+
+  await send('c2', { type: 'prompt', message: 'ask again' });
+  await waitFor(async () => (await snapshot()).interactions.length, 1);
+  await send('c3', { type: 'stop' });
+  await waitFor(async () => (await snapshot()).interactions.length, 0, 10_000);
+});

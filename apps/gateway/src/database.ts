@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import type { GatewayConfig } from './config.js';
 import { ApiError } from './errors.js';
 import type {
@@ -88,20 +88,21 @@ export interface InteractionRow {
 }
 
 export class GatewayDatabase {
-  readonly raw: Database.Database;
+  readonly raw: Database;
   constructor(databasePath: string) {
-    this.raw = new Database(databasePath);
-    this.raw.pragma('journal_mode = WAL');
-    this.raw.pragma('foreign_keys = ON');
+    this.raw = new Database(databasePath, { create: true });
+    this.raw.exec('PRAGMA journal_mode = WAL');
+    this.raw.exec('PRAGMA foreign_keys = ON');
     this.migrate();
   }
 
   private migrate(): void {
-    const current = this.raw.pragma('user_version', { simple: true }) as number;
+    const current = (this.raw.query('PRAGMA user_version').get() as { user_version: number })
+      .user_version;
     for (let index = current; index < migrations.length; index++) {
       this.raw.transaction(() => {
         this.raw.exec(migrations[index]!);
-        this.raw.pragma(`user_version = ${index + 1}`);
+        this.raw.exec(`PRAGMA user_version = ${index + 1}`);
       })();
     }
   }
@@ -521,6 +522,17 @@ export class GatewayDatabase {
         throw new ApiError(409, 'stale_interaction', 'Interaction was already answered');
       return interaction;
     })();
+  }
+  /** Agent withdrew a dialog (abort/timeout); returns the interaction id if one was pending. */
+  cancelInteractionByRpcId(sessionId: string, epoch: number, rpcId: string): string | null {
+    const row = this.raw
+      .prepare(
+        "SELECT id FROM interactions WHERE session_id=? AND runner_epoch=? AND rpc_id=? AND status='pending'",
+      )
+      .get(sessionId, epoch, rpcId) as { id: string } | null;
+    if (!row) return null;
+    this.raw.prepare("UPDATE interactions SET status='cancelled' WHERE id=?").run(row.id);
+    return row.id;
   }
   staleEpochInteractions(sessionId: string, epoch: number): void {
     this.raw

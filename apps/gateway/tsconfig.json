@@ -1,20 +1,18 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "lib": ["ES2022"],
-    "rootDir": ".",
-    "outDir": "dist",
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "declaration": true,
-    "sourceMap": true,
-    "types": ["node", "vitest/globals"]
+    "types": ["bun"],
+    "noEmit": true,
+    "allowImportingTsExtensions": false
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
   "exclude": ["dist", "node_modules"]

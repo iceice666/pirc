@@ -1,11 +1,11 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it } from 'bun:test';
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { startNodeAgent } from '../src/agent-runtime.js';
-import { headers, testConfig } from './helpers.js';
+import { headers, testConfig, waitFor } from './helpers.js';
 
 const apps: FastifyInstance[] = [];
 const agents: Array<{ close: () => Promise<void> }> = [];
@@ -36,7 +36,7 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
     });
     agents.push(await startNodeAgent(nodeConfig, id!, secret!, url));
   }
-  await expect.poll(() => services.nodes.list().length).toBe(2);
+  await waitFor(() => services.nodes.list().length, 2);
   const existing = mkdtempSync(path.join(os.homedir(), 'pirc-ws-integration-'));
   const outside = mkdtempSync(path.join(os.tmpdir(), 'pirc-ws-outside-'));
   const link = path.join(existing, 'outside-link');
@@ -89,9 +89,7 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
   }
   const ids: string[] = [];
   for (const id of ['alpha', 'beta']) {
-    await expect
-      .poll(() => services.db.listWorkspaces().some((w) => w.id === `${id}:test`))
-      .toBe(true);
+    await waitFor(() => services.db.listWorkspaces().some((w) => w.id === `${id}:test`), true);
     const created = await app.inject({
       method: 'POST',
       url: '/api/sessions',
@@ -143,15 +141,15 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
       },
     });
     expect(duplicate.json().duplicate).toBe(true);
-    await expect
-      .poll(() =>
+    await waitFor(
+      () =>
         services.events
           .replay(sessionId, null)
           .events.some(
             (event) => event.type === 'pi_event' && (event.data as any)?.type === 'agent_settled',
           ),
-      )
-      .toBe(true);
+      true,
+    );
     const snapshot = (
       await app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/snapshot`, headers })
     ).json();
@@ -203,13 +201,13 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
     browserSocket.once('open', () => resolve());
     browserSocket.once('error', reject);
   });
-  await expect
-    .poll(() =>
+  await waitFor(
+    () =>
       browserEvents.some(
         (event) => event.type === 'pi_event' && event.data?.type === 'agent_settled',
       ),
-    )
-    .toBe(true);
+    true,
+  );
   browserSocket.close();
   const lease = (
     await app.inject({ method: 'GET', url: `/api/sessions/${ids[1]}/control`, headers })
@@ -226,7 +224,7 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
   ).toBe(204);
   await agents[0]!.close();
   agents.shift();
-  await expect.poll(() => services.nodes.list().length).toBe(1);
+  await waitFor(() => services.nodes.list().length, 1);
   const offline = await app.inject({
     method: 'GET',
     url: `/api/sessions/${ids[0]}/snapshot`,

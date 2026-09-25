@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import WebSocket from 'ws';
 import { buildApp } from '../src/app.js';
-import { headers, testConfig } from './helpers.js';
+import { headers, testConfig, waitFor } from './helpers.js';
 
 const apps: FastifyInstance[] = [];
 const sockets: WebSocket[] = [];
@@ -63,13 +63,14 @@ describe('node registrations', () => {
     const closed = new Promise<void>((resolve) => a.once('close', () => resolve()));
     a.close();
     await closed;
-    await expect
-      .poll(async () =>
+    await waitFor(
+      async () =>
         (await app.inject({ method: 'GET', url: '/api/nodes', headers }))
           .json()
-          .nodes.map((n: any) => n.id),
-      )
-      .toEqual(['node-b']);
+          .nodes.map((n: any) => n.id)
+          .join(','),
+      'node-b',
+    );
     const replacement = await open(url, 'node-b', 'b'.repeat(32));
     const oldClosed = new Promise<void>((resolve) => b.once('close', () => resolve()));
     const replacementReply = receive(replacement);

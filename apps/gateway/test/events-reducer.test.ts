@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { EventHub } from '../src/events.js';
 import { emptyReducedState, reducePiEvent } from '../src/reducer.js';
 

@@ -4,30 +4,29 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "bun": ">=1.2"
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "bun --watch src/cli.ts gateway",
+    "dev:node": "bun --watch src/cli.ts node",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/src/index.js",
-    "start:node": "node dist/src/node-agent.js",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "build": "bun build --compile --minify --sourcemap src/cli.ts --outfile dist/pirc",
+    "start": "bun src/cli.ts gateway",
+    "start:node": "bun src/cli.ts node",
+    "test": "bun test"
   },
   "dependencies": {
     "@fastify/websocket": "^11.0.2",
-    "better-sqlite3": "^13.0.3",
     "fastify": "^5.2.1",
     "ws": "^8.18.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
-    "@types/node": "^22.13.4",
     "@types/ws": "^8.18.1",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vitest": "^4.0.1"
+    "@types/bun": "^1.2.0"
+  },
+  "bin": {
+    "pirc": "src/cli.ts"
   }
 }

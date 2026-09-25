@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { headers, testConfig } from './helpers.js';

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { GatewayDatabase } from '../src/database.js';
 import { payloadHash } from '../src/util.js';
 import { testConfig } from './helpers.js';

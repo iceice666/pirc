@@ -4,5 +4,5 @@ coverage
 state
 data
 *.sqlite*
-package-lock.json
+bun.lock
 plan.md
