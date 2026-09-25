@@ -373,11 +373,23 @@ export class GatewayDatabase {
     const terminal = ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(status)
       ? stamp
       : null;
+    // Going back to running or succeeding (e.g. after an auto-retry) drops the
+    // provisional failure recorded for an earlier attempt.
+    const clears = status === 'running' || status === 'succeeded' ? 1 : 0;
     this.raw
       .prepare(
-        'UPDATE runs SET status=?, started_at=COALESCE(started_at,?), ended_at=COALESCE(?,ended_at), failure_reason=COALESCE(?,failure_reason) WHERE id=?',
+        'UPDATE runs SET status=?, started_at=COALESCE(started_at,?), ended_at=CASE WHEN ? THEN ? ELSE COALESCE(?,ended_at) END, failure_reason=CASE WHEN ? THEN NULL ELSE COALESCE(?,failure_reason) END WHERE id=?',
       )
-      .run(status, startedAt, terminal, failureReason ?? null, runId);
+      .run(
+        status,
+        startedAt,
+        status === 'running' ? 1 : 0,
+        null,
+        terminal,
+        clears,
+        failureReason ?? null,
+        runId,
+      );
   }
   latestRun(sessionId: string): Record<string, unknown> | null {
     return (

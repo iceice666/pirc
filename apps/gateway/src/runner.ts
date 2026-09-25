@@ -25,6 +25,8 @@ class PiRunner {
   private readonly pending = new Map<string, PendingRequest>();
   private closed = false;
   private currentRunId: string | null = null;
+  /** Error from the latest assistant turn; a later successful turn clears it. */
+  private runError: string | null = null;
 
   constructor(
     readonly session: SessionRow,
@@ -133,17 +135,28 @@ class PiRunner {
     reducePiEvent(this.state, message);
     if (message.type === 'agent_start') {
       if (!this.currentRunId) this.currentRunId = this.db.createRun(this.session.id);
+      this.runError = null;
       this.db.updateRun(this.currentRunId, 'running');
     } else if (message.type === 'agent_settled') {
-      if (this.currentRunId) this.db.updateRun(this.currentRunId, 'succeeded');
-      this.currentRunId = null;
-    } else if (message.type === 'message_end' && message.message?.stopReason === 'error') {
+      // A retried or recovered error must not leave the run failed; only the
+      // final assistant turn decides.
       if (this.currentRunId)
         this.db.updateRun(
           this.currentRunId,
-          'failed',
-          message.message?.errorMessage ?? 'Pi reported an error',
+          this.runError === null ? 'succeeded' : 'failed',
+          this.runError ?? undefined,
         );
+      this.currentRunId = null;
+      this.runError = null;
+    } else if (message.type === 'message_end' && message.message?.role === 'assistant') {
+      this.runError =
+        message.message.stopReason === 'error'
+          ? (message.message.errorMessage ?? 'The agent reported an error')
+          : null;
+      if (this.runError !== null && this.currentRunId)
+        this.db.updateRun(this.currentRunId, 'failed', this.runError);
+    } else if (message.type === 'auto_retry_start' && this.currentRunId) {
+      this.db.updateRun(this.currentRunId, 'running');
     }
     this.events.publish(this.session.id, this.epoch, 'pi_event', message);
   }

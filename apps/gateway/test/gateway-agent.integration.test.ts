@@ -165,3 +165,75 @@ it('answers and withdraws agent dialogs through gateway interactions', async () 
   await send('c3', { type: 'stop' });
   await waitFor(async () => (await snapshot()).interactions.length, 0, 10_000);
 });
+
+async function realAgentSession(llm: ReturnType<typeof startFakeLlm>) {
+  const configDir = mkdtempSync(path.join(tmpdir(), 'pirc-gw-config-'));
+  writeAgentConfig(configDir, llm.url);
+  const previous = process.env.PIRC_CONFIG_DIR;
+  process.env.PIRC_CONFIG_DIR = configDir;
+  cleanup.push(() => {
+    if (previous === undefined) delete process.env.PIRC_CONFIG_DIR;
+    else process.env.PIRC_CONFIG_DIR = previous;
+  });
+  const { app } = await buildApp(testConfig(defaultAgentCommand({})));
+  cleanup.push(() => app.close() as Promise<void>);
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/sessions',
+    headers,
+    payload: { workspaceId: 'test', name: 'Run status' },
+  });
+  const sessionId = created.json().session.id as string;
+  const lease = await app.inject({
+    method: 'POST',
+    url: `/api/sessions/${sessionId}/control/acquire`,
+    headers,
+    payload: { clientId: 'browser-1' },
+  });
+  const generation = lease.json().lease.generation as number;
+  let commands = 0;
+  return {
+    prompt: (message: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/sessions/${sessionId}/commands`,
+        headers,
+        payload: {
+          commandId: `cmd-${++commands}`,
+          clientId: 'browser-1',
+          generation,
+          payload: { type: 'prompt', message },
+        },
+      }),
+    snapshot: async () =>
+      (
+        await app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/snapshot`, headers })
+      ).json(),
+  };
+}
+
+it('reports the final provider error as a failed run with the current model', async () => {
+  const llm = startFakeLlm();
+  cleanup.push(() => llm.stop());
+  const session = await realAgentSession(llm);
+  llm.push({ status: 400, body: '{"error":{"message":"quota exhausted"}}' });
+  expect((await session.prompt('hello')).statusCode).toBe(202);
+  await waitFor(async () => (await session.snapshot()).run?.status, 'failed', 10_000);
+  const final = await session.snapshot();
+  expect(final.run.failureReason).toContain('quota exhausted');
+  expect(final.history.at(-1)).toMatchObject({ stopReason: 'error' });
+  expect(final.agent).toMatchObject({ model: { provider: 'fake', id: 'fake-model' } });
+  expect(typeof final.agent.thinkingLevel).toBe('string');
+});
+
+it('does not leave a run failed after an automatic retry recovers', async () => {
+  const llm = startFakeLlm();
+  cleanup.push(() => llm.stop());
+  const session = await realAgentSession(llm);
+  llm.push({ status: 503, body: 'overloaded' }, { text: 'Recovered.' });
+  expect((await session.prompt('hello')).statusCode).toBe(202);
+  await waitFor(async () => (await session.snapshot()).run?.status, 'succeeded', 12_000);
+  const final = await session.snapshot();
+  expect(final.run.failureReason ?? null).toBeNull();
+  expect(final.history.at(-1).content[0].text).toBe('Recovered.');
+});
