@@ -14,6 +14,7 @@ let
     mkMerge
     mkOption
     mkRemovedOptionModule
+    mkRenamedOptionModule
     optional
     types
     ;
@@ -57,22 +58,89 @@ let
       ;
   }) cfg.workspaces;
 
+  # The gateway only routes; the local node (`pirc node`) runs agents and
+  # shells. They share a token generated on first start, never in the store.
+  tokenFile = "${cfg.stateDirectory}/local-node-token";
+  daemonState = "${cfg.stateDirectory}/daemon";
+  nodeState = "${cfg.stateDirectory}/node";
+
   gatewayEnvironment = {
     PIRC_HOST = cfg.listenAddress;
     PIRC_PORT = toString cfg.port;
-    PIRC_STATE_DIR = cfg.stateDirectory;
-    PIRC_HOST_ID = cfg.hostId;
+    PIRC_STATE_DIR = daemonState;
     PIRC_TRUSTED_PROXIES = csv cfg.trustedProxies;
     PIRC_IDENTITY_HEADER = cfg.identityHeader;
     PIRC_ALLOWED_USERS = csv cfg.allowedUsers;
     PIRC_ALLOWED_ORIGINS = csv cfg.allowedOrigins;
     PIRC_ALLOWED_HOSTS = csv cfg.allowedHosts;
+  }
+  // cfg.environment;
+
+  nodeEnvironment = {
+    PIRC_NODE_ID = cfg.localNode.id;
+    PIRC_DAEMON_URL = "ws://127.0.0.1:${toString cfg.port}";
+    PIRC_STATE_DIR = nodeState;
+    PIRC_ALLOWED_USERS = csv cfg.allowedUsers;
     PIRC_WORKSPACES = json workspaceList;
     PIRC_CONFIG_DIR = "${agentConfigDir}";
     PIRC_RUNNER_LIMIT = toString cfg.runnerLimit;
     PIRC_TERMINALS = lib.boolToString cfg.terminals;
   }
   // cfg.environment;
+
+  ensureToken = pkgs.writeShellScript "pirc-local-node-token" ''
+    set -eu
+    if [ ! -s ${tokenFile} ]; then
+      umask 077
+      ${pkgs.coreutils}/bin/head -c 48 /dev/urandom | ${pkgs.coreutils}/bin/base64 -w0 | ${pkgs.coreutils}/bin/tr -d '/+=' > ${tokenFile}
+    fi
+  '';
+
+  # Remote nodes may be added through PIRC_NODE_TOKENS in environmentFile;
+  # the local node's token is merged in.
+  gatewayStart = pkgs.writeShellScript "pirc-gateway" (
+    if cfg.localNode.enable then
+      ''
+        set -eu
+        token=$(cat ${tokenFile})
+        remote=''${PIRC_NODE_TOKENS:-}
+        [ -n "$remote" ] || remote='{}'
+        PIRC_NODE_TOKENS=$(printf '%s' "$remote" \
+          | ${pkgs.jq}/bin/jq -c --arg id ${lib.escapeShellArg cfg.localNode.id} --arg token "$token" '. + {($id): $token}')
+        export PIRC_NODE_TOKENS
+        exec ${cfg.package}/bin/pirc gateway
+      ''
+    else
+      "exec ${cfg.package}/bin/pirc gateway"
+  );
+
+  nodeStart = pkgs.writeShellScript "pirc-node" ''
+    set -eu
+    PIRC_NODE_TOKEN=$(cat ${tokenFile})
+    export PIRC_NODE_TOKEN
+    exec ${cfg.package}/bin/pirc node
+  '';
+
+  hardening = {
+    NoNewPrivileges = true;
+    PrivateTmp = true;
+    PrivateDevices = true;
+    ProtectHome = true;
+    ProtectSystem = "strict";
+    ProtectKernelTunables = true;
+    ProtectKernelModules = true;
+    ProtectControlGroups = true;
+    RestrictSUIDSGID = true;
+    LockPersonality = true;
+    # Bun/JavaScriptCore needs executable JIT memory.
+    MemoryDenyWriteExecute = false;
+    User = cfg.user;
+    Group = cfg.group;
+    UMask = "0077";
+    Restart = "on-failure";
+    RestartSec = 3;
+    EnvironmentFile = optional (cfg.environmentFile != null) cfg.environmentFile;
+  };
 
   # Built-in agent config: ~/.config/.pirc equivalent, kept in the store.
   # API keys must use apiKeyEnv/apiKeyFile/apiKeyCommand, never literal values.
@@ -100,10 +168,29 @@ in
       "pirc"
       "piArgs"
     ] "pirc now runs its built-in agent (`pirc agent`); configure it with services.pirc.agentConfig.")
+    (mkRenamedOptionModule [ "services" "pirc" "hostId" ] [ "services" "pirc" "localNode" "id" ])
   ];
 
   options.services.pirc = {
     enable = mkEnableOption "pirc gateway, built-in agent and web UI";
+
+    localNode = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Run a `pirc node` on this host (service `pirc-node`) so its
+          workspaces can host sessions. The gateway itself never runs agents;
+          disable this for a routing-only gateway that serves remote nodes.
+        '';
+      };
+      id = mkOption {
+        type = types.strMatching "[a-zA-Z0-9_-]{1,100}";
+        default = config.networking.hostName;
+        defaultText = literalExpression "config.networking.hostName";
+        description = "Node ID of the local node; workspaces appear as `<id>:<workspace>`.";
+      };
+    };
 
     package = mkOption {
       type = types.package;
@@ -176,7 +263,11 @@ in
       type = types.nullOr types.path;
       default = null;
       example = "/run/secrets/pirc-env";
-      description = "Optional systemd EnvironmentFile for provider credentials. Do not store secrets in the Nix store.";
+      description = ''
+        Optional systemd EnvironmentFile for provider credentials, and for
+        `PIRC_NODE_TOKENS` (JSON `{nodeId: token}`) when remote nodes connect
+        to this gateway. Do not store secrets in the Nix store.
+      '';
     };
 
     environment = mkOption {
@@ -185,10 +276,6 @@ in
       description = "Additional non-secret PIRC environment variables.";
     };
 
-    hostId = mkOption {
-      type = types.str;
-      default = config.networking.hostName;
-    };
     listenAddress = mkOption {
       type = types.str;
       default = "127.0.0.1";
@@ -236,7 +323,7 @@ in
     workspaces = mkOption {
       type = types.attrsOf workspaceType;
       default = { };
-      description = "Explicit workspace allowlist.";
+      description = "Explicit workspace allowlist of the local node. More can be added from the web.";
     };
 
     nginx = {
@@ -268,6 +355,15 @@ in
         example = "http://127.0.0.1:9091/api/authz/auth-request";
         description = "Authelia-compatible auth_request endpoint. Required when nginx is enabled.";
       };
+      exposeNodeEndpoint = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Proxy `/node/connect` so remote `pirc node`s can reach this gateway
+          over TLS. It bypasses forward auth: nodes authenticate with their
+          PIRC_NODE_TOKENS secret instead.
+        '';
+      };
       authUserResponseHeader = mkOption {
         type = types.str;
         default = "Remote-User";
@@ -292,8 +388,8 @@ in
           message = "services.pirc.allowedHosts must not be empty";
         }
         {
-          assertion = cfg.workspaces != { };
-          message = "services.pirc.workspaces must not be empty";
+          assertion = cfg.localNode.enable || cfg.workspaces == { };
+          message = "services.pirc.workspaces belong to the local node; enable services.pirc.localNode";
         }
         {
           assertion = !cfg.nginx.enable || cfg.nginx.forwardAuthUri != null;
@@ -310,44 +406,52 @@ in
         createHome = true;
       };
 
+      systemd.tmpfiles.settings.pirc = {
+        ${cfg.stateDirectory}.d = {
+          user = cfg.user;
+          group = cfg.group;
+          mode = "0700";
+        };
+      };
+
       systemd.services.pirc = {
         description = "pirc gateway";
         wantedBy = [ "multi-user.target" ];
         after = [ "network.target" ];
-        path = [ pkgs.bash ] ++ cfg.extraPackages;
         environment = gatewayEnvironment;
-        serviceConfig = {
+        serviceConfig = hardening // {
           Type = "simple";
-          User = cfg.user;
-          Group = cfg.group;
           WorkingDirectory = cfg.stateDirectory;
-          ExecStart = "${cfg.package}/bin/pirc gateway";
-          Restart = "on-failure";
-          RestartSec = 3;
-          UMask = "0077";
-          EnvironmentFile = optional (cfg.environmentFile != null) cfg.environmentFile;
-          NoNewPrivileges = true;
-          PrivateTmp = true;
-          PrivateDevices = true;
-          ProtectHome = true;
-          ProtectSystem = "strict";
-          ReadWritePaths = [ cfg.stateDirectory ] ++ map (workspace: workspace.path) workspaceList;
-          ProtectKernelTunables = true;
-          ProtectKernelModules = true;
-          ProtectControlGroups = true;
-          RestrictSUIDSGID = true;
-          LockPersonality = true;
-          MemoryDenyWriteExecute = false;
+          ExecStartPre = optional cfg.localNode.enable ensureToken;
+          ExecStart = gatewayStart;
+          ReadWritePaths = [ cfg.stateDirectory ];
         };
       };
     }
+
+    (mkIf cfg.localNode.enable {
+      systemd.services.pirc-node = {
+        description = "pirc node (agents and shells for this host)";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "pirc.service" ];
+        requires = [ "pirc.service" ];
+        path = [ pkgs.bash ] ++ cfg.extraPackages;
+        environment = nodeEnvironment;
+        serviceConfig = hardening // {
+          Type = "simple";
+          WorkingDirectory = cfg.stateDirectory;
+          ExecStart = nodeStart;
+          ReadWritePaths = [ cfg.stateDirectory ] ++ map (workspace: workspace.path) workspaceList;
+        };
+      };
+    })
 
     (mkIf cfg.nginx.enable {
       services.nginx.enable = true;
       services.nginx.virtualHosts.${cfg.nginx.hostName} = {
         inherit (cfg.nginx) forceSSL enableACME;
-        sslCertificate = cfg.nginx.sslCertificate;
-        sslCertificateKey = cfg.nginx.sslCertificateKey;
+        sslCertificate = mkIf (cfg.nginx.sslCertificate != null) cfg.nginx.sslCertificate;
+        sslCertificateKey = mkIf (cfg.nginx.sslCertificateKey != null) cfg.nginx.sslCertificateKey;
         root = "${cfg.package}/share/pirc/web";
 
         locations."= /_pirc_auth" = {
@@ -378,6 +482,15 @@ in
             proxy_set_header Origin $http_origin;
             proxy_set_header X-Forwarded-Proto $scheme;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          '';
+        };
+
+        locations."= /node/connect" = mkIf cfg.nginx.exposeNodeEndpoint {
+          proxyPass = gatewayUpstream;
+          proxyWebsockets = true;
+          extraConfig = ''
+            proxy_set_header ${cfg.identityHeader} "";
+            proxy_read_timeout 1h;
           '';
         };
 

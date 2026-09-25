@@ -4,7 +4,7 @@ The flake exposes:
 
 - `packages.<system>.pirc`: a single Bun-compiled executable (`bin/pirc` with `gateway`, `node`, and `agent` subcommands) plus the static Web bundle (`share/pirc/web`). The executable needs no Node.js, Bun, or `node_modules` at runtime.
 - `overlays.default`: adds `pkgs.pirc`, built against the consumer's nixpkgs.
-- `nixosModules.pirc`: an unprivileged systemd service and optional nginx/forward-auth virtual host.
+- `nixosModules.pirc`: unprivileged systemd services for the gateway and a local node, and an optional nginx/forward-auth virtual host.
 - `devShells.<system>.default`: Bun (plus Node 22 for the web app's vitest/svelte-check).
 
 ## Local commands
@@ -15,11 +15,11 @@ bun install
 bun run check
 
 nix build
-./result/bin/pirc gateway # requires the PIRC_* environment described below
-./result/bin/pirc node    # outbound node agent (PIRC_NODE_ID, PIRC_NODE_TOKEN, PIRC_DAEMON_URL)
+./result/bin/pirc gateway # browser API and routing (see apps/gateway/.env.example)
+./result/bin/pirc node    # agents for this machine (PIRC_NODE_ID, PIRC_NODE_TOKEN, PIRC_DAEMON_URL)
 ```
 
-Pi is no longer required. The gateway starts one `pirc agent` subprocess per session by re-executing its own binary. It speaks the same JSONL RPC that Pi did.
+Pi is no longer required. A node starts one `pirc agent` subprocess per session by re-executing its own binary. It speaks the same JSONL RPC that Pi did.
 
 Dependencies are fetched in a fixed-output derivation (`pirc.nodeModules`) that covers every OS/CPU, so one `nodeModulesHash` works for all systems. After changing `bun.lock`, set `nodeModulesHash` to `lib.fakeHash`, run `nix build .#pirc.nodeModules`, and copy the reported hash into [`package.nix`](./package.nix).
 
@@ -55,7 +55,18 @@ Minimal service-only example:
 }
 ```
 
-This creates a dedicated `pirc` system user, listens on loopback by default, stores state in `/var/lib/pirc`, and starts `pirc.service`. Agent subprocesses run with the same unprivileged account. Ensure that account has the exact filesystem, Git, SSH, and provider access needed by the selected workspaces—no more.
+This creates a dedicated `pirc` system user and two services:
+
+- `pirc.service`, the gateway, listening on loopback by default with state in `/var/lib/pirc/daemon`;
+- `pirc-node.service`, the local node (`services.pirc.localNode`, on by default), which connects to the gateway over loopback, keeps sessions in `/var/lib/pirc/node`, and runs the agent subprocesses and shells for `services.pirc.workspaces`.
+
+They share a token generated on first start in `/var/lib/pirc/local-node-token`; it never enters the Nix store. Only the node service gets write access to workspace paths and the tools in `extraPackages`. Ensure the account has the exact filesystem, Git, SSH, and provider access needed by the selected workspaces—no more.
+
+The node ID defaults to `networking.hostName` (`services.pirc.localNode.id`; the old `hostId` option is renamed). Its workspaces appear in the web client as `<id>:<workspace>`.
+
+### Remote nodes
+
+Other machines can run `pirc node` against this gateway. Put their secrets in `environmentFile` as `PIRC_NODE_TOKENS={"m5pro":"…"}` (the local node's token is merged in), and set `nginx.exposeNodeEndpoint = true` so `/node/connect` is proxied over TLS without forward auth. Set `localNode.enable = false` for a routing-only gateway with no local workspaces.
 
 ### Agent configuration
 
@@ -77,6 +88,7 @@ The file uses systemd `KEY=value` syntax. Do not place tokens in `services.pirc.
 
 - authenticated static Web serving;
 - authenticated `/api/` proxying;
+- optionally, token-authenticated `/node/connect` for remote nodes (`nginx.exposeNodeEndpoint`);
 - WebSocket upgrade support;
 - an internal `auth_request` location;
 - identity-header replacement using the response from forward auth.
@@ -88,10 +100,10 @@ The generated nginx configuration does not create Tailscale certificates. Supply
 ## Workspace and hardening notes
 
 - Workspace allowlisting is not an OS sandbox.
-- `ProtectSystem=strict` is enabled; configured workspace paths and the state directory are writable.
+- `ProtectSystem=strict` is enabled; only the node service can write configured workspace paths, and each service writes only the state directory besides.
 - `ProtectHome=true` means workspaces under `/home` are intentionally unavailable. Prefer `/srv`, or explicitly override the systemd hardening in the host configuration after reviewing the risk.
 - `MemoryDenyWriteExecute` remains disabled because Bun/JavaScriptCore requires executable JIT memory.
-- Side-panel terminals (`services.pirc.terminals`, default on) give the session holder a shell as the `pirc` account in the workspace; disable them if that exceeds what the agent can already do.
+- Side-panel terminals (`services.pirc.terminals`, default on) give the session holder a shell as the `pirc` account in the workspace, run by the node; disable them if that exceeds what the agent can already do.
 - Add tools needed by the agent (and its `bash`/PTC tools) through `services.pirc.extraPackages`.
 - Grant private repository access through narrowly scoped credentials readable by the `pirc` account.
 
