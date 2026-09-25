@@ -16,6 +16,17 @@ export class WorkspaceLocks {
     this.held.set(sessionId, canonicalPath);
   }
 
+  /** Sessions whose held path overlaps `canonicalPath` (excluding `sessionId`). */
+  overlapping(sessionId: string, canonicalPath: string): string[] {
+    return [...this.held]
+      .filter(([owner, heldPath]) => owner !== sessionId && pathsOverlap(heldPath, canonicalPath))
+      .map(([owner]) => owner);
+  }
+
+  holders(): string[] {
+    return [...this.held.keys()];
+  }
+
   release(sessionId: string): void {
     this.held.delete(sessionId);
   }

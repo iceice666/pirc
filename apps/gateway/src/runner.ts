@@ -89,6 +89,19 @@ class PiRunner {
     return !this.closed;
   }
 
+  /**
+   * No run in progress, no RPC awaiting a reply, and no dialog awaiting the
+   * user: safe to stop and restart later.
+   */
+  get idle(): boolean {
+    return (
+      !this.closed &&
+      this.currentRunId === null &&
+      this.pending.size === 0 &&
+      this.db.pendingInteractions(this.session.id).length === 0
+    );
+  }
+
   private handleValue(value: unknown): void {
     if (!value || typeof value !== 'object') throw new Error('RPC emitted a non-object JSON value');
     const message = value as Record<string, any>;
@@ -259,11 +272,39 @@ export class RunnerManager {
     private readonly locks: WorkspaceLocks,
   ) {}
 
-  private ensure(sessionId: string): PiRunner {
+  /**
+   * Runners stay up after a run so follow-ups are fast, but an idle one must not
+   * block another session: stop idle runners that overlap this workspace, and
+   * the oldest idle runner when the global limit is reached.
+   */
+  private async evictIdle(sessionId: string, canonicalPath: string): Promise<void> {
+    const idle = (owner: string) => !!this.runners.get(owner)?.idle;
+    const victims = new Set(this.locks.overlapping(sessionId, canonicalPath).filter(idle));
+    const remaining = this.locks.holders().filter((owner) => !victims.has(owner));
+    if (remaining.length >= this.config.runnerLimit) {
+      const oldest = remaining.find((owner) => owner !== sessionId && idle(owner));
+      if (oldest) victims.add(oldest);
+    }
+    await Promise.all(
+      [...victims].map(async (owner) => {
+        const runner = this.runners.get(owner);
+        await runner?.stop(this.config.shutdownGraceMs);
+        // exit() already released the lock; this covers a runner that was never spawned.
+        this.locks.release(owner);
+        this.db.setRunnerState(owner, 'stopped');
+      }),
+    );
+  }
+
+  private async ensure(sessionId: string): Promise<PiRunner> {
     const existing = this.runners.get(sessionId);
     if (existing?.alive) return existing;
     const session = this.db.getSession(sessionId);
     const workspace = this.db.getWorkspace(session.workspaceId);
+    await this.evictIdle(sessionId, workspace.canonicalPath);
+    // A concurrent request may have started this session while we waited.
+    const started = this.runners.get(sessionId);
+    if (started?.alive) return started;
     this.locks.acquire(sessionId, workspace.canonicalPath);
     this.db.setRunnerState(sessionId, 'starting');
     try {
@@ -306,7 +347,7 @@ export class RunnerManager {
     payload: CommandPayload,
     user: string,
   ): Promise<Record<string, any>> {
-    const runner = this.ensure(sessionId);
+    const runner = await this.ensure(sessionId);
     let rpc: Record<string, unknown>;
     let runId: string | null = null;
     if (['prompt', 'steer', 'follow_up'].includes(payload.type)) {
@@ -372,10 +413,10 @@ export class RunnerManager {
   }
 
   async models(sessionId?: string): Promise<Record<string, any>> {
-    if (sessionId) return this.ensure(sessionId).request({ type: 'get_available_models' });
+    if (sessionId) return (await this.ensure(sessionId)).request({ type: 'get_available_models' });
     const first = this.db.listSessions()[0];
     if (!first) return { success: true, data: { models: [] } };
-    return this.ensure(first.id).request({ type: 'get_available_models' });
+    return (await this.ensure(first.id)).request({ type: 'get_available_models' });
   }
 
   async shutdown(): Promise<void> {

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
+import { mkdirSync, realpathSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
-import { headers, testConfig } from './helpers.js';
+import { headers, testConfig, waitFor } from './helpers.js';
 
 const apps: FastifyInstance[] = [];
 afterEach(async () => {
@@ -74,5 +75,71 @@ describe('gateway integration', () => {
     });
     expect(duplicate.statusCode).toBe(200);
     expect(duplicate.json().duplicate).toBe(true);
+  });
+
+  it('stops an idle runner that overlaps a new session but never a busy one', async () => {
+    const base = testConfig();
+    // Canonical paths, as the real config produces (macOS tmp is a /private symlink).
+    const root = realpathSync(base.workspaces[0]!.path);
+    const config = { ...base, workspaces: [{ ...base.workspaces[0]!, path: root }] };
+    const { app, services } = await buildApp(config);
+    apps.push(app);
+    // A nested workspace overlaps the parent one, like ~/code and ~/code/project.
+    const nested = `${root}/project`;
+    mkdirSync(nested);
+    services.db.addWorkspace('nested', 'test', 'Nested', nested);
+
+    const open = async (workspaceId: string, clientId: string) => {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/sessions',
+        headers,
+        payload: { workspaceId, name: workspaceId },
+      });
+      const sessionId = created.json().session.id as string;
+      const lease = await app.inject({
+        method: 'POST',
+        url: `/api/sessions/${sessionId}/control/acquire`,
+        headers,
+        payload: { clientId },
+      });
+      let n = 0;
+      return {
+        sessionId,
+        prompt: (message: string) =>
+          app.inject({
+            method: 'POST',
+            url: `/api/sessions/${sessionId}/commands`,
+            headers,
+            payload: {
+              commandId: `${sessionId}-${++n}`,
+              clientId,
+              generation: lease.json().lease.generation,
+              payload: { type: 'prompt', message },
+            },
+          }),
+      };
+    };
+
+    const parent = await open('test', 'browser-1');
+    expect((await parent.prompt('hello')).statusCode).toBe(202);
+    await waitFor(async () => services.runners.get(parent.sessionId)?.idle, true, 5_000);
+
+    const child = await open('nested', 'browser-2');
+    const accepted = await child.prompt('hello');
+    expect(accepted.statusCode).toBe(202);
+    expect(accepted.json().command.status).toBe('accepted');
+    expect(services.runners.get(parent.sessionId)?.alive ?? false).toBe(false);
+    expect(services.db.getSession(parent.sessionId).runnerState).toBe('stopped');
+
+    // Once idle, a dialog prompt keeps the nested session busy; it must win.
+    await waitFor(async () => services.runners.get(child.sessionId)?.idle, true, 5_000);
+    const asked = await child.prompt('ask');
+    expect(asked.statusCode).toBe(202);
+    await waitFor(async () => services.db.pendingInteractions(child.sessionId).length, 1, 5_000);
+    const blocked = await parent.prompt('hello again');
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json().error.message).toBe('Workspace overlaps an active runner');
+    expect(services.runners.get(child.sessionId)?.alive).toBe(true);
   });
 });
