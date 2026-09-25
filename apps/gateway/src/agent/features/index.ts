@@ -5,10 +5,12 @@ import { teamFeature } from './team/index.js';
 import { codeFeature } from './code.js';
 import { compactFeature } from './compact.js';
 import { memoryFeature } from './memory/index.js';
+import { titleFeature } from './title.js';
 import { todoFeature } from './todo/index.js';
 
 export function builtinFeatures(): Feature[] {
   return [
+    titleFeature(),
     askQuestionFeature(),
     todoFeature(),
     codeFeature(),

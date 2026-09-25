@@ -47,6 +47,11 @@ export function writeAgentConfig(
       },
       defaultModel: { provider: 'fake', id: 'fake-model', thinking: 'low' },
       ...extra,
+      // Titling makes a side request that would consume scripted replies; tests opt in.
+      features: {
+        sessionTitle: { enabled: false },
+        ...(extra.features as Record<string, unknown> | undefined),
+      },
     }),
   );
 }

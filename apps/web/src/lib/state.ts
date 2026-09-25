@@ -161,6 +161,8 @@ export function reduceEvent(
       return { ...base, control: event.control };
     case 'session_updated':
       return { ...base, session: event.session };
+    case 'session_renamed':
+      return { ...base, session: { ...state.session, name: event.name } };
   }
 }
 

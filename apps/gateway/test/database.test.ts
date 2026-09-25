@@ -8,7 +8,7 @@ describe('GatewayDatabase', () => {
     const config = testConfig();
     const db = new GatewayDatabase(config.databasePath);
     db.syncWorkspaces(config);
-    const session = db.createSession('test', 'one', `${config.sessionsDir}/one`);
+    const session = db.createSession('test', `${config.sessionsDir}/one`);
     const payload = { type: 'prompt', message: 'hi' };
     const hash = payloadHash(payload);
     expect(db.receiveCommand('c1', session.id, hash, payload).duplicate).toBe(false);
@@ -43,7 +43,7 @@ describe('GatewayDatabase', () => {
     const config = testConfig();
     const db = new GatewayDatabase(config.databasePath);
     db.syncWorkspaces(config);
-    const session = db.createSession('test', 'one', `${config.sessionsDir}/one`);
+    const session = db.createSession('test', `${config.sessionsDir}/one`);
     const run = db.createRun(session.id);
     db.updateRun(run, 'running');
     db.receiveCommand('c', session.id, 'h', {});

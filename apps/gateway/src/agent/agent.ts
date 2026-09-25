@@ -112,6 +112,7 @@ export class Agent {
   modelRef: { provider: string; id: string } | null = null;
   thinking: ThinkingLevel = 'medium';
   sessionName: string | null = null;
+  nameSource: 'user' | 'auto' | null = null;
 
   constructor(options: AgentOptions) {
     this.config = options.config;
@@ -163,7 +164,10 @@ export class Agent {
     const level = thinking?.thinkingLevel ?? fallback?.thinking;
     if (level && (thinkingLevels as readonly string[]).includes(level))
       this.thinking = level as ThinkingLevel;
-    if (info) this.sessionName = info.name;
+    if (info) {
+      this.sessionName = info.name;
+      this.nameSource = info.source ?? 'user';
+    }
   }
 
   get isRunning(): boolean {
@@ -222,6 +226,7 @@ export class Agent {
       sessionId: this.store.sessionId,
       sessionFile: this.store.file,
       sessionName: this.sessionName,
+      sessionNameSource: this.nameSource,
       model,
       thinkingLevel: this.thinking,
       isStreaming: this.running,
@@ -244,9 +249,13 @@ export class Agent {
     this.store.append({ type: 'thinking_level_change', thinkingLevel: level });
   }
 
-  setName(name: string): void {
+  /** `auto` names come from the title feature; the gateway never lets them replace a user name. */
+  setName(name: string, source: 'user' | 'auto' = 'user'): void {
+    if (name === this.sessionName && source === this.nameSource) return;
     this.sessionName = name;
-    this.store.append({ type: 'session_info', name });
+    this.nameSource = source;
+    this.store.append({ type: 'session_info', name, source });
+    this.emit({ type: 'session_name_changed', name, source });
   }
 
   private emitQueue(): void {
@@ -294,21 +303,21 @@ export class Agent {
     );
   }
 
-  private userInput(): void {
-    for (const feature of this.features) feature.userInput?.(this);
+  private userInput(text: string): void {
+    for (const feature of this.features) feature.userInput?.(this, text);
   }
 
   /** Start a run with a user prompt. Throws if a run is active. */
   prompt(text: string, images?: ImageContent[]): void {
     if (this.tryCommand(text)) return;
-    this.userInput();
     if (this.running) throw new Error('Agent is already running; use steer or follow_up');
+    this.userInput(text);
     this.startRun([{ kind: 'user', text, ...(images?.length ? { images } : {}) }]);
   }
 
   steer(text: string, images?: ImageContent[]): void {
     if (this.tryCommand(text)) return;
-    this.userInput();
+    this.userInput(text);
     const item: QueueItem = { kind: 'user', text, ...(images?.length ? { images } : {}) };
     if (!this.running) return this.startRun([item]);
     this.steering.push(item);
@@ -317,7 +326,7 @@ export class Agent {
 
   followUp(text: string, images?: ImageContent[]): void {
     if (this.tryCommand(text)) return;
-    this.userInput();
+    this.userInput(text);
     const item: QueueItem = { kind: 'user', text, ...(images?.length ? { images } : {}) };
     if (!this.running) return this.startRun([item]);
     this.followUps.push(item);

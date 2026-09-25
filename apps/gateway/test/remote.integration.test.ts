@@ -78,7 +78,7 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
       method: 'POST',
       url: '/api/sessions',
       headers,
-      payload: { workspaceId, name: 'Independent session' },
+      payload: { workspaceId },
     });
     expect(session.statusCode).toBe(201);
     expect(session.json().session.nodeId).toBe('alpha');
@@ -94,7 +94,7 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
       method: 'POST',
       url: '/api/sessions',
       headers,
-      payload: { workspaceId: `${id}:test`, name: `Session ${id}` },
+      payload: { workspaceId: `${id}:test` },
     });
     expect(created.statusCode).toBe(201);
     const sessionId = created.json().session.id as string;

@@ -204,7 +204,6 @@ export interface ModelOption {
 
 export interface CreateSessionInput {
   workspaceId: string;
-  name?: string;
   modelId?: string;
   thinkingLevel?: ThinkingLevel;
 }
@@ -264,6 +263,7 @@ export type GatewayEvent =
   | { type: 'status_updated'; key: string; text?: string }
   | { type: 'control_updated'; control: ControlLease }
   | { type: 'session_updated'; session: SessionSummary }
+  | { type: 'session_renamed'; name: string }
   | { type: 'reset'; reason: 'cursor_expired' | 'epoch_changed' | 'backpressure' };
 
 export interface ClientSessionState extends SessionSnapshot {

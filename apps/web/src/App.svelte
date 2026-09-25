@@ -59,7 +59,6 @@
   let clientId = '';
   let newSessionOpen = false;
   let newSessionWorkspace = '';
-  let newSessionName = '';
   let newWorkspaceOpen = false;
   let newWorkspaceNodeId = '';
   let newWorkspacePath = '';
@@ -177,6 +176,10 @@
             const followLatest =
               !!timeline && timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 80;
             sessionState = reduceEvent(sessionState, event);
+            if (event.event.type === 'session_renamed') {
+              const name = event.event.name;
+              sessions = sessions.map((item) => (item.id === id ? { ...item, name } : item));
+            }
             if (sessionState.needsSnapshot) void refreshSnapshot();
             if (followLatest) void scrollToLatest();
           },
@@ -201,6 +204,8 @@
     if (!activeSessionId || usingDemo) return;
     try {
       sessionState = fromSnapshot(await api.snapshot(activeSessionId));
+      const { id, name } = sessionState.session;
+      sessions = sessions.map((item) => (item.id === id ? { ...item, name } : item));
     } catch (error) {
       pageError = error instanceof Error ? error.message : 'Could not refresh the session.';
     }
@@ -434,7 +439,6 @@
           !workspace.id.includes(':') || nodes.some((node) => node.id === workspace.hostId),
       )?.id ??
       '';
-    newSessionName = '';
     newSessionOpen = true;
   }
 
@@ -445,15 +449,12 @@
         ? {
             id: crypto.randomUUID(),
             workspaceId: newSessionWorkspace,
-            name: newSessionName || 'Untitled session',
+            name: 'New session',
             lastActivityAt: new Date().toISOString(),
             runnerStatus: 'stopped' as const,
             unreadCount: 0,
           }
-        : await api.createSession({
-            workspaceId: newSessionWorkspace,
-            name: newSessionName || undefined,
-          });
+        : await api.createSession({ workspaceId: newSessionWorkspace });
       sessions = [created, ...sessions];
       newSessionOpen = false;
       if (usingDemo) {
@@ -813,14 +814,10 @@
             >{/each}</select
         ></label
       >
-      <label
-        ><span>Session name</span><input
-          bind:value={newSessionName}
-          placeholder="What are you working on?"
-          on:keydown={(event) => event.key === 'Enter' && createSession()}
-        /></label
-      >
-      <p>The session stays active on the host when this browser disconnects.</p>
+      <p>
+        The session is named from your first message and stays active on the host when this browser
+        disconnects.
+      </p>
       <footer>
         <button class="button ghost" type="button" on:click={() => (newSessionOpen = false)}
           >Cancel</button

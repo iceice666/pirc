@@ -177,10 +177,8 @@ export const api = {
       (
         await request<any>('/api/sessions', {
           method: 'POST',
-          body: JSON.stringify({
-            workspaceId: input.workspaceId,
-            name: input.name || 'New session',
-          }),
+          // The agent titles the session from the first message.
+          body: JSON.stringify({ workspaceId: input.workspaceId }),
         })
       ).session,
     ),
@@ -434,6 +432,8 @@ export function normalizeEvent(raw: any): EventEnvelope {
                 ...(typeof raw.data.statusText === 'string' ? { text: raw.data.statusText } : {}),
               }
             : { type: 'noop' };
+  else if (raw.type === 'session_renamed' && typeof raw.data?.name === 'string')
+    event = { type: 'session_renamed', name: raw.data.name };
   else if (raw.type === 'runner_stderr') event = { type: 'noop' };
   else if (SNAPSHOT_EVENTS.has(raw.type)) event = { type: 'reset', reason: 'cursor_expired' };
   return {

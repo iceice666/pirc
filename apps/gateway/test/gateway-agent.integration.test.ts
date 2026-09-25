@@ -31,7 +31,7 @@ it('runs a real pirc agent subprocess end to end through the gateway', async () 
     method: 'POST',
     url: '/api/sessions',
     headers,
-    payload: { workspaceId: 'test', name: 'Real agent' },
+    payload: { workspaceId: 'test' },
   });
   const sessionId = created.json().session.id as string;
   const lease = await app.inject({
@@ -100,7 +100,7 @@ it('answers and withdraws agent dialogs through gateway interactions', async () 
       method: 'POST',
       url: '/api/sessions',
       headers,
-      payload: { workspaceId: 'test', name: 'Dialogs' },
+      payload: { workspaceId: 'test' },
     })
   ).json().session.id as string;
   const generation = (
@@ -181,7 +181,7 @@ async function realAgentSession(llm: ReturnType<typeof startFakeLlm>) {
     method: 'POST',
     url: '/api/sessions',
     headers,
-    payload: { workspaceId: 'test', name: 'Run status' },
+    payload: { workspaceId: 'test' },
   });
   const sessionId = created.json().session.id as string;
   const lease = await app.inject({
@@ -236,4 +236,74 @@ it('does not leave a run failed after an automatic retry recovers', async () => 
   const final = await session.snapshot();
   expect(final.run.failureReason ?? null).toBeNull();
   expect(final.history.at(-1).content[0].text).toBe('Recovered.');
+});
+
+it('titles an unnamed session from the first message and keeps a later user rename', async () => {
+  const llm = startFakeLlm();
+  cleanup.push(() => llm.stop());
+  const configDir = mkdtempSync(path.join(tmpdir(), 'pirc-gw-config-'));
+  writeAgentConfig(configDir, llm.url, { features: { sessionTitle: { enabled: true } } });
+  const previous = process.env.PIRC_CONFIG_DIR;
+  process.env.PIRC_CONFIG_DIR = configDir;
+  cleanup.push(() => {
+    if (previous === undefined) delete process.env.PIRC_CONFIG_DIR;
+    else process.env.PIRC_CONFIG_DIR = previous;
+  });
+  const { app, services } = await buildApp(testConfig(defaultAgentCommand({})));
+  cleanup.push(() => app.close() as Promise<void>);
+  const isTitle = (body: any) => JSON.stringify(body.messages).includes('<user-message>');
+  llm.route = (body) =>
+    isTitle(body) ? { text: '<title>Tidy the build scripts</title>' } : undefined;
+
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/sessions',
+    headers,
+    // A name cannot be chosen at creation; it is ignored.
+    payload: { workspaceId: 'test', name: 'Ignored' },
+  });
+  expect(created.statusCode).toBe(201);
+  expect(created.json().session).toMatchObject({ name: 'New session', nameSource: 'auto' });
+  const sessionId = created.json().session.id as string;
+  const renamedEvents: unknown[] = [];
+  services.events.subscribe(sessionId, (event) => {
+    if (event.type === 'session_renamed') renamedEvents.push(event.data);
+  });
+  const generation = (
+    await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/control/acquire`,
+      headers,
+      payload: { clientId: 'browser-1' },
+    })
+  ).json().lease.generation as number;
+  const name = async () =>
+    (await app.inject({ method: 'GET', url: '/api/sessions', headers }))
+      .json()
+      .sessions.find((session: any) => session.id === sessionId).name;
+  llm.push({ text: 'Sure.' });
+  await app.inject({
+    method: 'POST',
+    url: `/api/sessions/${sessionId}/commands`,
+    headers,
+    payload: {
+      commandId: 'c1',
+      clientId: 'browser-1',
+      generation,
+      payload: { type: 'prompt', message: 'clean up the build scripts' },
+    },
+  });
+  await waitFor(name, 'Tidy the build scripts', 10_000);
+  expect(renamedEvents).toEqual([{ name: 'Tidy the build scripts', source: 'auto' }]);
+
+  const renamed = await app.inject({
+    method: 'PATCH',
+    url: `/api/sessions/${sessionId}`,
+    headers,
+    payload: { name: 'My build work' },
+  });
+  expect(renamed.json().session).toMatchObject({ name: 'My build work', nameSource: 'user' });
+  // A late generated title can no longer replace the user's name.
+  services.db.autoRenameSession(sessionId, 'Something else');
+  expect(await name()).toBe('My build work');
 });

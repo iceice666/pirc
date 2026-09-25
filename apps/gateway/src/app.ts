@@ -12,7 +12,7 @@ import { ApiError, errorBody } from './errors.js';
 import { EventHub } from './events.js';
 import { WorkspaceLocks } from './locks.js';
 import { NodeRegistry, validNodeToken } from './nodes.js';
-import { RunnerManager } from './runner.js';
+import { applySessionName, RunnerManager } from './runner.js';
 import type { CommandPayload, EventCursor, Snapshot } from './types.js';
 import { id, payloadHash } from './util.js';
 
@@ -23,10 +23,8 @@ const createWorkspaceBody = z.object({
   displayName: z.string().trim().min(1).max(200),
 });
 const interactionParams = z.object({ id: z.string().min(1), interactionId: z.string().min(1) });
-const createSessionBody = z.object({
-  workspaceId: z.string().min(1),
-  name: z.string().trim().min(1).max(200),
-});
+/** Sessions are never named at creation: the agent titles them; rename later with PATCH. */
+const createSessionBody = z.object({ workspaceId: z.string().min(1) });
 const renameBody = z.object({ name: z.string().trim().min(1).max(200) });
 const leaseBody = z.object({
   clientId: z.string().min(1).max(200),
@@ -152,7 +150,15 @@ export async function buildApp(
     try {
       const session = db.getSession(sessionId);
       if (session.nodeId !== nodeId) return;
-      if (typeof event.type === 'string')
+      if (event.type === 'session_renamed' && event.data && typeof event.data === 'object')
+        applySessionName(
+          db,
+          events,
+          sessionId,
+          session.runnerEpoch,
+          event.data as Record<string, unknown>,
+        );
+      else if (typeof event.type === 'string')
         events.publish(sessionId, session.runnerEpoch, event.type, event.data);
     } catch {
       /* ignore unknown sessions */
@@ -314,11 +320,10 @@ export async function buildApp(
         method: 'POST',
         url: '/api/sessions',
         user: request.identity!.user,
-        payload: { workspaceId: workspace.id.slice(nodeId.length + 1), name: body.name },
+        payload: { workspaceId: workspace.id.slice(nodeId.length + 1) },
       });
       const session = db.createSession(
         workspace.id,
-        body.name,
         `node://${nodeId}/${remote.session.id}`,
         nodeId,
         remote.session.id,
@@ -338,7 +343,6 @@ export async function buildApp(
     mkdirSync(sessionStorage, { recursive: true, mode: 0o700 });
     const session = db.createSession(
       workspace.id,
-      body.name,
       sessionStorage,
       null,
       null,
@@ -372,7 +376,9 @@ export async function buildApp(
       if (!response.success)
         throw new ApiError(503, 'runner_unavailable', response.error ?? 'Pi rejected session name');
     }
-    const session = db.renameSession(sessionId, name);
+    // Also notifies connected clients; a no-op when the runner's echo already applied it.
+    applySessionName(db, events, sessionId, row.runnerEpoch, { name, source: 'user' });
+    const session = db.getSession(sessionId);
     return {
       session: {
         ...session,

@@ -25,7 +25,7 @@ describe('gateway integration', () => {
       method: 'POST',
       url: '/api/sessions',
       headers,
-      payload: { workspaceId: 'test', name: 'Integration' },
+      payload: { workspaceId: 'test' },
     });
     expect(created.statusCode).toBe(201);
     const sessionId = created.json().session.id as string;
@@ -94,7 +94,7 @@ describe('gateway integration', () => {
         method: 'POST',
         url: '/api/sessions',
         headers,
-        payload: { workspaceId, name: workspaceId },
+        payload: { workspaceId },
       });
       const sessionId = created.json().session.id as string;
       const lease = await app.inject({

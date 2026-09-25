@@ -23,6 +23,8 @@ export interface SessionSummary {
   id: string;
   workspaceId: string;
   name: string;
+  /** `auto`: a placeholder or generated title that a new generated title may replace. */
+  nameSource: 'user' | 'auto';
   runnerState: RunnerState;
   runStatus: RunStatus | null;
   runnerEpoch: number;

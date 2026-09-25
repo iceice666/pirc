@@ -28,7 +28,7 @@ export type SessionEntry = EntryBase &
       }
     | { type: 'model_change'; provider: string; modelId: string }
     | { type: 'thinking_level_change'; thinkingLevel: string }
-    | { type: 'session_info'; name: string }
+    | { type: 'session_info'; name: string; source?: 'user' | 'auto' }
   );
 
 type NewEntry = SessionEntry extends infer E

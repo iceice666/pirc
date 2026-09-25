@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { normalizeEvent } from './api';
 import { fromSnapshot, reduceEvent } from './state';
 import type { EventEnvelope, SessionSnapshot } from './types';
 
@@ -105,5 +106,19 @@ describe('session event reducer', () => {
         runnerEpoch: 'epoch-b',
       }).needsSnapshot,
     ).toBe(true);
+  });
+
+  it('applies a generated session title from the gateway', () => {
+    const wire = normalizeEvent({
+      sessionId: 's1',
+      epoch: 'epoch-a',
+      sequence: 2,
+      type: 'session_renamed',
+      data: { name: 'Fix login button', source: 'auto' },
+    });
+    expect(wire.event).toEqual({ type: 'session_renamed', name: 'Fix login button' });
+    const state = reduceEvent(fromSnapshot(snapshot), wire);
+    expect(state.session.name).toBe('Fix login button');
+    expect(state.needsSnapshot).toBe(false);
   });
 });

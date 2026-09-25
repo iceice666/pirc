@@ -29,15 +29,11 @@ it('hides persisted local workspaces and forbids daemon-local session operations
       method: 'POST',
       url: '/api/sessions',
       headers,
-      payload: { workspaceId: 'test', name: 'not allowed' },
+      payload: { workspaceId: 'test' },
     });
     expect(create.statusCode).toBe(403);
     expect(services.db.listSessions()).toHaveLength(0);
-    const legacy = services.db.createSession(
-      'test',
-      'existing local session',
-      '/tmp/legacy-daemon-session',
-    );
+    const legacy = services.db.createSession('test', '/tmp/legacy-daemon-session');
     expect(
       (await app.inject({ method: 'GET', url: '/api/sessions', headers })).json().sessions,
     ).toEqual([]);

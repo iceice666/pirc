@@ -56,7 +56,13 @@ const migrations = [
   ALTER TABLE leases ADD COLUMN owner_user TEXT;
   ALTER TABLE sessions ADD COLUMN owner_user TEXT;
   `,
+  `
+  ALTER TABLE sessions ADD COLUMN name_source TEXT NOT NULL DEFAULT 'user';
+  UPDATE sessions SET name_source='auto' WHERE name IN ('New session', 'Untitled session');
+  `,
 ];
+
+export const PLACEHOLDER_SESSION_NAME = 'New session';
 
 const RUNNING: RunStatus[] = ['queued', 'running', 'waiting_input', 'stopping'];
 
@@ -222,9 +228,9 @@ export class GatewayDatabase {
     };
   }
 
+  /** New sessions get a placeholder name that the agent's generated title replaces. */
   createSession(
     workspaceId: string,
-    name: string,
     privateSessionPath: string,
     nodeId: string | null = null,
     remoteSessionId: string | null = null,
@@ -235,13 +241,13 @@ export class GatewayDatabase {
     const stamp = now();
     this.raw
       .prepare(
-        'INSERT INTO sessions (id,workspace_id,private_session_path,name,node_id,pi_session_id,owner_user,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
+        "INSERT INTO sessions (id,workspace_id,private_session_path,name,name_source,node_id,pi_session_id,owner_user,created_at,updated_at) VALUES (?,?,?,?,'auto',?,?,?,?,?)",
       )
       .run(
         sessionId,
         workspaceId,
         privateSessionPath,
-        name,
+        PLACEHOLDER_SESSION_NAME,
         nodeId,
         remoteSessionId,
         ownerUser,
@@ -258,6 +264,7 @@ export class GatewayDatabase {
       nodeId: row.node_id ?? null,
       ownerUser: row.owner_user ?? null,
       name: row.name,
+      nameSource: row.name_source === 'auto' ? 'auto' : 'user',
       runnerState: row.runner_state,
       runStatus: row.run_status ?? null,
       runnerEpoch: row.runner_epoch,
@@ -292,9 +299,18 @@ export class GatewayDatabase {
   renameSession(sessionId: string, name: string): SessionRow {
     this.getSession(sessionId);
     this.raw
-      .prepare('UPDATE sessions SET name=?, updated_at=? WHERE id=?')
+      .prepare("UPDATE sessions SET name=?, name_source='user', updated_at=? WHERE id=?")
       .run(name, now(), sessionId);
     return this.getSession(sessionId);
+  }
+
+  /** Apply a generated title unless the user has named the session. Returns whether it changed. */
+  autoRenameSession(sessionId: string, name: string): boolean {
+    return (
+      this.raw
+        .prepare("UPDATE sessions SET name=? WHERE id=? AND name_source='auto' AND name!=?")
+        .run(name, sessionId, name).changes > 0
+    );
   }
   claimRemoteSession(sessionId: string, user: string, requireOwner = false): void {
     const session = this.getSession(sessionId);

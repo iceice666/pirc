@@ -21,8 +21,8 @@ export interface Feature {
     string,
     { description: string; run(agent: Agent, args: string): Promise<void> }
   >;
-  /** A human (not an extension) submitted input. */
-  userInput?(agent: Agent): void;
+  /** A human (not an extension) submitted input (slash commands excluded). */
+  userInput?(agent: Agent, text: string): void;
   /** Called once after the session is loaded. */
   init?(agent: Agent): void | Promise<void>;
   /** Before each run: extend the system prompt or inject hidden context. */

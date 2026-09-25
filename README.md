@@ -60,6 +60,7 @@ Built-in tools and features:
 - Compaction with prompt-cache warming, and observational memory with `recall`.
 - `background_task`.
 - Agent teams (`agent_spawn` and friends; children are `pirc agent --headless` subprocesses).
+- Session titles: sessions cannot be named when created; each one is named by the model from the first user message that describes work (greetings are skipped). It is a side request with no tools and no thinking, and it retries on later messages if it fails. A name you set by renaming always wins. Configure it in `features.sessionTitle`: `enabled` (default `true`), `model` (`{ "provider", "id" }`; defaults to the session's model, so a small, fast model saves cost), `prompt` (replaces the default system prompt), and `maxAttempts` (default `3`).
 
 The design and milestones are in [`plans/single-binary-agent.md`](./plans/single-binary-agent.md).
 

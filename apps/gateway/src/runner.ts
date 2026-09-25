@@ -18,6 +18,32 @@ interface PendingRequest {
 
 const dialogMethods = new Set(['select', 'confirm', 'input', 'editor']);
 
+/**
+ * Persist a name reported by the agent (or relayed from a node) and tell
+ * clients. A generated (`auto`) title never replaces a name the user chose.
+ */
+export function applySessionName(
+  db: GatewayDatabase,
+  events: EventHub,
+  sessionId: string,
+  epoch: number,
+  data: Record<string, unknown>,
+): void {
+  const name = typeof data.name === 'string' ? data.name.trim().slice(0, 200) : '';
+  if (!name) return;
+  if (data.source === 'auto') {
+    if (!db.autoRenameSession(sessionId, name)) return;
+  } else {
+    const session = db.getSession(sessionId);
+    if (session.name === name && session.nameSource === 'user') return;
+    db.renameSession(sessionId, name);
+  }
+  events.publish(sessionId, epoch, 'session_renamed', {
+    name,
+    source: data.source === 'auto' ? 'auto' : 'user',
+  });
+}
+
 class PiRunner {
   readonly state: ReducedSessionState = emptyReducedState();
   readonly epoch: number;
@@ -77,6 +103,11 @@ class PiRunner {
     this.child.once('exit', (code, signal) => this.exit(code, signal));
     db.setRunnerState(session.id, 'ready');
     this.events.publish(session.id, this.epoch, 'runner_ready', {});
+    // A user-chosen name stops the agent from generating one. Written before any
+    // prompt, so the agent sees it first.
+    const current = db.getSession(session.id);
+    if (current.nameSource === 'user')
+      void this.request({ type: 'set_session_name', name: current.name }).catch(() => undefined);
     void this.request({ type: 'get_state' })
       .then((response) => {
         if (response.success && response.data?.sessionId)
@@ -144,6 +175,10 @@ class PiRunner {
         }
         return;
       } else this.events.publish(this.session.id, this.epoch, 'notification', message);
+    }
+    if (message.type === 'session_name_changed') {
+      applySessionName(this.db, this.events, this.session.id, this.epoch, message);
+      return;
     }
     reducePiEvent(this.state, message);
     if (message.type === 'agent_start') {

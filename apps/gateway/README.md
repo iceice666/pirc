@@ -35,8 +35,8 @@ On **each** device set `PIRC_NODE_ID`, its matching `PIRC_NODE_TOKEN`, `PIRC_DAE
 
 - `GET /api/health`
 - `GET /api/workspaces`
-- `GET|POST /api/sessions`
-- `PATCH /api/sessions/:id`
+- `GET|POST /api/sessions`. Create takes only `{ "workspaceId" }`; sessions cannot be named at creation. A new session starts as `New session` (`nameSource: "auto"`), and the agent's generated title replaces it, reported as a `session_renamed` event.
+- `PATCH /api/sessions/:id` renames the session and marks the name as user-chosen, so generated titles no longer replace it.
 - `GET /api/sessions/:id/snapshot`
 - `POST /api/sessions/:id/commands`
 - `GET /api/sessions/:id/control`
