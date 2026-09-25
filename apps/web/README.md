@@ -1,6 +1,6 @@
 # Relay web client
 
-Standalone Svelte 5 + TypeScript + Vite client for the Pi Remote Client gateway. This package intentionally uses no SvelteKit server runtime.
+Standalone Svelte 5 + TypeScript + Vite client for the pirc gateway. This package intentionally uses no SvelteKit server runtime.
 
 ## Commands
 

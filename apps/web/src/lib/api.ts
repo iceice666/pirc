@@ -83,7 +83,14 @@ function interaction(raw: any): PendingInteraction {
     return {
       ...base,
       kind: 'select',
-      options: (request.options ?? []).map((value: string) => ({ value, label: value })),
+      ...(request.multiple ? { multiple: true } : {}),
+      options: (request.options ?? []).map((value: string, index: number) => ({
+        value,
+        label: value,
+        ...(request.optionDescriptions?.[index]
+          ? { description: request.optionDescriptions[index] }
+          : {}),
+      })),
     };
   if (raw.kind === 'confirm') return { ...base, kind: 'confirm' };
   if (raw.kind === 'editor')
@@ -142,6 +149,8 @@ async function normalizeSnapshot(raw: any): Promise<SessionSnapshot> {
     control: controlLease(lease),
     cursor: `${raw.watermark?.epoch ?? 0}:${raw.watermark?.sequence ?? 0}`,
     runnerEpoch: String(raw.watermark?.epoch ?? raw.session.runnerEpoch ?? 0),
+    widgets: raw.widgets ?? {},
+    statuses: raw.statuses ?? {},
   };
 }
 
@@ -230,7 +239,9 @@ export const api = {
         ? { cancelled: true }
         : typeof answer.value === 'boolean'
           ? { confirmed: answer.value }
-          : { value: Array.isArray(answer.value) ? answer.value.join(', ') : answer.value };
+          : Array.isArray(answer.value)
+            ? { value: answer.value.join(', '), values: answer.value }
+            : { value: answer.value };
     return request<void>(
       `/api/sessions/${encodeURIComponent(sessionId)}/interactions/${encodeURIComponent(interactionId)}/answer`,
       {
@@ -401,7 +412,19 @@ export function normalizeEvent(raw: any): EventEnvelope {
             type: 'message_completed',
             message: piNotification({ ...raw.data, receivedAt: raw.timestamp }),
           }
-        : { type: 'noop' };
+        : raw.data?.method === 'setWidget'
+          ? {
+              type: 'widget_updated',
+              key: String(raw.data.widgetKey ?? ''),
+              ...(Array.isArray(raw.data.widgetLines) ? { lines: raw.data.widgetLines } : {}),
+            }
+          : raw.data?.method === 'setStatus'
+            ? {
+                type: 'status_updated',
+                key: String(raw.data.statusKey ?? ''),
+                ...(typeof raw.data.statusText === 'string' ? { text: raw.data.statusText } : {}),
+              }
+            : { type: 'noop' };
   else if (raw.type === 'runner_stderr') event = { type: 'noop' };
   else if (SNAPSHOT_EVENTS.has(raw.type)) event = { type: 'reset', reason: 'cursor_expired' };
   return {

@@ -11,6 +11,9 @@ export interface ReducedSessionState {
   partialMessage: { base: unknown; content: Record<number, PartialContent> } | null;
   queue: { steering: string[]; followUp: string[] };
   notifications: Record<string, unknown>[];
+  /** Extension panels (`setWidget`) and status-line entries (`setStatus`), keyed by extension. */
+  widgets: Record<string, string[]>;
+  statuses: Record<string, string>;
 }
 
 export const emptyReducedState = (): ReducedSessionState => ({
@@ -18,6 +21,8 @@ export const emptyReducedState = (): ReducedSessionState => ({
   partialMessage: null,
   queue: { steering: [], followUp: [] },
   notifications: [],
+  widgets: {},
+  statuses: {},
 });
 
 export function reducePiEvent(state: ReducedSessionState, event: Record<string, any>): void {
@@ -78,4 +83,15 @@ export function reducePiEvent(state: ReducedSessionState, event: Record<string, 
     state.queue = { steering: event.steering ?? [], followUp: event.followUp ?? [] };
   else if (event.type === 'extension_ui_request' && event.method === 'notify')
     state.notifications.push({ ...event, receivedAt: Date.now() });
+  else if (event.type === 'extension_ui_request' && event.method === 'setWidget') {
+    const key = String(event.widgetKey ?? '');
+    if (Array.isArray(event.widgetLines) && event.widgetLines.length)
+      state.widgets[key] = event.widgetLines.map(String).slice(0, 50);
+    else delete state.widgets[key];
+  } else if (event.type === 'extension_ui_request' && event.method === 'setStatus') {
+    const key = String(event.statusKey ?? '');
+    if (typeof event.statusText === 'string' && event.statusText)
+      state.statuses[key] = event.statusText;
+    else delete state.statuses[key];
+  }
 }

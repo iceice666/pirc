@@ -188,6 +188,9 @@ export interface SessionSnapshot {
   runnerEpoch: string;
   selectedModelId?: string;
   thinkingLevel?: ThinkingLevel;
+  /** Extension panels (e.g. the todo list), keyed by extension. */
+  widgets?: Record<string, string[]>;
+  statuses?: Record<string, string>;
 }
 
 export interface ModelOption {
@@ -257,6 +260,8 @@ export type GatewayEvent =
   | { type: 'interaction_updated'; interaction: PendingInteraction }
   | { type: 'interaction_removed'; interactionId: string }
   | { type: 'queue_updated'; queue: QueueItem[] }
+  | { type: 'widget_updated'; key: string; lines?: string[] }
+  | { type: 'status_updated'; key: string; text?: string }
   | { type: 'control_updated'; control: ControlLease }
   | { type: 'session_updated'; session: SessionSummary }
   | { type: 'reset'; reason: 'cursor_expired' | 'epoch_changed' | 'backpressure' };

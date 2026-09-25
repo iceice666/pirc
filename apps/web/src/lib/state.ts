@@ -32,6 +32,18 @@ export function reduceEvent(
       return { ...base, needsSnapshot: true };
     case 'noop':
       return base;
+    case 'widget_updated': {
+      const widgets = { ...(state.widgets ?? {}) };
+      if (event.lines?.length) widgets[event.key] = event.lines;
+      else delete widgets[event.key];
+      return { ...base, widgets };
+    }
+    case 'status_updated': {
+      const statuses = { ...(state.statuses ?? {}) };
+      if (event.text) statuses[event.key] = event.text;
+      else delete statuses[event.key];
+      return { ...base, statuses };
+    }
     case 'message_started': {
       // Replace a stale partial with the same id; never clobber a finished message.
       const messages = state.messages.filter(

@@ -62,7 +62,7 @@ const answerBody = z.object({
   generation: z.number().int().positive(),
   answer: z.union([
     z.object({ cancelled: z.literal(true) }),
-    z.object({ value: z.string() }),
+    z.object({ value: z.string(), values: z.array(z.string()).max(64).optional() }),
     z.object({ confirmed: z.boolean() }),
   ]),
 });
@@ -442,6 +442,8 @@ export async function buildApp(
       run: db.latestRun(sessionId),
       interactions: db.pendingInteractions(sessionId),
       notifications,
+      widgets: active?.state.widgets ?? {},
+      statuses: active?.state.statuses ?? {},
       watermark: events.watermark(sessionId, sessionRow.runnerEpoch),
       partialOutputLost,
     };

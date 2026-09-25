@@ -20,6 +20,7 @@
   import { api, connectEvents, type EventConnection } from './lib/api';
   import Composer from './lib/components/Composer.svelte';
   import InteractionCard from './lib/components/InteractionCard.svelte';
+  import WidgetPanel from './lib/components/WidgetPanel.svelte';
   import Message from './lib/components/Message.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
   import { demoModels, demoSessions, demoSnapshot, demoWorkspaces } from './lib/mock';
@@ -586,6 +587,10 @@
               {/if}
             </div>
           </div>
+          <WidgetPanel
+            widgets={sessionState.widgets ?? {}}
+            statuses={sessionState.statuses ?? {}}
+          />
           <Composer
             value={draft}
             {connection}

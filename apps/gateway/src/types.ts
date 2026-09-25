@@ -55,6 +55,8 @@ export interface EventCursor {
 }
 
 export interface Snapshot {
+  widgets?: Record<string, string[]>;
+  statuses?: Record<string, string>;
   session: SessionSummary;
   history: unknown[];
   partialMessage: unknown | null;
