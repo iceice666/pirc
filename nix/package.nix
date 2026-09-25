@@ -45,6 +45,8 @@
 
     makeWrapper ${nodejs_22}/bin/node $out/bin/pirc-gateway \
       --add-flags "$out/lib/pirc/dist/src/index.js"
+    makeWrapper ${nodejs_22}/bin/node $out/bin/pirc-node \
+      --add-flags "$out/lib/pirc/dist/src/node-agent.js"
 
     runHook postInstall
   '';

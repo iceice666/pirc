@@ -14,6 +14,10 @@
       ...
     }:
     {
+      overlays.default = final: _prev: {
+        pirc = final.callPackage ./nix/package.nix { };
+      };
+
       nixosModules = {
         pirc = import ./nix/module.nix;
         default = self.nixosModules.pirc;

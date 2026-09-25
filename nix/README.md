@@ -2,7 +2,8 @@
 
 The flake exposes:
 
-- `packages.<system>.pirc`: compiled Gateway plus static Web bundle.
+- `packages.<system>.pirc`: compiled Gateway plus static Web bundle (`bin/pirc-gateway`, `bin/pirc-node`, `share/pirc/web`).
+- `overlays.default`: adds `pkgs.pirc`, built against the consumer's nixpkgs.
 - `nixosModules.pirc`: an unprivileged systemd service and optional nginx/forward-auth virtual host.
 - `devShells.<system>.default`: Node 22 and native build prerequisites.
 
