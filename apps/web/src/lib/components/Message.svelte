@@ -1,59 +1,213 @@
 <script lang="ts">
-  import { Bot, Copy, Image as ImageIcon, RotateCcw } from '@lucide/svelte';
+  import {
+    Bot,
+    Brain,
+    ChevronRight,
+    CircleAlert,
+    Copy,
+    GitBranch,
+    Image as ImageIcon,
+    Info,
+    Layers,
+    Puzzle,
+    RotateCcw,
+    SquareTerminal,
+    TriangleAlert,
+  } from '@lucide/svelte';
   import type { ConversationMessage } from '../types';
+  import Markdown from './Markdown.svelte';
   import ToolCard from './ToolCard.svelte';
 
   export let message: ConversationMessage;
 
+  let thinkingOpen = false;
+  let systemOpen = false;
+
   function time(date: string) {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
+
+  $: kind = message.systemKind ?? 'custom';
+  $: systemIcon =
+    kind === 'bash'
+      ? SquareTerminal
+      : kind === 'compaction'
+        ? Layers
+        : kind === 'branch'
+          ? GitBranch
+          : kind === 'notice'
+            ? message.level === 'error'
+              ? CircleAlert
+              : message.level === 'warning'
+                ? TriangleAlert
+                : Info
+            : Puzzle;
+  // Short system entries read fine inline; long summaries/outputs collapse.
+  $: collapsible = kind === 'compaction' || kind === 'branch' || kind === 'bash';
+  $: streamingThinking = !!message.isPartial && !message.content && !!message.thinking;
+  $: thinkingVisible = thinkingOpen || streamingThinking;
+  $: hasBody =
+    !!message.content || !!message.isPartial || !!message.errorMessage || !!message.images?.length;
 </script>
 
-<article
-  class:user={message.role === 'user'}
-  class:system={message.role === 'system'}
-  class="message"
->
-  <div class="message-gutter">
-    {#if message.role === 'assistant'}<span class="agent-avatar"><Bot size={16} /></span
-      >{:else if message.role === 'user'}<span class="user-avatar">You</span>{/if}
-  </div>
-  <div class="message-main">
-    <header>
-      <strong
-        >{message.role === 'assistant' ? 'Pi' : message.role === 'user' ? 'You' : 'System'}</strong
-      ><time datetime={message.createdAt}>{time(message.createdAt)}</time>
-    </header>
-    <div class="message-copy">
-      {message.content}{#if message.isPartial}<span class="stream-cursor" aria-label="Streaming"
-        ></span>{/if}
+{#if message.role === 'system'}
+  <aside
+    class="system-entry"
+    data-kind={kind}
+    data-level={message.level ?? 'info'}
+    aria-label={message.label ?? 'System message'}
+  >
+    {#if kind === 'notice'}
+      <div class="system-line">
+        <span class="system-icon" aria-hidden="true"
+          ><svelte:component this={systemIcon} size={14} /></span
+        >
+        <div class="system-text"><Markdown source={message.content} compact /></div>
+        <time datetime={message.createdAt}>{time(message.createdAt)}</time>
+      </div>
+    {:else}
+      <button
+        class="system-line"
+        type="button"
+        disabled={!collapsible || (!message.content && !message.tools?.length)}
+        aria-expanded={collapsible ? systemOpen : undefined}
+        on:click={() => (systemOpen = !systemOpen)}
+      >
+        <span class="system-icon" aria-hidden="true"
+          ><svelte:component this={systemIcon} size={14} /></span
+        >
+        <span class="system-title">
+          {#if kind === 'bash'}<code>$ {message.label}</code>{:else}<strong>{message.label}</strong
+            >{/if}
+          {#if message.meta}<span>{message.meta}</span>{/if}
+        </span>
+        <time datetime={message.createdAt}>{time(message.createdAt)}</time>
+        {#if collapsible && message.content}<ChevronRight
+            class={systemOpen ? 'rotated' : ''}
+            size={14}
+            aria-hidden="true"
+          />{/if}
+      </button>
+      {#if (!collapsible || systemOpen) && message.content}
+        <div class="system-body">
+          {#if kind === 'bash'}<pre>{message.content}</pre>{:else}<Markdown
+              source={message.content}
+              compact
+            />{/if}
+        </div>
+      {/if}
+      {#if message.images?.length}
+        <div class="message-images">
+          {#each message.images as image}<img
+              src={image.url}
+              alt="Attachment"
+              loading="lazy"
+            />{/each}
+        </div>
+      {/if}
+      {#if message.tools?.length}
+        <div class="tool-stack">
+          {#each message.tools as tool (tool.id)}<ToolCard {tool} />{/each}
+        </div>
+      {/if}
+    {/if}
+  </aside>
+{:else}
+  <article class:user={message.role === 'user'} class="message">
+    <div class="message-gutter">
+      {#if message.role === 'assistant'}<span class="agent-avatar"><Bot size={16} /></span
+        >{:else}<span class="user-avatar">You</span>{/if}
     </div>
-    {#if message.attachments?.length}
-      <div class="message-attachments">
-        {#each message.attachments as attachment}
-          <span><ImageIcon size={15} /> {attachment.name}</span>
-        {/each}
-      </div>
-    {/if}
-    {#if message.tools?.length}
-      <div class="tool-stack">
-        {#each message.tools as tool}<ToolCard {tool} />{/each}
-      </div>
-    {/if}
-    {#if message.role === 'assistant' && !message.isPartial}
-      <div class="message-actions">
-        <button
-          type="button"
-          aria-label="Copy response"
-          title="Copy response"
-          on:click={() => navigator.clipboard.writeText(message.content)}
-          ><Copy size={14} /> Copy</button
+    <div class="message-main">
+      <header>
+        <strong>{message.role === 'assistant' ? 'Pi' : 'You'}</strong><time
+          datetime={message.createdAt}>{time(message.createdAt)}</time
         >
-        <button type="button" aria-label="Retry response" title="Retry response"
-          ><RotateCcw size={14} /> Retry</button
-        >
-      </div>
-    {/if}
-  </div>
-</article>
+        {#if message.model}<span class="message-model">{message.model}</span>{/if}
+      </header>
+      {#if message.thinking || message.thinkingRedacted}
+        <div class="thinking" class:open={thinkingVisible}>
+          <button
+            type="button"
+            class="thinking-toggle"
+            aria-expanded={thinkingVisible}
+            on:click={() => (thinkingOpen = !thinkingOpen)}
+          >
+            <Brain size={13} aria-hidden="true" />
+            <span
+              >{streamingThinking
+                ? 'Thinking…'
+                : message.thinkingRedacted && !message.thinking
+                  ? 'Reasoning redacted'
+                  : 'Thinking'}</span
+            >
+            <ChevronRight class={thinkingVisible ? 'rotated' : ''} size={13} aria-hidden="true" />
+          </button>
+          {#if thinkingVisible && message.thinking}
+            <div class="thinking-body">
+              <Markdown source={message.thinking} streaming={streamingThinking} compact />
+            </div>
+          {/if}
+        </div>
+      {/if}
+      {#if hasBody}
+        <div class="message-copy">
+          {#if message.role === 'user'}
+            <span class="plain">{message.content}</span>
+          {:else if message.content}
+            <Markdown source={message.content} streaming={message.isPartial} />
+          {/if}
+          {#if message.isPartial && !streamingThinking && (message.role === 'user' || !message.content)}<span
+              class="stream-cursor"
+              aria-label="Streaming"
+            ></span>{/if}
+        </div>
+      {/if}
+      {#if message.stopReason}
+        <div class="message-error" role="status">
+          <CircleAlert size={14} aria-hidden="true" />
+          <span
+            >{message.stopReason === 'aborted' ? 'Stopped' : 'Error'}{message.errorMessage
+              ? `: ${message.errorMessage}`
+              : ''}</span
+          >
+        </div>
+      {/if}
+      {#if message.images?.length}
+        <div class="message-images">
+          {#each message.images as image}<img
+              src={image.url}
+              alt="Attachment"
+              loading="lazy"
+            />{/each}
+        </div>
+      {/if}
+      {#if message.attachments?.length}
+        <div class="message-attachments">
+          {#each message.attachments as attachment}
+            <span><ImageIcon size={15} /> {attachment.name}</span>
+          {/each}
+        </div>
+      {/if}
+      {#if message.tools?.length}
+        <div class="tool-stack">
+          {#each message.tools as tool (tool.id)}<ToolCard {tool} />{/each}
+        </div>
+      {/if}
+      {#if message.role === 'assistant' && !message.isPartial && message.content}
+        <div class="message-actions">
+          <button
+            type="button"
+            aria-label="Copy response"
+            title="Copy response"
+            on:click={() => navigator.clipboard.writeText(message.content)}
+            ><Copy size={14} /> Copy</button
+          >
+          <button type="button" aria-label="Retry response" title="Retry response"
+            ><RotateCcw size={14} /> Retry</button
+          >
+        </div>
+      {/if}
+    </div>
+  </article>
+{/if}

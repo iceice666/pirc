@@ -1,0 +1,326 @@
+/* Rendered Markdown inside messages. Scoped under .markdown. */
+.markdown {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown .table-wrap,
+.markdown .code-block,
+.markdown .math-block,
+.markdown .mermaid-block,
+.markdown hr {
+  margin: 0 0 0.85em;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  margin: 1.3em 0 0.5em;
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.35;
+}
+.markdown h1 {
+  font-size: 1.35em;
+}
+.markdown h2 {
+  font-size: 1.2em;
+}
+.markdown h3 {
+  font-size: 1.08em;
+}
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-size: 1em;
+}
+.markdown ul,
+.markdown ol {
+  padding-left: 1.5em;
+}
+.markdown li + li,
+.markdown li > ul,
+.markdown li > ol {
+  margin-top: 0.2em;
+}
+.markdown li > ul,
+.markdown li > ol {
+  margin-bottom: 0;
+}
+.markdown li > p {
+  margin-bottom: 0.4em;
+}
+.markdown li:has(> input[type='checkbox']) {
+  list-style: none;
+  margin-left: -1.3em;
+}
+.markdown input[type='checkbox'] {
+  margin: 0 0.45em 0 0;
+  vertical-align: -1px;
+  accent-color: var(--accent-deep);
+}
+.markdown a {
+  color: #4f6a17;
+  text-decoration: underline;
+  text-decoration-color: #c5cc6e;
+  text-underline-offset: 2px;
+}
+.markdown a:hover {
+  text-decoration-color: currentColor;
+}
+.markdown strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+.markdown blockquote {
+  padding: 0.1em 0 0.1em 0.95em;
+  border-left: 3px solid var(--line-dark);
+  color: var(--muted);
+}
+.markdown hr {
+  height: 1px;
+  border: 0;
+  background: var(--line);
+}
+.markdown img {
+  max-width: 100%;
+  border-radius: 7px;
+}
+.markdown :not(pre) > code {
+  padding: 0.1em 0.38em;
+  border-radius: 4px;
+  background: #ebe9e0;
+  color: #3b3e36;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.87em;
+}
+.message.user .markdown :not(pre) > code {
+  background: #e0ded4;
+}
+
+/* Streaming cursor sits at the end of the last rendered block. */
+.markdown.streaming > :last-child::after,
+.markdown.streaming > :is(ul, ol):last-child > li:last-child::after {
+  content: '';
+  width: 7px;
+  height: 14px;
+  display: inline-block;
+  margin-left: 4px;
+  vertical-align: -2px;
+  border-radius: 1px;
+  background: #a2ab18;
+  animation: blink 1s step-end infinite;
+}
+.markdown.streaming > :is(ul, ol):last-child::after,
+.markdown.streaming > .code-block:last-child::after,
+.markdown.streaming > .table-wrap:last-child::after {
+  display: none;
+}
+
+/* Tables */
+.markdown .table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92em;
+  line-height: 1.5;
+}
+.markdown th,
+.markdown td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.markdown th[align='center'],
+.markdown td[align='center'] {
+  text-align: center;
+}
+.markdown th[align='right'],
+.markdown td[align='right'] {
+  text-align: right;
+}
+.markdown th {
+  background: #f1f0ea;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.markdown tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Code blocks */
+.markdown .code-block {
+  overflow: hidden;
+  border-radius: 8px;
+  background: #20231f;
+  color: #e6e7df;
+}
+.markdown .code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 4px 12px;
+  border-bottom: 1px solid #33372f;
+  color: #8d9086;
+  font-family: 'DM Mono', monospace;
+  font-size: 9.5px;
+}
+.markdown .code-copy {
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 4px;
+  color: #aeb0a7;
+  background: transparent;
+  font-size: 9.5px;
+}
+.markdown .code-copy:hover {
+  color: #f1f2ea;
+  background: #33372f;
+}
+.markdown pre {
+  margin: 0;
+  padding: 11px 12px;
+  overflow-x: auto;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  tab-size: 2;
+}
+.markdown pre code {
+  font: inherit;
+  white-space: pre;
+}
+
+/* Math */
+.markdown .math-block {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0;
+}
+.markdown .katex {
+  font-size: 1.08em;
+}
+.markdown .katex-display {
+  margin: 0.3em 0;
+}
+.markdown .math-error {
+  color: var(--danger);
+}
+
+/* Mermaid */
+.markdown .mermaid-block {
+  overflow-x: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  text-align: center;
+}
+.markdown .mermaid-block svg {
+  max-width: 100%;
+  height: auto;
+}
+.markdown .mermaid-block[data-rendered='ok'] .mermaid-source {
+  display: none;
+}
+.markdown .mermaid-source {
+  padding: 0;
+  color: var(--muted);
+  text-align: left;
+}
+.markdown .mermaid-error {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 10px;
+  text-align: left;
+}
+
+/* Compact variant: thinking, notices, system bodies. */
+.markdown.compact {
+  font-size: inherit;
+  line-height: 1.6;
+}
+.markdown.compact p,
+.markdown.compact ul,
+.markdown.compact ol {
+  margin-bottom: 0.55em;
+}
+
+/* highlight.js theme, tuned to the dark code surface. */
+.hljs-comment,
+.hljs-quote {
+  color: #858a7c;
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-meta .hljs-keyword {
+  color: #dfe83f;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-meta .hljs-string {
+  color: #b5d68a;
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-variable.constant_ {
+  color: #e9b872;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: #9ecbd0;
+}
+.hljs-title.class_,
+.hljs-type,
+.hljs-built_in {
+  color: #d6b3e0;
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: #e6e7df;
+}
+.hljs-name,
+.hljs-tag,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: #f0a58f;
+}
+.hljs-deletion {
+  color: #f1b0a5;
+}
+.hljs-meta {
+  color: #a3a59e;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 700;
+}

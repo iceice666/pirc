@@ -1,9 +1,16 @@
+import {
+  interleave,
+  piHistory,
+  piMessage,
+  piNotification,
+  piPartialMessage,
+  toolResultFields,
+} from './pi-messages';
 import { getClientId } from './storage';
 import type {
   Attachment,
   CommandReceipt,
   ControlLease,
-  ConversationMessage,
   CreateSessionInput,
   EventEnvelope,
   GatewayEvent,
@@ -62,36 +69,6 @@ function sessionSummary(raw: any): SessionSummary {
   };
 }
 
-function messageText(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content
-    .filter((part) => part && (part.type === 'text' || part.type === 'thinking'))
-    .map((part) => part.text ?? part.thinking ?? '')
-    .join('');
-}
-
-function conversationMessage(raw: any, index = 0): ConversationMessage {
-  return {
-    id: raw.id ?? `message-${raw.timestamp ?? index}-${index}`,
-    role: raw.role === 'assistant' ? 'assistant' : raw.role === 'user' ? 'user' : 'system',
-    content: messageText(raw.content),
-    createdAt: iso(raw.timestamp),
-  };
-}
-
-function partialMessage(raw: any): ConversationMessage | undefined {
-  if (!raw) return undefined;
-  const blocks = Object.values(raw.content ?? {}) as any[];
-  return {
-    id: raw.base?.id ?? 'partial-assistant',
-    role: 'assistant',
-    content: blocks.map((block) => block.text ?? '').join(''),
-    createdAt: iso(raw.base?.timestamp),
-    isPartial: true,
-  };
-}
-
 function interaction(raw: any): PendingInteraction {
   const request = raw.request ?? {};
   const base = {
@@ -127,7 +104,7 @@ function controlLease(raw: any, clientId = getClientId()): ControlLease {
 
 async function normalizeSnapshot(raw: any): Promise<SessionSnapshot> {
   const lease = await request<any>(`/api/sessions/${encodeURIComponent(raw.session.id)}/control`);
-  const partial = partialMessage(raw.partialMessage);
+  const partial = piPartialMessage(raw.partialMessage);
   return {
     session: sessionSummary(raw.session),
     runnerStatus: raw.session.runnerState ?? 'stopped',
@@ -140,7 +117,12 @@ async function normalizeSnapshot(raw: any): Promise<SessionSnapshot> {
           failureReason: raw.run.failureReason ?? undefined,
         }
       : null,
-    messages: (raw.history ?? []).map(conversationMessage),
+    messages: interleave(
+      piHistory(raw.history ?? []),
+      (raw.notifications ?? [])
+        .filter((item: any) => item?.method === 'notify')
+        .map(piNotification),
+    ),
     partialMessage: partial,
     interactions: (raw.interactions ?? []).map(interaction),
     queue: [
@@ -293,34 +275,135 @@ export interface EventConnection {
   close(): void;
 }
 
-function normalizeEvent(raw: any): EventEnvelope {
+/** Events that change run/runner state only a snapshot reports accurately. */
+const SNAPSHOT_EVENTS = new Set([
+  'interaction_created',
+  'interaction_answered',
+  'runner_ready',
+  'runner_error',
+  'runner_exit',
+  'node_offline',
+  'node_reconnected',
+]);
+/** Pi lifecycle events that change run status. */
+const RUN_EVENTS = new Set(['agent_start', 'agent_end', 'agent_settled']);
+
+function piEvent(pi: any, timestamp: unknown): GatewayEvent {
+  switch (pi.type) {
+    case 'message_start': {
+      if (pi.message?.role !== 'assistant') return { type: 'noop' };
+      const message = piMessage(pi.message);
+      return message
+        ? { type: 'message_started', message: { ...message, isPartial: true } }
+        : { type: 'noop' };
+    }
+    case 'message_update': {
+      const delta = pi.assistantMessageEvent ?? {};
+      if (delta.type === 'text_delta' || delta.type === 'thinking_delta')
+        return {
+          type: 'message_delta',
+          delta: delta.delta ?? '',
+          channel: delta.type === 'thinking_delta' ? 'thinking' : 'text',
+        };
+      if (delta.type === 'toolcall_start' && delta.id)
+        return {
+          type: 'tool_updated',
+          tool: { id: delta.id, name: delta.toolName ?? 'tool', status: 'running' },
+        };
+      if (delta.type === 'toolcall_end' && delta.toolCall?.id)
+        return {
+          type: 'tool_updated',
+          tool: {
+            id: delta.toolCall.id,
+            name: delta.toolCall.name ?? 'tool',
+            input: delta.toolCall.arguments,
+            status: 'running',
+          },
+        };
+      return { type: 'noop' };
+    }
+    case 'message_end': {
+      const raw = pi.message;
+      if (raw?.role === 'toolResult')
+        return {
+          type: 'tool_updated',
+          tool: {
+            id: raw.toolCallId,
+            name: raw.toolName,
+            status: raw.isError ? 'failed' : 'succeeded',
+            ...toolResultFields(raw),
+          },
+        };
+      const message = piMessage(raw);
+      return message ? { type: 'message_completed', message } : { type: 'noop' };
+    }
+    case 'tool_execution_start':
+      return {
+        type: 'tool_updated',
+        tool: {
+          id: pi.toolCallId,
+          name: pi.toolName,
+          input: pi.args,
+          status: 'running',
+          startedAt: iso(timestamp),
+        },
+      };
+    case 'tool_execution_update':
+      return {
+        type: 'tool_updated',
+        tool: { id: pi.toolCallId, ...toolResultFields(pi.partialResult) },
+      };
+    case 'tool_execution_end':
+      return {
+        type: 'tool_updated',
+        tool: {
+          id: pi.toolCallId,
+          name: pi.toolName,
+          status: pi.isError ? 'failed' : 'succeeded',
+          endedAt: iso(timestamp),
+          ...toolResultFields(pi.result),
+        },
+      };
+    case 'queue_update':
+      return {
+        type: 'queue_updated',
+        queue: [
+          ...(pi.steering ?? []).map((content: string, index: number) => ({
+            id: `steer-${index}`,
+            kind: 'steer' as const,
+            content,
+            createdAt: iso(timestamp),
+          })),
+          ...(pi.followUp ?? []).map((content: string, index: number) => ({
+            id: `follow-${index}`,
+            kind: 'follow_up' as const,
+            content,
+            createdAt: iso(timestamp),
+          })),
+        ],
+      };
+    default:
+      return RUN_EVENTS.has(pi.type)
+        ? { type: 'reset', reason: 'cursor_expired' }
+        : { type: 'noop' };
+  }
+}
+
+export function normalizeEvent(raw: any): EventEnvelope {
   const cursor = `${raw.epoch ?? 0}:${raw.sequence ?? 0}`;
   let event: GatewayEvent = { type: 'reset', reason: 'epoch_changed' };
   if (raw.type === 'reset') event = { type: 'reset', reason: raw.reason ?? 'cursor_expired' };
-  else if (raw.type === 'pi_event') {
-    const pi = raw.data ?? {};
-    if (pi.type === 'message_start')
-      event = { type: 'message_started', message: conversationMessage(pi.message) };
-    else if (pi.type === 'message_update' && pi.assistantMessageEvent?.type === 'text_delta')
-      event = {
-        type: 'message_delta',
-        messageId: 'partial-assistant',
-        delta: pi.assistantMessageEvent.delta ?? '',
-      };
-    else if (pi.type === 'message_end')
-      event = { type: 'message_completed', message: conversationMessage(pi.message) };
-    else event = { type: 'reset', reason: 'cursor_expired' };
-  } else if (
-    [
-      'interaction_created',
-      'interaction_answered',
-      'runner_exit',
-      'node_offline',
-      'node_reconnected',
-    ].includes(raw.type)
-  ) {
-    event = { type: 'reset', reason: 'cursor_expired' };
-  }
+  else if (raw.type === 'pi_event') event = piEvent(raw.data ?? {}, raw.timestamp);
+  else if (raw.type === 'notification')
+    event =
+      raw.data?.method === 'notify'
+        ? {
+            type: 'message_completed',
+            message: piNotification({ ...raw.data, receivedAt: raw.timestamp }),
+          }
+        : { type: 'noop' };
+  else if (raw.type === 'runner_stderr') event = { type: 'noop' };
+  else if (SNAPSHOT_EVENTS.has(raw.type)) event = { type: 'reset', reason: 'cursor_expired' };
   return {
     sessionId: raw.sessionId ?? '',
     runnerEpoch: String(raw.epoch ?? 0),

@@ -61,6 +61,11 @@ export interface RunState {
   failureReason?: string;
 }
 
+export interface InlineImage {
+  mimeType: string;
+  url: string;
+}
+
 export interface ToolCall {
   id: string;
   name: string;
@@ -68,9 +73,22 @@ export interface ToolCall {
   status: 'running' | 'succeeded' | 'failed';
   input?: unknown;
   output?: string;
+  /** Unified diff reported by edit-style tools. */
+  diff?: string;
+  images?: InlineImage[];
   startedAt?: string;
   endedAt?: string;
 }
+
+/**
+ * Non-conversational entries that share the timeline with user/assistant turns.
+ * - notice: extension notifications and gateway/runner diagnostics
+ * - compaction / branch: Pi context summaries
+ * - bash: `!command` executions typed by the user in Pi
+ * - custom: extension-injected messages
+ */
+export type SystemKind = 'notice' | 'compaction' | 'branch' | 'bash' | 'custom';
+export type NoticeLevel = 'info' | 'warning' | 'error';
 
 export interface ConversationMessage {
   id: string;
@@ -78,8 +96,21 @@ export interface ConversationMessage {
   content: string;
   createdAt: string;
   isPartial?: boolean;
+  thinking?: string;
+  thinkingRedacted?: boolean;
+  /** Assistant turn ended with an error or was aborted. */
+  stopReason?: 'error' | 'aborted';
+  errorMessage?: string;
+  model?: string;
   tools?: ToolCall[];
   attachments?: Attachment[];
+  images?: InlineImage[];
+  systemKind?: SystemKind;
+  level?: NoticeLevel;
+  /** Short heading for system entries (e.g. extension custom type, bash command). */
+  label?: string;
+  /** Secondary detail for system entries (e.g. exit code, token count). */
+  meta?: string;
 }
 
 export interface Attachment {
@@ -206,9 +237,22 @@ export interface EventEnvelope<T extends GatewayEvent = GatewayEvent> {
 
 export type GatewayEvent =
   | { type: 'message_started'; message: ConversationMessage }
-  | { type: 'message_delta'; messageId: string; delta: string }
+  | {
+      type: 'message_delta';
+      /** Omitted for live Pi streams: applies to the newest partial assistant message. */
+      messageId?: string;
+      delta: string;
+      channel?: 'text' | 'thinking';
+    }
   | { type: 'message_completed'; message: ConversationMessage }
-  | { type: 'tool_updated'; messageId: string; tool: ToolCall }
+  | {
+      type: 'tool_updated';
+      /** Omitted when the owner is resolved by tool id. */
+      messageId?: string;
+      /** Fields merge into any existing tool with the same id. */
+      tool: Pick<ToolCall, 'id'> & Partial<ToolCall>;
+    }
+  | { type: 'noop' }
   | { type: 'run_updated'; run: RunState | null; runnerStatus?: RunnerStatus }
   | { type: 'interaction_updated'; interaction: PendingInteraction }
   | { type: 'interaction_removed'; interactionId: string }

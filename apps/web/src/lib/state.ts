@@ -1,4 +1,11 @@
-import type { ClientSessionState, EventEnvelope, SessionSnapshot, ToolCall } from './types';
+import { mergeTool } from './pi-messages';
+import type {
+  ClientSessionState,
+  ConversationMessage,
+  EventEnvelope,
+  SessionSnapshot,
+  ToolCall,
+} from './types';
 
 export function fromSnapshot(snapshot: SessionSnapshot): ClientSessionState {
   const messages = snapshot.partialMessage
@@ -23,44 +30,103 @@ export function reduceEvent(
   switch (event.type) {
     case 'reset':
       return { ...base, needsSnapshot: true };
-    case 'message_started':
+    case 'noop':
+      return base;
+    case 'message_started': {
+      // Replace a stale partial with the same id; never clobber a finished message.
+      const messages = state.messages.filter(
+        (message) => !(message.id === event.message.id && message.isPartial),
+      );
       return {
         ...base,
         messages: [
-          ...state.messages.filter((message) => message.id !== event.message.id),
-          event.message,
+          ...messages,
+          { ...event.message, id: uniqueId(messages, event.message.id, envelope) },
         ],
       };
+    }
     case 'message_delta': {
-      const existing = state.messages.find((message) => message.id === event.messageId);
-      if (!existing) return base;
+      let messages = state.messages;
+      let index = event.messageId
+        ? messages.findIndex((message) => message.id === event.messageId)
+        : findLastIndex(messages, (message) => message.role === 'assistant' && !!message.isPartial);
+      if (index === -1) {
+        if (event.messageId) return base;
+        // Joined mid-stream without a message_start: open a live partial.
+        messages = [
+          ...messages,
+          {
+            id: uniqueId(messages, 'assistant-live', envelope),
+            role: 'assistant',
+            content: '',
+            createdAt: new Date().toISOString(),
+            isPartial: true,
+          },
+        ];
+        index = messages.length - 1;
+      }
       return {
         ...base,
-        messages: state.messages.map((message) =>
-          message.id === event.messageId
-            ? { ...message, content: message.content + event.delta, isPartial: true }
+        messages: messages.map((message, position) =>
+          position !== index
+            ? message
+            : event.channel === 'thinking'
+              ? { ...message, thinking: (message.thinking ?? '') + event.delta, isPartial: true }
+              : { ...message, content: message.content + event.delta, isPartial: true },
+        ),
+      };
+    }
+    case 'message_completed': {
+      const incoming = event.message;
+      let index = state.messages.findIndex(
+        (message) => message.id === incoming.id && message.isPartial,
+      );
+      // Pi may omit timestamps on partials; the newest partial of the same role is the one ending.
+      if (index === -1 && incoming.role === 'assistant')
+        index = findLastIndex(
+          state.messages,
+          (message) => message.role === 'assistant' && !!message.isPartial,
+        );
+      if (index === -1) {
+        if (state.messages.some((message) => message.id === incoming.id && !message.isPartial)) {
+          // Same message delivered twice (replay after reconnect): keep the newest copy.
+          return {
+            ...base,
+            messages: state.messages.map((message) =>
+              message.id === incoming.id ? withTools(incoming, message) : message,
+            ),
+          };
+        }
+        return { ...base, messages: [...state.messages, incoming] };
+      }
+      const previous = state.messages[index]!;
+      return {
+        ...base,
+        messages: state.messages.map((message, position) =>
+          position === index ? { ...withTools(incoming, previous), id: previous.id } : message,
+        ),
+      };
+    }
+    case 'tool_updated': {
+      const tool = event.tool;
+      let index = event.messageId
+        ? state.messages.findIndex((message) => message.id === event.messageId)
+        : findLastIndex(
+            state.messages,
+            (message) => !!message.tools?.some((item) => item.id === tool.id),
+          );
+      if (index === -1 && !event.messageId)
+        index = findLastIndex(state.messages, (message) => message.role === 'assistant');
+      if (index === -1) return base;
+      return {
+        ...base,
+        messages: state.messages.map((message, position) =>
+          position === index
+            ? { ...message, tools: upsertTool(message.tools ?? [], tool) }
             : message,
         ),
       };
     }
-    case 'message_completed':
-      return {
-        ...base,
-        messages: state.messages.some((message) => message.id === event.message.id)
-          ? state.messages.map((message) =>
-              message.id === event.message.id ? event.message : message,
-            )
-          : [...state.messages, event.message],
-      };
-    case 'tool_updated':
-      return {
-        ...base,
-        messages: state.messages.map((message) =>
-          message.id === event.messageId
-            ? { ...message, tools: upsertTool(message.tools ?? [], event.tool) }
-            : message,
-        ),
-      };
     case 'run_updated':
       return { ...base, run: event.run, runnerStatus: event.runnerStatus ?? state.runnerStatus };
     case 'interaction_updated':
@@ -86,8 +152,33 @@ export function reduceEvent(
   }
 }
 
-function upsertTool(tools: ToolCall[], tool: ToolCall): ToolCall[] {
+function upsertTool(tools: ToolCall[], tool: Pick<ToolCall, 'id'> & Partial<ToolCall>): ToolCall[] {
   return tools.some((item) => item.id === tool.id)
-    ? tools.map((item) => (item.id === tool.id ? tool : item))
-    : [...tools, tool];
+    ? tools.map((item) => (item.id === tool.id ? mergeTool(item, tool) : item))
+    : [...tools, mergeTool(undefined, tool)];
+}
+
+/** Carry live tool results onto the final message, which only knows the calls. */
+function withTools(
+  incoming: ConversationMessage,
+  previous: ConversationMessage,
+): ConversationMessage {
+  if (!previous.tools?.length) return incoming;
+  const known = new Map(previous.tools.map((tool) => [tool.id, tool]));
+  const tools = (incoming.tools ?? []).map((tool) => {
+    const existing = known.get(tool.id);
+    known.delete(tool.id);
+    return existing ? mergeTool(existing, { ...tool, status: existing.status }) : tool;
+  });
+  return { ...incoming, tools: [...tools, ...known.values()] };
+}
+
+function uniqueId(messages: ConversationMessage[], id: string, envelope: EventEnvelope): string {
+  return messages.some((message) => message.id === id) ? `${id}-${envelope.cursor}` : id;
+}
+
+function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
+  for (let index = items.length - 1; index >= 0; index -= 1)
+    if (predicate(items[index]!)) return index;
+  return -1;
 }
