@@ -73,7 +73,8 @@ export function parseWorkspaces(env: NodeJS.ProcessEnv): ConfigWorkspace[] {
   if (raw)
     inputs = z
       .array(workspaceInput)
-      .min(env.PIRC_DAEMON_ONLY === 'true' ? 0 : 1)
+      // Nodes may start empty: workspaces can be added from the web client.
+      .min(env.PIRC_DAEMON_ONLY === 'true' || env.PIRC_NODE_ID ? 0 : 1)
       .parse(JSON.parse(raw));
   else {
     if (env.PIRC_DAEMON_ONLY === 'true') return [];

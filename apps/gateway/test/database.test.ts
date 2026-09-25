@@ -57,3 +57,9 @@ describe('GatewayDatabase', () => {
     db.close();
   });
 });
+
+it('lets a node start without configured workspaces', async () => {
+  const { parseWorkspaces } = await import('../src/config.js');
+  expect(parseWorkspaces({ PIRC_NODE_ID: 'm5pro', PIRC_WORKSPACES: '[]' })).toEqual([]);
+  expect(() => parseWorkspaces({ PIRC_WORKSPACES: '[]' })).toThrow();
+});
