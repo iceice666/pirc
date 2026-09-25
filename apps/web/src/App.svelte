@@ -1,8 +1,6 @@
 <script lang="ts">
   import {
-    Activity,
     Check,
-    ChevronDown,
     CircleAlert,
     CloudOff,
     Download,
@@ -23,6 +21,8 @@
   import WidgetPanel from './lib/components/WidgetPanel.svelte';
   import Message from './lib/components/Message.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
+  import SidePanel from './lib/components/panel/SidePanel.svelte';
+  import type { PanelTab } from './lib/panel-api';
   import { demoModels, demoSessions, demoSnapshot, demoWorkspaces } from './lib/mock';
   import { activateUpdate, registerPwa } from './lib/pwa';
   import { fromSnapshot, reduceEvent } from './lib/state';
@@ -51,6 +51,11 @@
   let uploads: Array<Attachment & { preview?: string; uploading?: boolean }> = [];
   let sidebarOpen = false;
   let detailsOpen = true;
+  let panelWide = false;
+  let panelTab: PanelTab = 'overview';
+  /** Bumped per `panel_changed` event so the side panel refetches. */
+  let panelTick = 0;
+  let panelChanged: string[] = [];
   let loading = true;
   let commandBusy = false;
   let pageError = '';
@@ -177,6 +182,10 @@
             const followLatest =
               !!timeline && timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 80;
             sessionState = reduceEvent(sessionState, event);
+            if (event.event.type === 'panel_changed') {
+              panelChanged = event.event.sections;
+              panelTick++;
+            }
             if (event.event.type === 'session_renamed') {
               const name = event.event.name;
               sessions = sessions.map((item) => (item.id === id ? { ...item, name } : item));
@@ -513,7 +522,11 @@
     onclose={() => (sidebarOpen = false)}
   />
 
-  <main class:details-collapsed={!detailsOpen} class="workspace">
+  <main
+    class:details-collapsed={!detailsOpen}
+    class:details-wide={detailsOpen && panelWide}
+    class="workspace"
+  >
     {#if loading}
       <div class="loading-state">
         <span class="large-mark"><Sparkles size={24} /></span>
@@ -628,104 +641,22 @@
           />
         </section>
 
-        <aside class:open={detailsOpen} class="details" aria-label="Session details">
-          <div class="details-section run-overview">
-            <div class="section-heading">
-              <span>Current run</span><span
-                class:working={runStatus === 'running'}
-                class="run-badge">{runStatus ?? 'idle'}</span
-              >
-            </div>
-            <div class="run-card">
-              <div class="run-orbit"><span></span><Activity size={20} /></div>
-              <div>
-                <strong
-                  >{runStatus === 'running'
-                    ? 'Pi is working'
-                    : runStatus === 'waiting_input'
-                      ? 'Waiting for you'
-                      : 'No active run'}</strong
-                ><span
-                  >{runStatus === 'running'
-                    ? `Elapsed ${formatDuration(sessionState.run?.startedAt)}`
-                    : 'Ready for a prompt'}</span
-                >
-              </div>
-            </div>
-            <dl class="detail-list">
-              <div>
-                <dt>Runner</dt>
-                <dd><span class="tiny-dot"></span>{sessionState.runnerStatus}</dd>
-              </div>
-              <div>
-                <dt>Model</dt>
-                <dd>
-                  {models.find((model) => model.id === selectedModel)?.displayName ?? selectedModel}
-                </dd>
-              </div>
-              <div>
-                <dt>Thinking</dt>
-                <dd class="capitalize">{thinking}</dd>
-              </div>
-              <div>
-                <dt>Control</dt>
-                <dd>
-                  {hasControl ? 'This browser' : (sessionState.control.holderName ?? 'Viewer')}
-                </dd>
-              </div>
-            </dl>
-          </div>
-
-          <div class="details-section">
-            <div class="section-heading">
-              <span>Queue</span><span>{sessionState.queue.length}</span>
-            </div>
-            {#if sessionState.queue.length}
-              <div class="queue-list">
-                {#each sessionState.queue as item, index}
-                  <div class="queue-item">
-                    <span>{index + 1}</span>
-                    <div>
-                      <strong>{item.kind === 'follow_up' ? 'Follow up' : 'Steer'}</strong>
-                      <p>{item.content}</p>
-                    </div>
-                  </div>
-                {/each}
-              </div>
-            {:else}<p class="muted-note">
-                Nothing queued. Follow-ups appear here while a run is active.
-              </p>{/if}
-          </div>
-
-          <div class="details-section">
-            <div class="section-heading">
-              <span>Session</span><button type="button" aria-label="Collapse section"
-                ><ChevronDown size={15} /></button
-              >
-            </div>
-            <dl class="detail-list compact">
-              <div>
-                <dt>Workspace</dt>
-                <dd>{activeWorkspace?.displayName}</dd>
-              </div>
-              <div>
-                <dt>Host</dt>
-                <dd>{activeWorkspace?.hostId}</dd>
-              </div>
-              <div>
-                <dt>Epoch</dt>
-                <dd class="mono">{sessionState.runnerEpoch.slice(0, 12)}</dd>
-              </div>
-              <div>
-                <dt>Cursor</dt>
-                <dd class="mono">{sessionState.cursor}</dd>
-              </div>
-            </dl>
-          </div>
-          {#if usingDemo}<div class="demo-note">
-              Preview data is shown because the gateway is not connected.
-            </div>{/if}
-        </aside>
+        <SidePanel
+          open={detailsOpen}
+          bind:wide={panelWide}
+          bind:tab={panelTab}
+          {sessionState}
+          {runStatus}
+          {hasControl}
+          {models}
+          {selectedModel}
+          {thinking}
+          {activeWorkspace}
+          {usingDemo}
+          changeTick={panelTick}
+          changed={panelChanged}
+          {formatDuration}
+        />
       </div>
     {:else}
       <div class="loading-state">

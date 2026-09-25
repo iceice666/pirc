@@ -400,6 +400,11 @@ function piEvent(pi: any, timestamp: unknown): GatewayEvent {
           })),
         ],
       };
+    case 'panel_changed':
+      return {
+        type: 'panel_changed',
+        sections: Array.isArray(pi.sections) ? pi.sections.map(String) : [],
+      };
     default:
       return RUN_EVENTS.has(pi.type)
         ? { type: 'reset', reason: 'cursor_expired' }

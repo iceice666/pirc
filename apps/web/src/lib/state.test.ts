@@ -121,4 +121,18 @@ describe('session event reducer', () => {
     expect(state.session.name).toBe('Fix login button');
     expect(state.needsSnapshot).toBe(false);
   });
+
+  it('passes side-panel change notices through without a resync', () => {
+    const wire = normalizeEvent({
+      sessionId: 's1',
+      epoch: 'epoch-a',
+      sequence: 2,
+      type: 'pi_event',
+      data: { type: 'panel_changed', sections: ['memory', 'background'] },
+    });
+    expect(wire.event).toEqual({ type: 'panel_changed', sections: ['memory', 'background'] });
+    const state = reduceEvent(fromSnapshot(snapshot), wire);
+    expect(state.needsSnapshot).toBe(false);
+    expect(state.cursor).toBe(wire.cursor);
+  });
 });

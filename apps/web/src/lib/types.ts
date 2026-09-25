@@ -264,6 +264,8 @@ export type GatewayEvent =
   | { type: 'control_updated'; control: ControlLease }
   | { type: 'session_updated'; session: SessionSummary }
   | { type: 'session_renamed'; name: string }
+  /** Side-panel data changed (memory, background, team, git); refetch lazily. */
+  | { type: 'panel_changed'; sections: string[] }
   | { type: 'reset'; reason: 'cursor_expired' | 'epoch_changed' | 'backpressure' };
 
 export interface ClientSessionState extends SessionSnapshot {

@@ -31,6 +31,7 @@ export function reduceEvent(
     case 'reset':
       return { ...base, needsSnapshot: true };
     case 'noop':
+    case 'panel_changed':
       return base;
     case 'widget_updated': {
       const widgets = { ...(state.widgets ?? {}) };
