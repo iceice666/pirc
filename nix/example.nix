@@ -11,8 +11,26 @@
           services.pirc = {
             enable = true;
 
-            # Replace this with the package that provides your pinned Pi 0.85.1.
-            # piPackage = pkgs.pi-coding-agent;
+            # Built-in agent configuration (config.json). Keep keys out of the
+            # store: reference them with apiKeyFile/apiKeyEnv/apiKeyCommand.
+            agentConfig = {
+              providers.openai = {
+                api = "openai-chat";
+                baseUrl = "https://api.openai.com/v1";
+                apiKeyFile = "/run/secrets/openai-key";
+                models = [
+                  {
+                    id = "gpt-5";
+                    reasoning = true;
+                    contextWindow = 400000;
+                  }
+                ];
+              };
+              defaultModel = {
+                provider = "openai";
+                id = "gpt-5";
+              };
+            };
 
             allowedUsers = [ "alice@example.com" ];
             allowedOrigins = [ "https://pirc.example.ts.net" ];
@@ -20,7 +38,7 @@
 
             workspaces.pirc = {
               path = "/srv/src/pirc";
-              displayName = "Pi Remote Client";
+              displayName = "pirc";
             };
 
             # Provider/API credentials belong outside the Nix store, for example

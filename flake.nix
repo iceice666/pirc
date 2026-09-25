@@ -1,5 +1,5 @@
 {
-  description = "Pi Remote Client gateway, web UI, and NixOS service";
+  description = "pirc: single-binary gateway, built-in coding agent, web UI, and NixOS service";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -39,12 +39,11 @@
 
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
-            nodejs_22
-            python3
-            pkg-config
+            bun
+            nodejs_22 # vitest/svelte-check for apps/web
           ];
           shellHook = ''
-            echo "pirc development shell (Node $(node --version))"
+            echo "pirc development shell (Bun $(bun --version))"
           '';
         };
 

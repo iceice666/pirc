@@ -13,6 +13,7 @@ let
     mkIf
     mkMerge
     mkOption
+    mkRemovedOptionModule
     optional
     types
     ;
@@ -67,17 +68,41 @@ let
     PIRC_ALLOWED_ORIGINS = csv cfg.allowedOrigins;
     PIRC_ALLOWED_HOSTS = csv cfg.allowedHosts;
     PIRC_WORKSPACES = json workspaceList;
-    PIRC_PI_COMMAND = if cfg.piPackage == null then "pi" else "${cfg.piPackage}/bin/pi";
-    PIRC_PI_ARGS = json cfg.piArgs;
+    PIRC_CONFIG_DIR = "${agentConfigDir}";
     PIRC_RUNNER_LIMIT = toString cfg.runnerLimit;
   }
   // cfg.environment;
 
+  # Built-in agent config: ~/.config/.pirc equivalent, kept in the store.
+  # API keys must use apiKeyEnv/apiKeyFile/apiKeyCommand, never literal values.
+  agentConfigDir = pkgs.runCommand "pirc-agent-config" { } (
+    ''
+      mkdir -p $out
+      cp ${pkgs.writeText "pirc-agent-config.json" (json cfg.agentConfig)} $out/config.json
+    ''
+    + lib.optionalString (cfg.agentPrompt != null) ''
+      cp ${pkgs.writeText "AGENTS.md" cfg.agentPrompt} $out/AGENTS.md
+    ''
+  );
+
   gatewayUpstream = "http://${cfg.listenAddress}:${toString cfg.port}";
 in
 {
+  imports = [
+    (mkRemovedOptionModule [
+      "services"
+      "pirc"
+      "piPackage"
+    ] "pirc now runs its built-in agent (`pirc agent`); configure it with services.pirc.agentConfig.")
+    (mkRemovedOptionModule [
+      "services"
+      "pirc"
+      "piArgs"
+    ] "pirc now runs its built-in agent (`pirc agent`); configure it with services.pirc.agentConfig.")
+  ];
+
   options.services.pirc = {
-    enable = mkEnableOption "Pi Remote Client gateway and web UI";
+    enable = mkEnableOption "pirc gateway, built-in agent and web UI";
 
     package = mkOption {
       type = types.package;
@@ -86,10 +111,31 @@ in
       description = "pirc package to run.";
     };
 
-    piPackage = mkOption {
-      type = types.nullOr types.package;
+    agentConfig = mkOption {
+      type = types.attrsOf types.anything;
+      default = { };
+      example = literalExpression ''
+        {
+          providers.openai = {
+            api = "openai-chat";
+            baseUrl = "https://api.openai.com/v1";
+            apiKeyFile = "/run/secrets/openai-key";
+            models = [ { id = "gpt-5"; reasoning = true; contextWindow = 400000; } ];
+          };
+          defaultModel = { provider = "openai"; id = "gpt-5"; };
+        }
+      '';
+      description = ''
+        Built-in agent configuration (the contents of config.json in
+        PIRC_CONFIG_DIR). Reference credentials with apiKeyEnv, apiKeyFile or
+        apiKeyCommand; literal apiKey values would land in the Nix store.
+      '';
+    };
+
+    agentPrompt = mkOption {
+      type = types.nullOr types.lines;
       default = null;
-      description = "Package providing bin/pi. Set this in production or add pi through extraPackages.";
+      description = "Optional global AGENTS.md appended to the built-in agent's system prompt.";
     };
 
     extraPackages = mkOption {
@@ -98,13 +144,13 @@ in
         pkgs.git
         pkgs.openssh
       ];
-      description = "Programs added to PATH for Pi and its tools.";
+      description = "Programs added to PATH for the agent and its tools.";
     };
 
     user = mkOption {
       type = types.str;
       default = "pirc";
-      description = "Unprivileged account used by the gateway and Pi subprocesses.";
+      description = "Unprivileged account used by the gateway and agent subprocesses.";
     };
 
     group = mkOption {
@@ -122,7 +168,7 @@ in
     stateDirectory = mkOption {
       type = types.str;
       default = "/var/lib/pirc";
-      description = "Persistent SQLite, upload, and private Pi session storage.";
+      description = "Persistent SQLite, upload, and private agent session storage.";
     };
 
     environmentFile = mkOption {
@@ -170,10 +216,6 @@ in
       default = [ ];
     };
     allowedHosts = mkOption {
-      type = types.listOf types.str;
-      default = [ ];
-    };
-    piArgs = mkOption {
       type = types.listOf types.str;
       default = [ ];
     };
@@ -259,17 +301,17 @@ in
       };
 
       systemd.services.pirc = {
-        description = "Pi Remote Client gateway";
+        description = "pirc gateway";
         wantedBy = [ "multi-user.target" ];
         after = [ "network.target" ];
-        path = cfg.extraPackages ++ optional (cfg.piPackage != null) cfg.piPackage;
+        path = [ pkgs.bash ] ++ cfg.extraPackages;
         environment = gatewayEnvironment;
         serviceConfig = {
           Type = "simple";
           User = cfg.user;
           Group = cfg.group;
           WorkingDirectory = cfg.stateDirectory;
-          ExecStart = "${cfg.package}/bin/pirc-gateway";
+          ExecStart = "${cfg.package}/bin/pirc gateway";
           Restart = "on-failure";
           RestartSec = 3;
           UMask = "0077";
