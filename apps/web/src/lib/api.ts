@@ -151,8 +151,14 @@ async function normalizeSnapshot(raw: any): Promise<SessionSnapshot> {
     runnerEpoch: String(raw.watermark?.epoch ?? raw.session.runnerEpoch ?? 0),
     widgets: raw.widgets ?? {},
     statuses: raw.statuses ?? {},
+    ...(raw.agent?.model?.id ? { selectedModelId: raw.agent.model.id } : {}),
+    ...(thinkingLevels.includes(raw.agent?.thinkingLevel)
+      ? { thinkingLevel: raw.agent.thinkingLevel as ThinkingLevel }
+      : {}),
   };
 }
+
+const thinkingLevels: unknown[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
 
 export const api = {
   nodes: async () => (await request<{ nodes: NodeSummary[] }>('/api/nodes')).nodes,
@@ -267,8 +273,11 @@ export const api = {
       size: raw.upload.byteSize,
     };
   },
-  models: async (): Promise<ModelOption[]> => {
-    const raw = await request<any>('/api/models');
+  /** Models a session's agent can use; a daemon-only gateway lists none without one. */
+  models: async (sessionId?: string): Promise<ModelOption[]> => {
+    const raw = await request<any>(
+      sessionId ? `/api/models?sessionId=${encodeURIComponent(sessionId)}` : '/api/models',
+    );
     return (raw.models ?? []).map((model: any) => ({
       id: model.id,
       provider: model.provider,

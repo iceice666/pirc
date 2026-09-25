@@ -57,6 +57,11 @@ export interface EventCursor {
 export interface Snapshot {
   widgets?: Record<string, string[]>;
   statuses?: Record<string, string>;
+  /** Current agent model and thinking level, when the runner is live. */
+  agent?: {
+    model: { provider: string; id: string } | null;
+    thinkingLevel: string | null;
+  } | null;
   session: SessionSummary;
   history: unknown[];
   partialMessage: unknown | null;

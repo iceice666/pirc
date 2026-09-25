@@ -166,6 +166,7 @@
           }
         : await api.snapshot(id);
       sessionState = fromSnapshot(snapshot);
+      if (!usingDemo) void loadModels(id);
       if (!usingDemo) {
         events = connectEvents({
           sessionId: id,
@@ -184,6 +185,15 @@
       await scrollToLatest(false);
     } catch (error) {
       pageError = error instanceof Error ? error.message : 'Unable to load this session.';
+    }
+  }
+
+  async function loadModels(id: string) {
+    try {
+      const list = await api.models(id);
+      if (activeSessionId === id && list.length) models = list;
+    } catch {
+      /* keep the previous list; the runner may still be starting */
     }
   }
 

@@ -418,6 +418,7 @@ export async function buildApp(
     let partialMessage = active?.state.partialMessage ?? null;
     let queue = active?.state.queue ?? { steering: [], followUp: [] };
     let notifications = active?.state.notifications ?? [];
+    let agent: Snapshot['agent'] = null;
     if (active) {
       try {
         const response = await active.request({ type: 'get_messages' });
@@ -425,6 +426,18 @@ export async function buildApp(
           history = response.data.messages;
       } catch {
         /* in-memory view is still consistent with watermark */
+      }
+      try {
+        const response = await active.request({ type: 'get_state' });
+        if (response.success && response.data)
+          agent = {
+            model: response.data.model
+              ? { provider: response.data.model.provider, id: response.data.model.id }
+              : null,
+            thinkingLevel: response.data.thinkingLevel ?? null,
+          };
+      } catch {
+        /* model/thinking are advisory */
       }
     }
     const {
@@ -444,6 +457,7 @@ export async function buildApp(
       notifications,
       widgets: active?.state.widgets ?? {},
       statuses: active?.state.statuses ?? {},
+      agent,
       watermark: events.watermark(sessionId, sessionRow.runnerEpoch),
       partialOutputLost,
     };
