@@ -44,6 +44,13 @@
   $: collapsible = kind === 'compaction' || kind === 'branch' || kind === 'bash';
   $: streamingThinking = !!message.isPartial && !message.content && !!message.thinking;
   $: thinkingVisible = thinkingOpen || streamingThinking;
+  // Tool/thinking-only assistant turns stack tightly, like one process log.
+  $: processOnly =
+    message.role === 'assistant' &&
+    !message.content &&
+    !message.stopReason &&
+    !message.errorMessage &&
+    !message.images?.length;
   $: hasBody =
     !!message.content || !!message.isPartial || !!message.errorMessage || !!message.images?.length;
 </script>
@@ -114,6 +121,7 @@
   <article
     class:user={message.role === 'user'}
     class:assistant={message.role === 'assistant'}
+    class:process={processOnly}
     class="message"
   >
     <div class="message-main">
@@ -186,7 +194,7 @@
           {#each message.tools as tool (tool.id)}<ToolCard {tool} />{/each}
         </div>
       {/if}
-      {#if !message.isPartial}
+      {#if !message.isPartial && message.content}
         <div class="message-actions">
           <time datetime={message.createdAt}>{time(message.createdAt)}</time>
           {#if message.role === 'assistant' && message.model}<span class="message-model"
