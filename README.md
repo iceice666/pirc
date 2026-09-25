@@ -12,6 +12,7 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 - Authenticated user identities, `Host`, and `Origin` are checked against exact allowlists.
 - There is no trust-all or unauthenticated production default.
 - Workspaces are allowlisted, but this is **not a sandbox**. The agent and its tools retain the operating-system permissions of the gateway account.
+- The web side panel can browse workspace files, show Git changes and history, and open interactive shells in the workspace. Shells run as the gateway account, just like the agent's tools, and require holding session control; set `PIRC_TERMINALS=false` to disable them.
 - Keep the gateway on loopback or a private interface reachable only by the trusted proxy. Do not expose it through Tailscale Funnel or the public Internet.
 
 ## Requirements

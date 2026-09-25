@@ -91,6 +91,7 @@ The generated nginx configuration does not create Tailscale certificates. Supply
 - `ProtectSystem=strict` is enabled; configured workspace paths and the state directory are writable.
 - `ProtectHome=true` means workspaces under `/home` are intentionally unavailable. Prefer `/srv`, or explicitly override the systemd hardening in the host configuration after reviewing the risk.
 - `MemoryDenyWriteExecute` remains disabled because Bun/JavaScriptCore requires executable JIT memory.
+- Side-panel terminals (`services.pirc.terminals`, default on) give the session holder a shell as the `pirc` account in the workspace; disable them if that exceeds what the agent can already do.
 - Add tools needed by the agent (and its `bash`/PTC tools) through `services.pirc.extraPackages`.
 - Grant private repository access through narrowly scoped credentials readable by the `pirc` account.
 

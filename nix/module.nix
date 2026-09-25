@@ -70,6 +70,7 @@ let
     PIRC_WORKSPACES = json workspaceList;
     PIRC_CONFIG_DIR = "${agentConfigDir}";
     PIRC_RUNNER_LIMIT = toString cfg.runnerLimit;
+    PIRC_TERMINALS = lib.boolToString cfg.terminals;
   }
   // cfg.environment;
 
@@ -222,6 +223,15 @@ in
     runnerLimit = mkOption {
       type = types.ints.positive;
       default = 2;
+    };
+    terminals = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Allow interactive shells in the web side panel. Shells run in the
+        session's workspace as the pirc account, like the agent's own tools,
+        and require holding session control.
+      '';
     };
     workspaces = mkOption {
       type = types.attrsOf workspaceType;
