@@ -14,3 +14,6 @@ data/
 .DS_Store
 playwright-report/
 test-results/
+
+# Local deployment notes (host-specific)
+DEPLOY.md
