@@ -14,8 +14,12 @@
       ...
     }:
     {
+      # bun.lock needs a recent Bun; take it from this flake's nixpkgs so a
+      # consumer on a stable channel still gets a compatible toolchain.
       overlays.default = final: _prev: {
-        pirc = final.callPackage ./nix/package.nix { };
+        pirc = final.callPackage ./nix/package.nix {
+          inherit (nixpkgs.legacyPackages.${final.stdenv.hostPlatform.system}) bun;
+        };
       };
 
       nixosModules = {
