@@ -166,6 +166,13 @@ async function normalizeSnapshot(raw: any): Promise<SessionSnapshot> {
 export const api = {
   nodes: async () => (await request<{ nodes: NodeSummary[] }>('/api/nodes')).nodes,
   workspaces: async () => (await request<any>('/api/workspaces')).workspaces as Workspace[],
+  createWorkspace: async (input: { nodeId: string; path: string; displayName: string }) =>
+    (
+      await request<{ workspace: Workspace }>('/api/workspaces', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      })
+    ).workspace,
   sessions: async () =>
     ((await request<any>('/api/sessions')).sessions as any[]).map(sessionSummary),
   createSession: async (input: CreateSessionInput) =>

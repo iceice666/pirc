@@ -59,6 +59,7 @@ export interface GatewayConfig {
   interactionTtlMs: number;
   shutdownGraceMs: number;
   allowDefaultWorkspace: boolean;
+  daemonOnly?: boolean;
   nodeTokens?: Map<string, string>;
   nodeAuthSecret?: string;
 }
@@ -66,8 +67,13 @@ export interface GatewayConfig {
 export function parseWorkspaces(env: NodeJS.ProcessEnv): ConfigWorkspace[] {
   const raw = env.PIRC_WORKSPACES;
   let inputs: z.infer<typeof workspaceInput>[];
-  if (raw) inputs = z.array(workspaceInput).min(1).parse(JSON.parse(raw));
+  if (raw)
+    inputs = z
+      .array(workspaceInput)
+      .min(env.PIRC_DAEMON_ONLY === 'true' ? 0 : 1)
+      .parse(JSON.parse(raw));
   else {
+    if (env.PIRC_DAEMON_ONLY === 'true') return [];
     if (!bool(env.PIRC_ALLOW_DEFAULT_WORKSPACE, false))
       throw new Error('PIRC_WORKSPACES is required unless PIRC_ALLOW_DEFAULT_WORKSPACE=true');
     inputs = [
@@ -90,6 +96,8 @@ export function parseWorkspaces(env: NodeJS.ProcessEnv): ConfigWorkspace[] {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig {
   const nodeTokens = new Map<string, string>();
+  if (env.PIRC_DAEMON_ONLY === 'true' && env.PIRC_NODE_ID)
+    throw new Error('PIRC_DAEMON_ONLY cannot be used on a node agent');
   const configuredTokens = z
     .record(z.string().min(32))
     .parse(JSON.parse(env.PIRC_NODE_TOKENS ?? '{}'));
@@ -102,6 +110,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     if ([...nodeTokens.values()].includes(token)) throw new Error('Node tokens must be unique');
     nodeTokens.set(nodeId, token);
   }
+  if (env.PIRC_DAEMON_ONLY === 'true' && !nodeTokens.size)
+    throw new Error('PIRC_DAEMON_ONLY requires PIRC_NODE_TOKENS');
   const stateDir = path.resolve(env.PIRC_STATE_DIR ?? path.join(process.cwd(), '.state'));
   const trustedProxies = new Set(csv(env.PIRC_TRUSTED_PROXIES));
   const allowedUsers = new Set(csv(env.PIRC_ALLOWED_USERS));
@@ -146,6 +156,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     interactionTtlMs: integer(env.PIRC_INTERACTION_TTL_MS, 3_600_000),
     shutdownGraceMs: integer(env.PIRC_SHUTDOWN_GRACE_MS, 5_000),
     allowDefaultWorkspace: bool(env.PIRC_ALLOW_DEFAULT_WORKSPACE, false),
+    daemonOnly: env.PIRC_DAEMON_ONLY === 'true',
     nodeTokens,
     ...(env.PIRC_NODE_ID && env.PIRC_NODE_TOKEN ? { nodeAuthSecret: env.PIRC_NODE_TOKEN } : {}),
   };

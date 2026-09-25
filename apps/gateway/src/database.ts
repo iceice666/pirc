@@ -177,6 +177,26 @@ export class GatewayDatabase {
     })();
   }
 
+  addWorkspace(
+    workspaceId: string,
+    hostId: string,
+    displayName: string,
+    canonicalPath: string,
+  ): Workspace {
+    try {
+      this.raw
+        .prepare(
+          'INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at) VALUES (?,?,?,?,?,?)',
+        )
+        .run(workspaceId, hostId, displayName, canonicalPath, '{}', now());
+    } catch (error) {
+      if ((error as { code?: string }).code?.startsWith('SQLITE_CONSTRAINT'))
+        throw new ApiError(409, 'conflict', 'Workspace ID or path is already registered');
+      throw error;
+    }
+    return this.getWorkspace(workspaceId);
+  }
+
   listWorkspaces(): Workspace[] {
     return (this.raw.prepare('SELECT * FROM workspaces ORDER BY display_name').all() as any[]).map(
       (row) => ({

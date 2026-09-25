@@ -76,6 +76,12 @@ export class NodeRegistry {
     });
   }
 
+  addWorkspace(nodeId: string, workspace: { id: string; displayName: string }): void {
+    const node = this.connections.get(nodeId)?.node;
+    if (!node) throw new ApiError(503, 'node_offline', 'Node is offline');
+    if (!node.workspaces.some((item) => item.id === workspace.id)) node.workspaces.push(workspace);
+  }
+
   get(nodeId: string): ConnectedNode | undefined {
     return this.connections.get(nodeId)?.node;
   }

@@ -59,6 +59,12 @@
   let newSessionOpen = false;
   let newSessionWorkspace = '';
   let newSessionName = '';
+  let newWorkspaceOpen = false;
+  let newWorkspaceNodeId = '';
+  let newWorkspacePath = '';
+  let newWorkspaceName = '';
+  let workspaceBusy = false;
+  let workspaceError = '';
   let updateRegistration: ServiceWorkerRegistration | undefined;
   let timeline: HTMLElement;
   let leaseHeartbeat: ReturnType<typeof setInterval> | undefined;
@@ -166,9 +172,11 @@
           onState: (state) => (connection = state),
           onEvent: (event) => {
             if (!sessionState) return;
+            const followLatest =
+              !!timeline && timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 80;
             sessionState = reduceEvent(sessionState, event);
             if (sessionState.needsSnapshot) void refreshSnapshot();
-            void scrollToLatest();
+            if (followLatest) void scrollToLatest();
           },
         });
       }
@@ -371,6 +379,42 @@
     }
   }
 
+  function showNewWorkspace(nodeId: string) {
+    newWorkspaceNodeId = nodeId;
+    newWorkspacePath = '';
+    newWorkspaceName = '';
+    workspaceError = '';
+    newWorkspaceOpen = true;
+    sidebarOpen = false;
+  }
+
+  async function createWorkspace() {
+    if (
+      !newWorkspaceNodeId ||
+      !newWorkspacePath.trim() ||
+      !newWorkspaceName.trim() ||
+      workspaceBusy
+    )
+      return;
+    workspaceBusy = true;
+    workspaceError = '';
+    try {
+      const workspace = await api.createWorkspace({
+        nodeId: newWorkspaceNodeId,
+        path: newWorkspacePath.trim(),
+        displayName: newWorkspaceName.trim(),
+      });
+      workspaces = [...workspaces.filter((item) => item.id !== workspace.id), workspace];
+      nodes = await api.nodes();
+      newWorkspaceOpen = false;
+      showNewSession(workspace.id);
+    } catch (error) {
+      workspaceError = error instanceof Error ? error.message : 'Could not add workspace.';
+    } finally {
+      workspaceBusy = false;
+    }
+  }
+
   function showNewSession(workspaceId?: string) {
     newSessionWorkspace =
       workspaceId ??
@@ -439,6 +483,7 @@
     open={sidebarOpen}
     onselect={openSession}
     onnew={showNewSession}
+    onaddworkspace={showNewWorkspace}
     onclose={() => (sidebarOpen = false)}
   />
 
@@ -670,6 +715,66 @@
     {/if}
   </main>
 </div>
+
+{#if newWorkspaceOpen}
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    on:click={(event) => event.target === event.currentTarget && (newWorkspaceOpen = false)}
+  >
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="new-workspace-title">
+      <header>
+        <div>
+          <span class="eyebrow">On a device</span>
+          <h2 id="new-workspace-title">Add workspace</h2>
+        </div>
+        <button
+          class="icon-button"
+          type="button"
+          aria-label="Close"
+          on:click={() => (newWorkspaceOpen = false)}><X size={19} /></button
+        >
+      </header>
+      <label
+        ><span>Device</span><select bind:value={newWorkspaceNodeId}
+          >{#each nodes as node}<option value={node.id}>{node.id}</option>{/each}</select
+        ></label
+      >
+      <label
+        ><span>Workspace name</span><input
+          bind:value={newWorkspaceName}
+          placeholder="My project"
+        /></label
+      >
+      <label
+        ><span>Existing directory on that device</span><input
+          bind:value={newWorkspacePath}
+          placeholder="~/projects/my-project"
+          on:keydown={(event) => event.key === 'Enter' && createWorkspace()}
+        /></label
+      >
+      <p>
+        Choose an existing folder inside that device's home directory. No files or folders will be
+        created.
+      </p>
+      {#if workspaceError}<p role="alert">{workspaceError}</p>{/if}
+      <footer>
+        <button class="button ghost" type="button" on:click={() => (newWorkspaceOpen = false)}
+          >Cancel</button
+        >
+        <button
+          class="button dark"
+          type="button"
+          disabled={workspaceBusy ||
+            !newWorkspaceNodeId ||
+            !newWorkspaceName.trim() ||
+            !newWorkspacePath.trim()}
+          on:click={createWorkspace}>{workspaceBusy ? 'Adding…' : 'Add workspace'}</button
+        >
+      </footer>
+    </div>
+  </div>
+{/if}
 
 {#if newSessionOpen}
   <div

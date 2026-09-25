@@ -10,6 +10,11 @@ export async function startNodeAgent(
   daemonUrl: string,
 ): Promise<{ close: () => Promise<void> }> {
   const { app, services } = await buildApp({ ...config, nodeAuthSecret: token });
+  const registeredWorkspaces = () =>
+    services.db
+      .listWorkspaces()
+      .filter((workspace) => workspace.hostId === nodeId)
+      .map(({ id, displayName }) => ({ id, displayName }));
   let stopped = false;
   let socket: WebSocket | undefined;
   let retry: NodeJS.Timeout | undefined;
@@ -39,7 +44,7 @@ export async function startNodeAgent(
       connection.send(
         JSON.stringify({
           type: 'register',
-          workspaces: config.workspaces.map(({ id, displayName }) => ({ id, displayName })),
+          workspaces: registeredWorkspaces(),
         }),
       );
       heartbeat = setInterval(() => send({ type: 'heartbeat' }), 15_000);
@@ -72,6 +77,7 @@ export async function startNodeAgent(
       void (async () => {
         try {
           const routes: Record<string, { method: string; path: RegExp }> = {
+            workspaceCreate: { method: 'POST', path: /^\/api\/workspaces$/ },
             create: { method: 'POST', path: /^\/api\/sessions$/ },
             snapshot: { method: 'GET', path: /^\/api\/sessions\/[^/?]+\/snapshot$/ },
             command: { method: 'POST', path: /^\/api\/sessions\/[^/?]+\/commands$/ },
@@ -98,7 +104,7 @@ export async function startNodeAgent(
             !config.allowedUsers.has(message.data.user)
           )
             throw new Error('Invalid node request');
-          if (message.action !== 'create') {
+          if (message.action !== 'create' && message.action !== 'workspaceCreate') {
             const sessionId =
               message.action === 'models'
                 ? new URL(message.data.url, 'http://node.internal').searchParams.get('sessionId')
@@ -109,7 +115,8 @@ export async function startNodeAgent(
             )
               throw new Error('Remote session is not owned by this user');
           }
-          if (message.action === 'create') inflightCreates.add(message.requestId);
+          if (message.action === 'create' || message.action === 'workspaceCreate')
+            inflightCreates.add(message.requestId);
           const response = await app.inject({
             method: message.data.method,
             url: message.data.url,
@@ -128,10 +135,11 @@ export async function startNodeAgent(
             allowedSessions.set(body.session.id, message.data.user);
             subscribe(body.session.id);
           }
-          if (message.action === 'create') requestResults.set(message.requestId, { result: body });
+          if (message.action === 'create' || message.action === 'workspaceCreate')
+            requestResults.set(message.requestId, { result: body });
           send({ type: 'response', requestId: message.requestId, data: body });
         } catch (error) {
-          if (message.action === 'create')
+          if (message.action === 'create' || message.action === 'workspaceCreate')
             requestResults.set(message.requestId, {
               result: null,
               error: (error as Error).message,

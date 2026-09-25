@@ -9,10 +9,16 @@
   export let open = false;
   export let onselect: (id: string) => void;
   export let onnew: (workspaceId?: string) => void;
+  export let onaddworkspace: (nodeId: string) => void;
   export let onclose: () => void;
 
   let query = '';
   let collapsed = new Set<string>();
+  let selectedNodeId = '';
+  $: if (selectedNodeId && !nodes.some((node) => node.id === selectedNodeId)) selectedNodeId = '';
+  $: shownWorkspaces = workspaces.filter(
+    (workspace) => !selectedNodeId || workspace.hostId === selectedNodeId,
+  );
 
   $: visibleSessions = sessions.filter((session) =>
     session.name.toLowerCase().includes(query.toLowerCase()),
@@ -60,8 +66,32 @@
     <input bind:value={query} placeholder="Search sessions" />
   </label>
 
+  <div class="device-switcher" aria-label="Select device">
+    <strong>Devices</strong>
+    <div class="device-options">
+      <button type="button" class:chosen={!selectedNodeId} on:click={() => (selectedNodeId = '')}
+        >All</button
+      >
+      {#each nodes as node}
+        <button
+          type="button"
+          class:chosen={selectedNodeId === node.id}
+          on:click={() => (selectedNodeId = node.id)}>{node.id}</button
+        >
+      {/each}
+    </div>
+  </div>
+  <div class="workspace-tools">
+    <strong>Workspaces</strong>
+    <button
+      type="button"
+      on:click={() => onaddworkspace(selectedNodeId || nodes[0]?.id)}
+      disabled={!nodes.length}
+      aria-label="Add workspace"><Plus size={16} /> Add</button
+    >
+  </div>
   <nav class="workspace-list">
-    {#each workspaces as workspace}
+    {#each shownWorkspaces as workspace}
       <section class="workspace-group">
         <div class="workspace-heading">
           <button

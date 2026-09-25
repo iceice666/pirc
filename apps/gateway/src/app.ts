@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -16,6 +17,11 @@ import type { CommandPayload, EventCursor, Snapshot } from './types.js';
 import { id, payloadHash } from './util.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
+const createWorkspaceBody = z.object({
+  nodeId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+  path: z.string().trim().min(1).max(4096),
+  displayName: z.string().trim().min(1).max(200),
+});
 const interactionParams = z.object({ id: z.string().min(1), interactionId: z.string().min(1) });
 const createSessionBody = z.object({
   workspaceId: z.string().min(1),
@@ -129,6 +135,11 @@ export async function buildApp(
   const runners = new RunnerManager(config, db, events, locks);
   const nodes = new NodeRegistry();
   const services = { db, events, runners, locks, nodes };
+  const claimSession = (sessionId: string, user: string) => {
+    db.claimRemoteSession(sessionId, user, Boolean(config.nodeAuthSecret));
+    if (config.daemonOnly && !db.getSession(sessionId).nodeId)
+      throw new ApiError(403, 'forbidden', 'Daemon-local sessions are disabled');
+  };
   nodes.onRegister = (node) => {
     db.syncRemoteWorkspaces(node.id, node.workspaces);
     for (const sessionId of db.remoteSessionIds(node.id)) {
@@ -216,17 +227,67 @@ export async function buildApp(
   app.get('/api/workspaces', async () => ({
     workspaces: db
       .listWorkspaces()
+      .filter((workspace) => !config.daemonOnly || workspace.hostId !== config.hostId)
       .map((workspace) =>
         workspace.hostId === config.hostId ? workspace : { ...workspace, canonicalPath: undefined },
       ),
   }));
+  app.post('/api/workspaces', async (request, reply) => {
+    const body = parse(createWorkspaceBody, request.body);
+    if (!config.nodeAuthSecret) {
+      if (!config.nodeTokens?.size)
+        throw new ApiError(403, 'forbidden', 'Workspace creation requires a node');
+      if (!nodes.get(body.nodeId)) throw new ApiError(503, 'node_offline', 'Node is offline');
+      const remote = await nodes.request(body.nodeId, 'workspaceCreate', {
+        method: 'POST',
+        url: '/api/workspaces',
+        user: request.identity!.user,
+        payload: body,
+      });
+      // A workspace acknowledgement can be lost, but the agent persists it before responding.
+      // Re-registration also reconciles workspaces after a daemon restart.
+      db.syncRemoteWorkspaces(body.nodeId, [remote.workspace]);
+      nodes.addWorkspace(body.nodeId, remote.workspace);
+      return reply.status(201).send({
+        workspace: {
+          ...db.getWorkspace(`${body.nodeId}:${remote.workspace.id}`),
+          canonicalPath: undefined,
+        },
+      });
+    }
+    if (body.nodeId !== config.hostId)
+      throw new ApiError(403, 'forbidden', 'Workspace belongs to another node');
+    const home = realpathSync(process.env.HOME ?? os.homedir());
+    const requested = body.path.startsWith('~/') ? path.join(home, body.path.slice(2)) : body.path;
+    if (!path.isAbsolute(requested))
+      throw new ApiError(400, 'invalid_input', 'Workspace must use an absolute path or ~/path');
+    let canonical: string;
+    try {
+      canonical = realpathSync(requested);
+      if (!statSync(canonical).isDirectory())
+        throw new ApiError(400, 'invalid_input', 'Workspace path must be a directory');
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(400, 'invalid_input', 'Workspace directory must already exist');
+    }
+    if (!canonical.startsWith(`${home}${path.sep}`))
+      throw new ApiError(403, 'forbidden', 'Workspace must stay within the node home directory');
+    const workspace = db.addWorkspace(
+      id('workspace').replaceAll('-', '_'),
+      config.hostId,
+      body.displayName,
+      canonical,
+    );
+    return reply.status(201).send({ workspace });
+  });
   app.get('/api/sessions', async (request) => ({
     sessions: db
       .listSessions()
       .filter(
         (session) =>
-          (!session.nodeId && !config.nodeAuthSecret) ||
-          session.ownerUser === request.identity!.user,
+          (!session.nodeId && !config.nodeAuthSecret && !config.daemonOnly) ||
+          (Boolean(session.nodeId) && session.ownerUser === request.identity!.user) ||
+          (Boolean(config.nodeAuthSecret) && session.ownerUser === request.identity!.user),
       )
       .map(
         ({
@@ -242,6 +303,8 @@ export async function buildApp(
     const body = parse(createSessionBody, request.body);
     const workspace = db.getWorkspace(body.workspaceId);
     const nodeId = workspace.hostId === config.hostId ? null : workspace.hostId;
+    if (!nodeId && config.daemonOnly)
+      throw new ApiError(403, 'forbidden', 'Sessions must be created on a node');
     if (nodeId) {
       if (config.nodeAuthSecret)
         throw new ApiError(403, 'forbidden', 'Nodes cannot route to another node');
@@ -293,7 +356,7 @@ export async function buildApp(
   });
   app.patch('/api/sessions/:id', async (request) => {
     const { id: sessionId } = parse(sessionParams, request.params);
-    db.claimRemoteSession(sessionId, request.identity!.user, Boolean(config.nodeAuthSecret));
+    claimSession(sessionId, request.identity!.user);
     const { name } = parse(renameBody, request.body);
     const row = db.getSession(sessionId);
     if (row.nodeId)
@@ -322,7 +385,7 @@ export async function buildApp(
   });
   app.get('/api/sessions/:id/snapshot', async (request) => {
     const { id: sessionId } = parse(sessionParams, request.params);
-    db.claimRemoteSession(sessionId, request.identity!.user, Boolean(config.nodeAuthSecret));
+    claimSession(sessionId, request.identity!.user);
     const sessionRow = db.getSession(sessionId);
     if (sessionRow.nodeId) {
       const remote = await nodes.request(sessionRow.nodeId, 'snapshot', {
@@ -386,7 +449,7 @@ export async function buildApp(
   });
   app.post('/api/sessions/:id/commands', async (request, reply) => {
     const { id: sessionId } = parse(sessionParams, request.params);
-    db.claimRemoteSession(sessionId, request.identity!.user, Boolean(config.nodeAuthSecret));
+    claimSession(sessionId, request.identity!.user);
     const targetSession = db.getSession(sessionId);
     const body = parse(commandBody, request.body);
     db.validateLease(sessionId, body.clientId, body.generation);
@@ -451,13 +514,13 @@ export async function buildApp(
 
   app.get('/api/sessions/:id/control', async (request) => {
     const { id: sessionId } = parse(sessionParams, request.params);
-    db.claimRemoteSession(sessionId, request.identity!.user, Boolean(config.nodeAuthSecret));
+    claimSession(sessionId, request.identity!.user);
     db.getSession(sessionId);
     return { lease: db.getLease(sessionId) };
   });
   app.post('/api/sessions/:id/control/acquire', async (request) => {
     const { id: sessionId } = parse(sessionParams, request.params);
-    db.claimRemoteSession(sessionId, request.identity!.user, Boolean(config.nodeAuthSecret));
+    claimSession(sessionId, request.identity!.user);
     const body = parse(leaseBody, request.body);
     const session = db.getSession(sessionId);
     if (session.nodeId) {
@@ -477,7 +540,7 @@ export async function buildApp(
   });
   app.post('/api/sessions/:id/control/heartbeat', async (request) => {
     const { id: sessionId } = parse(sessionParams, request.params);
-    db.claimRemoteSession(sessionId, request.identity!.user, Boolean(config.nodeAuthSecret));
+    claimSession(sessionId, request.identity!.user);
     const body = parse(leaseBody.extend({ generation: z.number().int().positive() }), request.body);
     const session = db.getSession(sessionId);
     if (session.nodeId) {
@@ -498,7 +561,7 @@ export async function buildApp(
   });
   app.post('/api/sessions/:id/control/release', async (request, reply) => {
     const { id: sessionId } = parse(sessionParams, request.params);
-    db.claimRemoteSession(sessionId, request.identity!.user, Boolean(config.nodeAuthSecret));
+    claimSession(sessionId, request.identity!.user);
     const body = parse(leaseBody.extend({ generation: z.number().int().positive() }), request.body);
     const session = db.getSession(sessionId);
     if (session.nodeId) {
@@ -518,7 +581,7 @@ export async function buildApp(
 
   app.post('/api/sessions/:id/interactions/:interactionId/answer', async (request) => {
     const params = parse(interactionParams, request.params);
-    db.claimRemoteSession(params.id, request.identity!.user, Boolean(config.nodeAuthSecret));
+    claimSession(params.id, request.identity!.user);
     const body = parse(answerBody, request.body);
     const session = db.getSession(params.id);
     db.validateLease(params.id, body.clientId, body.generation);
@@ -579,14 +642,13 @@ export async function buildApp(
   });
   app.get('/api/models', async (request) => {
     const query = parse(z.object({ sessionId: z.string().optional() }), request.query);
-    if (!query.sessionId && db.listSessions().every((session) => session.nodeId))
+    if (
+      !query.sessionId &&
+      (config.daemonOnly || db.listSessions().every((session) => session.nodeId))
+    )
       return { models: [] };
     if (query.sessionId) {
-      db.claimRemoteSession(
-        query.sessionId,
-        request.identity!.user,
-        Boolean(config.nodeAuthSecret),
-      );
+      claimSession(query.sessionId, request.identity!.user);
       const session = db.getSession(query.sessionId);
       if (session.nodeId) {
         const remote = await nodes.request(session.nodeId, 'models', {
@@ -612,11 +674,7 @@ export async function buildApp(
         z.object({ sessionId: z.string().min(1), cursor: z.string().optional() }),
         request.query,
       );
-      db.claimRemoteSession(
-        query.sessionId,
-        request.identity!.user,
-        Boolean(config.nodeAuthSecret),
-      );
+      claimSession(query.sessionId, request.identity!.user);
       const session = db.getSession(query.sessionId);
       const replay = events.replay(query.sessionId, cursorFrom(query.cursor), session.runnerEpoch);
       const send = (message: unknown) => {

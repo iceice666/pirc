@@ -1,4 +1,7 @@
 import { afterEach, expect, it } from 'vitest';
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { startNodeAgent } from '../src/agent-runtime.js';
@@ -34,6 +37,56 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
     agents.push(await startNodeAgent(nodeConfig, id!, secret!, url));
   }
   await expect.poll(() => services.nodes.list().length).toBe(2);
+  const existing = mkdtempSync(path.join(os.homedir(), 'pirc-ws-integration-'));
+  const outside = mkdtempSync(path.join(os.tmpdir(), 'pirc-ws-outside-'));
+  const link = path.join(existing, 'outside-link');
+  symlinkSync(outside, link);
+  try {
+    const denied = await app.inject({
+      method: 'POST',
+      url: '/api/workspaces',
+      headers,
+      payload: { nodeId: 'alpha', path: outside, displayName: 'Outside' },
+    });
+    expect(denied.statusCode).toBe(503);
+    const linked = await app.inject({
+      method: 'POST',
+      url: '/api/workspaces',
+      headers,
+      payload: { nodeId: 'alpha', path: link, displayName: 'Escaped link' },
+    });
+    expect(linked.statusCode).toBe(503);
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/workspaces',
+      headers,
+      payload: { nodeId: 'alpha', path: existing, displayName: 'Independent project' },
+    });
+    expect(created.statusCode).toBe(201);
+    const workspaceId = created.json().workspace.id;
+    expect(workspaceId).toMatch(/^alpha:workspace_/);
+    expect(created.json().workspace).not.toHaveProperty('canonicalPath');
+    expect(
+      services.nodes.get('alpha')?.workspaces.some((w) => `alpha:${w.id}` === workspaceId),
+    ).toBe(true);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/workspaces', headers }))
+        .json()
+        .workspaces.some((w: { id: string }) => w.id === workspaceId),
+    ).toBe(true);
+    const session = await app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      headers,
+      payload: { workspaceId, name: 'Independent session' },
+    });
+    expect(session.statusCode).toBe(201);
+    expect(session.json().session.nodeId).toBe('alpha');
+  } finally {
+    rmSync(link, { force: true });
+    rmSync(existing, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
   const ids: string[] = [];
   for (const id of ['alpha', 'beta']) {
     await expect

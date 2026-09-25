@@ -204,6 +204,53 @@ select:disabled {
 .search input::placeholder {
   color: #92958c;
 }
+.device-switcher,
+.workspace-tools {
+  margin: 0 15px 13px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.device-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+.device-options button,
+.workspace-tools button {
+  border: 1px solid var(--line-dark);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 6px 9px;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.device-options button.chosen {
+  background: var(--ink);
+  color: white;
+  border-color: var(--ink);
+}
+.workspace-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.workspace-tools button {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.workspace-tools button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .workspace-list {
   flex: 1;
   overflow: auto;
@@ -386,12 +433,18 @@ select:disabled {
 .workspace {
   height: 100%;
   min-width: 0;
-  display: grid;
-  grid-template-rows: 72px auto 1fr;
+  display: flex;
+  flex-direction: column;
   background: var(--paper);
+}
+.workspace > .content-grid {
+  flex: 1 1 0;
+  min-height: 0;
 }
 .topbar {
   min-width: 0;
+  min-height: 72px;
+  flex: 0 0 72px;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -537,6 +590,7 @@ select:disabled {
 .timeline {
   min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
@@ -1496,10 +1550,11 @@ select:disabled {
   }
   .workspace {
     height: 100%;
-    grid-template-rows: 64px auto 1fr;
   }
   .topbar {
     height: 64px;
+    min-height: 64px;
+    flex-basis: 64px;
     padding: 0 10px 0 58px;
     gap: 7px;
   }
