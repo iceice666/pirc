@@ -27,17 +27,17 @@
   .widget-panel {
     display: grid;
     gap: 0.4rem;
-    margin: 0 auto 0.5rem;
-    width: min(100%, 52rem);
-    padding: 0.55rem 0.8rem;
-    border: 1px solid var(--border, rgb(127 127 127 / 25%));
-    border-radius: 0.6rem;
-    font-size: 0.82rem;
-    background: var(--surface, transparent);
+    margin: 0 auto 8px;
+    width: min(796px, calc(100% - 64px));
+    padding: 10px 16px;
+    border-radius: var(--radius-lg);
+    color: var(--text-2);
+    font-size: 13px;
+    background: var(--bg-subtle);
   }
   .widget strong {
-    font-size: 0.78rem;
-    letter-spacing: 0.02em;
+    color: var(--ink);
+    font-weight: 500;
   }
   ul {
     margin: 0.25rem 0 0;
@@ -53,6 +53,6 @@
   }
   .status-line {
     margin: 0;
-    opacity: 0.75;
+    color: var(--muted);
   }
 </style>

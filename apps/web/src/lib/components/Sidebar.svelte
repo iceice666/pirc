@@ -1,5 +1,14 @@
 <script lang="ts">
-  import { ChevronDown, Command, Menu, MoreHorizontal, Plus, Search, X } from '@lucide/svelte';
+  import {
+    ChevronDown,
+    Command,
+    Menu,
+    MoreHorizontal,
+    Plus,
+    Search,
+    SquarePen,
+    X,
+  } from '@lucide/svelte';
   import type { NodeSummary, SessionSummary, Workspace } from '../types';
 
   export let workspaces: Workspace[];
@@ -48,7 +57,7 @@
 <aside class:open class="sidebar" aria-label="Sessions">
   <div class="brand-row">
     <a class="brand" href="/" aria-label="Relay home">
-      <span class="brand-mark"><Command size={18} /></span><span>Relay</span>
+      <span class="brand-mark"><Command size={16} /></span><span>Relay</span>
     </a>
     <button
       class="mobile-close icon-button"
@@ -58,7 +67,7 @@
     >
   </div>
   <button class="new-session" type="button" on:click={() => onnew()}
-    ><Plus size={17} /> New session <span>⌘ N</span></button
+    ><SquarePen size={16} /> New session</button
   >
   <label class="search">
     <Search size={16} />
@@ -102,7 +111,6 @@
             <span class:collapsed={collapsed.has(workspace.id)} class="chevron">
               <ChevronDown size={15} />
             </span>
-            <span class="workspace-dot"></span>
             <strong>{workspace.displayName}</strong>
             <small
               >· {workspace.hostId}{nodes.some((node) => node.id === workspace.hostId)
@@ -129,26 +137,19 @@
                 on:click={() => onselect(session.id)}
                 aria-current={session.id === activeSessionId ? 'page' : undefined}
               >
-                <span class="session-card-top">
-                  <strong>{session.name}</strong>
-                  <small>{relativeTime(session.lastActivityAt)}</small>
-                </span>
-                <span class="session-preview">{session.preview ?? 'No messages yet'}</span>
-                <span class="session-meta">
-                  <span
-                    class:waiting={session.runStatus === 'waiting_input'}
-                    class:running={session.runStatus === 'running'}
-                    class="status-dot"
-                  ></span>
-                  <span
-                    >{session.runStatus === 'waiting_input'
-                      ? 'Needs input'
-                      : session.runStatus === 'running'
-                        ? 'Working'
-                        : (session.runStatus ?? session.runnerStatus)}</span
-                  >
-                  {#if session.unreadCount}<span class="unread">{session.unreadCount}</span>{/if}
-                </span>
+                <span
+                  class:waiting={session.runStatus === 'waiting_input'}
+                  class:running={session.runStatus === 'running'}
+                  class="status-dot"
+                  title={session.runStatus === 'waiting_input'
+                    ? 'Needs input'
+                    : session.runStatus === 'running'
+                      ? 'Working'
+                      : (session.runStatus ?? session.runnerStatus)}
+                ></span>
+                <span class="session-name">{session.name}</span>
+                {#if session.unreadCount}<span class="unread">{session.unreadCount}</span
+                  >{:else}<small>{relativeTime(session.lastActivityAt)}</small>{/if}
               </button>
             {/each}
           </div>

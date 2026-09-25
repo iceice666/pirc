@@ -221,18 +221,20 @@ function loadMermaid(): Promise<MermaidApi> {
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: 'strict',
-      theme: 'base',
-      fontFamily: 'Manrope, ui-sans-serif, system-ui, sans-serif',
-      themeVariables: {
-        background: '#f8f7f2',
-        primaryColor: '#f2f0e9',
-        primaryBorderColor: '#a3a59e',
-        primaryTextColor: '#20231f',
-        lineColor: '#74776f',
-        secondaryColor: '#f7f7dc',
-        tertiaryColor: '#eeece4',
-        fontSize: '13px',
-      },
+      theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'base',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      themeVariables: matchMedia('(prefers-color-scheme: dark)').matches
+        ? { fontSize: '13px' }
+        : {
+            background: '#ffffff',
+            primaryColor: '#edf3fe',
+            primaryBorderColor: '#4176e6',
+            primaryTextColor: '#0f1115',
+            lineColor: '#81858c',
+            secondaryColor: '#f1f3f5',
+            tertiaryColor: '#f9fafb',
+            fontSize: '13px',
+          },
     });
     return mermaid;
   });

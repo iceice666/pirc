@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    Bot,
     Brain,
     ChevronRight,
     CircleAlert,
@@ -10,7 +9,6 @@
     Info,
     Layers,
     Puzzle,
-    RotateCcw,
     SquareTerminal,
     TriangleAlert,
   } from '@lucide/svelte';
@@ -113,35 +111,29 @@
     {/if}
   </aside>
 {:else}
-  <article class:user={message.role === 'user'} class="message">
-    <div class="message-gutter">
-      {#if message.role === 'assistant'}<span class="agent-avatar"><Bot size={16} /></span
-        >{:else}<span class="user-avatar">You</span>{/if}
-    </div>
+  <article
+    class:user={message.role === 'user'}
+    class:assistant={message.role === 'assistant'}
+    class="message"
+  >
     <div class="message-main">
-      <header>
-        <strong>{message.role === 'assistant' ? 'Pi' : 'You'}</strong><time
-          datetime={message.createdAt}>{time(message.createdAt)}</time
-        >
-        {#if message.model}<span class="message-model">{message.model}</span>{/if}
-      </header>
       {#if message.thinking || message.thinkingRedacted}
-        <div class="thinking" class:open={thinkingVisible}>
+        <div class="thinking" class:open={thinkingVisible} class:streaming={streamingThinking}>
           <button
             type="button"
             class="thinking-toggle"
             aria-expanded={thinkingVisible}
             on:click={() => (thinkingOpen = !thinkingOpen)}
           >
-            <Brain size={13} aria-hidden="true" />
+            <Brain size={15} aria-hidden="true" />
             <span
               >{streamingThinking
                 ? 'Thinking…'
                 : message.thinkingRedacted && !message.thinking
                   ? 'Reasoning redacted'
-                  : 'Thinking'}</span
+                  : 'Thought'}</span
             >
-            <ChevronRight class={thinkingVisible ? 'rotated' : ''} size={13} aria-hidden="true" />
+            <ChevronRight class={thinkingVisible ? 'rotated' : ''} size={14} aria-hidden="true" />
           </button>
           {#if thinkingVisible && message.thinking}
             <div class="thinking-body">
@@ -194,18 +186,22 @@
           {#each message.tools as tool (tool.id)}<ToolCard {tool} />{/each}
         </div>
       {/if}
-      {#if message.role === 'assistant' && !message.isPartial && message.content}
+      {#if !message.isPartial}
         <div class="message-actions">
-          <button
-            type="button"
-            aria-label="Copy response"
-            title="Copy response"
-            on:click={() => navigator.clipboard.writeText(message.content)}
-            ><Copy size={14} /> Copy</button
-          >
-          <button type="button" aria-label="Retry response" title="Retry response"
-            ><RotateCcw size={14} /> Retry</button
-          >
+          <time datetime={message.createdAt}>{time(message.createdAt)}</time>
+          {#if message.role === 'assistant' && message.model}<span class="message-model"
+              >{message.model}</span
+            >{/if}
+          {#if message.content}
+            <button
+              type="button"
+              class="icon-action"
+              aria-label="Copy message"
+              title="Copy"
+              on:click={() => navigator.clipboard.writeText(message.content)}
+              ><Copy size={14} /></button
+            >
+          {/if}
         </div>
       {/if}
     </div>
