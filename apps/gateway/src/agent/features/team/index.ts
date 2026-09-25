@@ -135,8 +135,13 @@ export function teamFeature(): Feature {
           },
           { triggerTurn: true, deliverAs: 'steer' },
         ),
+      onRecord: () => {
+        if (!lifetime.signal.aborted) agent.panelChanged('team');
+      },
       onChange: (state) => {
-        if (!agent.hasUI || lifetime.signal.aborted) return;
+        if (lifetime.signal.aborted) return;
+        agent.panelChanged('team');
+        if (!agent.hasUI) return;
         const live = state.agents.filter((a) => !['stopped', 'failed'].includes(a.status));
         agent.ui.setStatus(
           'agent-team',
@@ -229,6 +234,27 @@ export function teamFeature(): Feature {
   return {
     name: 'agent-team',
     tools: (agent) => (settings(agent).enabled === false ? [] : tools(agent)),
+    panel() {
+      if (!team) return { team: { agents: [] } };
+      return {
+        team: {
+          agents: team.list().agents.map(({ sessionFile: _file, ...member }) => ({
+            ...member,
+            task: String(member.task ?? '').slice(0, 2000),
+          })),
+          // Recent broker traffic (bodies clipped); full history is agent_inbox.
+          events: team.records.slice(-40).map((record) => ({
+            id: record.id,
+            time: record.time,
+            kind: record.kind,
+            ...(typeof record.from === 'string' ? { from: record.from } : {}),
+            ...(typeof record.to === 'string' ? { to: record.to } : {}),
+            ...(typeof record.name === 'string' ? { name: record.name } : {}),
+            ...(typeof record.body === 'string' ? { body: record.body.slice(0, 600) } : {}),
+          })),
+        },
+      };
+    },
     async shutdown(agent) {
       lifetime.abort();
       if (childName) parentChannel().closeAll();

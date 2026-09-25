@@ -293,6 +293,31 @@ export class Agent {
     return false;
   }
 
+  /** Side-panel state contributed by features (see `Feature.panel`). */
+  panelState(): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const feature of this.features) {
+      try {
+        Object.assign(out, feature.panel?.(this));
+      } catch {
+        /* a broken panel must not break the others */
+      }
+    }
+    return out;
+  }
+
+  /** Tell clients a side-panel section changed, coalesced per tick. */
+  panelChanged(section: string): void {
+    this.changedSections.add(section);
+    if (this.changedSections.size > 1) return;
+    queueMicrotask(() => {
+      const sections = [...this.changedSections];
+      this.changedSections.clear();
+      this.emit({ type: 'panel_changed', sections });
+    });
+  }
+  private readonly changedSections = new Set<string>();
+
   commandList(): Array<{ name: string; description: string; source: string }> {
     return this.features.flatMap((feature) =>
       Object.entries(feature.commands ?? {}).map(([name, command]) => ({

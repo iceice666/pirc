@@ -41,4 +41,11 @@ export interface Feature {
   ): Promise<CompactionPlan | { cancel: true } | undefined>;
   afterCompact?(agent: Agent): void | Promise<void>;
   shutdown?(agent: Agent): void | Promise<void>;
+  /**
+   * Structured state for the web side panel (`get_panel_state`), merged across
+   * features. Call `agent.panelChanged(section)` when it changes.
+   */
+  panel?(agent: Agent): Record<string, unknown>;
+  /** Extra JSONL RPC commands, by `type`. */
+  rpc?: Record<string, (agent: Agent, command: Record<string, any>) => Promise<unknown>>;
 }

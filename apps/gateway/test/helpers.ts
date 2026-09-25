@@ -33,6 +33,7 @@ export function testConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     rpcMaxOutputBytes: 16 * 1024 * 1024,
     websocketMaxBufferedBytes: 1024 * 1024,
     uploadMaxBytes: 1024 * 1024,
+    terminalsEnabled: true,
     leaseTtlMs: 5000,
     interactionTtlMs: 5000,
     shutdownGraceMs: 100,

@@ -45,6 +45,8 @@ On **each** device set `PIRC_NODE_ID`, its matching `PIRC_NODE_TOKEN`, `PIRC_DAE
 - `POST /api/uploads` with raw PNG/JPEG/GIF/WebP bytes
 - `GET /api/models?sessionId=...`
 - WebSocket `GET /api/events?sessionId=...&cursor=<epoch>:<sequence>`
+- Side panel, read-only (proxied to the owning node for remote sessions): `GET /api/sessions/:id/git/{status,diff,log}`, `GET /api/sessions/:id/git/commits/:sha`, `GET /api/sessions/:id/files[/content]?path=...` (confined to the workspace), `GET /api/sessions/:id/panel/state` (memory, background tasks, teammates) and `GET /api/sessions/:id/panel/background/:taskId`. A `panel_changed` event tells clients which sections to refetch.
+- Terminals (local sessions only; disable with `PIRC_TERMINALS=false`, shell from `PIRC_TERMINAL_SHELL` or `$SHELL`): `GET|POST /api/sessions/:id/terminals`, `POST /api/sessions/:id/terminals/:terminalId/close`, and WebSocket `GET /api/sessions/:id/terminals/:terminalId/stream`, which replays recent output on connect. Creating, closing, typing and resizing require a live control lease.
 
 Mutations that affect the agent require `{clientId,generation}` from a live control lease. Commands additionally require a client-generated `commandId`. Reusing the ID with the same canonical payload returns the known command; using it with a different payload returns `409`.
 

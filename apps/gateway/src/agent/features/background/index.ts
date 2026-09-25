@@ -26,7 +26,9 @@ export function backgroundFeature(): Feature {
   const completed: TaskInfo[] = [];
 
   const refresh = () => {
-    if (!agentRef?.hasUI || closed) return;
+    if (!agentRef || closed) return;
+    agentRef.panelChanged('background');
+    if (!agentRef.hasUI) return;
     const running = manager.list().filter((t) => t.status === 'running' || t.status === 'stopping');
     agentRef.ui.setStatus('background-task', running.length ? `BG ${running.length}` : undefined);
   };
@@ -165,6 +167,26 @@ export function backgroundFeature(): Feature {
     agentSettled() {
       noticePending = false;
       flush();
+    },
+    panel() {
+      return {
+        backgroundTasks: manager.list().map(({ logPath: _log, ...task }) => ({
+          ...task,
+          command: clean(task.command).slice(0, 2000),
+        })),
+      };
+    },
+    rpc: {
+      async background_output(_agent, command) {
+        const id = String(command.taskId ?? '');
+        const lines = Number(command.lines ?? 400);
+        const task = manager.get(id);
+        if (!Number.isInteger(lines) || lines < 1 || lines > 2000)
+          throw new Error('lines must be an integer from 1 to 2000.');
+        const tail = truncateOutput(tailLines(clean(manager.output(id, lines)), lines), 64 * 1024);
+        const { logPath: _log, ...info } = task;
+        return { task: { ...info, command: clean(task.command) }, output: tail.text };
+      },
     },
     async shutdown(agent) {
       closed = true;

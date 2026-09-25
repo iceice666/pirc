@@ -58,6 +58,10 @@ export interface GatewayConfig {
   rpcMaxOutputBytes: number;
   websocketMaxBufferedBytes: number;
   uploadMaxBytes: number;
+  /** Interactive shells in the web side panel (PIRC_TERMINALS, default on). */
+  terminalsEnabled: boolean;
+  /** Shell for side-panel terminals (PIRC_TERMINAL_SHELL, default $SHELL). */
+  terminalShell?: string;
   leaseTtlMs: number;
   interactionTtlMs: number;
   shutdownGraceMs: number;
@@ -172,6 +176,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     rpcMaxOutputBytes: integer(env.PIRC_RPC_MAX_OUTPUT_BYTES, 16_777_216),
     websocketMaxBufferedBytes: integer(env.PIRC_WS_MAX_BUFFERED_BYTES, 1_048_576),
     uploadMaxBytes: integer(env.PIRC_UPLOAD_MAX_BYTES, 10_485_760),
+    terminalsEnabled: bool(env.PIRC_TERMINALS, true),
+    ...(env.PIRC_TERMINAL_SHELL ? { terminalShell: env.PIRC_TERMINAL_SHELL } : {}),
     leaseTtlMs: integer(env.PIRC_LEASE_TTL_MS, 30_000),
     interactionTtlMs: integer(env.PIRC_INTERACTION_TTL_MS, 3_600_000),
     shutdownGraceMs: integer(env.PIRC_SHUTDOWN_GRACE_MS, 5_000),

@@ -203,8 +203,12 @@ export async function handleCommand(
     case 'set_session_name':
       agent.setName(String(command.name ?? ''));
       return undefined;
+    case 'get_panel_state':
+      return agent.panelState();
     default: {
-      const handler = extra[command.type];
+      const handler =
+        extra[command.type] ??
+        agent.features.find((feature) => feature.rpc?.[command.type])?.rpc?.[command.type];
       if (handler) return handler(agent, command);
       throw new Error(`Unsupported command: ${command.type}`);
     }

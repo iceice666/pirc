@@ -39,6 +39,72 @@ type NewEntry = SessionEntry extends infer E
 
 export const SESSION_FILE = 'session.jsonl';
 
+function parseEntries(text: string): SessionEntry[] {
+  const entries: SessionEntry[] = [];
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      entries.push(JSON.parse(line) as SessionEntry);
+    } catch {
+      /* a torn final line after a crash is skipped */
+    }
+  }
+  return entries;
+}
+
+/** Entries on the chain ending at `leafId`, root first. */
+function chainOf(byId: Map<string, SessionEntry>, leafId: string | null): SessionEntry[] {
+  const chain: SessionEntry[] = [];
+  let cursor = leafId ? byId.get(leafId) : undefined;
+  while (cursor) {
+    chain.push(cursor);
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+  }
+  return chain.reverse();
+}
+
+/**
+ * Read a session's active branch without opening a store (never writes).
+ * Used by the gateway to inspect a session whose agent is not running.
+ */
+export function readSessionBranch(dir: string): SessionEntry[] {
+  const file = path.join(dir, SESSION_FILE);
+  if (!existsSync(file)) return [];
+  const entries = parseEntries(readFileSync(file, 'utf8'));
+  return chainOf(new Map(entries.map((entry) => [entry.id, entry])), entries.at(-1)?.id ?? null);
+}
+
+/**
+ * Messages the model sees: latest compaction summary followed by messages
+ * from its `firstKeptEntryId` onward.
+ */
+export function contextEntriesOf(
+  branch: SessionEntry[],
+): Array<{ entryId: string; message: Message }> {
+  let start = 0;
+  let summary: { entryId: string; message: Message } | undefined;
+  for (let index = branch.length - 1; index >= 0; index--) {
+    const entry = branch[index]!;
+    if (entry.type !== 'compaction') continue;
+    const kept = branch.findIndex((item) => item.id === entry.firstKeptEntryId);
+    start = kept === -1 ? index + 1 : kept;
+    summary = {
+      entryId: entry.id,
+      message: {
+        role: 'compactionSummary',
+        summary: entry.summary,
+        tokensBefore: entry.tokensBefore,
+        timestamp: entry.timestamp,
+      },
+    };
+    break;
+  }
+  const out = summary ? [summary] : [];
+  for (const entry of branch.slice(start))
+    if (entry.type === 'message') out.push({ entryId: entry.id, message: entry.message });
+  return out;
+}
+
 export class SessionStore {
   readonly file: string;
   private readonly entries: SessionEntry[] = [];
@@ -52,16 +118,10 @@ export class SessionStore {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     this.file = path.join(dir, SESSION_FILE);
     if (existsSync(this.file)) {
-      for (const line of readFileSync(this.file, 'utf8').split('\n')) {
-        if (!line.trim()) continue;
-        try {
-          const entry = JSON.parse(line) as SessionEntry;
-          this.entries.push(entry);
-          this.byId.set(entry.id, entry);
-          this.leafId = entry.id;
-        } catch {
-          /* a torn final line after a crash is skipped */
-        }
+      for (const entry of parseEntries(readFileSync(this.file, 'utf8'))) {
+        this.entries.push(entry);
+        this.byId.set(entry.id, entry);
+        this.leafId = entry.id;
       }
     }
     if (!this.entries.length)
@@ -100,13 +160,7 @@ export class SessionStore {
 
   /** Entries on the active branch, root first. */
   branch(): SessionEntry[] {
-    const chain: SessionEntry[] = [];
-    let cursor = this.leafId ? this.byId.get(this.leafId) : undefined;
-    while (cursor) {
-      chain.push(cursor);
-      cursor = cursor.parentId ? this.byId.get(cursor.parentId) : undefined;
-    }
-    return chain.reverse();
+    return chainOf(this.byId, this.leafId);
   }
 
   latest<T extends SessionEntry['type']>(type: T): Extract<SessionEntry, { type: T }> | undefined {
@@ -144,29 +198,7 @@ export class SessionStore {
    * from its `firstKeptEntryId` onward.
    */
   contextEntries(): Array<{ entryId: string; message: Message }> {
-    const branch = this.branch();
-    let start = 0;
-    let summary: { entryId: string; message: Message } | undefined;
-    for (let index = branch.length - 1; index >= 0; index--) {
-      const entry = branch[index]!;
-      if (entry.type !== 'compaction') continue;
-      const kept = branch.findIndex((item) => item.id === entry.firstKeptEntryId);
-      start = kept === -1 ? index + 1 : kept;
-      summary = {
-        entryId: entry.id,
-        message: {
-          role: 'compactionSummary',
-          summary: entry.summary,
-          tokensBefore: entry.tokensBefore,
-          timestamp: entry.timestamp,
-        },
-      };
-      break;
-    }
-    const out = summary ? [summary] : [];
-    for (const entry of branch.slice(start))
-      if (entry.type === 'message') out.push({ entryId: entry.id, message: entry.message });
-    return out;
+    return contextEntriesOf(this.branch());
   }
 
   contextMessages(): Message[] {

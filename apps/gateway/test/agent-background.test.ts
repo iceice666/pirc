@@ -135,4 +135,22 @@ describe('background_task tool', () => {
     await Bun.sleep(200);
     expect(pgrep()).toBe('');
   });
+
+  it('reports tasks and output to the side panel', async () => {
+    const agent = await startAgent();
+    agents.push(agent);
+    await agent.send({ type: 'prompt', message: '/bg start echo panel-output; sleep 60' });
+    await agent.waitFor((e) => e.type === 'panel_changed' && e.sections.includes('background'));
+    const state = await agent.send({ type: 'get_panel_state' });
+    expect(state.success).toBe(true);
+    const [task] = state.data.backgroundTasks;
+    expect(task.status).toBe('running');
+    expect(task.logPath).toBeUndefined();
+    expect(state.data.memoryRuntime).toMatchObject({ phase: null, autoCompacting: false });
+    await Bun.sleep(100);
+    const output = await agent.send({ type: 'background_output', taskId: task.id });
+    expect(output.data.output).toContain('panel-output');
+    const missing = await agent.send({ type: 'background_output', taskId: 'nope' });
+    expect(missing.success).toBe(false);
+  });
 });

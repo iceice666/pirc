@@ -1,0 +1,364 @@
+/**
+ * HTTP/WebSocket surface for the web side panel: workspace files, Git,
+ * session memory / background tasks / team state, and interactive terminals.
+ *
+ * Read-only routes proxy to the owning node for remote sessions. Terminals
+ * run on this host only, and creating, typing into or closing one requires
+ * the session's control lease (the same authority as prompting the agent).
+ */
+import { statSync } from 'node:fs';
+import path from 'node:path';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { z } from 'zod';
+import { validateRequest } from './auth.js';
+import { loadAgentConfig } from './agent/config.js';
+import { memoryConfigFrom } from './agent/features/memory/index.js';
+import { memoryPanel } from './agent/features/memory/panel.js';
+import { readSessionBranch, SESSION_FILE } from './agent/session-store.js';
+import type { GatewayConfig } from './config.js';
+import type { GatewayDatabase } from './database.js';
+import { ApiError } from './errors.js';
+import {
+  gitDiff,
+  gitLog,
+  gitShow,
+  gitStatus,
+  listDirectory,
+  readWorkspaceFile,
+} from './inspect.js';
+import type { NodeRegistry } from './nodes.js';
+import type { RunnerManager } from './runner.js';
+import { TerminalManager } from './terminals.js';
+
+function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> {
+  const result = schema.safeParse(value);
+  if (!result.success)
+    throw new ApiError(400, 'invalid_input', 'Invalid request', result.error.flatten());
+  return result.data;
+}
+
+const sessionParams = z.object({ id: z.string().min(1) });
+const flag = z
+  .enum(['1', '0', 'true', 'false'])
+  .optional()
+  .transform((value) => value === '1' || value === 'true');
+const leaseBody = z.object({
+  clientId: z.string().min(1).max(200),
+  generation: z.number().int().positive(),
+});
+
+/** Environment secrets the gateway holds that a user shell has no business seeing. */
+const SECRET_ENV = /^(PIRC_NODE_TOKENS?|PIRC_.*SECRET.*)$/;
+
+/**
+ * Session branches keyed by file size + mtime: the panel polls after every
+ * turn, and session files only grow, so an unchanged stat means unchanged content.
+ */
+class BranchCache {
+  private readonly entries = new Map<
+    string,
+    { size: number; mtimeMs: number; branch: ReturnType<typeof readSessionBranch> }
+  >();
+  read(dir: string) {
+    let stat: { size: number; mtimeMs: number };
+    try {
+      stat = statSync(path.join(dir, SESSION_FILE));
+    } catch {
+      return [];
+    }
+    const cached = this.entries.get(dir);
+    if (cached && cached.size === stat.size && cached.mtimeMs === stat.mtimeMs)
+      return cached.branch;
+    const branch = readSessionBranch(dir);
+    this.entries.delete(dir);
+    this.entries.set(dir, { size: stat.size, mtimeMs: stat.mtimeMs, branch });
+    // Small LRU: a handful of sessions are viewed at a time.
+    if (this.entries.size > 16) this.entries.delete(this.entries.keys().next().value!);
+    return branch;
+  }
+}
+
+export interface PanelContext {
+  config: GatewayConfig;
+  db: GatewayDatabase;
+  runners: RunnerManager;
+  nodes: NodeRegistry;
+  claimSession(sessionId: string, user: string): void;
+}
+
+export function registerPanelRoutes(app: FastifyInstance, ctx: PanelContext): TerminalManager {
+  const { config, db, runners, nodes } = ctx;
+  const branchCache = new BranchCache();
+  const terminals = new TerminalManager(
+    () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !SECRET_ENV.test(key))),
+    config.terminalShell,
+  );
+
+  /** Authorize, then either proxy to the owning node or resolve the local workspace. */
+  const target = async (request: FastifyRequest) => {
+    const { id: sessionId } = parse(sessionParams, request.params);
+    ctx.claimSession(sessionId, request.identity!.user);
+    const session = db.getSession(sessionId);
+    if (session.nodeId) {
+      if (!nodes.get(session.nodeId)) throw new ApiError(503, 'node_offline', 'Node is offline');
+      const rest = request.url.split('/').slice(4).join('/');
+      const remote = await nodes.request(session.nodeId, 'panel', {
+        method: 'GET',
+        url: `/api/sessions/${encodeURIComponent(session.piSessionId!)}/${rest}`,
+        user: request.identity!.user,
+      });
+      return { remote } as const;
+    }
+    const workspace = db.getWorkspace(session.workspaceId);
+    return { local: { session, root: workspace.canonicalPath } } as const;
+  };
+  const local = <T>(
+    handler: (
+      local: { session: ReturnType<GatewayDatabase['getSession']>; root: string },
+      request: FastifyRequest,
+    ) => T | Promise<T>,
+  ) =>
+    async function (request: FastifyRequest) {
+      const resolved = await target(request);
+      if ('remote' in resolved) return resolved.remote;
+      return handler(resolved.local, request);
+    };
+
+  app.get(
+    '/api/sessions/:id/git/status',
+    local(({ root }) => gitStatus(root)),
+  );
+  app.get(
+    '/api/sessions/:id/git/diff',
+    local(({ root }, request) => {
+      const query = parse(
+        z.object({ path: z.string().max(4096).optional(), staged: flag, untracked: flag }),
+        request.query,
+      );
+      return gitDiff(root, query);
+    }),
+  );
+  app.get(
+    '/api/sessions/:id/git/log',
+    local(({ root }, request) => {
+      const query = parse(
+        z.object({
+          skip: z.coerce.number().int().min(0).max(1_000_000).default(0),
+          limit: z.coerce.number().int().min(1).max(200).default(50),
+        }),
+        request.query,
+      );
+      return gitLog(root, query);
+    }),
+  );
+  app.get(
+    '/api/sessions/:id/git/commits/:sha',
+    local(({ root }, request) =>
+      gitShow(root, parse(z.object({ sha: z.string().min(4).max(64) }), request.params).sha),
+    ),
+  );
+  app.get(
+    '/api/sessions/:id/files',
+    local(({ root }, request) =>
+      listDirectory(
+        root,
+        parse(z.object({ path: z.string().max(4096).default('') }), request.query).path,
+      ),
+    ),
+  );
+  app.get(
+    '/api/sessions/:id/files/content',
+    local(({ root }, request) =>
+      readWorkspaceFile(
+        root,
+        parse(z.object({ path: z.string().min(1).max(4096) }), request.query).path,
+      ),
+    ),
+  );
+
+  /**
+   * Memory (from the session file, so it works while the agent is stopped),
+   * plus live feature state (background tasks, team) when the agent runs.
+   */
+  app.get(
+    '/api/sessions/:id/panel/state',
+    local(async ({ session, root }) => {
+      const runner = runners.get(session.id);
+      let live: Record<string, unknown> = {};
+      let contextWindow: number | undefined;
+      if (runner?.alive) {
+        const [panel, state] = await Promise.allSettled([
+          runner.request({ type: 'get_panel_state' }),
+          runner.request({ type: 'get_state' }),
+        ]);
+        if (panel.status === 'fulfilled' && panel.value.success && panel.value.data)
+          live = panel.value.data;
+        if (state.status === 'fulfilled' && state.value.success)
+          contextWindow = state.value.data?.model?.contextWindow;
+      }
+      let features: Record<string, unknown> = {};
+      const branch = branchCache.read(session.privateSessionPath);
+      try {
+        const config = loadAgentConfig(root);
+        features = config.features;
+        // Stopped agent: the session's current model decides a ratio-mode threshold.
+        if (contextWindow === undefined) {
+          const change = branch.findLast((entry) => entry.type === 'model_change');
+          const ref =
+            change?.type === 'model_change'
+              ? { provider: change.provider, id: change.modelId }
+              : config.defaultModel;
+          contextWindow = ref
+            ? config.providers[ref.provider]?.models.find((model) => model.id === ref.id)
+                ?.contextWindow
+            : undefined;
+        }
+      } catch {
+        /* invalid config: fall back to defaults */
+      }
+      let memory: ReturnType<typeof memoryPanel> | null = null;
+      try {
+        memory = memoryPanel(branch, memoryConfigFrom(features), contextWindow);
+      } catch (error) {
+        app.log.warn({ error }, 'memory panel unavailable');
+      }
+      return {
+        agentRunning: Boolean(runner?.alive),
+        memory,
+        memoryRuntime: live.memoryRuntime ?? null,
+        backgroundTasks: live.backgroundTasks ?? [],
+        team: live.team ?? { agents: [] },
+      };
+    }),
+  );
+  app.get(
+    '/api/sessions/:id/panel/background/:taskId',
+    local(async ({ session }, request) => {
+      const { taskId } = parse(z.object({ taskId: z.string().min(1).max(100) }), request.params);
+      const { lines } = parse(
+        z.object({ lines: z.coerce.number().int().min(1).max(2000).default(400) }),
+        request.query,
+      );
+      const runner = runners.get(session.id);
+      if (!runner?.alive) throw new ApiError(409, 'runner_unavailable', 'The agent is not running');
+      const response = await runner.request({ type: 'background_output', taskId, lines });
+      if (!response.success)
+        throw new ApiError(404, 'not_found', response.error ?? 'Background task not found');
+      return response.data;
+    }),
+  );
+
+  // ---- terminals ----------------------------------------------------------
+
+  const localTerminalSession = (request: FastifyRequest) => {
+    if (!config.terminalsEnabled)
+      throw new ApiError(403, 'forbidden', 'Terminals are disabled on this gateway');
+    const { id: sessionId } = parse(sessionParams, request.params);
+    ctx.claimSession(sessionId, request.identity!.user);
+    const session = db.getSession(sessionId);
+    if (session.nodeId)
+      throw new ApiError(
+        400,
+        'invalid_input',
+        'Terminals are not available for remote-node sessions',
+      );
+    return session;
+  };
+
+  app.get('/api/sessions/:id/terminals', async (request) => {
+    const session = localTerminalSession(request);
+    return { terminals: terminals.list(session.id) };
+  });
+  app.post('/api/sessions/:id/terminals', async (request, reply) => {
+    const session = localTerminalSession(request);
+    const body = parse(
+      leaseBody.extend({
+        cols: z.number().int().optional(),
+        rows: z.number().int().optional(),
+      }),
+      request.body,
+    );
+    db.validateLease(session.id, body.clientId, body.generation);
+    const workspace = db.getWorkspace(session.workspaceId);
+    const terminal = terminals.create(session.id, workspace.canonicalPath, {
+      cols: body.cols ?? 80,
+      rows: body.rows ?? 24,
+    });
+    return reply.status(201).send({ terminal });
+  });
+  app.post('/api/sessions/:id/terminals/:terminalId/close', async (request, reply) => {
+    const session = localTerminalSession(request);
+    const { terminalId } = parse(z.object({ terminalId: z.string().min(1) }), request.params);
+    const body = parse(leaseBody, request.body);
+    db.validateLease(session.id, body.clientId, body.generation);
+    terminals.close(session.id, terminalId);
+    return reply.status(204).send();
+  });
+
+  /**
+   * Terminal stream. Anyone who may view the session may watch; input and
+   * resize require the control lease, checked per message.
+   */
+  app.get(
+    '/api/sessions/:id/terminals/:terminalId/stream',
+    { websocket: true },
+    (socket, request) => {
+      try {
+        validateRequest(request, config, true);
+        const session = localTerminalSession(request);
+        const { terminalId } = parse(z.object({ terminalId: z.string().min(1) }), request.params);
+        const send = (message: unknown) => {
+          if (socket.readyState !== socket.OPEN) return;
+          if (socket.bufferedAmount > config.websocketMaxBufferedBytes) {
+            // The client reconnects and gets the scrollback replayed.
+            socket.close(1013, 'resync required');
+            return;
+          }
+          socket.send(JSON.stringify(message));
+        };
+        const attached = terminals.attach(session.id, terminalId, (event) => {
+          send(event);
+          if (event.type === 'exit') socket.close(1000, 'terminal exited');
+        });
+        send({ type: 'ready', terminal: attached.info, replay: attached.replay });
+        if (attached.info.exited) send({ type: 'exit', exitCode: attached.info.exitCode });
+        socket.on('message', (raw) => {
+          let message: any;
+          try {
+            message = JSON.parse(String(raw));
+          } catch {
+            return;
+          }
+          try {
+            db.validateLease(
+              session.id,
+              String(message.clientId ?? ''),
+              Number(message.generation),
+            );
+          } catch {
+            send({ type: 'error', code: 'lost_control', message: 'Take control to type here' });
+            return;
+          }
+          try {
+            if (message.type === 'input' && typeof message.data === 'string')
+              terminals.input(session.id, terminalId, message.data);
+            else if (message.type === 'resize')
+              terminals.resize(session.id, terminalId, Number(message.cols), Number(message.rows));
+          } catch (error) {
+            send({ type: 'error', code: 'not_found', message: (error as Error).message });
+          }
+        });
+        socket.once('close', attached.detach);
+        socket.once('error', attached.detach);
+      } catch (error) {
+        const status = error instanceof ApiError ? error.statusCode : 500;
+        socket.close(
+          status === 401 ? 4401 : status === 403 ? 4403 : status === 404 ? 4404 : 4400,
+          error instanceof Error ? error.message.slice(0, 120) : 'invalid request',
+        );
+      }
+    },
+  );
+
+  return terminals;
+}

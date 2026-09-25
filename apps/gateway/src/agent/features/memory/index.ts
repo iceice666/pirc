@@ -76,14 +76,18 @@ export const memorySchema = z.object({
 export type MemoryConfig = z.infer<typeof memorySchema>;
 
 export function memoryConfig(agent: Agent): MemoryConfig {
-  const parsed = memorySchema.safeParse(agent.config.features.observationalMemory ?? {});
+  return memoryConfigFrom(agent.config.features);
+}
+
+export function memoryConfigFrom(features: Record<string, unknown>): MemoryConfig {
+  const parsed = memorySchema.safeParse(features.observationalMemory ?? {});
   const config = parsed.success ? parsed.data : memorySchema.parse({});
   if (process.env.PIRC_MEMORY_PASSIVE)
     config.passive = /^(1|true|yes|on)$/i.test(process.env.PIRC_MEMORY_PASSIVE.trim());
   return config;
 }
 
-const poolTarget = (config: MemoryConfig) =>
+export const poolTarget = (config: MemoryConfig) =>
   config.observationsPoolTargetTokens &&
   config.observationsPoolTargetTokens < config.observationsPoolMaxTokens
     ? config.observationsPoolTargetTokens
@@ -201,7 +205,12 @@ export function memoryFeature(): Feature {
   let fallbackNoticeFor: string | undefined;
 
   const notify = (agent: Agent, config: MemoryConfig, text: string) => {
+    agent.panelChanged('memory');
     if (config.showWorkerNotifications) agent.ui.notify(`Observational memory: ${text}`, 'info');
+  };
+  const setPhase = (agent: Agent, next: string) => {
+    phase = next;
+    agent.panelChanged('memory');
   };
   const currentTokens = (agent: Agent) => contextTokens(agent.store.contextEntries());
 
@@ -247,7 +256,7 @@ export function memoryFeature(): Feature {
       });
 
     // Observer
-    phase = 'observer';
+    setPhase(agent, 'observer');
     let branch = agent.store.branch();
     const obsTokens = tokensSinceCoverage(branch, OBS_RECORDED, currentTokens(agent));
     const obsCoverage = latestCoverageId(branch, OBS_RECORDED);
@@ -273,6 +282,7 @@ export function memoryFeature(): Feature {
         );
         if (!out.length && result.error) {
           lastError.observer = result.error;
+          agent.panelChanged('memory');
           return;
         }
         if (!out.length) {
@@ -291,7 +301,7 @@ export function memoryFeature(): Feature {
     if (signal.aborted) return;
 
     // Reflector
-    phase = 'reflector';
+    setPhase(agent, 'reflector');
     branch = agent.store.branch();
     const refTokens = tokensSinceCoverage(branch, REF_RECORDED, currentTokens(agent));
     const obsCov = latestCoverageId(branch, OBS_RECORDED);
@@ -318,7 +328,7 @@ export function memoryFeature(): Feature {
     if (signal.aborted) return;
 
     // Dropper (only after a same-run reflection)
-    phase = 'dropper';
+    setPhase(agent, 'dropper');
     branch = agent.store.branch();
     folded = foldLedger(branch);
     const target = poolTarget(config);
@@ -362,6 +372,7 @@ export function memoryFeature(): Feature {
     consolidating = consolidate(agent, signal)
       .catch((error) => {
         lastError[phase || 'consolidation'] = (error as Error).message;
+        agent.panelChanged('memory');
         agent.ui.notify(
           `Observational memory ${phase} failed: ${(error as Error).message}`,
           'warning',
@@ -369,7 +380,7 @@ export function memoryFeature(): Feature {
       })
       .finally(() => {
         consolidating = null;
-        phase = '';
+        setPhase(agent, '');
       });
   };
 
@@ -409,6 +420,8 @@ export function memoryFeature(): Feature {
     },
     turnEnd(agent) {
       maybeConsolidate(agent);
+      // Threshold progress moves every turn.
+      agent.panelChanged('memory');
     },
     async agentSettled(agent) {
       const config = memoryConfig(agent);
@@ -450,6 +463,7 @@ export function memoryFeature(): Feature {
           })
           .finally(() => {
             autoCompacting = false;
+            agent.panelChanged('memory');
           });
       }, 0);
     },
@@ -487,6 +501,20 @@ export function memoryFeature(): Feature {
       lifetime.abort();
       await consolidating;
       lifetime = new AbortController();
+    },
+    afterCompact(agent) {
+      agent.panelChanged('memory');
+    },
+    /** Live-only state; the ledger itself is built by the gateway (memory/panel.ts). */
+    panel() {
+      return {
+        memoryRuntime: {
+          phase: consolidating ? phase || 'starting' : null,
+          autoCompacting,
+          rateLimited: (tracker?.entries() ?? []).map(([model, until]) => ({ model, until })),
+          lastErrors: { ...lastError },
+        },
+      };
     },
     commands: {
       'om:status': {

@@ -273,6 +273,8 @@ export interface TeamOptions {
   deliverParent(entry: Json): void;
   askUser(question: Question, signal: AbortSignal, from: string): Promise<QuestionResult>;
   onChange?(state: ReturnType<Team['list']>): void;
+  /** A broker record was appended (messages, questions, posts). */
+  onRecord?(): void;
   kinds?: Record<string, { model?: string; thinking?: string }>;
   limit?: number;
   env?: Record<string, string | undefined>;
@@ -307,6 +309,7 @@ export class Team {
     });
     this.records.push(entry);
     this.notifyWaiters();
+    this.options.onRecord?.();
     return entry;
   }
 

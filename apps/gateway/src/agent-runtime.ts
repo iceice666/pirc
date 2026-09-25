@@ -93,6 +93,10 @@ export async function startNodeAgent(
               path: /^\/api\/sessions\/[^/?]+\/interactions\/[^/?]+\/answer$/,
             },
             models: { method: 'GET', path: /^\/api\/models\?sessionId=[^&]+$/ },
+            panel: {
+              method: 'GET',
+              path: /^\/api\/sessions\/[^/?]+\/(?:git\/(?:status|diff|log|commits\/[0-9a-fA-F]{4,64})|files(?:\/content)?|panel\/(?:state|background\/[^/?]+))(?:\?[^#]*)?$/,
+            },
           };
           const route = routes[message.action];
           if (

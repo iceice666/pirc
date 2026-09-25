@@ -12,6 +12,7 @@ import { ApiError, errorBody } from './errors.js';
 import { EventHub } from './events.js';
 import { WorkspaceLocks } from './locks.js';
 import { NodeRegistry, validNodeToken } from './nodes.js';
+import { registerPanelRoutes } from './panel-routes.js';
 import { applySessionName, RunnerManager } from './runner.js';
 import type { CommandPayload, EventCursor, Snapshot } from './types.js';
 import { id, payloadHash } from './util.js';
@@ -687,6 +688,8 @@ export async function buildApp(
     return response.data;
   });
 
+  const terminals = registerPanelRoutes(app, { config, db, runners, nodes, claimSession });
+
   app.get('/api/events', { websocket: true }, (socket, request) => {
     try {
       if (!config.nodeAuthSecret) validateRequest(request, config, true);
@@ -734,6 +737,7 @@ export async function buildApp(
   });
 
   app.addHook('onClose', async () => {
+    terminals.shutdown();
     nodes.close();
     await runners.shutdown();
     db.close();
