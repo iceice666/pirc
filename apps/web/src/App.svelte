@@ -59,6 +59,7 @@
   let clientId = '';
   let newSessionOpen = false;
   let newSessionWorkspace = '';
+  let creatingSession = false;
   let newWorkspaceOpen = false;
   let newWorkspaceNodeId = '';
   let newWorkspacePath = '';
@@ -431,19 +432,30 @@
     }
   }
 
+  /** With a workspace (its `+` button, or one just added) the session is created right away. */
   function showNewSession(workspaceId?: string) {
+    if (workspaceId) {
+      newSessionWorkspace = workspaceId;
+      void createSession();
+      return;
+    }
     newSessionWorkspace =
-      workspaceId ??
       workspaces.find(
         (workspace) =>
           !workspace.id.includes(':') || nodes.some((node) => node.id === workspace.hostId),
-      )?.id ??
-      '';
+      )?.id ?? '';
     newSessionOpen = true;
   }
 
   async function createSession() {
-    if (!newSessionWorkspace) return;
+    if (!newSessionWorkspace || creatingSession) return;
+    const workspace = workspaces.find((item) => item.id === newSessionWorkspace);
+    if (workspace?.id.includes(':') && !nodes.some((node) => node.id === workspace.hostId)) {
+      pageError = `${workspace.displayName} is offline.`;
+      return;
+    }
+    creatingSession = true;
+    pageError = '';
     try {
       const created = usingDemo
         ? {
@@ -470,6 +482,8 @@
       } else await openSession(created.id);
     } catch (error) {
       pageError = error instanceof Error ? error.message : 'Could not create the session.';
+    } finally {
+      creatingSession = false;
     }
   }
 
@@ -825,7 +839,8 @@
           class="button dark"
           type="button"
           on:click={createSession}
-          disabled={!newSessionWorkspace ||
+          disabled={creatingSession ||
+            !newSessionWorkspace ||
             (newSessionWorkspace.includes(':') &&
               !nodes.some(
                 (node) =>
