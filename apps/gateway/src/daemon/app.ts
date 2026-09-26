@@ -65,7 +65,7 @@ const answerBody = z
  */
 const RELAYED_GET =
   /^(?:git\/(?:status|diff|log|commits\/[0-9a-fA-F]{4,64})|files(?:\/content)?|panel\/(?:state|background\/[^/?]+)|terminals)$/;
-const RELAYED_POST = /^terminals(?:\/[^/?]+\/close)?$/;
+const RELAYED_POST = /^(?:terminals(?:\/[^/?]+\/close)?|panel\/background\/[^/?]+\/stop)$/;
 
 function cursorFrom(value: unknown): EventCursor | null {
   if (typeof value !== 'string' || !value) return null;
@@ -475,6 +475,7 @@ export async function buildDaemonApp(
     app.get(route, relayPanel('GET'));
   app.post('/api/sessions/:id/terminals', relayPanel('POST'));
   app.post('/api/sessions/:id/terminals/:terminalId/close', relayPanel('POST'));
+  app.post('/api/sessions/:id/panel/background/:taskId/stop', relayPanel('POST'));
 
   // ---- WebSockets -----------------------------------------------------------
 

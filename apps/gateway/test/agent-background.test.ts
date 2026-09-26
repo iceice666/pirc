@@ -247,4 +247,23 @@ describe('background_task tool', () => {
     const missing = await agent.send({ type: 'background_output', taskId: 'nope' });
     expect(missing.success).toBe(false);
   });
+
+  it('stops a task from the panel and tells the model', async () => {
+    const agent = await startAgent();
+    agents.push(agent);
+    agent.llm.push({ text: 'Noted, the watcher was stopped.' });
+    await agent.send({ type: 'prompt', message: '/bg start sleep 60' });
+    await agent.waitFor((e) => e.type === 'panel_changed' && e.sections.includes('background'));
+    const [task] = (await agent.send({ type: 'get_panel_state' })).data.backgroundTasks;
+    const stopped = await agent.send({ type: 'background_stop', taskId: task.id });
+    expect(stopped.success).toBe(true);
+    expect(stopped.data.task.logPath).toBeUndefined();
+    expect(['stopping', 'stopped']).toContain(stopped.data.task.status);
+    const wake = await agent.waitFor(
+      (e) => e.type === 'message_end' && e.message.customType === 'background-task-finished',
+    );
+    expect(wake.message.content).toContain(`${task.id} · stopped`);
+    const missing = await agent.send({ type: 'background_stop', taskId: 'nope' });
+    expect(missing.success).toBe(false);
+  });
 });

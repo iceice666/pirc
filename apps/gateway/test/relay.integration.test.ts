@@ -207,6 +207,24 @@ it('closes a terminal stream for an unknown terminal or another user', async () 
   expect(await new Promise<number>((resolve) => socket.once('close', resolve))).toBe(4403);
 });
 
+it('relays background-task stops to the node, which checks the lease', async () => {
+  const cluster = await startCluster();
+  clusters.push(cluster);
+  const { app } = cluster;
+  const { sessionId, control } = await openSession(cluster);
+  const url = `/api/sessions/${sessionId}/panel/background/bg1/stop`;
+  const refused = await app.inject({
+    method: 'POST',
+    url,
+    headers,
+    payload: { clientId: control.clientId, generation: control.generation + 5 },
+  });
+  expect(refused.statusCode).toBe(409);
+  // With control it reaches the node; no agent runs in this test, so no task either.
+  const relayed = await app.inject({ method: 'POST', url, headers, payload: control });
+  expect(relayed.json().error.code).toBe('runner_unavailable');
+});
+
 it('keeps daemon and node configuration apart', () => {
   const state = mkdtempSync(path.join(os.tmpdir(), 'pirc-cfg-'));
   const daemonEnv = {

@@ -275,6 +275,23 @@ export function backgroundFeature(): Feature {
         const { logPath: _log, ...info } = task;
         return { task: { ...info, command: clean(task.command) }, output: tail.text };
       },
+      /**
+       * Stop requested from the web UI. Returns at once (status `stopping`);
+       * the finish flows through the usual completion notice, so the model
+       * learns the task was stopped.
+       */
+      async background_stop(agent, command) {
+        agentRef = agent;
+        requireOpen();
+        const id = String(command.taskId ?? '');
+        const before = manager.get(id);
+        if (before.status === 'running') {
+          void manager.stop(id).then(refresh, () => undefined);
+          refresh();
+        }
+        const { logPath: _log, ...info } = manager.get(id);
+        return { task: { ...info, command: clean(info.command) } };
+      },
     },
     async shutdown(agent) {
       closed = true;

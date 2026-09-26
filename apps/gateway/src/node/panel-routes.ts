@@ -254,6 +254,22 @@ export function registerPanelRoutes(
       return response.data;
     }),
   );
+  /** Stopping a background task needs the control lease, like prompting the agent. */
+  app.post('/api/sessions/:id/panel/background/:taskId/stop', async (request) => {
+    const session = claim(request);
+    const { taskId } = parse(
+      z.object({ id: z.string(), taskId: z.string().min(1).max(100) }),
+      request.params,
+    );
+    const body = parse(leaseBody, request.body);
+    db.validateLease(session.id, body.clientId, body.generation);
+    const runner = runners.get(session.id);
+    if (!runner?.alive) throw new ApiError(409, 'runner_unavailable', 'The agent is not running');
+    const response = await runner.request({ type: 'background_stop', taskId });
+    if (!response.success)
+      throw new ApiError(404, 'not_found', response.error ?? 'Background task not found');
+    return response.data;
+  });
 
   // ---- terminals ----------------------------------------------------------
 
