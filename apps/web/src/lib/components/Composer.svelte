@@ -23,6 +23,7 @@
   } from '../types';
   import type { GoalView } from '../goal';
   import type { TodoList } from '../todo';
+  import ComposerSelect from './ComposerSelect.svelte';
   import GoalDock from './GoalDock.svelte';
   import TodoDock from './TodoDock.svelte';
 
@@ -195,31 +196,36 @@
       >
         <Paperclip size={18} />
       </button>
-      <select
-        class="model-select"
-        aria-label="Model"
-        value={modelId}
-        on:change={(event) => onmodel(event.currentTarget.value)}
-        disabled={active}
-      >
-        {#each models.filter((model) => model.available) as model}
-          <option value={model.id}>{model.displayName}</option>
-        {/each}
-      </select>
-      <span class="select-divider"></span>
-      <select
-        class="thinking-select"
-        aria-label="Thinking level"
-        value={thinking}
-        on:change={(event) => onthinking(event.currentTarget.value as ThinkingLevel)}
-      >
-        <option value="off">No thinking</option>
-        <option value="minimal">Minimal</option>
-        <option value="low">Low</option>
-        <option value="medium">Medium</option>
-        <option value="high">High thinking</option>
-        <option value="xhigh">Extra high</option>
-      </select>
+      <div class="model-select">
+        <ComposerSelect
+          label="Model"
+          value={modelId}
+          options={models
+            .filter((model) => model.available)
+            .map((model) => ({
+              value: model.id,
+              label: model.displayName,
+              detail: model.provider,
+            }))}
+          disabled={active}
+          onselect={onmodel}
+        />
+      </div>
+      <div class="thinking-select">
+        <ComposerSelect
+          label="Reasoning effort"
+          value={thinking}
+          options={[
+            { value: 'off', label: 'No thinking' },
+            { value: 'minimal', label: 'Minimal' },
+            { value: 'low', label: 'Low' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'high', label: 'High' },
+            { value: 'xhigh', label: 'Extra high' },
+          ]}
+          onselect={(level) => onthinking(level as ThinkingLevel)}
+        />
+      </div>
       <span class="spacer"></span>
       {#if active}
         <div class="mode-switch" aria-label="Message delivery mode">

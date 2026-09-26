@@ -3,6 +3,8 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [svelte()],
+  // Component tests mount into jsdom rather than rendering on the server.
+  resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
   build: {
     manifest: true,
     sourcemap: true,
