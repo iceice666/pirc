@@ -185,6 +185,17 @@ export class Agent {
     return this.steering.length + this.followUps.length;
   }
 
+  /** Some feature will start another run after this one settles (see `Feature.willContinue`). */
+  willContinue(): boolean {
+    return this.features.some((feature) => {
+      try {
+        return feature.willContinue?.(this) === true;
+      } catch {
+        return false;
+      }
+    });
+  }
+
   get toolList(): Tool[] {
     return [...this.tools.values()];
   }

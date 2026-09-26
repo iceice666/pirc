@@ -32,6 +32,11 @@ export interface Feature {
   turnEnd?(agent: Agent, message: AssistantMessage): void | Promise<void>;
   /** Run loop is about to stop; may queue follow-ups to continue it. */
   agentEnd?(agent: Agent, messages: Message[]): void | Promise<void>;
+  /**
+   * The feature will start another run once idle (e.g. an active goal), so
+   * end-of-run nudges such as the todo reminder can leave it to that run.
+   */
+  willContinue?(agent: Agent): boolean;
   /** Fully idle (after agent_end); may queue steer messages to wake the agent. */
   agentSettled?(agent: Agent): void | Promise<void>;
   /** Return a custom compaction, or undefined to fall back to the default summarizer. */

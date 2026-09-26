@@ -193,7 +193,8 @@ export function todoFeature(): Feature {
     agentEnd(agent, messages) {
       const last = messages.at(-1);
       if (last?.role !== 'assistant' || last.stopReason !== 'stop') return;
-      if (reminded || agent.pendingCount) return;
+      // An active goal starts the next round anyway; its continuation covers the reminder.
+      if (reminded || agent.pendingCount || agent.willContinue()) return;
       const unfinished = state.todos.filter((item) => item.status !== 'completed');
       if (!unfinished.length) return;
       reminded = true;
