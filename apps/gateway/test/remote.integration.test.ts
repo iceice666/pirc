@@ -226,3 +226,59 @@ it('routes sessions and Pi prompts through two independent outbound nodes', asyn
   });
   expect(online.statusCode).toBe(200);
 });
+
+it('pins, settles and renames sessions from the browser', async () => {
+  const cluster = await startCluster([{ nodeId: 'alpha' }], {
+    allowedUsers: new Set(['test@example.com', 'other@example.com']),
+  });
+  clusters.push(cluster);
+  const { app, services } = cluster;
+  await waitFor(() => services.db.listWorkspaces().some((w) => w.id === 'alpha:test'), true);
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/sessions',
+    headers,
+    payload: { workspaceId: 'alpha:test' },
+  });
+  const session = created.json().session;
+  expect(session).toMatchObject({ pinnedAt: null, settledAt: null });
+  const patch = (payload: Record<string, unknown>, as: Record<string, string> = headers) =>
+    app.inject({ method: 'PATCH', url: `/api/sessions/${session.id}`, headers: as, payload });
+
+  const pinned = await patch({ pinned: true });
+  expect(pinned.statusCode).toBe(200);
+  expect(pinned.json().session.pinnedAt).toBeNumber();
+  // Organizing never counts as activity.
+  expect(pinned.json().session.updatedAt).toBe(session.updatedAt);
+  // Pinning again keeps the original time.
+  expect((await patch({ pinned: true })).json().session.pinnedAt).toBe(
+    pinned.json().session.pinnedAt,
+  );
+
+  const settled = await patch({ settled: true, pinned: false });
+  expect(settled.json().session).toMatchObject({ pinnedAt: null, name: 'New session' });
+  expect(settled.json().session.settledAt).toBeNumber();
+
+  const renamed = await patch({ name: '  Tidy scripts  ' });
+  expect(renamed.json().session).toMatchObject({ name: 'Tidy scripts', nameSource: 'user' });
+  expect(renamed.json().session.settledAt).toBe(settled.json().session.settledAt);
+
+  expect((await patch({})).statusCode).toBe(400);
+  expect((await patch({ name: '   ' })).statusCode).toBe(400);
+  expect((await patch({ pinned: 'yes' })).statusCode).toBe(400);
+  expect(
+    (await patch({ pinned: true }, { ...headers, 'x-pirc-user': 'other@example.com' })).statusCode,
+  ).toBe(403);
+
+  const listed = (await app.inject({ method: 'GET', url: '/api/sessions', headers }))
+    .json()
+    .sessions.find((item: { id: string }) => item.id === session.id);
+  expect(listed.settledAt).toBe(settled.json().session.settledAt);
+
+  // Pin and settle are the gateway's own: they work while the node is away; a rename does not.
+  await cluster.nodes[0]!.close();
+  await waitFor(() => services.nodes.list().length, 0);
+  expect((await patch({ settled: false })).json().session.settledAt).toBeNull();
+  expect((await patch({ name: 'Offline name' })).statusCode).toBe(503);
+  expect(services.db.getSession(session.id).name).toBe('Tidy scripts');
+});

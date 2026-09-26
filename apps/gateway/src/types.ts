@@ -28,6 +28,10 @@ export interface SessionSummary {
   runnerState: RunnerState;
   runStatus: RunStatus | null;
   runnerEpoch: number;
+  /** When the user pinned the session to the top of its workspace; `null` if not pinned. */
+  pinnedAt: number | null;
+  /** When the user marked the session settled (done); `null` while it is open. */
+  settledAt: number | null;
   createdAt: number;
   updatedAt: number;
 }

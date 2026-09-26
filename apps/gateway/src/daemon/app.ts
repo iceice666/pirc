@@ -29,7 +29,16 @@ const createWorkspaceBody = z.object({
   displayName: z.string().trim().min(1).max(200),
 });
 const createSessionBody = z.object({ workspaceId: z.string().min(1) });
-const renameBody = z.object({ name: z.string().trim().min(1).max(200) });
+/** Rename, pin and settle, in any combination. Only a rename reaches the node. */
+const updateSessionBody = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    pinned: z.boolean().optional(),
+    settled: z.boolean().optional(),
+  })
+  .refine((body) => Object.values(body).some((value) => value !== undefined), {
+    message: 'Nothing to update',
+  });
 const leaseBody = z.object({
   clientId: z.string().min(1).max(200),
   generation: z.number().int().nonnegative().optional(),
@@ -251,14 +260,18 @@ export async function buildDaemonApp(
 
   app.patch('/api/sessions/:id', async (request, reply) => {
     const session = claim(request);
-    const { name } = parse(renameBody, request.body);
-    const remote = await expectOk(reply, session.nodeId, request, {
-      method: 'PATCH',
-      url: nodeUrl(session),
-      payload: { name },
-    });
-    if (!remote) return reply;
-    applySessionName(db, events, session.id, session.runnerEpoch, { name, source: 'user' });
+    const { name, pinned, settled } = parse(updateSessionBody, request.body);
+    if (name !== undefined) {
+      const remote = await expectOk(reply, session.nodeId, request, {
+        method: 'PATCH',
+        url: nodeUrl(session),
+        payload: { name },
+      });
+      if (!remote) return reply;
+      applySessionName(db, events, session.id, session.runnerEpoch, { name, source: 'user' });
+    }
+    if (pinned !== undefined || settled !== undefined)
+      db.setSessionFlags(session.id, { pinned, settled });
     return { session: publicSession(db.getSession(session.id)) };
   });
 

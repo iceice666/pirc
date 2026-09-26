@@ -60,6 +60,10 @@ const migrations = [
   ALTER TABLE sessions ADD COLUMN name_source TEXT NOT NULL DEFAULT 'user';
   UPDATE sessions SET name_source='auto' WHERE name IN ('New session', 'Untitled session');
   `,
+  `
+  ALTER TABLE sessions ADD COLUMN pinned_at INTEGER;
+  ALTER TABLE sessions ADD COLUMN settled_at INTEGER;
+  `,
 ];
 
 export const PLACEHOLDER_SESSION_NAME = 'New session';
@@ -269,6 +273,8 @@ export class GatewayDatabase {
       runnerState: row.runner_state,
       runStatus: row.run_status ?? null,
       runnerEpoch: row.runner_epoch,
+      pinnedAt: row.pinned_at ?? null,
+      settledAt: row.settled_at ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       privateSessionPath: row.private_session_path,
@@ -302,6 +308,24 @@ export class GatewayDatabase {
     this.raw
       .prepare("UPDATE sessions SET name=?, name_source='user', updated_at=? WHERE id=?")
       .run(name, now(), sessionId);
+    return this.getSession(sessionId);
+  }
+
+  /**
+   * Sidebar organisation only: pinning and settling never touch `updated_at`,
+   * so they do not reorder sessions by activity.
+   */
+  setSessionFlags(
+    sessionId: string,
+    flags: { pinned?: boolean | undefined; settled?: boolean | undefined },
+  ): SessionRow {
+    const session = this.getSession(sessionId);
+    const stamp = now();
+    const next = (wanted: boolean | undefined, current: number | null) =>
+      wanted === undefined ? current : wanted ? (current ?? stamp) : null;
+    this.raw
+      .prepare('UPDATE sessions SET pinned_at=?, settled_at=? WHERE id=?')
+      .run(next(flags.pinned, session.pinnedAt), next(flags.settled, session.settledAt), sessionId);
     return this.getSession(sessionId);
   }
 
