@@ -552,7 +552,10 @@
   }
 </script>
 
-<svelte:window bind:innerWidth={viewportWidth} />
+<svelte:window
+  bind:innerWidth={viewportWidth}
+  on:keydown={(event) => event.key === 'Escape' && sidebarOpen && (sidebarOpen = false)}
+/>
 
 <svelte:head
   ><title>{sessionState ? `${sessionState.session.name} · Relay` : 'Relay · Pi Remote'}</title
@@ -570,7 +573,7 @@
     {nodes}
     {sessions}
     {activeSessionId}
-    open={sidebarOpen}
+    bind:open={sidebarOpen}
     collapsed={sidebarCollapsed}
     oncollapse={() => (sidebarCollapsed = true)}
     onselect={openSession}
