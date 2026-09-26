@@ -143,6 +143,36 @@ describe('pirc agent (OpenAI chat)', () => {
     ]);
   });
 
+  it('keeps every event line small even when a turn produces a lot of output', async () => {
+    // The node kills an agent whose stdout line exceeds 1 MiB. Each tool result
+    // is capped on its own, but turn_end/agent_end used to repeat a whole
+    // turn/run of them in one line.
+    const calls = Array.from({ length: 30 }, (_, index) => ({
+      type: 'toolCall' as const,
+      id: `call_${index}`,
+      name: 'read',
+      arguments: { path: 'big.txt' },
+    }));
+    const sizes: Record<string, number> = {};
+    await runInProcess(
+      [calls, [{ type: 'text', text: 'Read it thirty times.' }]],
+      (event) => {
+        const bytes = Buffer.byteLength(JSON.stringify(event));
+        sizes[event.type] = Math.max(sizes[event.type] ?? 0, bytes);
+      },
+      (workspace) =>
+        writeFileSync(
+          path.join(workspace, 'big.txt'),
+          Array.from({ length: 5000 }, (_, i) => `line ${i} ${'x'.repeat(40)}`).join('\n'),
+        ),
+    );
+    const total = sizes.tool_execution_end! * calls.length;
+    expect(total).toBeGreaterThan(1024 * 1024); // the turn as a whole is over the limit
+    expect(Math.max(...Object.values(sizes))).toBeLessThan(1024 * 1024);
+    expect(sizes.turn_end).toBeLessThan(100);
+    expect(sizes.agent_end).toBeLessThan(100);
+  });
+
   it('confines file tools to the workspace and allowed paths, and protects .pirc', async () => {
     const outside = path.join(tmpdir(), `pirc-outside-${Date.now()}`);
     mkdirSync(outside);

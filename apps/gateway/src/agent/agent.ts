@@ -697,7 +697,7 @@ export class Agent {
       if (!persisted && compactsInstead(message)) {
         // Drop the failed reply, compact everything, and retry the turn once.
         overflowRetried = true;
-        this.emit({ type: 'turn_end', message, toolResults: [] });
+        this.emit({ type: 'turn_end' });
         const result = await this.withCompacting(signal, (inner) =>
           runCompaction(this, {
             reason: 'overflow',
@@ -733,7 +733,10 @@ export class Agent {
           results.push(await this.executeTool(call, signal));
         }
       }
-      this.emit({ type: 'turn_end', message, toolResults: results });
+      // Markers only: every message already went out in its own message_end,
+      // and repeating a turn's worth of tool output in one line could exceed
+      // the node's per-line RPC limit and get the agent killed.
+      this.emit({ type: 'turn_end' });
       for (const feature of this.features) await feature.turnEnd?.(this, message);
       if (message.stopReason === 'error' || message.stopReason === 'aborted') break;
       if (this.steering.length) {
@@ -755,7 +758,7 @@ export class Agent {
       }
       break;
     }
-    this.emit({ type: 'agent_end', messages: produced, willRetry: false });
+    this.emit({ type: 'agent_end', willRetry: false });
   }
 
   private recordResult(call: ToolCall, result: ToolResult): ToolResultMessage {

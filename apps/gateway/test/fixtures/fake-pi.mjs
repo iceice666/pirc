@@ -149,7 +149,7 @@ rl.on('line', (raw) => {
     setTimeout(() => {
       persist(message);
       line({ type: 'message_end', message });
-      line({ type: 'agent_end', messages: [message], willRetry: false });
+      line({ type: 'agent_end', willRetry: false });
       line({ type: 'agent_settled' });
     }, 10);
     return;
