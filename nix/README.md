@@ -33,7 +33,7 @@ Minimal service-only example:
 {
   services.pirc = {
     enable = true;
-    agentConfig = {
+    models = {
       providers.main = {
         api = "openai-chat"; # or "anthropic-messages"
         baseUrl = "https://api.example.com/v1";
@@ -70,11 +70,11 @@ Other machines can run `pirc node` against this gateway. Put their secrets in `e
 
 ### Agent configuration
 
-`services.pirc.agentConfig` becomes `config.json` in a store directory that `PIRC_CONFIG_DIR` points to. `services.pirc.agentPrompt` becomes the global `AGENTS.md`. Workspaces can still add a `.pirc/` project config (allowed paths, env, hooks, default model). The removed `piPackage`/`piArgs` options now fail evaluation with a migration hint.
+`services.pirc.models` holds the providers and default model. It becomes `/etc/pirc/models.json` for the gateway, which resolves the keys and pushes the providers to every node, local and remote, so remote nodes need no provider settings of their own. Changing it reloads the gateway (`SIGHUP`, no restart), and agents started afterwards use the new providers. `services.pirc.agentConfig` (limits, features, hooks) becomes the local node's `config.json` in a store directory that `PIRC_CONFIG_DIR` points to; `providers` or `defaultModel` there fail evaluation with a pointer to `services.pirc.models`. `services.pirc.agentPrompt` becomes the global `AGENTS.md`. Workspaces can still add a `.pirc/` project config (allowed paths, env, hooks, default model). The removed `piPackage`/`piArgs` options now fail evaluation with a migration hint.
 
 ### Secrets
 
-The agent config lives in the world-readable Nix store, so reference provider keys indirectly with `apiKeyFile`, `apiKeyEnv`, or `apiKeyCommand`. For `apiKeyEnv`, put the variable in `services.pirc.environmentFile`:
+`services.pirc.models` lives in the world-readable Nix store, so reference provider keys indirectly with `apiKeyFile`, `apiKeyEnv`, or `apiKeyCommand`. They are resolved by the gateway service (`apiKeyCommand` finds `extraPackages` on its PATH). For `apiKeyEnv`, put the variable in `services.pirc.environmentFile`:
 
 ```nix
 services.pirc.environmentFile = config.sops.secrets.pirc-env.path;

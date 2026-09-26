@@ -73,6 +73,7 @@ let
     PIRC_ALLOWED_USERS = csv cfg.allowedUsers;
     PIRC_ALLOWED_ORIGINS = csv cfg.allowedOrigins;
     PIRC_ALLOWED_HOSTS = csv cfg.allowedHosts;
+    PIRC_MODELS_FILE = "/etc/pirc/models.json";
   }
   // cfg.environment;
 
@@ -142,8 +143,13 @@ let
     EnvironmentFile = optional (cfg.environmentFile != null) cfg.environmentFile;
   };
 
-  # Built-in agent config: ~/.config/.pirc equivalent, kept in the store.
+  # Providers live on the gateway, which resolves their keys and pushes them
+  # to every node. The file sits at a stable /etc path so a change reloads
+  # the gateway (SIGHUP) instead of restarting it; new sessions pick it up.
   # API keys must use apiKeyEnv/apiKeyFile/apiKeyCommand, never literal values.
+  modelsFile = pkgs.writeText "pirc-models.json" (json cfg.models);
+
+  # Node-local agent config (limits, features, hooks, ...), kept in the store.
   agentConfigDir = pkgs.runCommand "pirc-agent-config" { } (
     ''
       mkdir -p $out
@@ -199,7 +205,7 @@ in
       description = "pirc package to run.";
     };
 
-    agentConfig = mkOption {
+    models = mkOption {
       type = types.attrsOf types.anything;
       default = { };
       example = literalExpression ''
@@ -214,9 +220,28 @@ in
         }
       '';
       description = ''
-        Built-in agent configuration (the contents of config.json in
-        PIRC_CONFIG_DIR). Reference credentials with apiKeyEnv, apiKeyFile or
-        apiKeyCommand; literal apiKey values would land in the Nix store.
+        Model providers and the default model, held by the gateway
+        (`models.json`) and pushed to every node, local and remote. The
+        gateway resolves keys: reference them with apiKeyEnv (set in
+        environmentFile), apiKeyFile or apiKeyCommand, which run as the
+        gateway's account; literal apiKey values would land in the Nix store.
+        Changes reload the gateway and apply to agents started afterwards.
+      '';
+    };
+
+    agentConfig = mkOption {
+      type = types.attrsOf types.anything;
+      default = { };
+      example = literalExpression ''
+        {
+          limits.maxTurns = 300;
+          features.sessionTitle.enabled = true;
+        }
+      '';
+      description = ''
+        Local node's agent configuration (the contents of config.json in
+        PIRC_CONFIG_DIR): limits, features, hooks, env and allowed paths.
+        Providers and the default model belong in services.pirc.models.
       '';
     };
 
@@ -392,6 +417,10 @@ in
           message = "services.pirc.workspaces belong to the local node; enable services.pirc.localNode";
         }
         {
+          assertion = !(cfg.agentConfig ? providers) && !(cfg.agentConfig ? defaultModel);
+          message = "services.pirc.agentConfig.providers/defaultModel moved to services.pirc.models (the gateway pushes them to every node)";
+        }
+        {
           assertion = !cfg.nginx.enable || cfg.nginx.forwardAuthUri != null;
           message = "services.pirc.nginx.forwardAuthUri is required when nginx is enabled";
         }
@@ -414,16 +443,22 @@ in
         };
       };
 
+      environment.etc."pirc/models.json".source = modelsFile;
+
       systemd.services.pirc = {
         description = "pirc gateway";
         wantedBy = [ "multi-user.target" ];
         after = [ "network.target" ];
         environment = gatewayEnvironment;
+        # apiKeyCommand runs on the gateway.
+        path = cfg.extraPackages;
+        reloadTriggers = [ modelsFile ];
         serviceConfig = hardening // {
           Type = "simple";
           WorkingDirectory = cfg.stateDirectory;
           ExecStartPre = optional cfg.localNode.enable ensureToken;
           ExecStart = gatewayStart;
+          ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
           ReadWritePaths = [ cfg.stateDirectory ];
         };
       };

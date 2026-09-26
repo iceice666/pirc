@@ -11,9 +11,9 @@
           services.pirc = {
             enable = true;
 
-            # Built-in agent configuration (config.json). Keep keys out of the
-            # store: reference them with apiKeyFile/apiKeyEnv/apiKeyCommand.
-            agentConfig = {
+            # Providers, held by the gateway and pushed to every node. Keep keys
+            # out of the store: reference them with apiKeyFile/apiKeyEnv/apiKeyCommand.
+            models = {
               providers.openai = {
                 api = "openai-chat";
                 baseUrl = "https://api.openai.com/v1";
