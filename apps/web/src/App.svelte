@@ -35,6 +35,7 @@
   import { activateUpdate, registerPwa } from './lib/pwa';
   import { fromSnapshot, reduceEvent } from './lib/state';
   import { parseTodoWidget, TODO_WIDGET } from './lib/todo';
+  import { GOAL_WIDGET, parseGoalWidget } from './lib/goal';
   import { getClientId, loadDraft, loadLayout, saveDraft, saveLayout } from './lib/storage';
   import type {
     Attachment,
@@ -118,6 +119,8 @@
     saveLayout('panelWidth', width);
   }
   $: todo = parseTodoWidget(sessionState?.widgets?.[TODO_WIDGET]);
+  $: goal = parseGoalWidget(sessionState?.widgets?.[GOAL_WIDGET]);
+  const DOCKED_WIDGETS = new Set([TODO_WIDGET, GOAL_WIDGET]);
   /**
    * Status-line entries not already shown elsewhere: background tasks and team
    * members live in the jobs menu. Other extension widgets show their header.
@@ -125,7 +128,7 @@
   const SHOWN_ELSEWHERE = new Set(['background-task', 'agent-team']);
   $: statusLine = [
     ...Object.entries(sessionState?.widgets ?? {})
-      .filter(([key, lines]) => key !== TODO_WIDGET && lines.length)
+      .filter(([key, lines]) => !DOCKED_WIDGETS.has(key) && lines.length)
       .map(([, lines]) => lines[0]!),
     ...Object.entries(sessionState?.statuses ?? {})
       .filter(([key, text]) => !SHOWN_ELSEWHERE.has(key) && text)
@@ -354,6 +357,35 @@
         uploads = [];
         await scrollToLatest();
       }
+    } catch (error) {
+      pageError = error instanceof Error ? error.message : 'The command was not accepted.';
+    } finally {
+      commandBusy = false;
+    }
+  }
+
+  /**
+   * Goal dock buttons send `/goal pause|resume`. As a steer it works both idle
+   * and mid-run, and it does not open a run record the way a prompt does.
+   */
+  async function goalAction(action: 'pause' | 'resume') {
+    if (
+      usingDemo ||
+      !sessionState ||
+      !activeSessionId ||
+      !sessionState.control.generation ||
+      connection !== 'connected'
+    )
+      return;
+    commandBusy = true;
+    pageError = '';
+    try {
+      await api.command(activeSessionId, {
+        commandId: crypto.randomUUID(),
+        kind: 'steer',
+        controlGeneration: sessionState.control.generation,
+        content: `/goal ${action}`,
+      });
     } catch (error) {
       pageError = error instanceof Error ? error.message : 'The command was not accepted.';
     } finally {
@@ -722,6 +754,8 @@
             </div>
           </div>
           <Composer
+            {goal}
+            ongoal={goalAction}
             {todo}
             statuses={statusLine}
             value={draft}

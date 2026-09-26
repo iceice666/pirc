@@ -21,10 +21,15 @@
     RunStatus,
     ThinkingLevel,
   } from '../types';
+  import type { GoalView } from '../goal';
   import type { TodoList } from '../todo';
+  import GoalDock from './GoalDock.svelte';
   import TodoDock from './TodoDock.svelte';
 
   export let value = '';
+  /** The session goal, docked above the task list. */
+  export let goal: GoalView | undefined = undefined;
+  export let ongoal: (action: 'pause' | 'resume') => void = () => undefined;
   /** The agent's task list, docked above the queue. */
   export let todo: TodoList | undefined = undefined;
   /** Remaining extension status lines (e.g. compaction), shown quietly under the input. */
@@ -89,9 +94,14 @@
 </script>
 
 <div class="composer-wrap">
-  {#if todo || queue.length > 0}
-    <!-- Cards tucked on top of the composer: the task list, then queued messages. -->
+  {#if goal || todo || queue.length > 0}
+    <!-- Cards tucked on top of the composer: the goal, the task list, then queued messages. -->
     <div class="composer-dock" transition:slide={{ duration: 180 }}>
+      {#if goal}<GoalDock
+          {goal}
+          disabled={!hasControl || connection !== 'connected' || busy}
+          onaction={ongoal}
+        />{/if}
       {#if todo}<TodoDock list={todo} />{/if}
       {#if queue.length > 0}
         <section class="dock-section queue-dock" aria-label="Queued messages">
