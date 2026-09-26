@@ -2205,12 +2205,14 @@ button.system-line:not(:disabled):hover {
 }
 .chip.working,
 .chip.status-running,
+.chip.status-in_progress,
 .chip.status-active,
 .chip.status-busy {
   color: var(--accent);
   background: var(--accent-soft);
 }
 .chip.status-completed,
+.chip.status-done,
 .chip.status-idle {
   color: var(--success);
   background: color-mix(in srgb, var(--success) 12%, transparent);

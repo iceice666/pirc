@@ -146,6 +146,9 @@ export interface BackgroundTask {
   pid?: number;
   exitCode?: number | null;
   signal?: string | null;
+  tty?: boolean;
+  notifyOn?: string;
+  matches?: number;
   startedAt: string;
   endedAt?: string;
   error?: string;
@@ -153,6 +156,9 @@ export interface BackgroundTask {
 export interface TeamMember {
   name: string;
   kind?: string;
+  mode?: 'team' | 'subagent';
+  background?: boolean;
+  tools?: string[];
   status?: string;
   cwd?: string;
   model?: string;
@@ -164,6 +170,17 @@ export interface TeamMember {
   lastActivity?: number | string;
   activity?: unknown;
 }
+export interface TeamTask {
+  id: string;
+  subject: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  owner?: string;
+  blockedBy: string[];
+  blocked: boolean;
+  ready: boolean;
+  revision: number;
+}
 export interface PanelState {
   agentRunning: boolean;
   memory: MemoryPanel | null;
@@ -171,6 +188,7 @@ export interface PanelState {
   backgroundTasks: BackgroundTask[];
   team: {
     agents: TeamMember[];
+    tasks?: TeamTask[];
     events?: Array<{
       id: string;
       time: string;
