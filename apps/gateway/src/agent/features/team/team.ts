@@ -2,6 +2,10 @@
  * Parent-side team broker (port of Pi's agent-team `Team`). Children are
  * `pirc agent --headless` subprocesses; they reach the broker through
  * `team_call` lines on their stdout instead of a localhost HTTP server.
+ *
+ * Two member modes share the process plumbing: persistent `team` members
+ * that message peers and the parent, and one-shot `subagent`s that run one
+ * task, report their final message once, and exit.
  */
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
@@ -14,26 +18,44 @@ import type { Question, QuestionResult } from '../ask-question.js';
 type Json = Record<string, any>;
 const THINKING = new Set<string>([...thinkingLevels, 'max']);
 const KIND_NAME = /^[a-z][a-z0-9_-]{0,39}$/;
+const TOOL_NAME = /^[a-z][a-z0-9_]{0,63}$/;
 const RESULT_NOTICE_LIMIT = 2000;
-export const DEFAULT_KINDS: Record<string, { model?: string; thinking?: string }> = {
+const SUBAGENT_NOTICE_LIMIT = 4000;
+const TASK_LIMIT = 200;
+export interface KindPreset {
+  model?: string;
+  thinking?: string;
+  /** Tool allowlist for children of this kind (team coordination tools are always kept). */
+  tools?: string[];
+}
+export const DEFAULT_KINDS: Record<string, KindPreset> = {
   general: {},
 };
 
-export function validateKinds(
-  value: unknown,
-): Record<string, { model?: string; thinking?: string }> {
+export function validateToolList(value: unknown, label = 'tools'): string[] {
+  if (!Array.isArray(value) || value.length > 64)
+    throw new Error(`${label} must be an array of at most 64 tool names`);
+  for (const name of value)
+    if (typeof name !== 'string' || !TOOL_NAME.test(name))
+      throw new Error(`Invalid tool name in ${label}: ${String(name).slice(0, 80)}`);
+  return [...new Set(value as string[])];
+}
+
+export function validateKinds(value: unknown): Record<string, KindPreset> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new Error('Agent kinds must be an object');
-  const result: Record<string, { model?: string; thinking?: string }> = {};
+  const result: Record<string, KindPreset> = {};
   for (const [kind, preset] of Object.entries(value as Json)) {
     if (!KIND_NAME.test(kind) || ['parent', 'user'].includes(kind))
       throw new Error(`Invalid agent kind: ${kind}`);
     if (!preset || typeof preset !== 'object' || Array.isArray(preset))
       throw new Error(`Invalid agent kind preset: ${kind}`);
-    const unknown = Object.keys(preset).filter((key) => !['model', 'thinking'].includes(key));
+    const unknown = Object.keys(preset).filter(
+      (key) => !['model', 'thinking', 'tools'].includes(key),
+    );
     if (unknown.length)
       throw new Error(`Unknown agent kind fields for ${kind}: ${unknown.join(', ')}`);
-    const { model, thinking } = preset as Json;
+    const { model, thinking, tools } = preset as Json;
     if (
       model !== undefined &&
       (typeof model !== 'string' || !model.includes('/') || model.length > 200)
@@ -44,6 +66,7 @@ export function validateKinds(
     result[kind] = {
       ...(model === undefined ? {} : { model }),
       ...(thinking === undefined ? {} : { thinking }),
+      ...(tools === undefined ? {} : { tools: validateToolList(tools, `tools for ${kind}`) }),
     };
   }
   return result;
@@ -100,18 +123,41 @@ export function userQuestion(args: Json): Question {
   return question;
 }
 
-function compactResult(entry: Json): Json {
+function compactResult(entry: Json, limit = RESULT_NOTICE_LIMIT): Json {
   const body = typeof entry.body === 'string' ? entry.body : String(entry.body ?? '');
   const normalized = body
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  const clipped = normalized.length > RESULT_NOTICE_LIMIT;
+  const clipped = normalized.length > limit;
   return {
     ...entry,
-    body: `${normalized.slice(0, RESULT_NOTICE_LIMIT)}${clipped ? '\n[Preview truncated]' : ''}\nFull result: agent_inbox event ${entry.id}`,
+    body: `${normalized.slice(0, limit)}${clipped ? '\n[Preview truncated]' : ''}\nFull result: agent_inbox event ${entry.id}`,
     ...(clipped ? { truncated: true } : {}),
   };
+}
+
+export type TaskStatus = 'pending' | 'in_progress' | 'completed';
+export interface TeamTask {
+  id: string;
+  subject: string;
+  description: string;
+  status: TaskStatus;
+  owner?: string | undefined;
+  blockedBy: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  revision: number;
+}
+
+/** Final outcome of a one-shot subagent. */
+export interface SubagentOutcome {
+  name: string;
+  status: 'done' | 'failed' | 'stopped';
+  result?: string;
+  error?: string;
+  event_id?: string;
 }
 
 /** JSONL RPC client for one child agent process. */
@@ -240,12 +286,16 @@ export class ChildProcess {
   }
 }
 
+type Mode = 'team' | 'subagent';
 interface Member {
   name: string;
   kind: string;
+  /** `team`: persistent, messages peers. `subagent`: one run, one result, then stopped. */
+  mode: Mode;
   cwd: string;
   model: string;
   thinking: string;
+  tools?: string[];
   task: string;
   status: string;
   activity: string;
@@ -257,6 +307,14 @@ interface Member {
   stateRevision: number;
   rpc?: ChildProcess;
   inflight: Map<string, AbortController>;
+  /** Outcome of the latest final assistant message; reported once when the child settles. */
+  lastOutcome?: { kind: 'result' | 'error'; body: string } | undefined;
+  background?: boolean;
+  outcome?: {
+    promise: Promise<SubagentOutcome>;
+    resolve(value: SubagentOutcome): void;
+    settled: boolean;
+  };
 }
 interface Waiter {
   who: string;
@@ -264,7 +322,11 @@ interface Waiter {
   check(): void;
 }
 
-const live = (member: { status: string }) => !['stopped', 'failed'].includes(member.status);
+const FINAL = new Set(['stopped', 'failed', 'done']);
+const live = (member: { status: string }) => !FINAL.has(member.status);
+const NAME = /^[a-z][a-z0-9_-]*$/;
+const SUBAGENT_PREAMBLE =
+  'You are a one-shot subagent started by a parent agent. Complete the task below on your own; you cannot talk to the parent or the user. Your run ends as soon as you stop calling tools, and your final message is returned to the parent as your result, so make it a self-contained report. Stop any background jobs you start before finishing.';
 
 export interface TeamOptions {
   directory: string;
@@ -273,18 +335,23 @@ export interface TeamOptions {
   deliverParent(entry: Json): void;
   askUser(question: Question, signal: AbortSignal, from: string): Promise<QuestionResult>;
   onChange?(state: ReturnType<Team['list']>): void;
-  /** A broker record was appended (messages, questions, posts). */
+  /** A broker record was appended (messages, questions, posts, tasks). */
   onRecord?(): void;
-  kinds?: Record<string, { model?: string; thinking?: string }>;
+  kinds?: Record<string, KindPreset>;
+  /** Live persistent teammates (default 4). */
   limit?: number;
+  /** Concurrently running one-shot subagents (default 4). */
+  subagentLimit?: number;
   env?: Record<string, string | undefined>;
 }
 
 export class Team {
   readonly directory: string;
-  readonly kinds: Record<string, { model?: string; thinking?: string }>;
+  readonly kinds: Record<string, KindPreset>;
   readonly agents = new Map<string, Member>();
   readonly records: Json[] = [];
+  readonly tasks = new Map<string, TeamTask>();
+  private taskCounter = 0;
   private readonly waiters = new Set<Waiter>();
   private readonly userQuestions = new Map<
     string,
@@ -301,6 +368,9 @@ export class Team {
   private get limit() {
     return this.options.limit ?? 4;
   }
+  private get subagentLimit() {
+    return this.options.subagentLimit ?? 4;
+  }
 
   record(kind: string, data: Json): Json {
     const entry = { id: randomUUID(), time: new Date().toISOString(), kind, ...data };
@@ -316,15 +386,23 @@ export class Team {
   list() {
     return {
       directory: this.directory,
-      kinds: Object.keys(this.kinds),
+      kinds: Object.fromEntries(
+        Object.entries(this.kinds).map(([name, preset]) => [
+          name,
+          preset.tools ? { tools: preset.tools } : {},
+        ]),
+      ),
       agents: [...this.agents.values()].map(
         ({
           name,
           kind,
+          mode,
           status,
           cwd,
           model,
           thinking,
+          tools,
+          background,
           sessionFile,
           lastError,
           task,
@@ -335,10 +413,13 @@ export class Team {
         }) => ({
           name,
           kind,
+          mode,
           status,
           cwd,
           model,
           thinking,
+          ...(tools ? { tools } : {}),
+          ...(mode === 'subagent' ? { background: !!background } : {}),
           sessionFile,
           lastError,
           task,
@@ -356,6 +437,7 @@ export class Team {
     member.activity = status;
     member.lastActivity = new Date().toISOString();
     member.stateRevision++;
+    if (!live(member)) this.releaseTasks(member.name);
     this.notifyWaiters();
     this.options.onChange?.(this.list());
   }
@@ -436,18 +518,25 @@ export class Team {
     });
   }
 
-  async spawn(
+  /** Validate spawn arguments and reserve the member (before any await). */
+  private prepare(
     args: Json,
     defaults: { cwd: string; model?: string | undefined; thinking?: string | undefined },
-    signal?: AbortSignal,
-  ): Promise<Json> {
+    mode: Mode,
+  ): Member {
     if (this.closing) throw new Error('Team shutting down');
-    const name = text(args.name, 'name', 40);
-    if (!/^[a-z][a-z0-9_-]*$/.test(name) || ['parent', 'user'].includes(name))
+    const name =
+      mode === 'subagent' && (args.name === undefined || args.name === '')
+        ? `sub-${randomUUID().slice(0, 6)}`
+        : text(args.name, 'name', 40);
+    if (!NAME.test(name) || ['parent', 'user'].includes(name))
       throw new Error('Use a lowercase agent name; parent and user are reserved');
     if (this.agents.has(name)) throw new Error('Name already used in this team');
-    if ([...this.agents.values()].filter(live).length >= this.limit)
+    const running = [...this.agents.values()].filter((m) => live(m) && m.mode === mode).length;
+    if (mode === 'team' && running >= this.limit)
       throw new Error(`Limit of ${this.limit} live agents reached`);
+    if (mode === 'subagent' && running >= this.subagentLimit)
+      throw new Error(`Limit of ${this.subagentLimit} running subagents reached`);
     const task = text(args.task, 'task');
     const cwd = resolve(defaults.cwd, args.cwd ?? '.');
     if (!statSync(cwd, { throwIfNoEntry: false })?.isDirectory())
@@ -459,14 +548,15 @@ export class Team {
     if (!model) throw new Error('Select a parent model or provide provider/model');
     const thinking = args.thinking ?? preset.thinking ?? defaults.thinking ?? 'off';
     if (!THINKING.has(thinking)) throw new Error('Invalid thinking level');
-    signal?.throwIfAborted();
     const startedAt = new Date().toISOString();
     const member: Member = {
       name,
       kind,
+      mode,
       cwd,
       model,
       thinking,
+      ...(preset.tools ? { tools: preset.tools } : {}),
       task,
       startedAt,
       lastActivity: startedAt,
@@ -477,6 +567,12 @@ export class Team {
     };
     // Reserve before awaiting so parallel spawns respect the limit.
     this.agents.set(name, member);
+    return member;
+  }
+
+  /** Start the child process and hand it its task. */
+  private async launch(member: Member, signal?: AbortSignal): Promise<void> {
+    const { name } = member;
     const dir = join(this.directory, name);
     mkdirSync(dir, { mode: 0o700 });
     const abort = () => {
@@ -484,6 +580,7 @@ export class Team {
     };
     signal?.addEventListener('abort', abort, { once: true });
     try {
+      signal?.throwIfAborted();
       this.change(member, 'starting');
       member.rpc = new ChildProcess(
         [
@@ -493,17 +590,19 @@ export class Team {
           '--session-dir',
           dir,
           '--model',
-          model,
+          member.model,
           '--thinking',
-          thinking === 'max' ? 'xhigh' : thinking,
+          member.thinking === 'max' ? 'xhigh' : member.thinking,
           '--name',
-          `team:${name}`,
+          `${member.mode === 'subagent' ? 'subagent' : 'team'}:${name}`,
+          ...(member.tools ? ['--tools', member.tools.join(',')] : []),
         ],
         {
-          cwd,
+          cwd: member.cwd,
           env: {
             ...(this.options.env ?? process.env),
             PIRC_TEAM_AGENT: name,
+            PIRC_TEAM_MODE: member.mode,
             PIRC_TEAM_PARENT_PID: String(process.pid),
           },
         },
@@ -511,22 +610,130 @@ export class Team {
       );
       member.pid = member.rpc.proc.pid;
       const state = await member.rpc.request('get_state');
-      if (this.closing || member.status === 'stopped')
-        throw new Error('Agent stopped during startup');
+      if (this.closing || !live(member)) throw new Error('Agent stopped during startup');
       member.sessionFile = state.sessionFile;
-      this.record('spawn', { name, cwd, model, thinking, sessionFile: member.sessionFile });
+      this.record('spawn', {
+        name,
+        mode: member.mode,
+        cwd: member.cwd,
+        model: member.model,
+        thinking: member.thinking,
+        ...(member.tools ? { tools: member.tools } : {}),
+        sessionFile: member.sessionFile,
+      });
       this.change(member, 'running');
-      await this.send('parent', name, task, 'task');
+      if (member.mode === 'team') await this.send('parent', name, member.task, 'task');
+      else {
+        this.record('task', { from: 'parent', to: name, body: member.task });
+        await member.rpc.request('prompt', {
+          message: `${SUBAGENT_PREAMBLE}\n\nTask:\n${member.task}`,
+        });
+      }
       signal?.throwIfAborted();
-      return this.list().agents.find((item) => item.name === name)!;
     } catch (error) {
       member.lastError = (error as Error).message;
-      this.change(member, 'failed');
+      // The spawn call itself reports this failure; no separate notice.
+      member.background = false;
+      if (member.mode === 'subagent') this.finishSubagent(member, 'failed', member.lastError);
+      else if (live(member)) this.change(member, 'failed');
       if (member.rpc) await member.rpc.stop();
       throw error;
     } finally {
       signal?.removeEventListener('abort', abort);
     }
+  }
+
+  async spawn(
+    args: Json,
+    defaults: { cwd: string; model?: string | undefined; thinking?: string | undefined },
+    signal?: AbortSignal,
+  ): Promise<Json> {
+    const member = this.prepare(args, defaults, 'team');
+    await this.launch(member, signal);
+    return this.list().agents.find((item) => item.name === member.name)!;
+  }
+
+  /**
+   * One-shot subagent: runs one task and reports its final message once.
+   * Foreground resolves with the outcome (abort stops the child); background
+   * returns at once and delivers the outcome to the parent when it finishes.
+   */
+  async subagent(
+    args: Json,
+    defaults: { cwd: string; model?: string | undefined; thinking?: string | undefined },
+    options: { background: boolean; signal?: AbortSignal },
+  ): Promise<Json> {
+    const member = this.prepare(args, defaults, 'subagent');
+    member.background = options.background;
+    let settle!: (value: SubagentOutcome) => void;
+    const promise = new Promise<SubagentOutcome>((done) => {
+      settle = done;
+    });
+    member.outcome = { promise, resolve: settle, settled: false };
+    await this.launch(member, options.signal);
+    if (options.background)
+      return {
+        ...this.list().agents.find((item) => item.name === member.name)!,
+        note: 'Started in background; the result is delivered to you when it finishes. Do not poll.',
+      };
+    const { signal } = options;
+    const onAbort = () => void this.stop(member.name).catch(() => undefined);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+    try {
+      return await promise;
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+
+  private finishSubagent(
+    member: Member,
+    status: SubagentOutcome['status'],
+    error?: string,
+    result?: string,
+  ): void {
+    const outcome = member.outcome;
+    if (!outcome || outcome.settled) return;
+    outcome.settled = true;
+    let entry: Json | undefined;
+    try {
+      entry =
+        status === 'done'
+          ? this.record('result', {
+              from: member.name,
+              to: 'parent',
+              subagent: true,
+              body: result?.trim() || '(no output)',
+            })
+          : this.record('error', {
+              from: member.name,
+              to: 'parent',
+              subagent: true,
+              body: error ?? status,
+            });
+    } catch (cause) {
+      member.lastError = (cause as Error).message;
+    }
+    if (status !== 'done') member.lastError = error ?? member.lastError ?? status;
+    if (live(member)) this.change(member, status);
+    const value: SubagentOutcome = {
+      name: member.name,
+      status,
+      ...(status === 'done' ? { result: result?.trim() || '(no output)' } : {}),
+      ...(status !== 'done' ? { error: member.lastError ?? status } : {}),
+      ...(entry ? { event_id: entry.id } : {}),
+    };
+    // A stop the parent requested needs no notice; the parent already knows.
+    if (member.background && entry && !this.closing && status !== 'stopped')
+      this.options.deliverParent(
+        compactResult(
+          { ...entry, kind: status === 'done' ? 'subagent_result' : 'subagent_error' },
+          SUBAGENT_NOTICE_LIMIT,
+        ),
+      );
+    outcome.resolve(value);
+    void member.rpc?.stop();
   }
 
   private event(member: Member, event: Json): void {
@@ -536,7 +743,7 @@ export class Team {
       member.inflight.get(event.id)?.abort();
       return;
     }
-    if (this.closing || member.status === 'stopped') return;
+    if (this.closing || !live(member)) return;
     if (event.type === 'message_update')
       member.activity = event.assistantMessageEvent?.type?.startsWith('thinking')
         ? 'thinking'
@@ -545,24 +752,36 @@ export class Team {
       member.activity = `tool: ${String(event.toolName ?? 'tool').slice(0, 120)}`;
     if (event.type === 'tool_execution_end') member.activity = 'running';
     if (event.type === 'agent_start') this.change(member, 'running');
-    if (event.type === 'agent_settled') {
-      const pending = this.records.some(
-        (r) => r.kind === 'question' && r.from === member.name && !this.answered(r.id),
-      );
-      this.change(member, pending ? 'waiting' : 'idle');
-    }
     if (event.type === 'message_end' && event.message?.role === 'assistant') {
       const message = event.message;
       if (message.stopReason === 'error' || message.stopReason === 'aborted') {
         member.lastError = message.errorMessage || message.stopReason;
-        this.report(member, 'error', member.lastError!);
-      } else if (message.stopReason !== 'toolUse') {
-        const output = message.content
+        member.lastOutcome = { kind: 'error', body: member.lastError! };
+      } else if (message.stopReason === 'toolUse') {
+        // A retried attempt that failed earlier has recovered.
+        if (member.lastOutcome?.kind === 'error') member.lastOutcome = undefined;
+      } else {
+        const output = (message.content ?? [])
           .filter((c: Json) => c.type === 'text')
           .map((c: Json) => c.text)
           .join('\n');
-        if (output) this.report(member, 'result', output);
+        member.lastOutcome = output ? { kind: 'result', body: output } : undefined;
       }
+    }
+    if (event.type === 'agent_settled') {
+      // Report once per settle, not once per assistant message.
+      const outcome = member.lastOutcome;
+      member.lastOutcome = undefined;
+      if (member.mode === 'subagent') {
+        if (outcome?.kind === 'error') this.finishSubagent(member, 'failed', outcome.body);
+        else this.finishSubagent(member, 'done', undefined, outcome?.body);
+        return;
+      }
+      if (outcome) this.report(member, outcome.kind, outcome.body);
+      const pending = this.records.some(
+        (r) => r.kind === 'question' && r.from === member.name && !this.answered(r.id),
+      );
+      this.change(member, pending ? 'waiting' : 'idle');
     }
     if (event.type === 'team_dialog_cancelled')
       this.report(
@@ -572,9 +791,14 @@ export class Team {
       );
     if (event.type === 'team_exit') {
       this.cancelUserQuestions(member.name);
-      member.lastError = `Agent exited: ${event.code ?? event.signal}. ${event.stderr}`;
+      const error = `Agent exited: ${event.code ?? event.signal}. ${event.stderr}`;
+      member.lastError = error;
+      if (member.mode === 'subagent') return this.finishSubagent(member, 'failed', error);
+      const outcome = member.lastOutcome;
+      member.lastOutcome = undefined;
+      if (outcome?.kind === 'result') this.report(member, 'result', outcome.body);
       this.change(member, 'failed');
-      this.report(member, 'error', member.lastError);
+      this.report(member, 'error', error);
     }
   }
 
@@ -599,7 +823,8 @@ export class Team {
   private report(member: Member, kind: string, body: string): void {
     try {
       const entry = this.record(kind, { from: member.name, to: 'parent', body });
-      this.options.deliverParent(compactResult(entry));
+      // Subagents deliver a single outcome through finishSubagent.
+      if (member.mode === 'team') this.options.deliverParent(compactResult(entry));
     } catch (error) {
       member.lastError = (error as Error).message;
     }
@@ -609,6 +834,7 @@ export class Team {
     if (to === 'parent') return undefined;
     const member = this.agents.get(to);
     if (!member || !live(member) || !member.rpc) throw new Error(`Agent unavailable: ${to}`);
+    if (member.mode !== 'team') throw new Error(`Subagents do not take messages: ${to}`);
     return member;
   }
 
@@ -737,6 +963,205 @@ export class Team {
       if (!who || pending.from === who) pending.controller.abort();
   }
 
+  // ---- shared task board -------------------------------------------------
+
+  private taskView(task: TeamTask) {
+    const blocked = task.blockedBy.some((id) => this.tasks.get(id)?.status !== 'completed');
+    return {
+      ...task,
+      blocked,
+      ready: task.status === 'pending' && !task.owner && !blocked,
+    };
+  }
+
+  private saveTasks(): void {
+    writeFileSync(
+      join(this.directory, 'tasks.json'),
+      JSON.stringify([...this.tasks.values()], null, 2),
+      { mode: 0o600 },
+    );
+  }
+
+  private lookupTask(id: unknown): TeamTask {
+    const task = typeof id === 'string' ? this.tasks.get(id) : undefined;
+    if (!task) throw new Error(`Unknown task: ${String(id).slice(0, 40)}`);
+    return task;
+  }
+
+  private dependencies(value: unknown, self?: string): string[] {
+    if (value === undefined) return [];
+    if (!Array.isArray(value) || value.length > 50)
+      throw new Error('blocked_by must be an array of at most 50 task ids');
+    const ids = [...new Set(value.map(String))];
+    for (const id of ids) {
+      if (id === self) throw new Error('A task cannot depend on itself');
+      this.lookupTask(id);
+    }
+    if (self) {
+      // Reject cycles: nothing we depend on may (transitively) depend on us.
+      const reaches = (from: string, seen = new Set<string>()): boolean => {
+        if (from === self) return true;
+        if (seen.has(from)) return false;
+        seen.add(from);
+        return (this.tasks.get(from)?.blockedBy ?? []).some((next) => reaches(next, seen));
+      };
+      if (ids.some((id) => reaches(id))) throw new Error('Dependencies would create a cycle');
+    }
+    return ids;
+  }
+
+  private touch(who: string, task: TeamTask, action: string): Json {
+    task.revision++;
+    task.updatedAt = new Date().toISOString();
+    this.saveTasks();
+    this.record('task', {
+      from: who,
+      task_id: task.id,
+      action,
+      status: task.status,
+      ...(task.owner ? { owner: task.owner } : {}),
+      body: `${action} #${task.id}: ${task.subject}`,
+    });
+    return this.taskView(task);
+  }
+
+  /** A member that stops or fails hands its unfinished tasks back to the board. */
+  private releaseTasks(name: string): void {
+    for (const task of this.tasks.values())
+      if (task.owner === name && task.status !== 'completed') {
+        task.owner = undefined;
+        task.status = 'pending';
+        try {
+          this.touch('team', task, 'released');
+        } catch {
+          /* best effort */
+        }
+      }
+  }
+
+  private createTask(who: string, args: Json): Json {
+    if (this.tasks.size >= TASK_LIMIT) throw new Error(`At most ${TASK_LIMIT} tasks per team`);
+    const now = new Date().toISOString();
+    const task: TeamTask = {
+      id: String(++this.taskCounter),
+      subject: text(args.subject, 'subject', 200),
+      description: text(args.description, 'description'),
+      status: 'pending',
+      blockedBy: this.dependencies(args.blocked_by),
+      createdBy: who,
+      createdAt: now,
+      updatedAt: now,
+      revision: 0,
+    };
+    this.tasks.set(task.id, task);
+    return this.touch(who, task, 'created');
+  }
+
+  private async updateTask(who: string, args: Json): Promise<Json> {
+    const task = this.lookupTask(args.task_id);
+    if (args.expected_revision !== undefined && args.expected_revision !== task.revision)
+      throw new Error(
+        `Revision mismatch: task ${task.id} is at revision ${task.revision}; re-read it with task_get`,
+      );
+    const isParent = who === 'parent';
+    const mayManage = isParent || task.createdBy === who || task.owner === who;
+    const view = this.taskView(task);
+    switch (args.action) {
+      case 'claim':
+        if (task.status !== 'pending') throw new Error(`Task ${task.id} is ${task.status}`);
+        if (task.owner && task.owner !== who)
+          throw new Error(`Task ${task.id} is assigned to ${task.owner}`);
+        if (view.blocked) throw new Error(`Task ${task.id} is blocked by unfinished tasks`);
+        task.owner = who;
+        task.status = 'in_progress';
+        return this.touch(who, task, 'claimed');
+      case 'release':
+        if (!isParent && task.owner !== who) throw new Error('Only the owner can release a task');
+        if (task.status === 'completed') throw new Error('Completed tasks cannot be released');
+        task.owner = undefined;
+        task.status = 'pending';
+        return this.touch(who, task, 'released');
+      case 'complete':
+        if (task.status === 'completed') throw new Error(`Task ${task.id} is already completed`);
+        if (!isParent && task.owner !== who) throw new Error('Claim the task before completing it');
+        task.status = 'completed';
+        return this.touch(who, task, 'completed');
+      case 'reopen':
+        if (task.status !== 'completed') throw new Error(`Task ${task.id} is not completed`);
+        if (!mayManage) throw new Error('Only the parent, creator or owner can reopen a task');
+        task.status = 'pending';
+        task.owner = undefined;
+        return this.touch(who, task, 'reopened');
+      case 'edit':
+        if (!mayManage) throw new Error('Only the parent, creator or owner can edit a task');
+        if (args.subject === undefined && args.description === undefined)
+          throw new Error('Provide subject and/or description');
+        if (args.subject !== undefined) task.subject = text(args.subject, 'subject', 200);
+        if (args.description !== undefined)
+          task.description = text(args.description, 'description');
+        return this.touch(who, task, 'edited');
+      case 'set_dependencies':
+        if (!isParent && task.createdBy !== who)
+          throw new Error('Only the parent or creator can change dependencies');
+        task.blockedBy = this.dependencies(args.blocked_by ?? [], task.id);
+        return this.touch(who, task, 'dependencies');
+      case 'assign': {
+        if (!isParent) throw new Error('Only the parent can assign tasks');
+        if (task.status === 'completed') throw new Error('Completed tasks cannot be assigned');
+        if (args.owner === undefined || args.owner === null || args.owner === '') {
+          task.owner = undefined;
+          task.status = 'pending';
+          return this.touch(who, task, 'unassigned');
+        }
+        const owner = text(args.owner, 'owner', 40);
+        const member = this.agents.get(owner);
+        if (!member || member.mode !== 'team' || !live(member))
+          throw new Error(`Agent unavailable: ${owner}`);
+        task.owner = owner;
+        task.status = 'pending';
+        const result = this.touch(who, task, 'assigned');
+        await this.send(
+          'parent',
+          owner,
+          `Task #${task.id} assigned to you: ${task.subject}\n\n${task.description}\n\nClaim it with task_update {task_id:"${task.id}", action:"claim"} and complete it when done.`,
+          'task_assignment',
+          { task_id: task.id },
+        );
+        return result;
+      }
+      case 'delete':
+        if (!isParent) throw new Error('Only the parent can delete tasks');
+        this.tasks.delete(task.id);
+        for (const other of this.tasks.values())
+          if (other.blockedBy.includes(task.id)) {
+            other.blockedBy = other.blockedBy.filter((id) => id !== task.id);
+            other.revision++;
+          }
+        this.saveTasks();
+        this.record('task', {
+          from: who,
+          task_id: task.id,
+          action: 'deleted',
+          body: `deleted #${task.id}: ${task.subject}`,
+        });
+        return { deleted: task.id };
+      default:
+        throw new Error(`Unknown task action: ${String(args.action)}`);
+    }
+  }
+
+  taskList(filter: Json = {}) {
+    return [...this.tasks.values()]
+      .map((task) => this.taskView(task))
+      .filter(
+        (task) =>
+          (!filter.status || task.status === filter.status) &&
+          (filter.owner === undefined ||
+            (filter.owner === 'unowned' ? !task.owner : task.owner === filter.owner)) &&
+          (filter.ready === undefined || task.ready === filter.ready),
+      );
+  }
+
   async call(
     who: string,
     operation: string,
@@ -746,6 +1171,8 @@ export class Team {
     if (this.closing) throw new Error('Team shutting down');
     if (who !== 'parent' && !live(this.agents.get(who) ?? { status: 'stopped' }))
       throw new Error('Unknown sender');
+    if (who !== 'parent' && this.agents.get(who)?.mode === 'subagent')
+      throw new Error('Subagents cannot use team tools');
     switch (operation) {
       case 'agent_list':
         return this.list();
@@ -786,6 +1213,14 @@ export class Team {
           this.records.filter((r) => r.to === who || r.from === who),
           args,
         );
+      case 'task_create':
+        return this.createTask(who, args);
+      case 'task_list':
+        return { tasks: this.taskList(args) };
+      case 'task_get':
+        return this.taskView(this.lookupTask(args.task_id));
+      case 'task_update':
+        return this.updateTask(who, args);
       case 'agent_stop':
         if (who !== 'parent') throw new Error('Only parent can stop agents');
         await this.stop(text(args.agent, 'agent', 40));
@@ -835,7 +1270,8 @@ export class Team {
     if (!member) throw new Error('Unknown agent');
     this.cancelUserQuestions(name);
     for (const controller of member.inflight.values()) controller.abort();
-    this.change(member, 'stopped');
+    if (member.mode === 'subagent') this.finishSubagent(member, 'stopped', 'Stopped by the parent');
+    if (live(member)) this.change(member, 'stopped');
     if (member.rpc) await member.rpc.stop();
   }
 
@@ -847,7 +1283,8 @@ export class Team {
     await Promise.all([...this.userQuestions.values()].map((p) => p.task));
     await Promise.all(
       [...this.agents.values()].map(async (member) => {
-        member.status = 'stopped';
+        if (member.mode === 'subagent') this.finishSubagent(member, 'stopped', 'Team shut down');
+        if (live(member)) member.status = 'stopped';
         await member.rpc?.stop();
       }),
     );

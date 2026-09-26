@@ -52,6 +52,9 @@ export class ParentChannel {
 let channel: ParentChannel | undefined;
 /** Name of this agent when it runs as a team child. */
 export const teamChildName = () => process.env.PIRC_TEAM_AGENT || undefined;
+/** `subagent` children are one-shot workers without team tools. */
+export const teamChildMode = (): 'team' | 'subagent' | undefined =>
+  teamChildName() ? (process.env.PIRC_TEAM_MODE === 'subagent' ? 'subagent' : 'team') : undefined;
 export function parentChannel(): ParentChannel {
   channel ??= new ParentChannel((value) => process.stdout.write(`${JSON.stringify(value)}\n`));
   return channel;

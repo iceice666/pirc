@@ -5,11 +5,22 @@ import type { Feature } from '../../feature.js';
 import type { Tool } from '../../tools/types.js';
 import { selfCommand } from '../../../self.js';
 import { askQuestions, askQuestionSchema } from '../ask-question.js';
-import { parentChannel, teamChildName } from './channel.js';
-import { Team, userQuestion } from './team.js';
+import { parentChannel, teamChildMode, teamChildName } from './channel.js';
+import { Team, userQuestion, type SubagentOutcome } from './team.js';
 
 type Json = Record<string, any>;
 const short = { type: 'string', minLength: 1, maxLength: 12000 };
+const TASK_STATUSES = ['pending', 'in_progress', 'completed'];
+const TASK_ACTIONS = [
+  'claim',
+  'release',
+  'complete',
+  'reopen',
+  'edit',
+  'set_dependencies',
+  'assign',
+  'delete',
+];
 const paging = {
   after: { type: 'string' },
   limit: { type: 'integer', minimum: 1, maximum: 50 },
@@ -88,7 +99,74 @@ const DEFINITIONS: Array<[string, string, Json]> = [
     'Read shared notes, oldest first, paginated at most 40KB. Use next as after with the same topic filter.',
     object({ topic: { type: 'string' }, ...paging }),
   ],
+  [
+    'task_create',
+    'Create a pending, unowned task on the shared team task board. blocked_by lists task IDs that must be completed first. Does not notify anyone.',
+    object(
+      {
+        subject: { type: 'string', minLength: 1, maxLength: 200 },
+        description: short,
+        blocked_by: { type: 'array', items: { type: 'string' }, maxItems: 50 },
+      },
+      ['subject', 'description'],
+    ),
+  ],
+  [
+    'task_list',
+    'List shared tasks with status, owner, revision, blocked_by and readiness (pending, unowned, all dependencies completed). Filter by status, owner ("unowned" for none) or ready.',
+    object({
+      status: { type: 'string', enum: TASK_STATUSES },
+      owner: { type: 'string', maxLength: 40 },
+      ready: { type: 'boolean' },
+    }),
+  ],
+  [
+    'task_get',
+    'Read one shared task, including its current revision, before changing it.',
+    object({ task_id: { type: 'string' } }, ['task_id']),
+  ],
+  [
+    'task_update',
+    'Change a shared task. Actions: claim (pending, unblocked, unowned or assigned to you → in_progress, owned by you), release, complete (owner or parent), reopen, edit (subject/description), set_dependencies (blocked_by), assign (parent only; owner = teammate name, empty to unassign; notifies the teammate), delete (parent only). Pass expected_revision from task_get/task_list to avoid overwriting a concurrent change. Tasks owned by a member that stops are released.',
+    object(
+      {
+        task_id: { type: 'string' },
+        action: { type: 'string', enum: TASK_ACTIONS },
+        expected_revision: { type: 'integer', minimum: 0 },
+        subject: { type: 'string', minLength: 1, maxLength: 200 },
+        description: short,
+        blocked_by: { type: 'array', items: { type: 'string' }, maxItems: 50 },
+        owner: { type: 'string', maxLength: 40 },
+      },
+      ['task_id', 'action'],
+    ),
+  ],
 ];
+
+/** Coordination tools a team member keeps regardless of its kind's tool allowlist. */
+export const TEAM_TOOL_NAMES = DEFINITIONS.map(([name]) => name);
+
+const spawnFields = {
+  kind: {
+    type: 'string',
+    pattern: '^[a-z][a-z0-9_-]{0,39}$',
+    description:
+      'Agent kind preset (features.agentTeam.kinds; built-in: general). Kinds may fix model, thinking and a tool allowlist.',
+  },
+  cwd: {
+    type: 'string',
+    description: 'Existing working directory or worktree; defaults to parent cwd',
+  },
+  model: {
+    type: 'string',
+    description: 'provider/model ID; overrides the selected kind and defaults to parent model',
+  },
+  thinking: {
+    type: 'string',
+    enum: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+  },
+};
+const MAX_FOREGROUND_RESULT = 40_000;
 
 const result = (data: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(data) }],
@@ -97,6 +175,7 @@ const result = (data: unknown) => ({
 
 export function teamFeature(): Feature {
   const childName = teamChildName();
+  const childMode = teamChildMode();
   let team: Team | undefined;
   let lifetime = new AbortController();
 
@@ -109,6 +188,9 @@ export function teamFeature(): Feature {
       command: selfCommand(),
       kinds: options.kinds,
       ...(typeof options.limit === 'number' ? { limit: options.limit } : {}),
+      ...(typeof options.subagentLimit === 'number'
+        ? { subagentLimit: options.subagentLimit }
+        : {}),
       env: { ...process.env, ...agent.config.env },
       askUser: (question, signal, from) =>
         askQuestions(
@@ -133,7 +215,9 @@ export function teamFeature(): Feature {
             display: true,
             details: { event: entry },
           },
-          { triggerTurn: true, deliverAs: 'steer' },
+          // followUp, not steer: a queued steer makes the running turn skip its
+          // remaining tool calls. Idle parents are woken either way.
+          { triggerTurn: true, deliverAs: 'followUp' },
         ),
       onRecord: () => {
         if (!lifetime.signal.aborted) agent.panelChanged('team');
@@ -142,7 +226,7 @@ export function teamFeature(): Feature {
         if (lifetime.signal.aborted) return;
         agent.panelChanged('team');
         if (!agent.hasUI) return;
-        const live = state.agents.filter((a) => !['stopped', 'failed'].includes(a.status));
+        const live = state.agents.filter((a) => !['stopped', 'failed', 'done'].includes(a.status));
         agent.ui.setStatus(
           'agent-team',
           live.length ? `Team ${live.map((a) => `${a.name}:${a.status}`).join(' ')}` : undefined,
@@ -162,7 +246,60 @@ export function teamFeature(): Feature {
     return manager(agent).call('parent', operation, args, combined);
   };
 
+  const defaults = (agent: Agent, cwd: string) => {
+    const ref = agent.modelRef;
+    return {
+      cwd,
+      model: ref ? `${ref.provider}/${ref.id}` : undefined,
+      thinking: agent.thinking,
+    };
+  };
+
+  const subagentTool = (agent: Agent): Tool => ({
+    name: 'subagent',
+    description:
+      'Delegate a self-contained task to a one-shot subagent: a fresh pirc agent with its own context window that cannot see this conversation, message you, or ask the user. Give it everything it needs. It returns only its final report, then exits. Foreground (default) waits and returns the report; aborting stops the subagent. background:true returns at once and delivers the report to you when it finishes (do not poll; keep working or end your turn). Pick kind for a preset (model, thinking, tool allowlist, e.g. a read-only explorer). Use agent_spawn instead for persistent collaborators that need messages or a task board.',
+    parameters: object(
+      {
+        task: short,
+        name: {
+          type: 'string',
+          pattern: '^[a-z][a-z0-9_-]{0,39}$',
+          description: 'Optional unique name; generated when omitted',
+        },
+        background: { type: 'boolean', description: 'Run concurrently (default false)' },
+        ...spawnFields,
+      },
+      ['task'],
+    ),
+    async execute(args, ctx) {
+      const background = args.background === true;
+      const { background: _flag, ...rest } = args ?? {};
+      const outcome = await manager(agent).subagent(rest, defaults(agent, ctx.cwd), {
+        background,
+        signal: AbortSignal.any([ctx.signal, lifetime.signal]),
+      });
+      if (background) return result(outcome);
+      const report = outcome as SubagentOutcome;
+      const body = report.status === 'done' ? (report.result ?? '') : (report.error ?? '');
+      const clipped = body.length > MAX_FOREGROUND_RESULT;
+      const header = `Subagent ${report.name} ${report.status}${report.event_id ? ` (agent_inbox event ${report.event_id})` : ''}`;
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `${header}:\n${clipped ? `${body.slice(0, MAX_FOREGROUND_RESULT)}\n[Result truncated; full text via agent_inbox]` : body}`,
+          },
+        ],
+        details: { name: report.name, status: report.status, event_id: report.event_id },
+        ...(report.status === 'done' ? {} : { isError: true }),
+      };
+    },
+  });
+
   const tools = (agent: Agent): Tool[] => {
+    // One-shot subagents work alone: no team tools, no nested spawning.
+    if (childMode === 'subagent') return [];
     const list: Tool[] = DEFINITIONS.map(([name, description, parameters]) => ({
       name,
       description,
@@ -173,49 +310,22 @@ export function teamFeature(): Feature {
     }));
     if (childName) return list;
     list.push(
+      subagentTool(agent),
       {
         name: 'agent_spawn',
         description:
-          'Start a persistent independent pirc agent session (maximum 4 live children by default). Returns immediately after task acceptance, not completion. Select kind for a configured model/thinking preset (features.agentTeam.kinds; built-in: general). Explicit model/thinking override the kind; otherwise the parent model/thinking is inherited. Supply necessary context and file ownership. Costs are incurred by each child.',
+          'Start a persistent independent pirc agent session (maximum 4 live children by default) for work that needs follow-up messages, questions or a shared task board; for a single delegated task prefer subagent. Returns immediately after task acceptance, not completion; the child reports to you each time it goes idle. Select kind for a configured preset (model, thinking, tool allowlist). Explicit model/thinking override the kind; otherwise the parent model/thinking is inherited. Supply necessary context and file ownership. Costs are incurred by each child.',
         parameters: object(
           {
             name: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,39}$' },
             task: short,
-            kind: {
-              type: 'string',
-              pattern: '^[a-z][a-z0-9_-]{0,39}$',
-              description: 'Agent kind preset; defaults to general',
-            },
-            cwd: {
-              type: 'string',
-              description: 'Existing working directory or worktree; defaults to parent cwd',
-            },
-            model: {
-              type: 'string',
-              description:
-                'provider/model ID; overrides the selected kind and defaults to parent model',
-            },
-            thinking: {
-              type: 'string',
-              enum: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
-            },
+            ...spawnFields,
           },
           ['name', 'task'],
         ),
         async execute(args, ctx) {
           const signal = AbortSignal.any([ctx.signal, lifetime.signal]);
-          const ref = agent.modelRef;
-          return result(
-            await manager(agent).spawn(
-              args,
-              {
-                cwd: ctx.cwd,
-                model: ref ? `${ref.provider}/${ref.id}` : undefined,
-                thinking: agent.thinking,
-              },
-              signal,
-            ),
-          );
+          return result(await manager(agent).spawn(args, defaults(agent, ctx.cwd), signal));
         },
       },
       {
@@ -235,12 +345,16 @@ export function teamFeature(): Feature {
     name: 'agent-team',
     tools: (agent) => (settings(agent).enabled === false ? [] : tools(agent)),
     panel() {
-      if (!team) return { team: { agents: [] } };
+      if (!team) return { team: { agents: [], tasks: [] } };
       return {
         team: {
           agents: team.list().agents.map(({ sessionFile: _file, ...member }) => ({
             ...member,
             task: String(member.task ?? '').slice(0, 2000),
+          })),
+          tasks: team.taskList().map((task) => ({
+            ...task,
+            description: task.description.slice(0, 2000),
           })),
           // Recent broker traffic (bodies clipped); full history is agent_inbox.
           events: team.records.slice(-40).map((record) => ({

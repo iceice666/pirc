@@ -2,6 +2,8 @@ import { parseArgs } from 'node:util';
 import { Agent } from './agent.js';
 import { loadAgentConfig } from './config.js';
 import { builtinFeatures } from './features/index.js';
+import { teamChildMode } from './features/team/channel.js';
+import { TEAM_TOOL_NAMES } from './features/team/index.js';
 import { RpcUi, serveRpc } from './rpc.js';
 import { SessionStore } from './session-store.js';
 import { builtinTools } from './tools/index.js';
@@ -22,9 +24,18 @@ export async function runAgent(argv: string[]): Promise<void> {
       thinking: { type: 'string' },
       name: { type: 'string' },
       headless: { type: 'boolean' },
+      tools: { type: 'string' },
     },
     strict: false,
   });
+  // Tool allowlist (team kinds); team members always keep their coordination tools.
+  const allowedTools =
+    typeof values.tools === 'string'
+      ? [
+          ...values.tools.split(',').filter(Boolean),
+          ...(teamChildMode() === 'team' ? TEAM_TOOL_NAMES : []),
+        ]
+      : undefined;
   const sessionDir = values['session-dir'] ?? process.env.PI_CODING_AGENT_SESSION_DIR;
   if (typeof sessionDir !== 'string' || !sessionDir) throw new Error('--session-dir is required');
   const cwd = process.cwd();
@@ -40,6 +51,7 @@ export async function runAgent(argv: string[]): Promise<void> {
     hasUI: !values.headless,
     tools: builtinTools(),
     features: builtinFeatures(),
+    ...(allowedTools ? { allowedTools } : {}),
   });
   if (typeof values.model === 'string' && values.model.includes('/')) {
     const [provider, ...id] = values.model.split('/');

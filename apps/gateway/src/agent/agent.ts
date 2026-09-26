@@ -49,6 +49,8 @@ export interface AgentOptions {
   streamOverride?: StreamFn;
   /** Extra environment for tools (e.g. team broker variables). */
   toolEnv?: Record<string, string>;
+  /** When set, only these tools are exposed (e.g. a restricted subagent kind). */
+  allowedTools?: string[];
 }
 
 const RETRY_DELAYS = [2_000, 5_000, 15_000];
@@ -138,6 +140,10 @@ export class Agent {
     for (const tool of options.tools) this.tools.set(tool.name, tool);
     for (const feature of this.features)
       for (const tool of feature.tools?.(this) ?? []) this.tools.set(tool.name, tool);
+    if (options.allowedTools) {
+      const allowed = new Set(options.allowedTools);
+      for (const name of [...this.tools.keys()]) if (!allowed.has(name)) this.tools.delete(name);
+    }
     this.restoreSettings();
   }
 
