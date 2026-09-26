@@ -51,7 +51,101 @@ describe('TaskManager', () => {
   });
 });
 
+describe('TaskManager terminals and monitors', () => {
+  it('runs a task on a PTY that accepts input', async () => {
+    const manager = new TaskManager();
+    managers.push(manager);
+    const task = manager.start({
+      command: 'read -p "name? " n; echo "hi $n"; [ -t 0 ] && echo tty-ok',
+      cwd: '/tmp',
+      tty: true,
+    });
+    expect(task.tty).toBe(true);
+    await Bun.sleep(200);
+    manager.write(task.id, 'bob\n');
+    const result = await manager.wait(task.id, { timeout: 5 });
+    expect(result.task.status).toBe('completed');
+    expect(manager.output(task.id)).toContain('hi bob');
+    expect(manager.output(task.id)).toContain('tty-ok');
+    expect(() => manager.write(task.id, 'x')).toThrow(/not running/);
+    const piped = manager.start({ command: 'sleep 5', cwd: '/tmp' });
+    expect(() => manager.write(piped.id, 'x')).toThrow(/no terminal/);
+  });
+
+  it('reports output lines that match the monitor pattern', async () => {
+    const lines: string[] = [];
+    const manager = new TaskManager(undefined, undefined, {
+      onMatch: (_task, line) => lines.push(line),
+    });
+    managers.push(manager);
+    expect(() => manager.start({ command: 'true', cwd: '/tmp', notifyOn: '(' })).toThrow(
+      /Invalid notify_on/,
+    );
+    const task = manager.start({
+      command:
+        'echo ok; echo "ERROR one"; printf "\\033[31mERROR two\\033[0m\\n"; printf "ERROR tail"',
+      cwd: '/tmp',
+      notifyOn: 'ERROR',
+    });
+    await manager.wait(task.id, { timeout: 5 });
+    expect(lines).toEqual(['ERROR one', 'ERROR two', 'ERROR tail']);
+    expect(manager.get(task.id).matches).toBe(3);
+    const other = manager.start({ command: 'sleep 0.2; echo late-match', cwd: '/tmp' });
+    manager.monitor(other.id, 'late');
+    await manager.wait(other.id, { timeout: 5 });
+    expect(lines.at(-1)).toBe('late-match');
+  });
+});
+
 describe('background_task tool', () => {
+  it('wakes the agent with matched output and supports write', async () => {
+    const agent = await startAgent();
+    agents.push(agent);
+    agent.llm.push(
+      {
+        tool: {
+          id: 'b1',
+          name: 'background_task',
+          args: {
+            action: 'start',
+            tty: true,
+            notify_on: 'READY',
+            command: 'sleep 0.2; echo READY; read line; echo "got $line"; sleep 30',
+          },
+        },
+      },
+      { text: 'Waiting for the server.' },
+      {
+        dynamic: (body) => {
+          const last = JSON.stringify(body.messages.at(-1).content);
+          const id = /([0-9a-f]{8}) \//.exec(last)![1]!;
+          return {
+            tool: {
+              id: 'w1',
+              name: 'background_task',
+              args: { action: 'write', id, input: 'ping\n' },
+            },
+          };
+        },
+      },
+      { text: 'Sent input.' },
+    );
+    await agent.send({ type: 'prompt', message: 'start server' });
+    const wake = await agent.waitFor(
+      (e) =>
+        e.type === 'message_end' &&
+        e.message.role === 'custom' &&
+        e.message.customType === 'background-task-output',
+    );
+    expect(wake.message.content).toContain('READY');
+    await agent.waitFor(
+      (e) => e.type === 'message_end' && e.message.content?.[0]?.text === 'Sent input.',
+    );
+    const end = agent.events.findLast((e) => e.type === 'tool_execution_end');
+    expect(end!.isError).toBeFalsy();
+    expect(end!.result.content[0].text).toContain('got ping');
+  });
+
   it('wakes the idle agent once when background work finishes', async () => {
     const agent = await startAgent();
     agents.push(agent);

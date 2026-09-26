@@ -4,10 +4,12 @@ import type { Agent } from '../../agent.js';
 import type { Feature } from '../../feature.js';
 import { truncateOutput } from '../../sandbox.js';
 import type { Tool } from '../../tools/types.js';
-import { TaskManager, type TaskInfo, type WaitResult } from './manager.js';
+import { TaskManager, MATCH_LIMIT, type TaskInfo, type WaitResult } from './manager.js';
 
 const HELP = `/bg or /bg list — List tasks
 /bg start <shell command> — Run in the background
+/bg tty <shell command> — Run on a pseudo-terminal (accepts input)
+/bg write <id> <text> — Send a line of input to a tty task
 /bg output <id> [lines] — Show recent output (default: 200 lines)
 /bg stop <id> — Stop the process group
 /bg stop-all — Stop all tasks
@@ -16,14 +18,28 @@ Tasks run with the current user's permissions, not in a sandbox.`;
 const clean = (text: string) =>
   stripVTControlCharacters(text).replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '');
 const summary = (task: TaskInfo) =>
-  `${task.id} · ${task.status}${task.exitCode != null ? ` (exit ${task.exitCode})` : ''} · ${clean(task.command).replace(/\s+/g, ' ').slice(0, 180)}`;
+  `${task.id} · ${task.status}${task.exitCode != null ? ` (exit ${task.exitCode})` : ''}${task.tty ? ' · tty' : ''}${task.notifyOn ? ` · notify_on /${task.notifyOn}/ (${task.matches ?? 0} matches)` : ''} · ${clean(task.command).replace(/\s+/g, ' ').slice(0, 180)}`;
 const tailLines = (text: string, lines: number) => text.split('\n').slice(-lines).join('\n');
+/** Matched lines kept per task between wakeups. */
+const PENDING_MATCHES = 20;
+const MATCH_CHARS = 500;
+const unescapeInput = (value: string) =>
+  value.replace(/\\(n|r|t|e|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|\\)/g, (_m, code: string) => {
+    if (code === 'n') return '\n';
+    if (code === 'r') return '\r';
+    if (code === 't') return '\t';
+    if (code === 'e') return '\x1b';
+    if (code === '\\') return '\\';
+    return String.fromCharCode(parseInt(code.slice(1), 16));
+  });
 
 export function backgroundFeature(): Feature {
   let agentRef: Agent | undefined;
   let closed = false;
   let noticePending = false;
   const completed: TaskInfo[] = [];
+  /** Monitor matches awaiting a wakeup, by task. */
+  const matched = new Map<string, { task: TaskInfo; lines: string[]; dropped: number }>();
 
   const refresh = () => {
     if (!agentRef || closed) return;
@@ -32,20 +48,42 @@ export function backgroundFeature(): Feature {
     const running = manager.list().filter((t) => t.status === 'running' || t.status === 'stopping');
     agentRef.ui.setStatus('background-task', running.length ? `BG ${running.length}` : undefined);
   };
-  /** Coalesce finished tasks into one wake-up while idle. */
+  /** Coalesce finished tasks and monitor matches into one wake-up while idle. */
   const flush = () => {
     const agent = agentRef;
-    if (!agent || closed || noticePending || !completed.length || agent.isRunning) return;
+    if (!agent || closed || noticePending || agent.isRunning) return;
+    if (!completed.length && !matched.size) return;
     const tasks = completed.splice(0);
+    const matches = [...matched.values()];
+    matched.clear();
     noticePending = true;
+    const parts: string[] = [];
+    if (matches.length)
+      parts.push(
+        `Background output matched (notify_on):\n${matches
+          .map(
+            (m) =>
+              `${m.task.id} /${m.task.notifyOn ?? ''}/:\n${m.lines.map((line) => `  ${line}`).join('\n')}${m.dropped ? `\n  [${m.dropped} more matching line${m.dropped === 1 ? '' : 's'}; use output]` : ''}${(m.task.matches ?? 0) >= MATCH_LIMIT ? `\n  [Monitor switched off after ${MATCH_LIMIT} matches]` : ''}`,
+          )
+          .join('\n')}`,
+      );
+    if (tasks.length)
+      parts.push(
+        `${tasks.length} background task${tasks.length === 1 ? '' : 's'} finished:\n${tasks
+          .map((t) => `${t.id} · ${t.status}${t.exitCode != null ? ` (exit ${t.exitCode})` : ''}`)
+          .join('\n')}`,
+      );
+    parts.push('Use background_task list/output to inspect results.');
     agent.deliver(
       {
-        customType: 'background-task-finished',
+        customType: tasks.length ? 'background-task-finished' : 'background-task-output',
         display: true,
-        content: `${tasks.length} background task${tasks.length === 1 ? '' : 's'} finished:\n${tasks
-          .map((t) => `${t.id} · ${t.status}${t.exitCode != null ? ` (exit ${t.exitCode})` : ''}`)
-          .join('\n')}\nUse background_task list/output to inspect results.`,
-        details: { status: tasks.length === 1 ? tasks[0]!.status : 'completed', tasks },
+        content: parts.join('\n'),
+        details: {
+          status: tasks.length === 1 ? tasks[0]!.status : tasks.length ? 'completed' : 'matched',
+          tasks,
+          matches: matches.map((m) => ({ id: m.task.id, lines: m.lines, dropped: m.dropped })),
+        },
       },
       { triggerTurn: true, deliverAs: 'steer' },
     );
@@ -62,6 +100,19 @@ export function backgroundFeature(): Feature {
       flush();
     },
     () => ({ ...process.env, ...(agentRef?.config.env ?? {}) }),
+    {
+      onMatch(task, line) {
+        if (closed) return;
+        const entry = matched.get(task.id) ?? { task, lines: [], dropped: 0 };
+        entry.task = task;
+        if (entry.lines.length < PENDING_MATCHES)
+          entry.lines.push(clean(line).slice(0, MATCH_CHARS));
+        else entry.dropped++;
+        matched.set(task.id, entry);
+        refresh();
+        flush();
+      },
+    },
   );
   const output = (id: string, lines = 200) => {
     if (!Number.isInteger(lines) || lines < 1 || lines > 2000)
@@ -83,11 +134,14 @@ export function backgroundFeature(): Feature {
     name: 'background_task',
     ptc: true,
     description:
-      'Start/list/output/wait/stop background Bash jobs. Start returns immediately. Wait blocks until a job finishes or its wait timeout expires (default 60 seconds); timeout or abort cancels only the wait, not the job. Session-local; aborting does not stop jobs, session shutdown does. Maximum 8 active jobs. Output is a bounded tail (up to 2000 lines/48 KiB); log files cap at 10 MiB. No stdin/PTY. Not sandboxed; same permissions as Bash. Completions are coalesced into one short wakeup while the agent is idle; inspect task output explicitly with list/output. Use for long-running tests, builds or development servers. Do not busy-poll; continue other work, use wait when completion is needed. Stop servers explicitly when finished.',
+      'Start/list/output/wait/write/monitor/stop background Bash jobs. Start returns immediately. Wait blocks until a job finishes or its wait timeout expires (default 60 seconds); timeout or abort cancels only the wait, not the job. Session-local; aborting does not stop jobs, session shutdown does. Maximum 8 active jobs. Output is a bounded tail (up to 2000 lines/48 KiB); log files cap at 10 MiB. Jobs have no stdin unless started with tty:true, which runs them on a pseudo-terminal (stdout/stderr merged, ANSI codes stripped from output) so write can send input; write takes raw text, so include \\n for Enter (\\u0003 is Ctrl-C, \\u0004 EOF). notify_on (a JavaScript regular expression, on start or via monitor; omit pattern on monitor to clear) wakes you with matching output lines, e.g. "error|listening on" for a dev server or a test watcher; it switches itself off after 200 matches. Not sandboxed; same permissions as Bash. Completions and matches are coalesced into one short wakeup while the agent is idle; inspect task output explicitly with list/output. Use for long-running tests, builds, development servers, watchers or interactive programs. Do not busy-poll; continue other work, use wait when completion is needed. Stop servers explicitly when finished.',
     parameters: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: ['start', 'list', 'output', 'wait', 'stop'] },
+        action: {
+          type: 'string',
+          enum: ['start', 'list', 'output', 'wait', 'write', 'monitor', 'stop'],
+        },
         command: { type: 'string', minLength: 1, maxLength: 16000 },
         cwd: {
           type: 'string',
@@ -102,6 +156,21 @@ export function backgroundFeature(): Feature {
         },
         id: { type: 'string' },
         lines: { type: 'integer', minimum: 1, maximum: 2000 },
+        tty: {
+          type: 'boolean',
+          description: 'start: run on a pseudo-terminal that accepts input via write',
+        },
+        notify_on: {
+          type: 'string',
+          maxLength: 500,
+          description:
+            'start/monitor: regular expression; matching output lines wake you. monitor without it clears the monitor',
+        },
+        input: {
+          type: 'string',
+          maxLength: 65536,
+          description: 'write: raw text sent to the terminal; include \\n to press Enter',
+        },
       },
       required: ['action'],
       additionalProperties: false,
@@ -115,7 +184,13 @@ export function backgroundFeature(): Feature {
       if (params.action === 'start') {
         if (!params.command?.trim()) throw new Error('command is required for start.');
         const cwd = resolve(ctx.cwd, String(params.cwd ?? '.').replace(/^@/, ''));
-        const task = manager.start({ command: params.command, cwd, timeout: params.timeout });
+        const task = manager.start({
+          command: params.command,
+          cwd,
+          timeout: params.timeout,
+          tty: params.tty === true,
+          notifyOn: params.notify_on,
+        });
         text = `${summary(task)}\nLog: ${task.logPath}\nStarted in background; this is not a completion result.`;
       } else if (params.action === 'list') {
         text = manager.list().map(summary).join('\n') || 'No background tasks.';
@@ -135,6 +210,19 @@ export function backgroundFeature(): Feature {
             const index = completed.findIndex((task) => task.id === params.id);
             if (index !== -1) completed.splice(index, 1);
           }
+        } else if (params.action === 'write') {
+          if (typeof params.input !== 'string' || !params.input)
+            throw new Error('input is required for write.');
+          const task = manager.write(params.id, params.input);
+          // Give the program a moment to react so the reply includes its response.
+          await Bun.sleep(300);
+          text = `Sent ${params.input.length} characters.\n${output(task.id, params.lines ?? 40)}`;
+        } else if (params.action === 'monitor') {
+          const task = manager.monitor(params.id, params.notify_on);
+          matched.delete(task.id);
+          text = task.notifyOn
+            ? `${summary(task)}\nMonitoring output for /${task.notifyOn}/.`
+            : `${summary(task)}\nMonitor cleared.`;
         } else if (params.action === 'stop') text = summary(await manager.stop(params.id));
         else if (params.action === 'output') text = output(params.id, params.lines);
         else throw new Error(`Unknown action ${params.action}`);
@@ -195,7 +283,7 @@ export function backgroundFeature(): Feature {
     },
     commands: {
       bg: {
-        description: 'Background tasks: list / start / output / stop / stop-all',
+        description: 'Background tasks: list / start / tty / write / output / stop / stop-all',
         async run(agent, args) {
           agentRef = agent;
           requireOpen();
@@ -203,9 +291,17 @@ export function backgroundFeature(): Feature {
           const action = match?.[1] ?? 'list';
           const rest = match?.[2] ?? '';
           let text: string;
-          if (action === 'start') {
-            const task = manager.start({ command: rest, cwd: agent.config.workspace });
+          if (action === 'start' || action === 'tty') {
+            const task = manager.start({
+              command: rest,
+              cwd: agent.config.workspace,
+              tty: action === 'tty',
+            });
             text = `${summary(task)}\nLog: ${task.logPath}`;
+          } else if (action === 'write') {
+            const [, id, input] = /^(\S+)\s+([\s\S]+)$/.exec(rest) ?? [];
+            if (!id || !input) throw new Error('Usage: /bg write <id> <text>');
+            text = summary(manager.write(id, `${unescapeInput(input)}\n`));
           } else if (action === 'list')
             text = manager.list().map(summary).join('\n') || 'No background tasks.';
           else if (action === 'output') {
