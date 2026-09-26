@@ -664,7 +664,7 @@
             modelId={selectedModel}
             {thinking}
             attachments={uploads}
-            queueCount={sessionState.queue.length}
+            queue={sessionState.queue}
             busy={commandBusy}
             onvalue={setDraft}
             onsubmit={sendCommand}

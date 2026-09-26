@@ -718,6 +718,8 @@ select:disabled {
   min-width: 0;
   min-height: 0;
   display: grid;
+  /* An explicit column lets composer controls shrink instead of widening the column. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto auto;
   background: var(--bg);
 }
@@ -1391,54 +1393,117 @@ button.system-line:not(:disabled):hover {
   background: linear-gradient(to top, var(--bg), transparent);
   pointer-events: none;
 }
-.run-controls {
-  width: min(796px, 100%);
-  min-height: 36px;
-  margin: 0 auto 6px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .mode-switch {
+  flex: none;
   display: flex;
+  margin-right: 4px;
   padding: 2px;
   border-radius: 999px;
   background: var(--bg-hover);
 }
 .mode-switch button {
-  height: 28px;
-  padding: 0 12px;
+  height: 30px;
+  padding: 0 11px;
   border: 0;
   border-radius: 999px;
   color: var(--text-2);
   background: transparent;
-  font-size: 13px;
+  font-size: 12.5px;
 }
 .mode-switch button.active {
   color: var(--ink);
   background: var(--bg-layer);
   box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
 }
-.text-action,
-.stop-action {
-  height: 30px;
+/* Queue dock: a tab of pending messages tucked on top of the composer. */
+.queue-dock {
+  position: relative;
+  width: calc(min(796px, 100%) - 40px);
+  margin: 0 auto -1px;
+  overflow: hidden;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--bg-subtle);
+  box-shadow: 0 0 0 1px var(--line-dark);
+  clip-path: inset(-1px -1px 0 -1px);
+}
+.queue-dock-head {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px 0 4px;
+}
+.queue-dock-toggle,
+.queue-dock-clear {
+  height: 26px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 12px;
+  padding: 0 8px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   color: var(--text-2);
   background: transparent;
-  font-size: 13px;
+  font-size: 12.5px;
+  font-weight: 500;
 }
-.text-action:hover:not(:disabled) {
+.queue-dock-toggle {
+  flex: 1;
+  min-width: 0;
+}
+.queue-dock-toggle:hover,
+.queue-dock-clear:hover:not(:disabled) {
   color: var(--ink);
   background: var(--bg-hover);
 }
-.stop-action {
-  color: var(--danger);
-  background: var(--danger-soft);
+.queue-dock-chevron {
+  display: grid;
+  color: var(--muted);
+  transition: transform 0.18s var(--ease);
+}
+.queue-dock-chevron.collapsed {
+  transform: rotate(180deg);
+}
+.queue-dock-clear {
+  flex: none;
+  font-weight: 400;
+}
+.queue-dock-list {
+  max-height: 168px;
+  margin: 0;
+  padding: 0 8px 8px;
+  overflow-y: auto;
+  list-style: none;
+}
+.queue-dock-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: var(--radius-sm);
+}
+.queue-dock-list li + li {
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+.queue-dock-kind {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+.queue-dock-text {
+  min-width: 0;
+  flex: 1;
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .composer {
   width: min(796px, 100%);
@@ -1500,7 +1565,11 @@ button.system-line:not(:disabled):hover {
   box-shadow: inset 0 0 0 1px var(--line-dark);
 }
 .composer-tools select {
+  /* Shrinks before the send/stop controls get pushed out on narrow screens. */
+  flex: 0 1 auto;
+  min-width: 56px;
   max-width: 180px;
+  text-overflow: ellipsis;
   height: 34px;
   padding: 0 10px;
   border: 0;
@@ -1540,6 +1609,35 @@ button.system-line:not(:disabled):hover {
   opacity: 1;
   color: var(--bg);
   background: var(--faint);
+}
+.send-button.stop-button {
+  color: var(--bg);
+  background: var(--ink);
+}
+.send-button.stop-button:hover:not(:disabled) {
+  background: var(--ink);
+  filter: opacity(0.82);
+}
+.send-button.stop-button:disabled {
+  color: var(--bg);
+  background: var(--ink);
+  filter: opacity(0.55);
+}
+.stop-button.secondary {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ink);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-dark);
+}
+.stop-button.secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
 }
 .attachment-strip {
   display: flex;
@@ -2820,18 +2918,17 @@ button.task-row:hover {
   .composer-wrap {
     padding: 0 10px max(10px, env(safe-area-inset-bottom));
   }
-  .run-controls {
-    min-height: 32px;
-    margin-bottom: 4px;
-    gap: 4px;
+  .queue-dock {
+    width: calc(100% - 24px);
   }
-  .text-action {
-    font-size: 0;
+  .mode-switch {
+    margin-right: 2px;
+  }
+  .mode-switch button {
     padding: 0 8px;
   }
-  .text-action svg {
-    width: 15px;
-    height: 15px;
+  .composer-tools {
+    gap: 3px;
   }
   .composer {
     border-radius: var(--radius-xl);

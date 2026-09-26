@@ -1,10 +1,23 @@
 <script lang="ts">
-  import { ArrowUp, Image, LoaderCircle, Paperclip, Square, Trash2, X } from '@lucide/svelte';
+  import {
+    ArrowUp,
+    ChevronDown,
+    CornerDownRight,
+    Image,
+    ListOrdered,
+    LoaderCircle,
+    Navigation,
+    Paperclip,
+    Square,
+    X,
+  } from '@lucide/svelte';
+  import { slide } from 'svelte/transition';
   import type {
     Attachment,
     CommandKind,
     ConnectionState,
     ModelOption,
+    QueueItem,
     RunStatus,
     ThinkingLevel,
   } from '../types';
@@ -17,7 +30,8 @@
   export let modelId = '';
   export let thinking: ThinkingLevel = 'medium';
   export let attachments: Array<Attachment & { preview?: string; uploading?: boolean }> = [];
-  export let queueCount = 0;
+  /** Messages waiting for the current run; shown as a dock above the input. */
+  export let queue: QueueItem[] = [];
   export let busy = false;
   export let onvalue: (value: string) => void;
   export let onsubmit: (kind: CommandKind) => void;
@@ -30,6 +44,7 @@
 
   let mode: CommandKind = 'prompt';
   let fileInput: HTMLInputElement;
+  let queueExpanded = true;
 
   $: active =
     runStatus === 'running' ||
@@ -44,6 +59,10 @@
     hasControl &&
     !busy &&
     !attachments.some((item) => item.uploading);
+  $: stopping = runStatus === 'stopping';
+  /** During a run an empty composer's primary button stops it; typing turns it back into send. */
+  $: showStopPrimary = active && value.trim().length === 0 && !busy;
+  $: if (queue.length === 0) queueExpanded = true;
   $: placeholder =
     connection === 'offline'
       ? 'Offline draft — it will stay on this device'
@@ -64,36 +83,39 @@
 </script>
 
 <div class="composer-wrap">
-  {#if active || queueCount > 0}
-    <div class="run-controls">
-      {#if active}
-        <div class="mode-switch" aria-label="Message delivery mode">
-          <button class:active={mode === 'steer'} type="button" on:click={() => (mode = 'steer')}
-            >Steer now</button
-          >
-          <button
-            class:active={mode === 'follow_up'}
-            type="button"
-            on:click={() => (mode = 'follow_up')}>Follow up</button
-          >
-        </div>
-      {/if}
-      <span class="spacer"></span>
-      {#if queueCount > 0}
-        <button class="text-action" type="button" on:click={onclear} disabled={!hasControl}>
-          <Trash2 size={14} /> Clear queue · {queueCount}
-        </button>
-      {/if}
-      {#if active}
+  {#if queue.length > 0}
+    <div class="queue-dock" transition:slide={{ duration: 180 }}>
+      <div class="queue-dock-head">
         <button
-          class="stop-action"
+          class="queue-dock-toggle"
           type="button"
-          on:click={onstop}
-          disabled={!hasControl || runStatus === 'stopping'}
+          aria-expanded={queueExpanded}
+          aria-controls="queue-dock-list"
+          on:click={() => (queueExpanded = !queueExpanded)}
         >
-          <Square size={12} fill="currentColor" />
-          {runStatus === 'stopping' ? 'Stopping…' : 'Stop run'}
+          <ListOrdered size={14} />
+          <span>{queue.length} queued</span>
+          <span class:collapsed={!queueExpanded} class="queue-dock-chevron"
+            ><ChevronDown size={14} /></span
+          >
         </button>
+        <button class="queue-dock-clear" type="button" on:click={onclear} disabled={!hasControl}
+          >Clear</button
+        >
+      </div>
+      {#if queueExpanded}
+        <ol id="queue-dock-list" class="queue-dock-list" transition:slide={{ duration: 160 }}>
+          {#each queue as item (item.id)}
+            <li>
+              <span class="queue-dock-kind" title={item.kind === 'steer' ? 'Steer' : 'Follow up'}>
+                {#if item.kind === 'steer'}<Navigation size={13} />{:else}<CornerDownRight
+                    size={13}
+                  />{/if}
+              </span>
+              <span class="queue-dock-text">{item.content}</span>
+            </li>
+          {/each}
+        </ol>
       {/if}
     </div>
   {/if}
@@ -172,19 +194,65 @@
         <option value="xhigh">Extra high</option>
       </select>
       <span class="spacer"></span>
+      {#if active}
+        <div class="mode-switch" aria-label="Message delivery mode">
+          <button
+            class:active={mode === 'steer'}
+            type="button"
+            title="Deliver into the current run"
+            on:click={() => (mode = 'steer')}>Steer</button
+          >
+          <button
+            class:active={mode === 'follow_up'}
+            type="button"
+            title="Queue for after the current run"
+            on:click={() => (mode = 'follow_up')}>Follow up</button
+          >
+        </div>
+      {/if}
       <span class="send-hint">↵ send</span>
-      <button
-        class="send-button"
-        type="button"
-        on:click={() => onsubmit(mode)}
-        disabled={!canSubmit}
-        aria-label="Send message"
-      >
-        {#if busy}<LoaderCircle class="spin" size={18} />{:else}<ArrowUp
-            size={19}
-            strokeWidth={2.2}
-          />{/if}
-      </button>
+      {#if active && !showStopPrimary}
+        <!-- While typing mid-run, stopping stays one click away beside send. -->
+        <button
+          class="stop-button secondary"
+          type="button"
+          on:click={onstop}
+          disabled={!hasControl || stopping}
+          aria-label="Stop run"
+          title="Stop run"
+        >
+          <Square size={11} fill="currentColor" />
+        </button>
+      {/if}
+      {#if showStopPrimary}
+        <button
+          class="send-button stop-button"
+          type="button"
+          on:click={onstop}
+          disabled={!hasControl || stopping}
+          aria-label={stopping ? 'Stopping run' : 'Stop run'}
+          title={stopping ? 'Stopping…' : 'Stop run'}
+        >
+          {#if stopping}<LoaderCircle class="spin" size={18} />{:else}<Square
+              size={13}
+              fill="currentColor"
+            />{/if}
+        </button>
+      {:else}
+        <button
+          class="send-button"
+          type="button"
+          on:click={() => onsubmit(mode)}
+          disabled={!canSubmit}
+          aria-label={mode === 'follow_up' ? 'Queue message' : 'Send message'}
+          title={mode === 'follow_up' ? 'Queue message' : 'Send message'}
+        >
+          {#if busy}<LoaderCircle class="spin" size={18} />{:else}<ArrowUp
+              size={19}
+              strokeWidth={2.2}
+            />{/if}
+        </button>
+      {/if}
     </div>
   </div>
 </div>
