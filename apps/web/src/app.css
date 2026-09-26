@@ -619,32 +619,27 @@ select:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px 0 16px;
+  padding: 0 8px;
   border-top: 1px solid var(--line);
 }
-.host-status {
+.settings-entry {
   flex: 1;
   min-width: 0;
+  height: 36px;
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  background: transparent;
+  font-size: 14px;
+  text-align: left;
 }
-.host-status > span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--success);
-}
-.host-status div {
-  display: grid;
-}
-.host-status strong {
-  font-size: 13px;
-  font-weight: 500;
-}
-.host-status small {
-  color: var(--muted);
-  font-size: 11px;
+.settings-entry:hover {
+  color: var(--ink);
+  background: var(--bg-hover);
 }
 
 /* ───────────── Main column ───────────── */
@@ -2081,6 +2076,77 @@ button.system-line:not(:disabled):hover {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 20px;
+}
+.settings-section + .settings-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.settings-section h3 {
+  margin: 0 0 8px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.modal .settings-section p {
+  margin: 8px 0 0;
+}
+.settings-devices {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.settings-devices li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+.settings-devices strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.settings-devices small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.online-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.settings-row code {
+  overflow: hidden;
+  max-width: 60%;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  user-select: all;
 }
 .update-toast {
   position: fixed;

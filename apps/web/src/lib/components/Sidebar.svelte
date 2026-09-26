@@ -5,13 +5,13 @@
     ChevronDown,
     Command,
     Menu,
-    MoreHorizontal,
     PanelLeftClose,
     Pencil,
     Pin,
     PinOff,
     Plus,
     Search,
+    Settings,
     SquarePen,
     X,
   } from '@lucide/svelte';
@@ -33,6 +33,7 @@
   export let onrename: (id: string, name: string) => void;
   export let onpin: (id: string, pinned: boolean) => void;
   export let onsettle: (id: string, settled: boolean) => void;
+  export let onsettings: () => void;
 
   let query = '';
   let collapsedGroups = new Set<string>();
@@ -220,13 +221,10 @@
   </nav>
 
   <div class="sidebar-footer">
-    <div class="host-status">
-      <span></span>
-      <div><strong>Devices</strong><small>{nodes.length} online · Private VPN</small></div>
-    </div>
-    <button class="icon-button" type="button" aria-label="More options"
-      ><MoreHorizontal size={19} /></button
-    >
+    <button class="settings-entry" type="button" on:click={onsettings}>
+      <Settings size={17} />
+      <span>Settings</span>
+    </button>
   </div>
 </aside>
 

@@ -75,6 +75,7 @@
   let usingDemo = false;
   let events: EventConnection | undefined;
   let clientId = '';
+  let settingsOpen = false;
   let newSessionOpen = false;
   let newSessionWorkspace = '';
   let creatingSession = false;
@@ -453,6 +454,12 @@
     }
   }
 
+  function resetLayout() {
+    sidebarCollapsed = false;
+    detailsOpen = false;
+    resizePanel(PANEL_DEFAULT);
+  }
+
   function showNewWorkspace(nodeId: string) {
     newWorkspaceNodeId = nodeId;
     newWorkspacePath = '';
@@ -573,6 +580,10 @@
     onrename={(id, name) => updateSession(id, { name })}
     onpin={(id, pinned) => updateSession(id, { pinned })}
     onsettle={(id, settled) => updateSession(id, { settled })}
+    onsettings={() => {
+      settingsOpen = true;
+      sidebarOpen = false;
+    }}
   />
 
   <main class:details-collapsed={!detailsOpen} class="workspace">
@@ -726,6 +737,68 @@
     {/if}
   </main>
 </div>
+
+{#if settingsOpen}
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    on:click={(event) => event.target === event.currentTarget && (settingsOpen = false)}
+    on:keydown={(event) => event.key === 'Escape' && (settingsOpen = false)}
+  >
+    <div class="modal settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <header>
+        <div>
+          <span class="eyebrow">Relay</span>
+          <h2 id="settings-title">Settings</h2>
+        </div>
+        <button
+          class="icon-button"
+          type="button"
+          aria-label="Close"
+          on:click={() => (settingsOpen = false)}><X size={19} /></button
+        >
+      </header>
+
+      <section class="settings-section">
+        <h3>Devices</h3>
+        {#if nodes.length}
+          <ul class="settings-devices">
+            {#each nodes as node (node.id)}
+              <li>
+                <span class="online-dot"></span>
+                <strong>{node.id}</strong>
+                <small
+                  >{node.workspaces.length} workspace{node.workspaces.length === 1
+                    ? ''
+                    : 's'}</small
+                >
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <p>No devices online.</p>
+        {/if}
+        <p>{nodes.length} online · Private VPN</p>
+      </section>
+
+      <section class="settings-section">
+        <h3>Layout</h3>
+        <div class="settings-row">
+          <span>Restore the sidebar and side panel to their default size and visibility.</span>
+          <button class="button ghost" type="button" on:click={resetLayout}>Reset</button>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h3>This browser</h3>
+        <div class="settings-row">
+          <span>Client ID</span>
+          <code>{clientId}</code>
+        </div>
+      </section>
+    </div>
+  </div>
+{/if}
 
 {#if newWorkspaceOpen}
   <div
