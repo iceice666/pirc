@@ -66,6 +66,32 @@ describe('Pi history conversion', () => {
     });
   });
 
+  it('handles runtime events without details and leaves other extensions unchanged', () => {
+    const messages = piHistory([
+      { role: 'custom', customType: 'agent-team', content: 'legacy event', timestamp: 1 },
+      { role: 'custom', customType: 'other', content: 'extension content', timestamp: 2 },
+      {
+        role: 'custom',
+        customType: 'background-task-output',
+        display: false,
+        content: 'hidden',
+        timestamp: 3,
+      },
+    ]);
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatchObject({
+      systemKind: 'team',
+      label: 'Agent team',
+      content: 'legacy event',
+    });
+    expect(messages[0]?.meta).toBeUndefined();
+    expect(messages[1]).toMatchObject({
+      systemKind: 'custom',
+      label: 'other',
+      content: 'extension content',
+    });
+  });
+
   it('marks failed assistant turns', () => {
     const [message] = piHistory([
       {

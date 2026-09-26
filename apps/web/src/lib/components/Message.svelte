@@ -41,7 +41,8 @@
                 : Info
             : Puzzle;
   // Short system entries read fine inline; long summaries/outputs collapse.
-  $: collapsible = kind === 'compaction' || kind === 'branch' || kind === 'bash';
+  $: runtimeEvent = kind === 'team' || kind === 'background';
+  $: collapsible = kind === 'compaction' || kind === 'branch' || kind === 'bash' || runtimeEvent;
   // Notices read like a tool row: "Source: detail" splits into name + summary,
   // and only the first line shows until expanded.
   $: noticeFirstLine = message.content.split('\n', 1)[0]!.trim();
@@ -121,7 +122,7 @@
       </button>
       {#if (!collapsible || systemOpen) && message.content}
         <div class="system-body">
-          {#if kind === 'bash'}<pre>{message.content}</pre>{:else}<Markdown
+          {#if kind === 'bash' || runtimeEvent}<pre>{message.content}</pre>{:else}<Markdown
               source={message.content}
               compact
             />{/if}

@@ -91,7 +91,14 @@ export interface ToolCall {
  * - bash: `!command` executions typed by the user in Pi
  * - custom: extension-injected messages
  */
-export type SystemKind = 'notice' | 'compaction' | 'branch' | 'bash' | 'custom';
+export type SystemKind =
+  | 'notice'
+  | 'compaction'
+  | 'branch'
+  | 'bash'
+  | 'custom'
+  | 'team'
+  | 'background';
 export type NoticeLevel = 'info' | 'warning' | 'error';
 
 export interface ConversationMessage {

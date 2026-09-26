@@ -184,11 +184,28 @@ export function piMessage(
     case 'custom': {
       if (raw.display === false) return null;
       const found = images(raw.content);
+      const team = raw.customType === 'agent-team';
+      const background =
+        raw.customType === 'background-task-finished' ||
+        raw.customType === 'background-task-output';
+      const short = (value: unknown) =>
+        typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, 100) : '';
+      const event = raw.details?.event;
+      const summary = team
+        ? [short(event?.from), short(event?.kind)].filter(Boolean).join(' · ')
+        : background
+          ? short(text(raw.content).split('\n', 1)[0])
+          : '';
       return {
         id,
         role: 'system',
-        systemKind: 'custom',
-        label: raw.customType ?? 'Extension',
+        systemKind: team ? 'team' : background ? 'background' : 'custom',
+        label: team
+          ? 'Agent team'
+          : background
+            ? 'Background task'
+            : (raw.customType ?? 'Extension'),
+        ...(summary ? { meta: summary } : {}),
         content: text(raw.content),
         createdAt,
         ...(found.length ? { images: found } : {}),
