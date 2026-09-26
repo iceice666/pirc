@@ -192,6 +192,7 @@ export function teamFeature(): Feature {
         ? { subagentLimit: options.subagentLimit }
         : {}),
       env: { ...process.env, ...agent.config.env },
+      models: agent.config.models,
       askUser: (question, signal, from) =>
         askQuestions(
           agent.ui,

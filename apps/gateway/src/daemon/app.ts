@@ -15,6 +15,7 @@ import { GatewayDatabase, type SessionRow } from '../database.js';
 import { ApiError } from '../errors.js';
 import { EventHub } from '../events.js';
 import { registerErrorHandler, registerImageParsers } from '../http.js';
+import { listModels, loadModelsFile, ModelStore } from '../models.js';
 import { NODE_FRAME_MAX_BYTES, type NodeHttpRequest } from '../protocol.js';
 import { applySessionName, publicSession } from '../session-name.js';
 import type { EventCursor } from '../types.js';
@@ -82,6 +83,12 @@ export interface DaemonServices {
   db: GatewayDatabase;
   events: EventHub;
   nodes: NodeRegistry;
+  models: ModelStore;
+  /**
+   * Re-read the models file and push it to every node; agents started
+   * afterwards use it. On error the current providers stay in effect.
+   */
+  reloadModels(): void;
 }
 
 export async function buildDaemonApp(
@@ -94,8 +101,36 @@ export async function buildDaemonApp(
   const recovery = db.recoverStartup();
   app.log.info({ recovery }, 'daemon startup recovery complete');
   const events = new EventHub(config.eventBufferSize);
-  const nodes = new NodeRegistry();
-  const services = { db, events, nodes };
+  const models = new ModelStore();
+  const readModels = () => {
+    const loaded = loadModelsFile(config.modelsFile);
+    if (!loaded)
+      app.log.warn(
+        { file: config.modelsFile },
+        'models file not found: agents have no providers until it exists and is reloaded',
+      );
+    models.set(loaded ?? { providers: {} });
+    app.log.info(
+      { file: config.modelsFile, providers: Object.keys(models.current.providers) },
+      'models loaded',
+    );
+  };
+  // An invalid file at startup is fatal; on reload it only logs.
+  readModels();
+  const nodes = new NodeRegistry(models);
+  const reloadModels = () => {
+    try {
+      readModels();
+    } catch (error) {
+      app.log.error(
+        { error: (error as Error).message },
+        'models reload failed; keeping the previous providers',
+      );
+      return;
+    }
+    nodes.broadcastModels();
+  };
+  const services = { db, events, nodes, models, reloadModels };
 
   // ---- node link ------------------------------------------------------------
 
@@ -409,15 +444,11 @@ export async function buildDaemonApp(
     });
   });
 
-  /** Models come from the session's agent; without a session there is nothing to ask. */
-  app.get('/api/models', async (request, reply) => {
+  /** Every node's agents use the gateway's providers, so one list serves all sessions. */
+  app.get('/api/models', async (request) => {
     const query = parse(z.object({ sessionId: z.string().optional() }), request.query);
-    if (!query.sessionId) return { models: [] };
-    const session = claim(request, query.sessionId);
-    return forward(reply, session.nodeId, request, {
-      method: 'GET',
-      url: `/api/models?sessionId=${encodeURIComponent(session.piSessionId)}`,
-    });
+    if (query.sessionId) claim(request, query.sessionId);
+    return { models: listModels(models.current) };
   });
 
   // Side panel and terminal REST: relayed verbatim.

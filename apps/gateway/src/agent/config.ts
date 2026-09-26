@@ -1,38 +1,24 @@
 import { existsSync, readFileSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
+import {
+  defaultConfigDir,
+  expandHome,
+  modelRefSchema as modelRef,
+  type ModelsConfig,
+  type ModelRef,
+  type ProviderConfig,
+} from '../models.js';
 
-export const thinkingLevels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
-export type ThinkingLevel = (typeof thinkingLevels)[number];
-
-const modelSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().optional(),
-  contextWindow: z.number().int().positive().default(200_000),
-  maxTokens: z.number().int().positive().default(32_000),
-  reasoning: z.boolean().default(false),
-  input: z.array(z.enum(['text', 'image'])).default(['text']),
-  compat: z.record(z.unknown()).default({}),
-});
-
-const providerSchema = z.object({
-  api: z.enum(['openai-chat', 'anthropic-messages']),
-  baseUrl: z.string().url(),
-  apiKey: z.string().optional(),
-  apiKeyEnv: z.string().optional(),
-  apiKeyFile: z.string().optional(),
-  apiKeyCommand: z.array(z.string()).min(1).optional(),
-  headers: z.record(z.string()).default({}),
-  compat: z.record(z.unknown()).default({}),
-  models: z.array(modelSchema).min(1),
-});
-
-const modelRef = z.object({
-  provider: z.string(),
-  id: z.string(),
-  thinking: z.enum(thinkingLevels).optional(),
-});
+export {
+  defaultConfigDir,
+  expandHome,
+  thinkingLevels,
+  type ModelConfig,
+  type ModelRef,
+  type ProviderConfig,
+  type ThinkingLevel,
+} from '../models.js';
 
 const hookSchema = z.object({
   command: z.string().min(1),
@@ -58,9 +44,11 @@ const limitsSchema = z
   })
   .default({});
 
+/**
+ * Node-local agent settings. Providers and the default model are not here:
+ * they come from the gateway (see `models.ts`).
+ */
 const globalSchema = z.object({
-  providers: z.record(providerSchema).default({}),
-  defaultModel: modelRef.optional(),
   allowedPaths: z.array(z.string()).default([]),
   env: z.record(z.string()).default({}),
   hooks: hooksSchema,
@@ -78,16 +66,16 @@ const projectSchema = z
   })
   .strict();
 
-export type ModelConfig = z.infer<typeof modelSchema>;
-export type ProviderConfig = z.infer<typeof providerSchema>;
 export type HookConfig = z.infer<typeof hookSchema>;
 export type HooksConfig = z.infer<typeof hooksSchema>;
-export type ModelRef = z.infer<typeof modelRef>;
 
 export interface AgentConfig {
   configDir: string;
   workspace: string;
+  /** Providers and default model exactly as the gateway sent them. */
+  models: ModelsConfig;
   providers: Record<string, ProviderConfig>;
+  /** The project's default model, else the gateway's. */
   defaultModel?: ModelRef;
   /** Canonical absolute paths the file tools may touch, workspace first. */
   allowedPaths: string[];
@@ -98,16 +86,6 @@ export interface AgentConfig {
   limits: z.infer<typeof limitsSchema>;
   features: Record<string, unknown>;
   systemPrompt: string;
-}
-
-export function defaultConfigDir(env: NodeJS.ProcessEnv = process.env): string {
-  return env.PIRC_CONFIG_DIR ?? path.join(os.homedir(), '.config', '.pirc');
-}
-
-export function expandHome(value: string): string {
-  if (value === '~') return os.homedir();
-  if (value.startsWith('~/')) return path.join(os.homedir(), value.slice(2));
-  return value;
 }
 
 function readJson(file: string): unknown {
@@ -127,8 +105,17 @@ const basePrompt = `You are pirc, a coding agent operating inside a user's works
 Work carefully: read before editing, keep changes minimal and verified, and report blockers honestly.
 File tools are limited to the workspace and explicitly allowed paths.`;
 
+/** Keys of the node's config.json that moved to the gateway and are now ignored. */
+export function legacyModelKeys(env: NodeJS.ProcessEnv = process.env): string[] {
+  const raw = readJson(path.join(defaultConfigDir(env), 'config.json'));
+  return raw && typeof raw === 'object'
+    ? ['providers', 'defaultModel'].filter((key) => key in raw)
+    : [];
+}
+
 export function loadAgentConfig(
   workspace: string,
+  models: ModelsConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): AgentConfig {
   const configDir = defaultConfigDir(env);
@@ -154,11 +141,12 @@ export function loadAgentConfig(
     readText(path.join(workspace, 'AGENTS.md')),
     readText(path.join(projectDir, 'AGENTS.md')),
   ].filter(Boolean);
-  const defaultModel = project.defaultModel ?? global.defaultModel;
+  const defaultModel = project.defaultModel ?? models.defaultModel;
   return {
     configDir,
     workspace,
-    providers: global.providers,
+    models,
+    providers: models.providers,
     ...(defaultModel ? { defaultModel } : {}),
     allowedPaths: [...new Set(allowedPaths)],
     protectedPaths: [projectDir],
@@ -168,26 +156,4 @@ export function loadAgentConfig(
     features: global.features,
     systemPrompt: prompts.join('\n\n'),
   };
-}
-
-const keyCache = new Map<string, string>();
-
-/** Resolve a provider API key from literal, env, file or command (cached per process). */
-export function resolveApiKey(name: string, provider: ProviderConfig): string | undefined {
-  const cached = keyCache.get(name);
-  if (cached !== undefined) return cached;
-  let key: string | undefined;
-  if (provider.apiKey) key = provider.apiKey;
-  else if (provider.apiKeyEnv) key = process.env[provider.apiKeyEnv];
-  else if (provider.apiKeyFile) key = readFileSync(expandHome(provider.apiKeyFile), 'utf8');
-  else if (provider.apiKeyCommand) {
-    const [command, ...args] = provider.apiKeyCommand;
-    const result = Bun.spawnSync([expandHome(command!), ...args], { stderr: 'pipe' });
-    if (result.exitCode !== 0)
-      throw new Error(`apiKeyCommand for ${name} failed: ${result.stderr.toString().trim()}`);
-    key = result.stdout.toString();
-  }
-  key = key?.trim();
-  if (key) keyCache.set(name, key);
-  return key;
 }

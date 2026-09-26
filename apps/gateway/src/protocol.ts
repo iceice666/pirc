@@ -4,7 +4,9 @@
  * version: the daemon refuses a registration from any other version, so
  * upgrade the daemon and every node together.
  */
-export const NODE_PROTOCOL_VERSION = 2;
+import type { ModelsConfig } from './models.js';
+
+export const NODE_PROTOCOL_VERSION = 3;
 
 /** One WebSocket frame on the node link. Uploads (base64) must fit, see MAX_UPLOAD_BYTES. */
 export const NODE_FRAME_MAX_BYTES = 16_777_216;
@@ -40,9 +42,14 @@ export interface RegisteredWorkspace {
   displayName: string;
 }
 
-/** Messages the daemon sends to a node. */
+/**
+ * Messages the daemon sends to a node. `registered` and `models` carry the
+ * gateway's providers with resolved keys; a node uses the latest set for
+ * agents it starts afterwards (running agents keep theirs).
+ */
 export type DaemonToNode =
-  | { type: 'registered'; nodeId: string }
+  | { type: 'registered'; nodeId: string; models: ModelsConfig }
+  | { type: 'models'; models: ModelsConfig }
   | { type: 'heartbeat_ack' }
   | { type: 'request'; requestId: string; data: NodeHttpRequest }
   | {

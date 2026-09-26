@@ -1,12 +1,36 @@
 import { parseArgs } from 'node:util';
 import { Agent } from './agent.js';
 import { loadAgentConfig } from './config.js';
+import { modelsSchema, type ModelsConfig } from '../models.js';
 import { builtinFeatures } from './features/index.js';
 import { teamChildMode } from './features/team/channel.js';
 import { TEAM_TOOL_NAMES } from './features/team/index.js';
-import { RpcUi, serveRpc } from './rpc.js';
+import { RpcUi, serveRpc, stdinLines } from './rpc.js';
 import { SessionStore } from './session-store.js';
 import { builtinTools } from './tools/index.js';
+
+/**
+ * The first stdin line must be `{"type":"configure","models":{…}}`: the
+ * providers the gateway pushed to this node (see `models.ts`). Keys arrive
+ * this way rather than through argv, the environment or a file.
+ */
+async function readConfigure(lines: AsyncIterator<string>): Promise<ModelsConfig> {
+  for (;;) {
+    const next = await lines.next();
+    if (next.done) throw new Error('stdin closed before the configure message');
+    if (!next.value.trim()) continue;
+    let message: unknown;
+    try {
+      message = JSON.parse(next.value);
+    } catch {
+      throw new Error('The first stdin line must be a JSON configure message');
+    }
+    const record = message as { type?: unknown; models?: unknown } | null;
+    if (record?.type !== 'configure')
+      throw new Error('The first stdin line must be {"type":"configure","models":…}');
+    return modelsSchema.parse(record.models ?? {});
+  }
+}
 
 /**
  * `pirc agent --session-dir DIR` — one session, JSONL RPC on stdin/stdout.
@@ -41,7 +65,8 @@ export async function runAgent(argv: string[]): Promise<void> {
   const cwd = process.cwd();
   const write = (value: unknown) => process.stdout.write(`${JSON.stringify(value)}\n`);
   const ui = new RpcUi(write);
-  const config = loadAgentConfig(cwd);
+  const lines = stdinLines();
+  const config = loadAgentConfig(cwd, await readConfigure(lines));
   const store = new SessionStore(sessionDir, cwd);
   const agent = new Agent({
     config,
@@ -67,6 +92,6 @@ export async function runAgent(argv: string[]): Promise<void> {
   };
   process.once('SIGTERM', () => void shutdown());
   process.once('SIGINT', () => void shutdown());
-  await serveRpc(agent, ui, write);
+  await serveRpc(agent, ui, write, lines);
   await shutdown();
 }

@@ -15,6 +15,7 @@ import { GatewayDatabase } from '../database.js';
 import { ApiError } from '../errors.js';
 import { EventHub } from '../events.js';
 import { registerErrorHandler, registerImageParsers } from '../http.js';
+import { ModelStore } from '../models.js';
 import { NODE_USER_HEADER } from '../protocol.js';
 import { applySessionName, publicSession } from '../session-name.js';
 import type { CommandPayload, Snapshot } from '../types.js';
@@ -97,6 +98,8 @@ export interface NodeServices {
   events: EventHub;
   runners: RunnerManager;
   locks: WorkspaceLocks;
+  /** Providers from the daemon, used for agents started from now on. */
+  models: ModelStore;
   terminals: TerminalManager;
   terminalStreams: TerminalStreams;
 }
@@ -112,7 +115,9 @@ export async function buildNodeApp(
   app.log.info({ recovery }, 'node startup recovery complete');
   const events = new EventHub(config.eventBufferSize);
   const locks = new WorkspaceLocks(config.runnerLimit);
-  const runners = new RunnerManager(config, db, events, locks);
+  // Filled by the daemon on registration; agents started before that get no providers.
+  const models = new ModelStore();
+  const runners = new RunnerManager(config, db, events, locks, models);
   const claim = (request: FastifyRequest, sessionId = parse(sessionParams, request.params).id) =>
     db.claimSession(sessionId, request.identity!.user);
 
@@ -328,21 +333,18 @@ export async function buildNodeApp(
     return reply.status(201).send({ upload: { id: uploadId, mimeType, byteSize: buffer.length } });
   });
 
-  app.get('/api/models', async (request) => {
-    const query = parse(z.object({ sessionId: z.string().min(1) }), request.query);
-    const session = claim(request, query.sessionId);
-    const response = await runners.models(session.id);
-    if (!response.success)
-      throw new ApiError(503, 'runner_unavailable', response.error ?? 'Unable to list models');
-    return response.data;
+  const { terminals, terminalStreams } = registerPanelRoutes(app, {
+    config,
+    db,
+    runners,
+    models,
+    claim,
   });
-
-  const { terminals, terminalStreams } = registerPanelRoutes(app, { config, db, runners, claim });
 
   app.addHook('onClose', async () => {
     terminals.shutdown();
     await runners.shutdown();
     db.close();
   });
-  return { app, services: { db, events, runners, locks, terminals, terminalStreams } };
+  return { app, services: { db, events, runners, locks, models, terminals, terminalStreams } };
 }

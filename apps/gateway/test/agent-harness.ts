@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Subprocess } from 'bun';
+import type { ModelsConfig } from '../src/models.js';
 import { startFakeLlm, type FakeLlm } from './fixtures/fake-llm.js';
 
 export interface AgentProcess {
@@ -22,35 +23,65 @@ export interface AgentProcess {
 
 const cli = path.resolve(import.meta.dir, '../src/cli.ts');
 
-export function writeAgentConfig(
-  configDir: string,
-  llmUrl: string,
-  extra: Record<string, unknown> = {},
-): void {
+/** Providers as the gateway would push them (`providers`/`defaultModel` in `extra` override). */
+export function testModels(llmUrl: string, extra: Record<string, unknown> = {}): ModelsConfig {
+  return {
+    providers: (extra.providers as ModelsConfig['providers'] | undefined) ?? {
+      fake: {
+        api: 'openai-chat',
+        baseUrl: `${llmUrl}/v1`,
+        apiKey: 'test-key',
+        headers: {},
+        compat: {},
+        models: [
+          {
+            id: 'fake-model',
+            reasoning: true,
+            contextWindow: 100_000,
+            maxTokens: 1000,
+            input: ['text'],
+            compat: {},
+          },
+        ],
+      },
+      fakeclaude: {
+        api: 'anthropic-messages',
+        baseUrl: llmUrl,
+        apiKey: 'claude-key',
+        headers: {},
+        compat: {},
+        models: [
+          {
+            id: 'claude-x',
+            reasoning: true,
+            contextWindow: 100_000,
+            maxTokens: 16_000,
+            input: ['text'],
+            compat: {},
+          },
+        ],
+      },
+    },
+    defaultModel: (extra.defaultModel as ModelsConfig['defaultModel'] | undefined) ?? {
+      provider: 'fake',
+      id: 'fake-model',
+      thinking: 'low',
+    },
+  };
+}
+
+/** The node-local config.json (everything except providers and the default model). */
+export function writeAgentConfig(configDir: string, extra: Record<string, unknown> = {}): void {
+  const { providers: _providers, defaultModel: _default, ...local } = extra;
   mkdirSync(configDir, { recursive: true });
   writeFileSync(
     path.join(configDir, 'config.json'),
     JSON.stringify({
-      providers: {
-        fake: {
-          api: 'openai-chat',
-          baseUrl: `${llmUrl}/v1`,
-          apiKey: 'test-key',
-          models: [{ id: 'fake-model', reasoning: true, contextWindow: 100_000, maxTokens: 1000 }],
-        },
-        fakeclaude: {
-          api: 'anthropic-messages',
-          baseUrl: llmUrl,
-          apiKey: 'claude-key',
-          models: [{ id: 'claude-x', reasoning: true, contextWindow: 100_000, maxTokens: 16_000 }],
-        },
-      },
-      defaultModel: { provider: 'fake', id: 'fake-model', thinking: 'low' },
-      ...extra,
+      ...local,
       // Titling makes a side request that would consume scripted replies; tests opt in.
       features: {
         sessionTitle: { enabled: false },
-        ...(extra.features as Record<string, unknown> | undefined),
+        ...(local.features as Record<string, unknown> | undefined),
       },
     }),
   );
@@ -72,7 +103,7 @@ export async function startAgent(
   const configDir = path.join(root, 'config');
   const sessionDir = options.sessionDir ?? path.join(root, 'session');
   const llm = options.llm ?? startFakeLlm();
-  writeAgentConfig(configDir, llm.url, options.config);
+  writeAgentConfig(configDir, options.config);
   const proc = Bun.spawn(
     [process.execPath, cli, 'agent', '--session-dir', sessionDir, ...(options.args ?? [])],
     {
@@ -117,6 +148,7 @@ export async function startAgent(
     proc.stdin.write(`${JSON.stringify(value)}\n`);
     proc.stdin.flush();
   };
+  raw({ type: 'configure', models: testModels(llm.url, options.config) });
   const waitFor = (test: (e: Record<string, any>) => boolean, timeoutMs = 8000) => {
     const found = events.find(test);
     if (found) return Promise.resolve(found);

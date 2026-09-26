@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { NodeConfig } from '../config.js';
+import { configureLine, type ModelStore } from '../models.js';
 import type { GatewayDatabase, SessionRow } from '../database.js';
 import { ApiError } from '../errors.js';
 import type { EventHub } from '../events.js';
@@ -34,6 +35,7 @@ class PiRunner {
     private readonly config: NodeConfig,
     private readonly db: GatewayDatabase,
     private readonly events: EventHub,
+    models: ModelStore,
     private readonly onExit: (runner: PiRunner) => void,
   ) {
     this.epoch = db.incrementEpoch(session.id);
@@ -52,6 +54,8 @@ class PiRunner {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, PI_CODING_AGENT_SESSION_DIR: session.privateSessionPath },
     });
+    // Providers (with keys) go on the first stdin line, before any RPC command.
+    this.child.stdin.write(configureLine(models.current));
     const parser = new JsonlParser(config.rpcMaxLineBytes, config.rpcMaxOutputBytes, (value) =>
       this.handleValue(value),
     );
@@ -280,6 +284,7 @@ export class RunnerManager {
     private readonly db: GatewayDatabase,
     private readonly events: EventHub,
     private readonly locks: WorkspaceLocks,
+    private readonly models: ModelStore,
   ) {}
 
   /**
@@ -318,10 +323,17 @@ export class RunnerManager {
     this.locks.acquire(sessionId, workspace.canonicalPath);
     this.db.setRunnerState(sessionId, 'starting');
     try {
-      const runner = new PiRunner(session, this.config, this.db, this.events, (exited) => {
-        if (this.runners.get(sessionId) === exited) this.runners.delete(sessionId);
-        this.locks.release(sessionId);
-      });
+      const runner = new PiRunner(
+        session,
+        this.config,
+        this.db,
+        this.events,
+        this.models,
+        (exited) => {
+          if (this.runners.get(sessionId) === exited) this.runners.delete(sessionId);
+          this.locks.release(sessionId);
+        },
+      );
       this.runners.set(sessionId, runner);
       return runner;
     } catch (error) {
@@ -420,13 +432,6 @@ export class RunnerManager {
         'Interaction belongs to an inactive runner epoch',
       );
     await runner.answer(rpcId, answer);
-  }
-
-  async models(sessionId?: string): Promise<Record<string, any>> {
-    if (sessionId) return (await this.ensure(sessionId)).request({ type: 'get_available_models' });
-    const first = this.db.listSessions()[0];
-    if (!first) return { success: true, data: { models: [] } };
-    return (await this.ensure(first.id)).request({ type: 'get_available_models' });
   }
 
   async shutdown(): Promise<void> {

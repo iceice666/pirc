@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import type { Agent } from '../agent.js';
-import { resolveApiKey } from '../config.js';
 import type { Feature } from '../feature.js';
 import type { AssistantMessage } from '../messages.js';
 
@@ -165,7 +164,7 @@ export async function generateTitle(
       providerName,
       provider,
       model,
-      apiKey: resolveApiKey(providerName, provider),
+      apiKey: provider.apiKey,
       systemPrompt: custom ? `${custom}\n\n${MARKER_INSTRUCTION}` : TITLE_SYSTEM_PROMPT,
       messages: [
         {

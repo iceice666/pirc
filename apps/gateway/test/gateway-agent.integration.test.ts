@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, expect, it } from 'bun:test';
 import { buildNodeApp } from '../src/node/app.js';
 import { defaultAgentCommand } from '../src/config.js';
-import { writeAgentConfig } from './agent-harness.js';
+import { testModels, writeAgentConfig } from './agent-harness.js';
 import { startFakeLlm } from './fixtures/fake-llm.js';
 import { nodeHeaders as headers, testConfig, waitFor } from './helpers.js';
 
@@ -17,14 +17,15 @@ it('runs a real pirc agent subprocess end to end through the gateway', async () 
   const llm = startFakeLlm();
   cleanup.push(() => llm.stop());
   const configDir = mkdtempSync(path.join(tmpdir(), 'pirc-gw-config-'));
-  writeAgentConfig(configDir, llm.url);
+  writeAgentConfig(configDir);
   const previous = process.env.PIRC_CONFIG_DIR;
   process.env.PIRC_CONFIG_DIR = configDir;
   cleanup.push(() => {
     if (previous === undefined) delete process.env.PIRC_CONFIG_DIR;
     else process.env.PIRC_CONFIG_DIR = previous;
   });
-  const { app } = await buildNodeApp(testConfig(defaultAgentCommand({})));
+  const { app, services } = await buildNodeApp(testConfig(defaultAgentCommand({})));
+  services.models.set(testModels(llm.url));
   cleanup.push(() => app.close() as Promise<void>);
 
   const created = await app.inject({
@@ -71,29 +72,22 @@ it('runs a real pirc agent subprocess end to end through the gateway', async () 
   ]);
   expect(final.history[2].content[0].text).toContain('from-bash');
   expect(final.history.at(-1).content[0].text).toBe('All done.');
-
-  const models = await app.inject({
-    method: 'GET',
-    url: `/api/models?sessionId=${sessionId}`,
-    headers,
-  });
-  expect(models.json().models.map((m: any) => `${m.provider}/${m.id}`)).toContain(
-    'fake/fake-model',
-  );
+  expect(final.history.at(-1).provider).toBe('fake');
 });
 
 it('answers and withdraws agent dialogs through gateway interactions', async () => {
   const llm = startFakeLlm();
   cleanup.push(() => llm.stop());
   const configDir = mkdtempSync(path.join(tmpdir(), 'pirc-gw-config-'));
-  writeAgentConfig(configDir, llm.url);
+  writeAgentConfig(configDir);
   const previous = process.env.PIRC_CONFIG_DIR;
   process.env.PIRC_CONFIG_DIR = configDir;
   cleanup.push(() => {
     if (previous === undefined) delete process.env.PIRC_CONFIG_DIR;
     else process.env.PIRC_CONFIG_DIR = previous;
   });
-  const { app } = await buildNodeApp(testConfig(defaultAgentCommand({})));
+  const { app, services } = await buildNodeApp(testConfig(defaultAgentCommand({})));
+  services.models.set(testModels(llm.url));
   cleanup.push(() => app.close() as Promise<void>);
   const sessionId = (
     await app.inject({
@@ -168,14 +162,15 @@ it('answers and withdraws agent dialogs through gateway interactions', async () 
 
 async function realAgentSession(llm: ReturnType<typeof startFakeLlm>) {
   const configDir = mkdtempSync(path.join(tmpdir(), 'pirc-gw-config-'));
-  writeAgentConfig(configDir, llm.url);
+  writeAgentConfig(configDir);
   const previous = process.env.PIRC_CONFIG_DIR;
   process.env.PIRC_CONFIG_DIR = configDir;
   cleanup.push(() => {
     if (previous === undefined) delete process.env.PIRC_CONFIG_DIR;
     else process.env.PIRC_CONFIG_DIR = previous;
   });
-  const { app } = await buildNodeApp(testConfig(defaultAgentCommand({})));
+  const { app, services } = await buildNodeApp(testConfig(defaultAgentCommand({})));
+  services.models.set(testModels(llm.url));
   cleanup.push(() => app.close() as Promise<void>);
   const created = await app.inject({
     method: 'POST',
@@ -242,7 +237,7 @@ it('titles an unnamed session from the first message and keeps a later user rena
   const llm = startFakeLlm();
   cleanup.push(() => llm.stop());
   const configDir = mkdtempSync(path.join(tmpdir(), 'pirc-gw-config-'));
-  writeAgentConfig(configDir, llm.url, { features: { sessionTitle: { enabled: true } } });
+  writeAgentConfig(configDir, { features: { sessionTitle: { enabled: true } } });
   const previous = process.env.PIRC_CONFIG_DIR;
   process.env.PIRC_CONFIG_DIR = configDir;
   cleanup.push(() => {
@@ -250,6 +245,7 @@ it('titles an unnamed session from the first message and keeps a later user rena
     else process.env.PIRC_CONFIG_DIR = previous;
   });
   const { app, services } = await buildNodeApp(testConfig(defaultAgentCommand({})));
+  services.models.set(testModels(llm.url));
   cleanup.push(() => app.close() as Promise<void>);
   const isTitle = (body: any) => JSON.stringify(body.messages).includes('<user-message>');
   llm.route = (body) =>

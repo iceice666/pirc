@@ -25,7 +25,7 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 ## Requirements
 
 - [Bun](https://bun.sh) 1.2 or newer (development/build only; the compiled `pirc` binary needs no runtime)
-- An OpenAI Chat Completions or Anthropic Messages compatible provider, configured in `~/.config/.pirc/config.json` (see [Agent](#agent))
+- An OpenAI Chat Completions or Anthropic Messages compatible provider, configured once on the gateway in `models.json` (see [Agent](#agent))
 - A trusted forward-auth reverse proxy
 
 ## Development
@@ -55,10 +55,11 @@ The binary embeds the Bun runtime, SQLite, and the agent, and does not depend on
 
 ## Agent
 
-The built-in agent (`apps/gateway/src/agent/`) is configured in two layers:
+The built-in agent (`apps/gateway/src/agent/`) is configured in three layers:
 
-- **Global**: `~/.config/.pirc/config.json` (override the directory with `PIRC_CONFIG_DIR`). It holds providers (`openai-chat` / `anthropic-messages`), models, the default model, limits, features, and hooks. The global system prompt goes in `AGENTS.md` in the same directory. Reference API keys with `apiKeyEnv`, `apiKeyFile`, or `apiKeyCommand`.
-- **Project**: `<workspace>/.pirc/config.json` can only add `allowedPaths`, `env`, `hooks`, and a `defaultModel`. `<workspace>/.pirc/AGENTS.md` is appended to the system prompt. The agent's file tools cannot write to `.pirc/`.
+- **Models (gateway)**: `models.json` on the gateway (`PIRC_MODELS_FILE`, default `$PIRC_CONFIG_DIR/models.json`, i.e. `~/.config/.pirc/models.json`) holds `providers` (`openai-chat` / `anthropic-messages`, with their models) and `defaultModel`. Reference API keys with `apiKeyEnv`, `apiKeyFile`, or `apiKeyCommand`; the gateway resolves them and pushes the providers, keys included, to every node over the node link. A node passes them to each agent it starts on stdin, never writing them to disk. Send the gateway `SIGHUP` to reload the file; the new providers apply to agents started afterwards, and running agents keep theirs. An invalid file is fatal at startup, and on reload it is logged and ignored. Nodes have no provider settings of their own; `providers` and `defaultModel` in a node's `config.json` are ignored with a warning.
+- **Node**: `~/.config/.pirc/config.json` on each node (override the directory with `PIRC_CONFIG_DIR`) holds limits, features, hooks, `env`, and `allowedPaths`. The global system prompt goes in `AGENTS.md` in the same directory.
+- **Project**: `<workspace>/.pirc/config.json` can only add `allowedPaths`, `env`, `hooks`, and a `defaultModel` (which must name one of the gateway's models). `<workspace>/.pirc/AGENTS.md` is appended to the system prompt. The agent's file tools cannot write to `.pirc/`.
 
 Hooks (`sessionStart`, `beforePrompt`, `beforeTool`, `afterTool`, `agentSettled`) are shell commands that receive JSON on stdin. A `beforeTool` hook can reject a tool call (exit 2) or rewrite its arguments.
 

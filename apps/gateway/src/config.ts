@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
+import { defaultModelsFile } from './models.js';
 import { selfCommand } from './self.js';
 import { canonicalPath } from './util.js';
 
@@ -60,6 +61,8 @@ export interface DaemonConfig extends BrowserAuthConfig {
   eventBufferSize: number;
   websocketMaxBufferedBytes: number;
   uploadMaxBytes: number;
+  /** Providers and default model pushed to every node (PIRC_MODELS_FILE). */
+  modelsFile: string;
 }
 
 /**
@@ -186,6 +189,7 @@ export function loadDaemonConfig(env: NodeJS.ProcessEnv = process.env): DaemonCo
     eventBufferSize: integer(env.PIRC_EVENT_BUFFER_SIZE, 1000),
     websocketMaxBufferedBytes: integer(env.PIRC_WS_MAX_BUFFERED_BYTES, 1_048_576),
     uploadMaxBytes: uploadLimit(env),
+    modelsFile: path.resolve(defaultModelsFile(env)),
   };
 }
 

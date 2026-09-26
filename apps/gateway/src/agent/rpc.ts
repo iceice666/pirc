@@ -215,15 +215,29 @@ export async function handleCommand(
   }
 }
 
-/** Serve JSONL RPC over stdin/stdout until stdin closes. */
+/** Lines of stdin, read once and shared by the `configure` handshake and `serveRpc`. */
+export async function* stdinLines(): AsyncGenerator<string> {
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for await (const chunk of Bun.stdin.stream()) {
+    buffer += decoder.decode(chunk, { stream: true });
+    let newline: number;
+    while ((newline = buffer.indexOf('\n')) !== -1) {
+      yield buffer.slice(0, newline);
+      buffer = buffer.slice(newline + 1);
+    }
+  }
+  if (buffer) yield buffer;
+}
+
+/** Serve JSONL RPC until the input ends. */
 export async function serveRpc(
   agent: Agent,
   ui: RpcUi,
   write: (value: unknown) => void,
+  lines: AsyncIterable<string>,
   extra: Record<string, (agent: Agent, command: Json) => Promise<unknown>> = {},
 ): Promise<void> {
-  const decoder = new TextDecoder();
-  let buffer = '';
   const handleLine = (line: string) => {
     if (!line.trim()) return;
     let command: Json;
@@ -254,13 +268,5 @@ export async function serveRpc(
         }),
     );
   };
-  for await (const chunk of Bun.stdin.stream()) {
-    buffer += decoder.decode(chunk, { stream: true });
-    let newline: number;
-    while ((newline = buffer.indexOf('\n')) !== -1) {
-      handleLine(buffer.slice(0, newline));
-      buffer = buffer.slice(newline + 1);
-    }
-  }
-  if (buffer) handleLine(buffer);
+  for await (const line of lines) handleLine(line);
 }

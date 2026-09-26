@@ -17,6 +17,7 @@ import { memoryConfigFrom } from '../agent/features/memory/index.js';
 import { memoryPanel } from '../agent/features/memory/panel.js';
 import { readSessionBranch, SESSION_FILE } from '../agent/session-store.js';
 import type { NodeConfig } from '../config.js';
+import type { ModelStore } from '../models.js';
 import type { GatewayDatabase, SessionRow } from '../database.js';
 import { ApiError } from '../errors.js';
 import { parse } from '../util.js';
@@ -75,6 +76,7 @@ export interface PanelContext {
   config: NodeConfig;
   db: GatewayDatabase;
   runners: RunnerManager;
+  models: ModelStore;
   claim(request: FastifyRequest, sessionId?: string): SessionRow;
 }
 
@@ -108,7 +110,7 @@ export function registerPanelRoutes(
   app: FastifyInstance,
   ctx: PanelContext,
 ): { terminals: TerminalManager; terminalStreams: TerminalStreams } {
-  const { config, db, runners, claim } = ctx;
+  const { config, db, runners, models, claim } = ctx;
   const branchCache = new BranchCache();
   const terminals = new TerminalManager(
     () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !SECRET_ENV.test(key))),
@@ -204,7 +206,7 @@ export function registerPanelRoutes(
       let features: Record<string, unknown> = {};
       const branch = branchCache.read(session.privateSessionPath);
       try {
-        const config = loadAgentConfig(root);
+        const config = loadAgentConfig(root, models.current);
         features = config.features;
         // Stopped agent: the session's current model decides a ratio-mode threshold.
         if (contextWindow === undefined) {

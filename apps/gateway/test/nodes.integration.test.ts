@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import WebSocket from 'ws';
@@ -120,5 +123,76 @@ describe('node registrations', () => {
     expect(
       (await app.inject({ method: 'GET', url: '/api/nodes', headers })).json().nodes,
     ).toHaveLength(0);
+  });
+
+  it('pushes resolved providers to nodes on registration and reload', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'pirc-models-'));
+    const modelsFile = path.join(dir, 'models.json');
+    const keyFile = path.join(dir, 'key');
+    writeFileSync(keyFile, 'file-key\n');
+    const provider = (extra: Record<string, unknown>) => ({
+      api: 'openai-chat',
+      baseUrl: 'https://llm.example/v1',
+      models: [{ id: 'm1', reasoning: true }],
+      ...extra,
+    });
+    writeFileSync(
+      modelsFile,
+      JSON.stringify({
+        providers: { main: provider({ apiKeyFile: keyFile }) },
+        defaultModel: { provider: 'main', id: 'm1' },
+      }),
+    );
+    const { app, services } = await buildDaemonApp(daemonConfig({ modelsFile }));
+    apps.push(app);
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const url = `ws://127.0.0.1:${(app.server.address() as { port: number }).port}/node/connect`;
+    const node = await open(url, 'test', 't'.repeat(32));
+    const registered = receive(node);
+    node.send(
+      JSON.stringify({ type: 'register', protocol: NODE_PROTOCOL_VERSION, workspaces: [] }),
+    );
+    const reply = await registered;
+    expect(reply.type).toBe('registered');
+    // The key reference is resolved on the gateway; nodes only see the key.
+    expect(reply.models.providers.main.apiKey).toBe('file-key');
+    expect(reply.models.providers.main.apiKeyFile).toBeUndefined();
+    expect(reply.models.defaultModel).toEqual({ provider: 'main', id: 'm1' });
+
+    // The browser list needs no session and never includes keys.
+    const listed = (await app.inject({ method: 'GET', url: '/api/models', headers })).json();
+    expect(listed.models).toEqual([
+      expect.objectContaining({ provider: 'main', id: 'm1', reasoning: true }),
+    ]);
+    expect(JSON.stringify(listed)).not.toContain('file-key');
+
+    // An invalid file keeps the previous providers and pushes nothing.
+    writeFileSync(modelsFile, '{ nope');
+    services.reloadModels();
+    expect(services.models.current.providers.main?.apiKey).toBe('file-key');
+
+    writeFileSync(
+      modelsFile,
+      JSON.stringify({ providers: { other: provider({ apiKey: 'literal' }) } }),
+    );
+    const pushed = receive(node);
+    services.reloadModels();
+    const update = await pushed;
+    expect(update.type).toBe('models');
+    expect(Object.keys(update.models.providers)).toEqual(['other']);
+    expect(update.models.providers.other.apiKey).toBe('literal');
+  });
+
+  it('refuses a models file whose default model is not configured', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'pirc-models-'));
+    const modelsFile = path.join(dir, 'models.json');
+    writeFileSync(
+      modelsFile,
+      JSON.stringify({
+        providers: {},
+        defaultModel: { provider: 'missing', id: 'x' },
+      }),
+    );
+    await expect(buildDaemonApp(daemonConfig({ modelsFile }))).rejects.toThrow(/defaultModel/);
   });
 });

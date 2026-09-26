@@ -12,6 +12,7 @@ import { appendFileSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { Subprocess } from 'bun';
 import { thinkingLevels } from '../../config.js';
+import type { ModelsConfig } from '../../../models.js';
 import { killGroup } from '../../tools/bash.js';
 import type { Question, QuestionResult } from '../ask-question.js';
 
@@ -343,6 +344,8 @@ export interface TeamOptions {
   /** Concurrently running one-shot subagents (default 4). */
   subagentLimit?: number;
   env?: Record<string, string | undefined>;
+  /** Providers handed to each child on its first stdin line (see models.ts). */
+  models: ModelsConfig;
 }
 
 export class Team {
@@ -608,6 +611,7 @@ export class Team {
         },
         (event) => this.event(member, event),
       );
+      member.rpc.write({ type: 'configure', models: this.options.models });
       member.pid = member.rpc.proc.pid;
       const state = await member.rpc.request('get_state');
       if (this.closing || !live(member)) throw new Error('Agent stopped during startup');

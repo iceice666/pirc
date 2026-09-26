@@ -24,8 +24,16 @@ const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
 let messages = [];
 let queue = { steering: [], followUp: [] };
 
+let configured = false;
+
 rl.on('line', (raw) => {
   const command = JSON.parse(raw);
+  // Like `pirc agent`, the node's first line carries the gateway's providers.
+  if (!configured) {
+    if (command.type !== 'configure') process.exit(3);
+    configured = true;
+    return;
+  }
   const response = (success = true, data, error) =>
     line({
       id: command.id,

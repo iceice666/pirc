@@ -12,6 +12,7 @@ import {
   type NodeHttpResponse,
   type RegisteredWorkspace,
 } from '../protocol.js';
+import type { ModelStore } from '../models.js';
 
 const MAX_PENDING_REQUESTS = 100;
 const MAX_TERMINAL_STREAMS = 64;
@@ -100,6 +101,8 @@ export class NodeRegistry {
   onDisconnect?: (nodeId: string) => void;
   onRegister?: (node: ConnectedNode) => void;
   resolveSession?: (nodeId: string, remoteSessionId: string) => string | undefined;
+
+  constructor(private readonly models: ModelStore) {}
 
   private socketFor(nodeId: string): WebSocket {
     const connection = this.connections.get(nodeId);
@@ -237,7 +240,7 @@ export class NodeRegistry {
         };
         this.connections.set(nodeId, { socket, node });
         this.onRegister?.(node);
-        this.send(socket, { type: 'registered', nodeId });
+        this.send(socket, { type: 'registered', nodeId, models: this.models.current });
         return;
       }
       if (this.connections.get(nodeId)?.socket !== socket)
@@ -300,6 +303,13 @@ export class NodeRegistry {
     }
     for (const [id, stream] of this.streams)
       if (stream.nodeId === nodeId) this.endStream(id, 1012, 'node disconnected');
+  }
+
+  /** Push the current providers to every node; agents started afterwards use them. */
+  broadcastModels(): void {
+    for (const { socket } of this.connections.values())
+      if (socket.readyState === socket.OPEN)
+        this.send(socket, { type: 'models', models: this.models.current });
   }
 
   list(): ConnectedNode[] {

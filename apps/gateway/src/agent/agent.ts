@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentConfig, ModelConfig, ProviderConfig, ThinkingLevel } from './config.js';
-import { resolveApiKey, thinkingLevels } from './config.js';
+import { thinkingLevels } from './config.js';
+import { listModels } from '../models.js';
 import {
   contextTokens,
   defaultCompaction,
@@ -193,7 +194,7 @@ export class Agent {
   }
 
   resolveModel(ref = this.modelRef): ResolvedModel {
-    if (!ref) throw new Error('No model configured. Add providers to ~/.config/.pirc/config.json');
+    if (!ref) throw new Error('No model configured. Add providers to the gateway models.json');
     const provider = this.config.providers[ref.provider];
     const model = provider?.models.find((item) => item.id === ref.id);
     if (!provider || !model) throw new Error(`Unknown model ${ref.provider}/${ref.id}`);
@@ -201,17 +202,7 @@ export class Agent {
   }
 
   availableModels(): Array<Record<string, unknown>> {
-    return Object.entries(this.config.providers).flatMap(([provider, config]) =>
-      config.models.map((model) => ({
-        provider,
-        id: model.id,
-        name: model.name ?? model.id,
-        contextWindow: model.contextWindow,
-        maxTokens: model.maxTokens,
-        reasoning: model.reasoning,
-        input: model.input,
-      })),
-    );
+    return listModels(this.config.models);
   }
 
   state(): Record<string, unknown> {
@@ -580,16 +571,14 @@ export class Agent {
             model: model.id,
           },
         });
-      let apiKey: string | undefined;
       let message: AssistantMessage;
       try {
-        apiKey = resolveApiKey(providerName, provider);
         message = await streamFn(
           {
             providerName,
             provider,
             model,
-            apiKey,
+            apiKey: provider.apiKey,
             systemPrompt,
             messages: [
               ...sanitizeHistory(this.contextFor(options.upTo)),

@@ -1,5 +1,4 @@
 import type { ThinkingLevel } from '../../config.js';
-import { resolveApiKey } from '../../config.js';
 import type { Agent, ResolvedModel } from '../../agent.js';
 import type { AssistantMessage, Message, ToolCall, ToolResultMessage } from '../../messages.js';
 
@@ -74,16 +73,8 @@ export function pickModel(
     add(fallback, fallback.thinking ?? preferred?.thinking ?? 'low');
   if (!candidates.length) throw new Error('no model available');
   const ready = candidates.filter((candidate) => !tracker.cooling(candidate.key));
-  const pool = ready.length ? ready : candidates.slice(0, 1);
-  for (const candidate of pool) {
-    try {
-      resolveApiKey(candidate.resolved.providerName, candidate.resolved.provider);
-      return candidate;
-    } catch {
-      /* try next */
-    }
-  }
-  throw new Error(`no credentials for ${pool[0]!.key}`);
+  // Keys were resolved by the gateway; a provider without one is still tried (keyless endpoints).
+  return ready[0] ?? candidates[0]!;
 }
 
 export interface WorkerTool {
@@ -120,7 +111,7 @@ export async function runWorker(
         providerName: resolved.providerName,
         provider: resolved.provider,
         model: resolved.model,
-        apiKey: resolveApiKey(resolved.providerName, resolved.provider),
+        apiKey: resolved.provider.apiKey,
         systemPrompt: options.systemPrompt,
         messages,
         tools: [

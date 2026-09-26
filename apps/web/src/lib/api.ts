@@ -285,7 +285,7 @@ export const api = {
       size: raw.upload.byteSize,
     };
   },
-  /** Models a session's agent can use; without a session there are none. */
+  /** The gateway's models; every session and node uses the same list. */
   models: async (sessionId?: string): Promise<ModelOption[]> => {
     const raw = await request<any>(
       sessionId ? `/api/models?sessionId=${encodeURIComponent(sessionId)}` : '/api/models',

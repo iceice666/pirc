@@ -8,6 +8,8 @@ import { WebSocket } from 'ws';
 import { z } from 'zod';
 import type { NodeConfig } from '../config.js';
 import { ApiError } from '../errors.js';
+import { legacyModelKeys } from '../agent/config.js';
+import { modelsSchema } from '../models.js';
 import {
   NODE_FRAME_MAX_BYTES,
   NODE_PROTOCOL_VERSION,
@@ -23,7 +25,8 @@ const RECONNECT_MS = 3_000;
 const HEARTBEAT_MS = 15_000;
 
 const daemonMessage = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('registered'), nodeId: z.string() }),
+  z.object({ type: z.literal('registered'), nodeId: z.string(), models: modelsSchema }),
+  z.object({ type: z.literal('models'), models: modelsSchema }),
   z.object({ type: z.literal('heartbeat_ack') }),
   z.object({
     type: z.literal('request'),
@@ -50,6 +53,16 @@ const daemonMessage = z.discriminatedUnion('type', [
 
 export async function startNode(config: NodeConfig): Promise<{ close: () => Promise<void> }> {
   const { app, services } = await buildNodeApp(config);
+  try {
+    const legacy = legacyModelKeys();
+    if (legacy.length)
+      app.log.warn(
+        { keys: legacy },
+        'config.json provider settings are ignored: providers come from the gateway (models.json)',
+      );
+  } catch {
+    /* an invalid config.json is reported when an agent starts */
+  }
   const registeredWorkspaces = () =>
     services.db
       .listWorkspaces()
@@ -164,11 +177,22 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       const message = parsed.data;
       if (message.type === 'registered') {
         registered = true;
-        app.log.info({ daemon: config.daemonUrl }, 'registered with daemon');
+        services.models.set(message.models);
+        app.log.info(
+          { daemon: config.daemonUrl, providers: Object.keys(message.models.providers) },
+          'registered with daemon',
+        );
         return;
       }
       if (!registered) return;
       switch (message.type) {
+        case 'models':
+          services.models.set(message.models);
+          app.log.info(
+            { providers: Object.keys(message.models.providers) },
+            'models updated by daemon; new agents use them',
+          );
+          return;
         case 'request':
           void handleRequest(message)
             .catch((error: unknown) => {
