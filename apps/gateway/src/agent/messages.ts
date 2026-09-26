@@ -58,7 +58,10 @@ export interface AssistantMessage {
   usage: Usage;
   stopReason: StopReason;
   errorMessage?: string;
+  /** Stream start; also the message's identity in the client (role + timestamp). */
   timestamp: number;
+  /** Stream end, so clients can order notices raised while this message streamed. */
+  completedAt?: number;
 }
 export interface ToolResultMessage {
   role: 'toolResult';

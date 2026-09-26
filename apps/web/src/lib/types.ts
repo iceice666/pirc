@@ -99,6 +99,8 @@ export interface ConversationMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   createdAt: string;
+  /** When a streamed assistant message finished; orders notices raised meanwhile. */
+  completedAt?: string;
   isPartial?: boolean;
   thinking?: string;
   thinkingRedacted?: boolean;

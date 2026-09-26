@@ -110,7 +110,7 @@ export function reduceEvent(
             ),
           };
         }
-        return { ...base, messages: [...state.messages, incoming] };
+        return { ...base, messages: appendCompleted(state.messages, incoming) };
       }
       const previous = state.messages[index]!;
       return {
@@ -165,6 +165,22 @@ export function reduceEvent(
     case 'session_renamed':
       return { ...base, session: { ...state.session, name: event.name } };
   }
+}
+
+/**
+ * Append a finished entry. A notice raised while an assistant turn is still
+ * streaming goes above that turn: the partial is replaced in place when it
+ * completes, so appending would leave the earlier notice stuck below the final
+ * reply. Snapshots order it the same way (see `interleave`).
+ */
+function appendCompleted(
+  messages: ConversationMessage[],
+  incoming: ConversationMessage,
+): ConversationMessage[] {
+  const last = messages[messages.length - 1];
+  if (incoming.systemKind === 'notice' && last?.role === 'assistant' && last.isPartial)
+    return [...messages.slice(0, -1), incoming, last];
+  return [...messages, incoming];
 }
 
 function upsertTool(tools: ToolCall[], tool: Pick<ToolCall, 'id'> & Partial<ToolCall>): ToolCall[] {

@@ -609,6 +609,7 @@ export class Agent {
         };
       }
       message.timestamp = timestamp;
+      message.completedAt = Date.now();
       const retry =
         message.stopReason === 'error' &&
         options.retries !== false &&

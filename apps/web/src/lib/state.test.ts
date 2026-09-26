@@ -69,6 +69,55 @@ describe('session event reducer', () => {
     expect(state.messages[0]?.isPartial).toBeUndefined();
   });
 
+  it('keeps a notice that arrives mid-stream above the finished reply', () => {
+    let state = fromSnapshot(snapshot);
+    state = reduceEvent(
+      state,
+      envelope({
+        type: 'message_started',
+        message: {
+          id: 'm1',
+          role: 'assistant',
+          content: '',
+          createdAt: '2025-01-01T00:00:01Z',
+          isPartial: true,
+        },
+      }),
+    );
+    state = reduceEvent(
+      state,
+      envelope(
+        {
+          type: 'message_completed',
+          message: {
+            id: 'notice-1',
+            role: 'system',
+            systemKind: 'notice',
+            content: 'Observational memory: recorded 1 observation(s)',
+            createdAt: '2025-01-01T00:00:02Z',
+          },
+        },
+        '3',
+      ),
+    );
+    state = reduceEvent(
+      state,
+      envelope(
+        {
+          type: 'message_completed',
+          message: {
+            id: 'm1',
+            role: 'assistant',
+            content: 'Final answer',
+            createdAt: '2025-01-01T00:00:01Z',
+          },
+        },
+        '4',
+      ),
+    );
+    expect(state.messages.map((message) => message.id)).toEqual(['notice-1', 'm1']);
+  });
+
   it('upserts tool updates without duplicating tools', () => {
     let state = fromSnapshot({
       ...snapshot,

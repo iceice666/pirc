@@ -105,6 +105,26 @@ describe('Pi history conversion', () => {
       user!.id,
     ]);
   });
+
+  it('orders a notice raised mid-stream above the reply it preceded', () => {
+    const [reply] = piHistory([
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'done' }],
+        timestamp: 1000,
+        completedAt: 3000,
+      },
+    ]);
+    const notice = piNotification({
+      id: 'n',
+      message: 'Observational memory: x',
+      receivedAt: 2000,
+    });
+    expect(interleave([reply!], [notice]).map((message) => message.id)).toEqual([
+      'notice-n',
+      reply!.id,
+    ]);
+  });
 });
 
 describe('live Pi events', () => {

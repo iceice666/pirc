@@ -90,6 +90,7 @@ function assistantMessage(raw: Raw, id: string): ConversationMessage {
     role: 'assistant',
     content: text(raw.content),
     createdAt: iso(raw.timestamp),
+    ...(typeof raw.completedAt === 'number' ? { completedAt: iso(raw.completedAt) } : {}),
     ...(reasoning.text ? { thinking: reasoning.text } : {}),
     ...(reasoning.redacted ? { thinkingRedacted: true } : {}),
     ...(failed ? { stopReason: raw.stopReason } : {}),
@@ -319,7 +320,11 @@ export function piNotification(raw: Raw, index = 0): ConversationMessage {
   };
 }
 
-/** Insert notices into an already chronological timeline by timestamp. */
+/**
+ * Insert notices into an already chronological timeline by timestamp. A
+ * streamed message counts from when it finished, so a notice raised while the
+ * reply was still streaming sorts above it, as it does live.
+ */
 export function interleave(
   messages: ConversationMessage[],
   notices: ConversationMessage[],
@@ -328,7 +333,9 @@ export function interleave(
   const result = [...messages];
   for (const notice of notices) {
     const at = Date.parse(notice.createdAt);
-    const index = result.findIndex((message) => Date.parse(message.createdAt) > at);
+    const index = result.findIndex(
+      (message) => Date.parse(message.completedAt ?? message.createdAt) > at,
+    );
     if (index === -1) result.push(notice);
     else result.splice(index, 0, notice);
   }
