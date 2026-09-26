@@ -38,6 +38,7 @@
     ModelOption,
     NodeSummary,
     SessionSummary,
+    SessionUpdateInput,
     ThinkingLevel,
     Workspace,
   } from './lib/types';
@@ -242,6 +243,26 @@
       sessions = sessions.map((item) => (item.id === id ? { ...item, name } : item));
     } catch (error) {
       pageError = error instanceof Error ? error.message : 'Could not refresh the session.';
+    }
+  }
+
+  /** Rename, pin or settle from the sidebar. Applied at once and rolled back on failure. */
+  async function updateSession(id: string, input: SessionUpdateInput) {
+    const previous = sessions.find((item) => item.id === id);
+    if (!previous) return;
+    const apply = (patch: Partial<SessionSummary>) => {
+      sessions = sessions.map((item) => (item.id === id ? { ...item, ...patch } : item));
+      if (sessionState?.session.id === id && patch.name !== undefined)
+        sessionState = { ...sessionState, session: { ...sessionState.session, name: patch.name } };
+    };
+    apply(input);
+    if (usingDemo) return;
+    try {
+      const updated = await api.updateSession(id, input);
+      apply({ name: updated.name, pinned: updated.pinned, settled: updated.settled });
+    } catch (error) {
+      apply({ name: previous.name, pinned: previous.pinned, settled: previous.settled });
+      pageError = error instanceof Error ? error.message : 'Could not update the session.';
     }
   }
 
@@ -549,6 +570,9 @@
     onnew={showNewSession}
     onaddworkspace={showNewWorkspace}
     onclose={() => (sidebarOpen = false)}
+    onrename={(id, name) => updateSession(id, { name })}
+    onpin={(id, pinned) => updateSession(id, { pinned })}
+    onsettle={(id, settled) => updateSession(id, { settled })}
   />
 
   <main class:details-collapsed={!detailsOpen} class="workspace">

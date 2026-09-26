@@ -21,6 +21,7 @@ import type {
   SessionCommandInput,
   SessionSnapshot,
   SessionSummary,
+  SessionUpdateInput,
   ThinkingLevel,
   Workspace,
 } from './types';
@@ -66,6 +67,8 @@ function sessionSummary(raw: any): SessionSummary {
     runStatus: raw.runStatus ?? undefined,
     runnerStatus: raw.runnerState ?? 'stopped',
     unreadCount: 0,
+    pinned: raw.pinnedAt != null,
+    settled: raw.settledAt != null,
   };
 }
 
@@ -179,6 +182,16 @@ export const api = {
           method: 'POST',
           // The agent titles the session from the first message.
           body: JSON.stringify({ workspaceId: input.workspaceId }),
+        })
+      ).session,
+    ),
+  /** Rename, pin or settle a session. */
+  updateSession: async (sessionId: string, input: SessionUpdateInput) =>
+    sessionSummary(
+      (
+        await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(input),
         })
       ).session,
     ),

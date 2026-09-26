@@ -49,6 +49,10 @@ export interface SessionSummary {
   runStatus?: RunStatus;
   runnerStatus: RunnerStatus;
   unreadCount: number;
+  /** Pinned sessions sort first in their workspace. */
+  pinned?: boolean;
+  /** Settled (done) sessions are tucked away at the bottom of their workspace. */
+  settled?: boolean;
   preview?: string;
   pendingInteractionCount?: number;
 }
@@ -206,6 +210,12 @@ export interface CreateSessionInput {
   workspaceId: string;
   modelId?: string;
   thinkingLevel?: ThinkingLevel;
+}
+
+export interface SessionUpdateInput {
+  name?: string;
+  pinned?: boolean;
+  settled?: boolean;
 }
 
 export interface SessionCommandInput {

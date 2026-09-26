@@ -447,12 +447,126 @@ select:disabled {
   background: transparent;
   text-align: left;
 }
-.session-card:hover {
+.session-item {
+  position: relative;
+  min-width: 0;
+}
+.session-item:hover .session-card,
+.session-item:focus-within .session-card {
   background: var(--bg-hover);
 }
-.session-card.active {
+.session-card.active,
+.session-item:hover .session-card.active,
+.session-item:focus-within .session-card.active {
   background: var(--bg-active);
   font-weight: 500;
+}
+.session-item.settled .session-name {
+  color: var(--muted);
+}
+.session-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pin-mark {
+  display: grid;
+  color: var(--faint);
+}
+/* Row actions: pin, settle, rename. Shown on hover or keyboard focus; the
+   name makes room so it is never covered. */
+.session-actions {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+}
+.session-actions button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+}
+.session-actions button:hover {
+  color: var(--ink);
+  background: var(--bg-hover-strong);
+}
+.session-item:hover .session-actions,
+.session-item:focus-within .session-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.session-item:hover .session-card,
+.session-item:focus-within .session-card {
+  padding-right: 88px;
+}
+.session-item:hover .session-meta,
+.session-item:focus-within .session-meta {
+  display: none;
+}
+/* Touch screens have no hover: the open session carries its actions. */
+@media (hover: none) {
+  .session-item.active .session-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .session-item.active .session-card {
+    padding-right: 88px;
+  }
+  .session-item.active .session-meta {
+    display: none;
+  }
+}
+.session-rename {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px 0 22px;
+}
+.session-rename input {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--ink);
+  background: var(--input);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.session-rename input:focus {
+  border-color: var(--accent);
+}
+.settled-toggle {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px 0 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--faint);
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+}
+.settled-toggle:hover {
+  color: var(--text-2);
+  background: var(--bg-hover);
+}
+.settled-toggle .chevron {
+  color: inherit;
 }
 .session-name {
   flex: 1;
