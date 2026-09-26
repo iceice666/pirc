@@ -87,7 +87,6 @@ export interface NodeConfig {
   runnerLimit: number;
   eventBufferSize: number;
   rpcMaxLineBytes: number;
-  rpcMaxOutputBytes: number;
   uploadMaxBytes: number;
   /** Interactive shells in the web side panel (PIRC_TERMINALS, default on). */
   terminalsEnabled: boolean;
@@ -227,7 +226,6 @@ export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig
     runnerLimit: integer(env.PIRC_RUNNER_LIMIT, 2),
     eventBufferSize: integer(env.PIRC_EVENT_BUFFER_SIZE, 1000),
     rpcMaxLineBytes: integer(env.PIRC_RPC_MAX_LINE_BYTES, 1_048_576),
-    rpcMaxOutputBytes: integer(env.PIRC_RPC_MAX_OUTPUT_BYTES, 16_777_216),
     uploadMaxBytes: uploadLimit(env),
     terminalsEnabled: bool(env.PIRC_TERMINALS, true),
     ...(env.PIRC_TERMINAL_SHELL ? { terminalShell: env.PIRC_TERMINAL_SHELL } : {}),

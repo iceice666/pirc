@@ -35,7 +35,6 @@ export function testConfig(overrides: Partial<NodeConfig> = {}): NodeConfig {
     runnerLimit: 2,
     eventBufferSize: 20,
     rpcMaxLineBytes: 1024 * 1024,
-    rpcMaxOutputBytes: 16 * 1024 * 1024,
     uploadMaxBytes: 1024 * 1024,
     terminalsEnabled: true,
     leaseTtlMs: 5000,

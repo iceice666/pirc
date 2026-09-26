@@ -56,9 +56,7 @@ class PiRunner {
     });
     // Providers (with keys) go on the first stdin line, before any RPC command.
     this.child.stdin.write(configureLine(models.current));
-    const parser = new JsonlParser(config.rpcMaxLineBytes, config.rpcMaxOutputBytes, (value) =>
-      this.handleValue(value),
-    );
+    const parser = new JsonlParser(config.rpcMaxLineBytes, (value) => this.handleValue(value));
     this.child.stdout.on('data', (chunk: Buffer) => {
       try {
         parser.push(chunk);
