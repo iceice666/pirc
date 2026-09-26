@@ -4,6 +4,7 @@
     Command,
     Menu,
     MoreHorizontal,
+    PanelLeftClose,
     Plus,
     Search,
     SquarePen,
@@ -16,13 +17,16 @@
   export let sessions: SessionSummary[];
   export let activeSessionId: string | undefined;
   export let open = false;
+  /** Desktop: slid out of the layout; the main column shows the expand button. */
+  export let collapsed = false;
+  export let oncollapse: () => void;
   export let onselect: (id: string) => void;
   export let onnew: (workspaceId?: string) => void;
   export let onaddworkspace: (nodeId: string) => void;
   export let onclose: () => void;
 
   let query = '';
-  let collapsed = new Set<string>();
+  let collapsedGroups = new Set<string>();
   let selectedNodeId = '';
   $: if (selectedNodeId && !nodes.some((node) => node.id === selectedNodeId)) selectedNodeId = '';
   $: shownWorkspaces = workspaces.filter(
@@ -34,9 +38,9 @@
   );
 
   function toggleWorkspace(id: string) {
-    const next = new Set(collapsed);
+    const next = new Set(collapsedGroups);
     next.has(id) ? next.delete(id) : next.add(id);
-    collapsed = next;
+    collapsedGroups = next;
   }
 
   function relativeTime(date: string): string {
@@ -54,11 +58,18 @@
     aria-label="Close navigation"
     on:click={onclose}
   ></button>{/if}
-<aside class:open class="sidebar" aria-label="Sessions">
+<aside class:open class:collapsed class="sidebar" aria-label="Sessions" inert={collapsed && !open}>
   <div class="brand-row">
     <a class="brand" href="/" aria-label="Relay home">
       <span class="brand-mark"><Command size={16} /></span><span>Relay</span>
     </a>
+    <button
+      class="sidebar-collapse icon-button"
+      type="button"
+      aria-label="Hide sidebar"
+      title="Hide sidebar"
+      on:click={oncollapse}><PanelLeftClose size={18} /></button
+    >
     <button
       class="mobile-close icon-button"
       type="button"
@@ -106,9 +117,9 @@
           <button
             type="button"
             on:click={() => toggleWorkspace(workspace.id)}
-            aria-expanded={!collapsed.has(workspace.id)}
+            aria-expanded={!collapsedGroups.has(workspace.id)}
           >
-            <span class:collapsed={collapsed.has(workspace.id)} class="chevron">
+            <span class:collapsed={collapsedGroups.has(workspace.id)} class="chevron">
               <ChevronDown size={15} />
             </span>
             <strong>{workspace.displayName}</strong>
@@ -127,7 +138,7 @@
             on:click={() => onnew(workspace.id)}><Plus size={15} /></button
           >
         </div>
-        {#if !collapsed.has(workspace.id)}
+        {#if !collapsedGroups.has(workspace.id)}
           <div class="session-list">
             {#each visibleSessions.filter((session) => session.workspaceId === workspace.id) as session}
               <button

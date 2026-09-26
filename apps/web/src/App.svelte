@@ -5,6 +5,7 @@
     CloudOff,
     Download,
     MoreHorizontal,
+    PanelLeftOpen,
     PanelRightClose,
     PanelRightOpen,
     Plus,
@@ -15,6 +16,7 @@
     X,
   } from '@lucide/svelte';
   import { onMount, tick } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { api, connectEvents, type EventConnection } from './lib/api';
   import Composer from './lib/components/Composer.svelte';
   import InteractionCard from './lib/components/InteractionCard.svelte';
@@ -26,7 +28,7 @@
   import { demoModels, demoSessions, demoSnapshot, demoWorkspaces } from './lib/mock';
   import { activateUpdate, registerPwa } from './lib/pwa';
   import { fromSnapshot, reduceEvent } from './lib/state';
-  import { getClientId, loadDraft, saveDraft } from './lib/storage';
+  import { getClientId, loadDraft, loadLayout, saveDraft, saveLayout } from './lib/storage';
   import type {
     Attachment,
     ClientSessionState,
@@ -49,10 +51,20 @@
   let connection: ConnectionState = navigator.onLine ? 'reconnecting' : 'offline';
   let draft = '';
   let uploads: Array<Attachment & { preview?: string; uploading?: boolean }> = [];
+  /** Mobile overlay state of the left sidebar. */
   let sidebarOpen = false;
-  let detailsOpen = true;
-  let panelWide = false;
-  let panelTab: PanelTab = 'overview';
+  /** Desktop: left sidebar collapsed out of the grid. */
+  let sidebarCollapsed = loadLayout('sidebarCollapsed', false);
+  /** Right side panel starts hidden until the user opens it (then the choice is remembered). */
+  let detailsOpen = loadLayout('detailsOpen', false);
+  const PANEL_MIN = 280;
+  const PANEL_DEFAULT = 360;
+  /** Room the conversation column keeps when the side panel is dragged wide. */
+  const CONVERSATION_MIN = 380;
+  let panelWidth = loadLayout('panelWidth', PANEL_DEFAULT);
+  let panelResizing = false;
+  let viewportWidth = window.innerWidth;
+  let panelTab: PanelTab = 'files';
   /** Bumped per `panel_changed` event so the side panel refetches. */
   let panelTick = 0;
   let panelChanged: string[] = [];
@@ -82,6 +94,18 @@
   $: hasControl = sessionState?.control.heldByCurrentClient ?? false;
   $: selectedModel = sessionState?.selectedModelId ?? models[0]?.id ?? '';
   $: thinking = sessionState?.thinkingLevel ?? 'medium';
+  $: panelMax = Math.max(
+    PANEL_MIN,
+    viewportWidth - (sidebarCollapsed ? 0 : 264) - CONVERSATION_MIN,
+  );
+  $: panelShownWidth = Math.min(Math.max(panelWidth, PANEL_MIN), panelMax);
+  $: saveLayout('sidebarCollapsed', sidebarCollapsed);
+  $: saveLayout('detailsOpen', detailsOpen);
+
+  function resizePanel(width: number) {
+    panelWidth = width;
+    saveLayout('panelWidth', width);
+  }
   $: pendingInteractions =
     sessionState?.interactions.filter((item) => item.status === 'pending') ?? [];
 
@@ -498,38 +522,36 @@
       creatingSession = false;
     }
   }
-
-  function formatDuration(start?: string) {
-    if (!start) return '';
-    const seconds = Math.max(0, Math.floor((Date.now() - new Date(start).getTime()) / 1000));
-    const minutes = Math.floor(seconds / 60);
-    return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
-  }
 </script>
+
+<svelte:window bind:innerWidth={viewportWidth} />
 
 <svelte:head
   ><title>{sessionState ? `${sessionState.session.name} · Relay` : 'Relay · Pi Remote'}</title
   ></svelte:head
 >
 
-<div class="app-shell">
+<div
+  class="app-shell"
+  class:sidebar-collapsed={sidebarCollapsed}
+  class:resizing={panelResizing}
+  style:--panel-width="{panelShownWidth}px"
+>
   <Sidebar
     {workspaces}
     {nodes}
     {sessions}
     {activeSessionId}
     open={sidebarOpen}
+    collapsed={sidebarCollapsed}
+    oncollapse={() => (sidebarCollapsed = true)}
     onselect={openSession}
     onnew={showNewSession}
     onaddworkspace={showNewWorkspace}
     onclose={() => (sidebarOpen = false)}
   />
 
-  <main
-    class:details-collapsed={!detailsOpen}
-    class:details-wide={detailsOpen && panelWide}
-    class="workspace"
-  >
+  <main class:details-collapsed={!detailsOpen} class="workspace">
     {#if loading}
       <div class="loading-state">
         <span class="large-mark"><Sparkles size={24} /></span>
@@ -537,6 +559,16 @@
       </div>
     {:else if sessionState}
       <header class="topbar">
+        {#if sidebarCollapsed}
+          <button
+            class="sidebar-expand icon-button"
+            type="button"
+            aria-label="Show sidebar"
+            title="Show sidebar"
+            transition:fade={{ duration: 160 }}
+            on:click={() => (sidebarCollapsed = false)}><PanelLeftOpen size={19} /></button
+          >
+        {/if}
         <div class="title-block">
           <div class="breadcrumb">
             <span>{activeWorkspace?.displayName ?? 'Workspace'}</span><span>/</span><span
@@ -565,7 +597,8 @@
           <button
             class="icon-button details-toggle"
             type="button"
-            aria-label={detailsOpen ? 'Hide session details' : 'Show session details'}
+            aria-label={detailsOpen ? 'Hide side panel' : 'Show side panel'}
+            title={detailsOpen ? 'Hide side panel' : 'Show side panel'}
             on:click={() => (detailsOpen = !detailsOpen)}
           >
             {#if detailsOpen}<PanelRightClose size={19} />{:else}<PanelRightOpen size={19} />{/if}
@@ -646,19 +679,19 @@
 
         <SidePanel
           open={detailsOpen}
-          bind:wide={panelWide}
           bind:tab={panelTab}
+          bind:resizing={panelResizing}
           {sessionState}
           {runStatus}
           {hasControl}
-          {models}
-          {selectedModel}
-          {thinking}
-          {activeWorkspace}
           {usingDemo}
           changeTick={panelTick}
           changed={panelChanged}
-          {formatDuration}
+          width={panelShownWidth}
+          minWidth={PANEL_MIN}
+          maxWidth={panelMax}
+          defaultWidth={PANEL_DEFAULT}
+          onresize={resizePanel}
         />
       </div>
     {:else}

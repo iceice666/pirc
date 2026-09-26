@@ -1,7 +1,7 @@
 /** Client for the side-panel endpoints (files, Git, memory, background, terminals). */
 import { getClientId } from './storage';
 
-export type PanelTab = 'overview' | 'files' | 'git' | 'memory' | 'tasks' | 'terminal';
+export type PanelTab = 'files' | 'git' | 'memory' | 'tasks' | 'terminal';
 
 export class PanelError extends Error {
   constructor(
