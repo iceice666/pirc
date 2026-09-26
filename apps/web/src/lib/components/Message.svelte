@@ -42,6 +42,14 @@
             : Puzzle;
   // Short system entries read fine inline; long summaries/outputs collapse.
   $: collapsible = kind === 'compaction' || kind === 'branch' || kind === 'bash';
+  // Notices read like a tool row: "Source: detail" splits into name + summary,
+  // and only the first line shows until expanded.
+  $: noticeFirstLine = message.content.split('\n', 1)[0]!.trim();
+  $: noticeParts = /^([^:]{1,40}):\s+(.+)$/.exec(noticeFirstLine);
+  $: noticeName = noticeParts ? noticeParts[1]! : noticeFirstLine;
+  $: noticeDetail = noticeParts ? noticeParts[2]! : '';
+  $: noticeExpandable =
+    kind === 'notice' && (message.content.trim().includes('\n') || noticeFirstLine.length > 80);
   $: streamingThinking = !!message.isPartial && !message.content && !!message.thinking;
   $: thinkingVisible = thinkingOpen || streamingThinking;
   // Tool/thinking-only assistant turns stack tightly, like one process log.
@@ -63,13 +71,31 @@
     aria-label={message.label ?? 'System message'}
   >
     {#if kind === 'notice'}
-      <div class="system-line">
+      <button
+        class="system-line"
+        type="button"
+        disabled={!noticeExpandable}
+        aria-expanded={noticeExpandable ? systemOpen : undefined}
+        title={noticeExpandable ? undefined : message.content}
+        on:click={() => (systemOpen = !systemOpen)}
+      >
         <span class="system-icon" aria-hidden="true"
-          ><svelte:component this={systemIcon} size={14} /></span
+          ><svelte:component this={systemIcon} size={14} strokeWidth={1.8} /></span
         >
-        <div class="system-text"><Markdown source={message.content} compact /></div>
+        <span class="notice-text">
+          <strong>{noticeName}</strong>
+          {#if noticeDetail}<span>{noticeDetail}</span>{/if}
+        </span>
         <time datetime={message.createdAt}>{time(message.createdAt)}</time>
-      </div>
+        {#if noticeExpandable}<ChevronRight
+            class={systemOpen ? 'rotated' : ''}
+            size={14}
+            aria-hidden="true"
+          />{/if}
+      </button>
+      {#if systemOpen}
+        <div class="system-body"><Markdown source={message.content} compact /></div>
+      {/if}
     {:else}
       <button
         class="system-line"

@@ -1274,11 +1274,6 @@ button.system-line:not(:disabled):hover {
   color: var(--faint);
   font-size: 12px;
 }
-.system-text {
-  min-width: 0;
-  flex: 1;
-  color: var(--text-2);
-}
 .system-body {
   margin: 4px 0 0 22px;
   padding: 10px 12px;
@@ -1299,21 +1294,64 @@ button.system-line:not(:disabled):hover {
 .system-entry .tool-stack {
   margin-top: 4px;
 }
+/* Notices sit in the process log like tool rows: flat, one line, tightly stacked. */
+.system-entry[data-kind='notice'] {
+  margin: 0 0 2px;
+}
+.system-entry[data-kind='notice']:has(+ .message:not(.process)),
+.system-entry[data-kind='notice']:last-child {
+  margin-bottom: 16px;
+}
 .system-entry[data-kind='notice'] .system-line {
-  padding: 6px 10px;
-  background: var(--bg-subtle);
-  border-radius: var(--radius-md);
+  margin-left: -4px;
+  width: calc(100% + 4px);
+  font-size: 14px;
 }
-.system-entry[data-level='warning'] .system-line {
+.system-entry[data-kind='notice'] .system-icon {
+  color: var(--muted);
+}
+.system-entry[data-kind='notice'] .system-line > svg:last-child {
+  color: var(--faint);
+}
+.system-entry[data-kind='notice']
+  .system-line:not(:hover):not([aria-expanded='true'])
+  > svg:last-child {
+  opacity: 0;
+}
+.notice-text {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.notice-text strong {
+  flex: none;
+  color: var(--text-2);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.notice-text span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.system-entry[data-kind='notice'] .system-body {
+  margin-bottom: 8px;
+}
+.system-entry[data-kind='notice'][data-level='warning'] .system-icon,
+.system-entry[data-kind='notice'][data-level='warning'] .notice-text strong {
   color: var(--warning);
-  background: var(--warning-soft);
 }
-.system-entry[data-level='error'] .system-line {
+.system-entry[data-kind='notice'][data-level='error'] .system-icon,
+.system-entry[data-kind='notice'][data-level='error'] .notice-text strong {
   color: var(--danger);
-  background: var(--danger-soft);
 }
 .system-entry[data-kind='bash'][data-level='warning'] .system-line {
-  background: transparent;
+  color: var(--warning);
 }
 .system-entry[data-kind='compaction'] .system-icon,
 .system-entry[data-kind='branch'] .system-icon {
