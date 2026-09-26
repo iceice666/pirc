@@ -1,5 +1,24 @@
 #!/usr/bin/env node
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { createInterface } from 'node:readline';
+
+// Like `pirc agent`, messages live in `<session-dir>/session.jsonl` (the node
+// reads history from it) and each is written before its message_end.
+const dirFlag = process.argv.indexOf('--session-dir');
+const sessionDir = dirFlag === -1 ? null : process.argv[dirFlag + 1];
+const sessionFile = sessionDir ? path.join(sessionDir, 'session.jsonl') : null;
+let lastEntry = null;
+let nextEntry = 0;
+const persist = (message) => {
+  if (!sessionFile) return;
+  const id = `fake-${process.pid}-${++nextEntry}`;
+  appendFileSync(
+    sessionFile,
+    `${JSON.stringify({ type: 'message', id, parentId: lastEntry, timestamp: Date.now(), message })}\n`,
+  );
+  lastEntry = id;
+};
 
 // While a deliberately split line is half written, other output waits so it
 // cannot land in the middle of it (e.g. a get_state reply during a snapshot).
@@ -22,6 +41,14 @@ const writeSplit = (bytes, splitAt, delayMs, after) => {
 };
 const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
 let messages = [];
+if (sessionFile && existsSync(sessionFile))
+  for (const text of readFileSync(sessionFile, 'utf8').split('\n')) {
+    if (!text.trim()) continue;
+    const entry = JSON.parse(text);
+    lastEntry = entry.id;
+    if (entry.type === 'message') messages.push(entry.message);
+  }
+else if (sessionDir) mkdirSync(sessionDir, { recursive: true });
 let queue = { steering: [], followUp: [] };
 
 let configured = false;
@@ -120,6 +147,7 @@ rl.on('line', (raw) => {
         });
     });
     setTimeout(() => {
+      persist(message);
       line({ type: 'message_end', message });
       line({ type: 'agent_end', messages: [message], willRetry: false });
       line({ type: 'agent_settled' });

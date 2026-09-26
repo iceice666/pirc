@@ -230,6 +230,8 @@ it('does not leave a run failed after an automatic retry recovers', async () => 
   await waitFor(async () => (await session.snapshot()).run?.status, 'succeeded', 12_000);
   const final = await session.snapshot();
   expect(final.run.failureReason ?? null).toBeNull();
+  // History is the session file: the failed attempt was retried, so it is not in it.
+  expect(final.history.map((m: any) => m.role)).toEqual(['user', 'assistant']);
   expect(final.history.at(-1).content[0].text).toBe('Recovered.');
 });
 

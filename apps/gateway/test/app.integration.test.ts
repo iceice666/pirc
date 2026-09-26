@@ -145,4 +145,53 @@ describe('node router', () => {
     expect(blocked.json().error.message).toBe('Workspace overlaps an active runner');
     expect(services.runners.get(child.sessionId)?.alive).toBe(true);
   });
+
+  it('keeps serving history from the session file after the runner dies', async () => {
+    const { app, services } = await buildNodeApp(testConfig());
+    apps.push(app);
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      headers,
+      payload: { workspaceId: 'test' },
+    });
+    const sessionId = created.json().session.id as string;
+    const lease = await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/control/acquire`,
+      headers,
+      payload: { clientId: 'browser-1' },
+    });
+    let n = 0;
+    const prompt = (message: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/sessions/${sessionId}/commands`,
+        headers,
+        payload: {
+          commandId: `command-${++n}`,
+          clientId: 'browser-1',
+          generation: lease.json().lease.generation,
+          payload: { type: 'prompt', message },
+        },
+      });
+    const snapshot = async () =>
+      (
+        await app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/snapshot`, headers })
+      ).json() as { history: Array<{ content: Array<{ text: string }> }>; session: any };
+    const texts = async () => (await snapshot()).history.map((m) => m.content[0]!.text).join('|');
+
+    await prompt('first');
+    await waitFor(texts, 'echo:first');
+    // The runner dies (in production: the agent was killed); no agent answers get_messages now.
+    await prompt('crash');
+    await waitFor(async () => services.runners.get(sessionId)?.alive ?? false, false);
+    const dead = await snapshot();
+    expect(dead.session.runnerState).toBe('failed');
+    expect(dead.history.map((m) => m.content[0]!.text)).toEqual(['echo:first']);
+
+    // The next prompt starts a fresh runner that continues the same transcript.
+    expect((await prompt('second')).statusCode).toBe(202);
+    await waitFor(texts, 'echo:first|echo:second');
+  });
 });

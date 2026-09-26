@@ -553,6 +553,12 @@ export class Agent {
       upTo?: string;
       thinking?: ThinkingLevel;
       retries?: boolean;
+      /**
+       * Runs on the final reply just before its `message_end` (not on retried
+       * attempts), so a caller can persist it first: the node reads history
+       * from the session file, and an event must never be ahead of it.
+       */
+      beforeEnd?: (message: AssistantMessage) => void;
     } = {},
   ): Promise<AssistantMessage> {
     const { providerName, provider, model } = this.resolveModel();
@@ -618,6 +624,7 @@ export class Agent {
         isRetryable(message.errorMessage) &&
         !message.content.some((part) => part.type === 'text' && part.text);
       if (!retry) {
+        options.beforeEnd?.(message);
         if (emit) this.emit({ type: 'message_end', message });
         return message;
       }
@@ -677,8 +684,17 @@ export class Agent {
       await this.maybeCompact(signal);
       if (signal.aborted) break;
       this.emit({ type: 'turn_start' });
-      const message = await this.stream(this.systemPrompt(extraPrompt.trim()), signal);
-      if (isContextOverflow(message) && !overflowRetried && this.compactionSettings.enabled) {
+      const compactsInstead = (reply: AssistantMessage) =>
+        isContextOverflow(reply) && !overflowRetried && this.compactionSettings.enabled;
+      let persisted = false;
+      const message = await this.stream(this.systemPrompt(extraPrompt.trim()), signal, {
+        beforeEnd: (reply) => {
+          if (compactsInstead(reply)) return;
+          this.store.append({ type: 'message', message: reply });
+          persisted = true;
+        },
+      });
+      if (!persisted && compactsInstead(message)) {
         // Drop the failed reply, compact everything, and retry the turn once.
         overflowRetried = true;
         this.emit({ type: 'turn_end', message, toolResults: [] });
@@ -691,7 +707,8 @@ export class Agent {
         );
         if (result.ok) continue;
       }
-      this.store.append({ type: 'message', message });
+      // Normally already written by `beforeEnd`; an abort during a retry wait returns without it.
+      if (!persisted) this.store.append({ type: 'message', message });
       produced.push(message);
       const results: ToolResultMessage[] = [];
       if (message.stopReason === 'toolUse') {

@@ -20,6 +20,8 @@ import { NODE_USER_HEADER } from '../protocol.js';
 import { applySessionName, publicSession } from '../session-name.js';
 import type { CommandPayload, Snapshot } from '../types.js';
 import { id, parse, payloadHash } from '../util.js';
+import { historyOf } from '../agent/session-store.js';
+import { BranchCache } from './branch-cache.js';
 import { WorkspaceLocks } from './locks.js';
 import { registerPanelRoutes, type TerminalStreams } from './panel-routes.js';
 import { RunnerManager } from './runner.js';
@@ -118,6 +120,7 @@ export async function buildNodeApp(
   // Filled by the daemon on registration; agents started before that get no providers.
   const models = new ModelStore();
   const runners = new RunnerManager(config, db, events, locks, models);
+  const branches = new BranchCache();
   const claim = (request: FastifyRequest, sessionId = parse(sessionParams, request.params).id) =>
     db.claimSession(sessionId, request.identity!.user);
 
@@ -185,18 +188,10 @@ export async function buildNodeApp(
   });
 
   app.get('/api/sessions/:id/snapshot', async (request) => {
-    const { id: sessionId } = claim(request);
+    const { id: sessionId, privateSessionPath } = claim(request);
     const active = runners.get(sessionId);
-    let history: unknown[] = active?.state.history ?? [];
     let agent: Snapshot['agent'] = null;
     if (active) {
-      try {
-        const response = await active.request({ type: 'get_messages' });
-        if (response.success && Array.isArray(response.data?.messages))
-          history = response.data.messages;
-      } catch {
-        /* in-memory view is still consistent with watermark */
-      }
       try {
         const response = await active.request({ type: 'get_state' });
         if (response.success && response.data)
@@ -212,6 +207,11 @@ export async function buildNodeApp(
     }
     // Read after the RPCs: the runner may have started and bumped the epoch meanwhile.
     const session = db.getSession(sessionId);
+    // History comes from the session file, not the agent: it is there with no
+    // runner at all (stopped, crashed, evicted), and a long transcript never
+    // has to fit through one RPC line. The agent writes each message before
+    // announcing it, so the file is never behind the watermark taken below.
+    const history = historyOf(branches.read(privateSessionPath));
     const snapshot: Snapshot = {
       session: publicSession(session),
       history,
@@ -338,6 +338,7 @@ export async function buildNodeApp(
     db,
     runners,
     models,
+    branches,
     claim,
   });
 

@@ -74,6 +74,22 @@ export function readSessionBranch(dir: string): SessionEntry[] {
   return chainOf(new Map(entries.map((entry) => [entry.id, entry])), entries.at(-1)?.id ?? null);
 }
 
+/** Every message on a branch (for UI history), including compacted ones. */
+export function historyOf(branch: SessionEntry[]): Message[] {
+  const out: Message[] = [];
+  for (const entry of branch) {
+    if (entry.type === 'message') out.push(entry.message);
+    else if (entry.type === 'compaction')
+      out.push({
+        role: 'compactionSummary',
+        summary: entry.summary,
+        tokensBefore: entry.tokensBefore,
+        timestamp: entry.timestamp,
+      });
+  }
+  return out;
+}
+
 /**
  * Messages the model sees: latest compaction summary followed by messages
  * from its `firstKeptEntryId` onward.
@@ -179,18 +195,7 @@ export class SessionStore {
 
   /** Every message on the branch (for UI history), including compacted ones. */
   allMessages(): Message[] {
-    const out: Message[] = [];
-    for (const entry of this.branch()) {
-      if (entry.type === 'message') out.push(entry.message);
-      else if (entry.type === 'compaction')
-        out.push({
-          role: 'compactionSummary',
-          summary: entry.summary,
-          tokensBefore: entry.tokensBefore,
-          timestamp: entry.timestamp,
-        });
-    }
-    return out;
+    return historyOf(this.branch());
   }
 
   /**

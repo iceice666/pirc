@@ -8,14 +8,11 @@
  * into or closing a terminal requires the session's control lease (the
  * same authority as prompting the agent).
  */
-import { statSync } from 'node:fs';
-import path from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { loadAgentConfig } from '../agent/config.js';
 import { memoryConfigFrom } from '../agent/features/memory/index.js';
 import { memoryPanel } from '../agent/features/memory/panel.js';
-import { readSessionBranch, SESSION_FILE } from '../agent/session-store.js';
 import type { NodeConfig } from '../config.js';
 import type { ModelStore } from '../models.js';
 import type { GatewayDatabase, SessionRow } from '../database.js';
@@ -29,6 +26,7 @@ import {
   listDirectory,
   readWorkspaceFile,
 } from './inspect.js';
+import type { BranchCache } from './branch-cache.js';
 import type { RunnerManager } from './runner.js';
 import { TerminalManager } from './terminals.js';
 
@@ -44,39 +42,13 @@ const leaseBody = z.object({
 /** Environment secrets the node holds that a user shell has no business seeing. */
 const SECRET_ENV = /^(PIRC_NODE_TOKENS?|PIRC_.*SECRET.*)$/;
 
-/**
- * Session branches keyed by file size + mtime: the panel polls after every
- * turn, and session files only grow, so an unchanged stat means unchanged content.
- */
-class BranchCache {
-  private readonly entries = new Map<
-    string,
-    { size: number; mtimeMs: number; branch: ReturnType<typeof readSessionBranch> }
-  >();
-  read(dir: string) {
-    let stat: { size: number; mtimeMs: number };
-    try {
-      stat = statSync(path.join(dir, SESSION_FILE));
-    } catch {
-      return [];
-    }
-    const cached = this.entries.get(dir);
-    if (cached && cached.size === stat.size && cached.mtimeMs === stat.mtimeMs)
-      return cached.branch;
-    const branch = readSessionBranch(dir);
-    this.entries.delete(dir);
-    this.entries.set(dir, { size: stat.size, mtimeMs: stat.mtimeMs, branch });
-    // Small LRU: a handful of sessions are viewed at a time.
-    if (this.entries.size > 16) this.entries.delete(this.entries.keys().next().value!);
-    return branch;
-  }
-}
-
 export interface PanelContext {
   config: NodeConfig;
   db: GatewayDatabase;
   runners: RunnerManager;
   models: ModelStore;
+  /** Shared with the snapshot route. */
+  branches: BranchCache;
   claim(request: FastifyRequest, sessionId?: string): SessionRow;
 }
 
@@ -110,8 +82,7 @@ export function registerPanelRoutes(
   app: FastifyInstance,
   ctx: PanelContext,
 ): { terminals: TerminalManager; terminalStreams: TerminalStreams } {
-  const { config, db, runners, models, claim } = ctx;
-  const branchCache = new BranchCache();
+  const { config, db, runners, models, branches: branchCache, claim } = ctx;
   const terminals = new TerminalManager(
     () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !SECRET_ENV.test(key))),
     config.terminalShell,

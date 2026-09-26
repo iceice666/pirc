@@ -1,8 +1,21 @@
-import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'bun:test';
-import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
+import { Agent } from '../src/agent/agent.js';
+import { loadAgentConfig } from '../src/agent/config.js';
+import { RpcUi } from '../src/agent/rpc.js';
+import { SessionStore } from '../src/agent/session-store.js';
+import { builtinTools } from '../src/agent/tools/index.js';
+import type { AssistantMessage } from '../src/agent/messages.js';
+import { settledAfter, startAgent, testModels, type AgentProcess } from './agent-harness.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
@@ -59,6 +72,75 @@ describe('pirc agent (OpenAI chat)', () => {
       .trim()
       .split('\n');
     expect(lines.length).toBeGreaterThanOrEqual(5);
+  });
+
+  /**
+   * An agent in this process with scripted replies (content per LLM call), so
+   * `onEvent` runs at the exact instant each event is emitted.
+   */
+  const runInProcess = async (
+    replies: AssistantMessage['content'][],
+    onEvent: (event: Record<string, any>, store: SessionStore) => void,
+    setup?: (workspace: string) => void,
+  ) => {
+    const root = mkdtempSync(path.join(tmpdir(), 'pirc-inproc-'));
+    const workspace = path.join(root, 'workspace');
+    mkdirSync(workspace);
+    setup?.(workspace);
+    const store = new SessionStore(path.join(root, 'session'), workspace);
+    let settled!: () => void;
+    const done = new Promise<void>((resolve) => (settled = resolve));
+    let calls = 0;
+    const agent = new Agent({
+      config: loadAgentConfig(workspace, testModels('http://127.0.0.1:1'), {
+        PIRC_CONFIG_DIR: path.join(root, 'config'),
+      }),
+      store,
+      ui: new RpcUi(() => {}),
+      hasUI: false,
+      tools: builtinTools(),
+      emit: (event: Record<string, any>) => {
+        onEvent(event, store);
+        if (event.type === 'agent_settled') settled();
+      },
+      streamOverride: async (request) => {
+        const content = replies[calls++]!;
+        return {
+          role: 'assistant',
+          content,
+          api: 'openai-chat',
+          provider: request.providerName,
+          model: request.model.id,
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 },
+          stopReason: content.some((part) => part.type === 'toolCall') ? 'toolUse' : 'stop',
+          timestamp: Date.now(),
+        };
+      },
+    });
+    await agent.init();
+    agent.prompt('go');
+    await done;
+  };
+
+  it('writes every message to the session file before its message_end', async () => {
+    // The node reads snapshot history from the file; an event must never be ahead of it.
+    const seen: Array<{ role: string; stored: number }> = [];
+    await runInProcess(
+      [
+        [{ type: 'toolCall', id: 'call_1', name: 'ls', arguments: {} }],
+        [{ type: 'text', text: 'Listed.' }],
+      ],
+      (event, store) => {
+        if (event.type === 'message_end')
+          seen.push({ role: event.message.role, stored: store.allMessages().length });
+      },
+    );
+    expect(seen).toEqual([
+      { role: 'user', stored: 1 },
+      { role: 'assistant', stored: 2 },
+      { role: 'toolResult', stored: 3 },
+      { role: 'assistant', stored: 4 },
+    ]);
   });
 
   it('confines file tools to the workspace and allowed paths, and protects .pirc', async () => {
