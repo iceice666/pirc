@@ -120,6 +120,12 @@ API key 支援 `apiKeyEnv`、`apiKeyFile` 和 `apiKeyCommand`，方便配合 sop
    - agent-team：子 agent = `pirc agent --headless` 子行程；broker 是 stdin/stdout 上的反向 RPC（`team_call`／`team_result`／`team_cancel`），不開 HTTP port。
    - kinds 預設只有 `general`，其餘由 `features.agentTeam.kinds` 設定。
    - 不移植 TUI transcript viewer。
+   - 後續補強（對照 Claude Code／Codex／OpenCode）：
+     - 一次性 `subagent` tool：前景時等待並回傳最終報告，`background: true` 時完成後只送一次結果；子代理沒有 team tools，也不能巢狀 spawn。
+     - kind 可設定 `tools` 白名單（`pirc agent --tools`）；teammate 一律保留協作 tools。
+     - 共享任務板 `task_create/list/get/update`：claim、owner、相依性（拒絕循環）、`expected_revision`；owner 停止時自動釋放任務。
+     - `background_task`：`tty` 模式（PTY，可用 `write` 輸入）；`notify_on`／`monitor` 在輸出符合時喚醒。
+     - teammate 的結果改在 idle（`agent_settled`）時只回報一次，並以 followUp 送達，不會打斷父代理正在執行的 tool calls。
 7. ✅ **M7 發佈**：
    - `nix/package.nix`：固定輸出的 `nodeModules`（`--os='*' --cpu='*'`，所有平台共用一個 hash），`bun build --compile` 產生 `bin/pirc` 與 `share/pirc/web`；沙盒內以 bun 充當 `node`。
    - NixOS module：

@@ -68,8 +68,10 @@ Built-in tools and features:
 - PTC code mode (`code`: TS/JS run in a subprocess that can call the other tools).
 - `ask_user_question` and `todo`.
 - Compaction with prompt-cache warming, and observational memory with `recall`.
-- `background_task`.
-- Agent teams (`agent_spawn` and friends; children are `pirc agent --headless` subprocesses).
+- `background_task`: shell jobs with process-group cleanup and one coalesced wakeup per batch of completions. `tty: true` runs a job on a pseudo-terminal so `write` can send it input. `notify_on` (a regular expression, set on start or later with `monitor`) wakes the agent with matching output lines, for dev servers, watchers, or log tails.
+- `subagent`: a one-shot delegate with a fresh context. It runs one task and returns only its final report, then exits. It runs in the foreground (the tool call waits) or with `background: true` (the report is delivered once when it finishes). Subagents get no team tools and cannot spawn further agents.
+- Agent teams: `agent_spawn` starts persistent collaborators that message each other (`agent_send`/`ask`/`reply`/`wait`), share notes (`board_*`), and coordinate on a shared task board (`task_create`/`list`/`get`/`update`). The board has claims, owners, dependencies, and revision checks, and tasks are released when their owner stops. A teammate reports its last answer to the parent once each time it goes idle. Children are `pirc agent --headless` subprocesses.
+- Kind presets in `features.agentTeam.kinds` (for subagents and teammates) can set `model`, `thinking`, and a `tools` allowlist, for example `{ "explorer": { "tools": ["read", "ls", "find", "grep"] } }`. Teammates always keep their coordination tools. `features.agentTeam.limit` (default 4) caps live teammates and `subagentLimit` (default 4) caps running subagents.
 - Session titles: sessions cannot be named when created; each one is named by the model from the first user message that describes work (greetings are skipped). It is a side request with no tools and no thinking, and it retries on later messages if it fails. A name you set by renaming always wins. Configure it in `features.sessionTitle`: `enabled` (default `true`), `model` (`{ "provider", "id" }`; defaults to the session's model, so a small, fast model saves cost), `prompt` (replaces the default system prompt), and `maxAttempts` (default `3`).
 
 The design and milestones are in [`plans/single-binary-agent.md`](./plans/single-binary-agent.md).
