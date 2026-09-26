@@ -723,6 +723,228 @@ select:disabled {
   color: var(--accent);
   background: var(--accent-soft);
 }
+/* Top-bar background jobs: a quiet trigger and its popover. */
+.jobs-menu {
+  position: relative;
+}
+.jobs-trigger {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px 0 10px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.jobs-trigger.live {
+  color: var(--text-2);
+}
+.jobs-trigger:hover,
+.jobs-trigger.open {
+  color: var(--ink);
+  background: var(--bg-hover);
+}
+.jobs-trigger > svg {
+  transition: transform 0.12s var(--ease);
+}
+.jobs-trigger.open > svg {
+  transform: rotate(180deg);
+}
+.jobs-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.jobs-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(480px, calc(100vw - 24px));
+  max-height: min(480px, calc(100dvh - 120px));
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px;
+  overflow: auto;
+  border-radius: var(--radius-lg);
+  background: var(--bg-layer);
+  box-shadow: var(--shadow-pop);
+}
+.jobs-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 6px 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 18px;
+}
+.jobs-section:first-child {
+  margin-top: 0;
+  border-top: 0;
+}
+.jobs-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 11px;
+}
+.jobs-section-toggle:hover {
+  color: var(--text-2);
+  background: var(--bg-hover);
+}
+.section-chevron,
+.job-chevron {
+  display: grid;
+  transition: transform 0.12s var(--ease);
+}
+.section-chevron.open,
+.job-chevron.open {
+  transform: rotate(90deg);
+}
+.job-item {
+  display: flex;
+  flex-direction: column;
+}
+.job-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 10px;
+}
+.job-line.live {
+  background: var(--bg-hover);
+}
+.job-row {
+  min-width: 0;
+  flex: 1;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--ink);
+  background: transparent;
+  font-size: 12.5px;
+  text-align: left;
+}
+button.job-row:hover {
+  background: var(--bg-hover);
+}
+.job-line.live button.job-row:hover {
+  background: transparent;
+}
+.job-row.static {
+  cursor: default;
+}
+.job-row.settled {
+  color: var(--text-2);
+}
+.job-icon {
+  flex: none;
+  display: grid;
+  color: var(--muted);
+}
+.job-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.job-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.job-label.mono {
+  font: 12px/18px var(--font-mono);
+}
+.job-sub {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.job-meta {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.job-duration {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.job-chevron {
+  flex: none;
+  color: var(--faint);
+}
+.job-stop {
+  flex: none;
+  height: 22px;
+  min-width: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-right: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-2);
+  background: var(--bg-layer);
+  box-shadow: 0 0 0 1px var(--line-dark);
+  font-size: 11px;
+}
+.job-stop:hover:not(.pending),
+.job-stop.armed {
+  color: var(--danger);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.job-stop.armed {
+  padding: 0 8px;
+  background: var(--danger-soft);
+}
+.job-stop.pending {
+  color: var(--muted);
+}
+.job-output {
+  max-height: 240px;
+  margin: 4px 4px 6px;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  color: var(--code-ink);
+  background: var(--code-bg);
+  box-shadow: 0 0 0 1px var(--line);
+  font: 11.5px/1.5 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.jobs-error {
+  margin: 2px 8px 4px;
+  color: var(--danger);
+  font-size: 12px;
+}
 .button {
   height: 36px;
   display: inline-flex;
@@ -1568,8 +1790,12 @@ button.system-line:not(:disabled):hover {
   background: var(--bg-layer);
   box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
 }
-/* Queue dock: a tab of pending messages tucked on top of the composer. */
-.queue-dock {
+/*
+ * Composer dock: cards tucked on top of the composer (as in Codex and
+ * DeepSeek Harness) — the agent's task list, then queued messages. Sections
+ * share one surface, separated by a hairline.
+ */
+.composer-dock {
   position: relative;
   width: calc(min(796px, 100%) - 40px);
   margin: 0 auto -1px;
@@ -1579,14 +1805,17 @@ button.system-line:not(:disabled):hover {
   box-shadow: 0 0 0 1px var(--line-dark);
   clip-path: inset(-1px -1px 0 -1px);
 }
-.queue-dock-head {
+.dock-section + .dock-section {
+  border-top: 1px solid var(--line-dark);
+}
+.dock-head {
   height: 34px;
   display: flex;
   align-items: center;
   padding: 0 6px 0 4px;
 }
-.queue-dock-toggle,
-.queue-dock-clear {
+.dock-toggle,
+.dock-action {
   height: 26px;
   display: inline-flex;
   align-items: center;
@@ -1599,44 +1828,181 @@ button.system-line:not(:disabled):hover {
   font-size: 12.5px;
   font-weight: 500;
 }
-.queue-dock-toggle {
+.dock-toggle {
   flex: 1;
   min-width: 0;
 }
-.queue-dock-toggle:hover,
-.queue-dock-clear:hover:not(:disabled) {
+.dock-toggle:hover,
+.dock-action:hover:not(:disabled) {
   color: var(--ink);
   background: var(--bg-hover);
 }
-.queue-dock-chevron {
+.dock-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.dock-chevron {
+  flex: none;
   display: grid;
   color: var(--muted);
   transition: transform 0.18s var(--ease);
 }
-.queue-dock-chevron.collapsed {
+.dock-chevron.collapsed {
   transform: rotate(180deg);
 }
-.queue-dock-clear {
+.dock-action {
   flex: none;
   font-weight: 400;
 }
-.queue-dock-list {
+.dock-list {
   max-height: 168px;
   margin: 0;
   padding: 0 8px 8px;
   overflow-y: auto;
   list-style: none;
 }
-.queue-dock-list li {
+.queue-dock .dock-list li {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   padding: 6px 6px;
   border-radius: var(--radius-sm);
 }
-.queue-dock-list li + li {
+.queue-dock .dock-list li + li {
   border-top: 1px solid var(--line);
   border-radius: 0;
+}
+/* Todo dock: the task in progress leads, progress on the right. */
+.todo-lead {
+  flex: none;
+  width: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.todo-dock .dock-title {
+  flex: 1;
+}
+.todo-dock .dock-title.active {
+  color: var(--ink);
+}
+.todo-progress {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.todo-meter {
+  width: 36px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line-dark);
+}
+.todo-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--success);
+  transition: width 0.3s var(--ease);
+}
+.todo-list {
+  max-height: 220px;
+  display: grid;
+  gap: 1px;
+}
+.todo-item {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 6px;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 20px;
+}
+.todo-item .state-dot {
+  margin: 0 3px;
+}
+.todo-text {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.todo-item.status-in_progress {
+  color: var(--ink);
+  font-weight: 500;
+}
+.todo-item.status-completed .todo-text {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--faint);
+}
+.todo-tag {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 4px;
+  color: var(--muted);
+  background: var(--bg-hover);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 18px;
+}
+.todo-tag.blocked {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+/* Quiet extension status under the composer (e.g. compaction warm-up). */
+.composer-status {
+  width: min(796px, 100%);
+  margin: 6px auto 0;
+  padding: 0 14px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Shared compact status marker: idle ring, pulsing ongoing, done, error. */
+.state-dot {
+  flex: none;
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.state-dot.idle {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--faint);
+}
+.state-dot.ongoing {
+  background: var(--accent);
+  animation: state-pulse 1.6s var(--ease) infinite;
+}
+.state-dot.done {
+  background: var(--success);
+}
+.state-dot.error {
+  background: var(--danger);
+}
+@keyframes state-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 5px transparent;
+  }
 }
 .queue-dock-kind {
   flex: none;
@@ -3146,8 +3512,20 @@ button.task-row:hover {
     background: transparent;
   }
   .control-pill,
-  .session-menu {
+  .session-menu,
+  .jobs-label {
     display: none;
+  }
+  .jobs-trigger {
+    height: 32px;
+    padding: 0 8px;
+  }
+  .jobs-popover {
+    position: fixed;
+    top: 60px;
+    right: 12px;
+    left: 12px;
+    width: auto;
   }
   .button.takeover {
     width: 36px;
@@ -3213,11 +3591,14 @@ button.task-row:hover {
   .composer-wrap {
     padding: 0 8px max(8px, env(safe-area-inset-bottom));
   }
-  .queue-dock {
+  .composer-dock {
     width: calc(100% - 24px);
   }
-  .queue-dock-list {
+  .dock-list {
     max-height: 88px;
+  }
+  .todo-list {
+    max-height: 160px;
   }
   .mode-switch {
     margin-right: 2px;

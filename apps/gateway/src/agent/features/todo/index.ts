@@ -51,25 +51,26 @@ function changes(before: State, after: State): string {
   return lines.join('\n');
 }
 
-/** Plain-text panel for the web widget: latest done, in-progress, then pending. */
+/** Widget line markers, one per status; the web todo dock parses them back. */
+export const TODO_MARKS = { completed: '✓', in_progress: '▶', pending: '☐' } as const;
+
+/**
+ * Plain-text panel for the web widget: a `TODO · done/total` header, then every
+ * task in list order as `<mark> [category] label (blocked)`. In-progress tasks
+ * show their activity label.
+ */
 function panel(state: State): string[] {
   const done = state.todos.filter((t) => t.status === 'completed');
   const lines = [`TODO · ${done.length}/${state.todos.length}`];
-  const ordered = [
-    ...state.todos.filter((t) => t.status === 'in_progress'),
-    ...state.todos.filter((t) => t.status === 'pending'),
-  ];
-  for (const item of ordered.slice(0, 8)) {
-    const blocked = item.blockedBy.some(
-      (id) => state.todos.find((t) => t.id === id)?.status !== 'completed',
-    );
+  for (const item of state.todos) {
+    const blocked =
+      item.status !== 'completed' &&
+      item.blockedBy.some((id) => state.todos.find((t) => t.id === id)?.status !== 'completed');
     const label = item.status === 'in_progress' ? (item.activeForm ?? item.text) : item.text;
-    const mark = item.status === 'in_progress' ? '▶' : '☐';
     lines.push(
-      `${mark} ${item.category ? `[${safe(item.category)}] ` : ''}${safe(label)}${blocked ? ' (blocked)' : ''}`,
+      `${TODO_MARKS[item.status]} ${item.category ? `[${safe(item.category)}] ` : ''}${safe(label)}${blocked ? ' (blocked)' : ''}`,
     );
   }
-  if (ordered.length > 8) lines.push(`… ${ordered.length - 8} more`);
   return lines;
 }
 

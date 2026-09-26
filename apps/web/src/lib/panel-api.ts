@@ -233,6 +233,12 @@ export const panelApi = {
     request<{ task: BackgroundTask; output: string }>(
       `${base(sessionId)}/panel/background/${encodeURIComponent(taskId)}${qs({ lines })}`,
     ),
+  /** Needs the control lease; resolves once the stop is requested (status `stopping`). */
+  stopBackground: (sessionId: string, taskId: string, generation: number) =>
+    request<{ task: BackgroundTask }>(
+      `${base(sessionId)}/panel/background/${encodeURIComponent(taskId)}/stop`,
+      { method: 'POST', body: JSON.stringify({ clientId: getClientId(), generation }) },
+    ),
   terminals: (sessionId: string) =>
     request<{ terminals: TerminalInfo[] }>(`${base(sessionId)}/terminals`),
   createTerminal: (sessionId: string, generation: number, cols: number, rows: number) =>

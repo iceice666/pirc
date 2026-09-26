@@ -21,8 +21,14 @@
     RunStatus,
     ThinkingLevel,
   } from '../types';
+  import type { TodoList } from '../todo';
+  import TodoDock from './TodoDock.svelte';
 
   export let value = '';
+  /** The agent's task list, docked above the queue. */
+  export let todo: TodoList | undefined = undefined;
+  /** Remaining extension status lines (e.g. compaction), shown quietly under the input. */
+  export let statuses: string[] = [];
   export let connection: ConnectionState;
   export let runStatus: RunStatus | undefined;
   export let hasControl: boolean;
@@ -83,39 +89,48 @@
 </script>
 
 <div class="composer-wrap">
-  {#if queue.length > 0}
-    <div class="queue-dock" transition:slide={{ duration: 180 }}>
-      <div class="queue-dock-head">
-        <button
-          class="queue-dock-toggle"
-          type="button"
-          aria-expanded={queueExpanded}
-          aria-controls="queue-dock-list"
-          on:click={() => (queueExpanded = !queueExpanded)}
-        >
-          <ListOrdered size={14} />
-          <span>{queue.length} queued</span>
-          <span class:collapsed={!queueExpanded} class="queue-dock-chevron"
-            ><ChevronDown size={14} /></span
-          >
-        </button>
-        <button class="queue-dock-clear" type="button" on:click={onclear} disabled={!hasControl}
-          >Clear</button
-        >
-      </div>
-      {#if queueExpanded}
-        <ol id="queue-dock-list" class="queue-dock-list" transition:slide={{ duration: 160 }}>
-          {#each queue as item (item.id)}
-            <li>
-              <span class="queue-dock-kind" title={item.kind === 'steer' ? 'Steer' : 'Follow up'}>
-                {#if item.kind === 'steer'}<Navigation size={13} />{:else}<CornerDownRight
-                    size={13}
-                  />{/if}
-              </span>
-              <span class="queue-dock-text">{item.content}</span>
-            </li>
-          {/each}
-        </ol>
+  {#if todo || queue.length > 0}
+    <!-- Cards tucked on top of the composer: the task list, then queued messages. -->
+    <div class="composer-dock" transition:slide={{ duration: 180 }}>
+      {#if todo}<TodoDock list={todo} />{/if}
+      {#if queue.length > 0}
+        <section class="dock-section queue-dock" aria-label="Queued messages">
+          <div class="dock-head">
+            <button
+              class="dock-toggle"
+              type="button"
+              aria-expanded={queueExpanded}
+              aria-controls="queue-dock-list"
+              on:click={() => (queueExpanded = !queueExpanded)}
+            >
+              <ListOrdered size={14} />
+              <span class="dock-title">{queue.length} queued</span>
+              <span class:collapsed={!queueExpanded} class="dock-chevron"
+                ><ChevronDown size={14} /></span
+              >
+            </button>
+            <button class="dock-action" type="button" on:click={onclear} disabled={!hasControl}
+              >Clear</button
+            >
+          </div>
+          {#if queueExpanded}
+            <ol id="queue-dock-list" class="dock-list" transition:slide={{ duration: 160 }}>
+              {#each queue as item (item.id)}
+                <li>
+                  <span
+                    class="queue-dock-kind"
+                    title={item.kind === 'steer' ? 'Steer' : 'Follow up'}
+                  >
+                    {#if item.kind === 'steer'}<Navigation size={13} />{:else}<CornerDownRight
+                        size={13}
+                      />{/if}
+                  </span>
+                  <span class="queue-dock-text">{item.content}</span>
+                </li>
+              {/each}
+            </ol>
+          {/if}
+        </section>
       {/if}
     </div>
   {/if}
@@ -257,4 +272,7 @@
       {/if}
     </div>
   </div>
+  {#if statuses.length}
+    <p class="composer-status" role="status">{statuses.join(' · ')}</p>
+  {/if}
 </div>

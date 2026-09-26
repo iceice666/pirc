@@ -86,7 +86,8 @@ export function reducePiEvent(state: ReducedSessionState, event: Record<string, 
   else if (event.type === 'extension_ui_request' && event.method === 'setWidget') {
     const key = String(event.widgetKey ?? '');
     if (Array.isArray(event.widgetLines) && event.widgetLines.length)
-      state.widgets[key] = event.widgetLines.map(String).slice(0, 50);
+      // Room for a header plus the todo list's 50 tasks.
+      state.widgets[key] = event.widgetLines.map(String).slice(0, 64);
     else delete state.widgets[key];
   } else if (event.type === 'extension_ui_request' && event.method === 'setStatus') {
     const key = String(event.statusKey ?? '');

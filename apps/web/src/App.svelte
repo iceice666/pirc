@@ -20,14 +20,21 @@
   import { api, connectEvents, type EventConnection } from './lib/api';
   import Composer from './lib/components/Composer.svelte';
   import InteractionCard from './lib/components/InteractionCard.svelte';
-  import WidgetPanel from './lib/components/WidgetPanel.svelte';
+  import JobsMenu from './lib/components/JobsMenu.svelte';
   import Message from './lib/components/Message.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
   import SidePanel from './lib/components/panel/SidePanel.svelte';
   import type { PanelTab } from './lib/panel-api';
-  import { demoModels, demoSessions, demoSnapshot, demoWorkspaces } from './lib/mock';
+  import {
+    demoModels,
+    demoPanelState,
+    demoSessions,
+    demoSnapshot,
+    demoWorkspaces,
+  } from './lib/mock';
   import { activateUpdate, registerPwa } from './lib/pwa';
   import { fromSnapshot, reduceEvent } from './lib/state';
+  import { parseTodoWidget, TODO_WIDGET } from './lib/todo';
   import { getClientId, loadDraft, loadLayout, saveDraft, saveLayout } from './lib/storage';
   import type {
     Attachment,
@@ -69,6 +76,8 @@
   /** Bumped per `panel_changed` event so the side panel refetches. */
   let panelTick = 0;
   let panelChanged: string[] = [];
+  /** Bumped when background tasks or team members changed, for the top-bar jobs menu. */
+  let jobsTick = 0;
   let loading = true;
   let commandBusy = false;
   let pageError = '';
@@ -108,6 +117,20 @@
     panelWidth = width;
     saveLayout('panelWidth', width);
   }
+  $: todo = parseTodoWidget(sessionState?.widgets?.[TODO_WIDGET]);
+  /**
+   * Status-line entries not already shown elsewhere: background tasks and team
+   * members live in the jobs menu. Other extension widgets show their header.
+   */
+  const SHOWN_ELSEWHERE = new Set(['background-task', 'agent-team']);
+  $: statusLine = [
+    ...Object.entries(sessionState?.widgets ?? {})
+      .filter(([key, lines]) => key !== TODO_WIDGET && lines.length)
+      .map(([, lines]) => lines[0]!),
+    ...Object.entries(sessionState?.statuses ?? {})
+      .filter(([key, text]) => !SHOWN_ELSEWHERE.has(key) && text)
+      .map(([, text]) => text),
+  ];
   $: pendingInteractions =
     sessionState?.interactions.filter((item) => item.status === 'pending') ?? [];
 
@@ -211,6 +234,8 @@
             if (event.event.type === 'panel_changed') {
               panelChanged = event.event.sections;
               panelTick++;
+              if (panelChanged.some((section) => section === 'background' || section === 'team'))
+                jobsTick++;
             }
             if (event.event.type === 'session_renamed') {
               const name = event.event.name;
@@ -616,6 +641,13 @@
           <h1>{sessionState.session.name}</h1>
         </div>
         <div class="topbar-actions">
+          <JobsMenu
+            sessionId={sessionState.session.id}
+            {hasControl}
+            generation={sessionState.control.generation}
+            refreshKey={jobsTick}
+            demo={usingDemo ? demoPanelState : undefined}
+          />
           <span
             class:offline={connection === 'offline'}
             class:reconnecting={connection === 'reconnecting'}
@@ -689,11 +721,9 @@
               {/if}
             </div>
           </div>
-          <WidgetPanel
-            widgets={sessionState.widgets ?? {}}
-            statuses={sessionState.statuses ?? {}}
-          />
           <Composer
+            {todo}
+            statuses={statusLine}
             value={draft}
             {connection}
             {runStatus}

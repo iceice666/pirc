@@ -245,8 +245,7 @@ describe('todo', () => {
     const widget = agent.events.findLast(
       (e) => e.type === 'extension_ui_request' && e.method === 'setWidget',
     );
-    expect(widget!.widgetLines[0]).toBe('TODO · 1/2');
-    expect(widget!.widgetLines[1]).toContain('test it');
+    expect(widget!.widgetLines).toEqual(['TODO · 1/2', '✓ write code', '☐ test it']);
     // Reminder follow-up triggered exactly one extra request, then stopped.
     expect(agent.llm.requests).toHaveLength(4);
     const reminder = agent.llm.requests[3]!.body.messages.at(-1).content;

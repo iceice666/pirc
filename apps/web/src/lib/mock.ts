@@ -1,4 +1,34 @@
+import type { PanelState } from './panel-api';
 import type { ModelOption, SessionSnapshot, SessionSummary, Workspace } from './types';
+
+/** Background work shown by the top-bar jobs menu in the offline demo. */
+export const demoPanelState: PanelState = {
+  agentRunning: true,
+  memory: null,
+  memoryRuntime: null,
+  backgroundTasks: [
+    {
+      id: 'bg-1',
+      command: 'bun test --watch',
+      cwd: '~/code/pirc',
+      status: 'completed',
+      exitCode: 0,
+      startedAt: new Date(Date.now() - 900_000).toISOString(),
+      endedAt: new Date(Date.now() - 840_000).toISOString(),
+    },
+    {
+      id: 'bg-2',
+      command: 'bun run dev:web',
+      cwd: '~/code/pirc',
+      status: 'running',
+      notifyOn: 'error',
+      startedAt: new Date(Date.now() - 312_000).toISOString(),
+    },
+  ],
+  team: {
+    agents: [{ name: 'reviewer', mode: 'subagent', status: 'working', task: 'Audit the reducer' }],
+  },
+};
 
 export const demoWorkspaces: Workspace[] = [
   {
@@ -236,4 +266,14 @@ export const demoSnapshot: SessionSnapshot = {
   runnerEpoch: 'demo-epoch',
   selectedModelId: 'claude-sonnet',
   thinkingLevel: 'high',
+  widgets: {
+    'local-todo': [
+      'TODO · 2/5',
+      '✓ Read the transport plan',
+      '✓ Write the event reducer',
+      '▶ Building the composer modes',
+      '☐ [web] Wire the side panel',
+      '☐ Run tests and the production build (blocked)',
+    ],
+  },
 };
