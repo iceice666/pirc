@@ -526,6 +526,9 @@ select:disabled {
   .session-item.active .session-meta {
     display: none;
   }
+  .mini-action {
+    opacity: 1;
+  }
 }
 .session-rename {
   height: 36px;
@@ -1326,10 +1329,13 @@ button.system-line:not(:disabled):hover {
   gap: 8px;
 }
 .notice-text strong {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-2);
   font-weight: 400;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .notice-text span {
   min-width: 0;
@@ -3072,38 +3078,80 @@ button.task-row:hover {
   }
   .mobile-close {
     display: grid;
+    width: 40px;
+    height: 40px;
+    margin-right: -8px;
+  }
+  .brand-row {
+    padding: 0 12px 0 16px;
+  }
+  /* Touch-sized rows: fewer, larger targets instead of a dense desktop list. */
+  .session-card {
+    height: 44px;
+  }
+  .session-rename {
+    height: 44px;
+  }
+  .workspace-heading {
+    height: 40px;
+  }
+  .mini-action,
+  .session-actions button {
+    width: 32px;
+    height: 32px;
+  }
+  .session-item:hover .session-card,
+  .session-item:focus-within .session-card {
+    padding-right: 112px;
+  }
+  @media (hover: none) {
+    .session-item.active .session-card {
+      padding-right: 112px;
+    }
   }
   .mobile-menu {
     position: fixed;
     z-index: 20;
-    top: 12px;
-    left: 10px;
+    top: 8px;
+    left: 6px;
     display: grid;
+    width: 40px;
+    height: 40px;
   }
   .topbar {
     flex-basis: 56px;
-    padding: 0 8px 0 52px;
-    gap: 6px;
+    padding: 0 6px 0 50px;
+    gap: 4px;
   }
   .breadcrumb {
     display: none;
   }
   .title-block h1 {
-    max-width: 180px;
     font-size: 15px;
   }
+  .topbar-actions {
+    gap: 2px;
+  }
+  .topbar-actions .icon-button {
+    width: 40px;
+    height: 40px;
+  }
+  /* Only a coloured dot: the state is still announced by the pill's text. */
   .connection-pill {
     width: 28px;
     height: 28px;
     justify-content: center;
     padding: 0;
     font-size: 0;
+    background: transparent;
   }
-  .control-pill {
+  .control-pill,
+  .session-menu {
     display: none;
   }
   .button.takeover {
-    width: 32px;
+    width: 36px;
+    height: 36px;
     padding: 0;
     font-size: 0;
   }
@@ -3118,16 +3166,43 @@ button.task-row:hover {
     display: none;
   }
   .timeline-inner {
-    padding: 12px 16px 24px;
+    padding: 8px 14px 20px;
   }
   .message-copy {
     font-size: 15px;
+    line-height: 1.65;
   }
   .message.user .message-main {
     max-width: 88%;
   }
+  .message.user .message-copy {
+    padding: 9px 14px;
+  }
+  /* No hover on touch: keep copy reachable, but quieter than the text. */
   .message-actions {
-    opacity: 1;
+    min-height: 20px;
+    opacity: 0.7;
+  }
+  /* Timeline rows drop their clock time: the width goes to the tool name and detail. */
+  .system-line > time {
+    display: none;
+  }
+  .system-title {
+    flex: 1;
+  }
+  .system-title strong {
+    flex: none;
+    white-space: nowrap;
+  }
+  .system-title span {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .system-body {
+    margin-left: 0;
   }
   .interaction-card {
     padding: 14px;
@@ -3136,32 +3211,47 @@ button.task-row:hover {
     align-items: flex-end;
   }
   .composer-wrap {
-    padding: 0 10px max(10px, env(safe-area-inset-bottom));
+    padding: 0 8px max(8px, env(safe-area-inset-bottom));
   }
   .queue-dock {
     width: calc(100% - 24px);
+  }
+  .queue-dock-list {
+    max-height: 88px;
   }
   .mode-switch {
     margin-right: 2px;
   }
   .mode-switch button {
-    padding: 0 8px;
-  }
-  .composer-tools {
-    gap: 3px;
+    height: 28px;
+    padding: 0 9px;
+    font-size: 12px;
   }
   .composer {
     border-radius: var(--radius-xl);
   }
   .composer textarea {
-    padding: 12px 16px 2px;
+    min-height: 44px;
+    max-height: 160px;
+    padding: 10px 14px 0;
+    line-height: 22px;
   }
   .composer-tools {
-    padding: 6px 8px 8px;
+    min-height: 46px;
+    gap: 4px;
+    padding: 4px 6px 6px 8px;
   }
   .composer-tools select {
-    max-width: 120px;
-    padding-inline: 8px;
+    max-width: 112px;
+    padding-inline: 10px;
+    font-size: 12.5px;
+  }
+  /* The model is locked while a run is active, so its slot goes to Steer/Follow up. */
+  .composer-tools.running .model-select {
+    display: none;
+  }
+  .composer-tools.running .thinking-select {
+    max-width: 92px;
   }
   .update-toast {
     right: 8px;

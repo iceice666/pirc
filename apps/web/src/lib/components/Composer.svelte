@@ -152,7 +152,7 @@
       on:input={(event) => onvalue(event.currentTarget.value)}
       on:keydown={keydown}
     ></textarea>
-    <div class="composer-tools">
+    <div class="composer-tools" class:running={active}>
       <input
         class="sr-only"
         bind:this={fileInput}
@@ -171,6 +171,7 @@
         <Paperclip size={18} />
       </button>
       <select
+        class="model-select"
         aria-label="Model"
         value={modelId}
         on:change={(event) => onmodel(event.currentTarget.value)}
@@ -182,6 +183,7 @@
       </select>
       <span class="select-divider"></span>
       <select
+        class="thinking-select"
         aria-label="Thinking level"
         value={thinking}
         on:change={(event) => onthinking(event.currentTarget.value as ThinkingLevel)}

@@ -641,7 +641,7 @@
           >
             {#if detailsOpen}<PanelRightClose size={19} />{:else}<PanelRightOpen size={19} />{/if}
           </button>
-          <button class="icon-button" type="button" aria-label="Session menu"
+          <button class="icon-button session-menu" type="button" aria-label="Session menu"
             ><MoreHorizontal size={20} /></button
           >
         </div>
