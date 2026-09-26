@@ -13,6 +13,31 @@ describe('renderMarkdown', () => {
     expect(html).toContain('hljs-keyword');
   });
 
+  it.each(['：', '，', '。', '！', '？', '」', '）'])(
+    'renders bold ending in CJK punctuation %s without a following space',
+    (punctuation) => {
+      expect(renderMarkdown(`**驗證${punctuation}**新增 4 個測試`)).toContain(
+        `<strong>驗證${punctuation}</strong>新增 4 個測試`,
+      );
+    },
+  );
+
+  it('preserves inline formatting inside CJK bold labels', () => {
+    expect(renderMarkdown('**驗證 `check`：**新增')).toContain(
+      '<strong>驗證 <code>check</code>：</strong>新增',
+    );
+    expect(renderMarkdown('- **驗證：**新增')).toContain('<strong>驗證：</strong>新增');
+  });
+
+  it('leaves escaped delimiters, code, and ordinary emphasis rules unchanged', () => {
+    expect(renderMarkdown('`**驗證：**新增`')).toContain('<code>**驗證：**新增</code>');
+    expect(renderMarkdown('```text\n**驗證：**新增\n```')).toContain('**驗證：**新增</code>');
+    expect(renderMarkdown('\\*\\*驗證：\\*\\*新增')).not.toContain('<strong>');
+    expect(renderMarkdown('**Label:**next')).not.toContain('<strong>');
+    expect(renderMarkdown('**粗體**與 *斜體*')).toContain('<strong>粗體</strong>與 <em>斜體</em>');
+    expect(renderMarkdown('**驗證：')).not.toContain('<strong>');
+  });
+
   it('renders inline and display math but leaves prices alone', () => {
     const html = renderMarkdown('Area $\\pi r^2$ costs $5 and $10.\n\n$$\n\\int_0^1 x\\,dx\n$$');
     expect(html).toContain('class="katex"');

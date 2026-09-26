@@ -82,6 +82,17 @@ const marked = new Marked({
   gfm: true,
   breaks: false,
   extensions: [blockMath, inlineMath],
+  hooks: {
+    emStrongMask(source) {
+      // CommonMark treats punctuation before ** followed by text as an opener,
+      // not a closer (e.g. **驗證：**新增). Treat CJK punctuation as a letter
+      // only in the delimiter-analysis mask; preserve source text and offsets.
+      // Marked has already masked code, links, HTML, and escaped delimiters.
+      return source.replace(/[\u3000-\u303f\uff00-\uffef](?=\*\*(?!\*)[^\s*])/gu, (char) =>
+        /\p{P}/u.test(char) ? 'a' : char,
+      );
+    },
+  },
   renderer: {
     code({ text, lang }: Tokens.Code) {
       const language = (lang ?? '').trim().split(/\s+/)[0]!.toLowerCase();
