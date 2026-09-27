@@ -1,0 +1,204 @@
+{
+  "description": "A client that connects while a reply streams without having seen its message_start, then the runner restarts (new epoch).",
+  "snapshot": {
+    "session": {
+      "id": "s2",
+      "workspaceId": "m3air:notes",
+      "name": "New session",
+      "nameSource": "auto",
+      "runnerState": "ready",
+      "runStatus": null,
+      "runnerEpoch": 1,
+      "pinnedAt": 3,
+      "settledAt": null,
+      "createdAt": 1,
+      "updatedAt": 1000
+    },
+    "history": [
+      {
+        "role": "user",
+        "content": "Say hello",
+        "timestamp": 1000
+      }
+    ],
+    "partialMessage": null,
+    "queue": {
+      "steering": [],
+      "followUp": []
+    },
+    "run": null,
+    "interactions": [],
+    "notifications": [],
+    "widgets": {},
+    "statuses": {},
+    "agent": null,
+    "watermark": {
+      "epoch": 1,
+      "sequence": 4
+    },
+    "partialOutputLost": false
+  },
+  "events": [
+    {
+      "sessionId": "s2",
+      "epoch": 1,
+      "sequence": 5,
+      "type": "pi_event",
+      "timestamp": 2000,
+      "data": {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "Hel"
+        }
+      }
+    },
+    {
+      "sessionId": "s2",
+      "epoch": 1,
+      "sequence": 6,
+      "type": "pi_event",
+      "timestamp": 2010,
+      "data": {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "toolcall_start",
+          "contentIndex": 1,
+          "id": "c9",
+          "toolName": "write"
+        }
+      }
+    },
+    {
+      "sessionId": "s2",
+      "epoch": 1,
+      "sequence": 7,
+      "type": "pi_event",
+      "timestamp": 2020,
+      "data": {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "toolcall_end",
+          "contentIndex": 1,
+          "toolCall": {
+            "id": "c9",
+            "name": "write",
+            "arguments": {
+              "path": "h.txt"
+            }
+          }
+        }
+      }
+    },
+    {
+      "sessionId": "s2",
+      "epoch": 1,
+      "sequence": 8,
+      "type": "pi_event",
+      "timestamp": 2030,
+      "data": {
+        "type": "tool_execution_end",
+        "toolCallId": "c9",
+        "toolName": "write",
+        "isError": true,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "permission denied"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "s2",
+      "epoch": 1,
+      "sequence": 9,
+      "type": "pi_event",
+      "timestamp": 2040,
+      "data": {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 0,
+          "delta": "lo"
+        }
+      }
+    },
+    {
+      "sessionId": "s2",
+      "epoch": 2,
+      "sequence": 1,
+      "type": "node_reconnected",
+      "timestamp": 3000,
+      "data": {
+        "nodeId": "m3air"
+      }
+    }
+  ],
+  "expected": {
+    "afterSnapshot": {
+      "cursor": "1:4",
+      "runnerEpoch": "1",
+      "needsSnapshot": false,
+      "sessionName": "New session",
+      "pinned": true,
+      "runStatus": null,
+      "runnerStatus": "ready",
+      "selectedModelId": null,
+      "thinkingLevel": null,
+      "queue": [],
+      "widgets": {},
+      "statuses": {},
+      "interactions": [],
+      "messages": [
+        {
+          "id": "user-1000",
+          "role": "user",
+          "content": "Say hello"
+        }
+      ]
+    },
+    "afterEvents": {
+      "cursor": "2:1",
+      "runnerEpoch": "1",
+      "needsSnapshot": true,
+      "sessionName": "New session",
+      "pinned": true,
+      "runStatus": null,
+      "runnerStatus": "ready",
+      "selectedModelId": null,
+      "thinkingLevel": null,
+      "queue": [],
+      "widgets": {},
+      "statuses": {},
+      "interactions": [],
+      "messages": [
+        {
+          "id": "user-1000",
+          "role": "user",
+          "content": "Say hello"
+        },
+        {
+          "id": "assistant-live",
+          "role": "assistant",
+          "content": "Hello",
+          "isPartial": true,
+          "tools": [
+            {
+              "id": "c9",
+              "name": "write",
+              "status": "failed",
+              "input": {
+                "path": "h.txt"
+              },
+              "output": "permission denied"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

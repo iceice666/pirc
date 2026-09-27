@@ -1,0 +1,781 @@
+{
+  "description": "A snapshot taken mid-turn (history with every entry kind, a streaming partial with a tool call, a pending select interaction), then the live events that finish the turn, start and finish another, update queue/widgets/status/name, and end with a lifecycle event that needs a new snapshot.",
+  "snapshot": {
+    "session": {
+      "id": "s1",
+      "workspaceId": "m5pro:pirc",
+      "name": "Fix the parser",
+      "nameSource": "user",
+      "runnerState": "ready",
+      "runStatus": "running",
+      "runnerEpoch": 2,
+      "pinnedAt": null,
+      "settledAt": null,
+      "createdAt": 500,
+      "updatedAt": 9000,
+      "nodeId": "m5pro"
+    },
+    "history": [
+      {
+        "role": "user",
+        "content": "List files",
+        "timestamp": 1000
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "Use ls."
+          },
+          {
+            "type": "text",
+            "text": "Checking **now**."
+          },
+          {
+            "type": "toolCall",
+            "id": "c1",
+            "name": "bash",
+            "arguments": {
+              "command": "ls"
+            }
+          }
+        ],
+        "model": "m1",
+        "stopReason": "toolUse",
+        "timestamp": 2000,
+        "completedAt": 2600
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "c1",
+        "toolName": "bash",
+        "content": [
+          {
+            "type": "text",
+            "text": "a.txt\nb.txt"
+          }
+        ],
+        "isError": false,
+        "timestamp": 3000
+      },
+      {
+        "role": "compactionSummary",
+        "summary": "## Summary",
+        "tokensBefore": 1200,
+        "timestamp": 4000
+      },
+      {
+        "role": "bashExecution",
+        "command": "pwd",
+        "output": "/x",
+        "exitCode": 1,
+        "cancelled": false,
+        "truncated": false,
+        "timestamp": 5000
+      },
+      {
+        "role": "custom",
+        "customType": "hidden",
+        "content": "x",
+        "display": false,
+        "timestamp": 6000
+      },
+      {
+        "role": "custom",
+        "customType": "agent-team",
+        "content": "alpha finished",
+        "details": {
+          "event": {
+            "from": "alpha",
+            "kind": "completed"
+          }
+        },
+        "timestamp": 7000
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": ""
+          }
+        ],
+        "stopReason": "error",
+        "errorMessage": "Rate limited",
+        "timestamp": 7500
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Read this"
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgo="
+          }
+        ],
+        "timestamp": 8000
+      }
+    ],
+    "partialMessage": {
+      "base": {
+        "role": "assistant",
+        "content": [],
+        "timestamp": 9000
+      },
+      "content": {
+        "0": {
+          "type": "thinking",
+          "text": "Plan"
+        },
+        "1": {
+          "type": "text",
+          "text": "Working"
+        },
+        "2": {
+          "type": "toolCall",
+          "id": "c2",
+          "toolName": "read",
+          "arguments": "{\"path\":\"a.txt\"}"
+        }
+      }
+    },
+    "queue": {
+      "steering": ["faster"],
+      "followUp": []
+    },
+    "run": {
+      "id": "run1",
+      "sessionId": "s1",
+      "status": "running",
+      "startedAt": 8500,
+      "endedAt": null,
+      "failureReason": null
+    },
+    "interactions": [
+      {
+        "id": "i1",
+        "rpcId": "r1",
+        "sessionId": "s1",
+        "runnerEpoch": 2,
+        "kind": "select",
+        "status": "pending",
+        "request": {
+          "title": "Pick one",
+          "message": "Which file?",
+          "options": ["a.txt", "b.txt"],
+          "optionDescriptions": ["first"]
+        },
+        "expiresAt": 99999
+      }
+    ],
+    "notifications": [
+      {
+        "type": "extension_ui_request",
+        "method": "notify",
+        "id": "n1",
+        "message": "Indexed",
+        "receivedAt": 2500
+      },
+      {
+        "type": "extension_ui_request",
+        "method": "setWidget",
+        "widgetKey": "todo",
+        "widgetLines": ["x"]
+      }
+    ],
+    "widgets": {
+      "todo": ["[x] read"]
+    },
+    "statuses": {},
+    "agent": {
+      "model": {
+        "provider": "p",
+        "id": "m1"
+      },
+      "thinkingLevel": "high"
+    },
+    "watermark": {
+      "epoch": 2,
+      "sequence": 10
+    },
+    "partialOutputLost": false
+  },
+  "events": [
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 11,
+      "type": "pi_event",
+      "timestamp": 9050,
+      "data": {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 1,
+          "delta": " on it"
+        }
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 12,
+      "type": "pi_event",
+      "timestamp": 9100,
+      "data": {
+        "type": "tool_execution_start",
+        "toolCallId": "c2",
+        "toolName": "read",
+        "args": {
+          "path": "a.txt"
+        }
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 13,
+      "type": "pi_event",
+      "timestamp": 9150,
+      "data": {
+        "type": "tool_execution_update",
+        "toolCallId": "c2",
+        "partialResult": {
+          "content": [
+            {
+              "type": "text",
+              "text": "partial"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 14,
+      "type": "notification",
+      "timestamp": 9200,
+      "data": {
+        "type": "extension_ui_request",
+        "method": "notify",
+        "id": "n2",
+        "message": "Heads up",
+        "notifyType": "warning"
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 15,
+      "type": "pi_event",
+      "timestamp": 9300,
+      "data": {
+        "type": "tool_execution_end",
+        "toolCallId": "c2",
+        "toolName": "read",
+        "isError": false,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "hello"
+            }
+          ],
+          "details": {
+            "diff": "--- a\n+++ b"
+          }
+        }
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 16,
+      "type": "pi_event",
+      "timestamp": 9400,
+      "data": {
+        "type": "message_end",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "Plan"
+            },
+            {
+              "type": "text",
+              "text": "Working on it"
+            },
+            {
+              "type": "toolCall",
+              "id": "c2",
+              "name": "read",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ],
+          "model": "m1",
+          "stopReason": "toolUse",
+          "timestamp": 9000,
+          "completedAt": 9400
+        }
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 17,
+      "type": "pi_event",
+      "timestamp": 9500,
+      "data": {
+        "type": "message_end",
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "c2",
+          "toolName": "read",
+          "content": [
+            {
+              "type": "text",
+              "text": "hello"
+            }
+          ],
+          "isError": false,
+          "timestamp": 9500
+        }
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 18,
+      "type": "pi_event",
+      "timestamp": 9600,
+      "data": {
+        "type": "message_start",
+        "message": {
+          "role": "assistant",
+          "content": [],
+          "timestamp": 9600
+        }
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 19,
+      "type": "pi_event",
+      "timestamp": 9610,
+      "data": {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "thinking_delta",
+          "contentIndex": 0,
+          "delta": "Hmm"
+        }
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 20,
+      "type": "pi_event",
+      "timestamp": 9620,
+      "data": {
+        "type": "message_update",
+        "assistantMessageEvent": {
+          "type": "text_delta",
+          "contentIndex": 1,
+          "delta": "Done."
+        }
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 21,
+      "type": "pi_event",
+      "timestamp": 9700,
+      "data": {
+        "type": "message_end",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "Hmm"
+            },
+            {
+              "type": "text",
+              "text": "Done."
+            }
+          ],
+          "stopReason": "stop",
+          "timestamp": 9600,
+          "completedAt": 9700
+        }
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 22,
+      "type": "pi_event",
+      "timestamp": 9710,
+      "data": {
+        "type": "queue_update",
+        "steering": [],
+        "followUp": ["next"]
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 23,
+      "type": "notification",
+      "timestamp": 9720,
+      "data": {
+        "type": "extension_ui_request",
+        "method": "setWidget",
+        "widgetKey": "todo",
+        "widgetLines": ["[ ] a"]
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 24,
+      "type": "notification",
+      "timestamp": 9730,
+      "data": {
+        "type": "extension_ui_request",
+        "method": "setStatus",
+        "statusKey": "mem",
+        "statusText": "3 obs"
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 25,
+      "type": "session_renamed",
+      "timestamp": 9740,
+      "data": {
+        "name": "Parser fixed",
+        "source": "auto"
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 26,
+      "type": "runner_stderr",
+      "timestamp": 9750,
+      "data": "warning: something"
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 27,
+      "type": "pi_event",
+      "timestamp": 9760,
+      "data": {
+        "type": "panel_changed",
+        "sections": ["memory"]
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 28,
+      "type": "pi_event",
+      "timestamp": 9770,
+      "data": {
+        "type": "message_start",
+        "message": {
+          "role": "user",
+          "content": "hi",
+          "timestamp": 9770
+        }
+      }
+    },
+    {
+      "sessionId": "s1",
+      "epoch": 2,
+      "sequence": 29,
+      "type": "pi_event",
+      "timestamp": 9780,
+      "data": {
+        "type": "agent_end",
+        "willRetry": false
+      }
+    }
+  ],
+  "expected": {
+    "afterSnapshot": {
+      "cursor": "2:10",
+      "runnerEpoch": "2",
+      "needsSnapshot": false,
+      "sessionName": "Fix the parser",
+      "pinned": false,
+      "runStatus": "running",
+      "runnerStatus": "ready",
+      "selectedModelId": "m1",
+      "thinkingLevel": "high",
+      "queue": ["steer:faster"],
+      "widgets": {
+        "todo": ["[x] read"]
+      },
+      "statuses": {},
+      "interactions": [
+        {
+          "id": "i1",
+          "kind": "select",
+          "title": "Pick one",
+          "description": "Which file?",
+          "status": "pending",
+          "options": [
+            {
+              "value": "a.txt",
+              "description": "first"
+            },
+            {
+              "value": "b.txt"
+            }
+          ]
+        }
+      ],
+      "messages": [
+        {
+          "id": "user-1000",
+          "role": "user",
+          "content": "List files"
+        },
+        {
+          "id": "notice-n1",
+          "role": "system",
+          "content": "Indexed",
+          "systemKind": "notice",
+          "level": "info"
+        },
+        {
+          "id": "assistant-2000",
+          "role": "assistant",
+          "content": "Checking **now**.",
+          "thinking": "Use ls.",
+          "model": "m1",
+          "tools": [
+            {
+              "id": "c1",
+              "name": "bash",
+              "status": "succeeded",
+              "input": {
+                "command": "ls"
+              },
+              "output": "a.txt\nb.txt"
+            }
+          ]
+        },
+        {
+          "id": "compactionSummary-4000",
+          "role": "system",
+          "content": "## Summary",
+          "systemKind": "compaction",
+          "label": "Context compacted",
+          "meta": "1,200 tokens before"
+        },
+        {
+          "id": "bashExecution-5000",
+          "role": "system",
+          "content": "/x",
+          "systemKind": "bash",
+          "level": "warning",
+          "label": "pwd",
+          "meta": "exit 1"
+        },
+        {
+          "id": "custom-7000",
+          "role": "system",
+          "content": "alpha finished",
+          "systemKind": "team",
+          "label": "Agent team",
+          "meta": "alpha · completed"
+        },
+        {
+          "id": "assistant-7500",
+          "role": "assistant",
+          "content": "",
+          "stopReason": "error",
+          "errorMessage": "Rate limited"
+        },
+        {
+          "id": "user-8000",
+          "role": "user",
+          "content": "Read this",
+          "images": 1
+        },
+        {
+          "id": "assistant-9000",
+          "role": "assistant",
+          "content": "Working",
+          "isPartial": true,
+          "thinking": "Plan",
+          "tools": [
+            {
+              "id": "c2",
+              "name": "read",
+              "status": "running",
+              "input": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "afterEvents": {
+      "cursor": "2:29",
+      "runnerEpoch": "2",
+      "needsSnapshot": true,
+      "sessionName": "Parser fixed",
+      "pinned": false,
+      "runStatus": "running",
+      "runnerStatus": "ready",
+      "selectedModelId": "m1",
+      "thinkingLevel": "high",
+      "queue": ["follow_up:next"],
+      "widgets": {
+        "todo": ["[ ] a"]
+      },
+      "statuses": {
+        "mem": "3 obs"
+      },
+      "interactions": [
+        {
+          "id": "i1",
+          "kind": "select",
+          "title": "Pick one",
+          "description": "Which file?",
+          "status": "pending",
+          "options": [
+            {
+              "value": "a.txt",
+              "description": "first"
+            },
+            {
+              "value": "b.txt"
+            }
+          ]
+        }
+      ],
+      "messages": [
+        {
+          "id": "user-1000",
+          "role": "user",
+          "content": "List files"
+        },
+        {
+          "id": "notice-n1",
+          "role": "system",
+          "content": "Indexed",
+          "systemKind": "notice",
+          "level": "info"
+        },
+        {
+          "id": "assistant-2000",
+          "role": "assistant",
+          "content": "Checking **now**.",
+          "thinking": "Use ls.",
+          "model": "m1",
+          "tools": [
+            {
+              "id": "c1",
+              "name": "bash",
+              "status": "succeeded",
+              "input": {
+                "command": "ls"
+              },
+              "output": "a.txt\nb.txt"
+            }
+          ]
+        },
+        {
+          "id": "compactionSummary-4000",
+          "role": "system",
+          "content": "## Summary",
+          "systemKind": "compaction",
+          "label": "Context compacted",
+          "meta": "1,200 tokens before"
+        },
+        {
+          "id": "bashExecution-5000",
+          "role": "system",
+          "content": "/x",
+          "systemKind": "bash",
+          "level": "warning",
+          "label": "pwd",
+          "meta": "exit 1"
+        },
+        {
+          "id": "custom-7000",
+          "role": "system",
+          "content": "alpha finished",
+          "systemKind": "team",
+          "label": "Agent team",
+          "meta": "alpha · completed"
+        },
+        {
+          "id": "assistant-7500",
+          "role": "assistant",
+          "content": "",
+          "stopReason": "error",
+          "errorMessage": "Rate limited"
+        },
+        {
+          "id": "user-8000",
+          "role": "user",
+          "content": "Read this",
+          "images": 1
+        },
+        {
+          "id": "notice-n2",
+          "role": "system",
+          "content": "Heads up",
+          "systemKind": "notice",
+          "level": "warning"
+        },
+        {
+          "id": "assistant-9000",
+          "role": "assistant",
+          "content": "Working on it",
+          "thinking": "Plan",
+          "model": "m1",
+          "tools": [
+            {
+              "id": "c2",
+              "name": "read",
+              "status": "succeeded",
+              "input": {
+                "path": "a.txt"
+              },
+              "output": "hello",
+              "diff": "--- a\n+++ b"
+            }
+          ]
+        },
+        {
+          "id": "assistant-9600",
+          "role": "assistant",
+          "content": "Done.",
+          "thinking": "Hmm"
+        }
+      ]
+    }
+  }
+}

@@ -105,6 +105,14 @@ function controlLease(raw: any, clientId = getClientId()): ControlLease {
 
 async function normalizeSnapshot(raw: any): Promise<SessionSnapshot> {
   const lease = await request<any>(`/api/sessions/${encodeURIComponent(raw.session.id)}/control`);
+  return snapshotFromRaw(raw, lease);
+}
+
+/**
+ * A gateway snapshot (plus its control lease) as client state. Pure, so the
+ * shared timeline fixtures (`fixtures/timeline`) can pin it for every client.
+ */
+export function snapshotFromRaw(raw: any, lease: unknown): SessionSnapshot {
   const partial = piPartialMessage(raw.partialMessage);
   return {
     session: sessionSummary(raw.session),
