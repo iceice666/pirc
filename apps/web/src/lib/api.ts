@@ -200,6 +200,25 @@ export const api = {
       await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot`),
     ),
   command: async (sessionId: string, input: SessionCommandInput): Promise<CommandReceipt> => {
+    // A selection can be made before this browser acquires control, while a new
+    // session has no runner yet. Apply the visible settings before the prompt;
+    // putting modelId on a message payload does not change the agent's model.
+    if (input.kind === 'prompt') {
+      const applySetting = async (setting: Partial<SessionCommandInput>) => {
+        const receipt = await api.command(sessionId, {
+          ...input,
+          ...setting,
+          commandId: crypto.randomUUID(),
+        });
+        if (receipt.status !== 'accepted')
+          throw new Error(receipt.message ?? 'Session settings were not accepted.');
+      };
+      if (input.modelId) {
+        if (!input.provider) throw new Error('The selected model has no provider.');
+        await applySetting({ kind: 'set_model' });
+      }
+      if (input.thinkingLevel) await applySetting({ kind: 'set_thinking' });
+    }
     const payload =
       input.kind === 'prompt' || input.kind === 'steer' || input.kind === 'follow_up'
         ? { type: input.kind, message: input.content ?? '', uploadIds: input.attachmentIds }

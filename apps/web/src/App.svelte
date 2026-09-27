@@ -324,6 +324,7 @@
           controlGeneration: sessionState.control.generation,
           content: content || undefined,
           modelId: selectedModel || undefined,
+          provider: models.find((model) => model.id === selectedModel)?.provider,
           thinkingLevel: thinking,
           attachmentIds: attachmentIds.length ? attachmentIds : undefined,
         });
