@@ -36,6 +36,7 @@
   import { onFilePreviewRequest } from './lib/file-links';
   import { loadHighlighter } from './lib/markdown';
   import { activateUpdate, registerPwa } from './lib/pwa';
+  import { syncControl } from './lib/control';
   import { fromSnapshot, reduceEvent } from './lib/state';
   import { parseTodoWidget, TODO_WIDGET } from './lib/todo';
   import { GOAL_WIDGET, parseGoalWidget } from './lib/goal';
@@ -207,28 +208,14 @@
     const warm = () => void loadHighlighter();
     if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 3000 });
     else setTimeout(warm, 1000);
-    leaseHeartbeat = setInterval(() => {
-      if (
-        !usingDemo &&
-        activeSessionId &&
-        sessionState?.control.heldByCurrentClient &&
-        sessionState.control.generation &&
-        connection === 'connected'
-      ) {
-        void api
-          .heartbeatControl(activeSessionId, sessionState.control.generation)
-          .then((control) => {
-            if (sessionState) sessionState = { ...sessionState, control };
-          })
-          .catch(() => {
-            if (sessionState)
-              sessionState = {
-                ...sessionState,
-                control: { ...sessionState.control, heldByCurrentClient: false },
-              };
-          });
-      }
-    }, 10_000);
+    leaseHeartbeat = setInterval(() => void refreshControl(), 10_000);
+    // Background tabs and suspended mobile pages skip heartbeats; catch up at once.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshControl();
+    };
+    const onOnline = () => void refreshControl();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
     const nodeRefresh = setInterval(() => {
       if (!usingDemo)
         void Promise.all([api.nodes(), api.workspaces()])
@@ -241,6 +228,8 @@
     return () => {
       clearInterval(nodeRefresh);
       if (leaseHeartbeat) clearInterval(leaseHeartbeat);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
       events?.close();
       removePwa();
       removeFileLinks();
@@ -292,11 +281,15 @@
       sessionState = fromSnapshot(snapshot);
       hiddenMessages = Math.max(0, sessionState.messages.length - MESSAGE_PAGE);
       if (!usingDemo) void loadModels(id);
+      if (!usingDemo) void refreshControl();
       if (!usingDemo) {
         events = connectEvents({
           sessionId: id,
           cursor: snapshot.cursor,
-          onState: (state) => (connection = state),
+          onState: (state) => {
+            connection = state;
+            if (state === 'connected') void refreshControl();
+          },
           onEvent: (event) => {
             if (!sessionState) return;
             const followLatest =
@@ -459,6 +452,24 @@
       pageError = error instanceof Error ? error.message : 'The command was not accepted.';
     } finally {
       commandBusy = false;
+    }
+  }
+
+  let controlSyncing: string | undefined;
+  /** Renew this client's lease, or pick control back up if nobody holds a live one. */
+  async function refreshControl() {
+    const id = activeSessionId;
+    if (usingDemo || !id || !sessionState || controlSyncing === id) return;
+    controlSyncing = id;
+    try {
+      const control = await syncControl(api, id, sessionState.control, {
+        // A hidden tab only keeps what it has; it never grabs control.
+        mayAcquire: document.visibilityState === 'visible',
+      });
+      if (control && sessionState && activeSessionId === id)
+        sessionState = { ...sessionState, control };
+    } finally {
+      if (controlSyncing === id) controlSyncing = undefined;
     }
   }
 

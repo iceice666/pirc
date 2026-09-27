@@ -184,6 +184,8 @@ export interface ControlLease {
   holderClientId?: string;
   holderName?: string;
   heldByCurrentClient: boolean;
+  /** The lease row exists but its TTL has passed; anyone may acquire it. */
+  expired?: boolean;
   generation?: number;
   expiresAt?: string;
 }

@@ -123,6 +123,7 @@ function controlLease(raw: any, clientId = getClientId()): ControlLease {
   return {
     holderClientId: lease.clientId,
     heldByCurrentClient: lease.clientId === clientId && !lease.expired,
+    expired: !!lease.expired,
     generation: lease.generation,
     expiresAt: iso(lease.expiresAt),
   };
@@ -311,6 +312,14 @@ export const api = {
         body: JSON.stringify({ clientId, force: true }),
       }),
       clientId,
+    ),
+  /** Acquire without force: the node refuses while another client holds a live lease. */
+  acquireControl: async (sessionId: string) =>
+    controlLease(
+      await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/control/acquire`, {
+        method: 'POST',
+        body: JSON.stringify({ clientId: getClientId(), force: false }),
+      }),
     ),
   heartbeatControl: async (sessionId: string, generation: number) =>
     controlLease(
