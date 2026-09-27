@@ -4,24 +4,28 @@
   import type { FileTarget } from '../../file-links';
   import { highlightCode, languageForPath } from '../../markdown';
   import { panelApi, type DirEntry, type FileContent } from '../../panel-api';
+  import { watch } from '../../watch.svelte';
   import Markdown from '../Markdown.svelte';
 
-  export let sessionId: string;
-  /** Set by the parent (e.g. a Git or chat file link) to open a file directly. */
-  export let openRequest: (FileTarget & { seq: number }) | undefined = undefined;
-  export let refreshKey = 0;
+  interface Props {
+    sessionId: string;
+    /** Set by the parent (e.g. a Git or chat file link) to open a file directly. */
+    openRequest?: (FileTarget & { seq: number }) | undefined;
+    refreshKey?: number;
+  }
 
-  let dir = '';
-  let entries: DirEntry[] = [];
-  let truncated = false;
-  let file: FileContent | undefined;
-  let rendered = true;
-  let error = '';
-  let loading = false;
-  let loadedFor = '';
+  let { sessionId, openRequest = undefined, refreshKey = 0 }: Props = $props();
+
+  let dir = $state('');
+  let entries: DirEntry[] = $state([]);
+  let truncated = $state(false);
+  let file: FileContent | undefined = $state();
+  let rendered = $state(true);
+  let error = $state('');
+  let loading = $state(false);
   /** Line range a link pointed at (1-based, inclusive), highlighted in the source view. */
-  let focus: { line: number; endLine: number } | undefined;
-  let codeView: HTMLDivElement | undefined;
+  let focus: { line: number; endLine: number } | undefined = $state();
+  let codeView: HTMLDivElement | undefined = $state();
 
   const MAX_HIGHLIGHT = 200_000;
   /** `.code-view pre`: 12px font × 1.55 line height, 8px top padding (app.css). */
@@ -98,35 +102,44 @@
     return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
   }
 
-  $: crumbs = dir ? dir.split('/') : [];
-  $: language = file ? languageForPath(file.path) : undefined;
-  $: isMarkdown = !!file && /\.(md|markdown|mdx)$/i.test(file.path);
-  $: lineNumbers = Array.from(
-    { length: (file?.content ?? '').replace(/\n$/, '').split('\n').length },
-    (_, index) => index + 1,
-  ).join('\n');
-  $: highlighted =
+  let crumbs = $derived(dir ? dir.split('/') : []);
+  let language = $derived(file ? languageForPath(file.path) : undefined);
+  let isMarkdown = $derived(!!file && /\.(md|markdown|mdx)$/i.test(file.path));
+  let lineNumbers = $derived(
+    Array.from(
+      { length: (file?.content ?? '').replace(/\n$/, '').split('\n').length },
+      (_, index) => index + 1,
+    ).join('\n'),
+  );
+  let highlighted = $derived(
     file?.content !== undefined && file.content.length <= MAX_HIGHLIGHT && language
       ? highlightCode(file.content, language)
-      : undefined;
+      : undefined,
+  );
 
-  $: if (sessionId !== loadedFor) {
-    loadedFor = sessionId;
-    file = undefined;
-    entries = [];
-    void listDir('');
-  }
-  let lastOpen: number | undefined;
-  $: if (openRequest && openRequest.seq !== lastOpen) {
-    lastOpen = openRequest.seq;
-    void openFile(openRequest.path, openRequest);
-  }
-  let lastRefresh = refreshKey;
-  $: if (refreshKey !== lastRefresh) {
-    lastRefresh = refreshKey;
-    void listDir(dir);
-    if (file) void openFile(file.path, {}, true);
-  }
+  watch(
+    () => sessionId,
+    () => {
+      file = undefined;
+      entries = [];
+      void listDir('');
+    },
+    { immediate: true },
+  );
+  watch(
+    () => openRequest?.seq,
+    () => {
+      if (openRequest) void openFile(openRequest.path, openRequest);
+    },
+    { immediate: true },
+  );
+  watch(
+    () => refreshKey,
+    () => {
+      void listDir(dir);
+      if (file) void openFile(file.path, {}, true);
+    },
+  );
 </script>
 
 <div class="tab-body">
@@ -136,7 +149,7 @@
         class="icon-button small"
         type="button"
         aria-label="Back to folder"
-        on:click={() => {
+        onclick={() => {
           file = undefined;
           focus = undefined;
         }}><ArrowLeft size={16} /></button
@@ -151,7 +164,7 @@
           class="icon-button small"
           type="button"
           aria-label={rendered ? 'Show source' : 'Show rendered'}
-          on:click={() => (rendered = !rendered)}
+          onclick={() => (rendered = !rendered)}
         >
           {#if rendered}<Code size={15} />{:else}<Eye size={15} />{/if}
         </button>
@@ -189,10 +202,10 @@
   {:else}
     <div class="toolbar">
       <nav class="crumbs" aria-label="Folder">
-        <button type="button" on:click={() => listDir('')}>workspace</button>
+        <button type="button" onclick={() => listDir('')}>workspace</button>
         {#each crumbs as crumb, index}
           <ChevronRight size={12} />
-          <button type="button" on:click={() => listDir(crumbs.slice(0, index + 1).join('/'))}
+          <button type="button" onclick={() => listDir(crumbs.slice(0, index + 1).join('/'))}
             >{crumb}</button
           >
         {/each}
@@ -201,7 +214,7 @@
         class="icon-button small"
         type="button"
         aria-label="Refresh"
-        on:click={() => listDir(dir)}
+        onclick={() => listDir(dir)}
         disabled={loading}><RefreshCw class={loading ? 'spin' : ''} size={15} /></button
       >
     </div>
@@ -212,7 +225,7 @@
           <button
             type="button"
             class="file-row"
-            on:click={() => listDir(crumbs.slice(0, -1).join('/'))}
+            onclick={() => listDir(crumbs.slice(0, -1).join('/'))}
           >
             <Folder size={15} /><span class="file-name">..</span>
           </button>
@@ -223,7 +236,7 @@
           <button
             type="button"
             class="file-row"
-            on:click={() => open(entry)}
+            onclick={() => open(entry)}
             disabled={entry.kind === 'other'}
           >
             {#if entry.kind === 'dir'}<Folder size={15} />{:else}<File size={15} />{/if}

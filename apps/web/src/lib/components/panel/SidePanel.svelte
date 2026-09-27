@@ -10,40 +10,59 @@
   import { onFilePreviewRequest, type FileTarget } from '../../file-links';
   import { panelApi, type PanelState, type PanelTab } from '../../panel-api';
   import type { ClientSessionState, RunStatus } from '../../types';
+  import { watch } from '../../watch.svelte';
   import FilesTab from './FilesTab.svelte';
   import GitTab from './GitTab.svelte';
   import MemoryTab from './MemoryTab.svelte';
   import TasksTab from './TasksTab.svelte';
   import TerminalTab from './TerminalTab.svelte';
 
-  export let open = true;
-  export let tab: PanelTab = 'files';
-  export let sessionState: ClientSessionState;
-  export let runStatus: RunStatus | undefined;
-  export let hasControl: boolean;
-  export let usingDemo = false;
-  /** Incremented by the parent for every `panel_changed` event; sections listed in `changed`. */
-  export let changeTick = 0;
-  export let changed: string[] = [];
-  /** Current width in px; the drag handle reports new widths through `onresize`. */
-  export let width = 360;
-  export let minWidth = 280;
-  export let maxWidth = 900;
-  export let defaultWidth = 360;
-  export let onresize: (width: number) => void = () => {};
-  /** True while the edge is being dragged (the parent disables width transitions). */
-  export let resizing = false;
+  interface Props {
+    open?: boolean;
+    tab?: PanelTab;
+    sessionState: ClientSessionState;
+    runStatus: RunStatus | undefined;
+    hasControl: boolean;
+    usingDemo?: boolean;
+    /** Incremented by the parent for every `panel_changed` event; sections listed in `changed`. */
+    changeTick?: number;
+    changed?: string[];
+    /** Current width in px; the drag handle reports new widths through `onresize`. */
+    width?: number;
+    minWidth?: number;
+    maxWidth?: number;
+    defaultWidth?: number;
+    onresize?: (width: number) => void;
+    /** True while the edge is being dragged (the parent disables width transitions). */
+    resizing?: boolean;
+  }
 
-  let state: PanelState | undefined;
-  let stateError = '';
-  let gitRefresh = 0;
-  let filesRefresh = 0;
-  let openRequest: (FileTarget & { seq: number }) | undefined;
+  let {
+    open = true,
+    tab = $bindable('files'),
+    sessionState,
+    runStatus,
+    hasControl,
+    usingDemo = false,
+    changeTick = 0,
+    changed = [],
+    width = 360,
+    minWidth = 280,
+    maxWidth = 900,
+    defaultWidth = 360,
+    onresize = () => {},
+    resizing = $bindable(false),
+  }: Props = $props();
+
+  let panelState: PanelState | undefined = $state();
+  let stateError = $state('');
+  let gitRefresh = $state(0);
+  let filesRefresh = $state(0);
+  let openRequest: (FileTarget & { seq: number }) | undefined = $state();
   let openSeq = 0;
   let stateTimer: ReturnType<typeof setTimeout> | undefined;
-  let loadedFor = '';
   // Terminals stay mounted once visited so their sockets survive tab switches.
-  let terminalMounted = false;
+  let terminalMounted = $state(false);
 
   const tabs: Array<{ id: PanelTab; label: string; icon: typeof FolderTree }> = [
     { id: 'files', label: 'Files', icon: FolderTree },
@@ -53,16 +72,15 @@
     { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
   ];
 
-  $: sessionId = sessionState.session.id;
-  $: demo = usingDemo;
+  let sessionId = $derived(sessionState.session.id);
 
   async function loadState() {
-    if (demo) return;
+    if (usingDemo) return;
     const id = sessionId;
     try {
       const next = await panelApi.state(id);
       if (id !== sessionId) return;
-      state = next;
+      panelState = next;
       stateError = '';
     } catch (cause) {
       stateError = cause instanceof Error ? cause.message : 'Unable to load panel state.';
@@ -78,37 +96,45 @@
   }
   onDestroy(() => stateTimer && clearTimeout(stateTimer));
 
-  $: if (sessionId !== loadedFor) {
-    loadedFor = sessionId;
-    state = undefined;
-    openRequest = undefined;
-    terminalMounted = false;
-    if (open) void loadState();
-  }
-  $: if (tab === 'terminal') terminalMounted = true;
+  watch(
+    () => sessionId,
+    () => {
+      panelState = undefined;
+      openRequest = undefined;
+      terminalMounted = false;
+      if (open) void loadState();
+    },
+    { immediate: true },
+  );
+  $effect.pre(() => {
+    if (tab === 'terminal') terminalMounted = true;
+  });
   // Tab activation refreshes its data.
-  let lastTab: PanelTab | undefined;
-  $: if (open && tab !== lastTab) {
-    lastTab = tab;
-    if (tab === 'memory' || tab === 'tasks') void loadState();
-  }
-  let lastTick = changeTick;
-  $: if (changeTick !== lastTick) {
-    lastTick = changeTick;
-    if (changed.some((section) => section !== 'git')) scheduleState();
-    if (changed.includes('git')) gitRefresh++;
-  }
+  watch(
+    () => open && tab,
+    (active) => {
+      if (active === 'memory' || active === 'tasks') void loadState();
+    },
+    { immediate: true },
+  );
+  watch(
+    () => changeTick,
+    () => {
+      if (changed.some((section) => section !== 'git')) scheduleState();
+      if (changed.includes('git')) gitRefresh++;
+    },
+  );
   // A finished run may have changed the working tree and memory.
-  let lastRun: RunStatus | undefined = runStatus;
-  $: if (runStatus !== lastRun) {
-    const finished = lastRun === 'running' && runStatus !== 'running';
-    lastRun = runStatus;
-    if (finished) {
-      gitRefresh++;
-      filesRefresh++;
-      scheduleState(100);
-    }
-  }
+  watch(
+    () => runStatus,
+    (status, previous) => {
+      if (previous === 'running' && status !== 'running') {
+        gitRefresh++;
+        filesRefresh++;
+        scheduleState(100);
+      }
+    },
+  );
 
   function openFile(target: string | FileTarget) {
     // A fresh sequence number so the same path can be reopened.
@@ -157,10 +183,10 @@
     onresize(clampWidth(next));
   }
 
-  $: badge = {
-    tasks: (state?.backgroundTasks ?? []).filter((task) => task.status === 'running').length,
-    memory: state?.memoryRuntime?.phase ? 1 : 0,
-  } as Record<string, number>;
+  let badge = $derived({
+    tasks: (panelState?.backgroundTasks ?? []).filter((task) => task.status === 'running').length,
+    memory: panelState?.memoryRuntime?.phase ? 1 : 0,
+  } as Record<string, number>);
 </script>
 
 <aside class:open class="details side-panel" aria-label="Session side panel">
@@ -177,13 +203,13 @@
     aria-valuemax={maxWidth}
     tabindex={open ? 0 : -1}
     title="Drag to resize · double-click to reset"
-    on:pointerdown={startResize}
-    on:pointermove={moveResize}
-    on:pointerup={endResize}
-    on:pointercancel={endResize}
-    on:lostpointercapture={() => (resizing = false)}
-    on:dblclick={() => onresize(clampWidth(defaultWidth))}
-    on:keydown={keyResize}
+    onpointerdown={startResize}
+    onpointermove={moveResize}
+    onpointerup={endResize}
+    onpointercancel={endResize}
+    onlostpointercapture={() => (resizing = false)}
+    ondblclick={() => onresize(clampWidth(defaultWidth))}
+    onkeydown={keyResize}
   ></div>
   <div class="panel-tabs" role="tablist" aria-label="Side panel">
     {#each tabs as item (item.id)}
@@ -193,9 +219,9 @@
         class:active={tab === item.id}
         aria-selected={tab === item.id}
         title={item.label}
-        on:click={() => (tab = item.id)}
+        onclick={() => (tab = item.id)}
       >
-        <svelte:component this={item.icon} size={16} />
+        <item.icon size={16} />
         <span class="tab-label">{item.label}</span>
         {#if badge[item.id]}<span class="tab-dot" aria-label="activity"></span>{/if}
       </button>
@@ -203,24 +229,24 @@
   </div>
 
   <div class="panel-body">
-    {#if demo}
+    {#if usingDemo}
       <p class="panel-empty">Connect to a gateway to use this panel.</p>
     {:else if tab === 'files'}
       <FilesTab {sessionId} {openRequest} refreshKey={filesRefresh} />
     {:else if tab === 'git'}
       <GitTab {sessionId} refreshKey={gitRefresh} onopenfile={openFile} />
     {:else if tab === 'memory'}
-      {#if stateError && !state}<p class="panel-error">{stateError}</p>{/if}
+      {#if stateError && !panelState}<p class="panel-error">{stateError}</p>{/if}
       <MemoryTab
-        memory={state?.memory ?? null}
-        runtime={state?.memoryRuntime ?? null}
-        agentRunning={state?.agentRunning ?? false}
+        memory={panelState?.memory ?? null}
+        runtime={panelState?.memoryRuntime ?? null}
+        agentRunning={panelState?.agentRunning ?? false}
       />
     {:else if tab === 'tasks'}
-      {#if stateError && !state}<p class="panel-error">{stateError}</p>{/if}
-      <TasksTab {sessionId} {state} />
+      {#if stateError && !panelState}<p class="panel-error">{stateError}</p>{/if}
+      <TasksTab {sessionId} {panelState} />
     {/if}
-    {#if terminalMounted && !demo}
+    {#if terminalMounted && !usingDemo}
       <div class="terminal-slot" class:hidden={tab !== 'terminal'}>
         <TerminalTab
           {sessionId}

@@ -9,28 +9,42 @@
   import { loadLayout, saveLayout } from '../storage';
   import type { GoalView } from '../goal';
 
-  export let goal: GoalView;
-  export let disabled = false;
-  /** Sends `/goal pause` or `/goal resume`. */
-  export let onaction: (action: 'pause' | 'resume') => void;
+  interface Props {
+    goal: GoalView;
+    disabled?: boolean;
+    /** Sends `/goal pause` or `/goal resume`. */
+    onaction: (action: 'pause' | 'resume') => void;
+  }
 
-  let expanded = loadLayout('goalExpanded', false);
-  $: saveLayout('goalExpanded', expanded);
+  let { goal, disabled = false, onaction }: Props = $props();
 
-  $: running = goal.phase === 'active' && !goal.disarmed;
-  $: phaseLabel = goal.disarmed
-    ? 'Waiting for resume'
-    : { active: 'Active', paused: 'Paused', blocked: 'Blocked', complete: 'Complete' }[goal.phase];
-  $: dot = running
-    ? 'ongoing'
-    : goal.phase === 'complete'
-      ? 'done'
-      : goal.phase === 'blocked'
-        ? 'error'
-        : 'idle';
-  $: canResume =
+  let expanded = $state(loadLayout('goalExpanded', false));
+  function toggle() {
+    expanded = !expanded;
+    saveLayout('goalExpanded', expanded);
+  }
+
+  let running = $derived(goal.phase === 'active' && !goal.disarmed);
+  let phaseLabel = $derived(
+    goal.disarmed
+      ? 'Waiting for resume'
+      : { active: 'Active', paused: 'Paused', blocked: 'Blocked', complete: 'Complete' }[
+          goal.phase
+        ],
+  );
+  let dot = $derived(
+    running
+      ? 'ongoing'
+      : goal.phase === 'complete'
+        ? 'done'
+        : goal.phase === 'blocked'
+          ? 'error'
+          : 'idle',
+  );
+  let canResume = $derived(
     (goal.phase === 'paused' || goal.phase === 'blocked' || goal.disarmed) &&
-    (goal.maxRounds === undefined || goal.rounds < goal.maxRounds);
+      (goal.maxRounds === undefined || goal.rounds < goal.maxRounds),
+  );
 </script>
 
 <section class="dock-section goal-dock" aria-label="Goal">
@@ -40,7 +54,7 @@
       type="button"
       aria-expanded={expanded}
       aria-controls="goal-dock-body"
-      on:click={() => (expanded = !expanded)}
+      onclick={toggle}
     >
       <span class="todo-lead">
         {#if running}<span class="state-dot ongoing" aria-hidden="true"></span>{:else}<Target
@@ -55,11 +69,11 @@
       <span class:collapsed={!expanded} class="dock-chevron"><ChevronDown size={14} /></span>
     </button>
     {#if running}
-      <button class="dock-action" type="button" {disabled} on:click={() => onaction('pause')}
+      <button class="dock-action" type="button" {disabled} onclick={() => onaction('pause')}
         >Pause</button
       >
     {:else if canResume}
-      <button class="dock-action" type="button" {disabled} on:click={() => onaction('resume')}
+      <button class="dock-action" type="button" {disabled} onclick={() => onaction('resume')}
         >Resume</button
       >
     {/if}

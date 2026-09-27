@@ -2,15 +2,20 @@
   import { ArrowRight, CircleHelp, Clock3, X } from '@lucide/svelte';
   import type { InteractionAnswer, PendingInteraction } from '../types';
 
-  export let interaction: PendingInteraction;
-  export let disabled = false;
-  export let onanswer: (answer: InteractionAnswer) => void;
+  interface Props {
+    interaction: PendingInteraction;
+    disabled?: boolean;
+    onanswer: (answer: InteractionAnswer) => void;
+  }
 
-  let value =
+  let { interaction, disabled = false, onanswer }: Props = $props();
+
+  const initialValue = () =>
     interaction.kind === 'input' || interaction.kind === 'editor'
       ? (interaction.initialValue ?? '')
       : '';
-  let selected: string[] = [];
+  let value = $state(initialValue());
+  let selected: string[] = $state([]);
 
   function toggle(option: string) {
     if (interaction.kind !== 'select') return;
@@ -46,7 +51,7 @@
           type="button"
           class:selected={selected.includes(option.value)}
           class="option"
-          on:click={() => toggle(option.value)}
+          onclick={() => toggle(option.value)}
           {disabled}
           role={interaction.multiple ? 'checkbox' : 'radio'}
           aria-checked={selected.includes(option.value)}
@@ -89,7 +94,7 @@
       <button
         class="button ghost small"
         type="button"
-        on:click={() => onanswer({ action: 'cancel' })}
+        onclick={() => onanswer({ action: 'cancel' })}
         {disabled}
       >
         <X size={15} />
@@ -98,7 +103,7 @@
       <button
         class="button dark small"
         type="button"
-        on:click={submit}
+        onclick={submit}
         disabled={disabled || (interaction.kind === 'select' && selected.length === 0)}
       >
         {interaction.kind === 'confirm' ? (interaction.confirmLabel ?? 'Yes, continue') : 'Submit'}

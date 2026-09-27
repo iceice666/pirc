@@ -28,55 +28,88 @@
   import GoalDock from './GoalDock.svelte';
   import TodoDock from './TodoDock.svelte';
 
-  export let value = '';
-  /** The session goal, docked above the task list. */
-  export let goal: GoalView | undefined = undefined;
-  export let ongoal: (action: 'pause' | 'resume') => void = () => undefined;
-  /** The agent's task list, docked above the queue. */
-  export let todo: TodoList | undefined = undefined;
-  /** Remaining extension status lines (e.g. compaction), shown quietly under the input. */
-  export let statuses: string[] = [];
-  export let connection: ConnectionState;
-  export let runStatus: RunStatus | undefined;
-  export let hasControl: boolean;
-  export let models: ModelOption[];
-  export let modelId = '';
-  export let thinking: ThinkingLevel = 'medium';
-  export let attachments: Array<Attachment & { preview?: string; uploading?: boolean }> = [];
-  /** Messages waiting for the current run; shown as a dock above the input. */
-  export let queue: QueueItem[] = [];
-  export let busy = false;
-  export let onvalue: (value: string) => void;
-  export let onsubmit: (kind: CommandKind) => void;
-  export let onupload: (files: FileList) => void;
-  export let onremove: (id: string) => void;
-  export let onmodel: (id: string) => void;
-  export let onthinking: (level: ThinkingLevel) => void;
-  export let onstop: () => void;
-  export let onclear: () => void;
+  interface Props {
+    value?: string;
+    /** The session goal, docked above the task list. */
+    goal?: GoalView | undefined;
+    ongoal?: (action: 'pause' | 'resume') => void;
+    /** The agent's task list, docked above the queue. */
+    todo?: TodoList | undefined;
+    /** Remaining extension status lines (e.g. compaction), shown quietly under the input. */
+    statuses?: string[];
+    connection: ConnectionState;
+    runStatus: RunStatus | undefined;
+    hasControl: boolean;
+    models: ModelOption[];
+    modelId?: string;
+    thinking?: ThinkingLevel;
+    attachments?: Array<Attachment & { preview?: string; uploading?: boolean }>;
+    /** Messages waiting for the current run; shown as a dock above the input. */
+    queue?: QueueItem[];
+    busy?: boolean;
+    onvalue: (value: string) => void;
+    onsubmit: (kind: CommandKind) => void;
+    onupload: (files: FileList) => void;
+    onremove: (id: string) => void;
+    onmodel: (id: string) => void;
+    onthinking: (level: ThinkingLevel) => void;
+    onstop: () => void;
+    onclear: () => void;
+  }
 
-  let mode: CommandKind = 'prompt';
-  let fileInput: HTMLInputElement;
-  let queueExpanded = true;
+  let {
+    value = '',
+    goal = undefined,
+    ongoal = () => undefined,
+    todo = undefined,
+    statuses = [],
+    connection,
+    runStatus,
+    hasControl,
+    models,
+    modelId = '',
+    thinking = 'medium',
+    attachments = [],
+    queue = [],
+    busy = false,
+    onvalue,
+    onsubmit,
+    onupload,
+    onremove,
+    onmodel,
+    onthinking,
+    onstop,
+    onclear,
+  }: Props = $props();
 
-  $: active =
+  let mode = $state<CommandKind>('prompt');
+  let fileInput: HTMLInputElement | undefined = $state();
+  let queueExpanded = $state(true);
+
+  let active = $derived(
     runStatus === 'running' ||
-    runStatus === 'waiting_input' ||
-    runStatus === 'queued' ||
-    runStatus === 'stopping';
-  $: if (active && mode === 'prompt') mode = 'steer';
-  $: if (!active && (mode === 'steer' || mode === 'follow_up')) mode = 'prompt';
-  $: canSubmit =
+      runStatus === 'waiting_input' ||
+      runStatus === 'queued' ||
+      runStatus === 'stopping',
+  );
+  // A run starts in steer mode; once it ends messages are prompts again.
+  $effect.pre(() => {
+    mode = active ? 'steer' : 'prompt';
+  });
+  let canSubmit = $derived(
     value.trim().length > 0 &&
-    connection === 'connected' &&
-    hasControl &&
-    !busy &&
-    !attachments.some((item) => item.uploading);
-  $: stopping = runStatus === 'stopping';
+      connection === 'connected' &&
+      hasControl &&
+      !busy &&
+      !attachments.some((item) => item.uploading),
+  );
+  let stopping = $derived(runStatus === 'stopping');
   /** During a run an empty composer's primary button stops it; typing turns it back into send. */
-  $: showStopPrimary = active && value.trim().length === 0 && !busy;
-  $: if (queue.length === 0) queueExpanded = true;
-  $: placeholder =
+  let showStopPrimary = $derived(active && value.trim().length === 0 && !busy);
+  $effect.pre(() => {
+    if (queue.length === 0) queueExpanded = true;
+  });
+  let placeholder = $derived(
     connection === 'offline'
       ? 'Offline draft — it will stay on this device'
       : !hasControl
@@ -85,7 +118,8 @@
           ? 'Steer the current run…'
           : mode === 'follow_up'
             ? 'Queue what should happen next…'
-            : 'Tell the agent what to work on…';
+            : 'Tell the agent what to work on…',
+  );
 
   function keydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
@@ -113,7 +147,7 @@
               type="button"
               aria-expanded={queueExpanded}
               aria-controls="queue-dock-list"
-              on:click={() => (queueExpanded = !queueExpanded)}
+              onclick={() => (queueExpanded = !queueExpanded)}
             >
               <ListOrdered size={14} />
               <span class="dock-title">{queue.length} queued</span>
@@ -121,7 +155,7 @@
                 ><ChevronDown size={14} /></span
               >
             </button>
-            <button class="dock-action" type="button" on:click={onclear} disabled={!hasControl}
+            <button class="dock-action" type="button" onclick={onclear} disabled={!hasControl}
               >Clear</button
             >
           </div>
@@ -164,7 +198,7 @@
             {#if attachment.uploading}<LoaderCircle class="spin" size={15} />{:else}<button
                 type="button"
                 aria-label="Remove {attachment.name}"
-                on:click={() => onremove(attachment.id)}><X size={14} /></button
+                onclick={() => onremove(attachment.id)}><X size={14} /></button
               >{/if}
           </div>
         {/each}
@@ -176,8 +210,8 @@
       rows="2"
       {placeholder}
       {value}
-      on:input={(event) => onvalue(event.currentTarget.value)}
-      on:keydown={keydown}
+      oninput={(event) => onvalue(event.currentTarget.value)}
+      onkeydown={keydown}
     ></textarea>
     <div class="composer-tools" class:running={active}>
       <input
@@ -186,14 +220,14 @@
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
         multiple
-        on:change={(event) => event.currentTarget.files && onupload(event.currentTarget.files)}
+        onchange={(event) => event.currentTarget.files && onupload(event.currentTarget.files)}
       />
       <button
         class="icon-button"
         type="button"
         title="Attach images"
         aria-label="Attach images"
-        on:click={() => fileInput.click()}
+        onclick={() => fileInput?.click()}
       >
         <Paperclip size={18} />
       </button>
@@ -234,13 +268,13 @@
             class:active={mode === 'steer'}
             type="button"
             title="Deliver into the current run"
-            on:click={() => (mode = 'steer')}>Steer</button
+            onclick={() => (mode = 'steer')}>Steer</button
           >
           <button
             class:active={mode === 'follow_up'}
             type="button"
             title="Queue for after the current run"
-            on:click={() => (mode = 'follow_up')}>Follow up</button
+            onclick={() => (mode = 'follow_up')}>Follow up</button
           >
         </div>
       {/if}
@@ -250,7 +284,7 @@
         <button
           class="stop-button secondary"
           type="button"
-          on:click={onstop}
+          onclick={onstop}
           disabled={!hasControl || stopping}
           aria-label="Stop run"
           title="Stop run"
@@ -262,7 +296,7 @@
         <button
           class="send-button stop-button"
           type="button"
-          on:click={onstop}
+          onclick={onstop}
           disabled={!hasControl || stopping}
           aria-label={stopping ? 'Stopping run' : 'Stop run'}
           title={stopping ? 'Stopping…' : 'Stop run'}
@@ -276,7 +310,7 @@
         <button
           class="send-button"
           type="button"
-          on:click={() => onsubmit(mode)}
+          onclick={() => onsubmit(mode)}
           disabled={!canSubmit}
           aria-label={mode === 'follow_up' ? 'Queue message' : 'Send message'}
           title={mode === 'follow_up' ? 'Queue message' : 'Send message'}

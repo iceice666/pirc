@@ -16,17 +16,21 @@
   import Markdown from './Markdown.svelte';
   import ToolCard from './ToolCard.svelte';
 
-  export let message: ConversationMessage;
+  interface Props {
+    message: ConversationMessage;
+  }
 
-  let thinkingOpen = false;
-  let systemOpen = false;
+  let { message }: Props = $props();
+
+  let thinkingOpen = $state(false);
+  let systemOpen = $state(false);
 
   function time(date: string) {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  $: kind = message.systemKind ?? 'custom';
-  $: systemIcon =
+  let kind = $derived(message.systemKind ?? 'custom');
+  let SystemIcon = $derived(
     kind === 'bash'
       ? SquareTerminal
       : kind === 'compaction'
@@ -39,29 +43,35 @@
               : message.level === 'warning'
                 ? TriangleAlert
                 : Info
-            : Puzzle;
+            : Puzzle,
+  );
   // Short system entries read fine inline; long summaries/outputs collapse.
-  $: runtimeEvent = kind === 'team' || kind === 'background';
-  $: collapsible = kind === 'compaction' || kind === 'branch' || kind === 'bash' || runtimeEvent;
+  let runtimeEvent = $derived(kind === 'team' || kind === 'background');
+  let collapsible = $derived(
+    kind === 'compaction' || kind === 'branch' || kind === 'bash' || runtimeEvent,
+  );
   // Notices read like a tool row: "Source: detail" splits into name + summary,
   // and only the first line shows until expanded.
-  $: noticeFirstLine = message.content.split('\n', 1)[0]!.trim();
-  $: noticeParts = /^([^:]{1,40}):\s+(.+)$/.exec(noticeFirstLine);
-  $: noticeName = noticeParts ? noticeParts[1]! : noticeFirstLine;
-  $: noticeDetail = noticeParts ? noticeParts[2]! : '';
-  $: noticeExpandable =
-    kind === 'notice' && (message.content.trim().includes('\n') || noticeFirstLine.length > 80);
-  $: streamingThinking = !!message.isPartial && !message.content && !!message.thinking;
-  $: thinkingVisible = thinkingOpen || streamingThinking;
+  let noticeFirstLine = $derived(message.content.split('\n', 1)[0]!.trim());
+  let noticeParts = $derived(/^([^:]{1,40}):\s+(.+)$/.exec(noticeFirstLine));
+  let noticeName = $derived(noticeParts ? noticeParts[1]! : noticeFirstLine);
+  let noticeDetail = $derived(noticeParts ? noticeParts[2]! : '');
+  let noticeExpandable = $derived(
+    kind === 'notice' && (message.content.trim().includes('\n') || noticeFirstLine.length > 80),
+  );
+  let streamingThinking = $derived(!!message.isPartial && !message.content && !!message.thinking);
+  let thinkingVisible = $derived(thinkingOpen || streamingThinking);
   // Tool/thinking-only assistant turns stack tightly, like one process log.
-  $: processOnly =
+  let processOnly = $derived(
     message.role === 'assistant' &&
-    !message.content &&
-    !message.stopReason &&
-    !message.errorMessage &&
-    !message.images?.length;
-  $: hasBody =
-    !!message.content || !!message.isPartial || !!message.errorMessage || !!message.images?.length;
+      !message.content &&
+      !message.stopReason &&
+      !message.errorMessage &&
+      !message.images?.length,
+  );
+  let hasBody = $derived(
+    !!message.content || !!message.isPartial || !!message.errorMessage || !!message.images?.length,
+  );
 </script>
 
 {#if message.role === 'system'}
@@ -78,10 +88,10 @@
         disabled={!noticeExpandable}
         aria-expanded={noticeExpandable ? systemOpen : undefined}
         title={noticeExpandable ? undefined : message.content}
-        on:click={() => (systemOpen = !systemOpen)}
+        onclick={() => (systemOpen = !systemOpen)}
       >
         <span class="system-icon" aria-hidden="true"
-          ><svelte:component this={systemIcon} size={14} strokeWidth={1.8} /></span
+          ><SystemIcon size={14} strokeWidth={1.8} /></span
         >
         <span class="notice-text">
           <strong>{noticeName}</strong>
@@ -103,11 +113,9 @@
         type="button"
         disabled={!collapsible || (!message.content && !message.tools?.length)}
         aria-expanded={collapsible ? systemOpen : undefined}
-        on:click={() => (systemOpen = !systemOpen)}
+        onclick={() => (systemOpen = !systemOpen)}
       >
-        <span class="system-icon" aria-hidden="true"
-          ><svelte:component this={systemIcon} size={14} /></span
-        >
+        <span class="system-icon" aria-hidden="true"><SystemIcon size={14} /></span>
         <span class="system-title">
           {#if kind === 'bash'}<code>$ {message.label}</code>{:else}<strong>{message.label}</strong
             >{/if}
@@ -158,7 +166,7 @@
             type="button"
             class="thinking-toggle"
             aria-expanded={thinkingVisible}
-            on:click={() => (thinkingOpen = !thinkingOpen)}
+            onclick={() => (thinkingOpen = !thinkingOpen)}
           >
             <Brain size={15} aria-hidden="true" />
             <span
@@ -233,7 +241,7 @@
               class="icon-action"
               aria-label="Copy message"
               title="Copy"
-              on:click={() => navigator.clipboard.writeText(message.content)}
+              onclick={() => navigator.clipboard.writeText(message.content)}
               ><Copy size={14} /></button
             >
           {/if}

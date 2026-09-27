@@ -7,23 +7,27 @@
     type GitFile,
     type GitStatus,
   } from '../../panel-api';
+  import { watch } from '../../watch.svelte';
   import DiffView from './DiffView.svelte';
 
-  export let sessionId: string;
-  /** Bumped by the parent when the working tree may have changed. */
-  export let refreshKey = 0;
-  export let onopenfile: (path: string) => void = () => {};
+  interface Props {
+    sessionId: string;
+    /** Bumped by the parent when the working tree may have changed. */
+    refreshKey?: number;
+    onopenfile?: (path: string) => void;
+  }
 
-  let view: 'changes' | 'history' = 'changes';
-  let status: GitStatus | undefined;
-  let error = '';
-  let loading = false;
-  let selected: { file: GitFile; staged: boolean } | undefined;
-  let diff: { diff: string; truncated: boolean } | undefined;
-  let commits: Commit[] = [];
-  let more = false;
-  let commit: CommitDetail | undefined;
-  let loadedFor = '';
+  let { sessionId, refreshKey = 0, onopenfile = () => {} }: Props = $props();
+
+  let view: 'changes' | 'history' = $state('changes');
+  let status: GitStatus | undefined = $state();
+  let error = $state('');
+  let loading = $state(false);
+  let selected: { file: GitFile; staged: boolean } | undefined = $state();
+  let diff: { diff: string; truncated: boolean } | undefined = $state();
+  let commits: Commit[] = $state([]);
+  let more = $state(false);
+  let commit: CommitDetail | undefined = $state();
 
   const label: Record<string, string> = {
     M: 'Modified',
@@ -36,9 +40,9 @@
     '?': 'Untracked',
   };
 
-  $: files = status?.repo ? status.files : [];
-  $: staged = files.filter((file) => file.index !== ' ' && file.index !== '?');
-  $: unstaged = files.filter((file) => file.worktree !== ' ');
+  let files = $derived(status?.repo ? status.files : []);
+  let staged = $derived(files.filter((file) => file.index !== ' ' && file.index !== '?'));
+  let unstaged = $derived(files.filter((file) => file.worktree !== ' '));
 
   async function load() {
     loading = true;
@@ -114,19 +118,21 @@
   const dir = (path: string) => path.split('/').slice(0, -1).join('/');
   const code = (file: GitFile, isStaged: boolean) => (isStaged ? file.index : file.worktree);
 
-  $: if (sessionId !== loadedFor) {
-    loadedFor = sessionId;
-    status = undefined;
-    commits = [];
-    commit = undefined;
-    selected = undefined;
-    void load();
-  }
-  let lastRefresh = refreshKey;
-  $: if (refreshKey !== lastRefresh) {
-    lastRefresh = refreshKey;
-    void load();
-  }
+  watch(
+    () => sessionId,
+    () => {
+      status = undefined;
+      commits = [];
+      commit = undefined;
+      selected = undefined;
+      void load();
+    },
+    { immediate: true },
+  );
+  watch(
+    () => refreshKey,
+    () => void load(),
+  );
 </script>
 
 <div class="tab-body">
@@ -136,13 +142,13 @@
         class="icon-button small"
         type="button"
         aria-label="Back"
-        on:click={() => (selected = undefined)}><ArrowLeft size={16} /></button
+        onclick={() => (selected = undefined)}><ArrowLeft size={16} /></button
       >
       <button
         class="drill-title linkish"
         type="button"
         title="Open file"
-        on:click={() => selected && onopenfile(selected.file.path)}
+        onclick={() => selected && onopenfile(selected.file.path)}
       >
         {selected.file.path}
       </button>
@@ -159,7 +165,7 @@
         class="icon-button small"
         type="button"
         aria-label="Back"
-        on:click={() => (commit = undefined)}><ArrowLeft size={16} /></button
+        onclick={() => (commit = undefined)}><ArrowLeft size={16} /></button
       >
       <span class="drill-title mono">{commit.sha.slice(0, 10)}</span>
     </div>
@@ -179,7 +185,7 @@
           type="button"
           class:active={view === 'changes'}
           aria-selected={view === 'changes'}
-          on:click={() => switchView('changes')}
+          onclick={() => switchView('changes')}
           >Changes{#if files.length}<span class="count">{files.length}</span>{/if}</button
         >
         <button
@@ -187,14 +193,14 @@
           type="button"
           class:active={view === 'history'}
           aria-selected={view === 'history'}
-          on:click={() => switchView('history')}>History</button
+          onclick={() => switchView('history')}>History</button
         >
       </div>
       <button
         class="icon-button small"
         type="button"
         aria-label="Refresh"
-        on:click={load}
+        onclick={load}
         disabled={loading}><RefreshCw class={loading ? 'spin' : ''} size={15} /></button
       >
     </div>
@@ -222,7 +228,7 @@
                     <button
                       type="button"
                       class="file-row"
-                      on:click={() => openDiff(file, group.isStaged)}
+                      onclick={() => openDiff(file, group.isStaged)}
                     >
                       <span
                         class="status-code s-{code(file, group.isStaged) === '?'
@@ -251,7 +257,7 @@
         <ul class="commit-list">
           {#each commits as item (item.sha)}
             <li>
-              <button type="button" class="commit-row" on:click={() => openCommit(item)}>
+              <button type="button" class="commit-row" onclick={() => openCommit(item)}>
                 <GitCommitHorizontal size={15} />
                 <span class="commit-text">
                   <span class="commit-subject">{item.subject}</span>
@@ -266,7 +272,7 @@
             </li>
           {/each}
         </ul>
-        {#if more}<button class="load-more" type="button" on:click={() => loadHistory(false)}
+        {#if more}<button class="load-more" type="button" onclick={() => loadHistory(false)}
             >Load more</button
           >{/if}
       {/if}

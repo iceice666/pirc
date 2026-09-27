@@ -1,15 +1,20 @@
 <script lang="ts">
   import { ArrowLeft, Bot, ListChecks, RefreshCw, SquareTerminal, Users } from '@lucide/svelte';
   import { panelApi, type BackgroundTask, type PanelState } from '../../panel-api';
+  import { watch } from '../../watch.svelte';
 
-  export let sessionId: string;
-  export let state: PanelState | undefined;
+  interface Props {
+    sessionId: string;
+    panelState: PanelState | undefined;
+  }
 
-  let selected: BackgroundTask | undefined;
-  let output = '';
-  let error = '';
-  let loading = false;
-  let outputEl: HTMLPreElement | undefined;
+  let { sessionId, panelState }: Props = $props();
+
+  let selected: BackgroundTask | undefined = $state();
+  let output = $state('');
+  let error = $state('');
+  let loading = $state(false);
+  let outputEl: HTMLPreElement | undefined = $state();
 
   async function openTask(task: BackgroundTask) {
     selected = task;
@@ -40,19 +45,20 @@
     return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
   }
 
-  $: tasks = (state?.backgroundTasks ?? []).slice().reverse();
-  $: agents = state?.team.agents ?? [];
-  $: teammates = agents.filter((agent) => agent.mode !== 'subagent');
-  $: subagents = agents.filter((agent) => agent.mode === 'subagent').reverse();
-  $: boardTasks = state?.team.tasks ?? [];
-  $: teamEvents = (state?.team.events ?? []).slice(-12).reverse();
+  let tasks = $derived((panelState?.backgroundTasks ?? []).slice().reverse());
+  let agents = $derived(panelState?.team.agents ?? []);
+  let teammates = $derived(agents.filter((agent) => agent.mode !== 'subagent'));
+  let subagents = $derived(agents.filter((agent) => agent.mode === 'subagent').reverse());
+  let boardTasks = $derived(panelState?.team.tasks ?? []);
+  let teamEvents = $derived((panelState?.team.events ?? []).slice(-12).reverse());
   // Keep a running task's view fresh when the parent reports a change.
-  $: live = selected ? tasks.find((task) => task.id === selected?.id) : undefined;
-  let lastStatus = '';
-  $: if (live && live.status !== lastStatus) {
-    lastStatus = live.status;
-    void refreshOutput();
-  }
+  let live = $derived(selected ? tasks.find((task) => task.id === selected?.id) : undefined);
+  watch(
+    () => live && `${live.id}\n${live.status}`,
+    (key, previous) => {
+      if (key && previous?.split('\n')[0] === key.split('\n')[0]) void refreshOutput();
+    },
+  );
 </script>
 
 <div class="tab-body">
@@ -62,7 +68,7 @@
         class="icon-button small"
         type="button"
         aria-label="Back"
-        on:click={() => (selected = undefined)}><ArrowLeft size={16} /></button
+        onclick={() => (selected = undefined)}><ArrowLeft size={16} /></button
       >
       <span class="drill-title mono">{selected.id}</span>
       <span class="chip status-{selected.status}">{selected.status.replace('_', ' ')}</span>
@@ -70,14 +76,14 @@
         class="icon-button small"
         type="button"
         aria-label="Refresh output"
-        on:click={refreshOutput}
+        onclick={refreshOutput}
         disabled={loading}><RefreshCw class={loading ? 'spin' : ''} size={15} /></button
       >
     </div>
     <pre class="task-command">{selected.command}</pre>
     {#if error}<p class="panel-error">{error}</p>{/if}
     <pre class="task-output" bind:this={outputEl}>{output || 'No output yet.'}</pre>
-  {:else if !state?.agentRunning && !tasks.length && !agents.length}
+  {:else if !panelState?.agentRunning && !tasks.length && !agents.length}
     <p class="panel-empty">
       The agent is not running. Background tasks, subagents and teammates appear here while it is.
     </p>
@@ -89,7 +95,7 @@
       <ul class="file-list">
         {#each tasks as task (task.id)}
           <li>
-            <button type="button" class="task-row" on:click={() => openTask(task)}>
+            <button type="button" class="task-row" onclick={() => openTask(task)}>
               <SquareTerminal size={15} />
               <span class="task-text">
                 <span class="task-cmd">{task.command}</span>

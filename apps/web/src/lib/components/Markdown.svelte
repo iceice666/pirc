@@ -1,12 +1,16 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { enhanceMarkdown, renderMarkdown, rendererTick } from '../markdown';
 
-  export let source: string;
-  export let streaming = false;
-  export let compact = false;
-  /** Directory relative file links resolve against (workspace root by default). */
-  export let linkBase = '';
+  interface Props {
+    source: string;
+    streaming?: boolean;
+    compact?: boolean;
+    /** Directory relative file links resolve against (workspace root by default). */
+    linkBase?: string;
+  }
+
+  let { source, streaming = false, compact = false, linkBase = '' }: Props = $props();
 
   /**
    * While streaming, every delta would otherwise re-parse the whole message and
@@ -16,7 +20,7 @@
    */
   const STREAM_INTERVAL = 80;
 
-  let html = '';
+  let html = $state('');
   let timer: ReturnType<typeof setTimeout> | undefined;
   let lastRender = 0;
 
@@ -39,7 +43,12 @@
   }
 
   // `$rendererTick` re-runs this once a lazily loaded KaTeX / highlight.js lands.
-  $: (source, streaming, $rendererTick, schedule());
+  $effect.pre(() => {
+    void source;
+    void streaming;
+    void $rendererTick;
+    untrack(schedule);
+  });
 
   onDestroy(() => {
     if (timer) clearTimeout(timer);

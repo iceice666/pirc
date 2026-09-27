@@ -56,108 +56,109 @@
   } from './lib/types';
   import { modelKey } from './lib/types';
 
-  let workspaces: Workspace[] = [];
-  let nodes: NodeSummary[] = [];
-  let sessions: SessionSummary[] = [];
-  let models: ModelOption[] = [];
-  let activeSessionId: string | undefined;
-  let sessionState: ClientSessionState | undefined;
-  let connection: ConnectionState = navigator.onLine ? 'reconnecting' : 'offline';
-  let draft = '';
-  let uploads: Array<Attachment & { preview?: string; uploading?: boolean }> = [];
+  let workspaces: Workspace[] = $state.raw([]);
+  let nodes: NodeSummary[] = $state.raw([]);
+  let sessions: SessionSummary[] = $state.raw([]);
+  let models: ModelOption[] = $state.raw([]);
+  let activeSessionId: string | undefined = $state();
+  let sessionState: ClientSessionState | undefined = $state.raw();
+  let connection: ConnectionState = $state(navigator.onLine ? 'reconnecting' : 'offline');
+  let draft = $state('');
+  let uploads: Array<Attachment & { preview?: string; uploading?: boolean }> = $state([]);
   /** Mobile overlay state of the left sidebar. */
-  let sidebarOpen = false;
+  let sidebarOpen = $state(false);
   /** Desktop: left sidebar collapsed out of the grid. */
-  let sidebarCollapsed = loadLayout('sidebarCollapsed', false);
+  let sidebarCollapsed = $state(loadLayout('sidebarCollapsed', false));
   /** Right side panel starts hidden until the user opens it (then the choice is remembered). */
-  let detailsOpen = loadLayout('detailsOpen', false);
+  let detailsOpen = $state(loadLayout('detailsOpen', false));
   const PANEL_MIN = 280;
   const PANEL_DEFAULT = 360;
   /** Room the conversation column keeps when the side panel is dragged wide. */
   const CONVERSATION_MIN = 380;
-  let panelWidth = loadLayout('panelWidth', PANEL_DEFAULT);
+  let panelWidth = $state(loadLayout('panelWidth', PANEL_DEFAULT));
   /** Sidebar hides settled sessions unless enabled in settings. */
-  let showSettled = loadLayout('showSettled', false);
-  let panelResizing = false;
-  let viewportWidth = window.innerWidth;
-  let panelTab: PanelTab = 'files';
+  let showSettled = $state(loadLayout('showSettled', false));
+  let panelResizing = $state(false);
+  let viewportWidth = $state(window.innerWidth);
+  let panelTab: PanelTab = $state('files');
   /** Bumped per `panel_changed` event so the side panel refetches. */
-  let panelTick = 0;
-  let panelChanged: string[] = [];
+  let panelTick = $state(0);
+  let panelChanged: string[] = $state([]);
   /** Bumped when background tasks or team members changed, for the top-bar jobs menu. */
-  let jobsTick = 0;
-  let loading = true;
-  let commandBusy = false;
-  let pageError = '';
-  let usingDemo = false;
+  let jobsTick = $state(0);
+  let loading = $state(true);
+  let commandBusy = $state(false);
+  let pageError = $state('');
+  let usingDemo = $state(false);
   let events: EventConnection | undefined;
-  let clientId = '';
-  let settingsOpen = false;
+  let clientId = $state('');
+  let settingsOpen = $state(false);
   const SETTINGS_TABS = [
     { id: 'general', label: 'General' },
     { id: 'models', label: 'Models' },
     { id: 'devices', label: 'Devices' },
     { id: 'about', label: 'About' },
   ] as const;
-  let settingsTab: (typeof SETTINGS_TABS)[number]['id'] = 'general';
-  let newSessionOpen = false;
-  let newSessionWorkspace = '';
-  let creatingSession = false;
-  let newWorkspaceOpen = false;
-  let newWorkspaceNodeId = '';
-  let newWorkspacePath = '';
-  let newWorkspaceName = '';
-  let workspaceBusy = false;
-  let workspaceError = '';
-  let updateRegistration: ServiceWorkerRegistration | undefined;
-  let timeline: HTMLElement;
+  let settingsTab: (typeof SETTINGS_TABS)[number]['id'] = $state('general');
+  let newSessionOpen = $state(false);
+  let newSessionWorkspace = $state('');
+  let creatingSession = $state(false);
+  let newWorkspaceOpen = $state(false);
+  let newWorkspaceNodeId = $state('');
+  let newWorkspacePath = $state('');
+  let newWorkspaceName = $state('');
+  let workspaceBusy = $state(false);
+  let workspaceError = $state('');
+  let updateRegistration: ServiceWorkerRegistration | undefined = $state();
+  let timeline: HTMLElement | undefined = $state();
   let leaseHeartbeat: ReturnType<typeof setInterval> | undefined;
 
-  $: activeWorkspace = workspaces.find(
-    (workspace) => workspace.id === sessionState?.session.workspaceId,
+  let activeWorkspace = $derived(
+    workspaces.find((workspace) => workspace.id === sessionState?.session.workspaceId),
   );
-  $: runStatus = sessionState?.run?.status;
-  $: hasControl = sessionState?.control.heldByCurrentClient ?? false;
-  $: selectedModelOption =
+  let runStatus = $derived(sessionState?.run?.status);
+  let hasControl = $derived(sessionState?.control.heldByCurrentClient ?? false);
+  let selectedModelOption = $derived(
     models.find(
       (model) =>
         model.id === sessionState?.selectedModelId &&
         (!sessionState?.selectedModelProvider ||
           model.provider === sessionState.selectedModelProvider),
-    ) ?? models[0];
-  $: selectedModel = selectedModelOption ? modelKey(selectedModelOption) : '';
-  $: thinking = sessionState?.thinkingLevel ?? 'medium';
-  $: panelMax = Math.max(
-    PANEL_MIN,
-    viewportWidth - (sidebarCollapsed ? 0 : 264) - CONVERSATION_MIN,
+    ) ?? models[0],
   );
-  $: panelShownWidth = Math.min(Math.max(panelWidth, PANEL_MIN), panelMax);
-  $: saveLayout('sidebarCollapsed', sidebarCollapsed);
-  $: saveLayout('detailsOpen', detailsOpen);
-  $: saveLayout('showSettled', showSettled);
+  let selectedModel = $derived(selectedModelOption ? modelKey(selectedModelOption) : '');
+  let thinking = $derived(sessionState?.thinkingLevel ?? 'medium');
+  let panelMax = $derived(
+    Math.max(PANEL_MIN, viewportWidth - (sidebarCollapsed ? 0 : 264) - CONVERSATION_MIN),
+  );
+  let panelShownWidth = $derived(Math.min(Math.max(panelWidth, PANEL_MIN), panelMax));
+  $effect(() => saveLayout('sidebarCollapsed', sidebarCollapsed));
+  $effect(() => saveLayout('detailsOpen', detailsOpen));
+  $effect(() => saveLayout('showSettled', showSettled));
 
   function resizePanel(width: number) {
     panelWidth = width;
     saveLayout('panelWidth', width);
   }
-  $: todo = parseTodoWidget(sessionState?.widgets?.[TODO_WIDGET]);
-  $: goal = parseGoalWidget(sessionState?.widgets?.[GOAL_WIDGET]);
+  let todo = $derived(parseTodoWidget(sessionState?.widgets?.[TODO_WIDGET]));
+  let goal = $derived(parseGoalWidget(sessionState?.widgets?.[GOAL_WIDGET]));
   const DOCKED_WIDGETS = new Set([TODO_WIDGET, GOAL_WIDGET]);
   /**
    * Status-line entries not already shown elsewhere: background tasks and team
    * members live in the jobs menu. Other extension widgets show their header.
    */
   const SHOWN_ELSEWHERE = new Set(['background-task', 'agent-team']);
-  $: statusLine = [
+  let statusLine = $derived([
     ...Object.entries(sessionState?.widgets ?? {})
       .filter(([key, lines]) => !DOCKED_WIDGETS.has(key) && lines.length)
       .map(([, lines]) => lines[0]!),
     ...Object.entries(sessionState?.statuses ?? {})
       .filter(([key, text]) => !SHOWN_ELSEWHERE.has(key) && text)
       .map(([, text]) => text),
-  ];
-  $: pendingInteractions =
-    sessionState?.interactions.filter((item) => item.status === 'pending') ?? [];
+  ]);
+  let pendingInteractions = $derived(
+    sessionState?.interactions.filter((item) => item.status === 'pending') ?? [],
+  );
 
   /**
    * A long transcript is rendered from the end: opening a session mounts only
@@ -166,11 +167,13 @@
    * earliest entries not yet mounted.
    */
   const MESSAGE_PAGE = 60;
-  let hiddenMessages = 0;
+  let hiddenMessages = $state(0);
   let revealingEarlier = false;
-  $: visibleMessages = sessionState
-    ? sessionState.messages.slice(Math.min(hiddenMessages, sessionState.messages.length))
-    : [];
+  let visibleMessages = $derived(
+    sessionState
+      ? sessionState.messages.slice(Math.min(hiddenMessages, sessionState.messages.length))
+      : [],
+  );
 
   async function showEarlier() {
     if (!hiddenMessages || revealingEarlier) return;
@@ -695,7 +698,7 @@
 
 <svelte:window
   bind:innerWidth={viewportWidth}
-  on:keydown={(event) => event.key === 'Escape' && sidebarOpen && (sidebarOpen = false)}
+  onkeydown={(event) => event.key === 'Escape' && sidebarOpen && (sidebarOpen = false)}
 />
 
 <svelte:head
@@ -745,7 +748,7 @@
             aria-label="Show sidebar"
             title="Show sidebar"
             transition:fade={{ duration: 160 }}
-            on:click={() => (sidebarCollapsed = false)}><PanelLeftOpen size={19} /></button
+            onclick={() => (sidebarCollapsed = false)}><PanelLeftOpen size={19} /></button
           >
         {/if}
         <div class="title-block">
@@ -774,7 +777,7 @@
               /> Offline{:else}<RefreshCw class="spin" size={13} /> Reconnecting{/if}
           </span>
           {#if !hasControl}
-            <button class="button takeover" type="button" on:click={takeControl}
+            <button class="button takeover" type="button" onclick={takeControl}
               ><ShieldCheck size={15} /> Take control</button
             >
           {:else}
@@ -785,7 +788,7 @@
             type="button"
             aria-label={detailsOpen ? 'Hide side panel' : 'Show side panel'}
             title={detailsOpen ? 'Hide side panel' : 'Show side panel'}
-            on:click={() => (detailsOpen = !detailsOpen)}
+            onclick={() => (detailsOpen = !detailsOpen)}
           >
             {#if detailsOpen}<PanelRightClose size={19} />{:else}<PanelRightOpen size={19} />{/if}
           </button>
@@ -800,7 +803,7 @@
           <CircleAlert size={16} /><span>{pageError}</span><button
             type="button"
             aria-label="Dismiss error"
-            on:click={() => (pageError = '')}><X size={15} /></button
+            onclick={() => (pageError = '')}><X size={15} /></button
           >
         </div>
       {/if}
@@ -809,7 +812,7 @@
           <span
             >You’re viewing this session. {sessionState.control.holderName ?? 'Another device'} currently
             has control.</span
-          ><button type="button" on:click={takeControl}>Take control</button>
+          ><button type="button" onclick={takeControl}>Take control</button>
         </div>
       {/if}
 
@@ -822,7 +825,7 @@
                   type="button"
                   class="earlier-messages"
                   use:revealEarlier
-                  on:click={showEarlier}
+                  onclick={showEarlier}
                 >
                   Show earlier messages ({hiddenMessages} more)
                 </button>
@@ -903,8 +906,8 @@
   <div
     class="modal-backdrop"
     role="presentation"
-    on:click={(event) => event.target === event.currentTarget && (settingsOpen = false)}
-    on:keydown={(event) => event.key === 'Escape' && (settingsOpen = false)}
+    onclick={(event) => event.target === event.currentTarget && (settingsOpen = false)}
+    onkeydown={(event) => event.key === 'Escape' && (settingsOpen = false)}
   >
     <div class="modal settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <header>
@@ -916,7 +919,7 @@
           class="icon-button"
           type="button"
           aria-label="Close"
-          on:click={() => (settingsOpen = false)}><X size={19} /></button
+          onclick={() => (settingsOpen = false)}><X size={19} /></button
         >
       </header>
 
@@ -935,7 +938,7 @@
               aria-controls="settings-panel-{tab.id}"
               aria-selected={settingsTab === tab.id}
               class:chosen={settingsTab === tab.id}
-              on:click={() => (settingsTab = tab.id)}>{tab.label}</button
+              onclick={() => (settingsTab = tab.id)}>{tab.label}</button
             >
           {/each}
         </div>
@@ -962,7 +965,7 @@
               <div class="settings-row">
                 <span>Restore the sidebar and side panel to their default size and visibility.</span
                 >
-                <button class="button ghost" type="button" on:click={resetLayout}>Reset</button>
+                <button class="button ghost" type="button" onclick={resetLayout}>Reset</button>
               </div>
             </section>
           </div>
@@ -1029,7 +1032,7 @@
   <div
     class="modal-backdrop"
     role="presentation"
-    on:click={(event) => event.target === event.currentTarget && (newWorkspaceOpen = false)}
+    onclick={(event) => event.target === event.currentTarget && (newWorkspaceOpen = false)}
   >
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="new-workspace-title">
       <header>
@@ -1041,7 +1044,7 @@
           class="icon-button"
           type="button"
           aria-label="Close"
-          on:click={() => (newWorkspaceOpen = false)}><X size={19} /></button
+          onclick={() => (newWorkspaceOpen = false)}><X size={19} /></button
         >
       </header>
       <label
@@ -1059,7 +1062,7 @@
         ><span>Existing directory on that device</span><input
           bind:value={newWorkspacePath}
           placeholder="~/projects/my-project"
-          on:keydown={(event) => event.key === 'Enter' && createWorkspace()}
+          onkeydown={(event) => event.key === 'Enter' && createWorkspace()}
         /></label
       >
       <p>
@@ -1068,7 +1071,7 @@
       </p>
       {#if workspaceError}<p role="alert">{workspaceError}</p>{/if}
       <footer>
-        <button class="button ghost" type="button" on:click={() => (newWorkspaceOpen = false)}
+        <button class="button ghost" type="button" onclick={() => (newWorkspaceOpen = false)}
           >Cancel</button
         >
         <button
@@ -1078,7 +1081,7 @@
             !newWorkspaceNodeId ||
             !newWorkspaceName.trim() ||
             !newWorkspacePath.trim()}
-          on:click={createWorkspace}>{workspaceBusy ? 'Adding…' : 'Add workspace'}</button
+          onclick={createWorkspace}>{workspaceBusy ? 'Adding…' : 'Add workspace'}</button
         >
       </footer>
     </div>
@@ -1089,7 +1092,7 @@
   <div
     class="modal-backdrop"
     role="presentation"
-    on:click={(event) => event.target === event.currentTarget && (newSessionOpen = false)}
+    onclick={(event) => event.target === event.currentTarget && (newSessionOpen = false)}
   >
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="new-session-title">
       <header>
@@ -1101,7 +1104,7 @@
           class="icon-button"
           type="button"
           aria-label="Close"
-          on:click={() => (newSessionOpen = false)}><X size={19} /></button
+          onclick={() => (newSessionOpen = false)}><X size={19} /></button
         >
       </header>
       <label
@@ -1122,12 +1125,12 @@
         disconnects.
       </p>
       <footer>
-        <button class="button ghost" type="button" on:click={() => (newSessionOpen = false)}
+        <button class="button ghost" type="button" onclick={() => (newSessionOpen = false)}
           >Cancel</button
         ><button
           class="button dark"
           type="button"
-          on:click={createSession}
+          onclick={createSession}
           disabled={creatingSession ||
             !newSessionWorkspace ||
             (newSessionWorkspace.includes(':') &&
@@ -1148,14 +1151,14 @@
     <div><strong>Update ready</strong><span>Apply it when your draft is safe.</span></div>
     <button
       type="button"
-      on:click={() => {
+      onclick={() => {
         activateUpdate(updateRegistration!);
         updateRegistration = undefined;
       }}>Update</button
     ><button
       type="button"
       aria-label="Dismiss update"
-      on:click={() => (updateRegistration = undefined)}><X size={15} /></button
+      onclick={() => (updateRegistration = undefined)}><X size={15} /></button
     >
   </div>
 {/if}

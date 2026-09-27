@@ -1,18 +1,22 @@
 <script lang="ts">
   import { Plus, SquareTerminal, X } from '@lucide/svelte';
   import { panelApi, type TerminalInfo } from '../../panel-api';
+  import { watch } from '../../watch.svelte';
   import TerminalView from './TerminalView.svelte';
 
-  export let sessionId: string;
-  export let generation: number | undefined;
-  export let hasControl: boolean;
-  export let active = false;
+  interface Props {
+    sessionId: string;
+    generation: number | undefined;
+    hasControl: boolean;
+    active?: boolean;
+  }
 
-  let terminals: TerminalInfo[] = [];
-  let current: string | undefined;
-  let error = '';
-  let busy = false;
-  let loadedFor = '';
+  let { sessionId, generation, hasControl, active = false }: Props = $props();
+
+  let terminals: TerminalInfo[] = $state([]);
+  let current: string | undefined = $state();
+  let error = $state('');
+  let busy = $state(false);
 
   async function load() {
     const id = sessionId;
@@ -69,12 +73,15 @@
     terminals = terminals.map((t) => (t.id === id ? { ...t, exited: true, exitCode } : t));
   }
 
-  $: if (sessionId !== loadedFor) {
-    loadedFor = sessionId;
-    terminals = [];
-    current = undefined;
-    void load();
-  }
+  watch(
+    () => sessionId,
+    () => {
+      terminals = [];
+      current = undefined;
+      void load();
+    },
+    { immediate: true },
+  );
 </script>
 
 <div class="terminal-tab">
@@ -89,7 +96,7 @@
           type="button"
           role="tab"
           aria-selected={terminal.id === current}
-          on:click={() => (current = terminal.id)}
+          onclick={() => (current = terminal.id)}
         >
           <SquareTerminal size={13} />{terminal.title}
           {index + 1}
@@ -98,7 +105,7 @@
           type="button"
           class="chip-close"
           aria-label="Close terminal"
-          on:click={() => close(terminal)}><X size={12} /></button
+          onclick={() => close(terminal)}><X size={12} /></button
         >
       </div>
     {/each}
@@ -108,7 +115,7 @@
       aria-label="New terminal"
       disabled={busy || !hasControl}
       title={hasControl ? 'New terminal' : 'Take control to open a terminal'}
-      on:click={create}><Plus size={15} /></button
+      onclick={create}><Plus size={15} /></button
     >
   </div>
   {#if error}<p class="panel-error">{error}</p>{/if}
@@ -119,7 +126,7 @@
         Run commands in this workspace. The shell runs as the gateway’s account, just like the
         agent’s own tools.
       </p>
-      <button class="button primary" type="button" disabled={busy || !hasControl} on:click={create}
+      <button class="button primary" type="button" disabled={busy || !hasControl} onclick={create}
         >Open terminal</button
       >
       {#if !hasControl}<p class="muted">Take control of the session to open one.</p>{/if}

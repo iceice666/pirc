@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { backendApi, ApiError } from '../api';
+  import { watch } from '../watch.svelte';
   import type {
     BackendModel,
     BackendProvider,
@@ -10,35 +11,46 @@
     ProviderAuthSession,
   } from '../types';
 
-  export let disabled = false;
-  export let onchanged: () => void | Promise<void> = () => {};
+  interface Props {
+    disabled?: boolean;
+    onchanged?: () => void | Promise<void>;
+  }
 
-  let settings: BackendSettingsSnapshot | undefined;
-  let error = '';
-  let busy = false;
-  let loading = true;
-  let consent: Record<string, boolean> = {};
-  let login: ProviderAuthSession | undefined;
-  let answers: Record<string, string> = {};
+  let { disabled = false, onchanged = () => {} }: Props = $props();
+
+  let settings: BackendSettingsSnapshot | undefined = $state();
+  let error = $state('');
+  let busy = $state(false);
+  let loading = $state(true);
+  let consent: Record<string, boolean> = $state({});
+  let login: ProviderAuthSession | undefined = $state();
+  let answers: Record<string, string> = $state({});
   let alive = true;
   let generation = 0;
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
   let expiryTimer: ReturnType<typeof setTimeout> | undefined;
-  let editor = false;
-  let editingId: string | undefined;
-  let providerId = '';
-  let providerApi = 'openai-completions';
-  let baseUrl = '';
-  let apiKey = '';
-  let clearKey = false;
-  let modelRows: BackendModel[] = [];
-  let defaultChoice = '';
+  let editor = $state(false);
+  let editingId: string | undefined = $state();
+  let providerId = $state('');
+  let providerApi = $state('openai-completions');
+  let baseUrl = $state('');
+  let apiKey = $state('');
+  let clearKey = $state(false);
+  let modelRows: BackendModel[] = $state([]);
+  let defaultChoice = $state('');
 
-  $: activeLogin = login?.status === 'pending';
-  $: locked = disabled || busy;
-  $: defaultChoice = settings?.defaultModel
-    ? JSON.stringify([settings.defaultModel.provider, settings.defaultModel.id])
-    : '';
+  let activeLogin = $derived(login?.status === 'pending');
+  let locked = $derived(disabled || busy);
+  // Only a changed saved default resets the picker, so a refresh (e.g. after a
+  // login) keeps a selection that has not been saved yet.
+  watch(
+    () =>
+      settings?.defaultModel
+        ? JSON.stringify([settings.defaultModel.provider, settings.defaultModel.id])
+        : '',
+    (saved) => (defaultChoice = saved),
+    { immediate: true },
+  );
 
   function safeError(cause: unknown) {
     return cause instanceof ApiError
@@ -306,7 +318,7 @@
               disabled={locked ||
                 activeLogin ||
                 (provider.requiresPolicyConsent && !consent[provider.id])}
-              on:click={() => startLogin(provider)}
+              onclick={() => startLogin(provider)}
               >{provider.connected ? 'Reconnect' : 'Log in'}</button
             >
           </div>
@@ -330,7 +342,7 @@
               class="button ghost"
               type="button"
               disabled={locked || activeLogin}
-              on:click={() => mutate(() => backendApi.remove(provider.providerId))}
+              onclick={() => mutate(() => backendApi.remove(provider.providerId))}
               >Log out {provider.name}</button
             >{/if}
         </div>
@@ -365,7 +377,13 @@
             {/if}
             {#if login.progress}<p>{login.progress}</p>{/if}
             {#each login.prompts as prompt (prompt.id)}
-              <form on:submit|preventDefault={() => answerPrompt(prompt)} autocomplete="off">
+              <form
+                onsubmit={(event) => {
+                  event.preventDefault();
+                  void answerPrompt(prompt);
+                }}
+                autocomplete="off"
+              >
                 <label
                   ><span>{prompt.message}</span>
                   {#if prompt.kind === 'select'}
@@ -401,12 +419,12 @@
                       class="button ghost"
                       type="button"
                       disabled={locked}
-                      on:click={() => answerPrompt(prompt, true)}>Skip selection</button
+                      onclick={() => answerPrompt(prompt, true)}>Skip selection</button
                     >{/if}
                 </div>
               </form>
             {/each}
-            <button class="button ghost" type="button" on:click={() => cancelLogin()}
+            <button class="button ghost" type="button" onclick={() => cancelLogin()}
               >Cancel login</button
             >
           {:else if login.status === 'succeeded'}<p>
@@ -441,12 +459,12 @@
                 class="button ghost"
                 type="button"
                 disabled={locked || activeLogin}
-                on:click={() => editProvider(provider)}>Edit {provider.id}</button
+                onclick={() => editProvider(provider)}>Edit {provider.id}</button
               ><button
                 class="button ghost"
                 type="button"
                 disabled={locked || activeLogin}
-                on:click={() => mutate(() => backendApi.remove(provider.id))}
+                onclick={() => mutate(() => backendApi.remove(provider.id))}
                 >Remove {provider.id}</button
               >
             </div>{/if}
@@ -456,11 +474,18 @@
         class="button ghost"
         type="button"
         disabled={locked || activeLogin}
-        on:click={() => editProvider()}>Add backend</button
+        onclick={() => editProvider()}>Add backend</button
       >
 
       {#if editor}
-        <form class="backend-card" on:submit|preventDefault={saveProvider} autocomplete="off">
+        <form
+          class="backend-card"
+          onsubmit={(event) => {
+            event.preventDefault();
+            void saveProvider();
+          }}
+          autocomplete="off"
+        >
           <h4>{editingId ? 'Edit backend' : 'New backend'}</h4>
           <label
             ><span>Backend ID</span><input
@@ -533,16 +558,15 @@
                 ><input
                   type="checkbox"
                   checked={model.input?.includes('image') ?? false}
-                  on:change={(event) => {
+                  onchange={(event) => {
                     model.input = event.currentTarget.checked ? ['text', 'image'] : ['text'];
-                    modelRows = modelRows;
                   }}
                 /><span>Supports image input</span></label
               >
               <button
                 class="button ghost"
                 type="button"
-                on:click={() => (modelRows = modelRows.filter((_, i) => i !== index))}
+                onclick={() => (modelRows = modelRows.filter((_, i) => i !== index))}
                 >Remove model</button
               >
             </fieldset>
@@ -552,12 +576,12 @@
               class="button ghost"
               type="button"
               disabled={locked}
-              on:click={() => (modelRows = [...modelRows, { id: '', name: '' }])}>Add model</button
+              onclick={() => (modelRows = [...modelRows, { id: '', name: '' }])}>Add model</button
             ><button
               class="button primary"
               type="submit"
               disabled={locked || activeLogin || !modelRows.length}>Save backend</button
-            ><button class="button ghost" type="button" disabled={locked} on:click={closeEditor}
+            ><button class="button ghost" type="button" disabled={locked} onclick={closeEditor}
               >Cancel editing</button
             >
           </div>
@@ -580,13 +604,13 @@
         class="button ghost"
         type="button"
         disabled={locked || activeLogin}
-        on:click={saveDefault}>Save default</button
+        onclick={saveDefault}>Save default</button
       >
       <p>Applies to new runs that have no explicit model selection.</p>
     {:else}<button
         class="button ghost"
         type="button"
-        on:click={() => refresh().catch((cause) => (error = safeError(cause)))}
+        onclick={() => refresh().catch((cause) => (error = safeError(cause)))}
         >Retry settings</button
       >{/if}
   {/if}

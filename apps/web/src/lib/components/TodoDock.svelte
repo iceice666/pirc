@@ -9,18 +9,27 @@
   import { loadLayout, saveLayout } from '../storage';
   import type { TodoItem, TodoList } from '../todo';
 
-  export let list: TodoList;
+  interface Props {
+    list: TodoList;
+  }
 
-  let expanded = loadLayout('todoExpanded', false);
-  $: saveLayout('todoExpanded', expanded);
+  let { list }: Props = $props();
 
-  $: active = list.items.filter((item) => item.status === 'in_progress');
-  $: allDone = list.total > 0 && list.done === list.total;
-  $: headline = active.length
-    ? active[0]!.text + (active.length > 1 ? ` +${active.length - 1}` : '')
-    : allDone
-      ? 'All tasks completed'
-      : 'Tasks';
+  let expanded = $state(loadLayout('todoExpanded', false));
+  function toggle() {
+    expanded = !expanded;
+    saveLayout('todoExpanded', expanded);
+  }
+
+  let active = $derived(list.items.filter((item) => item.status === 'in_progress'));
+  let allDone = $derived(list.total > 0 && list.done === list.total);
+  let headline = $derived(
+    active.length
+      ? active[0]!.text + (active.length > 1 ? ` +${active.length - 1}` : '')
+      : allDone
+        ? 'All tasks completed'
+        : 'Tasks',
+  );
 
   const label: Record<TodoItem['status'], string> = {
     completed: 'Completed',
@@ -36,7 +45,7 @@
       type="button"
       aria-expanded={expanded}
       aria-controls="todo-dock-list"
-      on:click={() => (expanded = !expanded)}
+      onclick={toggle}
     >
       <span class="todo-lead">
         {#if active.length}<span class="state-dot ongoing" aria-hidden="true"

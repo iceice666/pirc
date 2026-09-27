@@ -4,25 +4,36 @@
    * socket reconnects with backoff and the gateway replays scrollback, so the
    * view is rebuilt from scratch on every (re)connect.
    */
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import { panelApi, type TerminalInfo } from '../../panel-api';
   import { getClientId } from '../../storage';
 
-  export let sessionId: string;
-  export let terminal: TerminalInfo;
-  export let generation: number | undefined;
-  export let hasControl: boolean;
-  export let visible = true;
-  export let onexit: (exitCode: number | null) => void = () => {};
+  interface Props {
+    sessionId: string;
+    terminal: TerminalInfo;
+    generation: number | undefined;
+    hasControl: boolean;
+    visible?: boolean;
+    onexit?: (exitCode: number | null) => void;
+  }
+
+  let {
+    sessionId,
+    terminal,
+    generation,
+    hasControl,
+    visible = true,
+    onexit = () => {},
+  }: Props = $props();
 
   let host: HTMLDivElement;
-  let notice = '';
+  let notice = $state('');
   let destroyed = false;
   let socket: WebSocket | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;
   let attempts = 0;
-  let exited = terminal.exited;
-  let xterm: import('@xterm/xterm').Terminal | undefined;
+  let exited = untrack(() => terminal.exited);
+  let xterm: import('@xterm/xterm').Terminal | undefined = $state();
   let fit: import('@xterm/addon-fit').FitAddon | undefined;
   let observer: ResizeObserver | undefined;
 
@@ -136,12 +147,16 @@
     xterm?.dispose();
   });
 
-  $: if (visible)
-    requestAnimationFrame(() => {
-      resize();
-      xterm?.focus();
-    });
-  $: if (hasControl && notice.startsWith('Take control')) notice = '';
+  $effect(() => {
+    if (visible)
+      requestAnimationFrame(() => {
+        resize();
+        xterm?.focus();
+      });
+  });
+  $effect.pre(() => {
+    if (hasControl && untrack(() => notice).startsWith('Take control')) notice = '';
+  });
 </script>
 
 <div class="terminal-view" class:hidden={!visible}>

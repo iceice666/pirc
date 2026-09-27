@@ -2,18 +2,24 @@
   import { Check, ChevronDown } from '@lucide/svelte';
   import { tick } from 'svelte';
 
-  export let label: string;
-  export let value: string;
-  export let options: Array<{ value: string; label: string; detail?: string }>;
-  export let disabled = false;
-  export let onselect: (value: string) => void;
+  interface Props {
+    label: string;
+    value: string;
+    options: Array<{ value: string; label: string; detail?: string }>;
+    disabled?: boolean;
+    onselect: (value: string) => void;
+  }
 
-  let open = false;
-  let root: HTMLDivElement;
-  let trigger: HTMLButtonElement;
-  let menu: HTMLDivElement;
-  $: selected = options.find((option) => option.value === value);
-  $: if (disabled) open = false;
+  let { label, value, options, disabled = false, onselect }: Props = $props();
+
+  let open = $state(false);
+  let root: HTMLDivElement | undefined = $state();
+  let trigger: HTMLButtonElement | undefined = $state();
+  let menu: HTMLDivElement | undefined = $state();
+  let selected = $derived(options.find((option) => option.value === value));
+  $effect.pre(() => {
+    if (disabled) open = false;
+  });
 
   function close(restoreFocus = false) {
     open = false;
@@ -57,13 +63,13 @@
 </script>
 
 <svelte:window
-  on:pointerdown={(event) => {
-    if (open && !root.contains(event.target as Node)) close();
+  onpointerdown={(event) => {
+    if (open && !root?.contains(event.target as Node)) close();
   }}
-  on:focusin={(event) => {
-    if (open && !root.contains(event.target as Node)) close();
+  onfocusin={(event) => {
+    if (open && !root?.contains(event.target as Node)) close();
   }}
-  on:keydown={keydown}
+  onkeydown={keydown}
 />
 
 <div class="composer-select" bind:this={root}>
@@ -77,8 +83,8 @@
     aria-haspopup="menu"
     aria-expanded={open}
     title={disabled ? `${label} cannot be changed during a run` : label}
-    on:click={() => (open ? close() : show())}
-    on:keydown={(event) => {
+    onclick={() => (open ? close() : show())}
+    onkeydown={(event) => {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
         void show(event.key === 'ArrowUp');
@@ -98,7 +104,7 @@
           aria-checked={option.value === value}
           tabindex={option.value === value ? 0 : -1}
           class="selector-option"
-          on:click={() => {
+          onclick={() => {
             close(true);
             if (option.value !== value) onselect(option.value);
           }}

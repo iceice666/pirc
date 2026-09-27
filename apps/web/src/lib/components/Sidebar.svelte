@@ -18,42 +18,65 @@
   import { tick } from 'svelte';
   import type { NodeSummary, SessionSummary, Workspace } from '../types';
 
-  export let workspaces: Workspace[];
-  export let nodes: NodeSummary[] = [];
-  export let sessions: SessionSummary[];
-  export let activeSessionId: string | undefined;
-  export let open = false;
-  /** Desktop: slid out of the layout; the main column shows the expand button. */
-  export let collapsed = false;
-  export let oncollapse: () => void;
-  export let onselect: (id: string) => void;
-  export let onnew: (workspaceId?: string) => void;
-  export let onaddworkspace: (nodeId: string) => void;
-  export let onclose: () => void;
-  export let onrename: (id: string, name: string) => void;
-  export let onpin: (id: string, pinned: boolean) => void;
-  export let onsettle: (id: string, settled: boolean) => void;
-  export let onsettings: () => void;
-  /** Settled sessions are hidden entirely unless enabled in settings. */
-  export let showSettled = false;
+  interface Props {
+    workspaces: Workspace[];
+    nodes?: NodeSummary[];
+    sessions: SessionSummary[];
+    activeSessionId: string | undefined;
+    open?: boolean;
+    /** Desktop: slid out of the layout; the main column shows the expand button. */
+    collapsed?: boolean;
+    oncollapse: () => void;
+    onselect: (id: string) => void;
+    onnew: (workspaceId?: string) => void;
+    onaddworkspace: (nodeId: string) => void;
+    onclose: () => void;
+    onrename: (id: string, name: string) => void;
+    onpin: (id: string, pinned: boolean) => void;
+    onsettle: (id: string, settled: boolean) => void;
+    onsettings: () => void;
+    /** Settled sessions are hidden entirely unless enabled in settings. */
+    showSettled?: boolean;
+  }
 
-  let query = '';
-  let collapsedGroups = new Set<string>();
-  let selectedNodeId = '';
-  $: if (selectedNodeId && !nodes.some((node) => node.id === selectedNodeId)) selectedNodeId = '';
-  $: shownWorkspaces = workspaces.filter(
-    (workspace) => !selectedNodeId || workspace.hostId === selectedNodeId,
+  let {
+    workspaces,
+    nodes = [],
+    sessions,
+    activeSessionId,
+    open = $bindable(false),
+    collapsed = false,
+    oncollapse,
+    onselect,
+    onnew,
+    onaddworkspace,
+    onclose,
+    onrename,
+    onpin,
+    onsettle,
+    onsettings,
+    showSettled = false,
+  }: Props = $props();
+
+  let query = $state('');
+  let collapsedGroups = $state(new Set<string>());
+  let selectedNodeId = $state('');
+  $effect.pre(() => {
+    if (selectedNodeId && !nodes.some((node) => node.id === selectedNodeId)) selectedNodeId = '';
+  });
+  let shownWorkspaces = $derived(
+    workspaces.filter((workspace) => !selectedNodeId || workspace.hostId === selectedNodeId),
   );
 
-  $: visibleSessions = sessions.filter((session) =>
-    session.name.toLowerCase().includes(query.toLowerCase()),
+  let visibleSessions = $derived(
+    sessions.filter((session) => session.name.toLowerCase().includes(query.toLowerCase())),
   );
 
   /** Workspaces whose settled sessions are shown; searching shows them all. */
-  let openSettled = new Set<string>();
-  let renamingId: string | undefined;
-  let renameValue = '';
-  let renameInput: HTMLInputElement | undefined;
+  let openSettled = $state(new Set<string>());
+  let renamingId: string | undefined = $state();
+  let renameValue = $state('');
+  let renameInput: HTMLInputElement | undefined = $state();
 
   /** Pinned first, then by activity (the order the gateway already returns). */
   function groupSessions(all: SessionSummary[], workspaceId: string) {
@@ -110,7 +133,7 @@
     class="sidebar-scrim"
     type="button"
     aria-label="Close navigation"
-    on:click={onclose}
+    onclick={onclose}
   ></button>{/if}
 <aside class:open class:collapsed class="sidebar" aria-label="Sessions" inert={collapsed && !open}>
   <div class="brand-row">
@@ -122,16 +145,16 @@
       type="button"
       aria-label="Hide sidebar"
       title="Hide sidebar"
-      on:click={oncollapse}><PanelLeftClose size={18} /></button
+      onclick={oncollapse}><PanelLeftClose size={18} /></button
     >
     <button
       class="mobile-close icon-button"
       type="button"
       aria-label="Close navigation"
-      on:click={onclose}><X size={19} /></button
+      onclick={onclose}><X size={19} /></button
     >
   </div>
-  <button class="new-session" type="button" on:click={() => onnew()}
+  <button class="new-session" type="button" onclick={() => onnew()}
     ><SquarePen size={16} /> New session</button
   >
   <label class="search">
@@ -143,14 +166,14 @@
   <div class="device-switcher" aria-label="Select device">
     <strong>Devices</strong>
     <div class="device-options">
-      <button type="button" class:chosen={!selectedNodeId} on:click={() => (selectedNodeId = '')}
+      <button type="button" class:chosen={!selectedNodeId} onclick={() => (selectedNodeId = '')}
         >All</button
       >
       {#each nodes as node}
         <button
           type="button"
           class:chosen={selectedNodeId === node.id}
-          on:click={() => (selectedNodeId = node.id)}>{node.id}</button
+          onclick={() => (selectedNodeId = node.id)}>{node.id}</button
         >
       {/each}
     </div>
@@ -159,7 +182,7 @@
     <strong>Workspaces</strong>
     <button
       type="button"
-      on:click={() => onaddworkspace(selectedNodeId || nodes[0]?.id)}
+      onclick={() => onaddworkspace(selectedNodeId || nodes[0]?.id)}
       disabled={!nodes.length}
       aria-label="Add workspace"><Plus size={16} /> Add</button
     >
@@ -170,7 +193,7 @@
         <div class="workspace-heading">
           <button
             type="button"
-            on:click={() => toggleWorkspace(workspace.id)}
+            onclick={() => toggleWorkspace(workspace.id)}
             aria-expanded={!collapsedGroups.has(workspace.id)}
           >
             <span class:collapsed={collapsedGroups.has(workspace.id)} class="chevron">
@@ -189,7 +212,7 @@
             class="mini-action"
             type="button"
             aria-label="New session in {workspace.displayName}"
-            on:click={() => onnew(workspace.id)}><Plus size={15} /></button
+            onclick={() => onnew(workspace.id)}><Plus size={15} /></button
           >
         </div>
         {#if !collapsedGroups.has(workspace.id)}
@@ -203,7 +226,7 @@
                 class="settled-toggle"
                 type="button"
                 aria-expanded={!!query || openSettled.has(workspace.id)}
-                on:click={() => toggleSettled(workspace.id)}
+                onclick={() => toggleSettled(workspace.id)}
               >
                 <span class:collapsed={!query && !openSettled.has(workspace.id)} class="chevron">
                   <ChevronDown size={13} />
@@ -223,7 +246,7 @@
   </nav>
 
   <div class="sidebar-footer">
-    <button class="settings-entry" type="button" on:click={onsettings}>
+    <button class="settings-entry" type="button" onclick={onsettings}>
       <Settings size={17} />
       <span>Settings</span>
     </button>
@@ -234,7 +257,7 @@
   class="mobile-menu icon-button"
   type="button"
   aria-label="Open navigation"
-  on:click={() => (open = true)}><Menu size={21} /></button
+  onclick={() => (open = true)}><Menu size={21} /></button
 >
 
 {#snippet sessionRow(session: SessionSummary)}
@@ -245,14 +268,20 @@
     class:renaming={renamingId === session.id}
   >
     {#if renamingId === session.id}
-      <form class="session-rename" on:submit|preventDefault={() => finishRename(true)}>
+      <form
+        class="session-rename"
+        onsubmit={(event) => {
+          event.preventDefault();
+          finishRename(true);
+        }}
+      >
         <input
           bind:this={renameInput}
           bind:value={renameValue}
           maxlength="200"
           aria-label="Session name"
-          on:keydown={(event) => event.key === 'Escape' && finishRename(false)}
-          on:blur={() => finishRename(true)}
+          onkeydown={(event) => event.key === 'Escape' && finishRename(false)}
+          onblur={() => finishRename(true)}
         />
       </form>
     {:else}
@@ -260,8 +289,8 @@
         class:active={session.id === activeSessionId}
         class="session-card"
         type="button"
-        on:click={() => onselect(session.id)}
-        on:dblclick={() => startRename(session)}
+        onclick={() => onselect(session.id)}
+        ondblclick={() => startRename(session)}
         aria-current={session.id === activeSessionId ? 'page' : undefined}
       >
         <span
@@ -287,14 +316,14 @@
           type="button"
           aria-label={session.pinned ? `Unpin ${session.name}` : `Pin ${session.name}`}
           title={session.pinned ? 'Unpin' : 'Pin'}
-          on:click={() => onpin(session.id, !session.pinned)}
+          onclick={() => onpin(session.id, !session.pinned)}
           >{#if session.pinned}<PinOff size={14} />{:else}<Pin size={14} />{/if}</button
         >
         <button
           type="button"
           aria-label={session.settled ? `Reopen ${session.name}` : `Settle ${session.name}`}
           title={session.settled ? 'Reopen' : 'Settle'}
-          on:click={() => onsettle(session.id, !session.settled)}
+          onclick={() => onsettle(session.id, !session.settled)}
           >{#if session.settled}<ArchiveRestore size={14} />{:else}<Archive
               size={14}
             />{/if}</button
@@ -303,7 +332,7 @@
           type="button"
           aria-label="Rename {session.name}"
           title="Rename"
-          on:click={() => startRename(session)}><Pencil size={14} /></button
+          onclick={() => startRename(session)}><Pencil size={14} /></button
         >
       </div>
     {/if}

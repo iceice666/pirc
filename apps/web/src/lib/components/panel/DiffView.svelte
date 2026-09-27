@@ -1,7 +1,11 @@
 <script lang="ts">
   /** Unified diff renderer: file headers, hunk headers, and +/- lines with gutters. */
-  export let diff: string;
-  export let truncated = false;
+  interface Props {
+    diff: string;
+    truncated?: boolean;
+  }
+
+  let { diff, truncated = false }: Props = $props();
 
   type Line = {
     kind: 'file' | 'meta' | 'hunk' | 'add' | 'del' | 'ctx';
@@ -40,7 +44,7 @@
     return lines;
   }
 
-  $: lines = parse(diff);
+  let lines = $derived(parse(diff));
 </script>
 
 {#if !diff.trim()}

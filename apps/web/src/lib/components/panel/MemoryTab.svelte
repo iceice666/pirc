@@ -1,13 +1,18 @@
 <script lang="ts">
   import { Brain, CircleAlert, LoaderCircle } from '@lucide/svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import type { MemoryPanel, MemoryRuntime, Meter } from '../../panel-api';
 
-  export let memory: MemoryPanel | null;
-  export let runtime: MemoryRuntime | null;
-  export let agentRunning = false;
+  interface Props {
+    memory: MemoryPanel | null;
+    runtime: MemoryRuntime | null;
+    agentRunning?: boolean;
+  }
 
-  let filter: 'active' | 'all' | 'dropped' = 'active';
-  let expanded = new Set<string>();
+  let { memory, runtime, agentRunning = false }: Props = $props();
+
+  let filter: 'active' | 'all' | 'dropped' = $state('active');
+  const expanded = new SvelteSet<string>();
 
   const pct = (meter: Meter) =>
     meter.max > 0 ? Math.min(100, (meter.value / meter.max) * 100) : 0;
@@ -24,24 +29,27 @@
     dropper: 'Pruning low-value observations',
   };
   function toggle(id: string) {
-    expanded.has(id) ? expanded.delete(id) : expanded.add(id);
-    expanded = expanded;
+    if (!expanded.delete(id)) expanded.add(id);
   }
 
-  $: meters = memory
-    ? [
-        { key: 'observation', label: 'Next observation', meter: memory.thresholds.observation },
-        { key: 'reflection', label: 'Next reflection', meter: memory.thresholds.reflection },
-        { key: 'compaction', label: 'Next compaction', meter: memory.thresholds.compaction },
-        { key: 'pool', label: 'Active observation pool', meter: memory.thresholds.activePool },
-      ]
-    : [];
-  $: observations = (memory?.observations ?? [])
-    .filter((o) => (filter === 'all' ? true : filter === 'dropped' ? o.dropped : !o.dropped))
-    .slice()
-    .reverse();
-  $: errors = Object.entries(runtime?.lastErrors ?? {});
-  $: limited = (runtime?.rateLimited ?? []).filter((item) => item.until > Date.now());
+  let meters = $derived(
+    memory
+      ? [
+          { key: 'observation', label: 'Next observation', meter: memory.thresholds.observation },
+          { key: 'reflection', label: 'Next reflection', meter: memory.thresholds.reflection },
+          { key: 'compaction', label: 'Next compaction', meter: memory.thresholds.compaction },
+          { key: 'pool', label: 'Active observation pool', meter: memory.thresholds.activePool },
+        ]
+      : [],
+  );
+  let observations = $derived(
+    (memory?.observations ?? [])
+      .filter((o) => (filter === 'all' ? true : filter === 'dropped' ? o.dropped : !o.dropped))
+      .slice()
+      .reverse(),
+  );
+  let errors = $derived(Object.entries(runtime?.lastErrors ?? {}));
+  let limited = $derived((runtime?.rateLimited ?? []).filter((item) => item.until > Date.now()));
 </script>
 
 <div class="tab-body">
@@ -112,7 +120,7 @@
             <button
               type="button"
               class="memory-item"
-              on:click={() => toggle(item.id)}
+              onclick={() => toggle(item.id)}
               aria-expanded={expanded.has(item.id)}
             >
               <span class="memory-text" class:clamped={!expanded.has(item.id)}>{item.content}</span>
@@ -136,7 +144,7 @@
             role="tab"
             class:active={filter === option}
             aria-selected={filter === option}
-            on:click={() => (filter = option as typeof filter)}>{option}</button
+            onclick={() => (filter = option as typeof filter)}>{option}</button
           >
         {/each}
       </div>
@@ -150,7 +158,7 @@
             <button
               type="button"
               class="memory-item"
-              on:click={() => toggle(item.id)}
+              onclick={() => toggle(item.id)}
               aria-expanded={expanded.has(item.id)}
             >
               <span class="memory-text" class:clamped={!expanded.has(item.id)}

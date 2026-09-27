@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import {
     Check,
     ChevronDown,
@@ -15,33 +16,13 @@
   import { highlightCode, languageForPath, rendererTick } from '../markdown';
   import type { ToolCall } from '../types';
 
-  export let tool: ToolCall;
-  let open = false;
-  let userToggled = false;
+  interface Props {
+    tool: ToolCall;
+  }
 
-  // Failures open by default so errors are never hidden behind a click.
-  $: if (!userToggled) open = tool.status === 'failed';
-
-  $: args = (tool.input && typeof tool.input === 'object' ? tool.input : {}) as Record<string, any>;
-  $: statusLabel =
-    tool.status === 'running' ? 'Running' : tool.status === 'failed' ? 'Failed' : 'Done';
-  $: icon =
-    tool.name === 'bash'
-      ? Terminal
-      : tool.name === 'read'
-        ? FileText
-        : tool.name === 'edit'
-          ? FilePen
-          : tool.name === 'write'
-            ? FilePlus
-            : tool.name === 'grep' || tool.name === 'find'
-              ? Search
-              : tool.name === 'ls'
-                ? FolderTree
-                : Wrench;
-  $: summary = describe(tool.name, args);
-  $: fileLanguage = languageForPath(args.path);
-  $: duration = elapsed(tool.startedAt, tool.endedAt);
+  let { tool }: Props = $props();
+  let open = $state(false);
+  let userToggled = $state(false);
 
   /** Primary argument shown next to the tool name, like a terminal prompt. */
   function describe(name: string, input: Record<string, any>): string {
@@ -102,43 +83,72 @@
     open = !open;
   }
 
-  $: extraInput =
-    tool.input !== undefined && typeof tool.input !== 'object'
-      ? String(tool.input)
-      : residualInput(tool.name, args);
-  $: diffLines = (tool.diff ?? '').split('\n');
-  $: pendingEdits =
-    !tool.diff && tool.name === 'edit' && Array.isArray(args.edits) ? args.edits : [];
-
   // Highlighting only runs for an expanded card, and re-runs once the lazily
   // loaded highlighter arrives (`$rendererTick`).
-  let commandHtml = '';
-  let contentHtml = '';
-  let inputHtml = '';
-  let outputHtml = '';
-  $: {
-    $rendererTick;
-    commandHtml =
-      open && tool.name === 'bash' && typeof args.command === 'string'
-        ? highlightCode(args.command, 'bash')
-        : '';
-    contentHtml =
-      open && tool.name === 'write' && typeof args.content === 'string'
-        ? highlightCode(args.content, fileLanguage)
-        : '';
-    inputHtml =
-      open && extraInput !== undefined
-        ? typeof extraInput === 'string'
-          ? highlightCode(extraInput)
-          : highlightCode(JSON.stringify(extraInput, null, 2), 'json')
-        : '';
-    outputHtml =
-      open && tool.output
-        ? tool.name === 'read' && tool.status !== 'failed'
-          ? highlightCode(tool.output, fileLanguage)
-          : highlightCode(tool.output)
-        : '';
-  }
+  // Failures open by default so errors are never hidden behind a click.
+  $effect.pre(() => {
+    const failed = tool.status === 'failed';
+    if (!untrack(() => userToggled)) open = failed;
+  });
+  let args = $derived(
+    (tool.input && typeof tool.input === 'object' ? tool.input : {}) as Record<string, any>,
+  );
+  let statusLabel = $derived(
+    tool.status === 'running' ? 'Running' : tool.status === 'failed' ? 'Failed' : 'Done',
+  );
+  let Icon = $derived(
+    tool.name === 'bash'
+      ? Terminal
+      : tool.name === 'read'
+        ? FileText
+        : tool.name === 'edit'
+          ? FilePen
+          : tool.name === 'write'
+            ? FilePlus
+            : tool.name === 'grep' || tool.name === 'find'
+              ? Search
+              : tool.name === 'ls'
+                ? FolderTree
+                : Wrench,
+  );
+  let summary = $derived(describe(tool.name, args));
+  let fileLanguage = $derived(languageForPath(args.path));
+  let duration = $derived(elapsed(tool.startedAt, tool.endedAt));
+  let extraInput = $derived(
+    tool.input !== undefined && typeof tool.input !== 'object'
+      ? String(tool.input)
+      : residualInput(tool.name, args),
+  );
+  let diffLines = $derived((tool.diff ?? '').split('\n'));
+  let pendingEdits = $derived(
+    !tool.diff && tool.name === 'edit' && Array.isArray(args.edits) ? args.edits : [],
+  );
+  const commandHtml = $derived.by(() => {
+    void $rendererTick;
+    return open && tool.name === 'bash' && typeof args.command === 'string'
+      ? highlightCode(args.command, 'bash')
+      : '';
+  });
+  const contentHtml = $derived.by(() => {
+    void $rendererTick;
+    return open && tool.name === 'write' && typeof args.content === 'string'
+      ? highlightCode(args.content, fileLanguage)
+      : '';
+  });
+  const inputHtml = $derived.by(() => {
+    void $rendererTick;
+    if (!open || extraInput === undefined) return '';
+    return typeof extraInput === 'string'
+      ? highlightCode(extraInput)
+      : highlightCode(JSON.stringify(extraInput, null, 2), 'json');
+  });
+  const outputHtml = $derived.by(() => {
+    void $rendererTick;
+    if (!open || !tool.output) return '';
+    return tool.name === 'read' && tool.status !== 'failed'
+      ? highlightCode(tool.output, fileLanguage)
+      : highlightCode(tool.output);
+  });
 </script>
 
 <div
@@ -147,10 +157,8 @@
   class="tool-card"
   data-tool={tool.name}
 >
-  <button class="tool-summary" type="button" on:click={toggle} aria-expanded={open}>
-    <span class="tool-icon" aria-hidden="true"
-      ><svelte:component this={icon} size={14} strokeWidth={1.8} /></span
-    >
+  <button class="tool-summary" type="button" onclick={toggle} aria-expanded={open}>
+    <span class="tool-icon" aria-hidden="true"><Icon size={14} strokeWidth={1.8} /></span>
     <span class="tool-name">
       <strong>{tool.title ?? tool.name}</strong>
       {#if summary}<code title={summary}>{summary}</code>{:else}<span>{statusLabel}</span>{/if}

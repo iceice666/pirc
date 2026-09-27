@@ -10,30 +10,40 @@
   import { onDestroy } from 'svelte';
   import { fade } from 'svelte/transition';
   import { panelApi, type BackgroundTask, type PanelState, type TeamMember } from '../panel-api';
+  import { watch } from '../watch.svelte';
 
-  export let sessionId: string;
-  export let hasControl = false;
-  export let generation: number | undefined;
-  /** Bumped by the parent when background or team state changed. */
-  export let refreshKey = 0;
-  /** Static state for the offline demo; nothing is fetched. */
-  export let demo: PanelState | undefined = undefined;
+  interface Props {
+    sessionId: string;
+    hasControl?: boolean;
+    generation: number | undefined;
+    /** Bumped by the parent when background or team state changed. */
+    refreshKey?: number;
+    /** Static state for the offline demo; nothing is fetched. */
+    demo?: PanelState | undefined;
+  }
 
-  let state: PanelState | undefined = demo;
-  let open = false;
-  let root: HTMLDivElement;
-  let now = Date.now();
-  let expanded: string | undefined;
-  let output = '';
-  let outputError = '';
-  let outputEl: HTMLPreElement | undefined;
-  let finishedOpen = false;
+  let {
+    sessionId,
+    hasControl = false,
+    generation,
+    refreshKey = 0,
+    demo = undefined,
+  }: Props = $props();
+
+  let panelState: PanelState | undefined = $state();
+  let open = $state(false);
+  let root: HTMLDivElement | undefined = $state();
+  let now = $state(Date.now());
+  let expanded: string | undefined = $state();
+  let output = $state('');
+  let outputError = $state('');
+  let outputEl: HTMLPreElement | undefined = $state();
+  let finishedOpen = $state(false);
   /** Finished tasks the user cleared from the list (client-side only). */
-  let cleared = new Set<string>();
-  let armed: string | undefined;
+  let cleared = $state(new Set<string>());
+  let armed: string | undefined = $state();
   let armTimer: ReturnType<typeof setTimeout> | undefined;
-  let stopError = '';
-  let loadedFor = '';
+  let stopError = $state('');
   let loading = false;
   let queued = false;
 
@@ -52,7 +62,7 @@
     const id = sessionId;
     try {
       const next = await panelApi.state(id);
-      if (id === sessionId) state = next;
+      if (id === sessionId) panelState = next;
     } catch {
       /* keep the last list; the node may be restarting */
     } finally {
@@ -64,55 +74,7 @@
     }
   }
 
-  $: if (sessionId !== loadedFor) {
-    loadedFor = sessionId;
-    state = demo;
-    open = false;
-    expanded = undefined;
-    cleared = new Set();
-    void load();
-  }
-  let lastKey = refreshKey;
-  $: if (refreshKey !== lastKey) {
-    lastKey = refreshKey;
-    void load();
-  }
-
-  $: tasks = (state?.backgroundTasks ?? []).slice().reverse();
-  $: liveTasks = tasks.filter(liveTask);
-  $: finished = tasks.filter((task) => !liveTask(task) && !cleared.has(task.id));
-  $: agents = (state?.team.agents ?? []).filter(LIVE_AGENT);
-  $: liveCount = liveTasks.length + agents.length;
-  $: visible = liveCount + finished.length > 0;
-  $: if (!visible && open) open = false;
-  $: label = liveCount
-    ? `${liveCount} running`
-    : `${finished.length} background task${finished.length === 1 ? '' : 's'}`;
-
-  // A ticking clock for durations, only while the list is visible.
-  let clock: ReturnType<typeof setInterval> | undefined;
-  $: if (open && liveCount && !clock) clock = setInterval(() => (now = Date.now()), 1000);
-  $: if ((!open || !liveCount) && clock) {
-    clearInterval(clock);
-    clock = undefined;
-  }
-  // The expanded output follows a running task.
-  let poll: ReturnType<typeof setInterval> | undefined;
-  $: expandedTask = tasks.find((task) => task.id === expanded);
-  $: pollWanted = open && !!expandedTask && liveTask(expandedTask);
-  $: if (pollWanted && !poll) poll = setInterval(() => void loadOutput(), 2000);
-  $: if (!pollWanted && poll) {
-    clearInterval(poll);
-    poll = undefined;
-  }
-  let lastExpandedStatus = '';
-  $: if (expandedTask && expandedTask.status !== lastExpandedStatus) {
-    lastExpandedStatus = expandedTask.status;
-    void loadOutput();
-  }
   onDestroy(() => {
-    if (clock) clearInterval(clock);
-    if (poll) clearInterval(poll);
     if (armTimer) clearTimeout(armTimer);
   });
 
@@ -128,7 +90,6 @@
     }
     expanded = task.id;
     output = '';
-    lastExpandedStatus = task.status;
     await loadOutput();
   }
   async function loadOutput() {
@@ -162,10 +123,12 @@
     if (!generation) return;
     try {
       const { task: next } = await panelApi.stopBackground(sessionId, task.id, generation);
-      if (state)
-        state = {
-          ...state,
-          backgroundTasks: state.backgroundTasks.map((item) => (item.id === next.id ? next : item)),
+      if (panelState)
+        panelState = {
+          ...panelState,
+          backgroundTasks: panelState.backgroundTasks.map((item) =>
+            item.id === next.id ? next : item,
+          ),
         };
     } catch (cause) {
       stopError = cause instanceof Error ? cause.message : 'Could not stop the task.';
@@ -211,9 +174,59 @@
       root?.querySelector<HTMLButtonElement>('.jobs-trigger')?.focus();
     }
   }
+  watch(
+    () => sessionId,
+    () => {
+      panelState = demo;
+      open = false;
+      expanded = undefined;
+      cleared = new Set();
+      void load();
+    },
+    { immediate: true },
+  );
+  watch(
+    () => refreshKey,
+    () => void load(),
+  );
+  let tasks = $derived((panelState?.backgroundTasks ?? []).slice().reverse());
+  let liveTasks = $derived(tasks.filter(liveTask));
+  let finished = $derived(tasks.filter((task) => !liveTask(task) && !cleared.has(task.id)));
+  let agents = $derived((panelState?.team.agents ?? []).filter(LIVE_AGENT));
+  let liveCount = $derived(liveTasks.length + agents.length);
+  let visible = $derived(liveCount + finished.length > 0);
+  $effect.pre(() => {
+    if (!visible) open = false;
+  });
+  let label = $derived(
+    liveCount
+      ? `${liveCount} running`
+      : `${finished.length} background task${finished.length === 1 ? '' : 's'}`,
+  );
+  // A ticking clock for durations, only while the list is visible.
+  $effect(() => {
+    if (!open || !liveCount) return;
+    const clock = setInterval(() => (now = Date.now()), 1000);
+    return () => clearInterval(clock);
+  });
+  let expandedTask = $derived(tasks.find((task) => task.id === expanded));
+  let pollWanted = $derived(open && !!expandedTask && liveTask(expandedTask));
+  // The expanded output follows a running task.
+  $effect(() => {
+    if (!pollWanted) return;
+    const poll = setInterval(() => void loadOutput(), 2000);
+    return () => clearInterval(poll);
+  });
+  // A status change of the expanded task (e.g. it finished) refreshes its output.
+  watch(
+    () => expandedTask && `${expandedTask.id}\n${expandedTask.status}`,
+    (key, previous) => {
+      if (key && previous?.split('\n')[0] === key.split('\n')[0]) void loadOutput();
+    },
+  );
 </script>
 
-<svelte:window on:pointerdown={outside} on:keydown={keydown} />
+<svelte:window onpointerdown={outside} onkeydown={keydown} />
 
 {#if visible}
   <div class="jobs-menu" bind:this={root} transition:fade={{ duration: 120 }}>
@@ -226,7 +239,7 @@
       aria-haspopup="true"
       aria-label="{label}. Show background jobs"
       title="Background jobs"
-      on:click={toggleOpen}
+      onclick={toggleOpen}
     >
       {#if liveCount}<span class="state-dot ongoing" aria-hidden="true"></span>{/if}
       <span class="jobs-count">{liveCount || finished.length}</span>
@@ -263,15 +276,14 @@
               class="jobs-section-toggle"
               type="button"
               aria-expanded={finishedOpen || !liveCount}
-              on:click={() => (finishedOpen = !finishedOpen)}
+              onclick={() => (finishedOpen = !finishedOpen)}
             >
               <span class="section-chevron" class:open={finishedOpen || !liveCount}
                 ><ChevronRight size={12} /></span
               >
               Finished {finished.length}
             </button>
-            <button class="jobs-section-toggle" type="button" on:click={clearFinished}>Clear</button
-            >
+            <button class="jobs-section-toggle" type="button" onclick={clearFinished}>Clear</button>
           </div>
           {#if finishedOpen || !liveCount}
             {#each finished as task (task.id)}
@@ -292,7 +304,7 @@
         class:settled={!live}
         type="button"
         aria-expanded={expanded === task.id}
-        on:click={() => toggleTask(task)}
+        onclick={() => toggleTask(task)}
       >
         <span class="state-dot {dot(task)}" aria-hidden="true"></span>
         <span class="job-main">
@@ -310,7 +322,7 @@
           type="button"
           aria-label={armed === task.id ? 'Confirm stop' : `Stop ${task.id}`}
           title={armed === task.id ? 'Click again to stop' : 'Stop task'}
-          on:click={() => pressStop(task)}
+          onclick={() => pressStop(task)}
         >
           <Square size={9} fill="currentColor" />
           {#if armed === task.id}<span>Stop</span>{/if}
