@@ -4,6 +4,7 @@
   import { app } from '../../app.svelte';
   import Modal from './Modal.svelte';
   import BackendSettings from '../BackendSettings.svelte';
+  import PairedDevices from '../PairedDevices.svelte';
 
   interface Props {
     open: boolean;
@@ -98,7 +99,7 @@
         hidden={settingsTab !== 'devices'}
       >
         <section class="settings-section">
-          <h3>Devices</h3>
+          <h3>Nodes</h3>
           {#if app.nodes.length}
             <ul class="settings-devices">
               {#each app.nodes as node (node.id)}
@@ -114,10 +115,12 @@
               {/each}
             </ul>
           {:else}
-            <p>No devices online.</p>
+            <p>No nodes online.</p>
           {/if}
           <p>{app.nodes.length} online</p>
         </section>
+
+        <PairedDevices disabled={app.usingDemo} />
       </div>
 
       <div
