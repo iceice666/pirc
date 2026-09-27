@@ -44,6 +44,23 @@ import {
 import { DROPPER_SYSTEM, OBSERVER_SYSTEM, REFLECTOR_SYSTEM } from './prompts.js';
 import { renderMessage, serializeChunk } from './serialize.js';
 import { RateLimitTracker, pickModel, runWorker, type WorkerModel } from './worker.js';
+import { teamChildMode } from '../team/channel.js';
+import {
+  WORKSPACE_PROMOTER_SYSTEM,
+  WS_PROMOTED,
+  WS_SNAPSHOT,
+  WorkspaceLedger,
+  findWorkspaceItem,
+  gitLabel,
+  gitState,
+  promoterPrompt,
+  promoterTool,
+  promotionCandidates,
+  recallWorkspaceItem,
+  renderWorkspaceMemory,
+  workspaceItemLine,
+  type PromotionOutput,
+} from './workspace.js';
 
 const modelChoice = z.object({
   provider: z.string().min(1),
@@ -72,6 +89,15 @@ export const memorySchema = z.object({
   fallbackModels: z.array(modelChoice).default([]),
   rateLimitCooldownMs: positive.default(900_000),
   showWorkerNotifications: z.boolean().default(true),
+  /** Cross-session memory shared by every main session (and worktree) of a repository. */
+  workspace: z
+    .object({
+      enabled: z.boolean().default(true),
+      /** Budget for the notes frozen into a new session's system prompt (and the promoter's target). */
+      maxTokens: positive.default(3_000),
+      shutdownTimeoutMs: positive.default(20_000),
+    })
+    .default({}),
 });
 export type MemoryConfig = z.infer<typeof memorySchema>;
 
@@ -381,13 +407,120 @@ export function memoryFeature(): Feature {
       .finally(() => {
         consolidating = null;
         setPhase(agent, '');
+        // New reflections are the signal that something durable is worth carrying over.
+        schedulePromotion(agent);
       });
+  };
+
+  // ---------- workspace memory ----------
+  let ledger: WorkspaceLedger | undefined;
+  let promoting: Promise<void> | null = null;
+  let snapshotText: string | undefined;
+  const workspaceOn = (agent: Agent, config = memoryConfig(agent)) =>
+    config.enabled && config.workspace.enabled && teamChildMode() === undefined;
+  const workspaceLedger = (agent: Agent) =>
+    (ledger ??= WorkspaceLedger.forCwd(agent.config.workspace));
+
+  /** Distill unpromoted session memory into the workspace ledger. */
+  async function promote(agent: Agent, signal: AbortSignal, force = false): Promise<string> {
+    const config = memoryConfig(agent);
+    const candidates = promotionCandidates(agent.store.branch());
+    if (!candidates.length) return 'nothing new to promote';
+    if (!force && !candidates.some((c) => c.kind === 'reflection'))
+      return 'waiting for a reflection';
+    const model = choose(agent, config, 'workspace promotion');
+    if (!model) return 'no model available';
+    tracker ??= new RateLimitTracker(() => memoryConfig(agent).rateLimitCooldownMs);
+    const target = workspaceLedger(agent);
+    const result = await target.withLock(async () => {
+      const active = target.fold().active;
+      const git = gitState(agent.config.workspace);
+      const out: PromotionOutput = { add: [], retire: [] };
+      const run = await runWorker(agent, {
+        model,
+        tracker: tracker!,
+        systemPrompt: WORKSPACE_PROMOTER_SYSTEM,
+        prompt: promoterPrompt(active, candidates, git, config.workspace.maxTokens),
+        tool: promoterTool(
+          active,
+          candidates,
+          { sessionId: agent.store.sessionId, sessionDir: agent.store.dir, git },
+          out,
+        ),
+        maxTurns: config.agentMaxTurns,
+        maxTokens: config.agentMaxTokens,
+        signal,
+      });
+      if (run.error && !out.add.length && !out.retire.length) {
+        lastError.workspace = run.error;
+        agent.panelChanged('memory');
+        return `failed: ${run.error}`;
+      }
+      const at = Date.now();
+      if (out.add.length) target.append({ type: 'recorded', at, items: out.add });
+      if (out.retire.length)
+        target.append({ type: 'retired', at, ids: out.retire, reason: 'superseded' });
+      agent.store.append({
+        type: 'custom',
+        customType: WS_PROMOTED,
+        data: { memoryIds: candidates.map((c) => c.id) },
+      });
+      delete lastError.workspace;
+      const summary = `workspace memory +${out.add.length} / -${out.retire.length}`;
+      notify(agent, config, summary);
+      return summary;
+    });
+    return result ?? 'another session is updating workspace memory; will retry later';
+  }
+
+  const schedulePromotion = (agent: Agent, force = false) => {
+    const config = memoryConfig(agent);
+    if (!workspaceOn(agent, config) || config.passive || promoting || lifetime.signal.aborted)
+      return;
+    promoting = promote(agent, lifetime.signal, force)
+      .then(() => undefined)
+      .catch((error) => {
+        lastError.workspace = (error as Error).message;
+        agent.panelChanged('memory');
+      })
+      .finally(() => {
+        promoting = null;
+      });
+  };
+
+  /** Frozen per session (prompt cache); only fresh sessions receive workspace notes. */
+  const workspaceSnapshot = (agent: Agent): string => {
+    if (snapshotText !== undefined) return snapshotText;
+    const branch = agent.store.branch();
+    const existing = branch.findLast(
+      (entry) => entry.type === 'custom' && entry.customType === WS_SNAPSHOT,
+    );
+    if (existing?.type === 'custom')
+      return (snapshotText = String((existing.data as any)?.text ?? ''));
+    let text = '';
+    if (!branch.some((entry) => entry.type === 'message'))
+      try {
+        const target = workspaceLedger(agent);
+        text = renderWorkspaceMemory(
+          target.fold().active,
+          target.root,
+          gitState(agent.config.workspace),
+          memoryConfig(agent).workspace.maxTokens,
+        );
+      } catch (error) {
+        agent.ui.notify(
+          `Observational memory: workspace memory unavailable — ${(error as Error).message}`,
+          'warning',
+        );
+      }
+    agent.store.append({ type: 'custom', customType: WS_SNAPSHOT, data: { text } });
+    return (snapshotText = text);
   };
 
   const recallTool = (agent: Agent): Tool => ({
     name: 'recall',
     ptc: true,
-    description: `Recover exact evidence and source context behind a compacted observational-memory observation or reflection id on the current branch. Use when compressed memory is important and original source context is needed before acting.\n\n${RECALL_GUIDELINES.map((line) => `- ${line}`).join('\n')}`,
+    description: `Recover exact evidence and source context behind a compacted observational-memory observation or reflection id on the current branch, or a workspace-memory id from an earlier session. Use when compressed memory is important and original source context is needed before acting.\n\n${RECALL_GUIDELINES.map((line) => `- ${line}`).join('\n')}`,
     parameters: {
       type: 'object',
       properties: {
@@ -403,7 +536,12 @@ export function memoryFeature(): Feature {
     },
     async execute(args, ctx) {
       if (ctx.signal.aborted) throw new Error('Aborted');
-      const result = recall(agent.store.branch(), String(args.id ?? ''));
+      const id = String(args.id ?? '');
+      let result = recall(agent.store.branch(), id);
+      if (result.status === 'not_found' && workspaceOn(agent)) {
+        const item = findWorkspaceItem(workspaceLedger(agent), id);
+        if (item) result = recallWorkspaceItem(item, recall);
+      }
       return {
         content: [{ type: 'text', text: result.text }],
         details: { status: result.status, id: args.id },
@@ -415,8 +553,15 @@ export function memoryFeature(): Feature {
   return {
     name: 'observational-memory',
     tools: (agent) => (memoryConfig(agent).enabled ? [recallTool(agent)] : []),
+    init(agent) {
+      // Catch up on memory a previous run could not promote (e.g. killed during shutdown).
+      schedulePromotion(agent, true);
+    },
     async beforeAgentStart(agent) {
       maybeConsolidate(agent);
+      if (!workspaceOn(agent)) return;
+      const text = workspaceSnapshot(agent);
+      return text ? { systemPrompt: text } : undefined;
     },
     turnEnd(agent) {
       maybeConsolidate(agent);
@@ -497,10 +642,17 @@ export function memoryFeature(): Feature {
         compactHookBusy = false;
       }
     },
-    async shutdown() {
+    async shutdown(agent) {
       lifetime.abort();
       await consolidating;
+      await promoting;
       lifetime = new AbortController();
+      const config = memoryConfig(agent);
+      if (!workspaceOn(agent, config) || config.passive) return;
+      // Best effort: if the process is killed first, init() catches up next time.
+      await promote(agent, AbortSignal.timeout(config.workspace.shutdownTimeoutMs), true).catch(
+        () => undefined,
+      );
     },
     afterCompact(agent) {
       agent.panelChanged('memory');
@@ -554,6 +706,47 @@ export function memoryFeature(): Feature {
           for (const [stage, message] of Object.entries(lastError))
             lines.push(`Last ${stage} error: ${message}`);
           agent.ui.notify(lines.join('\n'), 'info');
+        },
+      },
+      'om:workspace': {
+        description: 'Workspace memory (/om:workspace [view|sync|forget <id>|clear])',
+        async run(agent, args) {
+          const [sub = 'view', id] = args.trim().split(/\s+/).filter(Boolean);
+          if (!workspaceOn(agent))
+            return agent.ui.notify(
+              'Workspace memory is disabled (or this is not a main session)',
+              'warning',
+            );
+          const target = workspaceLedger(agent);
+          if (sub === 'view') {
+            const active = target.fold().active;
+            const tokens = active.reduce((sum, item) => sum + item.tokenCount, 0);
+            return agent.ui.notify(
+              [
+                `Workspace memory for ${target.root}`,
+                `${active.length} active item(s), ~${tokens.toLocaleString()}/${memoryConfig(agent).workspace.maxTokens.toLocaleString()} tokens; current git: ${gitLabel(gitState(agent.config.workspace)) || 'n/a'}`,
+                `Frozen into this session: ${snapshotText ? 'yes' : 'no'}`,
+                ...active.map(workspaceItemLine),
+              ].join('\n'),
+              'info',
+            );
+          }
+          if (sub === 'sync') {
+            if (promoting) await promoting;
+            const result = await promote(agent, lifetime.signal, true);
+            return agent.ui.notify(`Workspace memory: ${result}`, 'info');
+          }
+          if (sub === 'forget') {
+            if (!id || !target.fold().active.some((item) => item.id === id))
+              return agent.ui.notify(`No active workspace memory item ${id ?? ''}`, 'warning');
+            target.append({ type: 'retired', at: Date.now(), ids: [id], reason: 'forgotten' });
+            return agent.ui.notify(`Workspace memory: forgot ${id}`, 'info');
+          }
+          if (sub === 'clear') {
+            target.append({ type: 'cleared', at: Date.now() });
+            return agent.ui.notify('Workspace memory cleared', 'info');
+          }
+          agent.ui.notify('Usage: /om:workspace [view|sync|forget <id>|clear]', 'warning');
         },
       },
       'om:view': {

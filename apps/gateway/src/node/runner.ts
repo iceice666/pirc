@@ -52,7 +52,12 @@ class PiRunner {
     this.child = spawn(config.agentCommand, args, {
       cwd: workspace.canonicalPath,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, PI_CODING_AGENT_SESSION_DIR: session.privateSessionPath },
+      env: {
+        ...process.env,
+        PI_CODING_AGENT_SESSION_DIR: session.privateSessionPath,
+        PIRC_WORKSPACE_MEMORY_DIR:
+          process.env.PIRC_WORKSPACE_MEMORY_DIR ?? path.join(config.stateDir, 'workspace-memory'),
+      },
     });
     // Public catalog + node-local inference transport; no provider credentials.
     this.child.stdin.write(configureLine(models.current));

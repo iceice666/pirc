@@ -108,7 +108,12 @@ export async function startAgent(
     [process.execPath, cli, 'agent', '--session-dir', sessionDir, ...(options.args ?? [])],
     {
       cwd: workspace,
-      env: { ...process.env, PIRC_CONFIG_DIR: configDir, ...options.env },
+      env: {
+        ...process.env,
+        PIRC_CONFIG_DIR: configDir,
+        PIRC_WORKSPACE_MEMORY_DIR: path.join(root, 'workspace-memory'),
+        ...options.env,
+      },
       stdin: 'pipe',
       stdout: 'pipe',
       stderr: 'pipe',
