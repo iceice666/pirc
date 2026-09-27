@@ -346,6 +346,8 @@ export interface TeamOptions {
   env?: Record<string, string | undefined>;
   /** Providers handed to each child on its first stdin line (see models.ts). */
   models: ModelsConfig;
+  /** Children write under the parent session's lease (see write-lease.ts). */
+  acquireWrite?(path: string, signal?: AbortSignal): Promise<void>;
 }
 
 export class Team {
@@ -1184,6 +1186,10 @@ export class Team {
     if (this.closing) throw new Error('Team shutting down');
     if (who !== 'parent' && !live(this.agents.get(who) ?? { status: 'stopped' }))
       throw new Error('Unknown sender');
+    if (operation === 'write_lease') {
+      await this.options.acquireWrite?.(text(args.path, 'path', 4096), signal);
+      return { granted: true };
+    }
     if (who !== 'parent' && this.agents.get(who)?.mode === 'subagent')
       throw new Error('Subagents cannot use team tools');
     switch (operation) {

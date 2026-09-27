@@ -84,7 +84,6 @@ let
     PIRC_ALLOWED_USERS = csv cfg.allowedUsers;
     PIRC_WORKSPACES = json workspaceList;
     PIRC_CONFIG_DIR = "${agentConfigDir}";
-    PIRC_RUNNER_LIMIT = toString cfg.runnerLimit;
     PIRC_TERMINALS = lib.boolToString cfg.terminals;
   }
   // cfg.environment;
@@ -176,6 +175,11 @@ in
       "piArgs"
     ] "pirc now runs its built-in agent (`pirc agent`); configure it with services.pirc.agentConfig.")
     (mkRenamedOptionModule [ "services" "pirc" "hostId" ] [ "services" "pirc" "localNode" "id" ])
+    (mkRemovedOptionModule [
+      "services"
+      "pirc"
+      "runnerLimit"
+    ] "Runners are no longer limited; concurrent writes are serialized by the node's write broker.")
   ];
 
   options.services.pirc = {
@@ -332,10 +336,6 @@ in
     allowedHosts = mkOption {
       type = types.listOf types.str;
       default = [ ];
-    };
-    runnerLimit = mkOption {
-      type = types.ints.positive;
-      default = 2;
     };
     terminals = mkOption {
       type = types.bool;

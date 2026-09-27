@@ -84,7 +84,6 @@ export interface NodeConfig {
   /** Arguments placed before the agent flags (default: `agent`, or `<cli.ts> agent` when unbundled). */
   agentArgs: string[];
   workspaces: ConfigWorkspace[];
-  runnerLimit: number;
   eventBufferSize: number;
   rpcMaxLineBytes: number;
   uploadMaxBytes: number;
@@ -223,7 +222,6 @@ export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig
     sessionsDir,
     ...defaultAgentCommand(env),
     workspaces: parseWorkspaces(env),
-    runnerLimit: integer(env.PIRC_RUNNER_LIMIT, 2),
     eventBufferSize: integer(env.PIRC_EVENT_BUFFER_SIZE, 1000),
     rpcMaxLineBytes: integer(env.PIRC_RPC_MAX_LINE_BYTES, 1_048_576),
     uploadMaxBytes: uploadLimit(env),

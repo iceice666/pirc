@@ -72,6 +72,7 @@ export const writeTool: Tool = {
   async execute(args, ctx) {
     const file = ctx.guard.resolve(requireString(args, 'path'), 'write');
     if (typeof args.content !== 'string') throw new Error('content must be a string');
+    await ctx.acquireWrite(file);
     await mkdir(path.dirname(file), { recursive: true });
     await writeFile(file, args.content);
     return text(`Wrote ${Buffer.byteLength(args.content)} bytes to ${args.path}`);
@@ -128,6 +129,7 @@ export const editTool: Tool = {
     const after = args.replaceAll
       ? before.split(oldText).join(args.newText)
       : before.replace(oldText, () => args.newText as string);
+    await ctx.acquireWrite(file);
     await writeFile(file, after);
     const diff = simpleDiff(before, after, String(args.path));
     return text(`Edited ${args.path} (${count} replacement${count === 1 ? '' : 's'})`, { diff });

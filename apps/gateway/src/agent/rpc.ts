@@ -1,4 +1,5 @@
 import { parentChannel } from './features/team/channel.js';
+import { nodeWriteBroker } from './write-lease.js';
 import { randomUUID } from 'node:crypto';
 import type { Agent } from './agent.js';
 import type { ImageContent } from './messages.js';
@@ -251,6 +252,7 @@ export async function serveRpc(
     }
     if (command.type === 'extension_ui_response') return ui.respond(command);
     if (command.type === 'team_result') return parentChannel().receive(command);
+    if (command.type === 'write_lease_response') return nodeWriteBroker().respond(command);
     void handleCommand(agent, command, extra).then(
       (data) =>
         write({

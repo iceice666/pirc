@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -219,6 +220,43 @@ describe('pirc agent (OpenAI chat)', () => {
     expect(ends[1]!.result.content[0].text).toContain('[exit 3]');
     expect(ends[1]!.isError).toBe(true);
     expect(ends[2]!.result.content[0].text).toContain('[timed out]');
+  });
+
+  it('asks the node write broker before write/edit and does not write when refused', async () => {
+    const agent = await start({ env: { PIRC_WRITE_BROKER: '1' } });
+    writeFileSync(path.join(agent.workspace, 'a.txt'), 'alpha\n');
+    agent.llm.push(
+      { tool: { id: 'w', name: 'write', args: { path: 'sub/b.txt', content: 'new' } } },
+      {
+        tool: { id: 'e', name: 'edit', args: { path: 'a.txt', oldText: 'alpha', newText: 'beta' } },
+      },
+      { tool: { id: 'r', name: 'read', args: { path: 'a.txt' } } },
+      { text: 'done' },
+    );
+    await agent.send({ type: 'prompt', message: 'write' });
+    const requests: Array<Record<string, any>> = [];
+    for (const granted of [false, true]) {
+      const request = await agent.waitFor(
+        (event) => event.type === 'write_lease_request' && !requests.includes(event),
+      );
+      requests.push(request);
+      agent.raw({
+        type: 'write_lease_response',
+        id: request.id,
+        granted,
+        ...(granted ? {} : { error: 'busy elsewhere' }),
+      });
+    }
+    await settledAfter(agent, 0);
+    // Leases are for the workspace root, whichever file is written under it.
+    const root = realpathSync(agent.workspace);
+    expect(requests.map((request) => request.path)).toEqual([root, root]);
+    expect(agent.events.filter((event) => event.type === 'write_lease_request')).toHaveLength(2);
+    const ends = agent.events.filter((event) => event.type === 'tool_execution_end');
+    expect(ends.map((end) => end.isError)).toEqual([true, false, false]);
+    expect(ends[0]!.result.content[0].text).toContain('busy elsewhere');
+    expect(existsSync(path.join(agent.workspace, 'sub'))).toBe(false);
+    expect(readFileSync(path.join(agent.workspace, 'a.txt'), 'utf8')).toBe('beta\n');
   });
 
   it('reports provider errors without retrying non-retryable ones', async () => {

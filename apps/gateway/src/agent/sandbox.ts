@@ -46,6 +46,12 @@ export class PathGuard {
     return this.roots;
   }
 
+  /** The allowed root containing `absolute` (innermost match), or undefined. */
+  rootOf(absolute: string): string | undefined {
+    const real = realResolve(absolute);
+    return this.roots.filter((root) => inside(real, root)).sort((a, b) => b.length - a.length)[0];
+  }
+
   resolve(input: string, mode: 'read' | 'write'): string {
     if (typeof input !== 'string' || !input) throw new Error('Path is required');
     const cleaned = input.startsWith('@') ? input.slice(1) : input;

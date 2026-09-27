@@ -32,7 +32,6 @@ export function testConfig(overrides: Partial<NodeConfig> = {}): NodeConfig {
     agentCommand: process.execPath,
     agentArgs: [path.resolve('test/fixtures/fake-pi.mjs')],
     workspaces: [{ id: 'test', path: workspace, displayName: 'Test', defaults: {} }],
-    runnerLimit: 2,
     eventBufferSize: 20,
     rpcMaxLineBytes: 1024 * 1024,
     uploadMaxBytes: 1024 * 1024,

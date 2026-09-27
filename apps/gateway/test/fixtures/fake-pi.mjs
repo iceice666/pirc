@@ -52,6 +52,16 @@ else if (sessionDir) mkdirSync(sessionDir, { recursive: true });
 let queue = { steering: [], followUp: [] };
 
 let configured = false;
+// `write <path>` / `hold <path>` prompts ask the node's write broker for a
+// lease, like a file tool would; `hold` keeps the run open until abort.
+const leases = new Map();
+const settle = (message) => {
+  messages.push(message);
+  persist(message);
+  line({ type: 'message_end', message });
+  line({ type: 'agent_end', willRetry: false });
+  line({ type: 'agent_settled' });
+};
 
 rl.on('line', (raw) => {
   const command = JSON.parse(raw);
@@ -115,6 +125,22 @@ rl.on('line', (raw) => {
     response();
     if (command.message === 'crash') return process.exit(17);
     line({ type: 'agent_start' });
+    const lease = /^(write|hold) (.+)$/.exec(command.message);
+    if (lease) {
+      const id = `lease-${leases.size + 1}`;
+      leases.set(id, (reply) => {
+        const text = reply.granted ? 'lease:granted' : `lease:refused ${reply.error}`;
+        const message = {
+          role: 'assistant',
+          content: [{ type: 'text', text }],
+          stopReason: 'stop',
+        };
+        if (lease[1] === 'write' || !reply.granted) settle(message);
+        else line({ type: 'message_end', message });
+      });
+      line({ type: 'write_lease_request', id, path: lease[2] });
+      return;
+    }
     line({ type: 'message_start', message: { role: 'assistant', content: [] } });
     const utf8 = Buffer.from(
       JSON.stringify({
@@ -155,5 +181,6 @@ rl.on('line', (raw) => {
     return;
   }
   if (command.type === 'extension_ui_response') return;
+  if (command.type === 'write_lease_response') return leases.get(command.id)?.(command);
   response(false, undefined, 'unsupported');
 });

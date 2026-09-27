@@ -23,7 +23,7 @@ import { id, parse, payloadHash } from '../util.js';
 import { loadAgentConfig, sessionSettings } from '../agent/config.js';
 import { historyOf } from '../agent/session-store.js';
 import { BranchCache } from './branch-cache.js';
-import { WorkspaceLocks } from './locks.js';
+import { WriteBroker } from './write-broker.js';
 import { registerPanelRoutes, type TerminalStreams } from './panel-routes.js';
 import { RunnerManager } from './runner.js';
 import type { TerminalManager } from './terminals.js';
@@ -100,7 +100,7 @@ export interface NodeServices {
   db: GatewayDatabase;
   events: EventHub;
   runners: RunnerManager;
-  locks: WorkspaceLocks;
+  writes: WriteBroker;
   /** Providers from the daemon, used for agents started from now on. */
   models: ModelStore;
   terminals: TerminalManager;
@@ -117,10 +117,10 @@ export async function buildNodeApp(
   const recovery = db.recoverStartup();
   app.log.info({ recovery }, 'node startup recovery complete');
   const events = new EventHub(config.eventBufferSize);
-  const locks = new WorkspaceLocks(config.runnerLimit);
+  const writes = new WriteBroker();
   // Filled by the daemon on registration; agents started before that get no providers.
   const models = new ModelStore();
-  const runners = new RunnerManager(config, db, events, locks, models);
+  const runners = new RunnerManager(config, db, events, writes, models);
   const branches = new BranchCache();
   const claim = (request: FastifyRequest, sessionId = parse(sessionParams, request.params).id) =>
     db.claimSession(sessionId, request.identity!.user);
@@ -361,5 +361,5 @@ export async function buildNodeApp(
     await runners.shutdown();
     db.close();
   });
-  return { app, services: { db, events, runners, locks, models, terminals, terminalStreams } };
+  return { app, services: { db, events, runners, writes, models, terminals, terminalStreams } };
 }

@@ -43,6 +43,12 @@ export interface ToolContext {
   /** Whether a human can answer dialogs (false for headless team workers). */
   hasUI: boolean;
   env: Record<string, string>;
+  /**
+   * Obtain the node's write lease for the workspace root containing `file`
+   * (an absolute path from `guard.resolve(…, 'write')`). Throws when another
+   * session is writing there. Call right before modifying the file.
+   */
+  acquireWrite(file: string): Promise<void>;
   /** Stream partial output to observers (`tool_execution_update`). */
   update(partial: ToolResult): void;
 }

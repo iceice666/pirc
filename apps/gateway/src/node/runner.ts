@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import type { NodeConfig } from '../config.js';
 import { configureLine, type ModelStore } from '../models.js';
@@ -7,7 +7,7 @@ import type { GatewayDatabase, SessionRow } from '../database.js';
 import { ApiError } from '../errors.js';
 import type { EventHub } from '../events.js';
 import { applySessionName } from '../session-name.js';
-import type { WorkspaceLocks } from './locks.js';
+import type { WriteBroker } from './write-broker.js';
 import { emptyReducedState, reducePiEvent, type ReducedSessionState } from './reducer.js';
 import { JsonlParser } from './rpc-framing.js';
 import type { CommandPayload } from '../types.js';
@@ -36,6 +36,7 @@ class PiRunner {
     private readonly db: GatewayDatabase,
     private readonly events: EventHub,
     models: ModelStore,
+    private readonly writes: WriteBroker,
     private readonly onExit: (runner: PiRunner) => void,
   ) {
     this.epoch = db.incrementEpoch(session.id);
@@ -55,6 +56,8 @@ class PiRunner {
       env: {
         ...process.env,
         PI_CODING_AGENT_SESSION_DIR: session.privateSessionPath,
+        // Ask this node for a write lease before file-tool writes.
+        PIRC_WRITE_BROKER: '1',
         PIRC_WORKSPACE_MEMORY_DIR:
           process.env.PIRC_WORKSPACE_MEMORY_DIR ?? path.join(config.stateDir, 'workspace-memory'),
       },
@@ -102,19 +105,6 @@ class PiRunner {
     return !this.closed;
   }
 
-  /**
-   * No run in progress, no RPC awaiting a reply, and no dialog awaiting the
-   * user: safe to stop and restart later.
-   */
-  get idle(): boolean {
-    return (
-      !this.closed &&
-      this.currentRunId === null &&
-      this.pending.size === 0 &&
-      this.db.pendingInteractions(this.session.id).length === 0
-    );
-  }
-
   private handleValue(value: unknown): void {
     if (!value || typeof value !== 'object') throw new Error('RPC emitted a non-object JSON value');
     const message = value as Record<string, any>;
@@ -158,6 +148,10 @@ class PiRunner {
         return;
       } else this.events.publish(this.session.id, this.epoch, 'notification', message);
     }
+    if (message.type === 'write_lease_request') {
+      this.grantWrite(message);
+      return;
+    }
     if (message.type === 'session_name_changed') {
       applySessionName(this.db, this.events, this.session.id, this.epoch, message);
       return;
@@ -178,6 +172,7 @@ class PiRunner {
         );
       this.currentRunId = null;
       this.runError = null;
+      this.writes.release(this.session.id);
     } else if (message.type === 'message_end' && message.message?.role === 'assistant') {
       this.runError =
         message.message.stopReason === 'error'
@@ -221,6 +216,40 @@ class PiRunner {
       ),
     );
     if (this.currentRunId) this.db.updateRun(this.currentRunId, 'running');
+  }
+
+  /** Answer the agent's `write_lease_request` from the node-wide broker. */
+  private grantWrite(message: Record<string, any>): void {
+    if (typeof message.id !== 'string') return;
+    let response: Record<string, unknown>;
+    if (typeof message.path !== 'string' || !path.isAbsolute(message.path))
+      response = { granted: false, error: 'write_lease_request needs an absolute path' };
+    else {
+      let canonical: string;
+      try {
+        canonical = realpathSync(message.path);
+      } catch {
+        canonical = path.resolve(message.path);
+      }
+      const grant = this.writes.acquire(this.session.id, canonical);
+      if (grant.granted) response = { granted: true };
+      else {
+        let holder = grant.holder;
+        try {
+          holder = `"${this.db.getSession(grant.holder).name}" (${grant.holder})`;
+        } catch {
+          /* session row gone; keep the id */
+        }
+        response = {
+          granted: false,
+          error: `${grant.path} is being written by session ${holder}; wait until its run finishes`,
+        };
+      }
+    }
+    if (!this.closed && this.child.stdin.writable)
+      this.child.stdin.write(
+        `${JSON.stringify({ type: 'write_lease_response', id: message.id, ...response })}\n`,
+      );
   }
 
   setRun(runId: string): void {
@@ -286,44 +315,18 @@ export class RunnerManager {
     private readonly config: NodeConfig,
     private readonly db: GatewayDatabase,
     private readonly events: EventHub,
-    private readonly locks: WorkspaceLocks,
+    private readonly writes: WriteBroker,
     private readonly models: ModelStore,
   ) {}
 
   /**
-   * Runners stay up after a run so follow-ups are fast, but an idle one must not
-   * block another session: stop idle runners that overlap this workspace, and
-   * the oldest idle runner when the global limit is reached.
+   * Runners start without a limit; sessions that only read never contend.
+   * Writers are serialized per path by the {@link WriteBroker}.
    */
-  private async evictIdle(sessionId: string, canonicalPath: string): Promise<void> {
-    const idle = (owner: string) => !!this.runners.get(owner)?.idle;
-    const victims = new Set(this.locks.overlapping(sessionId, canonicalPath).filter(idle));
-    const remaining = this.locks.holders().filter((owner) => !victims.has(owner));
-    if (remaining.length >= this.config.runnerLimit) {
-      const oldest = remaining.find((owner) => owner !== sessionId && idle(owner));
-      if (oldest) victims.add(oldest);
-    }
-    await Promise.all(
-      [...victims].map(async (owner) => {
-        const runner = this.runners.get(owner);
-        await runner?.stop(this.config.shutdownGraceMs);
-        // exit() already released the lock; this covers a runner that was never spawned.
-        this.locks.release(owner);
-        this.db.setRunnerState(owner, 'stopped');
-      }),
-    );
-  }
-
   private async ensure(sessionId: string): Promise<PiRunner> {
     const existing = this.runners.get(sessionId);
     if (existing?.alive) return existing;
     const session = this.db.getSession(sessionId);
-    const workspace = this.db.getWorkspace(session.workspaceId);
-    await this.evictIdle(sessionId, workspace.canonicalPath);
-    // A concurrent request may have started this session while we waited.
-    const started = this.runners.get(sessionId);
-    if (started?.alive) return started;
-    this.locks.acquire(sessionId, workspace.canonicalPath);
     this.db.setRunnerState(sessionId, 'starting');
     try {
       const runner = new PiRunner(
@@ -332,15 +335,16 @@ export class RunnerManager {
         this.db,
         this.events,
         this.models,
+        this.writes,
         (exited) => {
           if (this.runners.get(sessionId) === exited) this.runners.delete(sessionId);
-          this.locks.release(sessionId);
+          this.writes.release(sessionId);
         },
       );
       this.runners.set(sessionId, runner);
       return runner;
     } catch (error) {
-      this.locks.release(sessionId);
+      this.writes.release(sessionId);
       this.db.setRunnerState(sessionId, 'failed');
       throw error;
     }

@@ -26,6 +26,7 @@ import type { StreamFn, ToolSpec } from './providers/types.js';
 import { PathGuard } from './sandbox.js';
 import type { SessionStore } from './session-store.js';
 import type { Tool, ToolContext, ToolResult, UiApi } from './tools/types.js';
+import type { AcquireWrite } from './write-lease.js';
 
 export type Emit = (event: Record<string, unknown>) => void;
 
@@ -53,6 +54,8 @@ export interface AgentOptions {
   toolEnv?: Record<string, string>;
   /** When set, only these tools are exposed (e.g. a restricted subagent kind). */
   allowedTools?: string[];
+  /** Write-permission broker transport (see write-lease.ts); default grants everything. */
+  acquireWrite?: AcquireWrite;
 }
 
 const RETRY_DELAYS = [2_000, 5_000, 15_000];
@@ -105,6 +108,7 @@ export class Agent {
   private readonly tools = new Map<string, Tool>();
   private readonly streamOverride: StreamFn | undefined;
   private readonly toolEnv: Record<string, string>;
+  private readonly writeLease: AcquireWrite;
   private steering: QueueItem[] = [];
   private followUps: QueueItem[] = [];
   private running = false;
@@ -206,6 +210,7 @@ export class Agent {
     this.features = options.features ?? [];
     this.streamOverride = options.streamOverride;
     this.toolEnv = options.toolEnv ?? {};
+    this.writeLease = options.acquireWrite ?? (async () => undefined);
     this.guard = new PathGuard(
       options.config.workspace,
       options.config.allowedPaths,
@@ -915,6 +920,14 @@ export class Agent {
     return message;
   }
 
+  /**
+   * Obtain the write lease for the allowed root containing `file`. Team
+   * children's requests arrive here too, so they share this session's lease.
+   */
+  async acquireWrite(file: string, signal?: AbortSignal): Promise<void> {
+    await this.writeLease(this.guard.rootOf(file) ?? file, signal);
+  }
+
   toolContext(
     toolCallId: string,
     signal: AbortSignal,
@@ -929,6 +942,7 @@ export class Agent {
       ui: this.ui,
       hasUI: this.hasUI,
       env: { ...this.config.env, ...this.toolEnv },
+      acquireWrite: (file) => this.acquireWrite(file, signal),
       update: onUpdate ?? (() => undefined),
     };
   }

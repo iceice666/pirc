@@ -84,7 +84,7 @@ describe('node router', () => {
     expect(duplicate.json().duplicate).toBe(true);
   });
 
-  it('stops an idle runner that overlaps a new session but never a busy one', async () => {
+  it('runs overlapping sessions together and lets only one of them write', async () => {
     const base = testConfig();
     // Canonical paths, as the real config produces (macOS tmp is a /private symlink).
     const root = realpathSync(base.workspaces[0]!.path);
@@ -111,43 +111,64 @@ describe('node router', () => {
         payload: { clientId },
       });
       let n = 0;
+      const send = (payload: Record<string, unknown>) =>
+        app.inject({
+          method: 'POST',
+          url: `/api/sessions/${sessionId}/commands`,
+          headers,
+          payload: {
+            commandId: `${sessionId}-${++n}`,
+            clientId,
+            generation: lease.json().lease.generation,
+            payload,
+          },
+        });
+      const texts = async () =>
+        (await app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/snapshot`, headers }))
+          .json()
+          .history.map((m: { content: Array<{ text: string }> }) => m.content[0]!.text)
+          .join('|');
       return {
         sessionId,
-        prompt: (message: string) =>
-          app.inject({
-            method: 'POST',
-            url: `/api/sessions/${sessionId}/commands`,
-            headers,
-            payload: {
-              commandId: `${sessionId}-${++n}`,
-              clientId,
-              generation: lease.json().lease.generation,
-              payload: { type: 'prompt', message },
-            },
-          }),
+        texts,
+        prompt: (message: string) => send({ type: 'prompt', message }),
+        stop: () => send({ type: 'stop' }),
       };
     };
 
+    // No runner limit: three sessions over overlapping paths all run.
     const parent = await open('test', 'browser-1');
-    expect((await parent.prompt('hello')).statusCode).toBe(202);
-    await waitFor(async () => services.runners.get(parent.sessionId)?.idle, true, 5_000);
-
     const child = await open('nested', 'browser-2');
-    const accepted = await child.prompt('hello');
-    expect(accepted.statusCode).toBe(202);
-    expect(accepted.json().command.status).toBe('accepted');
-    expect(services.runners.get(parent.sessionId)?.alive ?? false).toBe(false);
-    expect(services.db.getSession(parent.sessionId).runnerState).toBe('stopped');
+    const reader = await open('nested', 'browser-3');
+    for (const session of [parent, child, reader])
+      expect((await session.prompt('hello')).statusCode).toBe(202);
+    for (const session of [parent, child, reader])
+      await waitFor(session.texts, 'echo:hello', 5_000);
+    for (const session of [parent, child, reader])
+      expect(services.runners.get(session.sessionId)?.alive).toBe(true);
 
-    // Once idle, a dialog prompt keeps the nested session busy; it must win.
-    await waitFor(async () => services.runners.get(child.sessionId)?.idle, true, 5_000);
-    const asked = await child.prompt('ask');
-    expect(asked.statusCode).toBe(202);
-    await waitFor(async () => services.db.pendingInteractions(child.sessionId).length, 1, 5_000);
-    const blocked = await parent.prompt('hello again');
-    expect(blocked.statusCode).toBe(409);
-    expect(blocked.json().error.message).toBe('Workspace overlaps an active runner');
-    expect(services.runners.get(child.sessionId)?.alive).toBe(true);
+    // The child holds a write lease for its whole run…
+    expect((await child.prompt(`hold ${nested}`)).statusCode).toBe(202);
+    await waitFor(async () => services.writes.leases(child.sessionId).join(), nested, 5_000);
+    // …so the parent cannot write anywhere overlapping it, while reading goes on.
+    expect((await parent.prompt(`write ${root}`)).statusCode).toBe(202);
+    await waitFor(
+      async () => (await parent.texts()).split('|').at(-1)!.split(' is being')[0],
+      'lease:refused ' + nested,
+      5_000,
+    );
+    expect(await parent.texts()).toContain(`(${child.sessionId}); wait until its run finishes`);
+    expect(services.writes.leases(parent.sessionId)).toEqual([]);
+    expect((await reader.prompt('still reading')).statusCode).toBe(202);
+    await waitFor(async () => (await reader.texts()).endsWith('echo:still reading'), true, 5_000);
+
+    // Once the child's run settles its lease is gone and the parent may write.
+    expect((await child.stop()).statusCode).toBe(202);
+    await waitFor(async () => services.writes.leases(child.sessionId).length, 0, 5_000);
+    expect((await parent.prompt(`write ${root}`)).statusCode).toBe(202);
+    await waitFor(async () => (await parent.texts()).endsWith('lease:granted'), true, 5_000);
+    // A `write` run settles immediately, which releases the lease again.
+    await waitFor(async () => services.writes.leases(parent.sessionId).length, 0, 5_000);
   });
 
   it('keeps serving history from the session file after the runner dies', async () => {

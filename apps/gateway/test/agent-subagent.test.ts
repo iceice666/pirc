@@ -77,6 +77,44 @@ describe('subagent tool', () => {
     expect(alive(scout.pid)).toBe(false);
   }, 30_000);
 
+  it("writes under the parent session's write lease", async () => {
+    const agent = await startAgent({ env: { PIRC_WRITE_BROKER: '1' } });
+    agents.push(agent);
+    const child: Reply[] = [
+      { tool: { id: 'c1', name: 'write', args: { path: 'first.txt', content: 'x' } } },
+      { tool: { id: 'c2', name: 'write', args: { path: 'second.txt', content: 'y' } } },
+      { text: 'wrote what I could' },
+    ];
+    const parent: Reply[] = [
+      { tool: { id: 'p1', name: 'subagent', args: { task: 'write files', name: 'writer' } } },
+      { text: 'parent done' },
+    ];
+    agent.llm.route = (body) =>
+      (isSubagent(body) ? child.shift() : parent.shift()) ?? { text: 'extra' };
+    const from = agent.events.length;
+    await agent.send({ type: 'prompt', message: 'delegate' });
+    // The child's requests surface as the parent's own, answered by the node.
+    const seen: Array<Record<string, any>> = [];
+    for (const granted of [true, false]) {
+      const request = await agent.waitFor(
+        (event) => event.type === 'write_lease_request' && !seen.includes(event),
+        15_000,
+      );
+      seen.push(request);
+      agent.raw({
+        type: 'write_lease_response',
+        id: request.id,
+        granted,
+        ...(granted ? {} : { error: 'another session is writing' }),
+      });
+    }
+    await settledAfter(agent, from);
+    expect(await Bun.file(`${agent.workspace}/first.txt`).exists()).toBe(true);
+    expect(await Bun.file(`${agent.workspace}/second.txt`).exists()).toBe(false);
+    const childRequest = agent.llm.requests.filter((r) => isSubagent(r.body)).at(-1)!;
+    expect(texts(childRequest.body)).toContain('another session is writing');
+  }, 30_000);
+
   it('delivers a background subagent result once when it finishes', async () => {
     const agent = await startAgent();
     agents.push(agent);

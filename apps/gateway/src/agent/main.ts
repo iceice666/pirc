@@ -8,6 +8,7 @@ import { TEAM_TOOL_NAMES } from './features/team/index.js';
 import { RpcUi, serveRpc, stdinLines } from './rpc.js';
 import { SessionStore } from './session-store.js';
 import { builtinTools } from './tools/index.js';
+import { nodeWriteBroker, processWriteLease } from './write-lease.js';
 
 /**
  * The first stdin line must be `{"type":"configure","models":{…}}`: the
@@ -76,6 +77,7 @@ export async function runAgent(argv: string[]): Promise<void> {
     hasUI: !values.headless,
     tools: builtinTools(),
     features: builtinFeatures(),
+    acquireWrite: processWriteLease(),
     ...(allowedTools ? { allowedTools } : {}),
   });
   await agent.refreshModels();
@@ -88,6 +90,7 @@ export async function runAgent(argv: string[]): Promise<void> {
   await agent.init();
   const shutdown = async () => {
     ui.cancelAll();
+    nodeWriteBroker().closeAll();
     await agent.shutdown();
     process.exit(0);
   };
