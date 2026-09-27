@@ -7,6 +7,7 @@ import {
   toolResultFields,
 } from './pi-messages';
 import { request } from './http';
+import { uuid } from './id';
 import { getClientId } from './storage';
 import type {
   Attachment,
@@ -68,7 +69,7 @@ function interaction(raw: any): PendingInteraction {
     runnerEpoch: String(raw.runnerEpoch),
     title: request.title ?? 'The agent needs your input',
     description: request.message,
-    expiresAt: iso(raw.expiresAt),
+    ...(typeof raw.expiresAt === 'number' ? { expiresAt: iso(raw.expiresAt) } : {}),
     status: raw.status ?? 'pending',
   } as const;
   if (raw.kind === 'select')
@@ -242,7 +243,7 @@ export const api = {
         const receipt = await api.command(sessionId, {
           ...input,
           ...setting,
-          commandId: crypto.randomUUID(),
+          commandId: uuid(),
         });
         if (receipt.status !== 'accepted')
           throw new Error(receipt.message ?? 'Session settings were not accepted.');

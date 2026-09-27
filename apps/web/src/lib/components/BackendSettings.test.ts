@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, tick, unmount } from 'svelte';
 import BackendSettings from './BackendSettings.svelte';
 import type { BackendSettingsSnapshot, ProviderAuthSession } from '../types';
+import { reactiveProps } from '../testing/props.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -114,6 +115,45 @@ afterEach(async () => {
 });
 
 describe('BackendSettings', () => {
+  it('loads once it stops being disabled', async () => {
+    target = document.createElement('div');
+    document.body.append(target);
+    const props = reactiveProps({ disabled: true, onchanged: vi.fn() });
+    component = mount(BackendSettings, { target, props });
+    await flush();
+    expect(calls).toHaveLength(0);
+    props.disabled = false;
+    await flush();
+    expect(calls.map((call) => call.url)).toEqual(['/api/providers']);
+    expect(target.textContent).toContain('Future registry provider');
+  });
+
+  it('keeps an unsaved default choice when settings refresh with the same default', async () => {
+    settings.defaultModel = { provider: 'baseline', id: 'base-model' };
+    settings.providers[0]!.models.push({ id: 'other-model' });
+    settings.providers.push({
+      id: 'custom',
+      name: 'Custom',
+      source: 'ui',
+      readOnly: false,
+      api: 'openai-completions',
+      hasApiKey: false,
+      models: [{ id: 'custom-model' }],
+    });
+    await setup();
+    await input('Gateway default', JSON.stringify(['baseline', 'other-model']));
+    // Another change refreshes settings; the saved default is unchanged.
+    await click('Remove custom');
+    expect(calls[calls.length - 1]).toMatchObject({ method: 'DELETE' });
+    expect(field('Gateway default').value).toBe(JSON.stringify(['baseline', 'other-model']));
+    // A changed saved default does reset the picker.
+    fetchMock.mockImplementationOnce(async () =>
+      response({ ...settings, defaultModel: { provider: 'custom', id: 'custom-model' } }),
+    );
+    await click('Remove custom');
+    expect(field('Gateway default').value).toBe(JSON.stringify(['custom', 'custom-model']));
+  });
+
   it('loads every registry provider, labels baseline read-only, and requires explicit policy consent', async () => {
     await setup();
     expect(target.textContent).toContain('Future registry provider');

@@ -68,9 +68,16 @@
     if (alive) settings = snapshot;
   }
 
-  onMount(() => {
-    if (disabled) loading = false;
-    else
+  // Loads once enabled, including when `disabled` turns false after mount.
+  watch(
+    () => disabled,
+    (isDisabled) => {
+      if (isDisabled) {
+        loading = false;
+        return;
+      }
+      if (settings) return;
+      loading = true;
       void refresh()
         .catch((cause) => {
           if (alive) error = safeError(cause);
@@ -78,6 +85,11 @@
         .finally(() => {
           loading = false;
         });
+    },
+    { immediate: true },
+  );
+
+  onMount(() => {
     return () => {
       alive = false;
       generation++;

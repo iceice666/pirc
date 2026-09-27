@@ -8,7 +8,8 @@ import { syncControl } from './control';
 import { GOAL_WIDGET, parseGoalWidget } from './goal';
 import { PanelStateResource } from './panel-state.svelte';
 import { fromSnapshot, reduceEvent } from './state';
-import { getClientId, loadDraft, saveDraft } from './storage';
+import { uuid } from './id';
+import { getClientId, loadDraft, pruneDrafts, removeDraft, saveDraft } from './storage';
 import { parseTodoWidget, TODO_WIDGET } from './todo';
 import type {
   Attachment,
@@ -160,6 +161,7 @@ class AppState {
         api.nodes(),
       ]);
       this.activeSessionId = this.sessions[0]?.id;
+      pruneDrafts(this.sessions.map((session) => session.id));
     } catch (error) {
       if (import.meta.env.DEV) {
         const demo = await import('./mock');
@@ -295,6 +297,8 @@ class AppState {
     try {
       const updated = await api.updateSession(id, input);
       apply({ name: updated.name, pinned: updated.pinned, settled: updated.settled });
+      // A settled session's unsent draft is dropped (unless it is open right now).
+      if (updated.settled && id !== this.activeSessionId) removeDraft(id);
     } catch (error) {
       apply({ name: previous.name, pinned: previous.pinned, settled: previous.settled });
       this.pageError = message(error, 'Could not update the session.');
@@ -334,7 +338,7 @@ class AppState {
     try {
       if (!this.demo) {
         await api.command(sessionId, {
-          commandId: crypto.randomUUID(),
+          commandId: uuid(),
           kind,
           controlGeneration: state.control.generation,
           content: content || undefined,
@@ -348,7 +352,7 @@ class AppState {
           ...state,
           queue: [
             ...state.queue,
-            { id: crypto.randomUUID(), kind, content, createdAt: new Date().toISOString() },
+            { id: uuid(), kind, content, createdAt: new Date().toISOString() },
           ],
         };
       } else if (kind === 'prompt' || kind === 'steer') {
@@ -357,7 +361,7 @@ class AppState {
           messages: [
             ...state.messages,
             {
-              id: crypto.randomUUID(),
+              id: uuid(),
               role: 'user',
               content,
               createdAt: new Date().toISOString(),
@@ -397,7 +401,7 @@ class AppState {
     this.pageError = '';
     try {
       await api.command(sessionId, {
-        commandId: crypto.randomUUID(),
+        commandId: uuid(),
         kind: 'steer',
         controlGeneration: state.control.generation,
         content: `/goal ${action}`,
@@ -482,7 +486,7 @@ class AppState {
     if (!sessionId) return;
     for (const file of Array.from(files)) {
       if (!file.type.startsWith('image/')) continue;
-      const localId = `local-${crypto.randomUUID()}`;
+      const localId = `local-${uuid()}`;
       const preview = URL.createObjectURL(file);
       this.uploads = [
         ...this.uploads,
@@ -528,7 +532,7 @@ class AppState {
     if (!this.demo && this.activeSessionId && state.control.generation) {
       try {
         await api.command(this.activeSessionId, {
-          commandId: crypto.randomUUID(),
+          commandId: uuid(),
           kind: 'set_model',
           controlGeneration: state.control.generation,
           provider: model.provider,
@@ -547,7 +551,7 @@ class AppState {
     if (!this.demo && this.activeSessionId && state.control.generation) {
       try {
         await api.command(this.activeSessionId, {
-          commandId: crypto.randomUUID(),
+          commandId: uuid(),
           kind: 'set_thinking',
           controlGeneration: state.control.generation,
           thinkingLevel: level,
@@ -586,7 +590,7 @@ class AppState {
       const demo = this.demo;
       const created = demo
         ? {
-            id: crypto.randomUUID(),
+            id: uuid(),
             workspaceId,
             name: 'New session',
             lastActivityAt: new Date().toISOString(),

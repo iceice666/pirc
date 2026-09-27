@@ -1614,6 +1614,9 @@ button.system-line:not(:disabled):hover {
   background: var(--bg-layer);
   box-shadow: var(--shadow-soft);
 }
+.interaction-card.expired {
+  opacity: 0.65;
+}
 .interaction-card header {
   display: flex;
   gap: 12px;

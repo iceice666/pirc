@@ -17,6 +17,22 @@
   let value = $state(initialValue());
   let selected: string[] = $state([]);
 
+  /** The gateway rejects answers after `expiresAt`; stop offering them. */
+  let expired = $state(false);
+  $effect(() => {
+    expired = false;
+    if (!interaction.expiresAt) return;
+    const remaining = Date.parse(interaction.expiresAt) - Date.now();
+    if (!(remaining > 0)) {
+      expired = true;
+      return;
+    }
+    // setTimeout overflows past ~24.8 days; nothing waits that long.
+    const timer = setTimeout(() => (expired = true), Math.min(remaining, 2 ** 31 - 1));
+    return () => clearTimeout(timer);
+  });
+  const locked = $derived(disabled || expired);
+
   function toggle(option: string) {
     if (interaction.kind !== 'select') return;
     if (!interaction.multiple) selected = [option];
@@ -34,7 +50,7 @@
   }
 </script>
 
-<section class="interaction-card" aria-labelledby="interaction-{interaction.id}">
+<section class="interaction-card" class:expired aria-labelledby="interaction-{interaction.id}">
   <header>
     <span class="interaction-icon"><CircleHelp size={18} /></span>
     <div>
@@ -52,7 +68,7 @@
           class:selected={selected.includes(option.value)}
           class="option"
           onclick={() => toggle(option.value)}
-          {disabled}
+          disabled={locked}
           role={interaction.multiple ? 'checkbox' : 'radio'}
           aria-checked={selected.includes(option.value)}
         >
@@ -68,14 +84,18 @@
   {:else if interaction.kind === 'input'}
     <label>
       <span class="sr-only">Your answer</span>
-      <input bind:value placeholder={interaction.placeholder ?? 'Type your answer…'} {disabled} />
+      <input
+        bind:value
+        placeholder={interaction.placeholder ?? 'Type your answer…'}
+        disabled={locked}
+      />
     </label>
   {:else if interaction.kind === 'editor'}
     <label>
       <span class="field-label"
         >Response {interaction.language ? `· ${interaction.language}` : ''}</span
       >
-      <textarea class="editor" bind:value rows="8" spellcheck="false" {disabled}></textarea>
+      <textarea class="editor" bind:value rows="8" spellcheck="false" disabled={locked}></textarea>
     </label>
   {:else}
     <p class="confirm-copy">Choose whether the agent should continue with this action.</p>
@@ -84,7 +104,9 @@
   <footer>
     {#if interaction.expiresAt}
       <span class="expires"
-        ><Clock3 size={14} /> Expires {new Date(interaction.expiresAt).toLocaleTimeString([], {
+        ><Clock3 size={14} />
+        {expired ? 'Expired' : 'Expires'}
+        {new Date(interaction.expiresAt).toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
         })}</span
@@ -95,7 +117,7 @@
         class="button ghost small"
         type="button"
         onclick={() => onanswer({ action: 'cancel' })}
-        {disabled}
+        disabled={locked}
       >
         <X size={15} />
         {interaction.kind === 'confirm' ? (interaction.cancelLabel ?? 'No') : 'Cancel'}
@@ -104,7 +126,7 @@
         class="button dark small"
         type="button"
         onclick={submit}
-        disabled={disabled || (interaction.kind === 'select' && selected.length === 0)}
+        disabled={locked || (interaction.kind === 'select' && selected.length === 0)}
       >
         {interaction.kind === 'confirm' ? (interaction.confirmLabel ?? 'Yes, continue') : 'Submit'}
         <ArrowRight size={15} />
