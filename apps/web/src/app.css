@@ -2483,17 +2483,25 @@ button.system-line:not(:disabled):hover {
 }
 
 /* ───────────── Modal & toast ───────────── */
-.modal-backdrop {
-  position: fixed;
-  z-index: 100;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 20px;
+/* <dialog> is a transparent frame; clicks on it (not the panel) are backdrop clicks. */
+.modal-dialog {
+  width: min(440px, calc(100% - 40px));
+  max-width: none;
+  max-height: calc(100dvh - 40px);
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+.modal-dialog.settings {
+  width: min(760px, calc(100% - 40px));
+}
+.modal-dialog::backdrop {
   background: rgb(0 0 0 / 40%);
 }
 .modal {
-  width: min(440px, 100%);
+  width: 100%;
   padding: 24px;
   border-radius: var(--radius-xl);
   background: var(--bg-layer);
@@ -2502,7 +2510,6 @@ button.system-line:not(:disabled):hover {
 .modal.settings {
   display: flex;
   flex-direction: column;
-  width: min(760px, 100%);
   height: min(640px, calc(100dvh - 40px));
 }
 .settings-layout {
@@ -2859,6 +2866,11 @@ button.system-line:not(:disabled):hover {
   align-content: start;
   gap: 8px;
   padding-top: 8px;
+}
+.tab-view {
+  display: grid;
+  align-content: start;
+  gap: 8px;
 }
 .toolbar {
   display: flex;

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ArrowRight, CircleHelp, Clock3, X } from '@lucide/svelte';
+  import { rovingFocus } from '../a11y';
   import type { InteractionAnswer, PendingInteraction } from '../types';
 
   interface Props {
@@ -61,8 +62,18 @@
   </header>
 
   {#if interaction.kind === 'select'}
-    <div class="option-list" role={interaction.multiple ? 'group' : 'radiogroup'}>
-      {#each interaction.options as option}
+    <!-- A radio group is one tab stop; arrows move and select. Checkboxes each take a stop. -->
+    <div
+      class="option-list"
+      role={interaction.multiple ? 'group' : 'radiogroup'}
+      aria-labelledby="interaction-{interaction.id}"
+      use:rovingFocus={{
+        selector: '[role="radio"]',
+        orientation: 'both',
+        activate: true,
+      }}
+    >
+      {#each interaction.options as option, index}
         <button
           type="button"
           class:selected={selected.includes(option.value)}
@@ -71,6 +82,10 @@
           disabled={locked}
           role={interaction.multiple ? 'checkbox' : 'radio'}
           aria-checked={selected.includes(option.value)}
+          tabindex={interaction.multiple ||
+          (selected.length ? selected[0] === option.value : index === 0)
+            ? 0
+            : -1}
         >
           <span class="option-mark"></span>
           <span

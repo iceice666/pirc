@@ -158,7 +158,7 @@
       {#if summary}<code title={summary}>{summary}</code>{:else}<span>{statusLabel}</span>{/if}
     </span>
     {#if duration}<span class="tool-duration">{duration}</span>{/if}
-    <span class="tool-status" aria-label={statusLabel} title={statusLabel}>
+    <span class="tool-status" role="img" aria-label={statusLabel} title={statusLabel}>
       {#if tool.status === 'running'}
         <LoaderCircle class="spin" size={15} />
       {:else if tool.status === 'failed'}

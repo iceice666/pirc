@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { app } from '../../app.svelte';
+  import Modal from './Modal.svelte';
   import { watch } from '../../watch.svelte';
 
   interface Props {
@@ -37,46 +38,37 @@
   }
 </script>
 
-{#if open}
-  <div
-    class="modal-backdrop"
-    role="presentation"
-    onclick={(event) => event.target === event.currentTarget && (open = false)}
-  >
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="new-session-title">
-      <header>
-        <div>
-          <span class="eyebrow">New work</span>
-          <h2 id="new-session-title">Create a session</h2>
-        </div>
-        <button class="icon-button" type="button" aria-label="Close" onclick={() => (open = false)}
-          ><X size={19} /></button
-        >
-      </header>
-      <label
-        ><span>Workspace</span><select bind:value={workspaceId}
-          >{#each app.workspaces as workspace (workspace.id)}<option
-              value={workspace.id}
-              disabled={!app.workspaceOnline(workspace)}
-              >{workspace.displayName} · {workspace.hostId}{app.workspaceOnline(workspace)
-                ? ''
-                : ' (offline)'}</option
-            >{/each}</select
-        ></label
-      >
-      <p>
-        The session is named from your first message and stays active on the host when this browser
-        disconnects.
-      </p>
-      <footer>
-        <button class="button ghost" type="button" onclick={() => (open = false)}>Cancel</button
-        ><button
-          class="button dark"
-          type="button"
-          onclick={create}
-          disabled={creating || !workspaceId || !chosenOnline}>Create session</button
-        >
-      </footer>
+<Modal bind:open labelledby="new-session-title">
+  <header>
+    <div>
+      <span class="eyebrow">New work</span>
+      <h2 id="new-session-title">Create a session</h2>
     </div>
-  </div>
-{/if}
+    <button class="icon-button" type="button" aria-label="Close" onclick={() => (open = false)}
+      ><X size={19} /></button
+    >
+  </header>
+  <label
+    ><span>Workspace</span><select bind:value={workspaceId}
+      >{#each app.workspaces as workspace (workspace.id)}<option
+          value={workspace.id}
+          disabled={!app.workspaceOnline(workspace)}
+          >{workspace.displayName} · {workspace.hostId}{app.workspaceOnline(workspace)
+            ? ''
+            : ' (offline)'}</option
+        >{/each}</select
+    ></label
+  >
+  <p>
+    The session is named from your first message and stays active on the host when this browser
+    disconnects.
+  </p>
+  <footer>
+    <button class="button ghost" type="button" onclick={() => (open = false)}>Cancel</button><button
+      class="button dark"
+      type="button"
+      onclick={create}
+      disabled={creating || !workspaceId || !chosenOnline}>Create session</button
+    >
+  </footer>
+</Modal>

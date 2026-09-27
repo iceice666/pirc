@@ -159,16 +159,20 @@
     <input bind:value={query} placeholder="Search sessions" />
   </label>
 
-  <div class="device-switcher" aria-label="Select device">
+  <div class="device-switcher" role="group" aria-label="Select device">
     <strong>Devices</strong>
     <div class="device-options">
-      <button type="button" class:chosen={!selectedNodeId} onclick={() => (selectedNodeId = '')}
-        >All</button
+      <button
+        type="button"
+        class:chosen={!selectedNodeId}
+        aria-pressed={!selectedNodeId}
+        onclick={() => (selectedNodeId = '')}>All</button
       >
       {#each nodes as node (node.id)}
         <button
           type="button"
           class:chosen={selectedNodeId === node.id}
+          aria-pressed={selectedNodeId === node.id}
           onclick={() => (selectedNodeId = node.id)}>{node.id}</button
         >
       {/each}
@@ -287,6 +291,13 @@
         type="button"
         onclick={() => onselect(session.id)}
         ondblclick={() => startRename(session)}
+        onkeydown={(event) => {
+          if (event.key === 'F2') {
+            event.preventDefault();
+            void startRename(session);
+          }
+        }}
+        aria-keyshortcuts="F2"
         aria-current={session.id === activeSessionId ? 'page' : undefined}
       >
         <span
@@ -327,7 +338,7 @@
         <button
           type="button"
           aria-label="Rename {session.name}"
-          title="Rename"
+          title="Rename (F2)"
           onclick={() => startRename(session)}><Pencil size={14} /></button
         >
       </div>

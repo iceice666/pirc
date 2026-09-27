@@ -163,13 +163,12 @@
 
     <div class="group-title">
       Observations
-      <div class="segmented small" role="tablist" aria-label="Observation filter">
+      <div class="segmented small" role="group" aria-label="Observation filter">
         {#each ['active', 'all', 'dropped'] as option}
           <button
             type="button"
-            role="tab"
             class:active={filter === option}
-            aria-selected={filter === option}
+            aria-pressed={filter === option}
             onclick={() => (filter = option as typeof filter)}>{option}</button
           >
         {/each}

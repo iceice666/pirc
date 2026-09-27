@@ -185,7 +185,13 @@
   );
 </script>
 
-<div class="terminal-view" class:hidden={!visible}>
+<div
+  class="terminal-view"
+  class:hidden={!visible}
+  role="tabpanel"
+  id="terminal-panel-{terminal.id}"
+  aria-labelledby="terminal-tab-{terminal.id}"
+>
   <div class="terminal-host" bind:this={host}></div>
   {#if notice}<p class="terminal-notice">{notice}</p>{/if}
 </div>

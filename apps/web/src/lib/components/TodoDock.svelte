@@ -62,7 +62,7 @@
           ></span>{:else}<ListChecks size={14} />{/if}
       </span>
       <span class="dock-title" class:active={active.length > 0}>{headline}</span>
-      <span class="todo-progress" aria-label="{list.done} of {list.total} completed">
+      <span class="todo-progress" role="img" aria-label="{list.done} of {list.total} completed">
         <span class="todo-meter"
           ><span style:width="{list.total ? (list.done / list.total) * 100 : 0}%"></span></span
         >

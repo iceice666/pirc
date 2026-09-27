@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowLeft, GitBranch, GitCommitHorizontal, RefreshCw } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
+  import { rovingFocus } from '../../a11y';
   import { app } from '../../app.svelte';
   import { Loader } from '../../loader.svelte';
   import {
@@ -213,20 +214,31 @@
     <DiffView diff={commit.diff} truncated={commit.truncated} />
   {:else}
     <div class="toolbar">
-      <div class="segmented" role="tablist" aria-label="Git view">
+      <div
+        class="segmented"
+        role="tablist"
+        aria-label="Git view"
+        use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
+      >
         <button
           role="tab"
           type="button"
+          id="git-view-changes"
+          aria-controls="git-view-panel"
           class:active={view === 'changes'}
           aria-selected={view === 'changes'}
+          tabindex={view === 'changes' ? 0 : -1}
           onclick={() => switchView('changes')}
           >Changes{#if files.length}<span class="count">{files.length}</span>{/if}</button
         >
         <button
           role="tab"
           type="button"
+          id="git-view-history"
+          aria-controls="git-view-panel"
           class:active={view === 'history'}
           aria-selected={view === 'history'}
+          tabindex={view === 'history' ? 0 : -1}
           onclick={() => switchView('history')}>History</button
         >
       </div>
@@ -239,83 +251,85 @@
         ><RefreshCw class={statusLoader.loading ? 'spin' : ''} size={15} /></button
       >
     </div>
-    {#if listError}<p class="panel-error">{listError}</p>{/if}
-    {#if status && !status.repo}
-      <p class="panel-empty">This workspace is not a Git repository.</p>
-    {:else if status?.repo}
-      <div class="branch-line">
-        <GitBranch size={14} />
-        <strong>{status.branch ?? 'detached'}</strong>
-        {#if status.upstream}<span class="muted">→ {status.upstream}</span>{/if}
-        {#if status.ahead}<span class="chip">↑{status.ahead}</span>{/if}
-        {#if status.behind}<span class="chip">↓{status.behind}</span>{/if}
-      </div>
-      {#if view === 'changes'}
-        {#if !files.length}
-          <p class="panel-empty">Working tree clean.</p>
+    <div class="tab-view" role="tabpanel" id="git-view-panel" aria-labelledby="git-view-{view}">
+      {#if listError}<p class="panel-error">{listError}</p>{/if}
+      {#if status && !status.repo}
+        <p class="panel-empty">This workspace is not a Git repository.</p>
+      {:else if status?.repo}
+        <div class="branch-line">
+          <GitBranch size={14} />
+          <strong>{status.branch ?? 'detached'}</strong>
+          {#if status.upstream}<span class="muted">→ {status.upstream}</span>{/if}
+          {#if status.ahead}<span class="chip">↑{status.ahead}</span>{/if}
+          {#if status.behind}<span class="chip">↓{status.behind}</span>{/if}
+        </div>
+        {#if view === 'changes'}
+          {#if !files.length}
+            <p class="panel-empty">Working tree clean.</p>
+          {:else}
+            {#each [{ title: 'Staged', list: staged, isStaged: true }, { title: 'Changes', list: unstaged, isStaged: false }] as group}
+              {#if group.list.length}
+                <div class="group-title">{group.title}<span>{group.list.length}</span></div>
+                <ul class="file-list">
+                  {#each group.list as file (file.path + group.isStaged)}
+                    <li>
+                      <button
+                        type="button"
+                        class="file-row"
+                        onclick={() => openDiff(file, group.isStaged)}
+                      >
+                        <span
+                          class="status-code s-{code(file, group.isStaged) === '?'
+                            ? 'U'
+                            : code(file, group.isStaged)}"
+                          title={label[code(file, group.isStaged)] ?? ''}
+                          >{code(file, group.isStaged) === '?'
+                            ? 'U'
+                            : code(file, group.isStaged)}</span
+                        >
+                        <span class="file-name">{base(file.path)}</span>
+                        <span class="file-dir"
+                          >{file.origPath ? `${file.origPath} →` : dir(file.path)}</span
+                        >
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            {/each}
+            {#if status.truncated}<p class="panel-empty">Showing the first 5,000 files.</p>{/if}
+          {/if}
+        {:else if !commits.length}
+          <p class="panel-empty">No commits yet.</p>
         {:else}
-          {#each [{ title: 'Staged', list: staged, isStaged: true }, { title: 'Changes', list: unstaged, isStaged: false }] as group}
-            {#if group.list.length}
-              <div class="group-title">{group.title}<span>{group.list.length}</span></div>
-              <ul class="file-list">
-                {#each group.list as file (file.path + group.isStaged)}
-                  <li>
-                    <button
-                      type="button"
-                      class="file-row"
-                      onclick={() => openDiff(file, group.isStaged)}
+          <ul class="commit-list">
+            {#each commits as item (item.sha)}
+              <li>
+                <button type="button" class="commit-row" onclick={() => openCommit(item)}>
+                  <GitCommitHorizontal size={15} />
+                  <span class="commit-text">
+                    <span class="commit-subject">{item.subject}</span>
+                    <span class="commit-sub"
+                      ><span class="mono">{item.short}</span> · {item.author} · {ago(
+                        item.time,
+                      )}{#each item.refs.slice(0, 2) as ref}
+                        <span class="chip">{ref.replace('HEAD -> ', '')}</span>{/each}</span
                     >
-                      <span
-                        class="status-code s-{code(file, group.isStaged) === '?'
-                          ? 'U'
-                          : code(file, group.isStaged)}"
-                        title={label[code(file, group.isStaged)] ?? ''}
-                        >{code(file, group.isStaged) === '?'
-                          ? 'U'
-                          : code(file, group.isStaged)}</span
-                      >
-                      <span class="file-name">{base(file.path)}</span>
-                      <span class="file-dir"
-                        >{file.origPath ? `${file.origPath} →` : dir(file.path)}</span
-                      >
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          {/each}
-          {#if status.truncated}<p class="panel-empty">Showing the first 5,000 files.</p>{/if}
+                  </span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+          {#if more}<button
+              class="load-more"
+              type="button"
+              disabled={historyLoader.loading}
+              onclick={() => loadHistory(false)}>Load more</button
+            >{/if}
         {/if}
-      {:else if !commits.length}
-        <p class="panel-empty">No commits yet.</p>
-      {:else}
-        <ul class="commit-list">
-          {#each commits as item (item.sha)}
-            <li>
-              <button type="button" class="commit-row" onclick={() => openCommit(item)}>
-                <GitCommitHorizontal size={15} />
-                <span class="commit-text">
-                  <span class="commit-subject">{item.subject}</span>
-                  <span class="commit-sub"
-                    ><span class="mono">{item.short}</span> · {item.author} · {ago(
-                      item.time,
-                    )}{#each item.refs.slice(0, 2) as ref}
-                      <span class="chip">{ref.replace('HEAD -> ', '')}</span>{/each}</span
-                  >
-                </span>
-              </button>
-            </li>
-          {/each}
-        </ul>
-        {#if more}<button
-            class="load-more"
-            type="button"
-            disabled={historyLoader.loading}
-            onclick={() => loadHistory(false)}>Load more</button
-          >{/if}
+      {:else if statusLoader.loading}
+        <p class="panel-empty">Loading…</p>
       {/if}
-    {:else if statusLoader.loading}
-      <p class="panel-empty">Loading…</p>
-    {/if}
+    </div>
   {/if}
 </div>

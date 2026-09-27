@@ -58,7 +58,9 @@
 {#if !diff.trim()}
   <p class="panel-empty">No changes.</p>
 {:else}
-  <div class="diff" role="table" aria-label="Diff">
+  <!-- A scrollable region (keyboard-scrollable via tabindex); lines read as plain text. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <div class="diff" role="region" aria-label="Diff" tabindex="0">
     {#each shown as line, index (index)}
       {#if line.kind === 'file'}
         <div class="diff-file">{line.text}</div>
@@ -67,9 +69,17 @@
       {:else if line.kind === 'hunk'}
         <div class="diff-hunk">{line.text}</div>
       {:else}
-        <div class="diff-line {line.kind}" role="row">
-          <span class="gutter">{line.old ?? ''}</span><span class="gutter">{line.new ?? ''}</span
-          ><span class="sign">{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ''}</span
+        <div class="diff-line {line.kind}">
+          <span class="gutter" aria-hidden="true">{line.old ?? ''}</span><span
+            class="gutter"
+            aria-hidden="true">{line.new ?? ''}</span
+          ><span class="sign"
+            >{#if line.kind === 'add'}<span aria-hidden="true">+</span><span class="sr-only"
+                >Added:
+              </span>{:else if line.kind === 'del'}<span aria-hidden="true">−</span><span
+                class="sr-only"
+                >Removed:
+              </span>{/if}</span
           ><code>{line.text}</code>
         </div>
       {/if}

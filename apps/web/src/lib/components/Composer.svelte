@@ -154,7 +154,7 @@
       </div>
     {/if}
     {#if attachments.length}
-      <div class="attachment-strip" aria-label="Attached images">
+      <div class="attachment-strip" role="group" aria-label="Attached images">
         {#each attachments as attachment (attachment.id)}
           <div class="attachment-preview">
             {#if attachment.preview}<img src={attachment.preview} alt="" />{:else}<Image
@@ -221,15 +221,17 @@
       </div>
       <span class="spacer"></span>
       {#if active}
-        <div class="mode-switch" aria-label="Message delivery mode">
+        <div class="mode-switch" role="group" aria-label="Message delivery mode">
           <button
             class:active={mode === 'steer'}
+            aria-pressed={mode === 'steer'}
             type="button"
             title="Deliver into the current run"
             onclick={() => (mode = 'steer')}>Steer</button
           >
           <button
             class:active={mode === 'follow_up'}
+            aria-pressed={mode === 'follow_up'}
             type="button"
             title="Queue for after the current run"
             onclick={() => (mode = 'follow_up')}>Follow up</button

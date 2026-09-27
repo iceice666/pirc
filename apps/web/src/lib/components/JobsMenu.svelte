@@ -9,6 +9,8 @@
   import { Bot, ChevronDown, ChevronRight, LoaderCircle, Square, Users } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { fade } from 'svelte/transition';
+  import { tick } from 'svelte';
+  import { rovingFocus } from '../a11y';
   import { app } from '../app.svelte';
   import { Loader } from '../loader.svelte';
   import { panelApi, type BackgroundTask, type TeamMember } from '../panel-api';
@@ -51,10 +53,15 @@
     }),
   );
 
-  function toggleOpen() {
+  let popover: HTMLDivElement | undefined = $state();
+  async function toggleOpen() {
     open = !open;
     now = Date.now();
-    if (open) void app.panel.refresh();
+    if (!open) return;
+    void app.panel.refresh();
+    // Move focus into the popover; arrow keys then walk its rows.
+    await tick();
+    popover?.querySelector<HTMLElement>('button')?.focus();
   }
   async function toggleTask(task: BackgroundTask) {
     if (expanded === task.id) {
@@ -144,11 +151,16 @@
       open = false;
       root?.querySelector<HTMLButtonElement>('.jobs-trigger')?.focus();
     };
+    const focusin = (event: FocusEvent) => {
+      if (root && !root.contains(event.target as Node)) open = false;
+    };
     window.addEventListener('pointerdown', outside);
     window.addEventListener('keydown', keydown);
+    window.addEventListener('focusin', focusin);
     return () => {
       window.removeEventListener('pointerdown', outside);
       window.removeEventListener('keydown', keydown);
+      window.removeEventListener('focusin', focusin);
     };
   });
   watch(
@@ -230,7 +242,14 @@
     </button>
 
     {#if open}
-      <div class="jobs-popover" role="dialog" aria-label="Background jobs">
+      <div
+        class="jobs-popover"
+        role="dialog"
+        aria-modal="false"
+        aria-label="Background jobs"
+        bind:this={popover}
+        use:rovingFocus={{ selector: 'button', orientation: 'vertical', wrap: false }}
+      >
         {#if liveTasks.length || agents.length}
           <div class="jobs-section">Running</div>
         {/if}
@@ -310,7 +329,7 @@
           {#if armed === task.id}<span>Stop</span>{/if}
         </button>
       {:else if task.status === 'stopping'}
-        <span class="job-stop pending" aria-label="Stopping"
+        <span class="job-stop pending" role="img" aria-label="Stopping"
           ><LoaderCircle class="spin" size={12} /></span
         >
       {/if}

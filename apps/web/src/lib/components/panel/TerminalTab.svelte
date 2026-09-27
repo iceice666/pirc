@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Plus, SquareTerminal, X } from '@lucide/svelte';
+  import { rovingFocus } from '../../a11y';
   import { Loader } from '../../loader.svelte';
   import { panelApi, type TerminalInfo } from '../../panel-api';
   import { watch } from '../../watch.svelte';
@@ -88,7 +89,12 @@
 </script>
 
 <div class="terminal-tab">
-  <div class="terminal-strip" role="tablist" aria-label="Terminals">
+  <div
+    class="terminal-strip"
+    role="tablist"
+    aria-label="Terminals"
+    use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
+  >
     {#each terminals as terminal, index (terminal.id)}
       <div
         class="terminal-chip"
@@ -98,8 +104,18 @@
         <button
           type="button"
           role="tab"
+          id="terminal-tab-{terminal.id}"
+          aria-controls="terminal-panel-{terminal.id}"
           aria-selected={terminal.id === current}
+          tabindex={terminal.id === current ? 0 : -1}
+          title="Delete closes this terminal"
           onclick={() => (current = terminal.id)}
+          onkeydown={(event) => {
+            if (event.key === 'Delete') {
+              event.preventDefault();
+              void close(terminal);
+            }
+          }}
         >
           <SquareTerminal size={13} />{terminal.title}
           {index + 1}
@@ -107,7 +123,8 @@
         <button
           type="button"
           class="chip-close"
-          aria-label="Close terminal"
+          tabindex="-1"
+          aria-label="Close terminal {index + 1}"
           onclick={() => close(terminal)}><X size={12} /></button
         >
       </div>

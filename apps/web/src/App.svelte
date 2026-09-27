@@ -31,6 +31,7 @@
   import { activateUpdate, registerPwa } from './lib/pwa';
   import { loadLayout, saveLayout } from './lib/storage';
   import { MESSAGE_PAGE } from './lib/app.svelte';
+  import { watch } from './lib/watch.svelte';
 
   /** Mobile overlay state of the left sidebar. */
   let sidebarOpen = $state(false);
@@ -133,6 +134,47 @@
     observer.observe(node);
     return { destroy: () => observer.disconnect() };
   }
+
+  /**
+   * Screen readers hear finished replies and new questions once, from a
+   * separate live region, instead of every streamed delta of the transcript.
+   */
+  let announcement = $state('');
+  const lastReply = $derived.by(() => {
+    const messages = sessionState?.messages ?? [];
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const message = messages[index]!;
+      if (message.role === 'assistant' && !message.isPartial) return message;
+    }
+    return undefined;
+  });
+  watch(
+    () => lastReply?.id,
+    (id, previous) => {
+      // Not on the first load of a session, only for replies that arrive later.
+      if (!id || !previous || sessionState?.session.id !== announcedSession) return;
+      const text = lastReply?.content.trim();
+      announcement = text
+        ? `Agent replied: ${text.length > 280 ? `${text.slice(0, 280)}…` : text}`
+        : 'Agent finished a step.';
+    },
+  );
+  watch(
+    () => app.pendingInteractions.length,
+    (count, previous) => {
+      if (count > (previous ?? 0) && sessionState?.session.id === announcedSession)
+        announcement = 'The agent needs your input.';
+    },
+  );
+  let announcedSession: string | undefined;
+  watch(
+    () => sessionState?.session.id,
+    (id) => {
+      announcedSession = id;
+      announcement = '';
+    },
+    { immediate: true },
+  );
 
   app.scroller = {
     toLatest: async (smooth = true) => {
@@ -332,7 +374,7 @@
 
       <div class="content-grid">
         <section class="conversation" aria-label="Conversation">
-          <div class="timeline" bind:this={timeline} onscroll={onTimelineScroll} aria-live="polite">
+          <div class="timeline" bind:this={timeline} onscroll={onTimelineScroll}>
             <div class="timeline-inner" use:followContent>
               {#if app.hiddenMessages > 0}
                 <button
@@ -365,6 +407,7 @@
             </div>
           </div>
           <Composer />
+          <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
         </section>
 
         <SidePanel

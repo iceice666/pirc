@@ -365,7 +365,12 @@
       </p>
 
       {#if login}
-        <div class="backend-card login-card" aria-label="Provider login" aria-live="polite">
+        <div
+          class="backend-card login-card"
+          role="region"
+          aria-label="Provider login"
+          aria-live="polite"
+        >
           <strong>Login: {login.status}</strong>
           {#if login.status === 'pending'}
             <p>

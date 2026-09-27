@@ -9,6 +9,7 @@
   import { Brain, FolderTree, GitBranch, ListChecks, SquareTerminal } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
+  import { rovingFocus } from '../../a11y';
   import { app } from '../../app.svelte';
   import { onFilePreviewRequest, type FileTarget } from '../../file-links';
   import type { PanelTab } from '../../panel-api';
@@ -136,19 +137,29 @@
     ondblclick={() => onresize(clampWidth(defaultWidth))}
     onkeydown={keyResize}
   ></div>
-  <div class="panel-tabs" role="tablist" aria-label="Side panel">
+  <div
+    class="panel-tabs"
+    role="tablist"
+    aria-label="Side panel"
+    use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
+  >
     {#each tabs as item (item.id)}
       <button
         type="button"
         role="tab"
+        id="panel-tab-{item.id}"
+        aria-controls={mounted.has(item.id) ? `panel-${item.id}` : undefined}
         class:active={tab === item.id}
         aria-selected={tab === item.id}
+        tabindex={tab === item.id ? 0 : -1}
         title={item.label}
         onclick={() => (tab = item.id)}
       >
         <item.icon size={16} />
         <span class="tab-label">{item.label}</span>
-        {#if badge[item.id]}<span class="tab-dot" aria-label="activity"></span>{/if}
+        {#if badge[item.id]}<span class="tab-dot" aria-hidden="true"></span><span class="sr-only"
+            >(activity)</span
+          >{/if}
       </button>
     {/each}
   </div>
@@ -159,7 +170,13 @@
     {:else if sessionId}
       {#each tabs as item (item.id)}
         {#if mounted.has(item.id)}
-          <div class="tab-slot" class:hidden={tab !== item.id}>
+          <div
+            class="tab-slot"
+            class:hidden={tab !== item.id}
+            role="tabpanel"
+            id="panel-{item.id}"
+            aria-labelledby="panel-tab-{item.id}"
+          >
             {#if item.id === 'files'}
               <FilesTab {sessionId} {openRequest} active={open && tab === 'files'} />
             {:else if item.id === 'git'}
