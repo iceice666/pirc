@@ -10,105 +10,87 @@
   import { onDestroy } from 'svelte';
   import { fade } from 'svelte/transition';
   import { app } from '../app.svelte';
-  import { panelApi, type BackgroundTask, type PanelState, type TeamMember } from '../panel-api';
+  import { Loader } from '../loader.svelte';
+  import { panelApi, type BackgroundTask, type TeamMember } from '../panel-api';
+  import { duration } from '../time';
   import { watch } from '../watch.svelte';
 
   const sessionId = $derived(app.sessionState?.session.id ?? '');
   const hasControl = $derived(app.hasControl);
   const generation = $derived(app.generation);
-  /** Static state for the offline demo; nothing is fetched. */
-  const demo = $derived(app.demo?.demoPanelState);
+  const panelState = $derived(app.panel.value);
 
-  let panelState: PanelState | undefined = $state();
   let open = $state(false);
   let root: HTMLDivElement | undefined = $state();
   let now = $state(Date.now());
   let expanded: string | undefined = $state();
   let output = $state('');
-  let outputError = $state('');
   let outputEl: HTMLPreElement | undefined = $state();
   let finishedOpen = $state(false);
   /** Finished tasks the user cleared from the list (client-side only). */
-  let cleared = $state(new Set<string>());
+  let cleared = $state.raw(new Set<string>());
   let armed: string | undefined = $state();
   let armTimer: ReturnType<typeof setTimeout> | undefined;
   let stopError = $state('');
-  let loading = false;
-  let queued = false;
+  const outputLoader = new Loader();
 
   const LIVE_AGENT = (agent: TeamMember) =>
     !['stopped', 'failed', 'done'].includes(agent.status ?? 'stopped');
   const liveTask = (task: BackgroundTask) =>
     task.status === 'running' || task.status === 'stopping';
 
-  async function load() {
-    if (demo) return;
-    if (loading) {
-      queued = true;
-      return;
-    }
-    loading = true;
-    const id = sessionId;
-    try {
-      const next = await panelApi.state(id);
-      if (id === sessionId) panelState = next;
-    } catch {
-      /* keep the last list; the node may be restarting */
-    } finally {
-      loading = false;
-      if (queued) {
-        queued = false;
-        void load();
-      }
-    }
-  }
-
   onDestroy(() => {
     if (armTimer) clearTimeout(armTimer);
   });
-  // Background tasks or team members changed.
+  // Background tasks or team members changed (or a run ended, which may stop them).
   onDestroy(
     app.onPanel((signal) => {
-      if (
-        signal.type === 'changed' &&
-        signal.sections.some((section) => section === 'background' || section === 'team')
-      )
-        void load();
+      if (signal.type === 'run-finished') app.panel.schedule(100);
+      else if (signal.sections.some((section) => section === 'background' || section === 'team'))
+        app.panel.schedule();
     }),
   );
 
   function toggleOpen() {
     open = !open;
     now = Date.now();
-    if (open) void load();
+    if (open) void app.panel.refresh();
   }
   async function toggleTask(task: BackgroundTask) {
     if (expanded === task.id) {
-      expanded = undefined;
+      collapse();
       return;
     }
     expanded = task.id;
     output = '';
     await loadOutput();
   }
-  async function loadOutput() {
+  function collapse() {
+    outputLoader.abort();
+    expanded = undefined;
+  }
+  /** Fetch the expanded task's output tail. Resolves true when it changed. */
+  async function loadOutput(): Promise<boolean> {
     const id = expanded;
-    if (!id) return;
-    if (demo) {
+    const session = sessionId;
+    if (!id) return false;
+    if (app.usingDemo) {
       output = '$ bun run dev\n  VITE ready in 412 ms\n  ➜  Local: http://localhost:5173/';
-      return;
+      return false;
     }
+    const result = await outputLoader.run(
+      (signal) => panelApi.backgroundOutput(session, id, 200, signal),
+      'Output unavailable.',
+    );
+    if (!result || expanded !== id || sessionId !== session) return false;
+    // Measured after the await: the element may belong to a task shown since.
     const follow =
       !outputEl || outputEl.scrollHeight - outputEl.scrollTop - outputEl.clientHeight < 24;
-    try {
-      const result = await panelApi.backgroundOutput(sessionId, id, 200);
-      if (expanded !== id) return;
-      output = result.output;
-      outputError = '';
-      if (follow) requestAnimationFrame(() => outputEl?.scrollTo({ top: outputEl.scrollHeight }));
-    } catch (cause) {
-      outputError = cause instanceof Error ? cause.message : 'Output unavailable.';
-    }
+    const changed = result.output !== output;
+    output = result.output;
+    if (follow && changed)
+      requestAnimationFrame(() => outputEl?.scrollTo({ top: outputEl.scrollHeight }));
+    return changed;
   }
   async function pressStop(task: BackgroundTask) {
     if (armed !== task.id) {
@@ -120,33 +102,20 @@
     }
     armed = undefined;
     if (!generation) return;
+    const session = sessionId;
     try {
-      const { task: next } = await panelApi.stopBackground(sessionId, task.id, generation);
-      if (panelState)
-        panelState = {
-          ...panelState,
-          backgroundTasks: panelState.backgroundTasks.map((item) =>
-            item.id === next.id ? next : item,
-          ),
-        };
+      const { task: next } = await panelApi.stopBackground(session, task.id, generation);
+      if (session === sessionId) app.panel.updateTask(next);
     } catch (cause) {
-      stopError = cause instanceof Error ? cause.message : 'Could not stop the task.';
+      if (session === sessionId)
+        stopError = cause instanceof Error ? cause.message : 'Could not stop the task.';
     }
   }
   function clearFinished() {
     cleared = new Set([...cleared, ...finished.map((task) => task.id)]);
-    if (expanded && cleared.has(expanded)) expanded = undefined;
+    if (expanded && cleared.has(expanded)) collapse();
   }
 
-  function duration(start?: string | number, end?: string | number) {
-    if (!start) return '';
-    const from = new Date(start).getTime();
-    const to = end ? new Date(end).getTime() : now;
-    const seconds = Math.max(0, Math.round((to - from) / 1000));
-    if (seconds < 60) return `${seconds}s`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
-  }
   function detail(task: BackgroundTask) {
     if (task.status === 'running') return task.tty ? 'tty' : '';
     if (task.status === 'stopping') return 'stopping';
@@ -164,23 +133,32 @@
           ? 'idle'
           : 'error';
 
-  function outside(event: PointerEvent) {
-    if (open && root && !root.contains(event.target as Node)) open = false;
-  }
-  function keydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && open) {
+  // Outside clicks and Escape close the popover; listen only while it is open.
+  $effect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => {
+      if (root && !root.contains(event.target as Node)) open = false;
+    };
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
       open = false;
       root?.querySelector<HTMLButtonElement>('.jobs-trigger')?.focus();
-    }
-  }
+    };
+    window.addEventListener('pointerdown', outside);
+    window.addEventListener('keydown', keydown);
+    return () => {
+      window.removeEventListener('pointerdown', outside);
+      window.removeEventListener('keydown', keydown);
+    };
+  });
   watch(
     () => sessionId,
     () => {
-      panelState = demo;
+      stopError = '';
       open = false;
-      expanded = undefined;
+      collapse();
       cleared = new Set();
-      void load();
+      void app.panel.refresh();
     },
     { immediate: true },
   );
@@ -206,11 +184,22 @@
   });
   let expandedTask = $derived(tasks.find((task) => task.id === expanded));
   let pollWanted = $derived(open && !!expandedTask && liveTask(expandedTask));
-  // The expanded output follows a running task.
+  /**
+   * The expanded output follows a running task. No event reports new output,
+   * so poll, backing off from 2 s to 10 s while the output stays the same.
+   */
   $effect(() => {
     if (!pollWanted) return;
-    const poll = setInterval(() => void loadOutput(), 2000);
-    return () => clearInterval(poll);
+    let delay = 2000;
+    let timer: ReturnType<typeof setTimeout>;
+    const next = () => {
+      timer = setTimeout(async () => {
+        delay = (await loadOutput()) ? 2000 : Math.min(10_000, delay * 1.5);
+        next();
+      }, delay);
+    };
+    next();
+    return () => clearTimeout(timer);
   });
   // A status change of the expanded task (e.g. it finished) refreshes its output.
   watch(
@@ -220,8 +209,6 @@
     },
   );
 </script>
-
-<svelte:window onpointerdown={outside} onkeydown={keydown} />
 
 {#if visible}
   <div class="jobs-menu" bind:this={root} transition:fade={{ duration: 120 }}>
@@ -306,7 +293,7 @@
           <span class="job-label mono" title={task.command}>{task.command}</span>
         </span>
         {#if detail(task)}<span class="job-meta">{detail(task)}</span>{/if}
-        <span class="job-duration">{duration(task.startedAt, task.endedAt)}</span>
+        <span class="job-duration">{duration(task.startedAt, task.endedAt, now)}</span>
         <span class="job-chevron" class:open={expanded === task.id}><ChevronRight size={13} /></span
         >
       </button>
@@ -329,7 +316,7 @@
       {/if}
     </div>
     {#if expanded === task.id}
-      {#if outputError}<p class="jobs-error">{outputError}</p>{/if}
+      {#if outputLoader.error}<p class="jobs-error">{outputLoader.error}</p>{/if}
       <pre class="job-output" bind:this={outputEl}>{output || 'No output yet.'}</pre>
     {/if}
   </div>

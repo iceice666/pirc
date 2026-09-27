@@ -1,5 +1,8 @@
 <script lang="ts">
   import { ArrowLeft, GitBranch, GitCommitHorizontal, RefreshCw } from '@lucide/svelte';
+  import { onDestroy } from 'svelte';
+  import { app } from '../../app.svelte';
+  import { Loader } from '../../loader.svelte';
   import {
     panelApi,
     type Commit,
@@ -7,27 +10,33 @@
     type GitFile,
     type GitStatus,
   } from '../../panel-api';
+  import { ago } from '../../time';
   import { watch } from '../../watch.svelte';
   import DiffView from './DiffView.svelte';
 
   interface Props {
     sessionId: string;
-    /** Bumped by the parent when the working tree may have changed. */
-    refreshKey?: number;
+    /** Shown in the panel; refreshes wait until then. */
+    active?: boolean;
     onopenfile?: (path: string) => void;
   }
 
-  let { sessionId, refreshKey = 0, onopenfile = () => {} }: Props = $props();
+  let { sessionId, active = true, onopenfile = () => {} }: Props = $props();
 
   let view: 'changes' | 'history' = $state('changes');
-  let status: GitStatus | undefined = $state();
-  let error = $state('');
-  let loading = $state(false);
-  let selected: { file: GitFile; staged: boolean } | undefined = $state();
-  let diff: { diff: string; truncated: boolean } | undefined = $state();
-  let commits: Commit[] = $state([]);
+  let status: GitStatus | undefined = $state.raw();
+  let selected: { file: GitFile; staged: boolean } | undefined = $state.raw();
+  let diff: { diff: string; truncated: boolean } | undefined = $state.raw();
+  let commits: Commit[] = $state.raw([]);
   let more = $state(false);
-  let commit: CommitDetail | undefined = $state();
+  let commit: CommitDetail | undefined = $state.raw();
+  /** A change arrived while the tab was hidden; reload when it is shown. */
+  let stale = false;
+  const statusLoader = new Loader();
+  const historyLoader = new Loader();
+  const diffLoader = new Loader();
+  const commitLoader = new Loader();
+  const listError = $derived(statusLoader.error || historyLoader.error || commitLoader.error);
 
   const label: Record<string, string> = {
     M: 'Modified',
@@ -45,84 +54,90 @@
   let unstaged = $derived(files.filter((file) => file.worktree !== ' '));
 
   async function load() {
-    loading = true;
-    error = '';
+    stale = false;
     const id = sessionId;
-    try {
-      const next = await panelApi.gitStatus(id);
-      if (id !== sessionId) return;
-      status = next;
-      if (view === 'history' && next.repo) await loadHistory(true);
-      if (selected) await openDiff(selected.file, selected.staged, false);
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Unable to read Git status.';
-    } finally {
-      loading = false;
-    }
+    const next = await statusLoader.run(
+      (signal) => panelApi.gitStatus(id, signal),
+      'Unable to read Git status.',
+    );
+    if (!next || id !== sessionId) return;
+    status = next;
+    if (view === 'history' && next.repo) void refreshHistory();
+    if (selected) void openDiff(selected.file, selected.staged, false);
   }
 
+  const HISTORY_PAGE = 50;
+  /** Append the next page ("Load more"), or load the first one. */
   async function loadHistory(reset: boolean) {
     const id = sessionId;
-    const page = await panelApi.gitLog(id, reset ? 0 : commits.length);
-    if (id !== sessionId) return;
+    const skip = reset ? 0 : commits.length;
+    const page = await historyLoader.run(
+      (signal) => panelApi.gitLog(id, skip, HISTORY_PAGE, signal),
+      'Unable to load history.',
+    );
+    if (!page || id !== sessionId) return;
     commits = reset ? page.commits : [...commits, ...page.commits];
     more = page.more;
   }
 
+  /**
+   * Re-read the newest page and prepend commits made since, keeping pages the
+   * user already loaded. A rewritten history (no overlap) starts over.
+   */
+  async function refreshHistory() {
+    if (!commits.length) return loadHistory(true);
+    const id = sessionId;
+    const page = await historyLoader.run(
+      (signal) => panelApi.gitLog(id, 0, HISTORY_PAGE, signal),
+      'Unable to load history.',
+    );
+    if (!page || id !== sessionId) return;
+    const overlap = page.commits.findIndex((item) => item.sha === commits[0]!.sha);
+    if (overlap === -1) {
+      commits = page.commits;
+      more = page.more;
+    } else if (overlap > 0) commits = [...page.commits.slice(0, overlap), ...commits];
+  }
+
   async function openDiff(file: GitFile, isStaged: boolean, reset = true) {
     selected = { file, staged: isStaged };
-    if (reset) {
-      diff = undefined;
-      error = '';
-    }
-    try {
-      diff = await panelApi.gitDiff(sessionId, {
-        path: file.path,
-        staged: isStaged,
-        untracked: file.worktree === '?',
-      });
-    } catch (cause) {
-      diff = { diff: '', truncated: false };
-      error = cause instanceof Error ? cause.message : 'Unable to load diff.';
-    }
+    if (reset) diff = undefined;
+    const id = sessionId;
+    const result = await diffLoader.run(
+      (signal) =>
+        panelApi.gitDiff(
+          id,
+          { path: file.path, staged: isStaged, untracked: file.worktree === '?' },
+          signal,
+        ),
+      'Unable to load diff.',
+    );
+    if (result && id === sessionId) diff = result;
   }
 
   async function openCommit(item: Commit) {
     commit = undefined;
-    error = '';
-    try {
-      commit = await panelApi.gitShow(sessionId, item.sha);
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Unable to load commit.';
-    }
+    const id = sessionId;
+    const result = await commitLoader.run(
+      (signal) => panelApi.gitShow(id, item.sha, signal),
+      'Unable to load commit.',
+    );
+    if (result && id === sessionId) commit = result;
   }
 
   function back() {
+    diffLoader.abort();
+    commitLoader.abort();
     selected = undefined;
     commit = undefined;
-    error = '';
   }
 
   async function switchView(next: 'changes' | 'history') {
     view = next;
     back();
-    if (next === 'history' && status?.repo && !commits.length) {
-      try {
-        await loadHistory(true);
-      } catch (cause) {
-        error = cause instanceof Error ? cause.message : 'Unable to load history.';
-      }
-    }
+    if (next === 'history' && status?.repo && !commits.length) await loadHistory(true);
   }
 
-  function ago(time: number) {
-    const seconds = Math.max(0, (Date.now() - time) / 1000);
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 30 * 86_400) return `${Math.floor(seconds / 86_400)}d ago`;
-    return new Date(time).toLocaleDateString();
-  }
   const base = (path: string) => path.slice(path.lastIndexOf('/') + 1);
   const dir = (path: string) => path.split('/').slice(0, -1).join('/');
   const code = (file: GitFile, isStaged: boolean) => (isStaged ? file.index : file.worktree);
@@ -130,17 +145,30 @@
   watch(
     () => sessionId,
     () => {
+      for (const loader of [statusLoader, historyLoader, diffLoader, commitLoader]) loader.abort();
       status = undefined;
       commits = [];
+      more = false;
       commit = undefined;
       selected = undefined;
+      diff = undefined;
       void load();
     },
     { immediate: true },
   );
+  // The working tree may have changed.
+  onDestroy(
+    app.onPanel((signal) => {
+      if (signal.type === 'changed' && !signal.sections.includes('git')) return;
+      if (active) void load();
+      else stale = true;
+    }),
+  );
   watch(
-    () => refreshKey,
-    () => void load(),
+    () => active,
+    (shown) => {
+      if (shown && stale) void load();
+    },
   );
 </script>
 
@@ -162,7 +190,7 @@
         >{selected.staged ? 'Staged' : (label[code(selected.file, false)] ?? 'Changed')}</span
       >
     </div>
-    {#if error}<p class="panel-error">{error}</p>
+    {#if diffLoader.error}<p class="panel-error">{diffLoader.error}</p>
     {:else if diff}<DiffView diff={diff.diff} truncated={diff.truncated} />{:else}<p
         class="panel-empty"
       >
@@ -207,10 +235,11 @@
         type="button"
         aria-label="Refresh"
         onclick={load}
-        disabled={loading}><RefreshCw class={loading ? 'spin' : ''} size={15} /></button
+        disabled={statusLoader.loading}
+        ><RefreshCw class={statusLoader.loading ? 'spin' : ''} size={15} /></button
       >
     </div>
-    {#if error}<p class="panel-error">{error}</p>{/if}
+    {#if listError}<p class="panel-error">{listError}</p>{/if}
     {#if status && !status.repo}
       <p class="panel-empty">This workspace is not a Git repository.</p>
     {:else if status?.repo}
@@ -278,11 +307,14 @@
             </li>
           {/each}
         </ul>
-        {#if more}<button class="load-more" type="button" onclick={() => loadHistory(false)}
-            >Load more</button
+        {#if more}<button
+            class="load-more"
+            type="button"
+            disabled={historyLoader.loading}
+            onclick={() => loadHistory(false)}>Load more</button
           >{/if}
       {/if}
-    {:else if loading}
+    {:else if statusLoader.loading}
       <p class="panel-empty">Loading…</p>
     {/if}
   {/if}

@@ -1,15 +1,37 @@
 <script lang="ts">
   import { Brain, CircleAlert, LoaderCircle } from '@lucide/svelte';
+  import { onDestroy } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import type { MemoryPanel, MemoryRuntime, Meter } from '../../panel-api';
+  import { app } from '../../app.svelte';
+  import type { Meter } from '../../panel-api';
+  import { watch } from '../../watch.svelte';
 
   interface Props {
-    memory: MemoryPanel | null;
-    runtime: MemoryRuntime | null;
-    agentRunning?: boolean;
+    /** Shown in the panel: loads on activation and follows memory changes while shown. */
+    active?: boolean;
   }
 
-  let { memory, runtime, agentRunning = false }: Props = $props();
+  let { active = true }: Props = $props();
+
+  const memory = $derived(app.panel.value?.memory ?? null);
+  const runtime = $derived(app.panel.value?.memoryRuntime ?? null);
+  const agentRunning = $derived(app.panel.value?.agentRunning ?? false);
+
+  watch(
+    () => active,
+    (shown) => {
+      if (shown) void app.panel.refresh();
+    },
+    { immediate: true },
+  );
+  // Memory reports progress every turn; only follow it while the tab is shown.
+  onDestroy(
+    app.onPanel((signal) => {
+      if (!active) return;
+      if (signal.type === 'run-finished') app.panel.schedule(100);
+      else if (signal.sections.includes('memory')) app.panel.schedule();
+    }),
+  );
 
   let filter: 'active' | 'all' | 'dropped' = $state('active');
   const expanded = new SvelteSet<string>();
@@ -53,7 +75,11 @@
 </script>
 
 <div class="tab-body">
-  {#if !memory}
+  {#if app.panel.error && !app.panel.value}
+    <p class="panel-error">{app.panel.error}</p>
+  {:else if !app.panel.value}
+    <p class="panel-empty">Loading…</p>
+  {:else if !memory}
     <p class="panel-empty">Memory state is unavailable for this session.</p>
   {:else if !memory.enabled}
     <p class="panel-empty">Observational memory is disabled in this workspace’s config.</p>

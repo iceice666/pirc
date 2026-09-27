@@ -17,6 +17,7 @@
   } from '@lucide/svelte';
   import { tick } from 'svelte';
   import { app } from '../app.svelte';
+  import { shortAgo } from '../time';
   import type { SessionSummary } from '../types';
 
   interface Props {
@@ -112,14 +113,6 @@
     const next = new Set(collapsedGroups);
     next.has(id) ? next.delete(id) : next.add(id);
     collapsedGroups = next;
-  }
-
-  function relativeTime(date: string): string {
-    const delta = Date.now() - new Date(date).getTime();
-    if (delta < 60_000) return 'now';
-    if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m`;
-    if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)}h`;
-    return `${Math.floor(delta / 86_400_000)}d`;
   }
 </script>
 
@@ -301,7 +294,7 @@
         <span class="session-meta">
           {#if session.pinned}<span class="pin-mark" title="Pinned"><Pin size={12} /></span>{/if}
           {#if session.unreadCount}<span class="unread">{session.unreadCount}</span>{:else}<small
-              >{relativeTime(session.lastActivityAt)}</small
+              >{shortAgo(session.lastActivityAt)}</small
             >{/if}
         </span>
       </button>

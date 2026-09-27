@@ -1,16 +1,17 @@
 <script lang="ts">
   /**
    * Right-hand side panel, Codex/ChatGPT style: a tab strip over Files, Git,
-   * Memory, Tasks and Terminal. Data tabs load lazily and refresh on
-   * `panel_changed` events and run transitions. Its left edge is a drag handle
-   * that resizes the panel.
+   * Memory, Tasks and Terminal. A tab mounts on first visit and then stays
+   * mounted (hidden) so its folder, open file, diff and scroll position survive
+   * tab switches; each tab loads and refreshes its own data while it is shown.
+   * The left edge is a drag handle that resizes the panel.
    */
   import { Brain, FolderTree, GitBranch, ListChecks, SquareTerminal } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
-  import { onFilePreviewRequest, type FileTarget } from '../../file-links';
-  import { panelApi, type PanelState, type PanelTab } from '../../panel-api';
+  import { SvelteSet } from 'svelte/reactivity';
   import { app } from '../../app.svelte';
-  import { watch } from '../../watch.svelte';
+  import { onFilePreviewRequest, type FileTarget } from '../../file-links';
+  import type { PanelTab } from '../../panel-api';
   import FilesTab from './FilesTab.svelte';
   import GitTab from './GitTab.svelte';
   import MemoryTab from './MemoryTab.svelte';
@@ -41,15 +42,10 @@
     resizing = $bindable(false),
   }: Props = $props();
 
-  let panelState: PanelState | undefined = $state();
-  let stateError = $state('');
-  let gitRefresh = $state(0);
-  let filesRefresh = $state(0);
   let openRequest: (FileTarget & { seq: number }) | undefined = $state();
   let openSeq = 0;
-  let stateTimer: ReturnType<typeof setTimeout> | undefined;
-  // Terminals stay mounted once visited so their sockets survive tab switches.
-  let terminalMounted = $state(false);
+  /** Tabs visited so far; they stay mounted. */
+  const mounted = new SvelteSet<PanelTab>();
 
   const tabs: Array<{ id: PanelTab; label: string; icon: typeof FolderTree }> = [
     { id: 'files', label: 'Files', icon: FolderTree },
@@ -60,64 +56,9 @@
   ];
 
   const sessionId = $derived(app.sessionState?.session.id ?? '');
-  const usingDemo = $derived(app.usingDemo);
-
-  async function loadState() {
-    if (usingDemo) return;
-    const id = sessionId;
-    try {
-      const next = await panelApi.state(id);
-      if (id !== sessionId) return;
-      panelState = next;
-      stateError = '';
-    } catch (cause) {
-      stateError = cause instanceof Error ? cause.message : 'Unable to load panel state.';
-    }
-  }
-  /** Coalesce bursts of change events (memory reports progress every turn). */
-  function scheduleState(delay = 400) {
-    if (stateTimer) return;
-    stateTimer = setTimeout(() => {
-      stateTimer = undefined;
-      if (open && (tab === 'memory' || tab === 'tasks')) void loadState();
-    }, delay);
-  }
-  onDestroy(() => stateTimer && clearTimeout(stateTimer));
-
-  watch(
-    () => sessionId,
-    () => {
-      panelState = undefined;
-      openRequest = undefined;
-      terminalMounted = false;
-      if (open) void loadState();
-    },
-    { immediate: true },
-  );
   $effect.pre(() => {
-    if (tab === 'terminal') terminalMounted = true;
+    if (open) mounted.add(tab);
   });
-  // Tab activation refreshes its data.
-  watch(
-    () => open && tab,
-    (active) => {
-      if (active === 'memory' || active === 'tasks') void loadState();
-    },
-    { immediate: true },
-  );
-  onDestroy(
-    app.onPanel((signal) => {
-      if (signal.type === 'changed') {
-        if (signal.sections.some((section) => section !== 'git')) scheduleState();
-        if (signal.sections.includes('git')) gitRefresh++;
-      } else {
-        // A finished run may have changed the working tree and memory.
-        gitRefresh++;
-        filesRefresh++;
-        scheduleState(100);
-      }
-    }),
-  );
 
   function openFile(target: string | FileTarget) {
     // A fresh sequence number so the same path can be reopened.
@@ -166,9 +107,10 @@
     onresize(clampWidth(next));
   }
 
-  let badge = $derived({
-    tasks: (panelState?.backgroundTasks ?? []).filter((task) => task.status === 'running').length,
-    memory: panelState?.memoryRuntime?.phase ? 1 : 0,
+  const badge = $derived({
+    tasks: (app.panel.value?.backgroundTasks ?? []).filter((task) => task.status === 'running')
+      .length,
+    memory: app.panel.value?.memoryRuntime?.phase ? 1 : 0,
   } as Record<string, number>);
 </script>
 
@@ -212,32 +154,31 @@
   </div>
 
   <div class="panel-body">
-    {#if usingDemo}
+    {#if app.usingDemo}
       <p class="panel-empty">Connect to a gateway to use this panel.</p>
-    {:else if tab === 'files'}
-      <FilesTab {sessionId} {openRequest} refreshKey={filesRefresh} />
-    {:else if tab === 'git'}
-      <GitTab {sessionId} refreshKey={gitRefresh} onopenfile={openFile} />
-    {:else if tab === 'memory'}
-      {#if stateError && !panelState}<p class="panel-error">{stateError}</p>{/if}
-      <MemoryTab
-        memory={panelState?.memory ?? null}
-        runtime={panelState?.memoryRuntime ?? null}
-        agentRunning={panelState?.agentRunning ?? false}
-      />
-    {:else if tab === 'tasks'}
-      {#if stateError && !panelState}<p class="panel-error">{stateError}</p>{/if}
-      <TasksTab {sessionId} {panelState} />
-    {/if}
-    {#if terminalMounted && !usingDemo}
-      <div class="terminal-slot" class:hidden={tab !== 'terminal'}>
-        <TerminalTab
-          {sessionId}
-          generation={app.generation}
-          hasControl={app.hasControl}
-          active={open && tab === 'terminal'}
-        />
-      </div>
+    {:else if sessionId}
+      {#each tabs as item (item.id)}
+        {#if mounted.has(item.id)}
+          <div class="tab-slot" class:hidden={tab !== item.id}>
+            {#if item.id === 'files'}
+              <FilesTab {sessionId} {openRequest} active={open && tab === 'files'} />
+            {:else if item.id === 'git'}
+              <GitTab {sessionId} active={open && tab === 'git'} onopenfile={openFile} />
+            {:else if item.id === 'memory'}
+              <MemoryTab active={open && tab === 'memory'} />
+            {:else if item.id === 'tasks'}
+              <TasksTab {sessionId} active={open && tab === 'tasks'} />
+            {:else}
+              <TerminalTab
+                {sessionId}
+                generation={app.generation}
+                hasControl={app.hasControl}
+                active={open && tab === 'terminal'}
+              />
+            {/if}
+          </div>
+        {/if}
+      {/each}
     {/if}
   </div>
 </aside>

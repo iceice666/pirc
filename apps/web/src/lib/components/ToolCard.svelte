@@ -14,6 +14,7 @@
     Wrench,
   } from '@lucide/svelte';
   import { highlightCode, languageForPath, rendererTick } from '../markdown';
+  import { elapsed } from '../time';
   import type { ToolCall } from '../types';
 
   interface Props {
@@ -51,13 +52,6 @@
         return typeof value === 'string' ? value : '';
       }
     }
-  }
-
-  function elapsed(start?: string, end?: string): string {
-    if (!start || !end) return '';
-    const ms = Date.parse(end) - Date.parse(start);
-    if (!(ms >= 0)) return '';
-    return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
   }
 
   /** Input keys that the summary line or a dedicated view already show. */

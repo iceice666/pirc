@@ -1,8 +1,10 @@
 <script lang="ts">
   import { ArrowLeft, ChevronRight, Code, Eye, File, Folder, RefreshCw } from '@lucide/svelte';
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
+  import { app } from '../../app.svelte';
   import type { FileTarget } from '../../file-links';
-  import { highlightCode, languageForPath, rendererTick } from '../../markdown';
+  import { Loader } from '../../loader.svelte';
+  import { highlightCode, highlighterReady, languageForPath, rendererTick } from '../../markdown';
   import { panelApi, type DirEntry, type FileContent } from '../../panel-api';
   import { watch } from '../../watch.svelte';
   import Markdown from '../Markdown.svelte';
@@ -11,21 +13,25 @@
     sessionId: string;
     /** Set by the parent (e.g. a Git or chat file link) to open a file directly. */
     openRequest?: (FileTarget & { seq: number }) | undefined;
-    refreshKey?: number;
+    /** Shown in the panel; refreshes wait until then. */
+    active?: boolean;
   }
 
-  let { sessionId, openRequest = undefined, refreshKey = 0 }: Props = $props();
+  let { sessionId, openRequest = undefined, active = true }: Props = $props();
 
   let dir = $state('');
-  let entries: DirEntry[] = $state([]);
+  let entries: DirEntry[] = $state.raw([]);
   let truncated = $state(false);
-  let file: FileContent | undefined = $state();
+  let file: FileContent | undefined = $state.raw();
   let rendered = $state(true);
-  let error = $state('');
-  let loading = $state(false);
   /** Line range a link pointed at (1-based, inclusive), highlighted in the source view. */
   let focus: { line: number; endLine: number } | undefined = $state();
   let codeView: HTMLDivElement | undefined = $state();
+  /** A change arrived while the tab was hidden; reload when it is shown. */
+  let stale = false;
+  const dirLoader = new Loader();
+  const fileLoader = new Loader();
+  const error = $derived(fileLoader.error || dirLoader.error);
 
   const MAX_HIGHLIGHT = 200_000;
   /** `.code-view pre`: 12px font × 1.55 line height, 8px top padding (app.css). */
@@ -33,20 +39,17 @@
   const CODE_PAD = 8;
 
   async function listDir(path: string) {
-    loading = true;
-    error = '';
     const id = sessionId;
-    try {
-      const result = await panelApi.files(id, path);
-      if (id !== sessionId) return;
-      dir = result.path;
-      entries = result.entries;
-      truncated = result.truncated;
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Unable to list directory.';
-    } finally {
-      loading = false;
-    }
+    // A failed file open is reported in the folder view until the next navigation.
+    if (!file) fileLoader.error = '';
+    const result = await dirLoader.run(
+      (signal) => panelApi.files(id, path, signal),
+      'Unable to list directory.',
+    );
+    if (!result || id !== sessionId) return;
+    dir = result.path;
+    entries = result.entries;
+    truncated = result.truncated;
   }
 
   /**
@@ -55,30 +58,42 @@
    * opens in source view so the lines can be shown.
    */
   async function openFile(path: string, lines: Omit<FileTarget, 'path'> = {}, refresh = false) {
-    error = '';
     const id = sessionId;
-    try {
-      const result = await panelApi.file(id, path);
-      if (id !== sessionId) return;
-      file = result;
-      if (!refresh) {
-        const count = (result.content ?? '').replace(/\n$/, '').split('\n').length;
-        const line = lines.line && Math.min(lines.line, count);
-        focus = line
-          ? { line, endLine: Math.min(Math.max(lines.endLine ?? line, line), count) }
-          : undefined;
-        rendered = !focus;
-        if (focus) void scrollToFocus();
-        // The server answers with the workspace-relative path, even for absolute requests.
-      }
-      const parent = result.path.split('/').slice(0, -1).join('/');
-      if (parent !== dir) void listDir(parent);
-    } catch (cause) {
-      if (id !== sessionId) return;
+    const result = await fileLoader.run(
+      (signal) => panelApi.file(id, path, signal),
+      (cause) => `${path}: ${cause instanceof Error ? cause.message : 'Unable to open file.'}`,
+    );
+    if (id !== sessionId) return;
+    if (!result) {
       // Back to the folder view, where the error is shown.
-      file = undefined;
-      error = `${path}: ${cause instanceof Error ? cause.message : 'Unable to open file.'}`;
+      if (fileLoader.error) file = undefined;
+      return;
     }
+    file = result;
+    if (!refresh) {
+      const count = (result.content ?? '').replace(/\n$/, '').split('\n').length;
+      const line = lines.line && Math.min(lines.line, count);
+      focus = line
+        ? { line, endLine: Math.min(Math.max(lines.endLine ?? line, line), count) }
+        : undefined;
+      rendered = !focus;
+      if (focus) void scrollToFocus();
+    }
+    // The server answers with the workspace-relative path, even for absolute requests.
+    const parent = result.path.split('/').slice(0, -1).join('/');
+    if (parent !== dir) void listDir(parent);
+  }
+
+  function reload() {
+    stale = false;
+    void listDir(dir);
+    if (file) void openFile(file.path, {}, true);
+  }
+
+  function closeFile() {
+    fileLoader.abort();
+    file = undefined;
+    focus = undefined;
   }
 
   async function scrollToFocus() {
@@ -102,28 +117,58 @@
     return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
   }
 
+  /**
+   * Highlighting a large file is slow and synchronous; keep the last few results
+   * per file version so toggling views or reopening a file does not redo it.
+   */
+  const highlightCache = new Map<string, string>();
+  function highlightFile(content: FileContent, language: string): string {
+    const key = `${content.path}\n${content.modifiedAt}\n${content.size}`;
+    const cached = highlightCache.get(key);
+    if (cached !== undefined) return cached;
+    const html = highlightCode(content.content ?? '', language);
+    // Plain text until highlight.js loads; don't cache that.
+    if (highlighterReady()) {
+      highlightCache.set(key, html);
+      if (highlightCache.size > 8) highlightCache.delete(highlightCache.keys().next().value!);
+    }
+    return html;
+  }
+
   let crumbs = $derived(dir ? dir.split('/') : []);
   let language = $derived(file ? languageForPath(file.path) : undefined);
   let isMarkdown = $derived(!!file && /\.(md|markdown|mdx)$/i.test(file.path));
+  let showSource = $derived(!!file && !file.binary && !(isMarkdown && rendered));
   let lineNumbers = $derived(
-    Array.from(
-      { length: (file?.content ?? '').replace(/\n$/, '').split('\n').length },
-      (_, index) => index + 1,
-    ).join('\n'),
+    showSource
+      ? Array.from(
+          { length: (file?.content ?? '').replace(/\n$/, '').split('\n').length },
+          (_, index) => index + 1,
+        ).join('\n')
+      : '',
   );
-  // Re-runs once the lazily loaded highlighter arrives (`$rendererTick`).
+  // Re-runs once the lazily loaded highlighter arrives (`$rendererTick`). A
+  // rendered Markdown document is not highlighted at all.
   let highlighted = $derived.by(() => {
     void $rendererTick;
-    return file?.content !== undefined && file.content.length <= MAX_HIGHLIGHT && language
-      ? highlightCode(file.content, language)
+    return showSource &&
+      file?.content !== undefined &&
+      file.content.length <= MAX_HIGHLIGHT &&
+      language
+      ? highlightFile(file, language)
       : undefined;
   });
 
   watch(
     () => sessionId,
     () => {
+      dirLoader.abort();
+      fileLoader.abort();
       file = undefined;
+      focus = undefined;
       entries = [];
+      dir = '';
+      stale = false;
       void listDir('');
     },
     { immediate: true },
@@ -135,11 +180,18 @@
     },
     { immediate: true },
   );
+  // A finished run may have changed the working tree.
+  onDestroy(
+    app.onPanel((signal) => {
+      if (signal.type !== 'run-finished') return;
+      if (active) reload();
+      else stale = true;
+    }),
+  );
   watch(
-    () => refreshKey,
-    () => {
-      void listDir(dir);
-      if (file) void openFile(file.path, {}, true);
+    () => active,
+    (shown) => {
+      if (shown && stale) reload();
     },
   );
 </script>
@@ -151,10 +203,7 @@
         class="icon-button small"
         type="button"
         aria-label="Back to folder"
-        onclick={() => {
-          file = undefined;
-          focus = undefined;
-        }}><ArrowLeft size={16} /></button
+        onclick={closeFile}><ArrowLeft size={16} /></button
       >
       <span class="drill-title" title={file.path}
         >{file.path}{#if focus}<span class="drill-lines"
@@ -216,8 +265,9 @@
         class="icon-button small"
         type="button"
         aria-label="Refresh"
-        onclick={() => listDir(dir)}
-        disabled={loading}><RefreshCw class={loading ? 'spin' : ''} size={15} /></button
+        onclick={reload}
+        disabled={dirLoader.loading}
+        ><RefreshCw class={dirLoader.loading ? 'spin' : ''} size={15} /></button
       >
     </div>
     {#if error}<p class="panel-error">{error}</p>{/if}
@@ -248,7 +298,9 @@
         </li>
       {/each}
     </ul>
-    {#if !loading && !entries.length && !error}<p class="panel-empty">Empty folder.</p>{/if}
+    {#if !dirLoader.loading && !entries.length && !error}<p class="panel-empty">
+        Empty folder.
+      </p>{/if}
     {#if truncated}<p class="panel-empty">Showing the first 2,000 entries.</p>{/if}
   {/if}
 </div>

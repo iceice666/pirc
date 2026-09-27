@@ -7,6 +7,7 @@
   import { onDestroy, onMount, untrack } from 'svelte';
   import { panelApi, type TerminalInfo } from '../../panel-api';
   import { getClientId } from '../../storage';
+  import { watch } from '../../watch.svelte';
 
   interface Props {
     sessionId: string;
@@ -54,10 +55,23 @@
     socket.send(JSON.stringify({ ...message, clientId: getClientId(), generation }));
   }
 
+  /** Size last sent to the pty; a resize the pty already has is not sent again. */
+  let sentSize = '';
+  let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Fit the view to its box and tell the pty (each change sends it a SIGWINCH). */
   function resize() {
     if (!fit || !xterm || !visible || !host?.offsetWidth) return;
     fit.fit();
-    if (hasControl) send({ type: 'resize', cols: xterm.cols, rows: xterm.rows });
+    const size = `${xterm.cols}x${xterm.rows}`;
+    if (!hasControl || socket?.readyState !== WebSocket.OPEN || size === sentSize) return;
+    sentSize = size;
+    send({ type: 'resize', cols: xterm.cols, rows: xterm.rows });
+  }
+  /** Dragging the panel edge fires a resize per pointer move; settle first. */
+  function scheduleResize() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(resize, 50);
   }
 
   function connect() {
@@ -75,6 +89,8 @@
         notice = '';
         xterm?.reset();
         xterm?.write(message.replay ?? '');
+        // A new connection may start at another size.
+        sentSize = '';
         resize();
       } else if (message.type === 'output') xterm?.write(message.data);
       else if (message.type === 'exit') {
@@ -126,7 +142,7 @@
       }
       send({ type: 'input', data });
     });
-    observer = new ResizeObserver(() => resize());
+    observer = new ResizeObserver(scheduleResize);
     observer.observe(host);
     scheme.addEventListener('change', retheme);
     connect();
@@ -142,6 +158,7 @@
     destroyed = true;
     scheme.removeEventListener('change', retheme);
     if (retry) clearTimeout(retry);
+    clearTimeout(resizeTimer);
     observer?.disconnect();
     socket?.close(1000, 'closed');
     xterm?.dispose();
@@ -157,6 +174,15 @@
   $effect.pre(() => {
     if (hasControl && untrack(() => notice).startsWith('Take control')) notice = '';
   });
+  // Regaining control: the pty may have been resized by another client meanwhile.
+  watch(
+    () => hasControl,
+    (control) => {
+      if (!control) return;
+      sentSize = '';
+      resize();
+    },
+  );
 </script>
 
 <div class="terminal-view" class:hidden={!visible}>

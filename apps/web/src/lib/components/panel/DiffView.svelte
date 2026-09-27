@@ -44,14 +44,22 @@
     return lines;
   }
 
+  /** Rows rendered at first; a 1 MB diff can be ~30k lines (4 nodes each). */
+  const PAGE = 2000;
   let lines = $derived(parse(diff));
+  let limit = $state(PAGE);
+  $effect.pre(() => {
+    void diff;
+    limit = PAGE;
+  });
+  let shown = $derived(lines.length > limit ? lines.slice(0, limit) : lines);
 </script>
 
 {#if !diff.trim()}
   <p class="panel-empty">No changes.</p>
 {:else}
   <div class="diff" role="table" aria-label="Diff">
-    {#each lines as line}
+    {#each shown as line, index (index)}
       {#if line.kind === 'file'}
         <div class="diff-file">{line.text}</div>
       {:else if line.kind === 'meta'}
@@ -66,7 +74,13 @@
         </div>
       {/if}
     {/each}
-    {#if truncated}<div class="diff-meta">Diff truncated at 1 MB.</div>{/if}
+    {#if shown.length < lines.length}
+      <button class="diff-more" type="button" onclick={() => (limit += PAGE * 2)}
+        >Show {Math.min(PAGE * 2, lines.length - shown.length).toLocaleString()} more lines ({(
+          lines.length - shown.length
+        ).toLocaleString()} hidden)</button
+      >
+    {:else if truncated}<div class="diff-meta">Diff truncated at 1 MB.</div>{/if}
   </div>
 {/if}
 
@@ -132,5 +146,21 @@
   }
   .del .sign {
     color: var(--danger);
+  }
+  .diff-more {
+    position: sticky;
+    left: 0;
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    border: 0;
+    border-top: 1px solid var(--line);
+    background: var(--bg-subtle);
+    color: var(--accent-ink);
+    font: inherit;
+    text-align: left;
+  }
+  .diff-more:hover {
+    background: var(--bg-hover);
   }
 </style>

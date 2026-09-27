@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Plus, SquareTerminal, X } from '@lucide/svelte';
+  import { Loader } from '../../loader.svelte';
   import { panelApi, type TerminalInfo } from '../../panel-api';
   import { watch } from '../../watch.svelte';
   import TerminalView from './TerminalView.svelte';
@@ -18,18 +19,18 @@
   let error = $state('');
   let busy = $state(false);
 
+  const listLoader = new Loader();
+
   async function load() {
     const id = sessionId;
-    try {
-      const result = await panelApi.terminals(id);
-      if (id !== sessionId) return;
-      terminals = result.terminals;
-      if (!current || !terminals.some((t) => t.id === current))
-        current = terminals[terminals.length - 1]?.id;
-      error = '';
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Terminals are unavailable.';
-    }
+    const result = await listLoader.run(
+      (signal) => panelApi.terminals(id, signal),
+      'Terminals are unavailable.',
+    );
+    if (!result || id !== sessionId) return;
+    terminals = result.terminals;
+    if (!current || !terminals.some((t) => t.id === current))
+      current = terminals[terminals.length - 1]?.id;
   }
 
   async function create() {
@@ -76,6 +77,8 @@
   watch(
     () => sessionId,
     () => {
+      listLoader.abort();
+      error = '';
       terminals = [];
       current = undefined;
       void load();
@@ -118,7 +121,7 @@
       onclick={create}><Plus size={15} /></button
     >
   </div>
-  {#if error}<p class="panel-error">{error}</p>{/if}
+  {#if error || listLoader.error}<p class="panel-error">{error || listLoader.error}</p>{/if}
   {#if !terminals.length}
     <div class="terminal-empty">
       <SquareTerminal size={22} />

@@ -6,6 +6,7 @@
 import { api, connectEvents, type EventConnection } from './api';
 import { syncControl } from './control';
 import { GOAL_WIDGET, parseGoalWidget } from './goal';
+import { PanelStateResource } from './panel-state.svelte';
 import { fromSnapshot, reduceEvent } from './state';
 import { getClientId, loadDraft, saveDraft } from './storage';
 import { parseTodoWidget, TODO_WIDGET } from './todo';
@@ -71,6 +72,8 @@ class AppState {
   /** Earliest transcript entries not yet mounted. */
   hiddenMessages = $state(0);
   clientId = '';
+  /** `/panel/state` of the open session (jobs menu, Memory and Tasks tabs). */
+  readonly panel = new PanelStateResource();
 
   #sessionState = $state.raw<ClientSessionState>();
   #events: EventConnection | undefined;
@@ -195,6 +198,7 @@ class AppState {
     this.draft = loadDraft(id);
     this.uploads = [];
     const demo = this.demo;
+    this.panel.reset(id, demo?.demoPanelState);
     try {
       const snapshot = demo
         ? {
@@ -576,6 +580,7 @@ class AppState {
       this.sessions = [created, ...this.sessions];
       if (demo) {
         this.activeSessionId = created.id;
+        this.panel.reset(created.id, demo.demoPanelState);
         this.sessionState = fromSnapshot({
           ...demo.demoSnapshot,
           session: created,

@@ -1,62 +1,57 @@
 <script lang="ts">
   import { ArrowLeft, Bot, ListChecks, RefreshCw, SquareTerminal, Users } from '@lucide/svelte';
-  import { panelApi, type BackgroundTask, type PanelState } from '../../panel-api';
+  import { onDestroy } from 'svelte';
+  import { app } from '../../app.svelte';
+  import { Loader } from '../../loader.svelte';
+  import { panelApi, type BackgroundTask } from '../../panel-api';
+  import { duration } from '../../time';
   import { watch } from '../../watch.svelte';
 
   interface Props {
     sessionId: string;
-    panelState: PanelState | undefined;
+    /** Shown in the panel: loads on activation and follows changes while shown. */
+    active?: boolean;
   }
 
-  let { sessionId, panelState }: Props = $props();
+  let { sessionId, active = true }: Props = $props();
 
-  let selected: BackgroundTask | undefined = $state();
+  let selected: BackgroundTask | undefined = $state.raw();
   let output = $state('');
-  let error = $state('');
-  let loading = $state(false);
   let outputEl: HTMLPreElement | undefined = $state();
+  const outputLoader = new Loader();
+  const panelState = $derived(app.panel.value);
 
   // The tab outlives a session switch; a task id means nothing in another session.
   watch(
     () => sessionId,
     () => {
+      outputLoader.abort();
       selected = undefined;
       output = '';
-      error = '';
     },
   );
 
   async function openTask(task: BackgroundTask) {
     selected = task;
+    output = '';
     await refreshOutput();
   }
   async function refreshOutput() {
     if (!selected) return;
     const id = sessionId;
     const taskId = selected.id;
-    loading = true;
-    error = '';
-    try {
-      const result = await panelApi.backgroundOutput(id, taskId);
-      if (id !== sessionId || selected?.id !== taskId) return;
-      selected = result.task;
-      output = result.output;
-      requestAnimationFrame(() => outputEl?.scrollTo({ top: outputEl.scrollHeight }));
-    } catch (cause) {
-      if (id !== sessionId || selected?.id !== taskId) return;
-      error = cause instanceof Error ? cause.message : 'Unable to load output.';
-    } finally {
-      loading = false;
-    }
+    const result = await outputLoader.run(
+      (signal) => panelApi.backgroundOutput(id, taskId, 400, signal),
+      'Unable to load output.',
+    );
+    if (!result || id !== sessionId || selected?.id !== taskId) return;
+    selected = result.task;
+    output = result.output;
+    requestAnimationFrame(() => outputEl?.scrollTo({ top: outputEl.scrollHeight }));
   }
-  function elapsed(start?: string | number, end?: string | number) {
-    if (!start) return '';
-    const from = new Date(start).getTime();
-    const to = end ? new Date(end).getTime() : Date.now();
-    const seconds = Math.max(0, Math.round((to - from) / 1000));
-    if (seconds < 60) return `${seconds}s`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+  function back() {
+    outputLoader.abort();
+    selected = undefined;
   }
 
   let tasks = $derived((panelState?.backgroundTasks ?? []).slice().reverse());
@@ -65,7 +60,7 @@
   let subagents = $derived(agents.filter((agent) => agent.mode === 'subagent').reverse());
   let boardTasks = $derived(panelState?.team.tasks ?? []);
   let teamEvents = $derived((panelState?.team.events ?? []).slice(-12).reverse());
-  // Keep a running task's view fresh when the parent reports a change.
+  // Keep a running task's view fresh when its status changes.
   let live = $derived(selected ? tasks.find((task) => task.id === selected?.id) : undefined);
   watch(
     () => live && `${live.id}\n${live.status}`,
@@ -73,16 +68,30 @@
       if (key && previous?.split('\n')[0] === key.split('\n')[0]) void refreshOutput();
     },
   );
+
+  // Tab activation refreshes the list; while shown it follows task and team changes.
+  watch(
+    () => active,
+    (shown) => {
+      if (shown) void app.panel.refresh();
+    },
+    { immediate: true },
+  );
+  onDestroy(
+    app.onPanel((signal) => {
+      if (!active) return;
+      if (signal.type === 'run-finished') app.panel.schedule(100);
+      else if (signal.sections.some((section) => section === 'background' || section === 'team'))
+        app.panel.schedule();
+    }),
+  );
 </script>
 
 <div class="tab-body">
   {#if selected}
     <div class="drill-head">
-      <button
-        class="icon-button small"
-        type="button"
-        aria-label="Back"
-        onclick={() => (selected = undefined)}><ArrowLeft size={16} /></button
+      <button class="icon-button small" type="button" aria-label="Back" onclick={back}
+        ><ArrowLeft size={16} /></button
       >
       <span class="drill-title mono">{selected.id}</span>
       <span class="chip status-{selected.status}">{selected.status.replace('_', ' ')}</span>
@@ -91,13 +100,18 @@
         type="button"
         aria-label="Refresh output"
         onclick={refreshOutput}
-        disabled={loading}><RefreshCw class={loading ? 'spin' : ''} size={15} /></button
+        disabled={outputLoader.loading}
+        ><RefreshCw class={outputLoader.loading ? 'spin' : ''} size={15} /></button
       >
     </div>
     <pre class="task-command">{selected.command}</pre>
-    {#if error}<p class="panel-error">{error}</p>{/if}
+    {#if outputLoader.error}<p class="panel-error">{outputLoader.error}</p>{/if}
     <pre class="task-output" bind:this={outputEl}>{output || 'No output yet.'}</pre>
-  {:else if !panelState?.agentRunning && !tasks.length && !agents.length}
+  {:else if app.panel.error && !panelState}
+    <p class="panel-error">{app.panel.error}</p>
+  {:else if !panelState}
+    <p class="panel-empty">Loading…</p>
+  {:else if !panelState.agentRunning && !tasks.length && !agents.length}
     <p class="panel-empty">
       The agent is not running. Background tasks, subagents and teammates appear here while it is.
     </p>
@@ -114,7 +128,7 @@
               <span class="task-text">
                 <span class="task-cmd">{task.command}</span>
                 <span class="memory-sub"
-                  ><span class="mono">{task.id}</span> · {elapsed(
+                  ><span class="mono">{task.id}</span> · {duration(
                     task.startedAt,
                     task.endedAt,
                   )}{#if task.exitCode !== undefined && task.exitCode !== null}

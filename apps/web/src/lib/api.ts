@@ -6,6 +6,7 @@ import {
   piPartialMessage,
   toolResultFields,
 } from './pi-messages';
+import { request } from './http';
 import { getClientId } from './storage';
 import type {
   Attachment,
@@ -29,46 +30,18 @@ import type {
   Workspace,
 } from './types';
 
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly code = 'unknown_error',
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
+export { ApiError } from './http';
 
 /**
  * Backend settings errors are curated gateway messages (e.g. "consent required",
  * "paste the complete callback URL"). Defense in depth: never render anything
  * that looks like a credential or an upstream body.
  */
-function safeBackendMessage(message: unknown, status: number): string {
+function safeBackendMessage(body: any, status: number): string {
+  const message: unknown = body?.error?.message;
   const fallback = `Backend request failed (${status}). Check your settings and try again.`;
   if (typeof message !== 'string' || !message || message.length > 200) return fallback;
   return /bearer|token|secret|api[_-]?key|[=:{}]|https?:\/\//i.test(message) ? fallback : message;
-}
-
-async function request<T>(path: string, init: RequestInit = {}, safeErrors = false): Promise<T> {
-  const headers = new Headers(init.headers);
-  if (init.body && !(init.body instanceof FormData) && !(init.body instanceof Blob))
-    headers.set('content-type', 'application/json');
-  headers.set('accept', 'application/json');
-  const response = await fetch(path, { ...init, headers, credentials: 'include' });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new ApiError(
-      safeErrors
-        ? safeBackendMessage(body?.error?.message, response.status)
-        : (body?.error?.message ?? body?.message ?? `Request failed (${response.status})`),
-      response.status,
-      body?.error?.code ?? body?.code,
-    );
-  }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
 }
 
 const iso = (value: unknown) =>
@@ -183,7 +156,7 @@ const thinkingLevels: unknown[] = ['off', 'minimal', 'low', 'medium', 'high', 'x
 
 /** Settings never use browser caches or expose upstream error bodies. */
 function backendRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  return request<T>(path, { cache: 'no-store', ...init }, true);
+  return request<T>(path, { cache: 'no-store', ...init }, { errorMessage: safeBackendMessage });
 }
 
 const authPath = (id: string) => `/api/provider-auth/sessions/${encodeURIComponent(id)}`;

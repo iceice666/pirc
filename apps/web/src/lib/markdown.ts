@@ -65,6 +65,9 @@ export function loadHighlighter(): Promise<void> {
   return hljsLoader;
 }
 
+/** Whether highlight.js has loaded (until then `highlightCode` returns plain text). */
+export const highlighterReady = () => !!hljs;
+
 /** Load both renderers up front (tests, or idle-time warm-up). */
 export const preloadRenderers = () => Promise.all([loadKatex(), loadHighlighter()]);
 

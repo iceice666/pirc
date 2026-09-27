@@ -1,34 +1,8 @@
 /** Client for the side-panel endpoints (files, Git, memory, background, terminals). */
+import { request } from './http';
 import { getClientId } from './storage';
 
 export type PanelTab = 'files' | 'git' | 'memory' | 'tasks' | 'terminal';
-
-export class PanelError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly code = 'unknown_error',
-  ) {
-    super(message);
-  }
-}
-
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  if (init.body) headers.set('content-type', 'application/json');
-  headers.set('accept', 'application/json');
-  const response = await fetch(path, { ...init, headers, credentials: 'include' });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new PanelError(
-      body?.error?.message ?? `Request failed (${response.status})`,
-      response.status,
-      body?.error?.code,
-    );
-  }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
-}
 
 const base = (sessionId: string) => `/api/sessions/${encodeURIComponent(sessionId)}`;
 const qs = (params: Record<string, string | number | boolean | undefined>) => {
@@ -212,26 +186,38 @@ export interface TerminalInfo {
   exited: boolean;
 }
 
+/** Read endpoints take an optional signal so a superseded load can be aborted. */
+const get = <T>(path: string, signal?: AbortSignal) => request<T>(path, { signal });
+
 export const panelApi = {
-  gitStatus: (sessionId: string) => request<GitStatus>(`${base(sessionId)}/git/status`),
-  gitDiff: (sessionId: string, options: { path?: string; staged?: boolean; untracked?: boolean }) =>
-    request<{ diff: string; truncated: boolean }>(`${base(sessionId)}/git/diff${qs(options)}`),
-  gitLog: (sessionId: string, skip = 0, limit = 50) =>
-    request<{ commits: Commit[]; more: boolean }>(
+  gitStatus: (sessionId: string, signal?: AbortSignal) =>
+    get<GitStatus>(`${base(sessionId)}/git/status`, signal),
+  gitDiff: (
+    sessionId: string,
+    options: { path?: string; staged?: boolean; untracked?: boolean },
+    signal?: AbortSignal,
+  ) =>
+    get<{ diff: string; truncated: boolean }>(`${base(sessionId)}/git/diff${qs(options)}`, signal),
+  gitLog: (sessionId: string, skip = 0, limit = 50, signal?: AbortSignal) =>
+    get<{ commits: Commit[]; more: boolean }>(
       `${base(sessionId)}/git/log${qs({ skip, limit })}`,
+      signal,
     ),
-  gitShow: (sessionId: string, sha: string) =>
-    request<CommitDetail>(`${base(sessionId)}/git/commits/${encodeURIComponent(sha)}`),
-  files: (sessionId: string, path = '') =>
-    request<{ path: string; entries: DirEntry[]; truncated: boolean }>(
+  gitShow: (sessionId: string, sha: string, signal?: AbortSignal) =>
+    get<CommitDetail>(`${base(sessionId)}/git/commits/${encodeURIComponent(sha)}`, signal),
+  files: (sessionId: string, path = '', signal?: AbortSignal) =>
+    get<{ path: string; entries: DirEntry[]; truncated: boolean }>(
       `${base(sessionId)}/files${qs({ path })}`,
+      signal,
     ),
-  file: (sessionId: string, path: string) =>
-    request<FileContent>(`${base(sessionId)}/files/content${qs({ path })}`),
-  state: (sessionId: string) => request<PanelState>(`${base(sessionId)}/panel/state`),
-  backgroundOutput: (sessionId: string, taskId: string, lines = 400) =>
-    request<{ task: BackgroundTask; output: string }>(
+  file: (sessionId: string, path: string, signal?: AbortSignal) =>
+    get<FileContent>(`${base(sessionId)}/files/content${qs({ path })}`, signal),
+  state: (sessionId: string, signal?: AbortSignal) =>
+    get<PanelState>(`${base(sessionId)}/panel/state`, signal),
+  backgroundOutput: (sessionId: string, taskId: string, lines = 400, signal?: AbortSignal) =>
+    get<{ task: BackgroundTask; output: string }>(
       `${base(sessionId)}/panel/background/${encodeURIComponent(taskId)}${qs({ lines })}`,
+      signal,
     ),
   /** Needs the control lease; resolves once the stop is requested (status `stopping`). */
   stopBackground: (sessionId: string, taskId: string, generation: number) =>
@@ -239,8 +225,8 @@ export const panelApi = {
       `${base(sessionId)}/panel/background/${encodeURIComponent(taskId)}/stop`,
       { method: 'POST', body: JSON.stringify({ clientId: getClientId(), generation }) },
     ),
-  terminals: (sessionId: string) =>
-    request<{ terminals: TerminalInfo[] }>(`${base(sessionId)}/terminals`),
+  terminals: (sessionId: string, signal?: AbortSignal) =>
+    get<{ terminals: TerminalInfo[] }>(`${base(sessionId)}/terminals`, signal),
   createTerminal: (sessionId: string, generation: number, cols: number, rows: number) =>
     request<{ terminal: TerminalInfo }>(`${base(sessionId)}/terminals`, {
       method: 'POST',
