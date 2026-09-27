@@ -2494,9 +2494,77 @@ button.system-line:not(:disabled):hover {
   box-shadow: var(--shadow-pop);
 }
 .modal.settings {
-  width: min(640px, 100%);
-  max-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 100%);
+  height: min(640px, calc(100dvh - 40px));
+}
+.settings-layout {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 20px;
+  min-height: 0;
+}
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-nav button {
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+}
+.settings-nav button:hover {
+  background: var(--bg-hover);
+}
+.settings-nav button.chosen {
+  color: var(--ink);
+  background: var(--bg-subtle);
+  font-weight: 600;
+}
+.settings-panels {
+  min-width: 0;
   overflow-y: auto;
+}
+.settings-panels [hidden] {
+  display: none;
+}
+@media (max-width: 640px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 12px;
+  }
+  .settings-nav {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+  .settings-nav button {
+    flex: none;
+  }
+}
+.modal label.settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  color: var(--muted);
+  font-weight: 400;
+}
+.modal .settings-toggle input {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  padding: 0;
+  accent-color: var(--accent);
 }
 .modal header {
   display: flex;

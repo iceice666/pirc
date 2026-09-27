@@ -34,6 +34,8 @@
   export let onpin: (id: string, pinned: boolean) => void;
   export let onsettle: (id: string, settled: boolean) => void;
   export let onsettings: () => void;
+  /** Settled sessions are hidden entirely unless enabled in settings. */
+  export let showSettled = false;
 
   let query = '';
   let collapsedGroups = new Set<string>();
@@ -196,7 +198,7 @@
             {#each groups.open as session (session.id)}
               {@render sessionRow(session)}
             {/each}
-            {#if groups.settled.length}
+            {#if showSettled && groups.settled.length}
               <button
                 class="settled-toggle"
                 type="button"
