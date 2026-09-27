@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { mkdirSync, realpathSync } from 'node:fs';
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
+import { SESSION_FILE } from '../src/agent/session-store.js';
 import { buildNodeApp } from '../src/node/app.js';
 import { nodeHeaders as headers, testConfig, waitFor } from './helpers.js';
 
@@ -193,5 +195,43 @@ describe('node router', () => {
     // The next prompt starts a fresh runner that continues the same transcript.
     expect((await prompt('second')).statusCode).toBe(202);
     await waitFor(texts, 'echo:first|echo:second');
+  });
+
+  it('reports the session-file model and thinking level when no runner is live', async () => {
+    const { app, services } = await buildNodeApp(testConfig());
+    apps.push(app);
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      headers,
+      payload: { workspaceId: 'test' },
+    });
+    const sessionId = created.json().session.id as string;
+    const snapshot = async () =>
+      (
+        await app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/snapshot`, headers })
+      ).json();
+    expect((await snapshot()).agent).toBeNull();
+
+    const dir = services.db.getSession(sessionId).privateSessionPath;
+    mkdirSync(dir, { recursive: true });
+    const entries = [
+      { type: 'session', id: 'a', parentId: null, timestamp: 1, version: 1, sessionId, cwd: dir },
+      { type: 'model_change', id: 'b', parentId: 'a', timestamp: 2, provider: 'p', modelId: 'old' },
+      {
+        type: 'thinking_level_change',
+        id: 'c',
+        parentId: 'b',
+        timestamp: 3,
+        thinkingLevel: 'high',
+      },
+      { type: 'model_change', id: 'd', parentId: 'c', timestamp: 4, provider: 'p', modelId: 'new' },
+    ];
+    writeFileSync(path.join(dir, SESSION_FILE), entries.map((e) => JSON.stringify(e)).join('\n'));
+    expect(services.runners.get(sessionId)?.alive ?? false).toBe(false);
+    expect((await snapshot()).agent).toEqual({
+      model: { provider: 'p', id: 'new' },
+      thinkingLevel: 'high',
+    });
   });
 });

@@ -211,7 +211,20 @@ export async function buildNodeApp(
     // runner at all (stopped, crashed, evicted), and a long transcript never
     // has to fit through one RPC line. The agent writes each message before
     // announcing it, so the file is never behind the watermark taken below.
-    const history = historyOf(branches.read(privateSessionPath));
+    const branch = branches.read(privateSessionPath);
+    const history = historyOf(branch);
+    // No live runner: report the settings the session file will restore, so the
+    // client does not fall back to another model and overwrite them on the next prompt.
+    if (!agent) {
+      const model = branch.findLast((entry) => entry.type === 'model_change');
+      const thinking = branch.findLast((entry) => entry.type === 'thinking_level_change');
+      if (model || thinking)
+        agent = {
+          model:
+            model?.type === 'model_change' ? { provider: model.provider, id: model.modelId } : null,
+          thinkingLevel: thinking?.type === 'thinking_level_change' ? thinking.thinkingLevel : null,
+        };
+    }
     const snapshot: Snapshot = {
       session: publicSession(session),
       history,
