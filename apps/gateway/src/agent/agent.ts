@@ -10,6 +10,7 @@ import {
   runCompaction,
   type CompactionSettings,
 } from './compaction.js';
+import { AutoMode } from './auto-mode/index.js';
 import type { Feature } from './feature.js';
 import { HookRunner } from './hooks.js';
 import type {
@@ -101,6 +102,7 @@ export class Agent {
   readonly store: SessionStore;
   readonly guard: PathGuard;
   readonly hooks: HookRunner;
+  readonly autoMode: AutoMode;
   readonly ui: UiApi;
   readonly hasUI: boolean;
   readonly features: Feature[];
@@ -223,6 +225,7 @@ export class Agent {
       { sessionId: options.store.sessionId, cwd: options.config.workspace },
       (message) => this.ui.notify(message, 'warning'),
     );
+    this.autoMode = new AutoMode(this);
     for (const tool of options.tools) this.tools.set(tool.name, tool);
     for (const feature of this.features)
       for (const tool of feature.tools?.(this) ?? []) this.tools.set(tool.name, tool);
@@ -974,6 +977,18 @@ export class Agent {
     if (gate.blocked)
       return {
         content: [{ type: 'text', text: `Blocked by hook: ${gate.blocked}` }],
+        isError: true,
+      };
+    // Auto mode judges the final (hook-rewritten) arguments and takes the write lease.
+    let refusal: string | undefined;
+    try {
+      refusal = await this.autoMode.gate(name, gate.args, signal);
+    } catch (error) {
+      return { content: [{ type: 'text', text: (error as Error).message }], isError: true };
+    }
+    if (refusal)
+      return {
+        content: [{ type: 'text', text: `Blocked by auto mode: ${refusal}` }],
         isError: true,
       };
     let result: ToolResult;

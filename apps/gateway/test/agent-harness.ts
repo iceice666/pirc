@@ -81,6 +81,8 @@ export function writeAgentConfig(configDir: string, extra: Record<string, unknow
       // Titling makes a side request that would consume scripted replies; tests opt in.
       features: {
         sessionTitle: { enabled: false },
+        // The auto-mode classifier would also consume scripted replies.
+        autoMode: { useModel: false },
         ...(local.features as Record<string, unknown> | undefined),
       },
     }),
