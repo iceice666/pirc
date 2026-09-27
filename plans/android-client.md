@@ -1,6 +1,6 @@
 # Native Android client
 
-Status: milestone 1 (gateway device tokens, web pairing) implemented; the Android app is not started.
+Status: milestones 1 (gateway device tokens, web pairing) and 2 (Android skeleton: pairing, session list) implemented.
 
 ## Why
 

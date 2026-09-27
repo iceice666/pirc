@@ -15,7 +15,9 @@ let
       let
         name = baseNameOf path;
       in
-      !lib.elem name [
+      # The Android client builds with Gradle, not into the pirc binary.
+      toString path != toString ../apps/android
+      && !lib.elem name [
         ".git"
         "node_modules"
         "dist"
