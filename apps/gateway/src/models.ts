@@ -1,12 +1,7 @@
 /**
- * Model providers are configured once, on the gateway (`models.json`), and
- * pushed to every node over the node link. A node hands them to each agent
- * process it starts on the agent's first stdin line, so provider settings
- * and keys never live in a node's own configuration, environment or disk.
- *
- * The gateway resolves API key references (`apiKeyEnv`, `apiKeyFile`,
- * `apiKeyCommand`) when it loads the file; nodes and agents only ever see
- * the resolved `apiKey`. A reload (SIGHUP) reaches agents started afterwards.
+ * Gateway-owned model configuration. Only publicModels() projections travel
+ * to nodes; credentials, headers and actual provider endpoints stay gateway-side.
+ * A node attaches its private local inference transport to the agent handshake.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
@@ -31,7 +26,22 @@ export function expandHome(value: string): string {
   return value;
 }
 
-const modelSchema = z.object({
+export const modelApis = [
+  'openai-chat',
+  'anthropic-messages',
+  'openai-completions',
+  'openai-responses',
+  'openai-codex-responses',
+] as const;
+const apiSchema = z.enum(modelApis);
+
+export const modelSchema = z.object({
+  api: apiSchema.optional(),
+  baseUrl: z.string().url().optional(),
+  canonicalProvider: z.string().optional(),
+  /** Gateway-only request headers required by a catalog model (never projected to nodes). */
+  headers: z.record(z.string()).optional(),
+  thinkingLevelMap: z.record(z.string().nullable()).optional(),
   id: z.string().min(1),
   name: z.string().optional(),
   contextWindow: z.number().int().positive().default(200_000),
@@ -42,7 +52,8 @@ const modelSchema = z.object({
 });
 
 const providerBase = z.object({
-  api: z.enum(['openai-chat', 'anthropic-messages']),
+  api: apiSchema,
+  piProvider: z.string().optional(),
   baseUrl: z.string().url(),
   headers: z.record(z.string()).default({}),
   compat: z.record(z.unknown()).default({}),
@@ -73,10 +84,18 @@ const modelsFileSchema = z
   })
   .strict();
 
-/** Resolved providers, as sent over the node link and to agents. */
+/** Local node transport, never a provider credential or gateway configuration. */
+export const inferenceConfigSchema = z.object({
+  socketPath: z.string().min(1),
+  token: z.string().min(1),
+});
+export type InferenceConfig = z.infer<typeof inferenceConfigSchema>;
+
+/** Gateway configuration or a secret-free node projection. */
 export const modelsSchema = z.object({
   providers: z.record(providerSchema).default({}),
   defaultModel: modelRefSchema.optional(),
+  inference: inferenceConfigSchema.optional(),
 });
 
 export type ModelConfig = z.infer<typeof modelSchema>;
@@ -146,6 +165,41 @@ export function loadModelsFile(
     providers[name] = apiKey === undefined ? rest : { ...rest, apiKey };
   }
   return defaultModel ? { providers, defaultModel } : { providers };
+}
+
+/** Explicit allowlist: never forward endpoint URLs, headers, compat or credentials. */
+export function publicModels(models: ModelsConfig): ModelsConfig {
+  return {
+    providers: Object.fromEntries(
+      Object.entries(models.providers).map(([name, provider]) => [
+        name,
+        {
+          api: provider.api,
+          baseUrl: 'https://gateway.invalid',
+          headers: {},
+          compat:
+            typeof provider.compat.supportsLongCacheRetention === 'boolean'
+              ? { supportsLongCacheRetention: provider.compat.supportsLongCacheRetention }
+              : {},
+          models: provider.models.map((model) => ({
+            id: model.id,
+            name: model.name,
+            contextWindow: model.contextWindow,
+            maxTokens: model.maxTokens,
+            reasoning: model.reasoning,
+            input: model.input,
+            compat:
+              typeof model.compat.supportsLongCacheRetention === 'boolean'
+                ? { supportsLongCacheRetention: model.compat.supportsLongCacheRetention }
+                : {},
+            ...(model.api ? { api: model.api } : {}),
+            ...(model.thinkingLevelMap ? { thinkingLevelMap: model.thinkingLevelMap } : {}),
+          })),
+        },
+      ]),
+    ),
+    ...(models.defaultModel ? { defaultModel: models.defaultModel } : {}),
+  };
 }
 
 /** Public model list for the browser (never includes keys). */

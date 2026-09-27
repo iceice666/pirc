@@ -22,6 +22,9 @@ import type { EventCursor } from '../types.js';
 import { parse, payloadHash } from '../util.js';
 import { authHook, validateRequest } from './auth.js';
 import { NodeRegistry, validNodeToken } from './nodes.js';
+import { BackendService } from '../backends/service.js';
+import { registerBackendRoutes } from '../backends/routes.js';
+import { GatewayInference } from '../backends/inference.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
 const createWorkspaceBody = z.object({
@@ -84,9 +87,10 @@ export interface DaemonServices {
   events: EventHub;
   nodes: NodeRegistry;
   models: ModelStore;
+  backends: BackendService;
   /**
-   * Re-read the models file and push it to every node; agents started
-   * afterwards use it. On error the current providers stay in effect.
+   * Re-read the gateway baseline and publish its secret-free catalog.
+   * Subsequent inference calls use current credentials, including live agents.
    */
   reloadModels(): void;
 }
@@ -102,35 +106,31 @@ export async function buildDaemonApp(
   app.log.info({ recovery }, 'daemon startup recovery complete');
   const events = new EventHub(config.eventBufferSize);
   const models = new ModelStore();
-  const readModels = () => {
-    const loaded = loadModelsFile(config.modelsFile);
-    if (!loaded)
-      app.log.warn(
-        { file: config.modelsFile },
-        'models file not found: agents have no providers until it exists and is reloaded',
-      );
-    models.set(loaded ?? { providers: {} });
-    app.log.info(
-      { file: config.modelsFile, providers: Object.keys(models.current.providers) },
-      'models loaded',
-    );
-  };
-  // An invalid file at startup is fatal; on reload it only logs.
-  readModels();
+  // Invalid baseline/state at startup is fatal. Never log raw key-command output.
+  const baseline = loadModelsFile(config.modelsFile) ?? { providers: {} };
   const nodes = new NodeRegistry(models);
+  let inference: GatewayInference | undefined;
+  const backends = new BackendService({
+    stateDir: config.stateDir,
+    baseline,
+    onChange: () => {
+      inference?.cancelAll();
+      models.set(backends.models);
+      nodes.broadcastModels();
+    },
+  });
+  models.set(backends.models);
+  inference = new GatewayInference(backends);
+  nodes.onInference = (request, signal, onDelta, nodeId) =>
+    inference!.run(request, signal, onDelta, nodeId);
   const reloadModels = () => {
     try {
-      readModels();
-    } catch (error) {
-      app.log.error(
-        { error: (error as Error).message },
-        'models reload failed; keeping the previous providers',
-      );
-      return;
+      backends.setBaseline(loadModelsFile(config.modelsFile) ?? { providers: {} });
+    } catch {
+      app.log.error('models reload failed; keeping the previous providers');
     }
-    nodes.broadcastModels();
   };
-  const services = { db, events, nodes, models, reloadModels };
+  const services = { db, events, nodes, models, backends, reloadModels };
 
   // ---- node link ------------------------------------------------------------
 
@@ -444,6 +444,8 @@ export async function buildDaemonApp(
     });
   });
 
+  registerBackendRoutes(app, backends);
+
   /** Every node's agents use the gateway's providers, so one list serves all sessions. */
   app.get('/api/models', async (request) => {
     const query = parse(z.object({ sessionId: z.string().optional() }), request.query);
@@ -572,6 +574,8 @@ export async function buildDaemonApp(
   );
 
   app.addHook('onClose', async () => {
+    inference?.cancelAll();
+    await backends.close();
     nodes.close();
     db.close();
   });

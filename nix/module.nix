@@ -143,9 +143,10 @@ let
     EnvironmentFile = optional (cfg.environmentFile != null) cfg.environmentFile;
   };
 
-  # Providers live on the gateway, which resolves their keys and pushes them
-  # to every node. The file sits at a stable /etc path so a change reloads
-  # the gateway (SIGHUP) instead of restarting it; new sessions pick it up.
+  # File-managed providers live on the gateway, which resolves their keys and
+  # runs every model request; nodes only get a secret-free catalog. The file
+  # sits at a stable /etc path so a change reloads the gateway (SIGHUP).
+  # Web-managed backends and subscription logins are kept in stateDirectory.
   # API keys must use apiKeyEnv/apiKeyFile/apiKeyCommand, never literal values.
   modelsFile = pkgs.writeText "pirc-models.json" (json cfg.models);
 

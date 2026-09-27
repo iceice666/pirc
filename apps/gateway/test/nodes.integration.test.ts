@@ -125,7 +125,7 @@ describe('node registrations', () => {
     ).toHaveLength(0);
   });
 
-  it('pushes resolved providers to nodes on registration and reload', async () => {
+  it('sends nodes a secret-free catalog; the gateway alone resolves keys', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'pirc-models-'));
     const modelsFile = path.join(dir, 'models.json');
     const keyFile = path.join(dir, 'key');
@@ -154,10 +154,14 @@ describe('node registrations', () => {
     );
     const reply = await registered;
     expect(reply.type).toBe('registered');
-    // The key reference is resolved on the gateway; nodes only see the key.
-    expect(reply.models.providers.main.apiKey).toBe('file-key');
+    // Nodes get model metadata only: no key, key reference, endpoint or headers.
+    expect(reply.models.providers.main.apiKey).toBeUndefined();
     expect(reply.models.providers.main.apiKeyFile).toBeUndefined();
+    expect(JSON.stringify(reply)).not.toContain('file-key');
+    expect(JSON.stringify(reply)).not.toContain('llm.example');
+    expect(reply.models.providers.main.models[0]).toMatchObject({ id: 'm1', reasoning: true });
     expect(reply.models.defaultModel).toEqual({ provider: 'main', id: 'm1' });
+    expect((await services.backends.resolve('main', 'm1')).apiKey).toBe('file-key');
 
     // The browser list needs no session and never includes keys.
     const listed = (await app.inject({ method: 'GET', url: '/api/models', headers })).json();
@@ -169,7 +173,7 @@ describe('node registrations', () => {
     // An invalid file keeps the previous providers and pushes nothing.
     writeFileSync(modelsFile, '{ nope');
     services.reloadModels();
-    expect(services.models.current.providers.main?.apiKey).toBe('file-key');
+    expect((await services.backends.resolve('main', 'm1')).apiKey).toBe('file-key');
 
     writeFileSync(
       modelsFile,
@@ -180,7 +184,8 @@ describe('node registrations', () => {
     const update = await pushed;
     expect(update.type).toBe('models');
     expect(Object.keys(update.models.providers)).toEqual(['other']);
-    expect(update.models.providers.other.apiKey).toBe('literal');
+    expect(JSON.stringify(update)).not.toContain('literal');
+    expect((await services.backends.resolve('other', 'm1')).apiKey).toBe('literal');
   });
 
   it('refuses a models file whose default model is not configured', async () => {

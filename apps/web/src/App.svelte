@@ -18,6 +18,7 @@
   import { onMount, tick } from 'svelte';
   import { fade } from 'svelte/transition';
   import { api, connectEvents, type EventConnection } from './lib/api';
+  import BackendSettings from './lib/components/BackendSettings.svelte';
   import Composer from './lib/components/Composer.svelte';
   import InteractionCard from './lib/components/InteractionCard.svelte';
   import JobsMenu from './lib/components/JobsMenu.svelte';
@@ -51,6 +52,7 @@
     ThinkingLevel,
     Workspace,
   } from './lib/types';
+  import { modelKey } from './lib/types';
 
   let workspaces: Workspace[] = [];
   let nodes: NodeSummary[] = [];
@@ -105,7 +107,14 @@
   );
   $: runStatus = sessionState?.run?.status;
   $: hasControl = sessionState?.control.heldByCurrentClient ?? false;
-  $: selectedModel = sessionState?.selectedModelId ?? models[0]?.id ?? '';
+  $: selectedModelOption =
+    models.find(
+      (model) =>
+        model.id === sessionState?.selectedModelId &&
+        (!sessionState?.selectedModelProvider ||
+          model.provider === sessionState.selectedModelProvider),
+    ) ?? models[0];
+  $: selectedModel = selectedModelOption ? modelKey(selectedModelOption) : '';
   $: thinking = sessionState?.thinkingLevel ?? 'medium';
   $: panelMax = Math.max(
     PANEL_MIN,
@@ -300,10 +309,10 @@
     }
   }
 
-  async function loadModels(id: string) {
+  async function loadModels(id = activeSessionId) {
     try {
       const list = await api.models(id);
-      if (activeSessionId === id && list.length) models = list;
+      if (activeSessionId === id) models = list;
     } catch {
       /* keep the previous list; the runner may still be starting */
     }
@@ -368,8 +377,8 @@
           kind,
           controlGeneration: sessionState.control.generation,
           content: content || undefined,
-          modelId: selectedModel || undefined,
-          provider: models.find((model) => model.id === selectedModel)?.provider,
+          modelId: selectedModelOption?.id,
+          provider: selectedModelOption?.provider,
           thinkingLevel: thinking,
           attachmentIds: attachmentIds.length ? attachmentIds : undefined,
         });
@@ -521,10 +530,14 @@
     uploads = uploads.filter((item) => item.id !== id);
   }
 
-  async function changeModel(id: string) {
-    if (!sessionState) return;
-    sessionState = { ...sessionState, selectedModelId: id };
-    const model = models.find((item) => item.id === id);
+  async function changeModel(key: string) {
+    const model = models.find((item) => modelKey(item) === key);
+    if (!sessionState || !model) return;
+    sessionState = {
+      ...sessionState,
+      selectedModelId: model.id,
+      selectedModelProvider: model.provider,
+    };
     if (!usingDemo && activeSessionId && model && sessionState.control.generation) {
       try {
         await api.command(activeSessionId, {
@@ -903,6 +916,8 @@
         {/if}
         <p>{nodes.length} online · Private VPN</p>
       </section>
+
+      <BackendSettings disabled={usingDemo} onchanged={() => loadModels()} />
 
       <section class="settings-section">
         <h3>Layout</h3>

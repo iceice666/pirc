@@ -26,6 +26,10 @@ switch (command) {
   case 'ptc-worker':
     await (await import('./agent/ptc/worker.js')).runPtcWorker(process.argv.slice(2));
     break;
+  case 'oauth-worker':
+    // Internal: one isolated OAuth login/refresh; private JSONL IPC on stdio only.
+    await (await import('./backends/oauth-worker.js')).runOAuthWorker();
+    break;
   case 'node':
     await (await import('./node/main.js')).runNode();
     break;

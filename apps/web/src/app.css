@@ -2493,6 +2493,11 @@ button.system-line:not(:disabled):hover {
   background: var(--bg-layer);
   box-shadow: var(--shadow-pop);
 }
+.modal.settings {
+  width: min(640px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
 .modal header {
   display: flex;
   align-items: flex-start;

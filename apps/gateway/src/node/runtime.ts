@@ -19,12 +19,19 @@ import {
   type NodeToDaemon,
 } from '../protocol.js';
 import { buildNodeApp } from './app.js';
+import { startNodeInference } from './inference.js';
+import {
+  inferenceEventFrames,
+  inferenceEventSchema,
+  INFERENCE_BUFFER_MAX_BYTES,
+} from '../inference-wire.js';
 import type { TerminalConnection } from './panel-routes.js';
 
 const RECONNECT_MS = 3_000;
 const HEARTBEAT_MS = 15_000;
 
 const daemonMessage = z.discriminatedUnion('type', [
+  ...inferenceEventFrames,
   z.object({ type: z.literal('registered'), nodeId: z.string(), models: modelsSchema }),
   z.object({ type: z.literal('models'), models: modelsSchema }),
   z.object({ type: z.literal('heartbeat_ack') }),
@@ -78,6 +85,25 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
   const send = (message: NodeToDaemon) => {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
   };
+  const inference = await startNodeInference({
+    stateDir: config.stateDir,
+    getModels: () => services.models.current,
+    send: (message) => {
+      if (!registered || socket?.readyState !== WebSocket.OPEN) return false;
+      const frame = JSON.stringify(message);
+      if (
+        Buffer.byteLength(frame) > NODE_FRAME_MAX_BYTES ||
+        socket.bufferedAmount + Buffer.byteLength(frame) > INFERENCE_BUFFER_MAX_BYTES
+      )
+        return false;
+      socket.send(frame, (error) => {
+        if (error) inference.disconnect();
+      });
+      return true;
+    },
+  });
+  // Even before registration, never fall back to direct provider inference.
+  services.models.set({ ...services.models.current, inference: inference.config });
   const closeTerminals = () => {
     for (const connection of terminals.values()) connection.detach();
     terminals.clear();
@@ -177,7 +203,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       const message = parsed.data;
       if (message.type === 'registered') {
         registered = true;
-        services.models.set(message.models);
+        services.models.set({ ...message.models, inference: inference.config });
         app.log.info(
           { daemon: config.daemonUrl, providers: Object.keys(message.models.providers) },
           'registered with daemon',
@@ -186,8 +212,13 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       }
       if (!registered) return;
       switch (message.type) {
+        case 'model_delta':
+        case 'model_end':
+        case 'model_error':
+          inference.receive(message.requestId, inferenceEventSchema.parse(message));
+          return;
         case 'models':
-          services.models.set(message.models);
+          services.models.set({ ...message.models, inference: inference.config });
           app.log.info(
             { providers: Object.keys(message.models.providers) },
             'models updated by daemon; new agents use them',
@@ -220,6 +251,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
     connection.on('close', (code, reason) => {
       if (socket !== connection) return;
       registered = false;
+      inference.disconnect();
       closeTerminals();
       if (heartbeat) clearInterval(heartbeat);
       if (code === PROTOCOL_MISMATCH_CLOSE)
@@ -238,6 +270,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       if (heartbeat) clearInterval(heartbeat);
       unsubscribeEvents();
       closeTerminals();
+      await inference.close();
       socket?.terminate();
       await app.close();
     },

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@fastify/websocket": "^11.0.2",
+    "@mariozechner/pi-ai": "0.73.1",
     "fastify": "^5.2.1",
     "ws": "^8.18.0",
     "zod": "^3.24.2"

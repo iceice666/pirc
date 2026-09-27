@@ -6,6 +6,8 @@
 export interface TextContent {
   type: 'text';
   text: string;
+  /** Opaque Responses message ID/phase, preserved for replay. */
+  textSignature?: string;
 }
 export interface ThinkingContent {
   type: 'thinking';
@@ -24,6 +26,7 @@ export interface ToolCall {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
+  thoughtSignature?: string;
 }
 
 export type StopReason = 'stop' | 'length' | 'toolUse' | 'error' | 'aborted';
@@ -55,6 +58,10 @@ export interface AssistantMessage {
   api: string;
   provider: string;
   model: string;
+  /** Pi identity differs from the user-visible backend alias. */
+  canonicalProvider?: string;
+  responseId?: string;
+  responseModel?: string;
   usage: Usage;
   stopReason: StopReason;
   errorMessage?: string;

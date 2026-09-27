@@ -200,11 +200,17 @@ export interface SessionSnapshot {
   cursor: string;
   runnerEpoch: string;
   selectedModelId?: string;
+  /** Several backends can expose the same model ID; the provider disambiguates. */
+  selectedModelProvider?: string;
   thinkingLevel?: ThinkingLevel;
   /** Extension panels (e.g. the todo list), keyed by extension. */
   widgets?: Record<string, string[]>;
   statuses?: Record<string, string>;
 }
+
+/** Stable selection key: model IDs are only unique within one backend. */
+export const modelKey = (model: { provider: string; id: string }) =>
+  JSON.stringify([model.provider, model.id]);
 
 export interface ModelOption {
   id: string;
@@ -213,6 +219,72 @@ export interface ModelOption {
   contextWindow?: number;
   thinkingLevels: ThinkingLevel[];
   available: boolean;
+}
+
+/** Public gateway settings metadata. Credentials are deliberately never returned. */
+export interface BackendModel {
+  id: string;
+  name?: string;
+  contextWindow?: number;
+  maxTokens?: number;
+  reasoning?: boolean;
+  input?: Array<'text' | 'image'>;
+  api?: string;
+  [key: string]: unknown;
+}
+
+export interface BackendProvider {
+  id: string;
+  name: string;
+  source: 'file' | 'ui' | 'oauth';
+  readOnly: boolean;
+  api: string;
+  baseUrl?: string;
+  hasApiKey: boolean;
+  models: BackendModel[];
+}
+
+export interface OAuthProviderOption {
+  id: string;
+  name: string;
+  connected: boolean;
+  providerId: string;
+  requiresPolicyConsent: boolean;
+  usesCallbackServer: boolean;
+  modelCount: number;
+}
+
+export interface BackendSettingsSnapshot {
+  providers: BackendProvider[];
+  oauthProviders: OAuthProviderOption[];
+  defaultModel?: { provider: string; id: string; thinking?: ThinkingLevel };
+}
+
+export interface BackendProviderInput {
+  api: string;
+  baseUrl: string;
+  apiKey?: string;
+  models: BackendModel[];
+}
+
+export interface ProviderAuthPrompt {
+  id: string;
+  kind: 'prompt' | 'manual' | 'select';
+  message: string;
+  placeholder?: string;
+  allowEmpty?: boolean;
+  options?: Array<{ id: string; label: string }>;
+}
+
+export interface ProviderAuthSession {
+  id: string;
+  providerId: string;
+  status: 'pending' | 'succeeded' | 'failed' | 'cancelled' | 'expired';
+  auth?: { url: string; instructions?: string };
+  prompts: ProviderAuthPrompt[];
+  progress?: string;
+  error?: string;
+  expiresAt: number;
 }
 
 export interface CreateSessionInput {

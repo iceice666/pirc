@@ -11,8 +11,8 @@ import { builtinTools } from './tools/index.js';
 
 /**
  * The first stdin line must be `{"type":"configure","models":{…}}`: the
- * providers the gateway pushed to this node (see `models.ts`). Keys arrive
- * this way rather than through argv, the environment or a file.
+ * public model catalog and local inference transport supplied by the node.
+ * Provider credentials remain on the gateway.
  */
 async function readConfigure(lines: AsyncIterator<string>): Promise<ModelsConfig> {
   for (;;) {
@@ -78,6 +78,7 @@ export async function runAgent(argv: string[]): Promise<void> {
     features: builtinFeatures(),
     ...(allowedTools ? { allowedTools } : {}),
   });
+  await agent.refreshModels();
   if (typeof values.model === 'string' && values.model.includes('/')) {
     const [provider, ...id] = values.model.split('/');
     agent.setModel(provider!, id.join('/'));

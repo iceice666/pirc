@@ -12,6 +12,9 @@
     "skipLibCheck": true,
     "types": ["bun"],
     "noEmit": true,
+    "paths": {
+      "#pi-models": ["./node_modules/@mariozechner/pi-ai/dist/models"]
+    },
     "allowImportingTsExtensions": false
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],

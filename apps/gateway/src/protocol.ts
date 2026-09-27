@@ -5,8 +5,9 @@
  * upgrade the daemon and every node together.
  */
 import type { ModelsConfig } from './models.js';
+import type { InferenceEvent, InferenceRequest } from './inference-wire.js';
 
-export const NODE_PROTOCOL_VERSION = 3;
+export const NODE_PROTOCOL_VERSION = 4;
 
 /** One WebSocket frame on the node link. Uploads (base64) must fit, see MAX_UPLOAD_BYTES. */
 export const NODE_FRAME_MAX_BYTES = 16_777_216;
@@ -44,10 +45,10 @@ export interface RegisteredWorkspace {
 
 /**
  * Messages the daemon sends to a node. `registered` and `models` carry the
- * gateway's providers with resolved keys; a node uses the latest set for
- * agents it starts afterwards (running agents keep theirs).
+ * gateway's secret-free model catalog. Inference credentials stay on the gateway.
  */
 export type DaemonToNode =
+  | (InferenceEvent & { requestId: string })
   | { type: 'registered'; nodeId: string; models: ModelsConfig }
   | { type: 'models'; models: ModelsConfig }
   | { type: 'heartbeat_ack' }
@@ -64,6 +65,8 @@ export type DaemonToNode =
 
 /** Messages a node sends to the daemon. */
 export type NodeToDaemon =
+  | { type: 'model_start'; requestId: string; request: InferenceRequest }
+  | { type: 'model_cancel'; requestId: string }
   | { type: 'register'; protocol: number; workspaces: RegisteredWorkspace[] }
   | { type: 'heartbeat' }
   | { type: 'response'; requestId: string; data: NodeHttpResponse }

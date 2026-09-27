@@ -162,6 +162,8 @@ export async function handleCommand(
   extra: Record<string, (agent: Agent, command: Json) => Promise<unknown>> = {},
 ): Promise<unknown> {
   const message = typeof command.message === 'string' ? command.message : '';
+  if (['prompt', 'set_model', 'get_available_models', 'compact'].includes(command.type))
+    await agent.refreshModels();
   switch (command.type) {
     case 'prompt':
       if (agent.isRunning) {

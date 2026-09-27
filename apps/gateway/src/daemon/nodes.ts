@@ -12,7 +12,18 @@ import {
   type NodeHttpResponse,
   type RegisteredWorkspace,
 } from '../protocol.js';
-import type { ModelStore } from '../models.js';
+import { publicModels, type ModelStore } from '../models.js';
+import type { AssistantDelta, AssistantMessage } from '../agent/messages.js';
+import {
+  INFERENCE_BUFFER_MAX_BYTES,
+  INFERENCE_MAX_REQUESTS,
+  INFERENCE_REQUEST_MAX_BYTES,
+  INFERENCE_STREAM_MAX_BYTES,
+  INFERENCE_TIMEOUT_MS,
+  inferenceRequestSchema,
+  type InferenceRequest,
+  type InferenceEvent,
+} from '../inference-wire.js';
 
 const MAX_PENDING_REQUESTS = 100;
 const MAX_TERMINAL_STREAMS = 64;
@@ -31,6 +42,12 @@ const registration = z.object({
     .max(100),
 });
 const nodeMessage = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('model_start'),
+    requestId: z.string().min(1).max(100),
+    request: inferenceRequestSchema,
+  }),
+  z.object({ type: z.literal('model_cancel'), requestId: z.string().min(1).max(100) }),
   z.object({ type: z.literal('heartbeat') }),
   z.object({
     type: z.literal('response'),
@@ -97,6 +114,16 @@ export class NodeRegistry {
     string,
     { nodeId: string; handlers: TerminalStreamHandlers }
   >();
+  private readonly inferences = new Map<
+    string,
+    { nodeId: string; controller: AbortController; timer: NodeJS.Timeout; bytes: number }
+  >();
+  onInference?: (
+    request: InferenceRequest,
+    signal: AbortSignal,
+    onDelta: (delta: AssistantDelta, partial: AssistantMessage) => void,
+    nodeId: string,
+  ) => Promise<AssistantMessage>;
   onEvent?: (nodeId: string, sessionId: string, event: Record<string, unknown>) => void;
   onDisconnect?: (nodeId: string) => void;
   onRegister?: (node: ConnectedNode) => void;
@@ -240,7 +267,11 @@ export class NodeRegistry {
         };
         this.connections.set(nodeId, { socket, node });
         this.onRegister?.(node);
-        this.send(socket, { type: 'registered', nodeId, models: this.models.current });
+        this.send(socket, {
+          type: 'registered',
+          nodeId,
+          models: publicModels(this.models.current),
+        });
         return;
       }
       if (this.connections.get(nodeId)?.socket !== socket)
@@ -249,6 +280,12 @@ export class NodeRegistry {
       if (!parsed.success) return socket.close(1008, 'unsupported message');
       const current = parsed.data;
       switch (current.type) {
+        case 'model_start':
+          this.startInference(nodeId, socket, current.requestId, current.request);
+          return;
+        case 'model_cancel':
+          this.cancelInference(nodeId, current.requestId);
+          return;
         case 'heartbeat': {
           lastSeenAt = Date.now();
           const connection = this.connections.get(nodeId);
@@ -292,7 +329,92 @@ export class NodeRegistry {
     });
   }
 
+  private cancelInference(nodeId: string, requestId: string): void {
+    const key = JSON.stringify([nodeId, requestId]);
+    const request = this.inferences.get(key);
+    if (!request) return;
+    this.inferences.delete(key);
+    clearTimeout(request.timer);
+    request.controller.abort();
+  }
+
+  private startInference(
+    nodeId: string,
+    socket: WebSocket,
+    requestId: string,
+    request: InferenceRequest,
+  ): void {
+    const key = JSON.stringify([nodeId, requestId]);
+    // A duplicate ID must never replace or route into another active stream.
+    if (this.inferences.has(key)) {
+      socket.close(1008, 'duplicate inference request');
+      return;
+    }
+    const send = (event: InferenceEvent): boolean => {
+      if (socket.readyState !== socket.OPEN) return false;
+      const frame = JSON.stringify({ ...event, requestId });
+      if (
+        Buffer.byteLength(frame) > NODE_FRAME_MAX_BYTES ||
+        socket.bufferedAmount + Buffer.byteLength(frame) > INFERENCE_BUFFER_MAX_BYTES
+      )
+        return false;
+      socket.send(frame, (error) => {
+        if (error) this.cancelInference(nodeId, requestId);
+      });
+      return true;
+    };
+    if (!this.onInference) {
+      send({ type: 'model_error', code: 'unavailable' });
+      return;
+    }
+    if (
+      this.inferences.size >= 128 ||
+      [...this.inferences.values()].filter((item) => item.nodeId === nodeId).length >=
+        INFERENCE_MAX_REQUESTS ||
+      Buffer.byteLength(JSON.stringify(request)) > INFERENCE_REQUEST_MAX_BYTES
+    ) {
+      if (!send({ type: 'model_error', code: 'limit_exceeded' }))
+        socket.close(1013, 'inference buffer limit');
+      return;
+    }
+    const controller = new AbortController();
+    const finish = (event: InferenceEvent) => {
+      if (!this.inferences.has(key)) return;
+      this.cancelInference(nodeId, requestId);
+      if (!send(event) && !send({ type: 'model_error', code: 'limit_exceeded' }))
+        socket.close(1013, 'inference buffer limit');
+    };
+    const timer = setTimeout(
+      () => finish({ type: 'model_error', code: 'timeout' }),
+      INFERENCE_TIMEOUT_MS,
+    );
+    timer.unref();
+    const state = { nodeId, controller, timer, bytes: 0 };
+    this.inferences.set(key, state);
+    const onDelta = (delta: AssistantDelta) => {
+      if (!this.inferences.has(key)) return;
+      const event: InferenceEvent = { type: 'model_delta', delta };
+      state.bytes += Buffer.byteLength(JSON.stringify(event));
+      if (state.bytes > INFERENCE_STREAM_MAX_BYTES || !send(event))
+        finish({ type: 'model_error', code: 'limit_exceeded' });
+    };
+    try {
+      void this.onInference(request, controller.signal, onDelta, nodeId).then(
+        (message) => finish({ type: 'model_end', message }),
+        () => finish({ type: 'model_error', code: 'inference_failed' }),
+      );
+    } catch {
+      finish({ type: 'model_error', code: 'inference_failed' });
+    }
+  }
+
   private failNode(nodeId: string): void {
+    for (const [key, request] of this.inferences) {
+      if (request.nodeId !== nodeId) continue;
+      this.inferences.delete(key);
+      clearTimeout(request.timer);
+      request.controller.abort();
+    }
     for (const [id, pending] of this.requests) {
       if (pending.nodeId !== nodeId) continue;
       clearTimeout(pending.timer);
@@ -309,7 +431,7 @@ export class NodeRegistry {
   broadcastModels(): void {
     for (const { socket } of this.connections.values())
       if (socket.readyState === socket.OPEN)
-        this.send(socket, { type: 'models', models: this.models.current });
+        this.send(socket, { type: 'models', models: publicModels(this.models.current) });
   }
 
   list(): ConnectedNode[] {

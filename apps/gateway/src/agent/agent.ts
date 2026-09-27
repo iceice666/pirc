@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { AgentConfig, ModelConfig, ProviderConfig, ThinkingLevel } from './config.js';
 import { thinkingLevels } from './config.js';
 import { listModels } from '../models.js';
+import { createRemoteStream, fetchRemoteModels } from './providers/remote.js';
 import {
   contextTokens,
   defaultCompaction,
@@ -627,9 +628,36 @@ export class Agent {
     }
   }
 
-  /** Provider stream function (tests may override all providers). */
+  /** Refresh public metadata only; provider credentials never reach this process. */
+  async refreshModels(): Promise<void> {
+    const inference = this.config.models.inference;
+    if (!inference) return;
+    let latest;
+    try {
+      latest = await fetchRemoteModels(inference);
+    } catch {
+      return; // Keep the last catalog; inference reports its own availability errors.
+    }
+    // Mutate this shared snapshot so team managers retain the current catalog.
+    this.config.models.providers = latest.providers;
+    this.config.models.defaultModel = latest.defaultModel;
+    this.config.providers = latest.providers;
+    if (!this.modelRef) {
+      const fallback = this.config.defaultModel ?? latest.defaultModel;
+      const [name, provider] = Object.entries(latest.providers)[0] ?? [];
+      this.modelRef = fallback
+        ? { provider: fallback.provider, id: fallback.id }
+        : name && provider?.models[0]
+          ? { provider: name, id: provider.models[0].id }
+          : null;
+    }
+  }
+
+  /** Every feature uses the same gateway transport (tests may override it). */
   streamFunction(provider: ProviderConfig): StreamFn {
-    return this.streamOverride ?? streamFor(provider);
+    if (this.streamOverride) return this.streamOverride;
+    const inference = this.config.models.inference;
+    return inference ? createRemoteStream(inference) : streamFor(provider);
   }
 
   private contextFor(upTo?: string): Message[] {

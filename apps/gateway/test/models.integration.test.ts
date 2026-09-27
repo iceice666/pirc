@@ -1,6 +1,7 @@
 /**
- * Providers live only on the gateway: a real `pirc agent` on a node gets
- * them over the node link, and a reload reaches new sessions only.
+ * Providers and keys live only on the gateway: a real `pirc agent` on a node
+ * sends model requests through the node link, and the gateway calls the model.
+ * A reload therefore reaches running sessions on their next request.
  */
 import { afterEach, expect, it } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -16,7 +17,7 @@ afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
 });
 
-it('runs node agents on the gateway providers; a reload reaches new sessions only', async () => {
+it('routes node agents through gateway inference; reloads reach running sessions', async () => {
   const llm = startFakeLlm();
   cleanup.push(() => llm.stop());
   const dir = mkdtempSync(path.join(tmpdir(), 'pirc-models-e2e-'));
@@ -32,7 +33,7 @@ it('runs node agents on the gateway providers; a reload reaches new sessions onl
   const modelsFile = path.join(dir, 'models.json');
   process.env.PIRC_TEST_GATEWAY_KEY = 'first-key';
   cleanup.push(() => void delete process.env.PIRC_TEST_GATEWAY_KEY);
-  const writeModels = (modelId: string) =>
+  const writeModels = (ids: string[], defaultId: string) =>
     writeFileSync(
       modelsFile,
       JSON.stringify({
@@ -41,13 +42,13 @@ it('runs node agents on the gateway providers; a reload reaches new sessions onl
             api: 'openai-chat',
             baseUrl: `${llm.url}/v1`,
             apiKeyEnv: 'PIRC_TEST_GATEWAY_KEY',
-            models: [{ id: modelId, contextWindow: 100_000, maxTokens: 1000 }],
+            models: ids.map((id) => ({ id, contextWindow: 100_000, maxTokens: 1000 })),
           },
         },
-        defaultModel: { provider: 'gw', id: modelId },
+        defaultModel: { provider: 'gw', id: defaultId },
       }),
     );
-  writeModels('model-a');
+  writeModels(['model-a'], 'model-a');
   const cluster: Cluster = await startCluster([{ nodeId: 'test', ...defaultAgentCommand({}) }], {
     modelsFile,
   });
@@ -100,22 +101,22 @@ it('runs node agents on the gateway providers; a reload reaches new sessions onl
   expect(llm.requests[0]!.body.model).toBe('model-a');
   expect(llm.requests[0]!.headers.authorization).toBe('Bearer first-key');
 
-  // Reload with a new model and key: pushed to the node for agents started later.
-  writeModels('model-b');
+  // Rotate the key and add a model. Only the gateway ever holds the key.
+  writeModels(['model-a', 'model-b'], 'model-b');
   process.env.PIRC_TEST_GATEWAY_KEY = 'second-key';
   services.reloadModels();
   expect(
     (await app.inject({ method: 'GET', url: '/api/models', headers }))
       .json()
       .models.map((model: { id: string }) => model.id),
-  ).toEqual(['model-b']);
+  ).toEqual(['model-a', 'model-b']);
   await Bun.sleep(100);
 
-  // The running agent keeps the providers it started with.
+  // The running agent keeps its chosen model but its next request uses the new key.
   llm.push({ text: 'two' });
   await first.prompt('again');
   expect(llm.requests[1]!.body.model).toBe('model-a');
-  expect(llm.requests[1]!.headers.authorization).toBe('Bearer first-key');
+  expect(llm.requests[1]!.headers.authorization).toBe('Bearer second-key');
 
   const second = await openSession();
   llm.push({ text: 'three' });

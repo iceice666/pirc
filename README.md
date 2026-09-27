@@ -12,7 +12,18 @@ The gateway never runs agents. On a single machine, run the gateway and a node s
 
 ## Security model
 
-The gateway is intended to sit behind a trusted reverse proxy using an Authelia-style forward-auth flow.
+### Threat model
+
+pirc is a **single-user, self-hosted tool for a trusted private network**, such as your own VPN or LAN. The operator, gateway, paired nodes, and their operating-system accounts belong to one trust domain. One user may have multiple nodes, devices, and concurrent sessions.
+
+- Model backend settings and credentials are deployment-wide settings for that operator. pirc is not a multi-tenant service: user allowlists and session ownership do not establish isolation between mutually untrusted users, and there is no separate administrator/user role model.
+- Compromised gateway or node hosts, malicious processes running as the same OS account, and hostile node operators are outside the protection boundary. Agents, tools, and subprocesses are **not sandboxes**; storing credentials on the gateway alone does not isolate them from processes that can access the same files or environment.
+- Repository content, web pages, model output, provider errors, and browser input remain untrusted data. A trusted network does not make that content authorization to run commands or change settings.
+- The security goals are to prevent unintended exposure and unauthorized access, cross-site requests, and accidental credential disclosure. Authentication, request validation, secret-safe handling, and resource/lifecycle limits still matter on a private network. Multi-user deployment or public exposure requires a new threat-model review.
+
+### Deployment safeguards
+
+The gateway is intended to sit behind a trusted reverse proxy using an Authelia-style forward-auth flow. The private-network assumption does not disable the following safeguards:
 
 - The gateway only accepts identity headers from explicitly configured proxy IP addresses.
 - Authenticated user identities, `Host`, and `Origin` are checked against exact allowlists.
@@ -25,7 +36,7 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 ## Requirements
 
 - [Bun](https://bun.sh) 1.2 or newer (development/build only; the compiled `pirc` binary needs no runtime)
-- An OpenAI Chat Completions or Anthropic Messages compatible provider, configured once on the gateway in `models.json` (see [Agent](#agent))
+- A model backend, configured on the gateway: a subscription login (Claude Pro/Max, GitHub Copilot, ChatGPT/Codex) or an API-key/custom endpoint from the web **Settings**, and/or `models.json` (see [Agent](#agent))
 - A trusted forward-auth reverse proxy
 
 ## Development
@@ -57,7 +68,12 @@ The binary embeds the Bun runtime, SQLite, and the agent, and does not depend on
 
 The built-in agent (`apps/gateway/src/agent/`) is configured in three layers:
 
-- **Models (gateway)**: `models.json` on the gateway (`PIRC_MODELS_FILE`, default `$PIRC_CONFIG_DIR/models.json`, i.e. `~/.config/.pirc/models.json`) holds `providers` (`openai-chat` / `anthropic-messages`, with their models) and `defaultModel`. Reference API keys with `apiKeyEnv`, `apiKeyFile`, or `apiKeyCommand`; the gateway resolves them and pushes the providers, keys included, to every node over the node link. A node passes them to each agent it starts on stdin, never writing them to disk. Send the gateway `SIGHUP` to reload the file; the new providers apply to agents started afterwards, and running agents keep theirs. An invalid file is fatal at startup, and on reload it is logged and ignored. Nodes have no provider settings of their own; `providers` and `defaultModel` in a node's `config.json` are ignored with a warning.
+- **Models (gateway)**: model backends and their credentials live only on the gateway, which also **runs every model request**. Agents stay on their nodes and send requests over the node link (via a private, token-protected Unix socket from agent to node); the gateway resolves the backend, calls the model, and streams the reply back. Nodes and agents receive only a secret-free model catalog: no API key, OAuth token, endpoint URL or header. Because credentials are resolved per request, a changed key, a token refresh, a new login or a logout reaches running sessions on their next request; a settings change cancels requests in flight. Backends come from two sources:
+  - **Web Settings → Model backends** (`$PIRC_STATE_DIR/backends/settings.json`, mode 0600, written atomically): every subscription login built into the pinned [Pi AI](https://github.com/earendil-works/pi/tree/main/packages/ai) version (`@mariozechner/pi-ai@0.73.1`: **Anthropic Claude Pro/Max**, **GitHub Copilot**, **ChatGPT Plus/Pro (Codex)**), API-key or keyless custom endpoints (`openai-completions`, `openai-responses`, `anthropic-messages`, legacy `openai-chat`), and the default model. See [Subscription logins](#subscription-logins).
+  - **`models.json`** (`PIRC_MODELS_FILE`, default `$PIRC_CONFIG_DIR/models.json`, i.e. `~/.config/.pirc/models.json`): `providers` and `defaultModel`, read-only in the web UI. Reference API keys with `apiKeyEnv`, `apiKeyFile`, or `apiKeyCommand` (resolved on the gateway). A file backend wins over a web backend with the same ID; the web default model wins over the file default. Send the gateway `SIGHUP` to reload the file. An invalid file is fatal at startup, and on reload it is logged and ignored.
+
+  Endpoints must be reachable from the gateway (a model server that only listens on a node's `localhost` is not). Nodes have no provider settings of their own; `providers` and `defaultModel` in a node's `config.json` are ignored with a warning.
+
 - **Node**: `~/.config/.pirc/config.json` on each node (override the directory with `PIRC_CONFIG_DIR`) holds limits, features, hooks, `env`, and `allowedPaths`. The global system prompt goes in `AGENTS.md` in the same directory.
 - **Project**: `<workspace>/.pirc/config.json` can only add `allowedPaths`, `env`, `hooks`, and a `defaultModel` (which must name one of the gateway's models). `<workspace>/.pirc/AGENTS.md` is appended to the system prompt. The agent's file tools cannot write to `.pirc/`.
 
@@ -77,7 +93,16 @@ Built-in tools and features:
 - Kind presets in `features.agentTeam.kinds` (for subagents and teammates) can set `model`, `thinking`, and a `tools` allowlist, for example `{ "explorer": { "tools": ["read", "ls", "find", "grep"] } }`. Teammates always keep their coordination tools. `features.agentTeam.limit` (default 4) caps live teammates and `subagentLimit` (default 4) caps running subagents.
 - Session titles: sessions cannot be named when created; each one is named by the model from the first user message that describes work (greetings are skipped). It is a side request with no tools and no thinking, and it retries on later messages if it fails. A name you set by renaming always wins. Configure it in `features.sessionTitle`: `enabled` (default `true`), `model` (`{ "provider", "id" }`; defaults to the session's model, so a small, fast model saves cost), `prompt` (replaces the default system prompt), and `maxAttempts` (default `3`).
 
-The design and milestones are in [`plans/single-binary-agent.md`](./plans/single-binary-agent.md).
+### Subscription logins
+
+Open **Settings → Model backends** and choose **Log in**. The gateway runs Pi's login flow in an isolated, time-limited subprocess and shows its steps in the browser: the authorization link and instructions, device codes, questions (such as a GitHub Enterprise domain), and progress. Nothing needs a CLI on a node.
+
+- **Claude Pro/Max** and **ChatGPT/Codex** use fixed `localhost` redirect URLs. When your browser is not on the gateway machine, the final redirect page fails to load; copy that complete `http://localhost:…` URL from the address bar and paste it into the login card. It must carry the state from this login. Do not expose a callback port.
+- **GitHub Copilot** uses a device code. Pi's login also **enables the policy for every GitHub Copilot model it knows** on your account, so the UI requires explicit consent first. Some models may still need enabling in Copilot itself.
+- Tokens are refreshed on the gateway shortly before they expire, once for concurrent requests. **Log out** deletes the gateway's saved credentials and blocks new requests; it does not revoke the account upstream or recall content already sent.
+- Pi's model catalog is not proof that your plan includes a model, and a built-in login is not a statement about each service's terms for third-party clients: check them yourself. Real logins and paid calls are not part of the automated tests.
+
+The design and milestones are in [`plans/single-binary-agent.md`](./plans/single-binary-agent.md); the backend-login research is in [`plans/pi-web-backend-auth-research.md`](./plans/pi-web-backend-auth-research.md).
 
 ## Validation
 
@@ -85,7 +110,7 @@ The design and milestones are in [`plans/single-binary-agent.md`](./plans/single
 bun run check
 ```
 
-Real-model smoke tests are deliberately separate because they require credentials and incur provider cost. The automated suite drives the real agent against a scripted fake OpenAI/Anthropic SSE server.
+Real-model smoke tests are deliberately separate because they require credentials and incur provider cost. The automated suite drives the real agent against a scripted fake OpenAI/Anthropic SSE server (end to end through gateway inference), and covers subscription logins, refresh and logout with fake OAuth providers, and the Pi adapter with an injected stream.
 
 ## Nix integration
 

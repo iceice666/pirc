@@ -9,6 +9,9 @@ import {
 import { getClientId } from './storage';
 import type {
   Attachment,
+  BackendProviderInput,
+  BackendSettingsSnapshot,
+  ProviderAuthSession,
   CommandReceipt,
   ControlLease,
   CreateSessionInput,
@@ -37,7 +40,18 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+/**
+ * Backend settings errors are curated gateway messages (e.g. "consent required",
+ * "paste the complete callback URL"). Defense in depth: never render anything
+ * that looks like a credential or an upstream body.
+ */
+function safeBackendMessage(message: unknown, status: number): string {
+  const fallback = `Backend request failed (${status}). Check your settings and try again.`;
+  if (typeof message !== 'string' || !message || message.length > 200) return fallback;
+  return /bearer|token|secret|api[_-]?key|[=:{}]|https?:\/\//i.test(message) ? fallback : message;
+}
+
+async function request<T>(path: string, init: RequestInit = {}, safeErrors = false): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !(init.body instanceof FormData) && !(init.body instanceof Blob))
     headers.set('content-type', 'application/json');
@@ -46,7 +60,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new ApiError(
-      body?.error?.message ?? body?.message ?? `Request failed (${response.status})`,
+      safeErrors
+        ? safeBackendMessage(body?.error?.message, response.status)
+        : (body?.error?.message ?? body?.message ?? `Request failed (${response.status})`),
       response.status,
       body?.error?.code ?? body?.code,
     );
@@ -155,6 +171,7 @@ async function normalizeSnapshot(raw: any): Promise<SessionSnapshot> {
     widgets: raw.widgets ?? {},
     statuses: raw.statuses ?? {},
     ...(raw.agent?.model?.id ? { selectedModelId: raw.agent.model.id } : {}),
+    ...(raw.agent?.model?.provider ? { selectedModelProvider: raw.agent.model.provider } : {}),
     ...(thinkingLevels.includes(raw.agent?.thinkingLevel)
       ? { thinkingLevel: raw.agent.thinkingLevel as ThinkingLevel }
       : {}),
@@ -162,6 +179,49 @@ async function normalizeSnapshot(raw: any): Promise<SessionSnapshot> {
 }
 
 const thinkingLevels: unknown[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+
+/** Settings never use browser caches or expose upstream error bodies. */
+function backendRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return request<T>(path, { cache: 'no-store', ...init }, true);
+}
+
+const authPath = (id: string) => `/api/provider-auth/sessions/${encodeURIComponent(id)}`;
+
+export const backendApi = {
+  settings: () => backendRequest<BackendSettingsSnapshot>('/api/providers'),
+  create: (id: string, input: BackendProviderInput) =>
+    backendRequest<BackendSettingsSnapshot>('/api/providers', {
+      method: 'POST',
+      body: JSON.stringify({ id, ...input }),
+    }),
+  update: (id: string, input: BackendProviderInput) =>
+    backendRequest<BackendSettingsSnapshot>(`/api/providers/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+  remove: (id: string) =>
+    backendRequest<BackendSettingsSnapshot>(`/api/providers/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  setDefault: (model: BackendSettingsSnapshot['defaultModel'] | null) =>
+    backendRequest<BackendSettingsSnapshot>('/api/providers/default-model', {
+      method: 'PUT',
+      body: JSON.stringify(model),
+    }),
+  startLogin: (providerId: string, policyConsent: boolean) =>
+    backendRequest<ProviderAuthSession>('/api/provider-auth/sessions', {
+      method: 'POST',
+      body: JSON.stringify({ providerId, policyConsent }),
+    }),
+  login: (id: string) => backendRequest<ProviderAuthSession>(authPath(id)),
+  answer: (id: string, promptId: string, value?: string) =>
+    backendRequest<ProviderAuthSession>(`${authPath(id)}/input`, {
+      method: 'POST',
+      body: JSON.stringify({ promptId, value }),
+    }),
+  cancelLogin: (id: string) =>
+    backendRequest<ProviderAuthSession>(authPath(id), { method: 'DELETE', keepalive: true }),
+};
 
 export const api = {
   nodes: async () => (await request<{ nodes: NodeSummary[] }>('/api/nodes')).nodes,

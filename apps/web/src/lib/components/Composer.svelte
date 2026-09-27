@@ -21,6 +21,7 @@
     RunStatus,
     ThinkingLevel,
   } from '../types';
+  import { modelKey } from '../types';
   import type { GoalView } from '../goal';
   import type { TodoList } from '../todo';
   import ComposerSelect from './ComposerSelect.svelte';
@@ -203,7 +204,7 @@
           options={models
             .filter((model) => model.available)
             .map((model) => ({
-              value: model.id,
+              value: modelKey(model),
               label: model.displayName,
               detail: model.provider,
             }))}

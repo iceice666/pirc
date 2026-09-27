@@ -2,7 +2,7 @@
   lib,
   stdenvNoCC,
   bun,
-  nodeModulesHash ? "sha256-FjJweFmkA1EdAzH4mdAtISX1rwEN17dz5anmbOShoZE=",
+  nodeModulesHash ? "sha256-hWgKussKDj9O16JGl/vcvQDyP/WwekRu/wFtKc1g+uA=",
 }:
 
 let

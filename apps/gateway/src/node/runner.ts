@@ -54,7 +54,7 @@ class PiRunner {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, PI_CODING_AGENT_SESSION_DIR: session.privateSessionPath },
     });
-    // Providers (with keys) go on the first stdin line, before any RPC command.
+    // Public catalog + node-local inference transport; no provider credentials.
     this.child.stdin.write(configureLine(models.current));
     const parser = new JsonlParser(config.rpcMaxLineBytes, (value) => this.handleValue(value));
     this.child.stdout.on('data', (chunk: Buffer) => {
