@@ -1,6 +1,6 @@
 # Native Android client
 
-Status: design, not started.
+Status: milestone 1 (gateway device tokens, web pairing) implemented; the Android app is not started.
 
 ## Why
 
@@ -32,8 +32,10 @@ Today every request must come from a trusted proxy and carry the forward-auth id
 
 - Format: `pirc_dev_` followed by 32 random bytes in base64url. It is shown exactly once.
 - Storage: gateway SQLite. The gateway stores only the SHA-256 hash:
-  `device_tokens(id TEXT PK, owner_user TEXT, name TEXT, token_hash TEXT UNIQUE, created_at, last_used_at, revoked_at)`.
-- Revocation takes effect on the next request. Open event and terminal WebSockets for that token are closed.
+  `device_tokens(id TEXT PK, owner_user TEXT, name TEXT, token_hash TEXT UNIQUE, created_at, expires_at, last_used_at)`. Revoked and expired rows are deleted.
+- Expiry is aggressive: 7 days without use (`PIRC_DEVICE_TOKEN_IDLE_DAYS`) or 30 days after pairing however often used (`PIRC_DEVICE_TOKEN_MAX_DAYS`). The app must handle a 401 by asking to pair again.
+- At most 10 paired devices per user.
+- Revocation takes effect on the next request. Open event and terminal WebSockets for that token are closed with `4401` at once, and within a minute of expiry.
 
 ### Request validation (`validateRequest`)
 
@@ -71,7 +73,7 @@ priority: above the Authelia router
 middlewares: strip the identity header (customRequestHeaders X-Pirc-User: "")
 ```
 
-The nix module's nginx path needs the equivalent: skip `auth_request` when `$http_authorization` matches and clear the identity header. Document both in `apps/gateway/README.md`.
+The nix module's nginx path has the equivalent behind `services.pirc.nginx.deviceTokens`: the forward-auth subrequest returns 200 with no identity for device-token requests, so nginx drops the identity header. Both are documented in `apps/gateway/README.md`.
 
 ## Android app (`apps/android`)
 
@@ -100,6 +102,5 @@ The nix module's nginx path needs the equivalent: skip `auth_request` when `$htt
 
 ## Open questions
 
-- Traefik: header-matched router (above) versus a separate hostname for devices.
-- Should device tokens expire (e.g. 90 days sliding), or only be revoked?
+- Should the app renew its token before the 30-day limit (e.g. a rotation endpoint), or is re-pairing monthly acceptable?
 - Distribution: sideloaded APK only, or F-Droid/Play later?
