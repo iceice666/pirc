@@ -75,6 +75,10 @@ class AppState {
   #sessionState = $state.raw<ClientSessionState>();
   #events: EventConnection | undefined;
   #controlSyncing: string | undefined;
+  /** Bumped per openSession; a slower, superseded open must not apply its result. */
+  #openSeq = 0;
+  #snapshotLoading = false;
+  #snapshotAgain = false;
   #panelListeners = new Set<(signal: PanelSignal) => void>();
   scroller: Scroller | undefined;
 
@@ -182,8 +186,10 @@ class AppState {
   }
 
   async openSession(id: string) {
+    const seq = ++this.#openSeq;
     this.activeSessionId = id;
     this.#events?.close();
+    this.#events = undefined;
     this.sessionState = undefined;
     this.pageError = '';
     this.draft = loadDraft(id);
@@ -196,6 +202,8 @@ class AppState {
             session: this.sessions.find((item) => item.id === id) ?? demo.demoSnapshot.session,
           }
         : await api.snapshot(id);
+      // Switched to another session while this snapshot was loading.
+      if (seq !== this.#openSeq) return;
       this.sessionState = fromSnapshot(snapshot);
       this.hiddenMessages = Math.max(0, this.sessionState.messages.length - MESSAGE_PAGE);
       if (!demo) {
@@ -205,12 +213,13 @@ class AppState {
           sessionId: id,
           cursor: snapshot.cursor,
           onState: (state) => {
+            if (seq !== this.#openSeq) return;
             this.connection = state;
             if (state === 'connected') void this.refreshControl();
           },
           onEvent: (event) => {
             const current = this.sessionState;
-            if (!current) return;
+            if (seq !== this.#openSeq || current?.session.id !== id) return;
             const followLatest = this.scroller?.following() ?? false;
             this.sessionState = reduceEvent(current, event);
             if (event.event.type === 'panel_changed')
@@ -228,7 +237,7 @@ class AppState {
       }
       await this.scroller?.toLatest(false);
     } catch (error) {
-      this.pageError = message(error, 'Unable to load this session.');
+      if (seq === this.#openSeq) this.pageError = message(error, 'Unable to load this session.');
     }
   }
 
@@ -241,14 +250,29 @@ class AppState {
     }
   }
 
+  /** Reload the open session. Bursts coalesce into one request plus one follow-up. */
   async refreshSnapshot() {
     if (!this.activeSessionId || this.demo) return;
+    if (this.#snapshotLoading) {
+      this.#snapshotAgain = true;
+      return;
+    }
+    this.#snapshotLoading = true;
+    const seq = this.#openSeq;
     try {
-      this.sessionState = fromSnapshot(await api.snapshot(this.activeSessionId));
+      const snapshot = await api.snapshot(this.activeSessionId);
+      if (seq !== this.#openSeq) return;
+      this.sessionState = fromSnapshot(snapshot);
       const { id, name } = this.sessionState.session;
       this.sessions = this.sessions.map((item) => (item.id === id ? { ...item, name } : item));
     } catch (error) {
-      this.pageError = message(error, 'Could not refresh the session.');
+      if (seq === this.#openSeq) this.pageError = message(error, 'Could not refresh the session.');
+    } finally {
+      this.#snapshotLoading = false;
+      if (this.#snapshotAgain) {
+        this.#snapshotAgain = false;
+        if (seq === this.#openSeq) void this.refreshSnapshot();
+      }
     }
   }
 
@@ -431,7 +455,7 @@ class AppState {
     }
   }
 
-  async uploadImages(files: FileList) {
+  async uploadImages(files: ArrayLike<File>) {
     // Images are stored on the node that runs the session's agent.
     const sessionId = this.activeSessionId;
     if (!sessionId) return;

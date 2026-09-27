@@ -71,7 +71,10 @@
 
   async function openDiff(file: GitFile, isStaged: boolean, reset = true) {
     selected = { file, staged: isStaged };
-    if (reset) diff = undefined;
+    if (reset) {
+      diff = undefined;
+      error = '';
+    }
     try {
       diff = await panelApi.gitDiff(sessionId, {
         path: file.path,
@@ -86,6 +89,7 @@
 
   async function openCommit(item: Commit) {
     commit = undefined;
+    error = '';
     try {
       commit = await panelApi.gitShow(sessionId, item.sha);
     } catch (cause) {
@@ -93,10 +97,15 @@
     }
   }
 
+  function back() {
+    selected = undefined;
+    commit = undefined;
+    error = '';
+  }
+
   async function switchView(next: 'changes' | 'history') {
     view = next;
-    commit = undefined;
-    selected = undefined;
+    back();
     if (next === 'history' && status?.repo && !commits.length) {
       try {
         await loadHistory(true);
@@ -138,11 +147,8 @@
 <div class="tab-body">
   {#if selected}
     <div class="drill-head">
-      <button
-        class="icon-button small"
-        type="button"
-        aria-label="Back"
-        onclick={() => (selected = undefined)}><ArrowLeft size={16} /></button
+      <button class="icon-button small" type="button" aria-label="Back" onclick={back}
+        ><ArrowLeft size={16} /></button
       >
       <button
         class="drill-title linkish"
@@ -156,16 +162,16 @@
         >{selected.staged ? 'Staged' : (label[code(selected.file, false)] ?? 'Changed')}</span
       >
     </div>
-    {#if diff}<DiffView diff={diff.diff} truncated={diff.truncated} />{:else}<p class="panel-empty">
+    {#if error}<p class="panel-error">{error}</p>
+    {:else if diff}<DiffView diff={diff.diff} truncated={diff.truncated} />{:else}<p
+        class="panel-empty"
+      >
         Loading diff…
       </p>{/if}
   {:else if commit}
     <div class="drill-head">
-      <button
-        class="icon-button small"
-        type="button"
-        aria-label="Back"
-        onclick={() => (commit = undefined)}><ArrowLeft size={16} /></button
+      <button class="icon-button small" type="button" aria-label="Back" onclick={back}
+        ><ArrowLeft size={16} /></button
       >
       <span class="drill-title mono">{commit.sha.slice(0, 10)}</span>
     </div>

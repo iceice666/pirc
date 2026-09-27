@@ -2,7 +2,7 @@
   import { ArrowLeft, ChevronRight, Code, Eye, File, Folder, RefreshCw } from '@lucide/svelte';
   import { tick } from 'svelte';
   import type { FileTarget } from '../../file-links';
-  import { highlightCode, languageForPath } from '../../markdown';
+  import { highlightCode, languageForPath, rendererTick } from '../../markdown';
   import { panelApi, type DirEntry, type FileContent } from '../../panel-api';
   import { watch } from '../../watch.svelte';
   import Markdown from '../Markdown.svelte';
@@ -111,11 +111,13 @@
       (_, index) => index + 1,
     ).join('\n'),
   );
-  let highlighted = $derived(
-    file?.content !== undefined && file.content.length <= MAX_HIGHLIGHT && language
+  // Re-runs once the lazily loaded highlighter arrives (`$rendererTick`).
+  let highlighted = $derived.by(() => {
+    void $rendererTick;
+    return file?.content !== undefined && file.content.length <= MAX_HIGHLIGHT && language
       ? highlightCode(file.content, language)
-      : undefined,
-  );
+      : undefined;
+  });
 
   watch(
     () => sessionId,

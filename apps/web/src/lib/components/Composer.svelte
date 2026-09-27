@@ -186,8 +186,12 @@
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
         multiple
-        onchange={(event) =>
-          event.currentTarget.files && app.uploadImages(event.currentTarget.files)}
+        onchange={(event) => {
+          const input = event.currentTarget;
+          if (input.files?.length) void app.uploadImages(Array.from(input.files));
+          // Clear the selection so picking the same image again fires `change`.
+          input.value = '';
+        }}
       />
       <button
         class="icon-button"

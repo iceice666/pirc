@@ -16,20 +16,34 @@
   let loading = $state(false);
   let outputEl: HTMLPreElement | undefined = $state();
 
+  // The tab outlives a session switch; a task id means nothing in another session.
+  watch(
+    () => sessionId,
+    () => {
+      selected = undefined;
+      output = '';
+      error = '';
+    },
+  );
+
   async function openTask(task: BackgroundTask) {
     selected = task;
     await refreshOutput();
   }
   async function refreshOutput() {
     if (!selected) return;
+    const id = sessionId;
+    const taskId = selected.id;
     loading = true;
     error = '';
     try {
-      const result = await panelApi.backgroundOutput(sessionId, selected.id);
+      const result = await panelApi.backgroundOutput(id, taskId);
+      if (id !== sessionId || selected?.id !== taskId) return;
       selected = result.task;
       output = result.output;
       requestAnimationFrame(() => outputEl?.scrollTo({ top: outputEl.scrollHeight }));
     } catch (cause) {
+      if (id !== sessionId || selected?.id !== taskId) return;
       error = cause instanceof Error ? cause.message : 'Unable to load output.';
     } finally {
       loading = false;
