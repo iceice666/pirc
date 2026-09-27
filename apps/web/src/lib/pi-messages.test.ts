@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeEvent } from './api';
 import { interleave, piHistory, piNotification, piPartialMessage } from './pi-messages';
 import { fromSnapshot, reduceEvent } from './state';
-import type { SessionSnapshot } from './types';
+import type { ConversationMessage, SessionSnapshot } from './types';
 
 describe('Pi history conversion', () => {
   const history = [
@@ -289,5 +289,54 @@ describe('live Pi events', () => {
       content: 'Blocked',
     });
     expect(state.needsSnapshot).toBe(false);
+  });
+});
+
+describe('interleave (linear merge)', () => {
+  /** The original insertion-based implementation, kept as the reference. */
+  function reference(messages: ConversationMessage[], notices: ConversationMessage[]) {
+    const result = [...messages];
+    for (const notice of notices) {
+      const at = Date.parse(notice.createdAt);
+      const index = result.findIndex(
+        (message) => Date.parse(message.completedAt ?? message.createdAt) > at,
+      );
+      if (index === -1) result.push(notice);
+      else result.splice(index, 0, notice);
+    }
+    return result;
+  }
+
+  it('matches the reference on random chronological inputs', () => {
+    let seed = 7;
+    const random = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+    const at = (seconds: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, seconds)).toISOString();
+    for (let round = 0; round < 200; round++) {
+      let clock = 0;
+      const messages: ConversationMessage[] = Array.from(
+        { length: Math.floor(random() * 12) },
+        (_, i) => {
+          clock += Math.floor(random() * 3);
+          const done = random() < 0.3 ? clock + Math.floor(random() * 4) : undefined;
+          return {
+            id: `m${i}`,
+            role: 'assistant',
+            content: '',
+            createdAt: at(clock),
+            ...(done !== undefined ? { completedAt: at(done) } : {}),
+          };
+        },
+      );
+      let noticeClock = 0;
+      const notices: ConversationMessage[] = Array.from(
+        { length: Math.floor(random() * 6) },
+        (_, i) => {
+          noticeClock += Math.floor(random() * 4);
+          return { id: `n${i}`, role: 'system', content: '', createdAt: at(noticeClock) };
+        },
+      );
+      const ids = (list: ConversationMessage[]) => list.map((message) => message.id);
+      expect(ids(interleave(messages, notices))).toEqual(ids(reference(messages, notices)));
+    }
   });
 });

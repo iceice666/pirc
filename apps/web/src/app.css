@@ -1091,6 +1091,9 @@ button.job-row:hover {
 
 /* ───────────── Messages ───────────── */
 .message {
+  /* Off-screen messages (code, KaTeX) skip layout and paint; `auto` keeps their last size. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
   display: flex;
   flex-direction: column;
   margin: 0 0 16px;

@@ -155,7 +155,7 @@
     {/if}
     {#if attachments.length}
       <div class="attachment-strip" aria-label="Attached images">
-        {#each attachments as attachment}
+        {#each attachments as attachment (attachment.id)}
           <div class="attachment-preview">
             {#if attachment.preview}<img src={attachment.preview} alt="" />{:else}<Image
                 size={22}

@@ -219,7 +219,7 @@
       {/if}
       {#if message.attachments?.length}
         <div class="message-attachments">
-          {#each message.attachments as attachment}
+          {#each message.attachments as attachment (attachment.id)}
             <span><ImageIcon size={15} /> {attachment.name}</span>
           {/each}
         </div>

@@ -40,6 +40,22 @@
     items?.[index]?.focus();
   }
 
+  // Outside pointer/focus closes the menu; listen only while it is open.
+  $effect(() => {
+    if (!open) return;
+    const outside = (event: Event) => {
+      if (!root?.contains(event.target as Node)) close();
+    };
+    window.addEventListener('pointerdown', outside);
+    window.addEventListener('focusin', outside);
+    window.addEventListener('keydown', keydown);
+    return () => {
+      window.removeEventListener('pointerdown', outside);
+      window.removeEventListener('focusin', outside);
+      window.removeEventListener('keydown', keydown);
+    };
+  });
+
   function keydown(event: KeyboardEvent) {
     if (!open) return;
     if (event.key === 'Escape') {
@@ -61,16 +77,6 @@
     items[next]?.focus();
   }
 </script>
-
-<svelte:window
-  onpointerdown={(event) => {
-    if (open && !root?.contains(event.target as Node)) close();
-  }}
-  onfocusin={(event) => {
-    if (open && !root?.contains(event.target as Node)) close();
-  }}
-  onkeydown={keydown}
-/>
 
 <div class="composer-select" bind:this={root}>
   <button

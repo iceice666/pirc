@@ -43,6 +43,13 @@ let hljs: Hljs | undefined;
 let katexLoader: Promise<void> | undefined;
 let hljsLoader: Promise<void> | undefined;
 
+/**
+ * Set while rendering when output fell back to plain text because KaTeX or
+ * highlight.js had not loaded yet; only such output needs a re-render once
+ * `rendererTick` bumps.
+ */
+let usedFallback = false;
+
 /** Bumped when a lazily loaded renderer becomes available. */
 export const rendererTick = writable(0);
 const bump = () => rendererTick.update((n) => n + 1);
@@ -73,6 +80,7 @@ export const preloadRenderers = () => Promise.all([loadKatex(), loadHighlighter(
 
 function renderMath(source: string, displayMode: boolean): string {
   if (!katex) {
+    usedFallback = true;
     void loadKatex();
     return `<code class="math-pending">${escapeHtml(source)}</code>`;
   }
@@ -137,6 +145,7 @@ const barePath: TokenizerAndRendererExtension = {
 function highlight(code: string, language: string): string {
   if (!language) return escapeHtml(code);
   if (!hljs) {
+    usedFallback = true;
     void loadHighlighter();
     return escapeHtml(code);
   }
@@ -251,13 +260,29 @@ function closeOpenFence(source: string): string {
 }
 
 export function renderMarkdown(source: string, options: { streaming?: boolean } = {}): string {
-  if (!source) return '';
+  return renderMarkdownChecked(source, options).html;
+}
+
+/**
+ * Like {@link renderMarkdown}; `pending` tells whether math or code was
+ * rendered as plain text while its renderer loads (re-render on `rendererTick`).
+ */
+export function renderMarkdownChecked(
+  source: string,
+  options: { streaming?: boolean } = {},
+): { html: string; pending: boolean } {
+  if (!source) return { html: '', pending: false };
+  usedFallback = false;
   const input = options.streaming ? closeOpenFence(source) : source;
   const html = marked.parse(input, { async: false });
-  return purifier().sanitize(html, {
-    ADD_ATTR: ['target', 'data-copy', 'data-file-link'],
-    ADD_TAGS: ['semantics', 'annotation'],
-  });
+  const pending = usedFallback;
+  return {
+    html: purifier().sanitize(html, {
+      ADD_ATTR: ['target', 'data-copy', 'data-file-link'],
+      ADD_TAGS: ['semantics', 'annotation'],
+    }),
+    pending,
+  };
 }
 
 /** Highlight a standalone snippet (tool input/output). Returns sanitized HTML. */

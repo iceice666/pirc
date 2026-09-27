@@ -105,10 +105,38 @@
     return { destroy: () => observer.disconnect() };
   }
 
+  /**
+   * Whether new content keeps the newest entry in view. Updated from scroll
+   * events only (scrolling up detaches, reaching the bottom re-attaches), so
+   * streamed deltas never measure the layout.
+   */
+  let following = true;
+  let lastScrollTop = 0;
+  function onTimelineScroll() {
+    if (!timeline) return;
+    const top = timeline.scrollTop;
+    const nearBottom = timeline.scrollHeight - top - timeline.clientHeight < 80;
+    if (top < lastScrollTop - 1) following = nearBottom;
+    else if (nearBottom) following = true;
+    lastScrollTop = top;
+  }
+
+  /**
+   * Keep the bottom in view while following, whatever made the transcript grow
+   * (a throttled Markdown render, a tool card, an image). ResizeObserver runs
+   * after layout, once per frame, so this never forces an extra layout.
+   */
+  function followContent(node: HTMLElement) {
+    const observer = new ResizeObserver(() => {
+      if (following && timeline) timeline.scrollTop = timeline.scrollHeight;
+    });
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  }
+
   app.scroller = {
-    following: () =>
-      !!timeline && timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 80,
     toLatest: async (smooth = true) => {
+      following = true;
       await tick();
       timeline?.scrollTo({ top: timeline.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
     },
@@ -124,19 +152,40 @@
     const warm = () => void loadHighlighter();
     if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 3000 });
     else setTimeout(warm, 1000);
-    const leaseHeartbeat = setInterval(() => void app.refreshControl(), 10_000);
+    /*
+     * Visible: renew the lease every 10 s and refresh the device list every
+     * 15 s. Hidden: the device list pauses, and the lease is only renewed as
+     * often as it must be to survive (half its 30 s TTL), so a background tab
+     * keeps control without polling at full rate. Both catch up on return.
+     */
+    let leaseHeartbeat: ReturnType<typeof setInterval> | undefined;
+    let nodeRefresh: ReturnType<typeof setInterval> | undefined;
+    const schedule = () => {
+      clearInterval(leaseHeartbeat);
+      clearInterval(nodeRefresh);
+      const visible = document.visibilityState === 'visible';
+      leaseHeartbeat = setInterval(() => void app.refreshControl(), visible ? 10_000 : 15_000);
+      nodeRefresh = visible ? setInterval(() => void app.refreshNodes(), 15_000) : undefined;
+    };
+    schedule();
     // Background tabs and suspended mobile pages skip heartbeats; catch up at once.
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void app.refreshControl();
+    const onVisibility = () => {
+      schedule();
+      if (document.visibilityState === 'visible') {
+        void app.refreshControl();
+        void app.refreshNodes();
+      } else app.flushDraft();
     };
     const onOnline = () => void app.refreshControl();
-    document.addEventListener('visibilitychange', onVisible);
+    const onPageHide = () => app.flushDraft();
+    document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('online', onOnline);
-    const nodeRefresh = setInterval(() => void app.refreshNodes(), 15_000);
+    window.addEventListener('pagehide', onPageHide);
     return () => {
       clearInterval(nodeRefresh);
       clearInterval(leaseHeartbeat);
-      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('online', onOnline);
       app.dispose();
       removePwa();
@@ -283,8 +332,8 @@
 
       <div class="content-grid">
         <section class="conversation" aria-label="Conversation">
-          <div class="timeline" bind:this={timeline} aria-live="polite">
-            <div class="timeline-inner">
+          <div class="timeline" bind:this={timeline} onscroll={onTimelineScroll} aria-live="polite">
+            <div class="timeline-inner" use:followContent>
               {#if app.hiddenMessages > 0}
                 <button
                   type="button"

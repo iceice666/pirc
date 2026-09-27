@@ -31,6 +31,16 @@
         : 'Tasks',
   );
 
+  /** Items have no id; key by text (numbered when repeated) so rows follow reorders. */
+  let keyed = $derived.by(() => {
+    const seen = new Map<string, number>();
+    return list.items.map((item) => {
+      const count = seen.get(item.text) ?? 0;
+      seen.set(item.text, count + 1);
+      return { item, key: `${item.text}\u0000${count}` };
+    });
+  });
+
   const label: Record<TodoItem['status'], string> = {
     completed: 'Completed',
     in_progress: 'In progress',
@@ -63,7 +73,7 @@
   </div>
   {#if expanded}
     <ol id="todo-dock-list" class="dock-list todo-list" transition:slide={{ duration: 160 }}>
-      {#each list.items as item, index (index)}
+      {#each keyed as { item, key } (key)}
         <li class="todo-item status-{item.status}">
           <span
             class="state-dot {item.status === 'completed'

@@ -340,21 +340,25 @@ export function piNotification(raw: Raw, index = 0): ConversationMessage {
 /**
  * Insert notices into an already chronological timeline by timestamp. A
  * streamed message counts from when it finished, so a notice raised while the
- * reply was still streaming sorts above it, as it does live.
+ * reply was still streaming sorts above it, as it does live. A notice goes
+ * before the first message that finished after it; notices at the same time
+ * keep their order. Linear merge over timestamps parsed once.
  */
 export function interleave(
   messages: ConversationMessage[],
   notices: ConversationMessage[],
 ): ConversationMessage[] {
   if (!notices.length) return messages;
-  const result = [...messages];
-  for (const notice of notices) {
-    const at = Date.parse(notice.createdAt);
-    const index = result.findIndex(
-      (message) => Date.parse(message.completedAt ?? message.createdAt) > at,
-    );
-    if (index === -1) result.push(notice);
-    else result.splice(index, 0, notice);
+  const pending = notices
+    .map((notice, index) => ({ notice, at: Date.parse(notice.createdAt), index }))
+    .sort((a, b) => a.at - b.at || a.index - b.index);
+  const result: ConversationMessage[] = [];
+  let next = 0;
+  for (const message of messages) {
+    const at = Date.parse(message.completedAt ?? message.createdAt);
+    while (next < pending.length && at > pending[next]!.at) result.push(pending[next++]!.notice);
+    result.push(message);
   }
+  while (next < pending.length) result.push(pending[next++]!.notice);
   return result;
 }

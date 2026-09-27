@@ -32,8 +32,7 @@ export type PanelSignal = { type: 'changed'; sections: string[] } | { type: 'run
 
 /** The timeline registers itself so incoming events can keep the newest entry in view. */
 export interface Scroller {
-  /** True when the reader is at (or near) the bottom. */
-  following(): boolean;
+  /** Scroll to the newest entry and keep following new content. */
   toLatest(smooth?: boolean): Promise<void>;
 }
 
@@ -81,6 +80,8 @@ class AppState {
   /** Bumped per openSession; a slower, superseded open must not apply its result. */
   #openSeq = 0;
   #snapshotLoading = false;
+  #draftTimer: ReturnType<typeof setTimeout> | undefined;
+  #draftPending: { sessionId: string; value: string } | undefined;
   #snapshotAgain = false;
   #panelListeners = new Set<(signal: PanelSignal) => void>();
   scroller: Scroller | undefined;
@@ -189,6 +190,7 @@ class AppState {
   }
 
   async openSession(id: string) {
+    this.flushDraft();
     const seq = ++this.#openSeq;
     this.activeSessionId = id;
     this.#events?.close();
@@ -224,7 +226,6 @@ class AppState {
           onEvent: (event) => {
             const current = this.sessionState;
             if (seq !== this.#openSeq || current?.session.id !== id) return;
-            const followLatest = this.scroller?.following() ?? false;
             this.sessionState = reduceEvent(current, event);
             if (event.event.type === 'panel_changed')
               this.#emitPanel({ type: 'changed', sections: event.event.sections });
@@ -235,7 +236,6 @@ class AppState {
               );
             }
             if (this.sessionState.needsSnapshot) void this.refreshSnapshot();
-            if (followLatest) void this.scroller?.toLatest();
           },
         });
       }
@@ -301,9 +301,26 @@ class AppState {
     }
   }
 
+  /**
+   * localStorage writes are synchronous; persist the draft after typing pauses
+   * (and on session switch / page hide via {@link flushDraft}), not per key.
+   */
   setDraft(value: string) {
     this.draft = value;
-    if (this.activeSessionId) saveDraft(this.activeSessionId, value);
+    if (!this.activeSessionId) return;
+    this.#draftPending = { sessionId: this.activeSessionId, value };
+    clearTimeout(this.#draftTimer);
+    // Cleared drafts (sent messages) are removed at once.
+    if (!value) this.flushDraft();
+    else this.#draftTimer = setTimeout(() => this.flushDraft(), 250);
+  }
+
+  flushDraft() {
+    clearTimeout(this.#draftTimer);
+    this.#draftTimer = undefined;
+    const pending = this.#draftPending;
+    this.#draftPending = undefined;
+    if (pending) saveDraft(pending.sessionId, pending.value);
   }
 
   async sendCommand(kind: CommandKind, content = this.draft) {
@@ -600,6 +617,7 @@ class AppState {
 
   /** Release resources held for the page (event socket, upload previews). */
   dispose() {
+    this.flushDraft();
     this.#events?.close();
     this.uploads.forEach((upload) => upload.preview && URL.revokeObjectURL(upload.preview));
   }

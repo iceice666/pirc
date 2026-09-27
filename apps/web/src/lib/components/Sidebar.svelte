@@ -73,18 +73,27 @@
   let renameValue = $state('');
   let renameInput: HTMLInputElement | undefined = $state();
 
-  /** Pinned first, then by activity (the order the gateway already returns). */
-  function groupSessions(all: SessionSummary[], workspaceId: string) {
-    const own = all.filter((session) => session.workspaceId === workspaceId);
-    const open = own.filter((session) => !session.settled);
-    return {
-      open: [
-        ...open.filter((session) => session.pinned),
-        ...open.filter((session) => !session.pinned),
-      ],
-      settled: own.filter((session) => session.settled),
-    };
-  }
+  /**
+   * Sessions per workspace, pinned first, then by activity (the order the
+   * gateway already returns). One pass over all sessions, not one per workspace.
+   */
+  let groups = $derived.by(() => {
+    const map = new Map<string, { open: SessionSummary[]; settled: SessionSummary[] }>();
+    const pinned = new Map<string, SessionSummary[]>();
+    for (const session of visibleSessions) {
+      let group = map.get(session.workspaceId);
+      if (!group) map.set(session.workspaceId, (group = { open: [], settled: [] }));
+      if (session.settled) group.settled.push(session);
+      else if (session.pinned) {
+        const list = pinned.get(session.workspaceId) ?? [];
+        list.push(session);
+        pinned.set(session.workspaceId, list);
+      } else group.open.push(session);
+    }
+    for (const [workspaceId, list] of pinned) map.get(workspaceId)!.open.unshift(...list);
+    return map;
+  });
+  const EMPTY_GROUP = { open: [], settled: [] };
 
   function toggleSettled(id: string) {
     const next = new Set(openSettled);
@@ -156,7 +165,7 @@
       <button type="button" class:chosen={!selectedNodeId} onclick={() => (selectedNodeId = '')}
         >All</button
       >
-      {#each nodes as node}
+      {#each nodes as node (node.id)}
         <button
           type="button"
           class:chosen={selectedNodeId === node.id}
@@ -175,7 +184,7 @@
     >
   </div>
   <nav class="workspace-list">
-    {#each shownWorkspaces as workspace}
+    {#each shownWorkspaces as workspace (workspace.id)}
       <section class="workspace-group">
         <div class="workspace-heading">
           <button
@@ -203,12 +212,12 @@
           >
         </div>
         {#if !collapsedGroups.has(workspace.id)}
-          {@const groups = groupSessions(visibleSessions, workspace.id)}
+          {@const group = groups.get(workspace.id) ?? EMPTY_GROUP}
           <div class="session-list">
-            {#each groups.open as session (session.id)}
+            {#each group.open as session (session.id)}
               {@render sessionRow(session)}
             {/each}
-            {#if showSettled && groups.settled.length}
+            {#if showSettled && group.settled.length}
               <button
                 class="settled-toggle"
                 type="button"
@@ -218,10 +227,10 @@
                 <span class:collapsed={!query && !openSettled.has(workspace.id)} class="chevron">
                   <ChevronDown size={13} />
                 </span>
-                Settled · {groups.settled.length}
+                Settled · {group.settled.length}
               </button>
               {#if query || openSettled.has(workspace.id)}
-                {#each groups.settled as session (session.id)}
+                {#each group.settled as session (session.id)}
                   {@render sessionRow(session)}
                 {/each}
               {/if}

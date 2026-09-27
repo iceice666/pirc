@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { enhanceMarkdown, renderMarkdown, rendererTick } from '../markdown';
+  import { enhanceMarkdown, renderMarkdownChecked, rendererTick } from '../markdown';
+  import { watch } from '../watch.svelte';
 
   interface Props {
     source: string;
@@ -21,13 +22,16 @@
   const STREAM_INTERVAL = 80;
 
   let html = $state('');
+  /** The last render showed math or code as plain text while its renderer loads. */
+  let pending = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let idle: number | undefined;
   let lastRender = 0;
 
   function render() {
     timer = undefined;
     lastRender = Date.now();
-    html = renderMarkdown(source, { streaming });
+    ({ html, pending } = renderMarkdownChecked(source, { streaming }));
   }
 
   function schedule() {
@@ -42,16 +46,36 @@
     else timer = setTimeout(render, wait);
   }
 
-  // `$rendererTick` re-runs this once a lazily loaded KaTeX / highlight.js lands.
   $effect.pre(() => {
     void source;
     void streaming;
-    void $rendererTick;
     untrack(schedule);
   });
 
+  /**
+   * A lazily loaded KaTeX / highlight.js landed (`$rendererTick`). Only output
+   * that fell back to plain text re-renders, in idle time, so dozens of mounted
+   * messages don't all re-parse in the same frame.
+   */
+  watch(
+    () => $rendererTick,
+    () => {
+      if (!pending || idle !== undefined) return;
+      const run = () => {
+        idle = undefined;
+        if (pending) schedule();
+      };
+      idle =
+        typeof requestIdleCallback === 'function'
+          ? requestIdleCallback(run, { timeout: 500 })
+          : window.setTimeout(run, 0);
+    },
+  );
+
   onDestroy(() => {
     if (timer) clearTimeout(timer);
+    if (idle !== undefined)
+      typeof cancelIdleCallback === 'function' ? cancelIdleCallback(idle) : clearTimeout(idle);
   });
 </script>
 

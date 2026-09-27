@@ -538,35 +538,46 @@ export function connectEvents(options: {
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   const open = () => {
     if (closed) return;
+    retryTimer = undefined;
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const query = new URLSearchParams({ sessionId: options.sessionId });
     if (cursor) query.set('cursor', cursor);
-    socket = new WebSocket(`${protocol}//${location.host}/api/events?${query}`);
-    socket.addEventListener('open', () => {
+    // Handlers act only for the current socket: a replaced socket's late
+    // error/close must not close or reschedule its successor.
+    const ws = new WebSocket(`${protocol}//${location.host}/api/events?${query}`);
+    socket = ws;
+    ws.addEventListener('open', () => {
+      if (ws !== socket) return;
       attempts = 0;
       options.onState('connected');
     });
-    socket.addEventListener('message', (message) => {
+    ws.addEventListener('message', (message) => {
+      if (ws !== socket) return;
       try {
         const envelope = normalizeEvent(JSON.parse(String(message.data)));
         cursor = envelope.cursor;
         options.onEvent(envelope);
       } catch {
-        socket?.close(1003, 'Invalid event');
+        ws.close(1003, 'Invalid event');
       }
     });
-    socket.addEventListener('close', () => {
-      if (closed) return;
+    ws.addEventListener('close', () => {
+      if (closed || ws !== socket) return;
       options.onState(navigator.onLine ? 'reconnecting' : 'offline');
       retryTimer = setTimeout(open, Math.min(20_000, 750 * 2 ** attempts++) + Math.random() * 400);
     });
-    socket.addEventListener('error', () => socket?.close());
+    ws.addEventListener('error', () => {
+      if (ws === socket) ws.close();
+    });
   };
+  /** Back online: reconnect now instead of waiting out the backoff. */
   const online = () => {
-    if (!closed && socket?.readyState !== WebSocket.OPEN) {
-      if (retryTimer) clearTimeout(retryTimer);
-      open();
-    }
+    if (closed) return;
+    const state = socket?.readyState;
+    if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return;
+    if (retryTimer) clearTimeout(retryTimer);
+    socket?.close();
+    open();
   };
   const offline = () => options.onState('offline');
   window.addEventListener('online', online);
