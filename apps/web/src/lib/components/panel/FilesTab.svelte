@@ -304,3 +304,82 @@
     {#if truncated}<p class="panel-empty">Showing the first 2,000 entries.</p>{/if}
   {/if}
 </div>
+
+<style>
+  .file-meta {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .crumbs {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    overflow-x: auto;
+    color: var(--muted);
+    font-size: 12.5px;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+  .crumbs button {
+    flex: none;
+    padding: 3px 5px;
+    border: 0;
+    border-radius: 6px;
+    color: var(--text-2);
+    background: transparent;
+  }
+  .crumbs button:hover {
+    color: var(--ink);
+    background: var(--bg-hover);
+  }
+  .crumbs button:last-child {
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .code-view {
+    display: flex;
+    overflow: auto;
+    max-height: calc(100dvh - 190px);
+    border-radius: var(--radius-md);
+    background: var(--code-bg);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .code-view pre {
+    margin: 0;
+    padding: 8px 12px 8px 0;
+    color: var(--code-ink);
+    background: transparent;
+    font: 12px/1.55 var(--font-mono);
+    tab-size: 2;
+  }
+  .code-view pre.gutter {
+    position: sticky;
+    left: 0;
+    flex: none;
+    padding: 8px 10px 8px 12px;
+    color: var(--faint);
+    background: var(--code-bg);
+    text-align: right;
+    user-select: none;
+  }
+  .code-view pre code {
+    font: inherit;
+  }
+  /* Lines a file link pointed at; `local` keeps the band on its lines while scrolling. */
+  .code-view.focused,
+  .code-view.focused pre.gutter {
+    background:
+      linear-gradient(var(--accent-soft), var(--accent-soft)) 0 var(--focus-top) / 100%
+        var(--focus-height) no-repeat local,
+      var(--code-bg);
+  }
+  .drill-lines {
+    color: var(--faint);
+  }
+  .doc {
+    padding: 4px 2px;
+    font-size: 14px;
+  }
+</style>

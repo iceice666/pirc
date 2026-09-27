@@ -78,3 +78,73 @@
     {/each}
   </ol>
 </DockSection>
+
+<style>
+  .todo-meter {
+    width: 36px;
+    height: 3px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--line-dark);
+  }
+  .todo-meter > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--success);
+    transition: width 0.3s var(--ease);
+  }
+  .todo-list {
+    max-height: 220px;
+    display: grid;
+    gap: 1px;
+  }
+  .todo-item {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 4px 6px;
+    color: var(--text-2);
+    font-size: 13px;
+    line-height: 20px;
+  }
+  .todo-item .state-dot {
+    margin: 0 3px;
+  }
+  .todo-text {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .todo-item.status-in_progress {
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .todo-item.status-completed .todo-text {
+    color: var(--muted);
+    text-decoration: line-through;
+    text-decoration-color: var(--faint);
+  }
+  .todo-tag {
+    flex: none;
+    padding: 0 6px;
+    border-radius: 4px;
+    color: var(--muted);
+    background: var(--bg-hover);
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 18px;
+  }
+  .todo-tag.blocked {
+    color: var(--warning);
+    background: var(--warning-soft);
+  }
+  @media (max-width: 650px) {
+    .todo-list {
+      max-height: 160px;
+    }
+  }
+</style>

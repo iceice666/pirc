@@ -273,3 +273,302 @@
     <p class="composer-status" role="status">{app.statusLine.join(' · ')}</p>
   {/if}
 </div>
+
+<style>
+  .spacer {
+    flex: 1;
+  }
+  /* ───────────── Composer ───────────── */
+  .composer-wrap {
+    position: relative;
+    z-index: 4;
+    padding: 0 32px max(16px, env(safe-area-inset-bottom));
+    background: var(--bg);
+  }
+  .composer-wrap::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 24px;
+    background: linear-gradient(to top, var(--bg), transparent);
+    pointer-events: none;
+  }
+  .mode-switch {
+    flex: none;
+    display: flex;
+    margin-right: 4px;
+    padding: 2px;
+    border-radius: 999px;
+    background: var(--bg-hover);
+  }
+  .mode-switch button {
+    height: 30px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--text-2);
+    background: transparent;
+    font-size: 12.5px;
+  }
+  .mode-switch button.active {
+    color: var(--ink);
+    background: var(--bg-layer);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+  }
+  /*
+  * Composer dock: cards tucked on top of the composer (as in Codex and
+  * DeepSeek Harness) — the agent's task list, then queued messages. Sections
+  * share one surface, separated by a hairline.
+  */
+  .composer-dock {
+    position: relative;
+    width: calc(min(796px, 100%) - 40px);
+    margin: 0 auto -1px;
+    overflow: hidden;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    background: var(--bg-subtle);
+    box-shadow: 0 0 0 1px var(--line-dark);
+    clip-path: inset(-1px -1px 0 -1px);
+  }
+  /* Quiet extension status under the composer (e.g. compaction warm-up). */
+  .composer-status {
+    width: min(796px, 100%);
+    margin: 6px auto 0;
+    padding: 0 14px;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .queue-dock-kind {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    color: var(--accent);
+  }
+  .queue-dock-text {
+    min-width: 0;
+    flex: 1;
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .composer {
+    position: relative;
+    width: min(796px, 100%);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--radius-panel);
+    background: var(--input);
+    box-shadow: var(--shadow-soft);
+    transition: box-shadow 0.15s var(--ease);
+  }
+  .composer:focus-within {
+    box-shadow:
+      0 0 0 1px var(--line-strong),
+      0 4px 24px rgb(15 17 21 / 8%);
+  }
+  .composer.offline {
+    box-shadow:
+      0 0 0 1px var(--danger),
+      0 4px 20px rgb(15 17 21 / 6%);
+  }
+  .offline-note {
+    padding: 8px 20px;
+    color: var(--danger);
+    background: var(--danger-soft);
+    font-size: 12px;
+  }
+  .composer textarea {
+    width: 100%;
+    min-height: 56px;
+    max-height: 240px;
+    display: block;
+    padding: 14px 20px 4px;
+    border: 0;
+    outline: 0;
+    resize: none;
+    color: var(--ink);
+    background: transparent;
+    font-size: 15px;
+    line-height: 24px;
+    field-sizing: content;
+  }
+  .composer textarea::placeholder {
+    color: var(--faint);
+  }
+  .composer-tools {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px 10px 12px;
+  }
+  .composer-tools .icon-button {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    color: var(--text-2);
+    box-shadow: inset 0 0 0 1px var(--line-dark);
+  }
+  .composer-tools .model-select,
+  .composer-tools .thinking-select {
+    /* Shrink labels before the send/stop controls get pushed out. */
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  .composer-tools .thinking-select {
+    flex-shrink: 0;
+  }
+  .send-hint {
+    display: none;
+  }
+  .send-button {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: var(--on-accent);
+    background: var(--accent);
+    transition: background 0.15s var(--ease);
+  }
+  .send-button:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+  .send-button:disabled {
+    opacity: 1;
+    color: var(--bg);
+    background: var(--faint);
+  }
+  .send-button.stop-button {
+    color: var(--bg);
+    background: var(--ink);
+  }
+  .send-button.stop-button:hover:not(:disabled) {
+    background: var(--ink);
+    filter: opacity(0.82);
+  }
+  .send-button.stop-button:disabled {
+    color: var(--bg);
+    background: var(--ink);
+    filter: opacity(0.55);
+  }
+  .stop-button.secondary {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    margin-right: 2px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: var(--ink);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-dark);
+  }
+  .stop-button.secondary:hover:not(:disabled) {
+    background: var(--bg-hover);
+  }
+  .attachment-strip {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 12px 16px 0;
+  }
+  .attachment-preview {
+    flex: 0 0 auto;
+    height: 48px;
+    max-width: 200px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px 6px 6px;
+    border-radius: var(--radius-md);
+    background: var(--bg-subtle);
+    font-size: 12px;
+  }
+  .attachment-preview img {
+    width: 36px;
+    height: 36px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+  }
+  .attachment-preview span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .attachment-preview button {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+  }
+  .attachment-preview button:hover {
+    background: var(--bg-hover-strong);
+  }
+  @media (max-width: 1100px) {
+    .composer-wrap {
+      padding-inline: 24px;
+    }
+  }
+  @media (max-width: 650px) {
+    .composer-wrap {
+      padding: 0 8px max(8px, env(safe-area-inset-bottom));
+    }
+    .composer-dock {
+      width: calc(100% - 24px);
+    }
+    .mode-switch {
+      margin-right: 2px;
+    }
+    .mode-switch button {
+      height: 28px;
+      padding: 0 9px;
+      font-size: 12px;
+    }
+    .composer {
+      border-radius: var(--radius-xl);
+    }
+    .composer textarea {
+      min-height: 44px;
+      max-height: 160px;
+      padding: 10px 14px 0;
+      line-height: 22px;
+    }
+    .composer-tools {
+      min-height: 46px;
+      gap: 4px;
+      padding: 4px 6px 6px 8px;
+    }
+    .composer-tools .model-select {
+      max-width: 112px;
+    }
+    /* The model is locked while a run is active, so its slot goes to Steer/Follow up. */
+    .composer-tools.running .model-select {
+      display: none;
+    }
+    .composer-tools.running .thinking-select {
+      max-width: 92px;
+    }
+  }
+</style>

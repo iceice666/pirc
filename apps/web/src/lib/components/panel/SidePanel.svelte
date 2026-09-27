@@ -18,6 +18,7 @@
   import MemoryTab from './MemoryTab.svelte';
   import TasksTab from './TasksTab.svelte';
   import TerminalTab from './TerminalTab.svelte';
+  import './panel.css';
 
   interface Props {
     open?: boolean;
@@ -199,3 +200,173 @@
     {/if}
   </div>
 </aside>
+
+<style>
+  /* ───────────── Right details panel ───────────── */
+  .details {
+    position: relative;
+    /* Keeps its width while the track animates closed; the grid clips the rest. */
+    width: var(--panel-width, 360px);
+    min-width: 0;
+    overflow-y: auto;
+    padding: 8px 12px 16px;
+    border-left: 1px solid var(--line);
+    background: var(--bg-sidebar);
+    transition:
+      opacity var(--layout-duration) var(--ease),
+      visibility var(--layout-duration);
+  }
+  .details:not(.open) {
+    visibility: hidden;
+    opacity: 0;
+  }
+  /* ───────────── Side panel (tabs) ───────────── */
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+    container: side-panel / inline-size;
+  }
+  .panel-resizer {
+    position: absolute;
+    z-index: 5;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 7px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .panel-resizer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    background: transparent;
+    transition: background 0.15s var(--ease);
+  }
+  .panel-resizer:hover::after,
+  .panel-resizer:focus-visible::after,
+  .panel-resizer.active::after {
+    background: var(--accent);
+  }
+  .panel-resizer:focus-visible {
+    outline: 0;
+  }
+  .panel-tabs {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 8px 6px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
+  }
+  .panel-tabs > button[role='tab'] {
+    position: relative;
+    flex: none;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--muted);
+    background: transparent;
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  .panel-tabs > button[role='tab']:hover {
+    color: var(--ink);
+    background: var(--bg-hover);
+  }
+  .panel-tabs > button[role='tab'].active {
+    color: var(--ink);
+    background: var(--bg-active);
+  }
+  @container side-panel (max-width: 459px) {
+    .panel-tabs > button[role='tab']:not(.active) .tab-label {
+      display: none;
+    }
+  }
+  .tab-dot {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .panel-body {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .panel-body > .panel-empty {
+    padding: 4px 12px;
+  }
+  /* Each tab scrolls on its own, so a hidden tab keeps its scroll position. */
+  .tab-slot {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    padding: 4px 12px 16px;
+  }
+  /* Not display:none, which would lose the scroll offset; skips rendering instead. */
+  .tab-slot.hidden {
+    visibility: hidden;
+    content-visibility: hidden;
+  }
+  @media (max-width: 860px) {
+    .panel-resizer {
+      display: none;
+    }
+    .details {
+      position: fixed;
+      z-index: 25;
+      top: 56px;
+      right: 8px;
+      bottom: 8px;
+      width: min(420px, calc(100vw - 16px));
+      border: 0;
+      border-radius: var(--radius-xl);
+      background: var(--bg-layer);
+      box-shadow: var(--shadow-pop);
+      visibility: hidden;
+      transform: translateX(calc(100% + 16px));
+      opacity: 0;
+      transition:
+        transform 0.2s var(--ease),
+        opacity 0.2s var(--ease),
+        visibility 0.2s;
+    }
+    .details.open {
+      visibility: visible;
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  @media (max-width: 650px) {
+    .details {
+      top: 56px;
+      right: 0;
+      bottom: 0;
+      width: 100vw;
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    }
+    .panel-tabs .tab-label {
+      display: none;
+    }
+  }
+  .tab-slot:has(> :global(.terminal-tab)) {
+    overflow: hidden;
+    padding: 0;
+  }
+</style>

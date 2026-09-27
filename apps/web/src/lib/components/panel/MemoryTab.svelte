@@ -201,3 +201,132 @@
     {/if}
   {/if}
 </div>
+
+<style>
+  .chip.working {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .memory-list {
+    display: grid;
+    gap: 1px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .memory-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .stat-grid > div {
+    display: grid;
+    gap: 1px;
+    padding: 8px;
+    border-radius: var(--radius-md);
+    background: var(--bg-layer);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .stat-grid strong {
+    font-size: 17px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-grid span {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .meters {
+    display: grid;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: var(--bg-layer);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .meter {
+    display: grid;
+    gap: 4px;
+  }
+  .meter-label {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12.5px;
+  }
+  .meter-label .muted {
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .bar {
+    height: 5px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--bg-hover-strong);
+  }
+  .bar span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+    transition: width 0.3s var(--ease);
+  }
+  .bar span.full {
+    background: var(--warning);
+  }
+  .memory-list li.dim {
+    opacity: 0.55;
+  }
+  .memory-item {
+    width: 100%;
+    display: grid;
+    gap: 3px;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    background: transparent;
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: left;
+  }
+  .memory-item:hover {
+    background: var(--bg-hover);
+  }
+  .memory-text {
+    overflow-wrap: anywhere;
+  }
+  .memory-text.clamped {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+  .rel {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin: 0 6px 1px 0;
+    border-radius: 50%;
+    vertical-align: middle;
+    background: var(--faint);
+  }
+  .rel-medium {
+    background: var(--accent);
+  }
+  .rel-high {
+    background: var(--warning);
+  }
+  .rel-critical {
+    background: var(--danger);
+  }
+</style>

@@ -195,3 +195,35 @@
   <div class="terminal-host" bind:this={host}></div>
   {#if notice}<p class="terminal-notice">{notice}</p>{/if}
 </div>
+
+<style>
+  .terminal-view {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 0;
+    padding: 6px 4px 4px 8px;
+    background: var(--code-bg);
+  }
+  .terminal-view.hidden {
+    display: none;
+  }
+  .terminal-host {
+    width: 100%;
+    height: 100%;
+  }
+  .terminal-notice {
+    position: absolute;
+    right: 12px;
+    bottom: 10px;
+    margin: 0;
+    padding: 5px 10px;
+    border-radius: 999px;
+    color: var(--text-2);
+    background: var(--bg-layer);
+    box-shadow: var(--shadow-soft);
+    font-size: 12px;
+  }
+  .terminal-host :global(.xterm-viewport) {
+    background: transparent !important;
+  }
+</style>

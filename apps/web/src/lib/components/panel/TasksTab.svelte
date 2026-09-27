@@ -227,3 +227,85 @@
     {/if}
   {/if}
 </div>
+
+<style>
+  .event-list {
+    display: grid;
+    gap: 1px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .task-row {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    background: transparent;
+    font-size: 13px;
+    text-align: left;
+  }
+  button.task-row:hover {
+    background: var(--bg-hover);
+  }
+  .task-row :global(svg) {
+    flex: none;
+    color: var(--muted);
+  }
+  .task-text {
+    min-width: 0;
+    flex: 1;
+    display: grid;
+    gap: 2px;
+  }
+  .task-cmd {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .task-cmd {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .memory-sub.danger {
+    color: var(--danger);
+  }
+  .task-row.static {
+    align-items: flex-start;
+  }
+  .task-command,
+  .task-output {
+    margin: 0;
+    padding: 8px 10px;
+    overflow: auto;
+    border-radius: var(--radius-md);
+    color: var(--code-ink);
+    background: var(--code-bg);
+    box-shadow: 0 0 0 1px var(--line);
+    font: 12px/1.5 var(--font-mono);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .task-output {
+    max-height: calc(100dvh - 260px);
+    white-space: pre;
+  }
+  .event-list li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+  .event-list p {
+    width: 100%;
+    margin: 0;
+    color: var(--text-2);
+    overflow-wrap: anywhere;
+  }
+</style>

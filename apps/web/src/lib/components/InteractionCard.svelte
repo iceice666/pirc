@@ -149,3 +149,147 @@
     </div>
   </footer>
 </section>
+
+<style>
+  /* ───────────── Interaction card ───────────── */
+  .interaction-card {
+    margin: 4px 0 24px;
+    padding: 16px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-layer);
+    box-shadow: var(--shadow-soft);
+  }
+  .interaction-card.expired {
+    opacity: 0.65;
+  }
+  .interaction-card header {
+    display: flex;
+    gap: 12px;
+  }
+  .interaction-icon {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .interaction-card h3 {
+    margin: 2px 0 4px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .interaction-card header p,
+  .confirm-copy {
+    margin: 0;
+    color: var(--text-2);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .confirm-copy {
+    margin-top: 12px;
+  }
+  .option-list {
+    display: grid;
+    gap: 6px;
+    margin: 14px 0 0;
+  }
+  .option {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--bg-hover);
+    text-align: left;
+  }
+  .option:hover:not(:disabled) {
+    background: var(--bg-hover-strong);
+  }
+  .option.selected {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .option-mark {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 50%;
+  }
+  .option.selected .option-mark {
+    border: 5px solid var(--accent);
+  }
+  .option span:last-child {
+    display: grid;
+    gap: 2px;
+  }
+  .option strong {
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .option small {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .interaction-card input,
+  .interaction-card textarea {
+    width: 100%;
+    margin-top: 14px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: var(--radius-md);
+    outline: 0;
+    background: var(--bg-subtle);
+    font-size: 14px;
+  }
+  .interaction-card input:focus,
+  .interaction-card textarea:focus {
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .field-label {
+    display: block;
+    margin-top: 14px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .interaction-card textarea.editor {
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    resize: vertical;
+  }
+  .interaction-card footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .expires {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .interaction-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+  }
+  @media (max-width: 650px) {
+    .interaction-card {
+      padding: 14px;
+    }
+    .interaction-card footer {
+      align-items: flex-end;
+    }
+  }
+</style>

@@ -163,3 +163,73 @@
     />
   {/each}
 </div>
+
+<style>
+  /* Terminal */
+  .terminal-tab {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .terminal-tab > .panel-error {
+    margin: 8px 12px 0;
+  }
+  .terminal-strip {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
+  }
+  .terminal-chip {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+  }
+  .terminal-chip.active {
+    color: var(--ink);
+    background: var(--bg-active);
+  }
+  .terminal-chip.exited {
+    opacity: 0.6;
+  }
+  .terminal-chip > button {
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 4px 0 8px;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font-size: 12px;
+  }
+  .terminal-chip .chip-close {
+    padding: 0 6px 0 2px;
+    color: var(--muted);
+  }
+  .terminal-chip .chip-close:hover {
+    color: var(--danger);
+  }
+  .terminal-empty {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    margin: auto;
+    padding: 24px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+    text-align: center;
+  }
+  .terminal-empty p {
+    max-width: 300px;
+    margin: 0;
+  }
+</style>

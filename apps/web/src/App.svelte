@@ -455,3 +455,372 @@
     >
   </div>
 {/if}
+
+<style>
+  /* ───────────── Shell ───────────── */
+  .app-shell {
+    --sidebar-width: 264px;
+    --layout-duration: 0.26s;
+    height: 100%;
+    display: grid;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    overflow: hidden;
+    background: var(--bg);
+    transition: grid-template-columns var(--layout-duration) var(--ease);
+  }
+  .app-shell.resizing {
+    cursor: col-resize;
+    user-select: none;
+  }
+  @media (min-width: 651px) {
+    .app-shell.sidebar-collapsed {
+      grid-template-columns: 0 minmax(0, 1fr);
+    }
+  }
+  .sidebar-expand {
+    flex: none;
+    margin-left: -8px;
+  }
+  /* ───────────── Main column ───────────── */
+  .workspace {
+    height: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+  }
+  .workspace > .content-grid {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .topbar {
+    min-width: 0;
+    flex: 0 0 56px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 12px 0 20px;
+    background: var(--bg);
+  }
+  .title-block {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .breadcrumb {
+    order: 2;
+    display: flex;
+    gap: 4px;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .breadcrumb span:nth-child(n + 2) {
+    display: none;
+  }
+  .title-block h1 {
+    margin: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .connection-pill,
+  .control-pill {
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 10px;
+    border-radius: 999px;
+    color: var(--text-2);
+    background: var(--bg-hover);
+    font-size: 12px;
+  }
+  .connection-pill :global(svg) {
+    color: var(--success);
+  }
+  .connection-pill.offline :global(svg) {
+    color: var(--danger);
+  }
+  .connection-pill.reconnecting :global(svg) {
+    color: var(--warning);
+  }
+  .control-pill {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .button.takeover {
+    height: 28px;
+    padding: 0 12px;
+    color: var(--on-accent);
+    background: var(--accent);
+    font-size: 12px;
+  }
+  .button.takeover:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+  .error-banner,
+  .viewer-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 auto 8px;
+    width: min(780px, calc(100% - 32px));
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+  }
+  .error-banner {
+    color: var(--danger);
+    background: var(--danger-soft);
+  }
+  .error-banner span,
+  .viewer-banner span {
+    flex: 1;
+  }
+  .error-banner button,
+  .viewer-banner button {
+    display: grid;
+    place-items: center;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    font-weight: 500;
+  }
+  .error-banner button:hover,
+  .viewer-banner button:hover {
+    background: var(--bg-hover);
+  }
+  .viewer-banner {
+    color: var(--text-2);
+    background: var(--bg-subtle);
+  }
+  .viewer-banner button {
+    color: var(--accent);
+  }
+  .content-grid {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--panel-width, 360px);
+    overflow: hidden;
+    transition: grid-template-columns var(--layout-duration) var(--ease);
+  }
+  .workspace.details-collapsed .content-grid {
+    grid-template-columns: minmax(0, 1fr) 0;
+  }
+  /* Dragging the panel edge must track the pointer, not ease towards it. */
+  .app-shell.resizing .content-grid {
+    transition: none;
+  }
+  .conversation {
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    /* An explicit column lets composer controls shrink instead of widening the column. */
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    background: var(--bg);
+  }
+  .timeline {
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .timeline-inner {
+    width: min(780px, 100%);
+    min-height: 100%;
+    margin: 0 auto;
+    padding: 16px 32px 32px;
+    display: flex;
+    flex-direction: column;
+  }
+  .earlier-messages {
+    align-self: center;
+    margin: 0 0 16px;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--bg-layer);
+    color: var(--muted);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .earlier-messages:hover {
+    background: var(--bg-hover);
+    color: var(--ink);
+  }
+  .empty-conversation {
+    flex: 1;
+    min-height: 300px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    text-align: center;
+  }
+  .empty-conversation > span {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .empty-conversation h2 {
+    margin: 16px 0 6px;
+    font-size: 22px;
+    font-weight: 600;
+  }
+  .empty-conversation p {
+    max-width: 400px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .loading-state {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 14px;
+    color: var(--muted);
+  }
+  .large-mark {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .loading-state p {
+    margin: 0;
+    font-size: 14px;
+  }
+  .update-toast {
+    position: fixed;
+    z-index: 110;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px 10px 14px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-layer);
+    box-shadow: var(--shadow-pop);
+  }
+  .update-toast > :global(svg) {
+    color: var(--accent);
+  }
+  .update-toast div {
+    display: grid;
+    gap: 2px;
+  }
+  .update-toast strong {
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .update-toast span {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .update-toast button {
+    padding: 6px 12px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .update-toast button:nth-of-type(1) {
+    color: var(--on-accent);
+    background: var(--accent);
+  }
+  .update-toast button:nth-of-type(2) {
+    display: grid;
+    place-items: center;
+    padding: 6px;
+  }
+  @media (max-width: 1100px) {
+    .timeline-inner {
+      padding-inline: 24px;
+    }
+  }
+  @media (max-width: 860px) {
+    .app-shell {
+      --sidebar-width: 232px;
+    }
+    .content-grid,
+    .workspace.details-collapsed .content-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  @media (max-width: 650px) {
+    .app-shell {
+      display: block;
+    }
+    .sidebar-expand {
+      display: none;
+    }
+    .topbar {
+      flex-basis: 56px;
+      padding: 0 6px 0 50px;
+      gap: 4px;
+    }
+    .breadcrumb {
+      display: none;
+    }
+    .title-block h1 {
+      font-size: 15px;
+    }
+    .topbar-actions {
+      gap: 2px;
+    }
+    .topbar-actions .icon-button {
+      width: 40px;
+      height: 40px;
+    }
+    /* Only a coloured dot: the state is still announced by the pill's text. */
+    .connection-pill {
+      width: 28px;
+      height: 28px;
+      justify-content: center;
+      padding: 0;
+      font-size: 0;
+      background: transparent;
+    }
+    .control-pill {
+      display: none;
+    }
+    .button.takeover {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      font-size: 0;
+    }
+    .timeline-inner {
+      padding: 8px 14px 20px;
+    }
+    .update-toast {
+      right: 8px;
+      bottom: max(8px, env(safe-area-inset-bottom));
+      left: 8px;
+    }
+  }
+</style>

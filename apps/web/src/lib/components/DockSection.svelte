@@ -6,6 +6,7 @@
   import { ChevronDown } from '@lucide/svelte';
   import type { Snippet } from 'svelte';
   import { slide } from 'svelte/transition';
+  import './dock.css';
 
   interface Props {
     /** Accessible name of the section. */
@@ -59,3 +60,45 @@
     </div>
   {/if}
 </section>
+
+<style>
+  :global(.dock-section) + .dock-section {
+    border-top: 1px solid var(--line-dark);
+  }
+  .dock-head {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    padding: 0 6px 0 4px;
+  }
+  .dock-toggle {
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    background: transparent;
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  .dock-toggle {
+    flex: 1;
+    min-width: 0;
+  }
+  .dock-toggle:hover {
+    color: var(--ink);
+    background: var(--bg-hover);
+  }
+  .dock-chevron {
+    flex: none;
+    display: grid;
+    color: var(--muted);
+    transition: transform 0.18s var(--ease);
+  }
+  .dock-chevron.collapsed {
+    transform: rotate(180deg);
+  }
+</style>

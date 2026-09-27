@@ -340,3 +340,244 @@
     {/if}
   </div>
 {/snippet}
+
+<style>
+  /* Top-bar background jobs: a quiet trigger and its popover. */
+  .jobs-menu {
+    position: relative;
+  }
+  .jobs-trigger {
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 8px 0 10px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--muted);
+    background: transparent;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .jobs-trigger.live {
+    color: var(--text-2);
+  }
+  .jobs-trigger:hover,
+  .jobs-trigger.open {
+    color: var(--ink);
+    background: var(--bg-hover);
+  }
+  .jobs-trigger > :global(svg) {
+    transition: transform 0.12s var(--ease);
+  }
+  .jobs-trigger.open > :global(svg) {
+    transform: rotate(180deg);
+  }
+  .jobs-count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+  .jobs-popover {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 6px);
+    right: 0;
+    width: min(480px, calc(100vw - 24px));
+    max-height: min(480px, calc(100dvh - 120px));
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px;
+    overflow: auto;
+    border-radius: var(--radius-lg);
+    background: var(--bg-layer);
+    box-shadow: var(--shadow-pop);
+  }
+  .jobs-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 4px 6px 2px;
+    padding-top: 4px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 18px;
+  }
+  .jobs-section:first-child {
+    margin-top: 0;
+    border-top: 0;
+  }
+  .jobs-section-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 4px;
+    border: 0;
+    border-radius: 5px;
+    color: var(--muted);
+    background: transparent;
+    font-size: 11px;
+  }
+  .jobs-section-toggle:hover {
+    color: var(--text-2);
+    background: var(--bg-hover);
+  }
+  .section-chevron,
+  .job-chevron {
+    display: grid;
+    transition: transform 0.12s var(--ease);
+  }
+  .section-chevron.open,
+  .job-chevron.open {
+    transform: rotate(90deg);
+  }
+  .job-item {
+    display: flex;
+    flex-direction: column;
+  }
+  .job-line {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 10px;
+  }
+  .job-line.live {
+    background: var(--bg-hover);
+  }
+  .job-row {
+    min-width: 0;
+    flex: 1;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 9px;
+    color: var(--ink);
+    background: transparent;
+    font-size: 12.5px;
+    text-align: left;
+  }
+  button.job-row:hover {
+    background: var(--bg-hover);
+  }
+  .job-line.live button.job-row:hover {
+    background: transparent;
+  }
+  .job-row.static {
+    cursor: default;
+  }
+  .job-row.settled {
+    color: var(--text-2);
+  }
+  .job-icon {
+    flex: none;
+    display: grid;
+    color: var(--muted);
+  }
+  .job-main {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .job-label {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .job-label.mono {
+    font: 12px/18px var(--font-mono);
+  }
+  .job-sub {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11.5px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .job-meta {
+    flex: none;
+    max-width: 40%;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .job-duration {
+    flex: none;
+    color: var(--muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .job-chevron {
+    flex: none;
+    color: var(--faint);
+  }
+  .job-stop {
+    flex: none;
+    height: 22px;
+    min-width: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-right: 5px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    color: var(--text-2);
+    background: var(--bg-layer);
+    box-shadow: 0 0 0 1px var(--line-dark);
+    font-size: 11px;
+  }
+  .job-stop:hover:not(.pending),
+  .job-stop.armed {
+    color: var(--danger);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
+  }
+  .job-stop.armed {
+    padding: 0 8px;
+    background: var(--danger-soft);
+  }
+  .job-stop.pending {
+    color: var(--muted);
+  }
+  .job-output {
+    max-height: 240px;
+    margin: 4px 4px 6px;
+    padding: 8px 10px;
+    overflow: auto;
+    border-radius: var(--radius-sm);
+    color: var(--code-ink);
+    background: var(--code-bg);
+    box-shadow: 0 0 0 1px var(--line);
+    font: 11.5px/1.5 var(--font-mono);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .jobs-error {
+    margin: 2px 8px 4px;
+    color: var(--danger);
+    font-size: 12px;
+  }
+  @media (max-width: 650px) {
+    .jobs-label {
+      display: none;
+    }
+    .jobs-trigger {
+      height: 32px;
+      padding: 0 8px;
+    }
+    .jobs-popover {
+      position: fixed;
+      top: 60px;
+      right: 12px;
+      left: 12px;
+      width: auto;
+    }
+  }
+</style>

@@ -49,3 +49,82 @@
     </div>
   {/if}
 </dialog>
+
+<style>
+  /* ───────────── Modal & toast ───────────── */
+  /* <dialog> is a transparent frame; clicks on it (not the panel) are backdrop clicks. */
+  .modal-dialog {
+    width: min(440px, calc(100% - 40px));
+    max-width: none;
+    max-height: calc(100dvh - 40px);
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    color: inherit;
+  }
+  .modal-dialog.settings {
+    width: min(760px, calc(100% - 40px));
+  }
+  .modal-dialog::backdrop {
+    background: rgb(0 0 0 / 40%);
+  }
+  .modal {
+    width: 100%;
+    padding: 24px;
+    border-radius: var(--radius-xl);
+    background: var(--bg-layer);
+    box-shadow: var(--shadow-pop);
+  }
+  .modal.settings {
+    display: flex;
+    flex-direction: column;
+    height: min(640px, calc(100dvh - 40px));
+  }
+  .modal :global(header) {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .modal :global(h2) {
+    margin: 2px 0 0;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .modal :global(label) {
+    display: grid;
+    gap: 6px;
+    margin: 12px 0;
+    color: var(--text-2);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .modal :global(input),
+  .modal :global(select) {
+    width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--radius-md);
+    outline: 0;
+    background: var(--bg-subtle);
+    font-size: 14px;
+  }
+  .modal :global(input:focus),
+  .modal :global(select:focus) {
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .modal :global(p) {
+    margin: 12px 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .modal :global(footer) {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 20px;
+  }
+</style>

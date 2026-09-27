@@ -345,3 +345,501 @@
     {/if}
   </div>
 {/snippet}
+
+<style>
+  /* ───────────── Left sidebar ───────────── */
+  .sidebar {
+    position: relative;
+    z-index: 30;
+    /* Fixed width: collapsing shrinks the grid track and slides this in sync,
+    so the contents never reflow mid-animation. */
+    width: var(--sidebar-width);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--line);
+    transition:
+      transform var(--layout-duration) var(--ease),
+      visibility var(--layout-duration);
+  }
+  @media (min-width: 651px) {
+    .sidebar.collapsed {
+      visibility: hidden;
+      transform: translateX(-100%);
+    }
+  }
+  .brand-row .sidebar-collapse {
+    margin-left: auto;
+  }
+  .brand-row {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 16px;
+    letter-spacing: -0.01em;
+  }
+  .brand-mark {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-sm);
+    color: var(--on-accent);
+    background: var(--accent);
+  }
+  .mobile-close,
+  .mobile-menu {
+    display: none;
+  }
+  .new-session {
+    margin: 4px 12px 8px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    color: var(--accent);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--accent-soft);
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+    transition: filter var(--ease) 0.15s;
+  }
+  .new-session:hover {
+    filter: brightness(0.97);
+  }
+  .search {
+    height: 36px;
+    margin: 0 12px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    color: var(--muted);
+    border-radius: var(--radius-sm);
+    background: var(--bg-hover);
+  }
+  .search:focus-within {
+    background: var(--bg-layer);
+    box-shadow: 0 0 0 1px var(--line-dark);
+  }
+  .search input {
+    min-width: 0;
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 13px;
+  }
+  .search input::placeholder {
+    color: var(--muted);
+  }
+  .device-switcher,
+  .workspace-tools {
+    margin: 0 16px 10px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .device-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .device-options button,
+  .workspace-tools button {
+    height: 26px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--text-2);
+    background: var(--bg-hover);
+    font-size: 12px;
+  }
+  .device-options button:hover,
+  .workspace-tools button:hover:not(:disabled) {
+    background: var(--bg-hover-strong);
+  }
+  .device-options button.chosen {
+    color: var(--bg);
+    background: var(--ink);
+  }
+  .workspace-tools {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .workspace-tools button {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 8px;
+    background: transparent;
+  }
+  .workspace-list {
+    flex: 1;
+    overflow: auto;
+    padding: 0 8px 16px;
+  }
+  .workspace-group + .workspace-group {
+    margin-top: 8px;
+  }
+  .workspace-heading {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    padding: 0 4px 0 8px;
+    border-radius: var(--radius-sm);
+  }
+  .workspace-heading:hover {
+    background: var(--bg-hover);
+  }
+  .workspace-heading > button:first-child {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+  }
+  .workspace-heading strong {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text-2);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .workspace-heading small {
+    overflow: hidden;
+    flex: none;
+    max-width: 45%;
+    color: var(--faint);
+    font-size: 11px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .chevron {
+    display: grid;
+    color: var(--muted);
+    transition: transform 0.18s var(--ease);
+  }
+  .chevron.collapsed {
+    transform: rotate(-90deg);
+  }
+  .mini-action {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    color: var(--muted);
+    background: transparent;
+    opacity: 0;
+  }
+  .workspace-heading:hover .mini-action,
+  .mini-action:focus-visible {
+    opacity: 1;
+  }
+  .mini-action:hover {
+    color: var(--ink);
+    background: var(--bg-hover-strong);
+  }
+  .session-list {
+    display: grid;
+    gap: 1px;
+    margin-top: 1px;
+  }
+  .session-card {
+    width: 100%;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px 0 28px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    background: transparent;
+    text-align: left;
+  }
+  .session-item {
+    position: relative;
+    min-width: 0;
+  }
+  .session-item:hover .session-card,
+  .session-item:focus-within .session-card {
+    background: var(--bg-hover);
+  }
+  .session-card.active,
+  .session-item:hover .session-card.active,
+  .session-item:focus-within .session-card.active {
+    background: var(--bg-active);
+    font-weight: 500;
+  }
+  .session-item.settled .session-name {
+    color: var(--muted);
+  }
+  .session-meta {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pin-mark {
+    display: grid;
+    color: var(--faint);
+  }
+  /* Row actions: pin, settle, rename. Shown on hover or keyboard focus; the
+  name makes room so it is never covered. */
+  .session-actions {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    display: flex;
+    gap: 2px;
+    transform: translateY(-50%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .session-actions button {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    color: var(--muted);
+    background: transparent;
+  }
+  .session-actions button:hover {
+    color: var(--ink);
+    background: var(--bg-hover-strong);
+  }
+  .session-item:hover .session-actions,
+  .session-item:focus-within .session-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .session-item:hover .session-card,
+  .session-item:focus-within .session-card {
+    padding-right: 88px;
+  }
+  .session-item:hover .session-meta,
+  .session-item:focus-within .session-meta {
+    display: none;
+  }
+  @media (hover: none) {
+    .session-item.active .session-actions {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .session-item.active .session-card {
+      padding-right: 88px;
+    }
+    .session-item.active .session-meta {
+      display: none;
+    }
+    .mini-action {
+      opacity: 1;
+    }
+  }
+  .session-rename {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 6px 0 22px;
+  }
+  .session-rename input {
+    width: 100%;
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    color: var(--ink);
+    background: var(--input);
+    font: inherit;
+    font-size: 14px;
+    outline: none;
+  }
+  .session-rename input:focus {
+    border-color: var(--accent);
+  }
+  .settled-toggle {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 10px 0 24px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--faint);
+    background: transparent;
+    font-size: 12px;
+    text-align: left;
+  }
+  .settled-toggle:hover {
+    color: var(--text-2);
+    background: var(--bg-hover);
+  }
+  .settled-toggle .chevron {
+    color: inherit;
+  }
+  .session-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 14px;
+  }
+  .session-card small {
+    flex: none;
+    color: var(--faint);
+    font-size: 11px;
+  }
+  .status-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin-left: -14px;
+    border-radius: 50%;
+    background: transparent;
+  }
+  .status-dot.running {
+    background: var(--accent);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  .status-dot.waiting {
+    background: var(--warning);
+  }
+  .unread {
+    flex: none;
+    min-width: 18px;
+    height: 18px;
+    display: grid;
+    place-items: center;
+    padding: 0 5px;
+    border-radius: 999px;
+    color: var(--on-accent);
+    background: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .sidebar-footer {
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px;
+    border-top: 1px solid var(--line);
+  }
+  .settings-entry {
+    flex: 1;
+    min-width: 0;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    background: transparent;
+    font-size: 14px;
+    text-align: left;
+  }
+  .settings-entry:hover {
+    color: var(--ink);
+    background: var(--bg-hover);
+  }
+  .sidebar-scrim {
+    display: none;
+  }
+  @media (max-width: 650px) {
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: min(86vw, 300px);
+      transform: translateX(-102%);
+      box-shadow: var(--shadow-pop);
+      transition: transform 0.22s var(--ease);
+    }
+    .sidebar-collapse {
+      display: none;
+    }
+    .sidebar.open {
+      transform: translateX(0);
+    }
+    .sidebar-scrim {
+      position: fixed;
+      z-index: 29;
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+      padding: 0;
+      border: 0;
+      background: rgb(0 0 0 / 35%);
+    }
+    .mobile-close {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      margin-right: -8px;
+    }
+    .brand-row {
+      padding: 0 12px 0 16px;
+    }
+    /* Touch-sized rows: fewer, larger targets instead of a dense desktop list. */
+    .session-card {
+      height: 44px;
+    }
+    .session-rename {
+      height: 44px;
+    }
+    .workspace-heading {
+      height: 40px;
+    }
+    .mini-action,
+    .session-actions button {
+      width: 32px;
+      height: 32px;
+    }
+    .session-item:hover .session-card,
+    .session-item:focus-within .session-card {
+      padding-right: 112px;
+    }
+    .mobile-menu {
+      position: fixed;
+      z-index: 20;
+      top: 8px;
+      left: 6px;
+      display: grid;
+      width: 40px;
+      height: 40px;
+    }
+  }
+</style>

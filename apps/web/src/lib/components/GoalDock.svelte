@@ -77,3 +77,48 @@
     {/if}
   </div>
 </DockSection>
+
+<style>
+  .goal-phase {
+    flex: none;
+    padding: 0 6px;
+    border-radius: 4px;
+    color: var(--muted);
+    background: var(--bg-hover);
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 18px;
+  }
+  .goal-phase.phase-active:not(.disarmed) {
+    color: var(--accent);
+  }
+  .goal-phase.phase-complete {
+    color: var(--success);
+  }
+  .goal-phase.phase-blocked,
+  .goal-phase.disarmed {
+    color: var(--warning);
+    background: var(--warning-soft);
+  }
+  .goal-body {
+    max-height: 180px;
+    padding: 0 14px 10px 32px;
+    overflow-y: auto;
+    color: var(--text-2);
+    font-size: 13px;
+    line-height: 20px;
+  }
+  .goal-objective {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .goal-reason {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 6px 0 0;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+  }
+</style>

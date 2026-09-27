@@ -137,3 +137,146 @@
     </div>
   </div>
 </Modal>
+
+<style>
+  /* Sections include BackendSettings' own, hence :global. */
+  .settings-panels :global(.settings-section + .settings-section) {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+  .settings-panels :global(.settings-section h3) {
+    margin: 0 0 8px;
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .settings-panels :global(.settings-section p) {
+    margin: 8px 0 0;
+  }
+
+  .settings-layout {
+    display: grid;
+    flex: 1;
+    grid-template-columns: 148px minmax(0, 1fr);
+    gap: 20px;
+    min-height: 0;
+  }
+  .settings-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .settings-nav button {
+    height: 32px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    background: transparent;
+    font-size: 13px;
+    text-align: left;
+  }
+  .settings-nav button:hover {
+    background: var(--bg-hover);
+  }
+  .settings-nav button.chosen {
+    color: var(--ink);
+    background: var(--bg-subtle);
+    font-weight: 600;
+  }
+  .settings-panels {
+    min-width: 0;
+    overflow-y: auto;
+  }
+  .settings-panels [hidden] {
+    display: none;
+  }
+  @media (max-width: 640px) {
+    .settings-layout {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 12px;
+    }
+    .settings-nav {
+      flex-direction: row;
+      overflow-x: auto;
+    }
+    .settings-nav button {
+      flex: none;
+    }
+  }
+  :global(.modal) label.settings-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0;
+    color: var(--muted);
+    font-weight: 400;
+  }
+  :global(.modal) .settings-toggle input {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    padding: 0;
+    accent-color: var(--accent);
+  }
+  .settings-devices {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .settings-devices li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 34px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-subtle);
+  }
+  .settings-devices strong {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .settings-devices small {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .online-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+  }
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .settings-row code {
+    overflow: hidden;
+    max-width: 60%;
+    color: var(--text-2);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    user-select: all;
+  }
+</style>

@@ -1,0 +1,96 @@
+/* Composer dock cards (DockSection) and the header content the goal, task and queue docks render into it. */
+.dock-action {
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.dock-action:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--bg-hover);
+}
+
+.dock-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.dock-action {
+  flex: none;
+  font-weight: 400;
+}
+
+.dock-list {
+  max-height: 168px;
+  margin: 0;
+  padding: 0 8px 8px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.queue-dock .dock-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.queue-dock .dock-list li + li {
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+
+/* Todo dock: the task in progress leads, progress on the right. */
+.todo-lead {
+  flex: none;
+  width: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.todo-dock .dock-title {
+  flex: 1;
+}
+
+.todo-dock .dock-title.active {
+  color: var(--ink);
+}
+
+.todo-progress {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Goal dock: the objective leads, phase and rounds on the right. */
+.goal-dock .dock-title {
+  flex: 1;
+}
+
+.goal-dock .dock-title.active {
+  color: var(--ink);
+}
+
+@media (max-width: 650px) {
+  .dock-list {
+    max-height: 88px;
+  }
+}

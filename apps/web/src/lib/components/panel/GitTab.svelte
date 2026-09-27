@@ -333,3 +333,146 @@
     </div>
   {/if}
 </div>
+
+<style>
+  .tab-view {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+  }
+  .segmented .count {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .branch-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text-2);
+    font-size: 13px;
+  }
+  .branch-line strong {
+    overflow: hidden;
+    color: var(--ink);
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .commit-list {
+    display: grid;
+    gap: 1px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .commit-row {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    background: transparent;
+    font-size: 13px;
+    text-align: left;
+  }
+  .commit-row:hover {
+    background: var(--bg-hover);
+  }
+  .commit-row :global(svg) {
+    flex: none;
+    color: var(--muted);
+  }
+  .status-code {
+    flex: none;
+    width: 16px;
+    color: var(--muted);
+    font: 600 11.5px var(--font-mono);
+    text-align: center;
+  }
+  .status-code.s-M,
+  .status-code.s-T {
+    color: var(--warning);
+  }
+  .status-code.s-A,
+  .status-code.s-U {
+    color: var(--success);
+  }
+  .status-code.s-D {
+    color: var(--danger);
+  }
+  .status-code.s-R,
+  .status-code.s-C {
+    color: var(--accent);
+  }
+  .commit-row {
+    align-items: flex-start;
+  }
+  .commit-row :global(svg) {
+    margin-top: 2px;
+  }
+  .commit-text {
+    min-width: 0;
+    flex: 1;
+    display: grid;
+    gap: 2px;
+  }
+  .commit-subject {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .commit-sub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .load-more {
+    justify-self: center;
+    padding: 6px 12px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--accent);
+    background: transparent;
+    font-size: 12.5px;
+  }
+  .load-more:hover {
+    background: var(--accent-soft);
+  }
+  .commit-card {
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: var(--bg-layer);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .commit-message {
+    margin: 0;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .commit-meta {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .refs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 2px 0 0;
+  }
+</style>

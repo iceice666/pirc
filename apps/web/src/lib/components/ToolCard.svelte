@@ -233,3 +233,161 @@
     </div>
   {/if}
 </div>
+
+<style>
+  .tool-images img {
+    max-width: min(100%, 360px);
+    max-height: 280px;
+    border-radius: var(--radius-md);
+    object-fit: contain;
+    background: var(--bg-subtle);
+  }
+  .tool-card {
+    min-width: 0;
+    border-radius: var(--radius-sm);
+  }
+  .tool-summary {
+    width: 100%;
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px 2px 4px;
+    margin-left: -4px;
+    width: calc(100% + 4px);
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    background: transparent;
+    text-align: left;
+    font-size: 14px;
+  }
+  .tool-summary:hover {
+    background: var(--bg-hover);
+  }
+  .tool-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    color: var(--muted);
+  }
+  .tool-name {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .tool-name strong {
+    flex: none;
+    color: var(--text-2);
+    font-weight: 400;
+    white-space: nowrap;
+  }
+  .tool-name span,
+  .tool-name code {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 13px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .tool-name code {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+  }
+  .tool-duration {
+    flex: none;
+    color: var(--faint);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .tool-status {
+    flex: none;
+    display: grid;
+    place-items: center;
+    color: var(--success);
+  }
+  .tool-card.running .tool-status {
+    color: var(--accent);
+  }
+  .tool-card.failed .tool-status,
+  .tool-card.failed .tool-name strong {
+    color: var(--danger);
+  }
+  .tool-summary > :global(svg) {
+    flex: none;
+    color: var(--faint);
+    transition: transform 0.18s var(--ease);
+  }
+  .tool-summary:not(:hover):not([aria-expanded='true']) > :global(svg:last-child) {
+    opacity: 0;
+  }
+  .tool-summary > :global(svg.rotated) {
+    transform: rotate(180deg);
+  }
+  .tool-content {
+    max-height: 420px;
+    overflow: auto;
+    display: grid;
+    gap: 10px;
+    margin: 4px 0 8px 22px;
+    padding: 12px;
+    border-radius: var(--radius-md);
+    color: var(--code-ink);
+    background: var(--code-bg);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .tool-section {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+  }
+  .tool-label {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .tool-content pre {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .tool-content pre code {
+    font: inherit;
+    background: none;
+    padding: 0;
+  }
+  .tool-content pre.error {
+    color: var(--danger);
+  }
+  .tool-diff .add {
+    display: block;
+    color: var(--success);
+    background: rgb(34 160 107 / 10%);
+  }
+  .tool-diff .del {
+    display: block;
+    color: var(--danger);
+    background: rgb(220 50 50 / 9%);
+  }
+  .tool-diff .hunk {
+    color: var(--muted);
+  }
+  .tool-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .tool-empty {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+  }
+</style>
