@@ -30,6 +30,14 @@ export interface Feature {
     agent: Agent,
   ): Promise<{ systemPrompt?: string; messages?: CustomMessage[] } | void>;
   turnEnd?(agent: Agent, message: AssistantMessage): void | Promise<void>;
+  /** Messages actually admitted to model history (not merely queued). */
+  messageAdmitted?(agent: Agent, message: Message): void;
+  /** Required background work that prevents a clean end. Empty means no runtime blocker. */
+  completionBlockers?(agent: Agent): string[];
+  /** Queued custom messages removed by clear_queue; features may retain them for later. */
+  notificationsCleared?(agent: Agent, messages: CustomMessage[]): void;
+  /** Explicit cancellation; late feature events must not immediately restart the run. */
+  abort?(agent: Agent): void;
   /** Run loop is about to stop; may queue follow-ups to continue it. */
   agentEnd?(agent: Agent, messages: Message[]): void | Promise<void>;
   /**

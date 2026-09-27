@@ -107,6 +107,85 @@ export class Agent {
   private steering: QueueItem[] = [];
   private followUps: QueueItem[] = [];
   private running = false;
+  private completionWake: (() => void) | undefined;
+  private completionWaiting: string[] = [];
+  private completionRevision = 0;
+
+  /** Feature state changed; recheck completion without polling or calling the model. */
+  completionChanged(): void {
+    this.completionRevision++;
+    this.completionWake?.();
+  }
+
+  /** Remove only matching custom notifications; never discard human input. */
+  discardNotifications(predicate: (message: CustomMessage) => boolean): void {
+    const keep = (item: QueueItem) => item.kind !== 'custom' || !predicate(item.message);
+    this.steering = this.steering.filter(keep);
+    this.followUps = this.followUps.filter(keep);
+  }
+
+  /** Batch only adjacent team events; never reorder a human follow-up. */
+  private teamBatchSize(): number {
+    let count = 0;
+    let bytes = 0;
+    while (count < 50) {
+      const next = this.followUps[count];
+      if (next?.kind !== 'custom' || next.message.customType !== 'agent-team') break;
+      bytes += Buffer.byteLength(JSON.stringify(next.message));
+      if (count && bytes > 40_000) break;
+      count++;
+    }
+    return count;
+  }
+
+  private admitted(message: Message): void {
+    for (const feature of this.features) feature.messageAdmitted?.(this, message);
+  }
+
+  private async waitForCompletion(signal: AbortSignal): Promise<boolean> {
+    const deadline = Date.now() + this.config.limits.completionWaitMs;
+    try {
+      while (!signal.aborted && !this.pendingCount) {
+        const revision = this.completionRevision;
+        const blockers = this.features.flatMap(
+          (feature) => feature.completionBlockers?.(this) ?? [],
+        );
+        if (!blockers.length) return false;
+        this.completionWaiting = blockers;
+        this.ui.setStatus('completion-wait', 'Waiting for team: ' + blockers.join(', '));
+        if (Date.now() >= deadline) {
+          this.deliver(
+            {
+              customType: 'completion-timeout',
+              display: true,
+              content:
+                'Team completion wait timed out. These workers have NOT completed: ' +
+                blockers.join(', ') +
+                '. Report the pending work honestly; do not claim completion. Workers were not stopped.',
+            },
+            { deliverAs: 'followUp' },
+          );
+          return true;
+        }
+        await new Promise<void>((resolve) => {
+          const wake = () => {
+            clearTimeout(timer);
+            signal.removeEventListener('abort', wake);
+            if (this.completionWake === wake) this.completionWake = undefined;
+            resolve();
+          };
+          const timer = setTimeout(wake, Math.max(1, deadline - Date.now()));
+          this.completionWake = wake;
+          signal.addEventListener('abort', wake, { once: true });
+          if (signal.aborted || this.pendingCount || revision !== this.completionRevision) wake();
+        });
+      }
+      return false;
+    } finally {
+      if (this.completionWaiting.length) this.ui.setStatus('completion-wait', undefined);
+      this.completionWaiting = [];
+    }
+  }
   private controller: AbortController | null = null;
   private runPromise: Promise<void> | null = null;
   private extraSystemPrompt = '';
@@ -238,6 +317,7 @@ export class Agent {
       model,
       thinkingLevel: this.thinking,
       isStreaming: this.running,
+      completionWaiting: this.completionWaiting,
       isCompacting: this.compacting !== null,
       messageCount: this.store.allMessages().length,
       pendingMessageCount: this.pendingCount,
@@ -280,6 +360,10 @@ export class Agent {
     const texts = (items: QueueItem[]) =>
       items.filter((item) => item.kind === 'user').map((item) => (item as { text: string }).text);
     const cleared = { steering: texts(this.steering), followUp: texts(this.followUps) };
+    const notifications = [...this.steering, ...this.followUps].flatMap((item) =>
+      item.kind === 'custom' ? [item.message] : [],
+    );
+    for (const feature of this.features) feature.notificationsCleared?.(this, notifications);
     this.steering = [];
     this.followUps = [];
     this.emitQueue();
@@ -354,6 +438,7 @@ export class Agent {
     const item: QueueItem = { kind: 'user', text, ...(images?.length ? { images } : {}) };
     if (!this.running) return this.startRun([item]);
     this.steering.push(item);
+    this.completionChanged();
     this.emitQueue();
   }
 
@@ -363,6 +448,7 @@ export class Agent {
     const item: QueueItem = { kind: 'user', text, ...(images?.length ? { images } : {}) };
     if (!this.running) return this.startRun([item]);
     this.followUps.push(item);
+    this.completionChanged();
     this.emitQueue();
   }
 
@@ -379,6 +465,7 @@ export class Agent {
     if (this.running) {
       if (options.deliverAs === 'followUp') this.followUps.push(item);
       else this.steering.push(item);
+      this.completionChanged();
       return;
     }
     if (options.triggerTurn) this.startRun([item]);
@@ -386,6 +473,7 @@ export class Agent {
   }
 
   abort(): void {
+    for (const feature of this.features) feature.abort?.(this);
     this.controller?.abort();
     this.compacting?.abort();
   }
@@ -439,6 +527,7 @@ export class Agent {
     for (const item of items) {
       if (item.kind === 'custom') {
         this.appendMessage(item.message);
+        this.admitted(item.message);
         continue;
       }
       if (this.config.hooks.beforePrompt.length) {
@@ -687,11 +776,16 @@ export class Agent {
     }
     let turns = 0;
     let overflowRetried = false;
+    let completionTimedOut = false;
     while (!signal.aborted) {
       if (++turns > this.config.limits.maxTurns) {
         this.ui.notify(`Stopped after ${this.config.limits.maxTurns} turns`, 'warning');
         break;
       }
+      // Team reports are safe at tool boundaries. Admit them before the next
+      // model call so a final synthesis cannot overlook already-queued results.
+      const teamBatch = this.teamBatchSize();
+      if (teamBatch) await this.admit(this.followUps.splice(0, teamBatch));
       await this.maybeCompact(signal);
       if (signal.aborted) break;
       this.emit({ type: 'turn_start' });
@@ -758,10 +852,23 @@ export class Agent {
         continue;
       }
       if (message.stopReason === 'toolUse') continue;
+      // Do not remove/acknowledge reports unless another model turn can use
+      // them. At the turn limit leave queued reports for settle's next run.
+      if (turns >= this.config.limits.maxTurns) {
+        this.ui.notify(
+          `Stopped after ${this.config.limits.maxTurns} turns; team work may still be pending.`,
+          'warning',
+        );
+        break;
+      }
+      if (!this.pendingCount && !completionTimedOut)
+        completionTimedOut = await this.waitForCompletion(signal);
+      if (signal.aborted) break;
       if (!this.followUps.length)
         for (const feature of this.features) await feature.agentEnd?.(this, produced);
       if (this.steering.length || this.followUps.length) {
-        const items = [...this.steering, ...this.followUps.splice(0, 1)];
+        const count = this.teamBatchSize() || 1;
+        const items = [...this.steering, ...this.followUps.splice(0, count)];
         this.steering = [];
         this.emitQueue();
         await this.admit(items);
@@ -785,6 +892,7 @@ export class Agent {
     this.store.append({ type: 'message', message });
     this.emit({ type: 'message_start', message });
     this.emit({ type: 'message_end', message });
+    this.admitted(message);
     return message;
   }
 

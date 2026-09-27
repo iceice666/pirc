@@ -445,6 +445,15 @@ export class Team {
     this.options.onChange?.(this.list());
   }
 
+  /** Active work, not resident processes. Question notifications wake the
+   * parent through its queue; an unanswered question is still unfinished work. */
+  completionBlockers(): string[] {
+    if (this.closing) return [];
+    return [...this.agents.values()]
+      .filter((m) => ['starting', 'running', 'waiting'].includes(m.status))
+      .map((m) => `${m.name} (${m.status})`);
+  }
+
   private notifyWaiters(): void {
     for (const waiter of [...this.waiters]) waiter.check();
   }

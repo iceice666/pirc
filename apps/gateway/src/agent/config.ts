@@ -41,6 +41,8 @@ const limitsSchema = z
     ptcTimeoutMs: z.number().int().positive().default(120_000),
     toolOutputBytes: z.number().int().positive().default(51_200),
     maxTurns: z.number().int().positive().default(200),
+    /** Event-driven team completion wait per boundary; timeout reports pending work. */
+    completionWaitMs: z.number().int().positive().max(86_400_000).default(60_000),
   })
   .default({});
 

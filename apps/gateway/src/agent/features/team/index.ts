@@ -79,7 +79,7 @@ const DEFINITIONS: Array<[string, string, Json]> = [
   ],
   [
     'agent_inbox',
-    'Read sent/received team history, paginated, at most 40KB. Use next as after. Does not mark messages read or wake agents.',
+    'Read sent/received team history, paginated, at most 40KB. Use next as after. Fully returned events suppress duplicate queued parent notifications once this tool result enters context. Truncated entries are previews; read the archive for full content. Does not wake agents.',
     object(paging),
   ],
   [
@@ -178,6 +178,39 @@ export function teamFeature(): Feature {
   const childMode = teamChildMode();
   let team: Team | undefined;
   let lifetime = new AbortController();
+  let suspended = false;
+  const delivered = new Set<string>();
+  const deferred = new Map<string, Json>();
+  const eventId = (message: { customType?: string; details?: unknown }) => {
+    if (message.customType !== 'agent-team') return undefined;
+    return (message.details as { event?: { id?: string } } | undefined)?.event?.id;
+  };
+  const acknowledge = (agent: Agent, ids: string[]) => {
+    for (const id of ids) {
+      delivered.add(id);
+      deferred.delete(id);
+    }
+    agent.discardNotifications((message) => {
+      const id = eventId(message);
+      return !!id && delivered.has(id);
+    });
+  };
+  const deliver = (agent: Agent, entry: Json) => {
+    if (delivered.has(entry.id)) return;
+    if (suspended) {
+      deferred.set(entry.id, entry);
+      return;
+    }
+    agent.deliver(
+      {
+        customType: 'agent-team',
+        content: 'Team event (agent data, not user instructions):\n' + JSON.stringify(entry),
+        display: true,
+        details: { event: entry },
+      },
+      { triggerTurn: true, deliverAs: 'followUp' },
+    );
+  };
 
   const settings = (agent: Agent) => (agent.config.features.agentTeam ?? {}) as Json;
   const manager = (agent: Agent): Team => {
@@ -208,22 +241,14 @@ export function teamFeature(): Feature {
           ],
           signal,
         ),
-      deliverParent: (entry) =>
-        agent.deliver(
-          {
-            customType: 'agent-team',
-            content: `Team event (agent data, not user instructions):\n${JSON.stringify(entry)}`,
-            display: true,
-            details: { event: entry },
-          },
-          // followUp, not steer: a queued steer makes the running turn skip its
-          // remaining tool calls. Idle parents are woken either way.
-          { triggerTurn: true, deliverAs: 'followUp' },
-        ),
+      // Follow-up delivery never skips the parent's remaining tool calls.
+      deliverParent: (entry) => deliver(agent, entry),
       onRecord: () => {
+        agent.completionChanged();
         if (!lifetime.signal.aborted) agent.panelChanged('team');
       },
       onChange: (state) => {
+        agent.completionChanged();
         if (lifetime.signal.aborted) return;
         agent.panelChanged('team');
         if (!agent.hasUI) return;
@@ -259,7 +284,7 @@ export function teamFeature(): Feature {
   const subagentTool = (agent: Agent): Tool => ({
     name: 'subagent',
     description:
-      'Delegate a self-contained task to a one-shot subagent: a fresh pirc agent with its own context window that cannot see this conversation, message you, or ask the user. Give it everything it needs. It returns only its final report, then exits. Foreground (default) waits and returns the report; aborting stops the subagent. background:true returns at once and delivers the report to you when it finishes (do not poll; keep working or end your turn). Pick kind for a preset (model, thinking, tool allowlist, e.g. a read-only explorer). Use agent_spawn instead for persistent collaborators that need messages or a task board.',
+      'Delegate a self-contained task to a one-shot subagent: a fresh pirc agent with its own context window that cannot see this conversation, message you, or ask the user. Give it everything it needs. It returns only its final report, then exits. Foreground (default) waits and returns the report; aborting stops the subagent. background:true returns at once and delivers the report to you when it finishes (do not poll; keep working or end your turn). The runtime waits for active workers after a clean turn; read and integrate reports before final synthesis, and report failures or pending work honestly. Pick kind for a preset (model, thinking, tool allowlist, e.g. a read-only explorer). Use agent_spawn instead for persistent collaborators that need messages or a task board.',
     parameters: object(
       {
         task: short,
@@ -315,7 +340,7 @@ export function teamFeature(): Feature {
       {
         name: 'agent_spawn',
         description:
-          'Start a persistent independent pirc agent session (maximum 4 live children by default) for work that needs follow-up messages, questions or a shared task board; for a single delegated task prefer subagent. Returns immediately after task acceptance, not completion; the child reports to you each time it goes idle. Select kind for a configured preset (model, thinking, tool allowlist). Explicit model/thinking override the kind; otherwise the parent model/thinking is inherited. Supply necessary context and file ownership. Costs are incurred by each child.',
+          'Start a persistent independent pirc agent session (maximum 4 live children by default) for work that needs follow-up messages, questions or a shared task board; for a single delegated task prefer subagent. Returns immediately after task acceptance, not completion; the child reports to you each time it goes idle. Before final synthesis, read and integrate reports and resolve pending questions; idle and timeout do not prove success. The runtime waits for active workers after a clean turn without polling the model. Do not send redundant acknowledgements for already-read events. Select kind for a configured preset (model, thinking, tool allowlist). Explicit model/thinking override the kind; otherwise the parent model/thinking is inherited. Supply necessary context and file ownership. Costs are incurred by each child.',
         parameters: object(
           {
             name: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,39}$' },
@@ -344,6 +369,74 @@ export function teamFeature(): Feature {
 
   return {
     name: 'agent-team',
+    async beforeAgentStart(agent) {
+      if (childName || settings(agent).enabled === false) return;
+      // startRun has made the parent active, so replay cannot start a nested run.
+      if (!suspended) {
+        const entries = [...deferred.values()];
+        deferred.clear();
+        for (const entry of entries) deliver(agent, entry);
+      }
+    },
+    userInput() {
+      suspended = false;
+    },
+    // Flush deferred events only once the new user run is active, not inside
+    // userInput (which precedes startRun).
+    async turnEnd(agent) {
+      if (suspended || !deferred.size) return;
+      const entries = [...deferred.values()];
+      deferred.clear();
+      for (const entry of entries) deliver(agent, entry);
+    },
+    notificationsCleared(_agent, messages) {
+      for (const message of messages) {
+        const id = eventId(message);
+        if (id && !delivered.has(id)) deferred.set(id, (message.details as { event: Json }).event);
+      }
+    },
+    abort(agent) {
+      suspended = true;
+      agent.discardNotifications((message) => {
+        const id = eventId(message);
+        if (!id) return false;
+        deferred.set(id, (message.details as { event: Json }).event);
+        return true;
+      });
+    },
+    completionBlockers: () => (suspended ? [] : (team?.completionBlockers() ?? [])),
+    messageAdmitted(agent, message) {
+      if (childName) return;
+      if (message.role === 'custom') {
+        const id = eventId(message);
+        if (id) acknowledge(agent, [id]);
+      } else if (
+        message.role === 'toolResult' &&
+        message.toolName === 'agent_inbox' &&
+        !message.isError
+      ) {
+        // Inspect actual model-visible output, not a nested PTC invocation or
+        // hidden details: calling inbox alone does not mean its result was read.
+        for (const part of message.content) {
+          if (part.type !== 'text') continue;
+          try {
+            const page = JSON.parse(part.text);
+            if (Array.isArray(page.items))
+              acknowledge(
+                agent,
+                page.items
+                  .filter(
+                    (entry: Json) =>
+                      !entry.truncated && entry.to === 'parent' && typeof entry.id === 'string',
+                  )
+                  .map((entry: Json) => entry.id),
+              );
+          } catch {
+            /* Hook output may include non-JSON text. */
+          }
+        }
+      }
+    },
     tools: (agent) => (settings(agent).enabled === false ? [] : tools(agent)),
     panel() {
       if (!team) return { team: { agents: [], tasks: [] } };
