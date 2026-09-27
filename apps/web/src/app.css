@@ -3673,7 +3673,6 @@ button.task-row:hover {
     background: transparent;
   }
   .control-pill,
-  .session-menu,
   .jobs-label {
     display: none;
   }

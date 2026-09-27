@@ -8,6 +8,9 @@ export default defineConfig({
   build: {
     manifest: true,
     sourcemap: true,
+    // Only lazily loaded renderers (mermaid diagrams, KaTeX) exceed the default
+    // 500 kB; the entry chunk stays well below this.
+    chunkSizeWarningLimit: 750,
   },
   server: {
     proxy: {
