@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentConfig, ModelConfig, ProviderConfig, ThinkingLevel } from './config.js';
-import { thinkingLevels } from './config.js';
+import { sessionSettings, thinkingLevels } from './config.js';
 import { listModels } from '../models.js';
 import { createRemoteStream, fetchRemoteModels } from './providers/remote.js';
 import {
@@ -238,19 +238,10 @@ export class Agent {
   }
 
   private restoreSettings(): void {
-    const model = this.store.latest('model_change');
-    const thinking = this.store.latest('thinking_level_change');
+    const settings = sessionSettings(this.store.branch(), this.config);
     const info = this.store.latest('session_info');
-    const fallback = this.config.defaultModel;
-    if (model) this.modelRef = { provider: model.provider, id: model.modelId };
-    else if (fallback) this.modelRef = { provider: fallback.provider, id: fallback.id };
-    else {
-      const [name, provider] = Object.entries(this.config.providers)[0] ?? [];
-      if (name && provider) this.modelRef = { provider: name, id: provider.models[0]!.id };
-    }
-    const level = thinking?.thinkingLevel ?? fallback?.thinking;
-    if (level && (thinkingLevels as readonly string[]).includes(level))
-      this.thinking = level as ThinkingLevel;
+    if (settings.model) this.modelRef = settings.model;
+    this.thinking = settings.thinking;
     if (info) {
       this.sessionName = info.name;
       this.nameSource = info.source ?? 'user';

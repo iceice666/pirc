@@ -20,6 +20,7 @@ import { NODE_USER_HEADER } from '../protocol.js';
 import { applySessionName, publicSession } from '../session-name.js';
 import type { CommandPayload, Snapshot } from '../types.js';
 import { id, parse, payloadHash } from '../util.js';
+import { loadAgentConfig, sessionSettings } from '../agent/config.js';
 import { historyOf } from '../agent/session-store.js';
 import { BranchCache } from './branch-cache.js';
 import { WorkspaceLocks } from './locks.js';
@@ -213,17 +214,17 @@ export async function buildNodeApp(
     // announcing it, so the file is never behind the watermark taken below.
     const branch = branches.read(privateSessionPath);
     const history = historyOf(branch);
-    // No live runner: report the settings the session file will restore, so the
-    // client does not fall back to another model and overwrite them on the next prompt.
+    // No live runner: report the settings the next agent will start with (the
+    // session file's, else the default model), so the client does not fall back
+    // to another model and overwrite them on the next prompt.
     if (!agent) {
-      const model = branch.findLast((entry) => entry.type === 'model_change');
-      const thinking = branch.findLast((entry) => entry.type === 'thinking_level_change');
-      if (model || thinking)
-        agent = {
-          model:
-            model?.type === 'model_change' ? { provider: model.provider, id: model.modelId } : null,
-          thinkingLevel: thinking?.type === 'thinking_level_change' ? thinking.thinkingLevel : null,
-        };
+      try {
+        const root = db.getWorkspace(session.workspaceId).canonicalPath;
+        const settings = sessionSettings(branch, loadAgentConfig(root, models.current));
+        agent = { model: settings.model, thinkingLevel: settings.thinking };
+      } catch {
+        /* invalid config: model/thinking are advisory */
+      }
     }
     const snapshot: Snapshot = {
       session: publicSession(session),

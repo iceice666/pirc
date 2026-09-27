@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { SESSION_FILE } from '../src/agent/session-store.js';
 import { buildNodeApp } from '../src/node/app.js';
+import { testModels } from './agent-harness.js';
 import { nodeHeaders as headers, testConfig, waitFor } from './helpers.js';
 
 const apps: FastifyInstance[] = [];
@@ -197,41 +199,74 @@ describe('node router', () => {
     await waitFor(texts, 'echo:first|echo:second');
   });
 
-  it('reports the session-file model and thinking level when no runner is live', async () => {
+  it('reports the model and thinking level the next agent will use when no runner is live', async () => {
+    const previous = process.env.PIRC_CONFIG_DIR;
+    process.env.PIRC_CONFIG_DIR = mkdtempSync(path.join(tmpdir(), 'pirc-snapshot-config-'));
     const { app, services } = await buildNodeApp(testConfig());
     apps.push(app);
-    const created = await app.inject({
-      method: 'POST',
-      url: '/api/sessions',
-      headers,
-      payload: { workspaceId: 'test' },
-    });
-    const sessionId = created.json().session.id as string;
-    const snapshot = async () =>
-      (
-        await app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/snapshot`, headers })
-      ).json();
-    expect((await snapshot()).agent).toBeNull();
-
-    const dir = services.db.getSession(sessionId).privateSessionPath;
-    mkdirSync(dir, { recursive: true });
-    const entries = [
-      { type: 'session', id: 'a', parentId: null, timestamp: 1, version: 1, sessionId, cwd: dir },
-      { type: 'model_change', id: 'b', parentId: 'a', timestamp: 2, provider: 'p', modelId: 'old' },
-      {
-        type: 'thinking_level_change',
-        id: 'c',
-        parentId: 'b',
-        timestamp: 3,
+    try {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/sessions',
+        headers,
+        payload: { workspaceId: 'test' },
+      });
+      const sessionId = created.json().session.id as string;
+      const snapshot = async () =>
+        (
+          await app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/snapshot`, headers })
+        ).json();
+      // No catalog yet: nothing to pick, the agent's default thinking level.
+      expect((await snapshot()).agent).toEqual({ model: null, thinkingLevel: 'medium' });
+      // A fresh session starts on the default model, not the first listed one.
+      services.models.set(
+        testModels('http://127.0.0.1:1', {
+          defaultModel: { provider: 'fakeclaude', id: 'claude-x', thinking: 'high' },
+        }),
+      );
+      expect((await snapshot()).agent).toEqual({
+        model: { provider: 'fakeclaude', id: 'claude-x' },
         thinkingLevel: 'high',
-      },
-      { type: 'model_change', id: 'd', parentId: 'c', timestamp: 4, provider: 'p', modelId: 'new' },
-    ];
-    writeFileSync(path.join(dir, SESSION_FILE), entries.map((e) => JSON.stringify(e)).join('\n'));
-    expect(services.runners.get(sessionId)?.alive ?? false).toBe(false);
-    expect((await snapshot()).agent).toEqual({
-      model: { provider: 'p', id: 'new' },
-      thinkingLevel: 'high',
-    });
+      });
+
+      // Recorded changes win over the default.
+      const dir = services.db.getSession(sessionId).privateSessionPath;
+      mkdirSync(dir, { recursive: true });
+      const entries = [
+        { type: 'session', id: 'a', parentId: null, timestamp: 1, version: 1, sessionId, cwd: dir },
+        {
+          type: 'model_change',
+          id: 'b',
+          parentId: 'a',
+          timestamp: 2,
+          provider: 'p',
+          modelId: 'old',
+        },
+        {
+          type: 'thinking_level_change',
+          id: 'c',
+          parentId: 'b',
+          timestamp: 3,
+          thinkingLevel: 'minimal',
+        },
+        {
+          type: 'model_change',
+          id: 'd',
+          parentId: 'c',
+          timestamp: 4,
+          provider: 'p',
+          modelId: 'new',
+        },
+      ];
+      writeFileSync(path.join(dir, SESSION_FILE), entries.map((e) => JSON.stringify(e)).join('\n'));
+      expect(services.runners.get(sessionId)?.alive ?? false).toBe(false);
+      expect((await snapshot()).agent).toEqual({
+        model: { provider: 'p', id: 'new' },
+        thinkingLevel: 'minimal',
+      });
+    } finally {
+      if (previous === undefined) delete process.env.PIRC_CONFIG_DIR;
+      else process.env.PIRC_CONFIG_DIR = previous;
+    }
   });
 });

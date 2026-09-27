@@ -8,7 +8,10 @@ import {
   type ModelsConfig,
   type ModelRef,
   type ProviderConfig,
+  thinkingLevels,
+  type ThinkingLevel,
 } from '../models.js';
+import type { SessionEntry } from './session-store.js';
 
 export {
   defaultConfigDir,
@@ -158,4 +161,32 @@ export function loadAgentConfig(
     features: global.features,
     systemPrompt: prompts.join('\n\n'),
   };
+}
+
+/**
+ * Model and thinking level an agent uses for a session: the latest recorded
+ * change on the branch, else the default model (and its thinking level), else
+ * the first configured model. Shared by the agent and the gateway snapshot.
+ */
+export function sessionSettings(
+  branch: readonly SessionEntry[],
+  config: Pick<AgentConfig, 'defaultModel' | 'providers'>,
+): { model: { provider: string; id: string } | null; thinking: ThinkingLevel } {
+  const change = branch.findLast((entry) => entry.type === 'model_change');
+  const level = branch.findLast((entry) => entry.type === 'thinking_level_change');
+  const fallback = config.defaultModel;
+  let model: { provider: string; id: string } | null = null;
+  if (change?.type === 'model_change') model = { provider: change.provider, id: change.modelId };
+  else if (fallback) model = { provider: fallback.provider, id: fallback.id };
+  else {
+    const [name, provider] = Object.entries(config.providers)[0] ?? [];
+    if (name && provider?.models[0]) model = { provider: name, id: provider.models[0].id };
+  }
+  const recorded =
+    level?.type === 'thinking_level_change' ? level.thinkingLevel : fallback?.thinking;
+  const thinking =
+    recorded && (thinkingLevels as readonly string[]).includes(recorded)
+      ? (recorded as ThinkingLevel)
+      : 'medium';
+  return { model, thinking };
 }
