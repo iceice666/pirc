@@ -9,9 +9,8 @@
  * Output is always passed through DOMPurify: model output and tool results are untrusted.
  */
 import DOMPurify from 'dompurify';
-import hljs from 'highlight.js/lib/common';
-import katex from 'katex';
 import { Marked, type Tokens, type TokenizerAndRendererExtension } from 'marked';
+import { writable } from 'svelte/store';
 
 const escapeHtml = (value: string) =>
   value
@@ -21,7 +20,50 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+/*
+ * KaTeX and highlight.js are the two largest pieces of the main bundle, and most
+ * messages need neither. They are loaded on first use: rendering is kept
+ * synchronous, emitting plain text until the module lands, and `rendererTick`
+ * bumps so components that depend on it re-render once with the real output.
+ */
+type Katex = typeof import('katex').default;
+type Hljs = typeof import('highlight.js/lib/common').default;
+
+let katex: Katex | undefined;
+let hljs: Hljs | undefined;
+let katexLoader: Promise<void> | undefined;
+let hljsLoader: Promise<void> | undefined;
+
+/** Bumped when a lazily loaded renderer becomes available. */
+export const rendererTick = writable(0);
+const bump = () => rendererTick.update((n) => n + 1);
+
+export function loadKatex(): Promise<void> {
+  katexLoader ??= Promise.all([import('katex'), import('katex/dist/katex.min.css')]).then(
+    ([module]) => {
+      katex = module.default;
+      bump();
+    },
+  );
+  return katexLoader;
+}
+
+export function loadHighlighter(): Promise<void> {
+  hljsLoader ??= import('highlight.js/lib/common').then((module) => {
+    hljs = module.default;
+    bump();
+  });
+  return hljsLoader;
+}
+
+/** Load both renderers up front (tests, or idle-time warm-up). */
+export const preloadRenderers = () => Promise.all([loadKatex(), loadHighlighter()]);
+
 function renderMath(source: string, displayMode: boolean): string {
+  if (!katex) {
+    void loadKatex();
+    return `<code class="math-pending">${escapeHtml(source)}</code>`;
+  }
   try {
     return katex.renderToString(source, {
       displayMode,
@@ -68,7 +110,12 @@ const inlineMath: TokenizerAndRendererExtension = {
 };
 
 function highlight(code: string, language: string): string {
-  if (language && hljs.getLanguage(language)) {
+  if (!language) return escapeHtml(code);
+  if (!hljs) {
+    void loadHighlighter();
+    return escapeHtml(code);
+  }
+  if (hljs.getLanguage(language)) {
     try {
       return hljs.highlight(code, { language, ignoreIllegals: true }).value;
     } catch {

@@ -32,6 +32,7 @@
     demoSnapshot,
     demoWorkspaces,
   } from './lib/mock';
+  import { loadHighlighter } from './lib/markdown';
   import { activateUpdate, registerPwa } from './lib/pwa';
   import { fromSnapshot, reduceEvent } from './lib/state';
   import { parseTodoWidget, TODO_WIDGET } from './lib/todo';
@@ -137,10 +138,53 @@
   $: pendingInteractions =
     sessionState?.interactions.filter((item) => item.status === 'pending') ?? [];
 
+  /**
+   * A long transcript is rendered from the end: opening a session mounts only
+   * the newest `MESSAGE_PAGE` entries (each one parses Markdown synchronously),
+   * and scrolling to the top reveals the next page. `hiddenMessages` counts the
+   * earliest entries not yet mounted.
+   */
+  const MESSAGE_PAGE = 60;
+  let hiddenMessages = 0;
+  let revealingEarlier = false;
+  $: visibleMessages = sessionState
+    ? sessionState.messages.slice(Math.min(hiddenMessages, sessionState.messages.length))
+    : [];
+
+  async function showEarlier() {
+    if (!hiddenMessages || revealingEarlier) return;
+    revealingEarlier = true;
+    const previousHeight = timeline?.scrollHeight ?? 0;
+    const previousTop = timeline?.scrollTop ?? 0;
+    hiddenMessages = Math.max(0, hiddenMessages - MESSAGE_PAGE);
+    await tick();
+    // Keep the entry the reader was looking at in place.
+    if (timeline) timeline.scrollTop = previousTop + (timeline.scrollHeight - previousHeight);
+    revealingEarlier = false;
+  }
+
+  /** Reveal the previous page when the top of the transcript scrolls into view. */
+  function revealEarlier(node: HTMLElement) {
+    if (typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) void showEarlier();
+      },
+      { root: node.closest('.timeline'), rootMargin: '200px 0px 0px' },
+    );
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  }
+
   onMount(() => {
     clientId = getClientId();
     const removePwa = registerPwa((registration) => (updateRegistration = registration));
     void bootstrap();
+    // Code blocks are common; fetch the highlighter once the first paint is done.
+    // KaTeX is rarer and loads on first use instead.
+    const warm = () => void loadHighlighter();
+    if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 3000 });
+    else setTimeout(warm, 1000);
     leaseHeartbeat = setInterval(() => {
       if (
         !usingDemo &&
@@ -223,6 +267,7 @@
           }
         : await api.snapshot(id);
       sessionState = fromSnapshot(snapshot);
+      hiddenMessages = Math.max(0, sessionState.messages.length - MESSAGE_PAGE);
       if (!usingDemo) void loadModels(id);
       if (!usingDemo) {
         events = connectEvents({
@@ -734,7 +779,17 @@
         <section class="conversation" aria-label="Conversation">
           <div class="timeline" bind:this={timeline} aria-live="polite">
             <div class="timeline-inner">
-              {#each sessionState.messages as message (message.id)}<Message {message} />{/each}
+              {#if hiddenMessages > 0}
+                <button
+                  type="button"
+                  class="earlier-messages"
+                  use:revealEarlier
+                  on:click={showEarlier}
+                >
+                  Show earlier messages ({hiddenMessages} more)
+                </button>
+              {/if}
+              {#each visibleMessages as message (message.id)}<Message {message} />{/each}
               {#each pendingInteractions as interaction (interaction.id)}
                 <InteractionCard
                   {interaction}

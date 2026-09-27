@@ -224,6 +224,10 @@
 .markdown .math-error {
   color: var(--danger);
 }
+/* Shown only until KaTeX has loaded. */
+.markdown .math-pending {
+  opacity: 0.7;
+}
 
 /* Mermaid */
 .markdown .mermaid-block {

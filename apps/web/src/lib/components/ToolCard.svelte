@@ -12,7 +12,7 @@
     Terminal,
     Wrench,
   } from '@lucide/svelte';
-  import { highlightCode, languageForPath } from '../markdown';
+  import { highlightCode, languageForPath, rendererTick } from '../markdown';
   import type { ToolCall } from '../types';
 
   export let tool: ToolCall;
@@ -109,6 +109,36 @@
   $: diffLines = (tool.diff ?? '').split('\n');
   $: pendingEdits =
     !tool.diff && tool.name === 'edit' && Array.isArray(args.edits) ? args.edits : [];
+
+  // Highlighting only runs for an expanded card, and re-runs once the lazily
+  // loaded highlighter arrives (`$rendererTick`).
+  let commandHtml = '';
+  let contentHtml = '';
+  let inputHtml = '';
+  let outputHtml = '';
+  $: {
+    $rendererTick;
+    commandHtml =
+      open && tool.name === 'bash' && typeof args.command === 'string'
+        ? highlightCode(args.command, 'bash')
+        : '';
+    contentHtml =
+      open && tool.name === 'write' && typeof args.content === 'string'
+        ? highlightCode(args.content, fileLanguage)
+        : '';
+    inputHtml =
+      open && extraInput !== undefined
+        ? typeof extraInput === 'string'
+          ? highlightCode(extraInput)
+          : highlightCode(JSON.stringify(extraInput, null, 2), 'json')
+        : '';
+    outputHtml =
+      open && tool.output
+        ? tool.name === 'read' && tool.status !== 'failed'
+          ? highlightCode(tool.output, fileLanguage)
+          : highlightCode(tool.output)
+        : '';
+  }
 </script>
 
 <div
@@ -142,15 +172,13 @@
       {#if tool.name === 'bash' && typeof args.command === 'string'}
         <section class="tool-section">
           <span class="tool-label">Command</span>
-          <pre class="tool-command"><code class="hljs"
-              >{@html highlightCode(args.command, 'bash')}</code
-            ></pre>
+          <pre class="tool-command"><code class="hljs">{@html commandHtml}</code></pre>
         </section>
       {/if}
       {#if tool.name === 'write' && typeof args.content === 'string'}
         <section class="tool-section">
           <span class="tool-label">Content</span>
-          <pre><code class="hljs">{@html highlightCode(args.content, fileLanguage)}</code></pre>
+          <pre><code class="hljs">{@html contentHtml}</code></pre>
         </section>
       {/if}
       {#if tool.diff}
@@ -176,20 +204,13 @@
       {#if extraInput !== undefined}
         <section class="tool-section">
           <span class="tool-label">Input</span>
-          <pre><code class="hljs"
-              >{@html typeof extraInput === 'string'
-                ? highlightCode(extraInput)
-                : highlightCode(JSON.stringify(extraInput, null, 2), 'json')}</code
-            ></pre>
+          <pre><code class="hljs">{@html inputHtml}</code></pre>
         </section>
       {/if}
       {#if tool.output}
         <section class="tool-section">
           <span class="tool-label">{tool.status === 'failed' ? 'Error' : 'Output'}</span>
-          <pre class:error={tool.status === 'failed'}><code class="hljs"
-              >{@html tool.name === 'read' && tool.status !== 'failed'
-                ? highlightCode(tool.output, fileLanguage)
-                : highlightCode(tool.output)}</code
+          <pre class:error={tool.status === 'failed'}><code class="hljs">{@html outputHtml}</code
             ></pre>
         </section>
       {/if}

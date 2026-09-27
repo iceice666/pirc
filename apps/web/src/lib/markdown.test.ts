@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
-import { renderMarkdown } from './markdown';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { preloadRenderers, renderMarkdown } from './markdown';
 
 describe('renderMarkdown', () => {
+  beforeAll(() => preloadRenderers());
+
   it('renders GFM and highlighted code', () => {
     const html = renderMarkdown(
       '# Title\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n```ts\nconst x = 1;\n```',
