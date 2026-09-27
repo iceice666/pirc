@@ -14,7 +14,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.pirc.android.AppViewModel
+import dev.pirc.android.SessionViewModel
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -43,7 +45,11 @@ fun PircApp(viewModel: AppViewModel) {
                 }
                 composable<SessionRoute> { entry ->
                     val route = entry.toRoute<SessionRoute>()
-                    SessionScreen(name = route.name, onBack = { nav.popBackStack() })
+                    val api = viewModel.api() ?: return@composable
+                    val session = viewModel<SessionViewModel>(key = "${api.pairing.baseUrl}|${route.id}") {
+                        SessionViewModel(api, route.id, onUnauthorized = { viewModel.handle(it) })
+                    }
+                    SessionScreen(session, fallbackName = route.name, onBack = { nav.popBackStack() })
                 }
             }
         }

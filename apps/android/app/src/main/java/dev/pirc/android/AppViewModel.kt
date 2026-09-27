@@ -59,7 +59,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (_pairing.value != null) refresh()
     }
 
-    fun api(): PircApi? = _pairing.value?.let { PircApi(it) }
+    private var cachedApi: PircApi? = null
+
+    /** One client per pairing, so connections are pooled. */
+    fun api(): PircApi? {
+        val pairing = _pairing.value ?: return null
+        cachedApi?.takeIf { it.pairing == pairing }?.let { return it }
+        return PircApi(pairing).also { cachedApi = it }
+    }
 
     /** A link from a deep link: never pairs without the user confirming the gateway. */
     fun offerLink(text: String) {

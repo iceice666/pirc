@@ -2,7 +2,7 @@
 
 A native Jetpack Compose client for the pirc gateway. See [`plans/android-client.md`](../../plans/android-client.md) for the design and milestones.
 
-Current state: pairing and the session list. Chat, the composer and the files panel come next; until then, the web client does everything else.
+Current state: pairing, the session list, and a live read-only chat view (markdown with highlighted, copyable code; collapsible thinking, tool calls and system entries; pending questions and the queue). The composer, answering questions and the files panel come next; until then, use the web client for those.
 
 ## Pairing
 
@@ -27,3 +27,17 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 This project is not part of the Bun workspace, `bun run check`, or the Nix package.
+
+## Timeline port
+
+`core/timeline` ports the web's snapshot/event handling (`api.ts`, `pi-messages.ts`, `state.ts`). Both are tested against the shared golden cases in [`fixtures/timeline`](../../fixtures/timeline/README.md); change them together.
+
+## Trying it without a gateway
+
+`dev/fake-gateway.ts` serves one session from the fixtures and streams a demo reply each time the chat opens:
+
+```sh
+bun apps/android/dev/fake-gateway.ts   # http://0.0.0.0:8799
+adb shell am start -a android.intent.action.VIEW \
+  -d "pirc://pair?url=http%3A%2F%2F10.0.2.2%3A8799&token=$(bun apps/android/dev/fake-gateway.ts --token)"
+```

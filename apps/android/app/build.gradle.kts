@@ -38,6 +38,13 @@ kotlin {
     jvmToolchain(21)
 }
 
+// Golden timeline cases shared with the web client.
+val sharedFixtures = rootProject.layout.projectDirectory.dir("../../fixtures")
+tasks.withType<Test>().configureEach {
+    inputs.dir(sharedFixtures).withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty("pirc.fixtures", sharedFixtures.asFile.absolutePath)
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -52,6 +59,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.play.services.code.scanner)
+    implementation(libs.markdown.m3)
+    implementation(libs.markdown.code)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

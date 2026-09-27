@@ -1,0 +1,166 @@
+package dev.pirc.android.ui.session
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dev.pirc.android.core.timeline.ToolCall
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+
+private val prettyJson = Json { prettyPrint = true }
+
+/** Long outputs are cut until the reader asks for all of it. */
+private const val OUTPUT_PREVIEW = 4_000
+
+/** The detail that identifies a call at a glance: a command, a path, or the first string argument. */
+internal fun toolSummary(tool: ToolCall): String {
+    val input = tool.input
+    if (input is JsonPrimitive) return input.content
+    if (input !is JsonObject) return ""
+    for (key in listOf("command", "path", "file_path", "pattern", "query", "url", "description", "name"))
+        (input[key] as? JsonPrimitive)?.takeIf { it.isString }?.let { return it.content }
+    return input.values.firstNotNullOfOrNull { (it as? JsonPrimitive)?.takeIf { value -> value.isString }?.content } ?: ""
+}
+
+private fun pretty(input: JsonElement?): String? = when (input) {
+    null -> null
+    is JsonPrimitive -> input.content
+    else -> prettyJson.encodeToString(JsonElement.serializer(), input)
+}
+
+@Composable
+fun ToolCard(tool: ToolCall, modifier: Modifier = Modifier) {
+    var open by rememberSaveable(tool.id) { mutableStateOf(false) }
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        color = colors.surfaceContainerLow,
+        shape = MaterialTheme.shapes.medium,
+        modifier = modifier.fillMaxWidth().animateContentSize(),
+    ) {
+        Column {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { open = !open }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                StatusMark(tool.status)
+                Text(tool.title ?: tool.name, style = MaterialTheme.typography.labelLarge)
+                Text(
+                    toolSummary(tool),
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            AnimatedVisibility(visible = open) {
+                Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    pretty(tool.input)?.takeIf { it.isNotEmpty() }?.let { CodePane("Input", AnnotatedString(it)) }
+                    tool.diff?.let { CodePane("Diff", diffText(it)) }
+                    tool.output?.let { output -> OutputPane(output) }
+                    if (tool.input == null && tool.output == null && tool.diff == null)
+                        Text("No details yet.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusMark(status: String) {
+    val colors = MaterialTheme.colorScheme
+    Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+        when (status) {
+            "running" -> CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+            "failed" -> Text("✕", color = colors.error, style = MaterialTheme.typography.labelLarge)
+            else -> Text("✓", color = colors.primary, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+@Composable
+private fun OutputPane(output: String) {
+    var all by rememberSaveable { mutableStateOf(false) }
+    val cut = !all && output.length > OUTPUT_PREVIEW
+    CodePane("Output", AnnotatedString(if (cut) output.take(OUTPUT_PREVIEW) + "\n…" else output))
+    if (cut) TextButton(onClick = { all = true }) { Text("Show all ${output.length} characters") }
+}
+
+/** Monospace, never wrapped: scrolls sideways, and at most a screenful tall. */
+@Composable
+fun CodePane(label: String, text: AnnotatedString) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = MaterialTheme.shapes.small) {
+            SelectionContainer {
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 18.sp),
+                    softWrap = false,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                        .horizontalScroll(rememberScrollState())
+                        .padding(10.dp),
+                )
+            }
+        }
+    }
+}
+
+private val Added = Color(0xFF2E9E5B)
+private val Removed = Color(0xFFD1453B)
+
+internal fun diffText(diff: String): AnnotatedString = buildAnnotatedString {
+    diff.lineSequence().forEachIndexed { index, line ->
+        if (index > 0) append('\n')
+        val color = when {
+            line.startsWith("+++") || line.startsWith("---") -> null
+            line.startsWith("+") -> Added
+            line.startsWith("-") -> Removed
+            line.startsWith("@@") -> Color(0xFF6B7FD7)
+            else -> null
+        }
+        if (color == null) append(line) else withStyle(SpanStyle(color = color)) { append(line) }
+    }
+}
