@@ -4,10 +4,10 @@
    * Collapsed, the header shows the objective, its phase and the rounds used;
    * expanded, the full objective, the blocked/paused reason and pause/resume.
    */
-  import { ChevronDown, Target } from '@lucide/svelte';
-  import { slide } from 'svelte/transition';
+  import { Target } from '@lucide/svelte';
   import { loadLayout, saveLayout } from '../storage';
   import type { GoalView } from '../goal';
+  import DockSection from './DockSection.svelte';
 
   interface Props {
     goal: GoalView;
@@ -19,10 +19,7 @@
   let { goal, disabled = false, onaction }: Props = $props();
 
   let expanded = $state(loadLayout('goalExpanded', false));
-  function toggle() {
-    expanded = !expanded;
-    saveLayout('goalExpanded', expanded);
-  }
+  const persist = (open: boolean) => saveLayout('goalExpanded', open);
 
   let running = $derived(goal.phase === 'active' && !goal.disarmed);
   let phaseLabel = $derived(
@@ -47,27 +44,20 @@
   );
 </script>
 
-<section class="dock-section goal-dock" aria-label="Goal">
-  <div class="dock-head">
-    <button
-      class="dock-toggle"
-      type="button"
-      aria-expanded={expanded}
-      aria-controls="goal-dock-body"
-      onclick={toggle}
-    >
-      <span class="todo-lead">
-        {#if running}<span class="state-dot ongoing" aria-hidden="true"></span>{:else}<Target
-            size={14}
-          />{/if}
-      </span>
-      <span class="dock-title" class:active={running}>{goal.objective}</span>
-      <span class="goal-phase phase-{goal.phase}" class:disarmed={goal.disarmed}>{phaseLabel}</span>
-      <span class="todo-progress" title="Continuation rounds">
-        {goal.rounds}{goal.maxRounds === undefined ? '' : `/${goal.maxRounds}`}
-      </span>
-      <span class:collapsed={!expanded} class="dock-chevron"><ChevronDown size={14} /></span>
-    </button>
+<DockSection label="Goal" class="goal-dock" bind:expanded ontoggle={persist}>
+  {#snippet head()}
+    <span class="todo-lead">
+      {#if running}<span class="state-dot ongoing" aria-hidden="true"></span>{:else}<Target
+          size={14}
+        />{/if}
+    </span>
+    <span class="dock-title" class:active={running}>{goal.objective}</span>
+    <span class="goal-phase phase-{goal.phase}" class:disarmed={goal.disarmed}>{phaseLabel}</span>
+    <span class="todo-progress" title="Continuation rounds">
+      {goal.rounds}{goal.maxRounds === undefined ? '' : `/${goal.maxRounds}`}
+    </span>
+  {/snippet}
+  {#snippet actions()}
     {#if running}
       <button class="dock-action" type="button" {disabled} onclick={() => onaction('pause')}
         >Pause</button
@@ -77,15 +67,13 @@
         >Resume</button
       >
     {/if}
+  {/snippet}
+  <div class="goal-body">
+    <p class="goal-objective">{goal.objective}</p>
+    {#if goal.reason}
+      <p class="goal-reason">
+        <span class="state-dot {dot}" aria-hidden="true"></span>{goal.reason}
+      </p>
+    {/if}
   </div>
-  {#if expanded}
-    <div id="goal-dock-body" class="goal-body" transition:slide={{ duration: 160 }}>
-      <p class="goal-objective">{goal.objective}</p>
-      {#if goal.reason}
-        <p class="goal-reason">
-          <span class="state-dot {dot}" aria-hidden="true"></span>{goal.reason}
-        </p>
-      {/if}
-    </div>
-  {/if}
-</section>
+</DockSection>

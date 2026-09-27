@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     ArrowUp,
-    ChevronDown,
     CornerDownRight,
     Image,
     ListOrdered,
@@ -17,6 +16,7 @@
   import { modelKey } from '../types';
   import ComposerSelect from './ComposerSelect.svelte';
   import GoalDock from './GoalDock.svelte';
+  import DockSection from './DockSection.svelte';
   import TodoDock from './TodoDock.svelte';
 
   const value = $derived(app.draft);
@@ -103,46 +103,32 @@
         />{/if}
       {#if app.todo}<TodoDock list={app.todo} />{/if}
       {#if queue.length > 0}
-        <section class="dock-section queue-dock" aria-label="Queued messages">
-          <div class="dock-head">
-            <button
-              class="dock-toggle"
-              type="button"
-              aria-expanded={queueExpanded}
-              aria-controls="queue-dock-list"
-              onclick={() => (queueExpanded = !queueExpanded)}
-            >
-              <ListOrdered size={14} />
-              <span class="dock-title">{queue.length} queued</span>
-              <span class:collapsed={!queueExpanded} class="dock-chevron"
-                ><ChevronDown size={14} /></span
-              >
-            </button>
+        <DockSection label="Queued messages" class="queue-dock" bind:expanded={queueExpanded}>
+          {#snippet head()}
+            <ListOrdered size={14} />
+            <span class="dock-title">{queue.length} queued</span>
+          {/snippet}
+          {#snippet actions()}
             <button
               class="dock-action"
               type="button"
               onclick={() => app.clearQueue()}
               disabled={!hasControl}>Clear</button
             >
-          </div>
-          {#if queueExpanded}
-            <ol id="queue-dock-list" class="dock-list" transition:slide={{ duration: 160 }}>
-              {#each queue as item (item.id)}
-                <li>
-                  <span
-                    class="queue-dock-kind"
-                    title={item.kind === 'steer' ? 'Steer' : 'Follow up'}
-                  >
-                    {#if item.kind === 'steer'}<Navigation size={13} />{:else}<CornerDownRight
-                        size={13}
-                      />{/if}
-                  </span>
-                  <span class="queue-dock-text">{item.content}</span>
-                </li>
-              {/each}
-            </ol>
-          {/if}
-        </section>
+          {/snippet}
+          <ol class="dock-list">
+            {#each queue as item (item.id)}
+              <li>
+                <span class="queue-dock-kind" title={item.kind === 'steer' ? 'Steer' : 'Follow up'}>
+                  {#if item.kind === 'steer'}<Navigation size={13} />{:else}<CornerDownRight
+                      size={13}
+                    />{/if}
+                </span>
+                <span class="queue-dock-text">{item.content}</span>
+              </li>
+            {/each}
+          </ol>
+        </DockSection>
       {/if}
     </div>
   {/if}
