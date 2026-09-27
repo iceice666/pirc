@@ -16,13 +16,10 @@
     X,
   } from '@lucide/svelte';
   import { tick } from 'svelte';
-  import type { NodeSummary, SessionSummary, Workspace } from '../types';
+  import { app } from '../app.svelte';
+  import type { SessionSummary } from '../types';
 
   interface Props {
-    workspaces: Workspace[];
-    nodes?: NodeSummary[];
-    sessions: SessionSummary[];
-    activeSessionId: string | undefined;
     open?: boolean;
     /** Desktop: slid out of the layout; the main column shows the expand button. */
     collapsed?: boolean;
@@ -31,19 +28,12 @@
     onnew: (workspaceId?: string) => void;
     onaddworkspace: (nodeId: string) => void;
     onclose: () => void;
-    onrename: (id: string, name: string) => void;
-    onpin: (id: string, pinned: boolean) => void;
-    onsettle: (id: string, settled: boolean) => void;
     onsettings: () => void;
     /** Settled sessions are hidden entirely unless enabled in settings. */
     showSettled?: boolean;
   }
 
   let {
-    workspaces,
-    nodes = [],
-    sessions,
-    activeSessionId,
     open = $bindable(false),
     collapsed = false,
     oncollapse,
@@ -51,12 +41,16 @@
     onnew,
     onaddworkspace,
     onclose,
-    onrename,
-    onpin,
-    onsettle,
     onsettings,
     showSettled = false,
   }: Props = $props();
+
+  const nodes = $derived(app.nodes);
+  const sessions = $derived(app.sessions);
+  const activeSessionId = $derived(app.activeSessionId);
+  const onrename = (id: string, name: string) => app.updateSession(id, { name });
+  const onpin = (id: string, pinned: boolean) => app.updateSession(id, { pinned });
+  const onsettle = (id: string, settled: boolean) => app.updateSession(id, { settled });
 
   let query = $state('');
   let collapsedGroups = $state(new Set<string>());
@@ -65,7 +59,7 @@
     if (selectedNodeId && !nodes.some((node) => node.id === selectedNodeId)) selectedNodeId = '';
   });
   let shownWorkspaces = $derived(
-    workspaces.filter((workspace) => !selectedNodeId || workspace.hostId === selectedNodeId),
+    app.workspaces.filter((workspace) => !selectedNodeId || workspace.hostId === selectedNodeId),
   );
 
   let visibleSessions = $derived(

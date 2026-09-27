@@ -12,75 +12,38 @@
     X,
   } from '@lucide/svelte';
   import { slide } from 'svelte/transition';
-  import type {
-    Attachment,
-    CommandKind,
-    ConnectionState,
-    ModelOption,
-    QueueItem,
-    RunStatus,
-    ThinkingLevel,
-  } from '../types';
+  import { app } from '../app.svelte';
+  import type { CommandKind, ThinkingLevel } from '../types';
   import { modelKey } from '../types';
-  import type { GoalView } from '../goal';
-  import type { TodoList } from '../todo';
   import ComposerSelect from './ComposerSelect.svelte';
   import GoalDock from './GoalDock.svelte';
   import TodoDock from './TodoDock.svelte';
 
-  interface Props {
-    value?: string;
-    /** The session goal, docked above the task list. */
-    goal?: GoalView | undefined;
-    ongoal?: (action: 'pause' | 'resume') => void;
-    /** The agent's task list, docked above the queue. */
-    todo?: TodoList | undefined;
-    /** Remaining extension status lines (e.g. compaction), shown quietly under the input. */
-    statuses?: string[];
-    connection: ConnectionState;
-    runStatus: RunStatus | undefined;
-    hasControl: boolean;
-    models: ModelOption[];
-    modelId?: string;
-    thinking?: ThinkingLevel;
-    attachments?: Array<Attachment & { preview?: string; uploading?: boolean }>;
-    /** Messages waiting for the current run; shown as a dock above the input. */
-    queue?: QueueItem[];
-    busy?: boolean;
-    onvalue: (value: string) => void;
-    onsubmit: (kind: CommandKind) => void;
-    onupload: (files: FileList) => void;
-    onremove: (id: string) => void;
-    onmodel: (id: string) => void;
-    onthinking: (level: ThinkingLevel) => void;
-    onstop: () => void;
-    onclear: () => void;
-  }
-
-  let {
-    value = '',
-    goal = undefined,
-    ongoal = () => undefined,
-    todo = undefined,
-    statuses = [],
-    connection,
-    runStatus,
-    hasControl,
-    models,
-    modelId = '',
-    thinking = 'medium',
-    attachments = [],
-    queue = [],
-    busy = false,
-    onvalue,
-    onsubmit,
-    onupload,
-    onremove,
-    onmodel,
-    onthinking,
-    onstop,
-    onclear,
-  }: Props = $props();
+  const value = $derived(app.draft);
+  const connection = $derived(app.connection);
+  const runStatus = $derived(app.runStatus);
+  const hasControl = $derived(app.hasControl);
+  const attachments = $derived(app.uploads);
+  /** Messages waiting for the current run; shown as a dock above the input. */
+  const queue = $derived(app.sessionState?.queue ?? []);
+  const busy = $derived(app.commandBusy);
+  const modelOptions = $derived(
+    app.models
+      .filter((model) => model.available)
+      .map((model) => ({
+        value: modelKey(model),
+        label: model.displayName,
+        detail: model.provider,
+      })),
+  );
+  const thinkingOptions = [
+    { value: 'off', label: 'No thinking' },
+    { value: 'minimal', label: 'Minimal' },
+    { value: 'low', label: 'Low' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'high', label: 'High' },
+    { value: 'xhigh', label: 'Extra high' },
+  ];
 
   let mode = $state<CommandKind>('prompt');
   let fileInput: HTMLInputElement | undefined = $state();
@@ -124,21 +87,21 @@
   function keydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
-      if (canSubmit) onsubmit(mode);
+      if (canSubmit) void app.sendCommand(mode);
     }
   }
 </script>
 
 <div class="composer-wrap">
-  {#if goal || todo || queue.length > 0}
+  {#if app.goal || app.todo || queue.length > 0}
     <!-- Cards tucked on top of the composer: the goal, the task list, then queued messages. -->
     <div class="composer-dock" transition:slide={{ duration: 180 }}>
-      {#if goal}<GoalDock
-          {goal}
-          disabled={!hasControl || connection !== 'connected' || busy}
-          onaction={ongoal}
+      {#if app.goal}<GoalDock
+          goal={app.goal}
+          disabled={!app.canCommand || busy}
+          onaction={(action) => app.goalAction(action)}
         />{/if}
-      {#if todo}<TodoDock list={todo} />{/if}
+      {#if app.todo}<TodoDock list={app.todo} />{/if}
       {#if queue.length > 0}
         <section class="dock-section queue-dock" aria-label="Queued messages">
           <div class="dock-head">
@@ -155,8 +118,11 @@
                 ><ChevronDown size={14} /></span
               >
             </button>
-            <button class="dock-action" type="button" onclick={onclear} disabled={!hasControl}
-              >Clear</button
+            <button
+              class="dock-action"
+              type="button"
+              onclick={() => app.clearQueue()}
+              disabled={!hasControl}>Clear</button
             >
           </div>
           {#if queueExpanded}
@@ -198,7 +164,7 @@
             {#if attachment.uploading}<LoaderCircle class="spin" size={15} />{:else}<button
                 type="button"
                 aria-label="Remove {attachment.name}"
-                onclick={() => onremove(attachment.id)}><X size={14} /></button
+                onclick={() => app.removeUpload(attachment.id)}><X size={14} /></button
               >{/if}
           </div>
         {/each}
@@ -210,7 +176,7 @@
       rows="2"
       {placeholder}
       {value}
-      oninput={(event) => onvalue(event.currentTarget.value)}
+      oninput={(event) => app.setDraft(event.currentTarget.value)}
       onkeydown={keydown}
     ></textarea>
     <div class="composer-tools" class:running={active}>
@@ -220,7 +186,8 @@
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
         multiple
-        onchange={(event) => event.currentTarget.files && onupload(event.currentTarget.files)}
+        onchange={(event) =>
+          event.currentTarget.files && app.uploadImages(event.currentTarget.files)}
       />
       <button
         class="icon-button"
@@ -234,31 +201,18 @@
       <div class="model-select">
         <ComposerSelect
           label="Model"
-          value={modelId}
-          options={models
-            .filter((model) => model.available)
-            .map((model) => ({
-              value: modelKey(model),
-              label: model.displayName,
-              detail: model.provider,
-            }))}
+          value={app.selectedModel}
+          options={modelOptions}
           disabled={active}
-          onselect={onmodel}
+          onselect={(key) => app.changeModel(key)}
         />
       </div>
       <div class="thinking-select">
         <ComposerSelect
           label="Reasoning effort"
-          value={thinking}
-          options={[
-            { value: 'off', label: 'No thinking' },
-            { value: 'minimal', label: 'Minimal' },
-            { value: 'low', label: 'Low' },
-            { value: 'medium', label: 'Medium' },
-            { value: 'high', label: 'High' },
-            { value: 'xhigh', label: 'Extra high' },
-          ]}
-          onselect={(level) => onthinking(level as ThinkingLevel)}
+          value={app.thinking}
+          options={thinkingOptions}
+          onselect={(level) => app.changeThinking(level as ThinkingLevel)}
         />
       </div>
       <span class="spacer"></span>
@@ -284,7 +238,7 @@
         <button
           class="stop-button secondary"
           type="button"
-          onclick={onstop}
+          onclick={() => app.stopRun()}
           disabled={!hasControl || stopping}
           aria-label="Stop run"
           title="Stop run"
@@ -296,7 +250,7 @@
         <button
           class="send-button stop-button"
           type="button"
-          onclick={onstop}
+          onclick={() => app.stopRun()}
           disabled={!hasControl || stopping}
           aria-label={stopping ? 'Stopping run' : 'Stop run'}
           title={stopping ? 'Stopping…' : 'Stop run'}
@@ -310,7 +264,7 @@
         <button
           class="send-button"
           type="button"
-          onclick={() => onsubmit(mode)}
+          onclick={() => app.sendCommand(mode)}
           disabled={!canSubmit}
           aria-label={mode === 'follow_up' ? 'Queue message' : 'Send message'}
           title={mode === 'follow_up' ? 'Queue message' : 'Send message'}
@@ -323,7 +277,7 @@
       {/if}
     </div>
   </div>
-  {#if statuses.length}
-    <p class="composer-status" role="status">{statuses.join(' · ')}</p>
+  {#if app.statusLine.length}
+    <p class="composer-status" role="status">{app.statusLine.join(' · ')}</p>
   {/if}
 </div>

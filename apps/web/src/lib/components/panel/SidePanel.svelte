@@ -9,7 +9,7 @@
   import { onDestroy } from 'svelte';
   import { onFilePreviewRequest, type FileTarget } from '../../file-links';
   import { panelApi, type PanelState, type PanelTab } from '../../panel-api';
-  import type { ClientSessionState, RunStatus } from '../../types';
+  import { app } from '../../app.svelte';
   import { watch } from '../../watch.svelte';
   import FilesTab from './FilesTab.svelte';
   import GitTab from './GitTab.svelte';
@@ -20,13 +20,6 @@
   interface Props {
     open?: boolean;
     tab?: PanelTab;
-    sessionState: ClientSessionState;
-    runStatus: RunStatus | undefined;
-    hasControl: boolean;
-    usingDemo?: boolean;
-    /** Incremented by the parent for every `panel_changed` event; sections listed in `changed`. */
-    changeTick?: number;
-    changed?: string[];
     /** Current width in px; the drag handle reports new widths through `onresize`. */
     width?: number;
     minWidth?: number;
@@ -40,12 +33,6 @@
   let {
     open = true,
     tab = $bindable('files'),
-    sessionState,
-    runStatus,
-    hasControl,
-    usingDemo = false,
-    changeTick = 0,
-    changed = [],
     width = 360,
     minWidth = 280,
     maxWidth = 900,
@@ -72,7 +59,8 @@
     { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
   ];
 
-  let sessionId = $derived(sessionState.session.id);
+  const sessionId = $derived(app.sessionState?.session.id ?? '');
+  const usingDemo = $derived(app.usingDemo);
 
   async function loadState() {
     if (usingDemo) return;
@@ -117,23 +105,18 @@
     },
     { immediate: true },
   );
-  watch(
-    () => changeTick,
-    () => {
-      if (changed.some((section) => section !== 'git')) scheduleState();
-      if (changed.includes('git')) gitRefresh++;
-    },
-  );
-  // A finished run may have changed the working tree and memory.
-  watch(
-    () => runStatus,
-    (status, previous) => {
-      if (previous === 'running' && status !== 'running') {
+  onDestroy(
+    app.onPanel((signal) => {
+      if (signal.type === 'changed') {
+        if (signal.sections.some((section) => section !== 'git')) scheduleState();
+        if (signal.sections.includes('git')) gitRefresh++;
+      } else {
+        // A finished run may have changed the working tree and memory.
         gitRefresh++;
         filesRefresh++;
         scheduleState(100);
       }
-    },
+    }),
   );
 
   function openFile(target: string | FileTarget) {
@@ -250,8 +233,8 @@
       <div class="terminal-slot" class:hidden={tab !== 'terminal'}>
         <TerminalTab
           {sessionId}
-          generation={sessionState.control.generation}
-          {hasControl}
+          generation={app.generation}
+          hasControl={app.hasControl}
           active={open && tab === 'terminal'}
         />
       </div>

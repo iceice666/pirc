@@ -9,26 +9,15 @@
   import { Bot, ChevronDown, ChevronRight, LoaderCircle, Square, Users } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { fade } from 'svelte/transition';
+  import { app } from '../app.svelte';
   import { panelApi, type BackgroundTask, type PanelState, type TeamMember } from '../panel-api';
   import { watch } from '../watch.svelte';
 
-  interface Props {
-    sessionId: string;
-    hasControl?: boolean;
-    generation: number | undefined;
-    /** Bumped by the parent when background or team state changed. */
-    refreshKey?: number;
-    /** Static state for the offline demo; nothing is fetched. */
-    demo?: PanelState | undefined;
-  }
-
-  let {
-    sessionId,
-    hasControl = false,
-    generation,
-    refreshKey = 0,
-    demo = undefined,
-  }: Props = $props();
+  const sessionId = $derived(app.sessionState?.session.id ?? '');
+  const hasControl = $derived(app.hasControl);
+  const generation = $derived(app.generation);
+  /** Static state for the offline demo; nothing is fetched. */
+  const demo = $derived(app.demo?.demoPanelState);
 
   let panelState: PanelState | undefined = $state();
   let open = $state(false);
@@ -77,6 +66,16 @@
   onDestroy(() => {
     if (armTimer) clearTimeout(armTimer);
   });
+  // Background tasks or team members changed.
+  onDestroy(
+    app.onPanel((signal) => {
+      if (
+        signal.type === 'changed' &&
+        signal.sections.some((section) => section === 'background' || section === 'team')
+      )
+        void load();
+    }),
+  );
 
   function toggleOpen() {
     open = !open;
@@ -184,10 +183,6 @@
       void load();
     },
     { immediate: true },
-  );
-  watch(
-    () => refreshKey,
-    () => void load(),
   );
   let tasks = $derived((panelState?.backgroundTasks ?? []).slice().reverse());
   let liveTasks = $derived(tasks.filter(liveTask));
