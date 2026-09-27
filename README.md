@@ -29,6 +29,7 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 - Authenticated user identities, `Host`, and `Origin` are checked against exact allowlists.
 - There is no trust-all or unauthenticated production default.
 - Nodes authenticate to the gateway with per-node secrets and connect outbound only; they listen on no port.
+- Phones running the native app authenticate with device tokens paired from the web **Settings → Devices**. A device token still needs the trusted proxy and an allowed `Host`, cannot manage devices or model backends, and dies after 7 days without use, 30 days after pairing, or on revocation. Otherwise, it acts as you, including shells on your nodes; revoke a lost phone at once. The proxy must pass these requests past forward auth and strip the identity header (see [`apps/gateway/README.md`](./apps/gateway/README.md#device-tokens)).
 - Workspaces are allowlisted, but this is **not a sandbox**. The agent and its tools retain the operating-system permissions of the node's account.
 - The web side panel can browse workspace files, show Git changes and history, and open interactive shells in the workspace. Shells run as the node's account, just like the agent's tools, and require holding session control; set `PIRC_TERMINALS=false` on the node to disable them.
 - Keep the gateway on loopback or a private interface reachable only by the trusted proxy. Do not expose it through Tailscale Funnel or the public Internet.

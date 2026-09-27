@@ -21,6 +21,7 @@ const integer = (value: string | undefined, fallback: number) =>
     .parse(value ?? fallback);
 
 export const NODE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
+const DAY_MS = 24 * 60 * 60 * 1000;
 /** Node transport frames are capped at 16 MiB; a base64 upload (4/3 larger) must fit in one. */
 export const MAX_UPLOAD_BYTES = 11 * 1024 * 1024;
 
@@ -61,6 +62,10 @@ export interface DaemonConfig extends BrowserAuthConfig {
   eventBufferSize: number;
   websocketMaxBufferedBytes: number;
   uploadMaxBytes: number;
+  /** A device token dies after this long without use (PIRC_DEVICE_TOKEN_IDLE_DAYS). */
+  deviceTokenIdleMs: number;
+  /** A device token dies this long after pairing, however often used (PIRC_DEVICE_TOKEN_MAX_DAYS). */
+  deviceTokenMaxAgeMs: number;
   /** Providers and default model pushed to every node (PIRC_MODELS_FILE). */
   modelsFile: string;
 }
@@ -174,6 +179,10 @@ export function loadDaemonConfig(env: NodeJS.ProcessEnv = process.env): DaemonCo
     throw new Error('PIRC_ALLOWED_ORIGINS must explicitly name at least one exact origin');
   if (!allowedHosts.size)
     throw new Error('PIRC_ALLOWED_HOSTS must explicitly name at least one exact Host value');
+  const deviceTokenIdleMs = integer(env.PIRC_DEVICE_TOKEN_IDLE_DAYS, 7) * DAY_MS;
+  const deviceTokenMaxAgeMs = integer(env.PIRC_DEVICE_TOKEN_MAX_DAYS, 30) * DAY_MS;
+  if (deviceTokenIdleMs > deviceTokenMaxAgeMs)
+    throw new Error('PIRC_DEVICE_TOKEN_IDLE_DAYS cannot exceed PIRC_DEVICE_TOKEN_MAX_DAYS');
   return {
     host: env.PIRC_HOST ?? '127.0.0.1',
     port: integer(env.PIRC_PORT, 8787),
@@ -187,6 +196,8 @@ export function loadDaemonConfig(env: NodeJS.ProcessEnv = process.env): DaemonCo
     eventBufferSize: integer(env.PIRC_EVENT_BUFFER_SIZE, 1000),
     websocketMaxBufferedBytes: integer(env.PIRC_WS_MAX_BUFFERED_BYTES, 1_048_576),
     uploadMaxBytes: uploadLimit(env),
+    deviceTokenIdleMs,
+    deviceTokenMaxAgeMs,
     modelsFile: path.resolve(defaultModelsFile(env)),
   };
 }

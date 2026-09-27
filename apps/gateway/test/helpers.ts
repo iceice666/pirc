@@ -57,6 +57,8 @@ export function daemonConfig(overrides: Partial<DaemonConfig> = {}): DaemonConfi
     eventBufferSize: 50,
     websocketMaxBufferedBytes: 1024 * 1024,
     uploadMaxBytes: 1024 * 1024,
+    deviceTokenIdleMs: 7 * 86_400_000,
+    deviceTokenMaxAgeMs: 30 * 86_400_000,
     // Absent file: no providers unless a test writes one.
     modelsFile: path.join(tmpdir(), 'pirc-test-no-models.json'),
     ...overrides,

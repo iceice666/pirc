@@ -381,6 +381,16 @@ in
         example = "http://127.0.0.1:9091/api/authz/auth-request";
         description = "Authelia-compatible auth_request endpoint. Required when nginx is enabled.";
       };
+      deviceTokens = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Let the native app reach `/api/` with a device token
+          (`Authorization: Bearer pirc_dev_…`) instead of forward auth. Such
+          requests skip the auth_request check, never carry the identity
+          header, and are authenticated by the gateway itself.
+        '';
+      };
       exposeNodeEndpoint = mkOption {
         type = types.bool;
         default = false;
@@ -494,6 +504,13 @@ in
           proxyPass = cfg.nginx.forwardAuthUri;
           extraConfig = ''
             internal;
+            ${lib.optionalString cfg.nginx.deviceTokens ''
+              # Device tokens are checked by the gateway. No identity is
+              # returned, so the identity header is not sent upstream.
+              if ($http_authorization ~* "^bearer\s+pirc_dev_") {
+                return 200;
+              }
+            ''}
             proxy_pass_request_body off;
             proxy_set_header Content-Length "";
             proxy_set_header X-Original-URL $scheme://$http_host$request_uri;

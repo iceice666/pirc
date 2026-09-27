@@ -21,6 +21,7 @@ import { applySessionName, publicSession } from '../session-name.js';
 import type { EventCursor } from '../types.js';
 import { parse, payloadHash } from '../util.js';
 import { authHook, validateRequest } from './auth.js';
+import { DeviceTokens, registerDeviceRoutes } from './devices.js';
 import { NodeRegistry, validNodeToken } from './nodes.js';
 import { BackendService } from '../backends/service.js';
 import { registerBackendRoutes } from '../backends/routes.js';
@@ -88,6 +89,7 @@ export interface DaemonServices {
   nodes: NodeRegistry;
   models: ModelStore;
   backends: BackendService;
+  devices: DeviceTokens;
   /**
    * Re-read the gateway baseline and publish its secret-free catalog.
    * Subsequent inference calls use current credentials, including live agents.
@@ -130,7 +132,21 @@ export async function buildDaemonApp(
       app.log.error('models reload failed; keeping the previous providers');
     }
   };
-  const services = { db, events, nodes, models, backends, reloadModels };
+  const devices = new DeviceTokens(db.raw, {
+    idleMs: config.deviceTokenIdleMs,
+    maxAgeMs: config.deviceTokenMaxAgeMs,
+  });
+  const services = { db, events, nodes, models, backends, devices, reloadModels };
+  /** Close a device's WebSocket once its token is revoked or expires. */
+  const trackDevice = (
+    request: FastifyRequest,
+    socket: { close(code: number, reason: string): void },
+  ) => {
+    const deviceId = request.identity!.deviceId;
+    return deviceId
+      ? devices.track(deviceId, () => socket.close(4401, 'device token revoked or expired'))
+      : () => {};
+  };
 
   // ---- node link ------------------------------------------------------------
 
@@ -220,7 +236,7 @@ export async function buildDaemonApp(
       request.headers.upgrade?.toLowerCase() === 'websocket'
     )
       return;
-    return authHook(config)(request, reply);
+    return authHook(config, devices)(request, reply);
   });
 
   app.get('/node/connect', { websocket: true }, (socket, request) => {
@@ -445,6 +461,7 @@ export async function buildDaemonApp(
   });
 
   registerBackendRoutes(app, backends);
+  registerDeviceRoutes(app, devices);
 
   /** Every node's agents use the gateway's providers, so one list serves all sessions. */
   app.get('/api/models', async (request) => {
@@ -483,7 +500,7 @@ export async function buildDaemonApp(
 
   app.get('/api/events', { websocket: true }, (socket, request) => {
     try {
-      validateRequest(request, config, true);
+      validateRequest(request, config, devices, true);
       const query = parse(
         z.object({ sessionId: z.string().min(1), cursor: z.string().optional() }),
         request.query,
@@ -513,8 +530,13 @@ export async function buildDaemonApp(
         });
       else for (const event of replay.events) send(event);
       const unsubscribe = events.subscribe(session.id, send);
-      socket.once('close', unsubscribe);
-      socket.once('error', unsubscribe);
+      const untrack = trackDevice(request, socket);
+      const done = () => {
+        unsubscribe();
+        untrack();
+      };
+      socket.once('close', done);
+      socket.once('error', done);
     } catch (error) {
       socket.close(
         wsCloseCode(error),
@@ -529,7 +551,7 @@ export async function buildDaemonApp(
     { websocket: true },
     (socket, request) => {
       try {
-        validateRequest(request, config, true);
+        validateRequest(request, config, devices, true);
         const session = claim(request);
         const { terminalId } = parse(
           z.object({ id: z.string(), terminalId: z.string().min(1).max(100) }),
@@ -562,8 +584,13 @@ export async function buildDaemonApp(
           }
           stream.send(message);
         });
-        socket.once('close', stream.close);
-        socket.once('error', stream.close);
+        const untrack = trackDevice(request, socket);
+        const done = () => {
+          stream.close();
+          untrack();
+        };
+        socket.once('close', done);
+        socket.once('error', done);
       } catch (error) {
         socket.close(
           wsCloseCode(error),
@@ -575,6 +602,7 @@ export async function buildDaemonApp(
 
   app.addHook('onClose', async () => {
     inference?.cancelAll();
+    devices.close();
     await backends.close();
     nodes.close();
     db.close();

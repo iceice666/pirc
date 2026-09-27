@@ -81,6 +81,8 @@ export interface Snapshot {
 
 export interface AuthIdentity {
   user: string;
+  /** Set when the caller authenticated with a device token instead of forward auth. */
+  deviceId?: string;
 }
 
 declare module 'fastify' {

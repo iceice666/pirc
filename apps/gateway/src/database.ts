@@ -64,6 +64,14 @@ const migrations = [
   ALTER TABLE sessions ADD COLUMN pinned_at INTEGER;
   ALTER TABLE sessions ADD COLUMN settled_at INTEGER;
   `,
+  `
+  CREATE TABLE device_tokens (
+    id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, name TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+    last_used_at INTEGER NOT NULL
+  );
+  CREATE INDEX device_tokens_owner ON device_tokens(owner_user);
+  `,
 ];
 
 export const PLACEHOLDER_SESSION_NAME = 'New session';

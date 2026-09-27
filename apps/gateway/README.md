@@ -11,7 +11,9 @@ A single-machine setup runs both on the same host; the node then reaches the gat
 
 ## Security model
 
-The gateway must listen only behind a trusted authenticated proxy. It accepts the configured identity header **only** when the TCP peer address exactly matches `PIRC_TRUSTED_PROXIES`, then checks that identity against `PIRC_ALLOWED_USERS`. Host and Origin comparisons are exact allowlist matches; mutating HTTP requests and every WebSocket upgrade require an Origin.
+The gateway must listen only behind a trusted authenticated proxy. It accepts the configured identity header **only** when the TCP peer address exactly matches `PIRC_TRUSTED_PROXIES`, then checks that identity against `PIRC_ALLOWED_USERS`. Host and Origin comparisons are exact allowlist matches; mutating HTTP requests and every WebSocket upgrade with forward auth require an Origin.
+
+Native clients (the Android app) authenticate with a **device token** instead of forward auth. See [Device tokens](#device-tokens).
 
 Nodes authenticate to `/node/connect` with a per-node secret (`PIRC_NODE_TOKENS` on the gateway, `PIRC_NODE_TOKEN` on the node). That path must bypass the browser forward-auth, and the proxy must never hand node tokens to browsers. Each node checks the user of every relayed request against its own `PIRC_ALLOWED_USERS`, and sessions are visible only to the user who created them.
 
@@ -34,6 +36,34 @@ bun run start:node  # or: dist/pirc node (separate environment, see .env.example
 ### Gateway
 
 Set `PIRC_HOST`/`PIRC_PORT`, `PIRC_STATE_DIR`, the browser checks (`PIRC_TRUSTED_PROXIES`, `PIRC_IDENTITY_HEADER`, `PIRC_ALLOWED_USERS`, `PIRC_ALLOWED_ORIGINS`, `PIRC_ALLOWED_HOSTS`), and `PIRC_NODE_TOKENS`: a JSON object mapping each node ID to a **different random secret of at least 32 characters**. Model backends are configured here: in the web **Settings** (API-key/custom endpoints and subscription logins) and in `models.json` (`PIRC_MODELS_FILE`, default `$PIRC_CONFIG_DIR/models.json`); `SIGHUP` reloads the file. The gateway runs all inference, so endpoints must be reachable from it (see the root README's Agent section). Node settings such as `PIRC_WORKSPACES` or `PIRC_NODE_ID` are refused at startup.
+
+### Device tokens
+
+A browser with forward auth pairs a phone in **Settings → Devices → Phones**. The gateway generates `pirc_dev_` plus 32 random bytes in base64url, shows it once as a `pirc://pair?url=<origin>&token=<token>` QR code and link, and stores only its SHA-256 hash. The app sends `Authorization: Bearer pirc_dev_…`.
+
+- The TCP peer must still be a trusted proxy, and `Host` must still be allowed. An `Origin` is optional for bearer requests because nothing is sent ambiently; if one is sent, it must be allowed.
+- A device-shaped bearer header never falls back to forward auth. A request carrying both a device token and the identity header is refused, so a misrouted proxy fails closed. Other `Authorization` schemes are ignored and forward auth applies.
+- The token owner must still be in `PIRC_ALLOWED_USERS`. Device tokens cannot reach `/api/devices*`, `/api/providers*`, or `/api/provider-auth/*`; otherwise they act as the user, including files and terminals on every node.
+- A token dies after `PIRC_DEVICE_TOKEN_IDLE_DAYS` (default 7) without use, `PIRC_DEVICE_TOKEN_MAX_DAYS` (default 30) after pairing whatever its use, or on revocation. Its open WebSockets close with `4401` on revocation, and within a minute of expiry. At most 10 phones can be paired at once.
+
+The proxy must route bearer requests to the gateway **without** forward auth and must strip the identity header from them, just like `/node/connect`. With Traefik, add a router above the forward-auth one:
+
+```yaml
+http:
+  routers:
+    pirc-device:
+      rule: Host(`pirc.example`) && PathPrefix(`/api/`) && HeaderRegexp(`Authorization`, `^Bearer pirc_dev_`)
+      priority: 100 # above the Authelia router for /api/
+      service: pirc-api
+      middlewares: [pirc-strip-identity]
+  middlewares:
+    pirc-strip-identity:
+      headers:
+        customRequestHeaders:
+          X-Pirc-User: '' # your PIRC_IDENTITY_HEADER; an empty value removes it
+```
+
+On Traefik v2 the matcher is `HeadersRegexp`. The NixOS module does the equivalent for nginx with `services.pirc.nginx.deviceTokens = true`: its forward-auth subrequest returns success without an identity for device-token requests, so nginx drops the identity header and the gateway checks the token.
 
 ### Node
 
@@ -69,6 +99,7 @@ Every session route is answered by the node that owns the session; the gateway c
 - `GET /api/models` lists the gateway's models (identical for every session and node; an optional `sessionId` is only checked for access)
 - Model backends (single-user, global; responses are `Cache-Control: no-store` and never contain keys, tokens or file endpoints): `GET /api/providers`; `POST /api/providers` with `{id, api, baseUrl, apiKey?, models}`; `PUT|DELETE /api/providers/:id` (`apiKey` omitted keeps the saved key, `""` clears it; deleting `oauth:<provider>` logs out); `PUT /api/providers/default-model` with `{provider, id, thinking?}` or `null`
 - Subscription login sessions: `POST /api/provider-auth/sessions` with `{providerId, policyConsent?}`; `GET|DELETE /api/provider-auth/sessions/:id`; `POST /api/provider-auth/sessions/:id/input` with `{promptId, value?}`. A session exposes the authorization link, pending prompts (`prompt`, `manual` callback URL, `select`), progress, status and expiry; it expires after 10 minutes
+- Paired devices (forward auth only; `Cache-Control: no-store`): `GET /api/devices` lists `{id, name, createdAt, lastUsedAt, expiresAt}`; `POST /api/devices` with `{name}` returns `{device, token}`, the only time the token is shown; `DELETE /api/devices/:id` revokes it
 - WebSocket `GET /api/events?sessionId=...&cursor=<epoch>:<sequence>`
 - `GET /api/nodes` lists online nodes; `GET|POST /api/workspaces` lists workspaces or adds one on a node
 - Side panel, read-only: `GET /api/sessions/:id/git/{status,diff,log}`, `GET /api/sessions/:id/git/commits/:sha`, `GET /api/sessions/:id/files[/content]?path=...` (confined to the workspace), `GET /api/sessions/:id/panel/state` (memory, background tasks, teammates) and `GET /api/sessions/:id/panel/background/:taskId`. A `panel_changed` event tells clients which sections to refetch.
