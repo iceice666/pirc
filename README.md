@@ -103,7 +103,7 @@ Open **Settings → Model backends** and choose **Log in**. The gateway runs pi-
 - Tokens are refreshed on the gateway shortly before they expire, once for concurrent requests. **Log out** deletes the gateway's saved credentials and blocks new requests; it does not revoke the account upstream or recall content already sent.
 - pi-ai's model catalog is not proof that your plan includes a model, and a built-in login is not a statement about each service's terms for third-party clients: check them yourself. Real logins and paid calls are not part of the automated tests.
 
-The design and milestones are in [`plans/single-binary-agent.md`](./plans/single-binary-agent.md); the backend-login research is in [`plans/pi-web-backend-auth-research.md`](./plans/pi-web-backend-auth-research.md).
+The observational-memory implementation is documented in [`docs/architecture-observational-memory.md`](./docs/architecture-observational-memory.md); the backend/subscription-login architecture is in [`docs/architecture-backend-auth.md`](./docs/architecture-backend-auth.md).
 
 ## Validation
 

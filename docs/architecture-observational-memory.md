@@ -1,14 +1,14 @@
-# Observational Memory (OM) — Functional Spec for Reimplementation
+# Observational Memory — Architecture Reference
 
-Source: `~/.pi/agent/extensions/observational-memory/` (Pi extension, "V3 ledger"). Everything here comes from reading that source. The system prompts in the Appendix were copied mechanically from `agents/*/prompts.ts`.
+This documents the implemented behavior of `features.observationalMemory` (`apps/gateway/src/agent/features/observational-memory/`), the built-in replacement for LLM-based compaction summaries. It is a port of Pi's "V3 ledger" extension; every detail below matches the shipped implementation, not a design proposal. The system prompts in the Appendix are byte-for-byte what the sub-agents use.
 
 ## 0. Architecture in one paragraph
 
-OM replaces Pi's LLM compaction summary with memory that builds up in the background. Three background sub-agents run one after another (**observer → reflector → dropper**) in a single fire-and-forget "consolidation" task. Each agent is a small tool-calling agent loop. Its results are appended to the session as **custom ledger entries**; OM never modifies an existing entry. When compaction happens, OM handles `session_before_compact`: it folds the ledger into a projection of reflections and observations and renders that as the compaction summary without making an LLM call. OM also triggers compaction itself once a token threshold is crossed. A `recall` tool maps any 12-hex memory id back to the raw source entries that are still on the branch.
+OM replaces the agent's LLM compaction summary with memory that builds up in the background. Three background sub-agents run one after another (**observer → reflector → dropper**) in a single fire-and-forget "consolidation" task. Each agent is a small tool-calling agent loop. Its results are appended to the session as **custom ledger entries**; OM never modifies an existing entry. When compaction happens, OM handles the before-compact hook: it folds the ledger into a projection of reflections and observations and renders that as the compaction summary without making an LLM call. OM also triggers compaction itself once a token threshold is crossed. A `recall` tool maps any 12-hex memory id back to the raw source entries that are still on the branch.
 
 ## 1. Config
 
-Config is read from the `"observational-memory"` key in `<agentDir>/settings.json` (global) and `<cwd>/.pi/settings.json` (project). Merge order: `DEFAULTS` < global < project < env. Env `PI_OBSERVATIONAL_MEMORY_PASSIVE` accepts `1/true/yes/on` or `0/false/no/off` (case-insensitive, trimmed) and only sets `passive`. Config loads lazily once per Runtime (`ensureConfig(cwd)`), then stays cached.
+Config is read from `features.observationalMemory` in the agent's merged config (global `~/.config/.pirc/config.json` and project `<workspace>/.pirc/config.json`). Config loads lazily once per session, then stays cached.
 
 | Key                            | Default                | Validation                                                                      | Meaning                                                                                                                                                         |
 | ------------------------------ | ---------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -27,15 +27,13 @@ Config is read from the `"observational-memory"` key in `<agentDir>/settings.jso
 | `rateLimitCooldownMs`          | 900000 (15 min)        | positive int                                                                    | How long a rate-limited model is skipped                                                                                                                        |
 | `showWorkerNotifications`      | true                   | bool                                                                            | Show info toasts for worker progress                                                                                                                            |
 | `passive`                      | false                  | bool                                                                            | Disables automatic consolidation and auto-compaction. The compaction hook, commands, and recall stay active                                                     |
-| `debugLog`                     | false                  | bool                                                                            | NDJSON debug log at `<agentDir>/observational-memory/debug/<sessionId>.ndjson`, falling back to `.../debug.ndjson`; rotates at 10 MB                            |
+| `debugLog`                     | false                  | bool                                                                            | NDJSON debug log, rotates at 10 MB                                                                                                                              |
 
 `thinking` ∈ `off|minimal|low|medium|high|xhigh|max`.
 
-**User's current config:** `agentMaxTokens: 8192`, `compactAfterTokensMode: "ratio"`, `compactAfterTokensRatio: 0.68`, `model: {provider:"cliproxyapi", id:"gpt-6-sol", thinking:"low"}`, `fallbackModels: [{provider:"cliproxyapi-claude", id:"claude-sonnet-5"}]`, `rateLimitCooldownMs: 900000`. All other keys use their defaults.
-
 ## 2. Data model
 
-### 2.1 Custom entries (appended with `pi.appendEntry(customType, data)` → session entry `{type:"custom", id, customType, data}`)
+### 2.1 Custom entries (appended to the session as `{type:"custom", id, customType, data}`)
 
 ```ts
 type Relevance = "low"|"medium"|"high"|"critical";
@@ -105,7 +103,7 @@ Observations in the drops set are then filtered out. Dedupe is first-wins.
 ### 3.1 Token clocks (`progress.ts`)
 
 - **Raw estimate:** `rawTokensSinceCoverage(type)` = sum of `estimateEntryTokens` over source entries after `latestCoverageIndex(type)`.
-- **Real (provider usage):** `realTokensSinceAnchor(entries, type, currentContextTokens)`, where `currentContextTokens = ctx.getContextUsage()?.tokens` (must be a finite number).
+- **Real (provider usage):** `realTokensSinceAnchor(entries, type, currentContextTokens)`, where `currentContextTokens` comes from the current context usage (must be a finite number).
   - `covIdx = latestCoverageIndex(type)`, `cmpIdx` = index of the last `type:"compaction"` entry.
   - If `cmpIdx > covIdx`: baseline = the first _valid assistant usage_ **after** the compaction. Return `current - baseline` if it is ≥0, else `undefined`.
   - Else if `covIdx ≥ 0`: baseline = the last valid assistant usage **at or before** covIdx. Return the delta if ≥0, else `undefined`.
@@ -118,13 +116,13 @@ Observations in the drops set are then filtered out. Dedupe is first-wins.
 
 The trigger subscribes to **`agent_start`** and **`turn_end`**. On each event:
 
-1. `ensureConfig`. If `passive`, or a consolidation is already in flight, return. Only one consolidation runs globally at a time.
+1. If `passive`, or a consolidation is already in flight, return. Only one consolidation runs globally at a time.
 2. `anyStageDue` = the observer clock ≥ `observeAfterTokens` **or** the reflector clock ≥ `reflectAfterTokens`, using real tokens with raw fallback. If neither is due, return.
-3. Launch `runConsolidationPipeline` **fire-and-forget** (`void promise`), so it runs concurrently with the main agent turn. It captures `cwd, hasUI, ui, model, modelRegistry, getContextUsage, sessionManager`.
+3. Launch the consolidation pipeline **fire-and-forget**, so it runs concurrently with the main agent turn.
 
-Every stage re-reads `sessionManager.getBranch()` fresh. Results are applied only by `appendEntry`, which the next compaction picks up. The pipeline: observer → reflector → dropper. If a stage returns `"abort"` or throws, the run stops. On a throw, the error goes to `lastXError` and a warning toast is shown. The in-flight flags are cleared in `finally`.
+Every stage re-reads the branch fresh. Results are applied only by appending entries, which the next compaction picks up. The pipeline: observer → reflector → dropper. If a stage returns `"abort"` or throws, the run stops. On a throw, the error is recorded and a warning notification is shown. The in-flight flags are cleared afterward.
 
-**Model resolver per run:** memoized, but re-resolved if `rateLimitTracker.generation` has changed since the last resolve (for example, a cooldown was armed mid-run). For opencode providers (`provider ∈ {opencode, opencode-go}` or baseUrl contains `opencode.ai`), it adds the headers `x-opencode-session: <sessionId>` and `x-opencode-client: pi`. If resolution fails, it shows a single warning `"Observational memory: <stage> skipped — <reason>"` and the stage aborts.
+**Model resolver per run:** memoized, but re-resolved if the rate-limit tracker's generation has changed since the last resolve (for example, a cooldown was armed mid-run). If resolution fails, it shows a single warning `"Observational memory: <stage> skipped — <reason>"` and the stage aborts.
 
 **Observer stage:**
 
@@ -134,7 +132,7 @@ Every stage re-reads `sessionManager.getBranch()` fresh. Results are applied onl
 4. Backlog = source entries after `latestCoverageIndex(obs)`. Serialize them with `maxTokens = resolveObserverChunkMaxTokens(cfg, resolvedModel.contextWindow)` (§4.1). If the chunk is empty, continue. `coversUpToId` = the last serialized source id (oldest-first draining).
 5. Prior memory comes from `fullProjection(entries)` at the tip: reflections as `[id] content` and observations as `[id] ts [rel] content`.
 6. Run the observer.
-   - `ObserverStreamError` (stream ended with error/aborted and nothing recorded): record the error and abort. Coverage does not advance.
+   - Stream error (stream ended with error/aborted and nothing recorded): record the error and abort. Coverage does not advance.
    - Empty result: set the backoff, show the info toast, continue. Coverage does not advance.
    - Otherwise clear the backoff and append `om.observations.recorded {observations, coversUpToId}`.
 
@@ -156,27 +154,27 @@ Every stage re-reads `sessionManager.getBranch()` fresh. Results are applied onl
 
 Pool metrics: `observationTokens = Σ observationLineTokenCount` (recomputed from the rendered line). `tokensOverTarget = max(0, tokens-target)`. `maxDropsAllowed = min(n, max(1, ceil(over/(tokens/n))))`, or 0 if the pool is not over target.
 
-### 3.3 Compaction trigger (`agent_settled`)
+### 3.3 Compaction trigger (turn settled)
 
-Pi emits `agent_settled` after retries, auto-compaction, and queued continuations have finished. On that event:
+Once retries, auto-compaction, and queued continuations for a turn have finished:
 
-1. If `passive` or `compactInFlight`, return.
-2. `progress = rawTokensSinceLastCompaction(branch)`. `threshold = resolveCompactAfterTokens(cfg, ctx.model.contextWindow)`. This uses the **session** model's window, not the memory model's. If `progress < threshold`, return.
-3. Show the toast "compaction threshold reached (~N estimated source tokens); triggering compaction". Set `compactInFlight = true`.
-4. `setTimeout(0)`:
-   - If `!ctx.isIdle()`: clear the flag and toast "deferred".
+1. If `passive` or a compaction is already in flight, return.
+2. `progress = rawTokensSinceLastCompaction(branch)`. `threshold = resolveCompactAfterTokens(cfg, contextWindow)`. This uses the **session** model's window, not the memory model's. If `progress < threshold`, return.
+3. Show the toast "compaction threshold reached (~N estimated source tokens); triggering compaction". Set the in-flight flag.
+4. Deferred:
+   - If the agent is not idle: clear the flag and toast "deferred".
    - Recompute progress. If it is now below the threshold: clear the flag and toast "skipped — another compaction already ran".
-   - Otherwise call `ctx.compact({onComplete, onError})`. Both callbacks clear the flag. `onError` shows no toast when `message === "Compaction cancelled"`.
+   - Otherwise trigger compaction. Both success and error paths clear the flag. The error path shows no toast when the message is "Compaction cancelled".
 
 ## 4. Sub-agents
 
-All three agents use `agentLoop(prompts, {systemPrompt, messages:[], tools:[oneTool]}, config, signal, streamFn)` from pi-agent-core. `config`:
+All three agents run a small tool-calling agent loop with one user message. `config`:
 
-- `{model, apiKey, headers, env, maxTokens: boundedMaxTokens(model, agentMaxTokens), convertToLlm: identity, toolExecution: "sequential"}`
-- `reasoning: thinkingLevel` only if `model.reasoning` is truthy and the level is not `"off"`. The level resolves as `resolved.thinking ?? config.model.thinking ?? "low"`.
-- `shouldStopAfterTurn: () => ++turns >= agentMaxTurns`.
+- `{model, apiKey, headers, env, maxTokens: boundedMaxTokens(model, agentMaxTokens), toolExecution: "sequential"}`
+- `reasoning: thinkingLevel` only if the model supports reasoning and the level is not `"off"`. The level resolves as `resolved.thinking ?? config.model.thinking ?? "low"`.
+- Stops after `agentMaxTurns` turns.
 
-Each agent gets one user message and runs a multi-turn tool loop: it calls the tool repeatedly, reads the acknowledgements, then ends with plain text. Results are collected inside the tool's `execute`. The final text is ignored. Every `message_end` assistant event with stopReason error/aborted goes to `logAgentStreamError` (§8). `streamFn` comes from `resolveWorkerStreamSimple` (§10).
+Each agent gets one user message and runs a multi-turn tool loop: it calls the tool repeatedly, reads the acknowledgements, then ends with plain text. Results are collected inside the tool's execute callback. The final text is ignored. Every stream error goes to the error log (§8).
 
 ### 4.1 Serialization for the observer (`serialize.ts`)
 
@@ -213,7 +211,7 @@ NEW CONVERSATION CHUNK:
   - Params: `{observations: [{timestamp: string (pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$, desc "Observation time in local 'YYYY-MM-DD HH:MM' format."), content: string minLength 1 (desc "Single-line plain prose. No markdown, no tags, no embedded timestamp."), relevance: low|medium|high|critical, sourceEntryIds: string[] minItems 1 (desc "Exact source entry ids from the chunk that directly support this observation. Use only ids shown in '[Source entry id: ...]' labels; never invent ids.")}]}`. The array description is "Batch of new observations. May be empty only if the tool is not called at all."
   - Execute: `sourceEntryIds` must all be in the chunk's allowed ids, otherwise the whole observation is rejected. Ids are deduped and sorted by chunk order. Content is truncated to 10k, `id = hashId(content)`, and duplicates within the run are skipped.
   - Ack: `Recorded N new observation(s) [(K duplicate(s) skipped).|.][ R observation(s) rejected for missing or invalid sourceEntryIds.] Total so far this run: T. Continue if the chunk still has uncovered content; otherwise stop calling the tool and emit a short plain-text confirmation.`
-- **Returns:** the accumulated observations, or `undefined`. If nothing was accumulated and the stream ended in error or aborted, it throws `ObserverStreamError`.
+- **Returns:** the accumulated observations, or `undefined`. If nothing was accumulated and the stream ended in error or aborted, it throws a stream error.
 
 ### 4.3 Reflector
 
@@ -227,31 +225,31 @@ NEW CONVERSATION CHUNK:
 
 ### 4.4 Dropper
 
-- **User message:** `CURRENT REFLECTIONS:\n…\n\nCURRENT OBSERVATIONS:\n<[id] ts [rel] [coverage: tier] content>\n\nActive observation pool: ~X tokens; target: ~Y tokens; fullness against target: ~P%; over target by ~Z tokens.\nMaximum drops allowed this run: M observation(s). This maximum is sized to move the active pool toward the target if every proposed drop is clearly safe.\nThis maximum is a hard upper bound, not a target. Drop fewer or none if fewer observations are clearly safe.` Numbers use `toLocaleString`. If `M ≤ 0`, the dropper returns early.
+- **User message:** `CURRENT REFLECTIONS:\n…\n\nCURRENT OBSERVATIONS:\n<[id] ts [rel] [coverage: tier] content>\n\nActive observation pool: ~X tokens; target: ~Y tokens; fullness against target: ~P%; over target by ~Z tokens.\nMaximum drops allowed this run: M observation(s). This maximum is sized to move the active pool toward the target if every proposed drop is clearly safe.\nThis maximum is a hard upper bound, not a target. Drop fewer or none if fewer observations are clearly safe.` Numbers use locale grouping. If `M ≤ 0`, the dropper returns early.
 - **Tool:** `drop_observations`, label "Drop observations", description `"Propose active observation ids that are safe to remove from compacted memory."`
   - Params: `{ids: string[] minItems1, reason?: string}`.
   - Execute: unknown ids are skipped. Duplicates within a request or within the run are skipped.
   - Ack: `Queued N drop candidate(s). Candidates this run: C. Maximum drops allowed: M.`
 - **Post-selection** (`selectDropCandidates`): sort by coverage rank (strong 0 < partial 1 < none 2), then relevance (low < medium < high < critical), then timestamp ascending (unparseable timestamps last), then proposal order. Take the first `M`. Return them, or `undefined` if none remain.
 
-## 5. Compaction hook (`session_before_compact`)
+## 5. Compaction hook
 
-The handler receives `event = {preparation: {firstKeptEntryId, tokensBefore, …}, branchEntries}`.
+The handler receives `{preparation: {firstKeptEntryId, tokensBefore, …}, branchEntries}`.
 
-1. If `compactHookInFlight`: show the warning "another compaction is already in progress; cancelling duplicate" and return `{cancel:true}`.
+1. If a compaction hook run is already in flight: show the warning "another compaction is already in progress; cancelling duplicate" and cancel.
 2. `projection = buildCompactionProjection(branchEntries, preparation.firstKeptEntryId, {observationsPoolMaxTokens})` (§2.6).
 3. `summary = renderSummary(projection.reflections, projection.observations)`.
-   - If the summary is empty, return `undefined`. OM declines, and Pi's native LLM summarizer runs.
-   - Otherwise return `{compaction: {summary, firstKeptEntryId, tokensBefore, details: projection.details}}`.
+   - If the summary is empty, decline. The agent's native summarizer runs instead.
+   - Otherwise return `{summary, firstKeptEntryId, tokensBefore, details: projection.details}`.
 
 Notes:
 
-- **`firstKeptEntryId` is Pi's own choice** from `preparation`. OM does not pick a cut point. Pi's normal keep-recent-tokens logic decides what raw tail stays in context.
+- **`firstKeptEntryId` is the agent's own choice**, not OM's. The normal keep-recent-tokens logic decides what raw tail stays in context.
 - Observations are included only if their coverage is at or before the cut, so memory never duplicates the kept raw tail.
 - No LLM call is made, so compaction is instant and deterministic.
 - **Cache-safety / prefix stability:** between full folds, reflections and drops stay frozen at the last full-fold boundary. Successive summaries only append observations in chronological order and never reorder earlier lines. At a full fold (visible observations ≥ `observationsPoolMaxTokens`), the summary is rebuilt from the full projection, which applies pending reflections and drops. The source has no other cache-specific logic.
 
-`renderSummary`: returns `""` if both lists are empty. Otherwise `CONTEXT_USAGE_INSTRUCTIONS` + `"\n\n## Reflections\n" + lines` (if any) + `"\n\n## Observations\n" + lines` (if any). Line formats: reflection `[id] content`; observation `[id] YYYY-MM-DD HH:MM [relevance] content`. The instruction text, verbatim:
+`renderSummary`: returns `""` if both lists are empty. Otherwise a context-usage instruction block + `"\n\n## Reflections\n" + lines` (if any) + `"\n\n## Observations\n" + lines` (if any). Line formats: reflection `[id] content`; observation `[id] YYYY-MM-DD HH:MM [relevance] content`. The instruction text, verbatim:
 
 ```
 These are condensed memories from earlier in this session.
@@ -281,7 +279,7 @@ When exact source context is needed for precision or traceability, use the recal
 **Behavior:**
 
 - **Invalid id:** returns `Memory id must be 12 lowercase hex characters. Received: <id>`.
-- **Lookup:** scans `getBranch()` for **all** valid observation and reflection records with that id, including dropped ones and those not visible. Status `dropped` means the id appears in any drop entry.
+- **Lookup:** scans the branch for **all** valid observation and reflection records with that id, including dropped ones and those not visible. Status `dropped` means the id appears in any drop entry.
 - **Not found:** `No observation or reflection with id <id> was found on the current branch.`
 - **Reflection match:** also pulls in the first record of each supporting observation (missing ones are listed).
 - **Source resolution:** each observation's `sourceEntryIds` are resolved against the branch. Missing ids and non-source-type ids are listed separately. `partial` = anything missing. `collision` = more than one direct match.
@@ -290,7 +288,7 @@ When exact source context is needed for precision or traceability, use the recal
   - per match: a dropped note (`Observation X is dropped from active memory but remains recallable.`), or an unavailable-source message, or the no-source message, or the rendered sources
 - **Output text for reflection/mixed:** sections `Reflections:\n[id] content`, `Observations:\n[id][ [dropped]] ts [rel] content`, `Unavailable supporting observations:…`, `Unavailable source entries: missing: …; non-source: …`, `Sources:\n<rendered>`.
 - **Recall rendering format:** `[User @ T]`, `[Assistant @ T]` (with thinking and tool calls), `[Tool result: name @ T]`, `[Custom message (type) @ T]`, `[Branch summary @ T]`. `T` falls back to "Unknown time", and non-text blocks become `[non-text content omitted]`.
-- **Details:** a structured `details` object (status ok|partial|invalid_id|not_found|no_source|source_unavailable) is returned for the TUI renderer. That rendering is optional.
+- **Details:** a structured `details` object (status ok|partial|invalid_id|not_found|no_source|source_unavailable) is returned for the UI renderer. That rendering is optional.
 
 ## 7. Commands
 
@@ -306,50 +304,26 @@ When exact source context is needed for precision or traceability, use the recal
 ## 8. Model fallback & rate-limit cooldown
 
 - **Candidates:**
-  - Preferred: `registry.find(cfg.model)`. If it is not found, a warning is shown and the session model is used; the thinking level applies only when the configured model was found.
-  - Then each fallback that `find` resolves, skipping duplicates of an earlier `provider/id`. A fallback's thinking defaults to `cfg.model.thinking`.
-- **Selection:** candidates whose `provider/id` is cooling down are filtered out. If all of them are, only the preferred model is tried. Each is tried in order with `resolveCandidate` (auth), and the first ok one wins. Then `rateLimitTracker.setActive(key)` runs, and there is a one-time warning `Observational memory: preferred model rate limited, using fallback <key>` when switching to a fallback.
+  - Preferred: the configured model, resolved against the registry. If it is not found, a warning is shown and the session model is used; the thinking level applies only when the configured model was found.
+  - Then each fallback that resolves, skipping duplicates of an earlier `provider/id`. A fallback's thinking defaults to `cfg.model.thinking`.
+- **Selection:** candidates whose `provider/id` is cooling down are filtered out. If all of them are, only the preferred model is tried. Each is tried in order with an auth check, and the first ok one wins. Then the rate-limit tracker marks it active, and there is a one-time warning `Observational memory: preferred model rate limited, using fallback <key>` when switching to a fallback.
 - **Failure:** if all candidates fail, the result is the first failure's reason.
-- **Auth acceptance:**
-  - ok if an apiKey or a non-empty header is present.
-  - Also ok for request-time-signing providers: `auth.ok`, not OAuth, not an empty-string key, and `registry.hasConfiguredAuth(model)`. If that last check is false, a one-off `registry.refresh({allowNetwork:false, providers:[p]})` re-check runs, with a 5 s timeout and at most once per 60 s per provider.
-  - If `auth.baseUrl` is set, it is copied onto the request model.
-- **`stream-errors.ts`:** on an assistant `message_end` with stopReason `error|aborted`, `rateLimitTracker.noteError(errorMessage)` is called. If the message matches `/(?:^|[^\d])429(?:[^\d]|$)|rate[\s_-]?limit|too[\s_-]?many[\s_-]?requests|quota|resource[\s_-]?exhausted|overloaded/i`, a cooldown `now + cooldownMs` is armed for the **active** key and `generation++`. The tracker is a module singleton. Expired cooldowns are pruned lazily. Other errors do not trigger a fallback.
+- **Auth acceptance:** ok if an apiKey or a non-empty header is present, or the model's credentials otherwise check out.
+- On a stream error with stop reason `error|aborted`, the rate-limit tracker inspects the error message. If it matches `/(?:^|[^\d])429(?:[^\d]|$)|rate[\s_-]?limit|too[\s_-]?many[\s_-]?requests|quota|resource[\s_-]?exhausted|overloaded/i`, a cooldown `now + cooldownMs` is armed for the **active** key and its generation increments. The tracker is a module singleton. Expired cooldowns are pruned lazily. Other errors do not trigger a fallback.
 
 ## 9. Token estimation & budget
 
 - `estimateStringTokens(s) = ceil(s.length/4)`.
 - `estimateEntryTokens`:
-  - `message` → Pi's `estimateTokens(message)`
+  - `message` → the agent's own token estimator
   - `custom_message` → a string or the sum of its text blocks
   - `branch_summary` → the summary string
   - everything else → 0
 - `boundedMaxTokens(model, req=32000) = model.maxTokens>0 ? min(model.maxTokens, req) : req`.
 
-## 10. Pi APIs relied on
-
-- **Events:**
-  - `pi.on("agent_start"|"turn_end", (e, ctx))` → consolidation.
-  - `pi.on("agent_settled")` → auto-compaction.
-  - `pi.on("session_before_compact", (event:{preparation:{firstKeptEntryId, tokensBefore}, branchEntries}, ctx))`. The handler returns `undefined` (defer to native), `{cancel:true}`, or `{compaction:{summary, firstKeptEntryId, tokensBefore, details}}`.
-- **ctx:**
-  - `cwd`, `hasUI`, `ui.notify(msg, "info"|"warning"|"error")`
-  - `model` (with `contextWindow`), `modelRegistry`
-  - `getContextUsage?() → {tokens?, contextWindow?}`
-  - `sessionManager.getBranch(): Entry[]` (root→tip; entries `{type, id, timestamp, message?, content?, customType?, summary?, data?, details?, firstKeptEntryId?}`), `getSessionId?()`, `getSessionFile?()`
-  - `isIdle()`, `compact({onComplete, onError(err:{message})})`
-- **Writes:** `pi.appendEntry(customType, data)`, `pi.registerTool(defineTool{…, execute(id, params, signal, onUpdate, ctx)})`, `pi.registerCommand(name, {description, handler(args, ctx)})`.
-- **modelRegistry:**
-  - `find(provider, id)`
-  - `getApiKeyAndHeaders(model) → {ok, apiKey?, headers?, env?, baseUrl?}`
-  - `isUsingOAuth?(model)`, `hasConfiguredAuth?(model)`, `refresh?(opts)`
-  - `streamSimple?` or `getRegisteredProviderConfig?(provider) → {api, streamSimple}`, used by `resolveWorkerStreamSimple`, which prefers the registry's composed stream so custom providers such as `cliproxyapi*` work. It falls back to pi-ai `compat.streamSimple`.
-- **Model fields used:** `provider, id, api, contextWindow, maxTokens, reasoning, baseUrl`.
-- **agentLoop:** an async-iterable of events (`message_end` carries `{role, stopReason, errorMessage}`) plus `.result()`. Tools return `{content:[{type:"text",text}], details}`.
-
 ## Appendix A — System prompts (verbatim)
 
-### A.1 OBSERVER_SYSTEM (agents/observer/prompts.ts)
+### A.1 Observer
 
 ```text
 You are the observation agent for a coding assistant.
@@ -473,7 +447,7 @@ Timestamp format: "YYYY-MM-DD HH:MM" (local time, 24-hour, to the minute). This 
 Remember: these observations are the assistant's ONLY memory of this chunk once the raw messages fall out of context. Make them count.
 ```
 
-### A.2 REFLECTOR_SYSTEM (agents/reflector/prompts.ts)
+### A.2 Reflector
 
 ```text
 You are the reflection agent for a coding assistant.
@@ -559,7 +533,7 @@ Examples:
 - ZERO REFLECTIONS: The only new observations are routine command outputs, transient debugging attempts, or partial work with no durable conclusion yet.
 ```
 
-### A.3 DROPPER_SYSTEM (agents/dropper/prompts.ts)
+### A.3 Dropper
 
 ```text
 You are the dropper agent for a coding assistant.
