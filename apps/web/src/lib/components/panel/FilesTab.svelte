@@ -1,12 +1,14 @@
 <script lang="ts">
   import { ArrowLeft, ChevronRight, Code, Eye, File, Folder, RefreshCw } from '@lucide/svelte';
+  import { tick } from 'svelte';
+  import type { FileTarget } from '../../file-links';
   import { highlightCode, languageForPath } from '../../markdown';
   import { panelApi, type DirEntry, type FileContent } from '../../panel-api';
   import Markdown from '../Markdown.svelte';
 
   export let sessionId: string;
-  /** Set by the parent (e.g. a Git file link) to open a file directly. */
-  export let openPath: string | undefined = undefined;
+  /** Set by the parent (e.g. a Git or chat file link) to open a file directly. */
+  export let openRequest: (FileTarget & { seq: number }) | undefined = undefined;
   export let refreshKey = 0;
 
   let dir = '';
@@ -17,8 +19,14 @@
   let error = '';
   let loading = false;
   let loadedFor = '';
+  /** Line range a link pointed at (1-based, inclusive), highlighted in the source view. */
+  let focus: { line: number; endLine: number } | undefined;
+  let codeView: HTMLDivElement | undefined;
 
   const MAX_HIGHLIGHT = 200_000;
+  /** `.code-view pre`: 12px font × 1.55 line height, 8px top padding (app.css). */
+  const LINE_HEIGHT = 12 * 1.55;
+  const CODE_PAD = 8;
 
   async function listDir(path: string) {
     loading = true;
@@ -37,19 +45,44 @@
     }
   }
 
-  async function openFile(path: string) {
+  /**
+   * `refresh` re-reads the open file in place (keeping view mode and focus);
+   * otherwise `lines` sets the focused range and a Markdown file with one
+   * opens in source view so the lines can be shown.
+   */
+  async function openFile(path: string, lines: Omit<FileTarget, 'path'> = {}, refresh = false) {
     error = '';
     const id = sessionId;
     try {
       const result = await panelApi.file(id, path);
       if (id !== sessionId) return;
       file = result;
-      rendered = true;
-      const parent = path.split('/').slice(0, -1).join('/');
+      if (!refresh) {
+        const count = (result.content ?? '').replace(/\n$/, '').split('\n').length;
+        const line = lines.line && Math.min(lines.line, count);
+        focus = line
+          ? { line, endLine: Math.min(Math.max(lines.endLine ?? line, line), count) }
+          : undefined;
+        rendered = !focus;
+        if (focus) void scrollToFocus();
+        // The server answers with the workspace-relative path, even for absolute requests.
+      }
+      const parent = result.path.split('/').slice(0, -1).join('/');
       if (parent !== dir) void listDir(parent);
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Unable to open file.';
+      if (id !== sessionId) return;
+      // Back to the folder view, where the error is shown.
+      file = undefined;
+      error = `${path}: ${cause instanceof Error ? cause.message : 'Unable to open file.'}`;
     }
+  }
+
+  async function scrollToFocus() {
+    await tick();
+    if (!focus || !codeView) return;
+    codeView.scrollIntoView({ block: 'nearest' });
+    const top = CODE_PAD + (focus.line - 1) * LINE_HEIGHT;
+    codeView.scrollTop = Math.max(0, top - codeView.clientHeight / 3);
   }
 
   function open(entry: DirEntry) {
@@ -83,16 +116,16 @@
     entries = [];
     void listDir('');
   }
-  let lastOpen: string | undefined;
-  $: if (openPath && openPath !== lastOpen) {
-    lastOpen = openPath;
-    void openFile(openPath);
+  let lastOpen: number | undefined;
+  $: if (openRequest && openRequest.seq !== lastOpen) {
+    lastOpen = openRequest.seq;
+    void openFile(openRequest.path, openRequest);
   }
   let lastRefresh = refreshKey;
   $: if (refreshKey !== lastRefresh) {
     lastRefresh = refreshKey;
     void listDir(dir);
-    if (file) void openFile(file.path);
+    if (file) void openFile(file.path, {}, true);
   }
 </script>
 
@@ -103,9 +136,16 @@
         class="icon-button small"
         type="button"
         aria-label="Back to folder"
-        on:click={() => (file = undefined)}><ArrowLeft size={16} /></button
+        on:click={() => {
+          file = undefined;
+          focus = undefined;
+        }}><ArrowLeft size={16} /></button
       >
-      <span class="drill-title" title={file.path}>{file.path}</span>
+      <span class="drill-title" title={file.path}
+        >{file.path}{#if focus}<span class="drill-lines"
+            >:{focus.line}{#if focus.endLine > focus.line}-{focus.endLine}{/if}</span
+          >{/if}</span
+      >
       {#if isMarkdown && !file.binary}
         <button
           class="icon-button small"
@@ -123,9 +163,22 @@
     {#if file.binary}
       <p class="panel-empty">Binary file — not shown.</p>
     {:else if isMarkdown && rendered}
-      <div class="doc"><Markdown source={file.content ?? ''} /></div>
+      <div class="doc">
+        <Markdown
+          source={file.content ?? ''}
+          linkBase={file.path.split('/').slice(0, -1).join('/')}
+        />
+      </div>
     {:else}
-      <div class="code-view">
+      <div
+        class="code-view"
+        class:focused={!!focus}
+        bind:this={codeView}
+        style:--focus-top={focus ? `${CODE_PAD + (focus.line - 1) * LINE_HEIGHT}px` : undefined}
+        style:--focus-height={focus
+          ? `${(focus.endLine - focus.line + 1) * LINE_HEIGHT}px`
+          : undefined}
+      >
         <pre class="gutter" aria-hidden="true">{lineNumbers}</pre>
         <!-- highlightCode output is sanitized (see markdown.ts). -->
         {#if highlighted !== undefined}<pre class="hljs"><code>{@html highlighted}</code

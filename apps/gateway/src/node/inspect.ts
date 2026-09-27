@@ -102,6 +102,20 @@ function realRoot(root: string): string {
 export function resolveInside(root: string, relative: string): string {
   if (relative.includes('\0')) throw new ApiError(400, 'invalid_input', 'Invalid path');
   root = realRoot(root);
+  const inside = (real: string) => {
+    const rel = path.relative(root, real);
+    return !(rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel));
+  };
+  // Agents usually cite absolute paths; accept one that resolves inside the
+  // workspace. Anything else is taken as workspace-relative, as before.
+  if (path.isAbsolute(relative)) {
+    try {
+      const real = realpathSync(relative);
+      if (inside(real)) return real;
+    } catch {
+      /* fall through */
+    }
+  }
   const joined = path.resolve(root, relative.replace(/^\/+/, ''));
   let real: string;
   try {
@@ -109,9 +123,7 @@ export function resolveInside(root: string, relative: string): string {
   } catch {
     throw new ApiError(404, 'not_found', 'Path not found');
   }
-  const rel = path.relative(root, real);
-  if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel))
-    throw new ApiError(403, 'forbidden', 'Path is outside the workspace');
+  if (!inside(real)) throw new ApiError(403, 'forbidden', 'Path is outside the workspace');
   return real;
 }
 

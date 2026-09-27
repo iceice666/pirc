@@ -33,6 +33,7 @@
     demoSnapshot,
     demoWorkspaces,
   } from './lib/mock';
+  import { onFilePreviewRequest } from './lib/file-links';
   import { loadHighlighter } from './lib/markdown';
   import { activateUpdate, registerPwa } from './lib/pwa';
   import { fromSnapshot, reduceEvent } from './lib/state';
@@ -189,6 +190,8 @@
     clientId = getClientId();
     const removePwa = registerPwa((registration) => (updateRegistration = registration));
     void bootstrap();
+    // A file link in the conversation previews the file in the side panel.
+    const removeFileLinks = onFilePreviewRequest(() => (detailsOpen = true));
     // Code blocks are common; fetch the highlighter once the first paint is done.
     // KaTeX is rarer and loads on first use instead.
     const warm = () => void loadHighlighter();
@@ -230,6 +233,7 @@
       if (leaseHeartbeat) clearInterval(leaseHeartbeat);
       events?.close();
       removePwa();
+      removeFileLinks();
       uploads.forEach((upload) => upload.preview && URL.revokeObjectURL(upload.preview));
     };
   });

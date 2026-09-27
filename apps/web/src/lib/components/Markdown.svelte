@@ -5,6 +5,8 @@
   export let source: string;
   export let streaming = false;
   export let compact = false;
+  /** Directory relative file links resolve against (workspace root by default). */
+  export let linkBase = '';
 
   /**
    * While streaming, every delta would otherwise re-parse the whole message and
@@ -49,7 +51,7 @@
   class="markdown"
   class:compact
   class:streaming
-  use:enhanceMarkdown={{ html, ready: !streaming }}
+  use:enhanceMarkdown={{ html, ready: !streaming, linkBase }}
 >
   {@html html}
 </div>

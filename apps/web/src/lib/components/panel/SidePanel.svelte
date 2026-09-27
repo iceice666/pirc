@@ -7,6 +7,7 @@
    */
   import { Brain, FolderTree, GitBranch, ListChecks, SquareTerminal } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
+  import { onFilePreviewRequest, type FileTarget } from '../../file-links';
   import { panelApi, type PanelState, type PanelTab } from '../../panel-api';
   import type { ClientSessionState, RunStatus } from '../../types';
   import FilesTab from './FilesTab.svelte';
@@ -37,7 +38,8 @@
   let stateError = '';
   let gitRefresh = 0;
   let filesRefresh = 0;
-  let openPath: string | undefined;
+  let openRequest: (FileTarget & { seq: number }) | undefined;
+  let openSeq = 0;
   let stateTimer: ReturnType<typeof setTimeout> | undefined;
   let loadedFor = '';
   // Terminals stay mounted once visited so their sockets survive tab switches.
@@ -79,7 +81,7 @@
   $: if (sessionId !== loadedFor) {
     loadedFor = sessionId;
     state = undefined;
-    openPath = undefined;
+    openRequest = undefined;
     terminalMounted = false;
     if (open) void loadState();
   }
@@ -108,14 +110,13 @@
     }
   }
 
-  function openFile(path: string) {
-    openPath = undefined;
-    // Next tick so the same path can be reopened.
-    queueMicrotask(() => {
-      openPath = path;
-      tab = 'files';
-    });
+  function openFile(target: string | FileTarget) {
+    // A fresh sequence number so the same path can be reopened.
+    openRequest = { ...(typeof target === 'string' ? { path: target } : target), seq: ++openSeq };
+    tab = 'files';
   }
+  // File links in the conversation (and in previewed documents) open here.
+  onDestroy(onFilePreviewRequest(openFile));
 
   let dragStartX = 0;
   let dragStartWidth = 0;
@@ -205,7 +206,7 @@
     {#if demo}
       <p class="panel-empty">Connect to a gateway to use this panel.</p>
     {:else if tab === 'files'}
-      <FilesTab {sessionId} {openPath} refreshKey={filesRefresh} />
+      <FilesTab {sessionId} {openRequest} refreshKey={filesRefresh} />
     {:else if tab === 'git'}
       <GitTab {sessionId} refreshKey={gitRefresh} onopenfile={openFile} />
     {:else if tab === 'memory'}

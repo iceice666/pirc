@@ -9,8 +9,17 @@
  * Output is always passed through DOMPurify: model output and tool results are untrusted.
  */
 import DOMPurify from 'dompurify';
-import { Marked, type Tokens, type TokenizerAndRendererExtension } from 'marked';
+import { Marked, type Token, type Tokens, type TokenizerAndRendererExtension } from 'marked';
 import { writable } from 'svelte/store';
+import {
+  BARE_PATH,
+  BARE_PATH_SEARCH,
+  CODE_PATH,
+  localFilePath,
+  parseFileLink,
+  requestFilePreview,
+  stripFileScheme,
+} from './file-links';
 
 const escapeHtml = (value: string) =>
   value
@@ -109,6 +118,19 @@ const inlineMath: TokenizerAndRendererExtension = {
   renderer: (token) => renderMath(token.text, !!token.display),
 };
 
+/** Bare file paths in prose (`see src/a.ts:12`) become file links. */
+const barePath: TokenizerAndRendererExtension = {
+  name: 'barePath',
+  level: 'inline',
+  start: (src) => src.match(BARE_PATH_SEARCH)?.index,
+  tokenizer(src) {
+    if (this.lexer.state.inLink) return undefined;
+    const match = BARE_PATH.exec(src);
+    return match ? { type: 'barePath', raw: match[0], text: match[0] } : undefined;
+  },
+  renderer: (token) => `<a href="${escapeHtml(token.text)}">${escapeHtml(token.text)}</a>`,
+};
+
 function highlight(code: string, language: string): string {
   if (!language) return escapeHtml(code);
   if (!hljs) {
@@ -128,7 +150,18 @@ function highlight(code: string, language: string): string {
 const marked = new Marked({
   gfm: true,
   breaks: false,
-  extensions: [blockMath, inlineMath],
+  extensions: [blockMath, inlineMath, barePath],
+  walkTokens(token) {
+    // Inline code inside a link must not become a (nested) file link.
+    if (token.type !== 'link') return;
+    const mark = (tokens: Token[] | undefined) =>
+      tokens?.forEach((child) => {
+        if (child.type === 'codespan')
+          (child as Tokens.Codespan & { inLink?: boolean }).inLink = true;
+        if ('tokens' in child) mark(child.tokens);
+      });
+    mark(token.tokens);
+  },
   hooks: {
     emStrongMask(source) {
       // CommonMark treats punctuation before ** followed by text as an opener,
@@ -141,6 +174,12 @@ const marked = new Marked({
     },
   },
   renderer: {
+    codespan(token: Tokens.Codespan & { inLink?: boolean }) {
+      // `src/a.ts:12` in inline code links to the file.
+      const code = `<code>${escapeHtml(token.text)}</code>`;
+      if (token.inLink || !CODE_PATH.test(token.text)) return code;
+      return `<a href="${escapeHtml(token.text)}">${code}</a>`;
+    },
     code({ text, lang }: Tokens.Code) {
       const language = (lang ?? '').trim().split(/\s+/)[0]!.toLowerCase();
       if (language === 'mermaid')
@@ -178,11 +217,22 @@ const marked = new Marked({
 let hooked = false;
 function purifier() {
   if (!hooked && typeof window !== 'undefined') {
+    DOMPurify.addHook('beforeSanitizeAttributes', (node) => {
+      // DOMPurify drops `file:` URLs; keep them as plain paths so they stay previewable.
+      const href = node.tagName === 'A' ? node.getAttribute('href') : null;
+      if (href && /^file:/i.test(href.trim()))
+        node.setAttribute('href', stripFileScheme(href) || '#');
+    });
     DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-      if (node.tagName === 'A' && node.getAttribute('href')) {
-        node.setAttribute('target', '_blank');
-        node.setAttribute('rel', 'noopener noreferrer');
+      if (node.tagName !== 'A' || !node.getAttribute('href')) return;
+      // Workspace file links open in the side panel (see enhanceMarkdown), not a new tab.
+      if (localFilePath(node.getAttribute('href'))) {
+        node.removeAttribute('target');
+        node.setAttribute('data-file-link', '');
+        return;
       }
+      node.setAttribute('target', '_blank');
+      node.setAttribute('rel', 'noopener noreferrer');
     });
     hooked = true;
   }
@@ -202,7 +252,7 @@ export function renderMarkdown(source: string, options: { streaming?: boolean } 
   const input = options.streaming ? closeOpenFence(source) : source;
   const html = marked.parse(input, { async: false });
   return purifier().sanitize(html, {
-    ADD_ATTR: ['target', 'data-copy'],
+    ADD_ATTR: ['target', 'data-copy', 'data-file-link'],
     ADD_TAGS: ['semantics', 'annotation'],
   });
 }
@@ -324,13 +374,35 @@ async function renderMermaidBlocks(root: HTMLElement) {
   }
 }
 
+interface EnhanceParams {
+  html: string;
+  ready: boolean;
+  /** Directory relative links resolve against (a previewed document's folder). */
+  linkBase?: string;
+}
+
 /**
- * Svelte action: copy buttons on code blocks and lazy Mermaid rendering.
+ * Svelte action: copy buttons on code blocks, workspace file links (opened in
+ * the side panel) and lazy Mermaid rendering.
  * Diagrams render only once `ready` is true (i.e. the message stopped streaming),
  * since a half-written diagram cannot be parsed.
  */
-export function enhanceMarkdown(node: HTMLElement, params: { html: string; ready: boolean }) {
+export function enhanceMarkdown(node: HTMLElement, params: EnhanceParams) {
+  let linkBase = params.linkBase ?? '';
+  const openFileLink = (event: MouseEvent) => {
+    const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[data-file-link]');
+    if (!link || !node.contains(link)) return false;
+    event.preventDefault();
+    const target = parseFileLink(link.getAttribute('href'), linkBase);
+    if (target) requestFilePreview(target);
+    return true;
+  };
+  // Middle click would otherwise open the 404ing URL in a new tab.
+  const onAuxClick = (event: MouseEvent) => {
+    if (event.button === 1) openFileLink(event);
+  };
   const onClick = (event: MouseEvent) => {
+    if (openFileLink(event)) return;
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-copy]');
     if (!button || !node.contains(button)) return;
     const code = button.closest('.code-block')?.querySelector('code')?.textContent ?? '';
@@ -340,12 +412,19 @@ export function enhanceMarkdown(node: HTMLElement, params: { html: string; ready
     });
   };
   node.addEventListener('click', onClick);
+  node.addEventListener('auxclick', onAuxClick);
   const run = (next: { ready: boolean }) => {
     if (next.ready) void renderMermaidBlocks(node);
   };
   run(params);
   return {
-    update: (next: { html: string; ready: boolean }) => queueMicrotask(() => run(next)),
-    destroy: () => node.removeEventListener('click', onClick),
+    update: (next: EnhanceParams) => {
+      linkBase = next.linkBase ?? '';
+      queueMicrotask(() => run(next));
+    },
+    destroy: () => {
+      node.removeEventListener('click', onClick);
+      node.removeEventListener('auxclick', onAuxClick);
+    },
   };
 }

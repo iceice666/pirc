@@ -104,6 +104,18 @@ describe('side panel: workspace inspection', () => {
     expect((await get('/files?path=src')).json().entries[0].name).toBe('main.ts');
     const file = (await get('/files/content?path=src/main.ts')).json();
     expect(file.content).toBe('export {};\n');
+    // Absolute paths inside the workspace (as agents cite them) resolve too.
+    const absolute = (
+      await get(`/files/content?path=${encodeURIComponent(path.join(workspace, 'src/main.ts'))}`)
+    ).json();
+    expect(absolute).toMatchObject({ path: 'src/main.ts', content: 'export {};\n' });
+    expect(
+      (
+        await get(
+          `/files/content?path=${encodeURIComponent(path.join(config.stateDir, 'secret.txt'))}`,
+        )
+      ).statusCode,
+    ).toBe(404);
     expect((await get('/files/content?path=bin.dat')).json()).toMatchObject({
       binary: true,
     });

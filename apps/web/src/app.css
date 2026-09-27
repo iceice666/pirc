@@ -3148,6 +3148,17 @@ button.task-row:hover {
 .code-view pre code {
   font: inherit;
 }
+/* Lines a file link pointed at; `local` keeps the band on its lines while scrolling. */
+.code-view.focused,
+.code-view.focused pre.gutter {
+  background:
+    linear-gradient(var(--accent-soft), var(--accent-soft)) 0 var(--focus-top) / 100%
+      var(--focus-height) no-repeat local,
+    var(--code-bg);
+}
+.drill-lines {
+  color: var(--faint);
+}
 .doc {
   padding: 4px 2px;
   font-size: 14px;
