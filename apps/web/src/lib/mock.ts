@@ -34,7 +34,7 @@ export const demoWorkspaces: Workspace[] = [
   {
     id: 'ws-pirc',
     hostId: 'homolab',
-    displayName: 'Pi Remote Client',
+    displayName: 'pirc',
     canonicalPath: '~/code/pirc',
     defaults: { modelId: 'claude-sonnet', thinkingLevel: 'high' },
     activeSessionCount: 1,

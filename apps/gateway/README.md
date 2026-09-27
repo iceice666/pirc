@@ -3,7 +3,7 @@
 A TypeScript/Fastify service on Bun, together with the built-in coding agent (`src/agent/`). One binary plays two roles:
 
 - **`pirc gateway`** (`src/daemon/`) is the only thing browsers talk to. It authenticates them, indexes sessions and control leases in SQLite, buffers each session's events, and routes every session request to the node that owns it. It never runs agents, shells, or workspace inspection itself, and never learns real workspace paths.
-- **`pirc node`** (`src/node/`) runs on each machine that has workspaces. It connects _out_ to the gateway over one WebSocket and owns everything local: the `pirc agent` subprocesses (Pi-compatible JSONL RPC), side-panel shells and Git/file inspection, uploaded images, and the session JSONL files and SQLite metadata. It does not listen on any port.
+- **`pirc node`** (`src/node/`) runs on each machine that has workspaces. It connects _out_ to the gateway over one WebSocket and owns everything local: the `pirc agent` subprocesses (JSONL RPC on stdin/stdout), side-panel shells and Git/file inspection, uploaded images, and the session JSONL files and SQLite metadata. It does not listen on any port.
 
 A single-machine setup runs both on the same host; the node then reaches the gateway at `ws://127.0.0.1:<port>`.
 

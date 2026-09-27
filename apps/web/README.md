@@ -1,4 +1,4 @@
-# Relay web client
+# pirc web client
 
 Standalone Svelte 5 + TypeScript + Vite client for the pirc gateway. This package intentionally uses no SvelteKit server runtime.
 

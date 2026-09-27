@@ -112,8 +112,8 @@
   ></button>{/if}
 <aside class:open class:collapsed class="sidebar" aria-label="Sessions" inert={collapsed && !open}>
   <div class="brand-row">
-    <a class="brand" href="/" aria-label="Relay home">
-      <span class="brand-mark"><Command size={16} /></span><span>Relay</span>
+    <a class="brand" href="/" aria-label="pirc home">
+      <span class="brand-mark"><Command size={16} /></span><span>pirc</span>
     </a>
     <button
       class="sidebar-collapse icon-button"

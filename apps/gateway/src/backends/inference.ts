@@ -105,7 +105,7 @@ export class GatewayInference {
           }
         },
       );
-      // Native adapters may embed upstream bodies; Pi adapter messages are already classified.
+      // Native adapters may embed upstream bodies; pi-ai adapter messages are already classified.
       if (message.errorMessage && !usePi)
         message.errorMessage = safeInferenceError(message.errorMessage);
       if (controller.signal.aborted) {

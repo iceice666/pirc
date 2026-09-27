@@ -93,7 +93,7 @@ function interaction(raw: any): PendingInteraction {
   const base = {
     id: raw.id,
     runnerEpoch: String(raw.runnerEpoch),
-    title: request.title ?? 'Pi needs your input',
+    title: request.title ?? 'The agent needs your input',
     description: request.message,
     expiresAt: iso(raw.expiresAt),
     status: raw.status ?? 'pending',
@@ -396,7 +396,7 @@ const SNAPSHOT_EVENTS = new Set([
   'node_offline',
   'node_reconnected',
 ]);
-/** Pi lifecycle events that change run status. */
+/** Agent lifecycle events that change run status. */
 const RUN_EVENTS = new Set(['agent_start', 'agent_end', 'agent_settled']);
 
 function piEvent(pi: any, timestamp: unknown): GatewayEvent {

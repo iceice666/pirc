@@ -48,7 +48,7 @@ import { RateLimitTracker, pickModel, runWorker, type WorkerModel } from './work
 const modelChoice = z.object({
   provider: z.string().min(1),
   id: z.string().min(1),
-  // Pi's `max` maps to our highest level.
+  // `max` (accepted for configs carried over from Pi) maps to our highest level.
   thinking: z
     .enum([...thinkingLevels, 'max'])
     .transform((level) => (level === 'max' ? 'xhigh' : level))

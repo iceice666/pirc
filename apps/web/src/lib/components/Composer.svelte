@@ -85,7 +85,7 @@
           ? 'Steer the current run…'
           : mode === 'follow_up'
             ? 'Queue what should happen next…'
-            : 'Tell Pi what to work on…';
+            : 'Tell the agent what to work on…';
 
   function keydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {

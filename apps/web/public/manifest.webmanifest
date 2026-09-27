@@ -1,7 +1,7 @@
 {
-  "name": "Relay — Pi Remote Client",
-  "short_name": "Relay",
-  "description": "Run and resume persistent Pi coding sessions from any private device.",
+  "name": "pirc",
+  "short_name": "pirc",
+  "description": "Run and resume persistent coding-agent sessions from any private device.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

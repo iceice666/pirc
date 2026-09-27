@@ -11,7 +11,7 @@ export interface CompactionPlan {
 
 /**
  * Built-in extension. Features are compiled into the binary; this is the
- * small hook surface they need (a subset of Pi's extension events).
+ * small hook surface they need.
  */
 export interface Feature {
   name: string;

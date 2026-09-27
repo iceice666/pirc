@@ -19,7 +19,7 @@ nix build
 ./result/bin/pirc node    # agents for this machine (PIRC_NODE_ID, PIRC_NODE_TOKEN, PIRC_DAEMON_URL)
 ```
 
-Pi is no longer required. A node starts one `pirc agent` subprocess per session by re-executing its own binary. It speaks the same JSONL RPC that Pi did.
+A node starts one `pirc agent` subprocess per session by re-executing its own binary; the two talk JSONL RPC over stdin/stdout.
 
 Dependencies are fetched in a fixed-output derivation (`pirc.nodeModules`) that covers every OS/CPU, so one `nodeModulesHash` works for all systems. After changing `bun.lock`, set `nodeModulesHash` to `lib.fakeHash`, run `nix build .#pirc.nodeModules`, and copy the reported hash into [`package.nix`](./package.nix).
 

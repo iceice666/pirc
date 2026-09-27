@@ -289,8 +289,8 @@
     {#if settings}
       <h4>Subscription accounts</h4>
       <p>
-        Pi's known model catalog is not a verification of your account's model access or service
-        policy.
+        pi-ai's built-in model catalog is not a verification of your account's model access or
+        service policy.
       </p>
       {#each settings.oauthProviders as provider (provider.id)}
         <div class="backend-card">

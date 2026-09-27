@@ -401,9 +401,9 @@ export class RunnerManager {
           commandId,
           'rejected',
           response,
-          response.error ?? 'Pi rejected command',
+          response.error ?? 'Agent rejected command',
         );
-        if (runId) this.db.updateRun(runId, 'failed', response.error ?? 'Pi rejected prompt');
+        if (runId) this.db.updateRun(runId, 'failed', response.error ?? 'Agent rejected prompt');
       } else this.db.updateCommand(commandId, 'accepted', response);
       return response;
     } catch (error) {

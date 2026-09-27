@@ -1,6 +1,7 @@
 /**
- * Internal conversation model. Shapes intentionally match the Pi RPC message
- * format so the gateway reducer and web client keep working unchanged.
+ * Internal conversation model. These shapes are the RPC message format that
+ * the node, gateway reducer and web client consume; they stay compatible with
+ * pi-ai's message types so the gateway's pi-ai adapter can convert directly.
  */
 
 export interface TextContent {
@@ -58,7 +59,7 @@ export interface AssistantMessage {
   api: string;
   provider: string;
   model: string;
-  /** Pi identity differs from the user-visible backend alias. */
+  /** pi-ai provider identity; differs from the user-visible backend alias. */
   canonicalProvider?: string;
   responseId?: string;
   responseModel?: string;
@@ -102,7 +103,7 @@ export type Message =
   | CustomMessage
   | CompactionSummaryMessage;
 
-/** Streaming deltas emitted by providers; mirrors Pi's `assistantMessageEvent`. */
+/** Streaming deltas emitted by providers (same shape as pi-ai's `assistantMessageEvent`). */
 export type AssistantDelta =
   | { type: 'text_start'; contentIndex: number }
   | { type: 'text_delta'; contentIndex: number; delta: string }

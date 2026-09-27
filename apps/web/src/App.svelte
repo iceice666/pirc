@@ -674,8 +674,7 @@
 />
 
 <svelte:head
-  ><title>{sessionState ? `${sessionState.session.name} · Relay` : 'Relay · Pi Remote'}</title
-  ></svelte:head
+  ><title>{sessionState ? `${sessionState.session.name} · pirc` : 'pirc'}</title></svelte:head
 >
 
 <div
@@ -815,8 +814,8 @@
                   <span><Plus size={24} /></span>
                   <h2>Start something useful</h2>
                   <p>
-                    Describe a task, attach a reference image, or ask Pi to continue work in this
-                    workspace.
+                    Describe a task, attach a reference image, or ask the agent to continue work in
+                    this workspace.
                   </p>
                 </div>
               {/if}
@@ -884,7 +883,7 @@
     <div class="modal settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <header>
         <div>
-          <span class="eyebrow">Relay</span>
+          <span class="eyebrow">pirc</span>
           <h2 id="settings-title">Settings</h2>
         </div>
         <button

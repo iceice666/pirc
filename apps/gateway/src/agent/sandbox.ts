@@ -27,7 +27,7 @@ const inside = (child: string, parent: string) =>
 /**
  * Enforces the workspace boundary for file tools and PTC file APIs.
  * Not a security sandbox for shell commands — bash still runs with the
- * agent account's permissions, exactly like Pi.
+ * agent account's permissions.
  */
 export class PathGuard {
   private readonly roots: string[];

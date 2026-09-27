@@ -1,5 +1,5 @@
 /**
- * Conversion from Pi RPC message shapes (pi-ai / pi-coding-agent) into the
+ * Conversion from agent RPC message shapes (compatible with pi-ai) into the
  * client timeline model. Tool results are folded into the assistant turn that
  * issued the call, so the timeline reads as conversation, not as a raw log.
  */
@@ -10,7 +10,7 @@ type Raw = Record<string, any>;
 const iso = (value: unknown) =>
   new Date(typeof value === 'number' ? value : Date.now()).toISOString();
 
-/** Stable per-message id: Pi messages carry no id, but role + timestamp is unique in practice. */
+/** Stable per-message id: agent messages carry no id, but role + timestamp is unique in practice. */
 export function piMessageId(raw: Raw | null | undefined): string {
   return `${raw?.role ?? 'message'}-${raw?.timestamp ?? 'live'}`;
 }
@@ -101,7 +101,7 @@ function assistantMessage(raw: Raw, id: string): ConversationMessage {
 }
 
 /**
- * Convert one Pi message. Returns null for messages that should not appear
+ * Convert one agent message. Returns null for messages that should not appear
  * (hidden custom messages). Tool results become an orphan system entry here;
  * {@link piHistory} folds them into their owning assistant turn.
  */
@@ -243,7 +243,7 @@ export function mergeTool(
   return merged;
 }
 
-/** Convert a full Pi history, folding tool results into their assistant turn. */
+/** Convert a full agent history, folding tool results into their assistant turn. */
 export function piHistory(history: unknown[]): ConversationMessage[] {
   const messages: ConversationMessage[] = [];
   const owners = new Map<string, number>();

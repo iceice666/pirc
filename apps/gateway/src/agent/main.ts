@@ -34,7 +34,7 @@ async function readConfigure(lines: AsyncIterator<string>): Promise<ModelsConfig
 
 /**
  * `pirc agent --session-dir DIR` — one session, JSONL RPC on stdin/stdout.
- * Pi-compatible flags `--mode rpc` and `--continue` are accepted and ignored
+ * The legacy flags `--mode rpc` and `--continue` are accepted and ignored
  * (sessions always resume from their directory).
  */
 export async function runAgent(argv: string[]): Promise<void> {

@@ -94,7 +94,7 @@ export function reduceEvent(
       let index = state.messages.findIndex(
         (message) => message.id === incoming.id && message.isPartial,
       );
-      // Pi may omit timestamps on partials; the newest partial of the same role is the one ending.
+      // The agent may omit timestamps on partials; the newest partial of the same role is the one ending.
       if (index === -1 && incoming.role === 'assistant')
         index = findLastIndex(
           state.messages,

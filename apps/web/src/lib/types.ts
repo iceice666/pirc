@@ -87,8 +87,8 @@ export interface ToolCall {
 /**
  * Non-conversational entries that share the timeline with user/assistant turns.
  * - notice: extension notifications and gateway/runner diagnostics
- * - compaction / branch: Pi context summaries
- * - bash: `!command` executions typed by the user in Pi
+ * - compaction / branch: agent context summaries
+ * - bash: `!command` executions typed by the user
  * - custom: extension-injected messages
  */
 export type SystemKind =
@@ -332,7 +332,7 @@ export type GatewayEvent =
   | { type: 'message_started'; message: ConversationMessage }
   | {
       type: 'message_delta';
-      /** Omitted for live Pi streams: applies to the newest partial assistant message. */
+      /** Omitted for live agent streams: applies to the newest partial assistant message. */
       messageId?: string;
       delta: string;
       channel?: 'text' | 'thinking';
