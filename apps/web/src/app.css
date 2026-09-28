@@ -99,10 +99,14 @@
 }
 
 html,
-body,
-#app {
+body {
   height: 100%;
   margin: 0;
+}
+
+/* The visible height, above the soft keyboard (see lib/viewport.ts). */
+#app {
+  height: var(--app-height, 100%);
 }
 
 body {

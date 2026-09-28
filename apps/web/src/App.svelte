@@ -31,6 +31,7 @@
   import { activateUpdate, registerPwa } from './lib/pwa';
   import { loadLayout, saveLayout } from './lib/storage';
   import { MESSAGE_PAGE } from './lib/app.svelte';
+  import { trackViewportHeight } from './lib/viewport';
   import { watch } from './lib/watch.svelte';
 
   /** Mobile overlay state of the left sidebar. */
@@ -168,14 +169,16 @@
 
   /**
    * Keep the bottom in view while following, whatever made the transcript grow
-   * (a throttled Markdown render, a tool card, an image). ResizeObserver runs
-   * after layout, once per frame, so this never forces an extra layout.
+   * (a throttled Markdown render, a tool card, an image) or the timeline shrink
+   * (the soft keyboard, a taller composer). ResizeObserver runs after layout,
+   * once per frame, so this never forces an extra layout.
    */
   function followContent(node: HTMLElement) {
     const observer = new ResizeObserver(() => {
       if (following && timeline) timeline.scrollTop = timeline.scrollHeight;
     });
     observer.observe(node);
+    if (node.parentElement) observer.observe(node.parentElement);
     return { destroy: () => observer.disconnect() };
   }
 
@@ -230,6 +233,7 @@
 
   onMount(() => {
     const removePwa = registerPwa((registration) => (updateRegistration = registration));
+    const removeViewport = trackViewportHeight();
     void app.bootstrap();
     // A file link in the conversation previews the file in the side panel.
     const removeFileLinks = onFilePreviewRequest(() => (detailsOpen = true));
@@ -277,6 +281,7 @@
       window.removeEventListener('online', onOnline);
       app.dispose();
       removePwa();
+      removeViewport();
       removeFileLinks();
     };
   });
