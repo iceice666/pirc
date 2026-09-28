@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -31,7 +30,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,8 +58,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.pirc.android.Attachment
 import dev.pirc.android.Connection
@@ -119,7 +120,8 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
     }
 
     Column(
-        modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp).animateContentSize(),
+        // No animateContentSize here: it clips, and would cut off the card's shadow.
+        modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         actionError?.let { message ->
@@ -148,7 +150,7 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
             shadowElevation = 3.dp,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Column(Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp)) {
+            Column(Modifier.animateContentSize().padding(6.dp)) {
                 if (attachments.isNotEmpty()) LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
@@ -185,20 +187,22 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
                             viewModel.setDelivery(if (delivery == Delivery.Steer) Delivery.FollowUp else Delivery.Steer)
                         }) { Text(if (delivery == Delivery.Steer) "Steer" else "Queue", style = MaterialTheme.typography.labelLarge) }
                     }
-                    Spacer(Modifier.weight(1f))
+                    // All the room between the buttons; a long name shrinks to fit instead of being cut.
                     Row(
                         Modifier
+                            .weight(1f)
                             .clip(MaterialTheme.shapes.large)
                             .clickable { picking = true }
-                            .padding(horizontal = 10.dp, vertical = 10.dp)
-                            .weight(1f, fill = false),
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
+                        val nameStyle = MaterialTheme.typography.titleSmall
+                        BasicText(
                             model?.displayName ?: "Model",
-                            style = MaterialTheme.typography.titleSmall,
+                            style = nameStyle.copy(color = MaterialTheme.colorScheme.onSurface),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            autoSize = TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = nameStyle.fontSize),
                             modifier = Modifier.weight(1f, fill = false),
                         )
                         Text(
