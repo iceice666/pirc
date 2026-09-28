@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -331,15 +332,22 @@ private fun AttachmentThumb(attachment: Attachment, onRemove: () -> Unit) {
     Box(Modifier.size(64.dp).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
         if (bitmap != null) Image(bitmap, contentDescription = attachment.name, contentScale = ContentScale.Crop, modifier = Modifier.size(64.dp))
         if (attachment.uploading) CircularProgressIndicator(Modifier.align(Alignment.Center).size(22.dp), strokeWidth = 2.dp)
+        // A small mark, but a 40dp target (most of the thumbnail's corner).
         Box(
             Modifier
                 .align(Alignment.TopEnd)
-                .padding(4.dp)
-                .size(22.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                .clickable(onClick = onRemove),
-            contentAlignment = Alignment.Center,
-        ) { Icon(PircIcons.Close, contentDescription = "Remove ${attachment.name}", tint = MaterialTheme.colorScheme.surface, modifier = Modifier.size(14.dp)) }
+                .size(40.dp)
+                .clickable(role = Role.Button, onClick = onRemove),
+            contentAlignment = Alignment.TopEnd,
+        ) {
+            Box(
+                Modifier
+                    .padding(4.dp)
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center,
+            ) { Icon(PircIcons.Close, contentDescription = "Remove ${attachment.name}", tint = MaterialTheme.colorScheme.surface, modifier = Modifier.size(14.dp)) }
+        }
     }
 }

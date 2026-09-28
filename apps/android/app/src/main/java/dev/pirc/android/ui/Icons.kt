@@ -35,6 +35,15 @@ object PircIcons {
         moveTo(7f, 12f); lineTo(14f, 12f)
     }
 
+    val ArrowDown = stroke("arrow-down") {
+        moveTo(12f, 5f); lineTo(12f, 19f)
+        moveTo(6f, 13f); lineTo(12f, 19f); lineTo(18f, 13f)
+    }
+
+    val Check = stroke("check") {
+        moveTo(5f, 12.5f); lineTo(10f, 17.5f); lineTo(19f, 7f)
+    }
+
     val ChevronDown = stroke("chevron-down") {
         moveTo(7f, 10f); lineTo(12f, 15f); lineTo(17f, 10f)
     }

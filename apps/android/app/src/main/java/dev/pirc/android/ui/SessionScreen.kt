@@ -271,7 +271,7 @@ private fun Timeline(state: SessionState, viewModel: SessionViewModel) {
             SmallFloatingActionButton(onClick = {
                 follow = true
                 scope.launch { list.animateScrollToItem(0) }
-            }) { Text("↓") }
+            }) { Icon(PircIcons.ArrowDown, contentDescription = "Scroll to the latest message", modifier = Modifier.size(20.dp)) }
         }
     }
 }

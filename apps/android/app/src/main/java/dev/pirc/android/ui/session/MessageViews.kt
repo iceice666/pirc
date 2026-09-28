@@ -27,6 +27,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -149,7 +151,11 @@ private fun Thinking(text: String, live: Boolean) {
             if (live) "Thinking…" else if (open) "Hide thinking" else "Show thinking",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.clip(MaterialTheme.shapes.small).clickable { open = !open }.padding(vertical = 6.dp, horizontal = 4.dp),
+            modifier = Modifier
+                .clip(MaterialTheme.shapes.small)
+                .clickable(role = Role.Button) { open = !open }
+                .minimumInteractiveComponentSize()
+                .padding(vertical = 6.dp, horizontal = 4.dp),
         )
         AnimatedVisibility(visible = open) {
             SelectionContainer {
@@ -186,7 +192,7 @@ private fun SystemEntry(message: Message, modifier: Modifier) {
     Surface(color = colors.surfaceContainerLow, shape = MaterialTheme.shapes.medium, modifier = modifier.fillMaxWidth().animateContentSize()) {
         Column {
             Row(
-                Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 12.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().clickable(role = Role.Button) { open = !open }.padding(horizontal = 12.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

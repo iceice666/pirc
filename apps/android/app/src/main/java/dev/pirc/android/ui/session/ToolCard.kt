@@ -16,6 +16,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import dev.pirc.android.ui.PircIcons
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -129,9 +133,9 @@ private fun StatusMark(status: String) {
     val colors = MaterialTheme.colorScheme
     Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
         when (status) {
-            "running" -> CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-            "failed" -> Text("✕", color = colors.error, style = MaterialTheme.typography.labelLarge)
-            else -> Text("✓", color = colors.primary, style = MaterialTheme.typography.labelLarge)
+            "running" -> CircularProgressIndicator(Modifier.size(14.dp).semantics { contentDescription = "Running" }, strokeWidth = 2.dp)
+            "failed" -> Icon(PircIcons.Close, contentDescription = "Failed", tint = colors.error, modifier = Modifier.size(16.dp))
+            else -> Icon(PircIcons.Check, contentDescription = "Succeeded", tint = colors.primary, modifier = Modifier.size(16.dp))
         }
     }
 }
