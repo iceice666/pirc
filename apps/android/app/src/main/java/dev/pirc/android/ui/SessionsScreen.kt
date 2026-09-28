@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import dev.pirc.android.AppViewModel
+import dev.pirc.android.core.Connectivity
 import dev.pirc.android.core.Session
 import dev.pirc.android.core.WorkspaceGroup
 
@@ -61,6 +62,7 @@ import dev.pirc.android.core.WorkspaceGroup
 fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
     val state by viewModel.sessions.collectAsStateWithLifecycle()
     val pairing by viewModel.pairing.collectAsStateWithLifecycle()
+    val online by Connectivity.online.collectAsStateWithLifecycle()
     val scroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
     var menu by remember { mutableStateOf(false) }
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
@@ -85,10 +87,11 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
         dismissButton = { TextButton(onClick = { unpairing = false }) { Text("Cancel") } },
     )
 
-    // Also the first load, and back from a session: its name, pin or activity may have changed.
+    // Also the first load, and back from a session: its name, pin or activity
+    // may have changed. While shown, the list keeps itself current.
     LifecycleResumeEffect(Unit) {
-        viewModel.refresh()
-        onPauseOrDispose { }
+        viewModel.watchSessions()
+        onPauseOrDispose { viewModel.unwatchSessions() }
     }
     LaunchedEffect(actionError) {
         actionError?.let {
@@ -106,9 +109,9 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
                         Text("Sessions")
                         pairing?.let {
                             Text(
-                                it.baseUrl.substringAfter("://"),
+                                it.baseUrl.substringAfter("://") + if (online) "" else " · Offline",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (online) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                             )
                         }
                     }
@@ -137,7 +140,7 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = state.loading,
-            onRefresh = viewModel::refresh,
+            onRefresh = { viewModel.refresh() },
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
             LazyColumn(
@@ -146,11 +149,17 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
             ) {
                 state.error?.let { error ->
                     item(key = "error") {
-                        Text(
-                            error,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(16.dp).animateItem(),
-                        )
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).animateItem(),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp)) {
+                                Text(error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).padding(vertical = 12.dp))
+                                TextButton(onClick = viewModel::retry, enabled = !state.loading) { Text("Retry") }
+                            }
+                        }
                     }
                 }
                 if (!state.loading && state.error == null && state.groups.isEmpty()) {

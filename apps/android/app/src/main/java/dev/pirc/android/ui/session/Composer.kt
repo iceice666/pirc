@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.pirc.android.Attachment
 import dev.pirc.android.Connection
+import dev.pirc.android.core.Connectivity
 import dev.pirc.android.SessionViewModel
 import dev.pirc.android.core.ModelOption
 import dev.pirc.android.core.THINKING_LEVELS
@@ -103,6 +104,7 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
     val settings by viewModel.composerSettings.collectAsStateWithLifecycle()
     val control by viewModel.control.collectAsStateWithLifecycle()
     val connection by viewModel.connection.collectAsStateWithLifecycle()
+    val online by Connectivity.online.collectAsStateWithLifecycle()
     // The field owns its text, so fast typing and IME composition (Zhuyin,
     // kana) never wait on a round trip; the view model hears about it debounced.
     val field = rememberTextFieldState(viewModel.initialDraft)
@@ -164,7 +166,15 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
-        AnimatedVisibility(visible = !hasControl) {
+        AnimatedVisibility(visible = !online) {
+            Text(
+                "You're offline. This draft is saved on this phone and is never sent automatically.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        }
+        AnimatedVisibility(visible = !hasControl && online) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
                 Text(
                     if (control.free) "Getting control…" else "Another device controls this session.",
@@ -190,6 +200,8 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
                     items(attachments, key = { it.localId }) { AttachmentThumb(it) { viewModel.removeAttachment(it.localId) } }
                 }
                 val hint = when {
+                    !online -> "Offline draft — it stays on this phone"
+                    connection == Connection.Reconnecting || connection == Connection.Stopped -> "Reconnecting… your draft is kept"
                     !hasControl -> "Take control to send a message"
                     !active -> "Message pirc"
                     else -> "Steer the current run"

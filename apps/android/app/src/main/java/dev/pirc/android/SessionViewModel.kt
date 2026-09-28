@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.pirc.android.core.ApiException
 import dev.pirc.android.core.Commands
+import dev.pirc.android.core.Connectivity
 import dev.pirc.android.core.ControlApi
 import dev.pirc.android.core.ControlLease
 import dev.pirc.android.core.Drafts
@@ -179,6 +180,8 @@ class SessionViewModel(
         val current = _state.value
         if (current == null || current.needsSnapshot || (hiddenFor != null && hiddenFor > RESNAPSHOT_AFTER_MS)) reload()
         else if (stream?.isActive != true) follow()
+        // Back in the foreground mid-backoff: reconnect now (the web's visibilitychange).
+        else if (_connection.value == Connection.Reconnecting) Connectivity.wake()
         heartbeat?.cancel()
         heartbeat = viewModelScope.launch {
             while (isActive) {

@@ -5,7 +5,8 @@ import dev.pirc.android.core.timeline.TimelineEvent
 import dev.pirc.android.core.timeline.normalizeEvent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.channelFlow
@@ -36,6 +37,8 @@ sealed interface StreamSignal {
  */
 class EventStream(
     private val api: PircApi,
+    /** Cuts a backoff short (the network came back); see [Connectivity]. */
+    private val wake: Flow<Unit> = Connectivity.regained,
     private val backoff: (attempt: Int) -> Long = { attempt ->
         min(20_000L, 750L shl min(attempt, 5)) + Random.nextLong(400)
     },
@@ -103,7 +106,8 @@ class EventStream(
             }
             if (delivered || (openedAt != 0L && System.nanoTime() - openedAt >= STABLE_NANOS)) attempt = 0
             send(StreamSignal.Reconnecting)
-            delay(backoff(attempt++))
+            // Back online: try at once, with the backoff started over.
+            if (withTimeoutOrNull(backoff(attempt++)) { wake.first() } != null) attempt = 0
         }
     }.buffer(Channel.UNLIMITED)
 

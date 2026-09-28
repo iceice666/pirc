@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.pirc.android.core.ApiException
+import dev.pirc.android.core.Connectivity
 import dev.pirc.android.core.CredentialStore
 import dev.pirc.android.core.InvalidPairingLink
 import dev.pirc.android.core.KeystoreCredentialStore
@@ -20,6 +21,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +30,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+
+/** How often the visible sessions list reloads (run states, node dots). */
+private const val LIST_POLL_MS = 20_000L
 
 sealed interface PairState {
     data object Idle : PairState
@@ -78,8 +84,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
     private var refreshJob: Job? = null
+    private var watching: Job? = null
 
     init {
+        Connectivity.start(application)
         // The sessions screen refreshes itself when it appears.
         viewModelScope.launch {
             val stored = withContext(Dispatchers.IO) { store.load() }
@@ -151,10 +159,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun refresh() {
+    /**
+     * Reload the lists. [quiet] (polling, network back) keeps the pull
+     * indicator hidden and leaves a running refresh alone.
+     */
+    fun refresh(quiet: Boolean = false) {
         val api = api() ?: return
+        if (quiet && refreshJob?.isActive == true) return
         refreshJob?.cancel()
-        _sessions.value = _sessions.value.copy(loading = true, error = null)
+        if (!quiet) _sessions.value = _sessions.value.copy(loading = true)
         refreshJob = viewModelScope.launch {
             try {
                 _sessions.value = coroutineScope {
@@ -166,9 +179,40 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 local.pruneDrafts(_sessions.value.sessions.map { it.id })
             } catch (error: IOException) {
                 handle(error)
-                _sessions.value = _sessions.value.copy(loading = false, error = error.message ?: "Network error")
+                // The last list stays; the error says it may be out of date.
+                val message = if (!Connectivity.online.value) "You're offline. The list may be out of date."
+                else error.message ?: "Network error"
+                _sessions.value = _sessions.value.copy(loading = false, error = message)
             }
         }
+    }
+
+    /**
+     * The sessions list is on screen: load it, then keep run states and node
+     * dots current. The gateway pushes no list events to a device outside a
+     * session, so it polls, and reloads at once when the network comes back.
+     */
+    fun watchSessions() {
+        watching?.cancel()
+        refresh()
+        watching = viewModelScope.launch {
+            launch { Connectivity.regained.collect { refresh(quiet = true) } }
+            while (isActive) {
+                delay(LIST_POLL_MS)
+                refresh(quiet = true)
+            }
+        }
+    }
+
+    fun unwatchSessions() {
+        watching?.cancel()
+        watching = null
+    }
+
+    /** Retry from the list's error: streams waiting out a backoff try again too. */
+    fun retry() {
+        Connectivity.wake()
+        refresh()
     }
 
     private fun listed(sessions: List<Session>, workspaces: List<Workspace>, nodes: List<NodeSummary>) = SessionsState(
@@ -237,6 +281,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun unpair(reason: String? = null) {
         refreshJob?.cancel()
+        unwatchSessions()
         store.clear()
         local.clearDrafts()
         closeApi()

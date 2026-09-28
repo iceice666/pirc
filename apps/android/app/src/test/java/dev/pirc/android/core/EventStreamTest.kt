@@ -1,7 +1,9 @@
 package dev.pirc.android.core
 
 import dev.pirc.android.core.timeline.TimelineEvent
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
@@ -61,6 +63,25 @@ class EventStreamTest {
         assertEquals("s 1", first.url.queryParameter("sessionId"))
         assertEquals("3:6", first.url.queryParameter("cursor"))
         assertEquals("3:8", server.takeRequest().url.queryParameter("cursor"))
+    }
+
+    @Test
+    fun aWakeCutsTheBackoffShort() = runBlocking {
+        // Every wait for a retry is woken shortly after it starts.
+        val wake = flow {
+            delay(50)
+            emit(Unit)
+        }
+        val api = PircApi(Pairing(server.url("/").toString().trimEnd('/'), token))
+        // An hour's backoff: only the wake can bring the second attempt within the timeout.
+        val slow = EventStream(api, backoff = { 3_600_000L }, wake = wake)
+        server.enqueue(socket(1001))
+        server.enqueue(socket(4404))
+        val signals = withTimeout(5_000) {
+            slow.open("s1", null).toList()
+        }
+        assertEquals(404, (signals.last() as StreamSignal.Closed).error.status)
+        assertEquals(2, server.requestCount)
     }
 
     @Test
