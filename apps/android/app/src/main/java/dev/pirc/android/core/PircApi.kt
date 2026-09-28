@@ -66,30 +66,30 @@ fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
     .followSslRedirects(false)
     .build()
 
-/** The gateway's browser API, authenticated with this phone's device token. */
-class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultHttpClient()) {
+/** The gateway's browser API, authenticated with this phone's device token. Open for test fakes. */
+open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultHttpClient()) {
 
-    suspend fun sessions(): List<Session> = get<SessionsResponse>("/api/sessions").sessions
+    open suspend fun sessions(): List<Session> = get<SessionsResponse>("/api/sessions").sessions
 
-    suspend fun workspaces(): List<Workspace> = get<WorkspacesResponse>("/api/workspaces").workspaces
+    open suspend fun workspaces(): List<Workspace> = get<WorkspacesResponse>("/api/workspaces").workspaces
 
-    suspend fun nodes(): List<NodeSummary> = get<NodesResponse>("/api/nodes").nodes
+    open suspend fun nodes(): List<NodeSummary> = get<NodesResponse>("/api/nodes").nodes
 
     /** The raw snapshot; see `snapshotState` in `core.timeline`. */
-    suspend fun snapshot(sessionId: String): JsonElement =
+    open suspend fun snapshot(sessionId: String): JsonElement =
         get<JsonElement>("/api/sessions/${sessionId.urlSegment()}/snapshot")
 
     /** The live event stream of one session; see [EventStream]. */
-    fun events(sessionId: String, cursor: String?) = EventStream(this).open(sessionId, cursor)
+    open fun events(sessionId: String, cursor: String?) = EventStream(this).open(sessionId, cursor)
 
     // ---- sessions and workspaces ----
 
     /** A new session in [workspaceId]; the agent titles it from the first message. */
-    suspend fun createSession(workspaceId: String): Session =
+    open suspend fun createSession(workspaceId: String): Session =
         decodeSession(send("POST", "/api/sessions", buildJsonObject { put("workspaceId", workspaceId) }))
 
     /** Rename, pin or settle a session (any combination). */
-    suspend fun updateSession(sessionId: String, name: String? = null, pinned: Boolean? = null, settled: Boolean? = null): Session =
+    open suspend fun updateSession(sessionId: String, name: String? = null, pinned: Boolean? = null, settled: Boolean? = null): Session =
         decodeSession(
             send("PATCH", session(sessionId), buildJsonObject {
                 name?.let { put("name", it) }
@@ -99,7 +99,7 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
         )
 
     /** Register a folder on an online node; it must exist inside that account's home. */
-    suspend fun createWorkspace(nodeId: String, path: String, displayName: String): Workspace {
+    open suspend fun createWorkspace(nodeId: String, path: String, displayName: String): Workspace {
         val reply = send("POST", "/api/workspaces", buildJsonObject {
             put("nodeId", nodeId)
             put("path", path)
@@ -114,40 +114,40 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
 
     // ---- workspace files (read-only, confined to the session's workspace) ----
 
-    suspend fun files(sessionId: String, path: String): DirListing =
+    open suspend fun files(sessionId: String, path: String): DirListing =
         get<DirListing>("${session(sessionId)}/files?path=${path.urlSegment()}")
 
-    suspend fun file(sessionId: String, path: String): FileContent =
+    open suspend fun file(sessionId: String, path: String): FileContent =
         get<FileContent>("${session(sessionId)}/files/content?path=${path.urlSegment()}")
 
     // ---- side panels ----
 
-    suspend fun gitStatus(sessionId: String): GitStatus = get("${session(sessionId)}/git/status")
+    open suspend fun gitStatus(sessionId: String): GitStatus = get("${session(sessionId)}/git/status")
 
-    suspend fun gitDiff(sessionId: String, path: String, staged: Boolean, untracked: Boolean): Diff =
+    open suspend fun gitDiff(sessionId: String, path: String, staged: Boolean, untracked: Boolean): Diff =
         get("${session(sessionId)}/git/diff?path=${path.urlSegment()}" + (if (staged) "&staged=1" else "") + (if (untracked) "&untracked=1" else ""))
 
-    suspend fun gitLog(sessionId: String, skip: Int, limit: Int = 50): CommitPage =
+    open suspend fun gitLog(sessionId: String, skip: Int, limit: Int = 50): CommitPage =
         get("${session(sessionId)}/git/log?skip=$skip&limit=$limit")
 
-    suspend fun gitShow(sessionId: String, sha: String): CommitDetail =
+    open suspend fun gitShow(sessionId: String, sha: String): CommitDetail =
         get("${session(sessionId)}/git/commits/${sha.urlSegment()}")
 
-    suspend fun panelState(sessionId: String): PanelState = get("${session(sessionId)}/panel/state")
+    open suspend fun panelState(sessionId: String): PanelState = get("${session(sessionId)}/panel/state")
 
-    suspend fun backgroundOutput(sessionId: String, taskId: String, lines: Int = 400): BackgroundOutput =
+    open suspend fun backgroundOutput(sessionId: String, taskId: String, lines: Int = 400): BackgroundOutput =
         get("${session(sessionId)}/panel/background/${taskId.urlSegment()}?lines=$lines")
 
     /** Needs the control lease; returns once the stop is requested (status `stopping`). */
-    suspend fun stopBackground(sessionId: String, taskId: String, clientId: String, generation: Long): BackgroundTask {
+    open suspend fun stopBackground(sessionId: String, taskId: String, clientId: String, generation: Long): BackgroundTask {
         val reply = send("POST", "${session(sessionId)}/panel/background/${taskId.urlSegment()}/stop", held(clientId, generation))
         return readingReply { PircJson.decodeFromJsonElement(TaskResponse.serializer(), reply ?: error("empty reply")).task }
     }
 
-    suspend fun terminals(sessionId: String): List<TerminalInfo> = get<TerminalsResponse>("${session(sessionId)}/terminals").terminals
+    open suspend fun terminals(sessionId: String): List<TerminalInfo> = get<TerminalsResponse>("${session(sessionId)}/terminals").terminals
 
     /** Needs the control lease. */
-    suspend fun createTerminal(sessionId: String, clientId: String, generation: Long, cols: Int, rows: Int): TerminalInfo {
+    open suspend fun createTerminal(sessionId: String, clientId: String, generation: Long, cols: Int, rows: Int): TerminalInfo {
         val reply = send("POST", "${session(sessionId)}/terminals", buildJsonObject {
             put("clientId", clientId)
             put("generation", generation)
@@ -157,7 +157,7 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
         return readingReply { PircJson.decodeFromJsonElement(TerminalResponse.serializer(), reply ?: error("empty reply")).terminal }
     }
 
-    suspend fun closeTerminal(sessionId: String, terminalId: String, clientId: String, generation: Long) {
+    open suspend fun closeTerminal(sessionId: String, terminalId: String, clientId: String, generation: Long) {
         send("POST", "${session(sessionId)}/terminals/${terminalId.urlSegment()}/close", held(clientId, generation))
     }
 
@@ -167,14 +167,14 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
 
     // ---- acting on a session (needs the control lease) ----
 
-    suspend fun models(sessionId: String): List<ModelOption> =
+    open suspend fun models(sessionId: String): List<ModelOption> =
         get<ModelsResponse>("/api/models?sessionId=${sessionId.urlSegment()}").models.map { it.option() }
 
-    suspend fun control(sessionId: String, clientId: String): ControlLease =
+    open suspend fun control(sessionId: String, clientId: String): ControlLease =
         ControlLease.from(send("GET", "${session(sessionId)}/control"), clientId)
 
     /** Without [force], the node refuses while another client holds a live lease (409). */
-    suspend fun acquireControl(sessionId: String, clientId: String, force: Boolean): ControlLease = ControlLease.from(
+    open suspend fun acquireControl(sessionId: String, clientId: String, force: Boolean): ControlLease = ControlLease.from(
         send("POST", "${session(sessionId)}/control/acquire", buildJsonObject {
             put("clientId", clientId)
             put("force", force)
@@ -182,12 +182,12 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
         clientId,
     )
 
-    suspend fun heartbeatControl(sessionId: String, clientId: String, generation: Long): ControlLease = ControlLease.from(
+    open suspend fun heartbeatControl(sessionId: String, clientId: String, generation: Long): ControlLease = ControlLease.from(
         send("POST", "${session(sessionId)}/control/heartbeat", held(clientId, generation)),
         clientId,
     )
 
-    suspend fun releaseControl(sessionId: String, clientId: String, generation: Long) {
+    open suspend fun releaseControl(sessionId: String, clientId: String, generation: Long) {
         send("POST", "${session(sessionId)}/control/release", held(clientId, generation))
     }
 
@@ -195,7 +195,7 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
      * Send one command. A command the node did not accept still comes back as a
      * receipt (with its reason), so only transport and lease errors throw.
      */
-    suspend fun command(sessionId: String, clientId: String, generation: Long, commandId: String, payload: JsonObject): CommandReceipt {
+    open suspend fun command(sessionId: String, clientId: String, generation: Long, commandId: String, payload: JsonObject): CommandReceipt {
         val body = buildJsonObject {
             put("commandId", commandId)
             put("clientId", clientId)
@@ -211,7 +211,7 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
         )
     }
 
-    suspend fun answer(sessionId: String, interactionId: String, clientId: String, generation: Long, answer: InteractionAnswer) {
+    open suspend fun answer(sessionId: String, interactionId: String, clientId: String, generation: Long, answer: InteractionAnswer) {
         send(
             "POST",
             "${session(sessionId)}/interactions/${interactionId.urlSegment()}/answer",
@@ -224,7 +224,7 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
     }
 
     /** Store an image on the session's node, where its agent reads it. */
-    suspend fun upload(sessionId: String, bytes: ByteArray, mimeType: String): Upload {
+    open suspend fun upload(sessionId: String, bytes: ByteArray, mimeType: String): Upload {
         val reply = send("POST", "${session(sessionId)}/uploads", bytes.toRequestBody(mimeType.toMediaType()))
         val upload = reply["upload"]
         return readingReply {

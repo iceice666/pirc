@@ -153,7 +153,10 @@ class TerminalInputView(context: Context, private val onInput: (String) -> Unit)
 
     companion object {
         /** A key event from the keyboard as the bytes an xterm-compatible terminal expects. */
-        fun keyBytes(event: KeyEvent): String? = when (event.keyCode) {
+        fun keyBytes(event: KeyEvent): String? = keyBytes(event.keyCode, event.unicodeChar, event.isCtrlPressed)
+
+        /** [keyBytes] of a key code, the character it types ([unicodeChar], 0 for none) and whether Ctrl is held. */
+        fun keyBytes(keyCode: Int, unicodeChar: Int, ctrl: Boolean): String? = when (keyCode) {
             KeyEvent.KEYCODE_DEL -> "\u007f"
             KeyEvent.KEYCODE_FORWARD_DEL -> "\u001b[3~"
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> "\r"
@@ -165,9 +168,9 @@ class TerminalInputView(context: Context, private val onInput: (String) -> Unit)
             KeyEvent.KEYCODE_DPAD_LEFT -> "\u001b[D"
             KeyEvent.KEYCODE_MOVE_HOME -> "\u001b[H"
             KeyEvent.KEYCODE_MOVE_END -> "\u001b[F"
-            else -> event.unicodeChar.takeIf { it != 0 }?.let { code ->
+            else -> unicodeChar.takeIf { it != 0 }?.let { code ->
                 val text = String(Character.toChars(code))
-                if (event.isCtrlPressed) dev.pirc.android.controlKey(text) else text
+                if (ctrl) dev.pirc.android.controlKey(text) else text
             }
         }
     }

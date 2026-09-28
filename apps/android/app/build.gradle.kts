@@ -29,6 +29,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        // android.util.Log in view models under test is a no-op instead of throwing.
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildFeatures {
         compose = true
         // BuildConfig.DEBUG gates development-only behaviour (plain-HTTP pairing, diagnostics).
