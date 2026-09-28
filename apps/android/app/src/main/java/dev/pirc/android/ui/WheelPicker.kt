@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
@@ -64,13 +63,15 @@ fun <T> WheelPicker(
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val currentSelect by rememberUpdatedState(onSelect)
+    val currentItems by rememberUpdatedState(items)
+    val currentSelected by rememberUpdatedState(selected)
 
     /** The row nearest the middle, and how far (in rows) each visible row is from it. */
     val centered by remember {
         derivedStateOf {
             val info = list.layoutInfo
             val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2
-            info.visibleItemsInfo.minByOrNull { abs(it.offset + it.size / 2 - middle) }?.index ?: selected
+            info.visibleItemsInfo.minByOrNull { abs(it.offset + it.size / 2 - middle) }?.index ?: currentSelected
         }
     }
 
@@ -78,14 +79,20 @@ fun <T> WheelPicker(
     LaunchedEffect(list) {
         snapshotFlow { centered }.distinctUntilChanged().drop(1).collect { haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick) }
     }
+    // Report the row the wheel rests on. Reading it once, as the scroll flag
+    // flips, can catch a layout one frame behind and report the row left behind,
+    // so keep watching while the wheel rests: the row that finally sits in the
+    // middle is the selection.
     LaunchedEffect(list) {
-        snapshotFlow { list.isScrollInProgress }.filter { !it }.collect {
-            if (centered in items.indices) currentSelect(centered)
-        }
+        snapshotFlow { if (list.isScrollInProgress) null else centered }
+            .distinctUntilChanged()
+            .collect { index -> if (index != null && index in currentItems.indices) currentSelect(index) }
     }
-    // Follow the caller: new items (e.g. another model's levels) or an outside change.
+    // Follow the caller: new items (e.g. another model's levels) or an outside
+    // change. Never mid-gesture: that would fight the finger on the wheel.
     LaunchedEffect(items, selected) {
-        if (selected in items.indices && selected != centered) list.scrollToItem(selected)
+        if (selected in items.indices && selected != centered && !list.isScrollInProgress)
+            list.scrollToItem(selected)
     }
 
     Box(modifier.height(rowHeight * visibleRows), contentAlignment = Alignment.Center) {

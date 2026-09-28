@@ -44,6 +44,8 @@ import kotlinx.coroutines.flow.update
 import dev.pirc.android.core.timeline.TimelineEvent
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.UUID
@@ -181,6 +183,9 @@ class SessionViewModel(
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    /** Model and thinking commands run outside [busy], but one change at a time. */
+    private val settingsLock = Mutex()
 
     private var visible = false
     private var stream: Job? = null
@@ -412,7 +417,7 @@ class SessionViewModel(
         if (text.isEmpty() || attachments.any { it.uploading }) return
         val kind = if (runActive()) "steer" else "prompt"
         perform("The message was not accepted.") { generation ->
-            if (kind == "prompt") applySettings(generation)
+            applySettings(generation, model = kind == "prompt")
             val receipt = api.command(
                 sessionId, clientId, generation, UUID.randomUUID().toString(),
                 Commands.message(kind, text, attachments.mapNotNull { it.uploadId }),
@@ -424,11 +429,16 @@ class SessionViewModel(
         }
     }
 
-    /** Settings chosen before this phone had control only reach the agent with a command. */
-    private suspend fun applySettings(generation: Long) {
+    /**
+     * Settings chosen before this phone had control, or while another action was
+     * in flight, only reach the agent with a command: send them with the message.
+     * A steer carries the thinking level alone (it applies to the next turn); the
+     * model is not switched mid-run, which is why the wheel is locked there.
+     */
+    private suspend fun applySettings(generation: Long, model: Boolean) {
         val state = _state.value ?: return
-        val model = selectedModel(state)
-        if (model != null) command(generation, Commands.setModel(model.provider, model.id))
+        val selected = if (model) selectedModel(state) else null
+        if (selected != null) command(generation, Commands.setModel(selected.provider, selected.id))
         command(generation, Commands.setThinking(thinkingLevel(state)))
     }
 
@@ -500,21 +510,33 @@ class SessionViewModel(
      */
     fun selectSettings(model: ModelOption?, level: String) {
         val before = _state.value
-        val modelChanged = model != null && model != selectedModel(before)
+        val picked = model?.takeIf { it != selectedModel(before) }
         val levelChanged = level != thinkingLevel(before)
-        if (!modelChanged && !levelChanged) return
+        if (picked == null && !levelChanged) return
         _state.update { state ->
             state?.copy(
-                selectedModelId = if (modelChanged) model!!.id else state.selectedModelId,
-                selectedModelProvider = if (modelChanged) model!!.provider else state.selectedModelProvider,
+                selectedModelId = picked?.id ?: state.selectedModelId,
+                selectedModelProvider = picked?.provider ?: state.selectedModelProvider,
                 thinkingLevel = level,
             )
         }
-        if (_control.value.heldByCurrentClient)
-            perform("The model settings could not be changed.") { generation ->
-                if (modelChanged) command(generation, Commands.setModel(model!!.provider, model.id))
-                if (levelChanged) command(generation, Commands.setThinking(level))
+        val generation = _control.value.generation?.takeIf { _control.value.heldByCurrentClient } ?: return
+        // Not through perform(): a send or answer in flight must not swallow the
+        // change, which would leave the agent on the old level while the composer
+        // shows the new one until the next snapshot silently takes it back.
+        viewModelScope.launch {
+            // One change at a time, in the order they were picked (two commands each).
+            settingsLock.withLock {
+                _actionError.value = null
+                try {
+                    if (picked != null) command(generation, Commands.setModel(picked.provider, picked.id))
+                    if (levelChanged) command(generation, Commands.setThinking(level))
+                } catch (error: IOException) {
+                    act(error, "The model settings could not be changed.")
+                    if (error is ApiException && error.code == "lost_control") withContext(NonCancellable) { syncNow() }
+                }
             }
+        }
     }
 
     private suspend fun command(generation: Long, payload: kotlinx.serialization.json.JsonObject) {

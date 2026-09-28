@@ -245,6 +245,37 @@ class SessionViewModelTest {
     }
 
     @Test
+    fun aThinkingLevelChangeIsSentEvenWhileAnotherActionIsInFlight() = test {
+        val model = live()
+        api.commandGate = CompletableDeferred()
+        // A stop, not a prompt: a prompt sends the settings itself.
+        model.stopRun()
+        runCurrent()
+        assertTrue(model.busy.value)
+
+        model.selectSettings(null, "high")
+        runCurrent()
+        api.commandGate!!.complete(Unit)
+        runCurrent()
+        assertEquals("high", model.thinkingLevel())
+        assertTrue(api.calls.any { it == "command:set_thinking:7" })
+        assertNull(model.actionError.value)
+    }
+
+    @Test
+    fun aSteerCarriesTheThinkingLevelButNotTheModel() = test {
+        api.snapshotJson = api.snapshotJson.replace(""""history":[]""", """"run":{"id":"r1","status":"running"},"history":[]""")
+        val model = live()
+        assertTrue(model.runActive())
+        model.send("go left")
+        runCurrent()
+        assertEquals(
+            listOf("command:set_thinking:7", "command:steer:7"),
+            api.calls.filter { it.startsWith("command:") },
+        )
+    }
+
+    @Test
     fun goalButtonsSteerTheGoalCommand() = test {
         val model = live()
         model.goalAction("pause")
