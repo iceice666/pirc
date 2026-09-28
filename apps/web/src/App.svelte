@@ -37,8 +37,19 @@
   let sidebarOpen = $state(false);
   /** Desktop: left sidebar collapsed out of the grid. */
   let sidebarCollapsed = $state(loadLayout('sidebarCollapsed', false));
-  /** Right side panel starts hidden until the user opens it (then the choice is remembered). */
-  let detailsOpen = $state(loadLayout('detailsOpen', false));
+  /**
+   * Up to this width the side panel is an overlay above the conversation
+   * instead of a column beside it.
+   */
+  const PANEL_OVERLAY_MAX = 860;
+  /**
+   * Right side panel starts hidden until the user opens it (then the choice is
+   * remembered). The remembered choice only applies where the panel is a
+   * column: a phone must not start with the conversation covered.
+   */
+  let detailsOpen = $state(
+    window.innerWidth > PANEL_OVERLAY_MAX && loadLayout('detailsOpen', false),
+  );
   const PANEL_MIN = 280;
   const PANEL_DEFAULT = 360;
   /** Room the conversation column keeps when the side panel is dragged wide. */
@@ -66,7 +77,40 @@
   );
   let panelShownWidth = $derived(Math.min(Math.max(panelWidth, PANEL_MIN), panelMax));
   $effect(() => saveLayout('sidebarCollapsed', sidebarCollapsed));
-  $effect(() => saveLayout('detailsOpen', detailsOpen));
+  $effect(() => {
+    if (viewportWidth > PANEL_OVERLAY_MAX) saveLayout('detailsOpen', detailsOpen);
+  });
+  /** The panel covers the conversation: scrim, Escape closes it, the rest is inert. */
+  const panelOverlay = $derived(detailsOpen && viewportWidth <= PANEL_OVERLAY_MAX);
+  let detailsToggle: HTMLButtonElement | undefined = $state();
+
+  function closePanel() {
+    const panel = document.querySelector('.side-panel');
+    const hadFocus = !!panel?.contains(document.activeElement);
+    detailsOpen = false;
+    // Focus would be lost in the hidden panel; return it to the toggle.
+    if (hadFocus) detailsToggle?.focus();
+  }
+
+  watch(
+    () => panelOverlay,
+    async (overlay) => {
+      if (!overlay) return;
+      await tick();
+      document.querySelector<HTMLElement>('.side-panel [role="tab"][tabindex="0"]')?.focus();
+    },
+  );
+
+  function onWindowKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    if (sidebarOpen) {
+      sidebarOpen = false;
+      return;
+    }
+    const target = event.target instanceof Element ? event.target : undefined;
+    // A dialog closes itself, and Escape belongs to programs in the terminal.
+    if (panelOverlay && !target?.closest('dialog, .terminal-tab')) closePanel();
+  }
   $effect(() => saveLayout('showSettled', showSettled));
 
   function resizePanel(width: number) {
@@ -211,12 +255,14 @@
     };
     schedule();
     // Background tabs and suspended mobile pages skip heartbeats; catch up at once.
+    let hiddenAt = 0;
     const onVisibility = () => {
       schedule();
-      if (document.visibilityState === 'visible') {
-        void app.refreshControl();
-        void app.refreshNodes();
-      } else app.flushDraft();
+      if (document.visibilityState === 'visible') app.resume(Date.now() - hiddenAt);
+      else {
+        hiddenAt = Date.now();
+        app.flushDraft();
+      }
     };
     const onOnline = () => void app.refreshControl();
     const onPageHide = () => app.flushDraft();
@@ -268,10 +314,7 @@
   }
 </script>
 
-<svelte:window
-  bind:innerWidth={viewportWidth}
-  onkeydown={(event) => event.key === 'Escape' && sidebarOpen && (sidebarOpen = false)}
-/>
+<svelte:window bind:innerWidth={viewportWidth} onkeydown={onWindowKeydown} />
 
 <svelte:head
   ><title>{sessionState ? `${sessionState.session.name} · pirc` : 'pirc'}</title></svelte:head
@@ -343,11 +386,13 @@
             <span class="control-pill"><ShieldCheck size={14} /> In control</span>
           {/if}
           <button
+            bind:this={detailsToggle}
             class="icon-button details-toggle"
             type="button"
             aria-label={detailsOpen ? 'Hide side panel' : 'Show side panel'}
             title={detailsOpen ? 'Hide side panel' : 'Show side panel'}
-            onclick={() => (detailsOpen = !detailsOpen)}
+            aria-expanded={detailsOpen}
+            onclick={() => (detailsOpen ? closePanel() : (detailsOpen = true))}
           >
             {#if detailsOpen}<PanelRightClose size={19} />{:else}<PanelRightOpen size={19} />{/if}
           </button>
@@ -373,7 +418,7 @@
       {/if}
 
       <div class="content-grid">
-        <section class="conversation" aria-label="Conversation">
+        <section class="conversation" aria-label="Conversation" inert={panelOverlay}>
           <div class="timeline" bind:this={timeline} onscroll={onTimelineScroll}>
             <div class="timeline-inner" use:followContent>
               {#if app.hiddenMessages > 0}
@@ -410,6 +455,16 @@
           <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
         </section>
 
+        {#if panelOverlay}
+          <button
+            class="panel-scrim"
+            type="button"
+            tabindex="-1"
+            aria-label="Close side panel"
+            transition:fade={{ duration: 160 }}
+            onclick={closePanel}
+          ></button>
+        {/if}
         <SidePanel
           open={detailsOpen}
           bind:tab={panelTab}
@@ -495,11 +550,12 @@
   }
   .topbar {
     min-width: 0;
-    flex: 0 0 56px;
+    /* Installed on iOS with viewport-fit=cover, the status bar overlaps the top. */
+    flex: 0 0 calc(56px + env(safe-area-inset-top));
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 0 12px 0 20px;
+    padding: env(safe-area-inset-top) 12px 0 20px;
     background: var(--bg);
   }
   .title-block {
@@ -762,9 +818,22 @@
       padding-inline: 24px;
     }
   }
+  .panel-scrim {
+    display: none;
+  }
   @media (max-width: 860px) {
     .app-shell {
       --sidebar-width: 232px;
+    }
+    .panel-scrim {
+      position: fixed;
+      z-index: 24;
+      inset: calc(56px + env(safe-area-inset-top)) 0 0;
+      display: block;
+      padding: 0;
+      border: 0;
+      background: rgb(0 0 0 / 25%);
+      cursor: default;
     }
     .content-grid,
     .workspace.details-collapsed .content-grid {
@@ -779,8 +848,8 @@
       display: none;
     }
     .topbar {
-      flex-basis: 56px;
-      padding: 0 6px 0 50px;
+      padding-right: 6px;
+      padding-left: 50px;
       gap: 4px;
     }
     .breadcrumb {

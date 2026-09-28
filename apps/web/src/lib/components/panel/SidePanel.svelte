@@ -331,10 +331,10 @@
     .details {
       position: fixed;
       z-index: 25;
-      top: 56px;
+      top: calc(56px + env(safe-area-inset-top));
       right: 8px;
-      bottom: 8px;
-      width: min(420px, calc(100vw - 16px));
+      bottom: max(8px, env(safe-area-inset-bottom));
+      width: min(420px, calc(100% - 16px));
       border: 0;
       border-radius: var(--radius-xl);
       background: var(--bg-layer);
@@ -355,10 +355,10 @@
   }
   @media (max-width: 650px) {
     .details {
-      top: 56px;
       right: 0;
       bottom: 0;
-      width: 100vw;
+      width: 100%;
+      padding-bottom: env(safe-area-inset-bottom);
       border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     }
     .panel-tabs .tab-label {

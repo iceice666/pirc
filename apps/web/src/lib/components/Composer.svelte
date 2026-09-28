@@ -80,12 +80,30 @@
           : 'Tell the agent what to work on…',
   );
 
+  /**
+   * Phone and tablet keyboards have no Shift+Enter, so there Enter inserts a
+   * newline and the send button sends (the mobile convention).
+   */
+  const touchKeyboard = () => matchMedia('(hover: none) and (pointer: coarse)').matches;
+
   function keydown(event: KeyboardEvent) {
-    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
-      event.preventDefault();
-      if (canSubmit) void app.sendCommand(mode);
-    }
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing || touchKeyboard()) return;
+    event.preventDefault();
+    if (canSubmit) void app.sendCommand(mode);
   }
+
+  /**
+   * `field-sizing: content` grows the textarea with its text; Safari lacks it,
+   * so there the height follows `scrollHeight` (bounded by the CSS max-height).
+   */
+  const autoSize = typeof CSS === 'undefined' || !CSS.supports?.('field-sizing', 'content');
+  let textarea: HTMLTextAreaElement | undefined = $state();
+  $effect(() => {
+    void value;
+    if (!autoSize || !textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  });
 </script>
 
 <div class="composer-wrap">
@@ -165,6 +183,7 @@
     <label class="sr-only" for="prompt">Message</label>
     <textarea
       id="prompt"
+      bind:this={textarea}
       rows="2"
       {placeholder}
       {value}

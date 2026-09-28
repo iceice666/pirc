@@ -46,6 +46,9 @@ type Demo = typeof import('./mock');
  */
 export const MESSAGE_PAGE = 60;
 
+/** Returning after this long in the background reloads the open session's snapshot. */
+const RESUME_SNAPSHOT_AFTER = 15_000;
+
 const DOCKED_WIDGETS = new Set([TODO_WIDGET, GOAL_WIDGET]);
 /**
  * Status-line entries not already shown elsewhere: background tasks and team
@@ -190,6 +193,18 @@ class AppState {
     } catch {
       /* keep the last lists */
     }
+  }
+
+  /**
+   * Back in the foreground after `hiddenFor` ms: reconnect the event stream at
+   * once, renew control, and reload what a suspended page may have missed.
+   */
+  resume(hiddenFor: number) {
+    this.#events?.reconnectNow();
+    void this.refreshControl();
+    void this.refreshNodes();
+    // A short switch away is covered by the stream's cursor replay.
+    if (hiddenFor >= RESUME_SNAPSHOT_AFTER) void this.refreshSnapshot();
   }
 
   async openSession(id: string) {

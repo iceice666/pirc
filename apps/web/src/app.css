@@ -119,6 +119,19 @@ select {
   color: inherit;
 }
 
+/*
+ * iOS Safari zooms the page into any text field smaller than 16px when it gets
+ * focus. On touch screens and phones every field is 16px; `!important` beats
+ * the component styles that set a denser size for desktop.
+ */
+@media (hover: none), (max-width: 650px) {
+  input:not([type='checkbox'], [type='radio'], [type='range']),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 button,
 select {
   cursor: pointer;

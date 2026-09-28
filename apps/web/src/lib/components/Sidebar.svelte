@@ -358,6 +358,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    padding-top: env(safe-area-inset-top);
     background: var(--bg-sidebar);
     border-right: 1px solid var(--line);
     transition:
@@ -749,11 +750,11 @@
     font-weight: 600;
   }
   .sidebar-footer {
-    min-height: 56px;
+    min-height: calc(56px + env(safe-area-inset-bottom));
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 8px;
+    padding: 0 8px env(safe-area-inset-bottom);
     border-top: 1px solid var(--line);
   }
   .settings-entry {
@@ -835,7 +836,7 @@
     .mobile-menu {
       position: fixed;
       z-index: 20;
-      top: 8px;
+      top: calc(8px + env(safe-area-inset-top));
       left: 6px;
       display: grid;
       width: 40px;

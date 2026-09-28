@@ -384,6 +384,11 @@ export const api = {
 
 export interface EventConnection {
   close(): void;
+  /**
+   * Reconnect at once, skipping the backoff wait (whose timer a browser also
+   * throttles in the background). A no-op while a socket is open or opening.
+   */
+  reconnectNow(): void;
 }
 
 /** Events that change run/runner state only a snapshot reports accurately. */
@@ -590,20 +595,24 @@ export function connectEvents(options: {
       if (ws === socket) ws.close();
     });
   };
-  /** Back online: reconnect now instead of waiting out the backoff. */
-  const online = () => {
+  /** Back online or in the foreground: reconnect now instead of waiting out the backoff. */
+  const reconnectNow = () => {
     if (closed) return;
     const state = socket?.readyState;
     if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return;
     if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = undefined;
+    attempts = 0;
     socket?.close();
     open();
   };
+  const online = reconnectNow;
   const offline = () => options.onState('offline');
   window.addEventListener('online', online);
   window.addEventListener('offline', offline);
   open();
   return {
+    reconnectNow,
     close() {
       closed = true;
       if (retryTimer) clearTimeout(retryTimer);
