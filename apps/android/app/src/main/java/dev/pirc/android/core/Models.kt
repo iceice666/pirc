@@ -17,6 +17,13 @@ data class Session(
 ) {
     val pinned get() = pinnedAt != null
     val settled get() = settledAt != null
+
+    /** How an update will look once the gateway applies it (shown until its reply arrives). */
+    fun edited(name: String? = null, pinned: Boolean? = null, settled: Boolean? = null, now: Long = System.currentTimeMillis()) = copy(
+        name = name ?: this.name,
+        pinnedAt = if (pinned == null) pinnedAt else if (pinned) pinnedAt ?: now else null,
+        settledAt = if (settled == null) settledAt else if (settled) settledAt ?: now else null,
+    )
 }
 
 @Serializable

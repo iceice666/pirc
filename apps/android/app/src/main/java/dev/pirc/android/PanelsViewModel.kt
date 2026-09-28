@@ -193,6 +193,9 @@ class PanelsViewModel(
         poll?.cancel()
         poll = viewModelScope.launch {
             refresh(_tab.value, quiet = true)
+            // The tab badges (Git changes, running tasks, memory at work) need their data from the start.
+            if (_tab.value != PanelTab.Git && _git.value !is Loadable.Ready) launch { loadGit(quiet = true) }
+            if (_tab.value != PanelTab.Tasks && _tab.value != PanelTab.Memory && _panel.value !is Loadable.Ready) launch { loadPanel(quiet = true) }
             while (isActive) {
                 delay(POLL_MS)
                 when (_tab.value) {

@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
@@ -90,6 +92,8 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
     // Also the first load, and back from a session: its name, pin or activity
     // may have changed. While shown, the list keeps itself current.
     LifecycleResumeEffect(Unit) {
+        // Back on the list: the next launch starts here too.
+        viewModel.local.lastSession = null
         viewModel.watchSessions()
         onPauseOrDispose { viewModel.unwatchSessions() }
     }
@@ -172,7 +176,17 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
                     }
                 }
                 state.groups.forEach { group ->
-                    stickyHeader(key = "h:${group.workspaceId}") { GroupHeader(group) }
+                    stickyHeader(key = "h:${group.workspaceId}") {
+                        GroupHeader(group, canCreate = group.online && online) { viewModel.createSession(group.workspaceId, onOpen) }
+                    }
+                    if (group.isEmpty) item(key = "e:${group.workspaceId}") {
+                        Text(
+                            if (group.online) "No sessions — tap + to start one." else "No sessions. The node is offline.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).animateItem(),
+                        )
+                    }
                     items(group.open, key = { it.id }) { session ->
                         SessionRow(session, Modifier.animateItem(), onLongClick = { acting = session }) { onOpen(session) }
                     }
@@ -209,7 +223,8 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
         state = state,
         onAdd = { node, path, name ->
             addingWorkspace = false
-            viewModel.createWorkspace(node, path, name) { creating = true }
+            // A new workspace is added to work in it: straight into a session there.
+            viewModel.createWorkspace(node, path, name) { workspace -> viewModel.createSession(workspace.id, onOpen) }
         },
         onDismiss = { addingWorkspace = false },
     )
@@ -244,10 +259,10 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
 }
 
 @Composable
-private fun GroupHeader(group: WorkspaceGroup) {
+private fun GroupHeader(group: WorkspaceGroup, canCreate: Boolean, onCreate: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            Modifier.padding(start = 16.dp, end = 4.dp).heightIn(min = 44.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -256,12 +271,18 @@ private fun GroupHeader(group: WorkspaceGroup) {
                     if (group.online) Color(0xFF3FA66B) else MaterialTheme.colorScheme.outline,
                 ),
             )
-            Text(group.title, style = MaterialTheme.typography.titleSmall)
+            Text(group.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             Text(
                 group.node,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
             )
+            // One tap to a new session here (the web's group +).
+            IconButton(onClick = onCreate, enabled = canCreate) {
+                Icon(PircIcons.Plus, contentDescription = "New session in ${group.title}", modifier = Modifier.size(20.dp))
+            }
         }
     }
 }

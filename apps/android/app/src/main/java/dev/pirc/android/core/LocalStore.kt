@@ -12,6 +12,8 @@ interface Drafts {
     fun saveDraft(sessionId: String, text: String)
 }
 
+data class LastSession(val id: String, val name: String)
+
 class LocalStore(context: Context) : Drafts {
     private val prefs = context.getSharedPreferences("local", Context.MODE_PRIVATE)
 
@@ -39,7 +41,20 @@ class LocalStore(context: Context) : Drafts {
         get() = prefs.getFloat(TERMINAL_FONT, 13f)
         set(value) = prefs.edit().putFloat(TERMINAL_FONT, value).apply()
 
+    /** The session on screen, reopened at the next launch; null once back on the list. */
+    var lastSession: LastSession?
+        get() {
+            val id = prefs.getString(LAST_SESSION_ID, null) ?: return null
+            return LastSession(id, prefs.getString(LAST_SESSION_NAME, null) ?: "")
+        }
+        set(value) = prefs.edit().apply {
+            if (value == null) remove(LAST_SESSION_ID).remove(LAST_SESSION_NAME)
+            else putString(LAST_SESSION_ID, value.id).putString(LAST_SESSION_NAME, value.name)
+        }.apply()
+
     private companion object {
+        const val LAST_SESSION_ID = "last_session_id"
+        const val LAST_SESSION_NAME = "last_session_name"
         const val TERMINAL_FONT = "terminal_font_size"
         const val CLIENT_ID = "client_id"
         const val DRAFT = "draft:"

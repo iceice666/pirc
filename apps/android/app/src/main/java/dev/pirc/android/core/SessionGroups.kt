@@ -10,12 +10,14 @@ data class WorkspaceGroup(
     val settled: List<Session>,
 ) {
     val lastActivity get() = (open + settled).maxOfOrNull { it.updatedAt } ?: 0
+    val isEmpty get() = open.isEmpty() && settled.isEmpty()
 }
 
 /**
  * Group sessions by workspace, like the web sidebar: pinned first, then most
  * recently active; settled sessions separately. Workspaces with the latest
- * activity come first. Unknown workspaces fall back to their ID.
+ * activity come first; those without sessions follow by name, so a new or
+ * emptied workspace is still listed. Unknown workspaces fall back to their ID.
  */
 fun groupSessions(
     sessions: List<Session>,
@@ -24,7 +26,11 @@ fun groupSessions(
 ): List<WorkspaceGroup> {
     val byId = workspaces.associateBy { it.id }
     val online = nodes.flatMap { node -> node.workspaces.map { "${node.id}:${it.id}" } }.toSet()
-    return sessions.groupBy { it.workspaceId }.map { (workspaceId, items) ->
+    val byWorkspace = sessions.groupBy { it.workspaceId }
+    val empty = workspaces.filter { it.id !in byWorkspace }.map { workspace ->
+        WorkspaceGroup(workspace.id, workspace.displayName, workspace.hostId, workspace.id in online, emptyList(), emptyList())
+    }.sortedBy { it.title.lowercase() }
+    return byWorkspace.map { (workspaceId, items) ->
         val workspace = byId[workspaceId]
         val (settled, open) = items.partition { it.settled }
         WorkspaceGroup(
@@ -35,5 +41,5 @@ fun groupSessions(
             open = open.sortedWith(compareByDescending<Session> { it.pinned }.thenByDescending { it.updatedAt }),
             settled = settled.sortedByDescending { it.updatedAt },
         )
-    }.sortedByDescending { it.lastActivity }
+    }.sortedByDescending { it.lastActivity } + empty
 }

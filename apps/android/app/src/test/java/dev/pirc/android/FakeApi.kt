@@ -5,6 +5,7 @@ import dev.pirc.android.core.CommandReceipt
 import dev.pirc.android.core.ControlLease
 import dev.pirc.android.core.Drafts
 import dev.pirc.android.core.InteractionAnswer
+import dev.pirc.android.core.GitStatus
 import dev.pirc.android.core.ModelOption
 import dev.pirc.android.core.Pairing
 import dev.pirc.android.core.PanelState
@@ -82,6 +83,14 @@ open class FakeApi(baseUrl: String = "https://pirc.example") : PircApi(Pairing(b
 
     override suspend fun answer(sessionId: String, interactionId: String, clientId: String, generation: Long, answer: InteractionAnswer) {
         calls += "answer:$interactionId"
+    }
+
+    /** No Git unless a test sets one (never the network). */
+    var git: () -> GitStatus = { throw ApiException(500, null, "no git") }
+
+    override suspend fun gitStatus(sessionId: String): GitStatus {
+        calls += "git"
+        return git()
     }
 
     var panel: () -> PanelState = { throw ApiException(500, null, "no panel") }

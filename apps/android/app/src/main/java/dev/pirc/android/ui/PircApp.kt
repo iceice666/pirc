@@ -10,6 +10,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import dev.pirc.android.core.LastSession
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
@@ -75,6 +80,14 @@ fun PircApp(viewModel: AppViewModel) {
             PairScreen(viewModel)
         } else {
             val nav = rememberNavController()
+            // Reopen the session left open last time, over the list (so Back
+            // lands there); once per launch, not again after a restored state.
+            var restored by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(nav) {
+                if (restored) return@LaunchedEffect
+                restored = true
+                viewModel.takeRestore()?.let { nav.navigate(SessionRoute(it.id, it.name)) }
+            }
             NavHost(navController = nav, startDestination = SessionsRoute) {
                 composable<SessionsRoute> {
                     SessionsScreen(viewModel, onOpen = { nav.navigate(SessionRoute(it.id, it.name)) })
@@ -82,6 +95,7 @@ fun PircApp(viewModel: AppViewModel) {
                 composable<SessionRoute> { entry ->
                     val route = entry.toRoute<SessionRoute>()
                     val api = viewModel.api() ?: return@composable
+                    LaunchedEffect(route.id) { viewModel.local.lastSession = LastSession(route.id, route.name) }
                     val session = viewModel<SessionViewModel>(key = "${api.pairing.baseUrl}|${route.id}") {
                         SessionViewModel(api, route.id, viewModel.local.clientId, viewModel.local, onUnauthorized = { viewModel.handle(it) }, cursors = viewModel.cursors)
                     }

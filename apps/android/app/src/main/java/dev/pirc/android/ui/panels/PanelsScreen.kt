@@ -41,6 +41,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -103,12 +105,17 @@ fun PanelsScreen(
                             PanelTab.Tasks -> ((panel as? Loadable.Ready)?.value?.backgroundTasks?.count { it.live } ?: 0)
                             else -> 0
                         }
+                        // Memory at work (observing, reflecting): a dot, as on the web.
+                        val memoryBusy = item == PanelTab.Memory && (panel as? Loadable.Ready)?.value?.memoryRuntime?.phase != null
                         Tab(
                             selected = tab == item,
                             onClick = { viewModel.select(item) },
                             text = {
-                                if (badge > 0) BadgedBox(badge = { Badge { Text(badge.toString()) } }) { Text(item.label) }
-                                else Text(item.label)
+                                when {
+                                    badge > 0 -> BadgedBox(badge = { Badge { Text(badge.toString()) } }) { Text(item.label) }
+                                    memoryBusy -> BadgedBox(badge = { Badge() }, modifier = Modifier.semantics { stateDescription = "Working" }) { Text(item.label) }
+                                    else -> Text(item.label)
+                                }
                             },
                         )
                     }

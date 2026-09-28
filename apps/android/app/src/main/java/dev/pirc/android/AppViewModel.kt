@@ -8,6 +8,7 @@ import dev.pirc.android.core.Connectivity
 import dev.pirc.android.core.CredentialStore
 import dev.pirc.android.core.InvalidPairingLink
 import dev.pirc.android.core.KeystoreCredentialStore
+import dev.pirc.android.core.LastSession
 import dev.pirc.android.core.LocalStore
 import dev.pirc.android.core.Pairing
 import dev.pirc.android.core.PairingLink
@@ -85,6 +86,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private var refreshJob: Job? = null
     private var watching: Job? = null
+
+    /** The session open when the app was last closed, reopened once at launch. */
+    private var restore: LastSession? = local.lastSession
+
+    fun takeRestore(): LastSession? = restore.also { restore = null }
 
     init {
         Connectivity.start(application)
@@ -231,13 +237,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _actionError.value = null
     }
 
-    private fun act(fallback: String, action: suspend (PircApi) -> Unit) {
+    private fun act(fallback: String, onError: () -> Unit = {}, action: suspend (PircApi) -> Unit) {
         val api = api() ?: return
         _actionError.value = null
         viewModelScope.launch {
             try {
                 action(api)
             } catch (error: IOException) {
+                onError()
                 handle(error)
                 _actionError.value = (error as? ApiException)?.message ?: fallback
             }
@@ -257,13 +264,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         onCreated(session)
     }
 
-    fun updateSession(session: Session, name: String? = null, pinned: Boolean? = null, settled: Boolean? = null) =
-        act("Could not update the session.") { api ->
+    /**
+     * Rename, pin or settle at once (as on the web); the gateway's reply then
+     * replaces the guess, and a failure puts the session back as it was.
+     */
+    fun updateSession(session: Session, name: String? = null, pinned: Boolean? = null, settled: Boolean? = null) {
+        val before = _sessions.value.sessions.firstOrNull { it.id == session.id } ?: session
+        replaceSession(before.edited(name, pinned, settled))
+        act("Could not update the session.", onError = { replaceSession(before) }) { api ->
             val updated = api.updateSession(session.id, name, pinned, settled)
             replaceSession(updated)
             // Settled from the list, so not open: its unsent draft goes (as on the web).
             if (settled == true && updated.settled) local.saveDraft(updated.id, "")
         }
+    }
 
     fun createWorkspace(nodeId: String, path: String, displayName: String, onCreated: (Workspace) -> Unit) =
         act("Could not add the workspace.") { api ->
@@ -284,6 +298,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         unwatchSessions()
         store.clear()
         local.clearDrafts()
+        local.lastSession = null
+        restore = null
         closeApi()
         cursors.clear()
         _pairing.value = null
