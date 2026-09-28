@@ -6,6 +6,7 @@ import {
   piPartialMessage,
   toolResultFields,
 } from './pi-messages';
+import type { NewWorkspace } from './chats';
 import { request } from './http';
 import { uuid } from './id';
 import { getClientId } from './storage';
@@ -220,7 +221,7 @@ export const backendApi = {
 export const api = {
   nodes: async () => (await request<{ nodes: NodeSummary[] }>('/api/nodes')).nodes,
   workspaces: async () => (await request<any>('/api/workspaces')).workspaces as Workspace[],
-  createWorkspace: async (input: { nodeId: string; path: string; displayName: string }) =>
+  createWorkspace: async (input: NewWorkspace) =>
     (
       await request<{ workspace: Workspace }>('/api/workspaces', {
         method: 'POST',

@@ -1,10 +1,11 @@
 # Personal assistant: global memory and delegation
 
-Status: proposed 2026-09-28. Milestones 0 (workspace memory fixes) and 1 (gateway channel) are implemented; the rest is not. Decisions taken with the user:
+Status: proposed 2026-09-28. Milestones 0 (workspace memory fixes), 1 (gateway channel) and 2 (chat workspaces) are implemented; the rest is not. Decisions taken with the user:
 
 - Global memory lives on the gateway from the start (no node-local interim store).
 - Only USER (profile) changes need the user's approval. The assistant writes MEMORY notes directly; the user can review, revert and forget them.
 - Every delegation to another workspace needs the user's confirmation.
+- The assistant lives in chat workspaces, like the chat list and projects of the ChatGPT and Claude web apps. The node keeps their directories hidden. A top-level workspace holds uncategorized chats, and the web gets buttons for new chats and projects. Chat sessions keep `bash`.
 
 ## Why
 
@@ -28,7 +29,7 @@ Honcho and Hindsight are not adopted:
 
 ## Scope
 
-**v1**: workspace-memory fixes; a gateway channel for agents; an assistant home workspace per user; USER/MEMORY on the gateway with a web review page; delegation with confirmation; cross-workspace records and search.
+**v1**: workspace-memory fixes; a gateway channel for agents; chat workspaces (top-level chats and projects) as the assistant's home; USER/MEMORY on the gateway with a web review page; delegation with confirmation; cross-workspace records and search.
 
 **Later**: background consolidation ("dreaming"), skills, USER in coding sessions, Android memory and approval screens, repo identity by normalized `origin` remote, taint tracking for network tool output, vector search.
 
@@ -77,18 +78,39 @@ The channel runs agent → runner → node → daemon, copying the write-lease a
 
 - **Agent ↔ runner.** When the runner sets `PIRC_GATEWAY=1`, the agent writes `{type: 'gateway_request', id, op, args}` on stdout. The runner answers with `gateway_response {id, ok, result | error}` on stdin, routed by `serveRpc` like `write_lease_request` (`agent/write-lease.ts`).
 - **Node ↔ daemon.** The runner adds its node session id. The node sends `agent_request {requestId, sessionId, op, args}` and the daemon answers `agent_response {requestId, status, body}`, with a 30 s timeout like relayed requests (`daemon/nodes.ts`). `NODE_PROTOCOL_VERSION` goes from 4 to 5.
-- **Daemon checks.** `resolveRemoteSession(nodeId, sessionId)` gives the session, its `ownerUser` and its workspace; the owner must still be an allowed user. Ops are allowlisted in `daemon/agent-ops.ts`. The v1 set is all assistant ops: `assistant.context`, `memory.note`, `memory.proposeUser`, `memory.search`, `delegation.create`, `delegation.status`, `recall.remote`. From milestone 2 on, each except `assistant.context` requires the session's workspace to be its owner's assistant home. Milestone 1 ships only `assistant.context`, which answers `{enabled: false}` until a home can be designated.
+- **Daemon checks.** `resolveRemoteSession(nodeId, sessionId)` gives the session, its `ownerUser` and its workspace; the owner must still be an allowed user. Ops are allowlisted in `daemon/agent-ops.ts`. The v1 set is all assistant ops: `assistant.context`, `memory.note`, `memory.proposeUser`, `memory.search`, `delegation.create`, `delegation.status`, `recall.remote`. From milestone 2 on, each except `assistant.context` requires the session to be in a chat workspace (below). Milestone 1 ships only `assistant.context`, which answers `{enabled: false}` until chat workspaces exist.
 - **Bad agent input is answered, never fatal.** An invalid op name, oversized `args` (over 64 KiB) or a flood (8 requests in flight per session, 64 per node link, 32 per node on the daemon) gets an error answer; it does not close the node's link. Error codes: `gateway_offline`, `gateway_timeout`, `too_many_requests`, `payload_too_large`, `invalid_input`, `not_found`, `unknown_operation`, `forbidden`, `internal_error`.
-- **Daemon → agent pushes** moved to milestone 3, their first user (see Delegation).
+- **Daemon → agent pushes** moved to milestone 4, their first user (see Delegation).
 - **Environment.** Drop node secrets from the agent environment (rule 6).
 
-## Assistant home and snapshot
+## Chat workspaces (the assistant's home)
 
-- **Home workspace.** Web **Settings → Assistant** picks one per user: `assistant_homes(owner_user TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, updated_at INTEGER NOT NULL)`.
-- **Chat-only node.** It registers one workspace (e.g. `~/assistant`). Its `AGENTS.md` sets the persona; the base prompt still says "coding agent" (`agent/config.ts:109`).
+A workspace gets a `kind`: `directory` (today's workspaces, a real directory) or `chat`. Chat workspaces behave like the chat list and the projects of the ChatGPT and Claude web apps.
+
+- **Chat node.** A node started with `PIRC_CHAT=1` (NixOS: `services.pirc.chat`) hosts chat workspaces. At start-up it creates the top-level chat workspace `chats` ("Chats") for uncategorized chats. Assume one chat node, on an always-on machine such as the gateway host: the assistant is offline whenever its node is.
+- **Projects.** The web's **New project** button creates another chat workspace on the chat node (`POST /api/workspaces {nodeId, kind: 'chat', displayName}`, no path). Projects group chats; they are not repositories.
+- **Hidden directories.** The node owns them: `<stateDir>/chat/<workspaceId>/` holds one subdirectory per session, `sessions/<sessionId>/`, which is the agent's working directory.
+  - Separate directories stop the write broker, which locks the working root, from blocking one chat while another writes.
+  - Uploads keep working (`.pirc/uploads` under the session directory).
+  - The user never picks or sees a path; `canonical_path` stores the workspace directory.
+- **Registration.** `RegisteredWorkspace` gains an optional `kind` (default `directory`), stored in a new `workspaces.kind` column. The node's word is enough, since nodes are in the trust domain; delegation still needs the user's confirmation on the daemon.
+- **Every session in a chat workspace is an assistant session**, with the USER and MEMORY of the session's owner. No per-user "assistant home" setting is needed.
+- **Agent behaviour in chat workspaces.**
+  - The base prompt is a personal assistant's instead of "a coding agent operating inside a user's workspace" (`agent/config.ts:109`).
+  - All tools stay, including `bash`, which auto mode gates as everywhere.
+  - Workspace memory is off; the gateway's MEMORY replaces it. Session OM stays.
+- **Web.**
+  - A **New chat** button starts a session in `chats` directly, like ChatGPT's.
+  - The sidebar shows top-level chats and projects first, then the project workspaces by node as today.
+  - Chat sessions hide the Git and Terminal panels. Files stays and shows the chat's own directory, where uploads and the assistant's outputs land (file links in the conversation open there).
+  - Android follows later.
+- **Later**: moving a chat into or out of a project; per-project instructions and shared files (project knowledge in Claude and ChatGPT); project-only memory.
+
+## Assistant context and snapshot
+
 - **Session start.** A fresh session calls `assistant.context`.
-  - Non-home sessions get `{enabled: false}` and no assistant tools.
-  - Home sessions get USER, MEMORY and the workspace list. The rendered text is frozen into a session entry, like `om.workspace.snapshot`, for prompt-cache stability; later changes reach new sessions only.
+  - Sessions outside chat workspaces get `{enabled: false}` and no assistant tools.
+  - Chat sessions get USER, MEMORY and the workspace list. The rendered text is frozen into a session entry, like `om.workspace.snapshot`, for prompt-cache stability; later changes reach new sessions only.
   - If the gateway is unreachable, the session gets a notice, never an empty memory presented as "nothing known".
 - **Budgets** are in characters, not the `len/4` token estimate, because profile text may be Chinese. Defaults: USER 2,000, MEMORY 8,000, both configurable. A write over budget fails and asks the assistant to consolidate (Hermes behaviour).
 
@@ -166,13 +188,15 @@ delegations(id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, assistant_session_id 
 
 0. **Workspace memory fixes** and the doc update.
 1. **Gateway channel**: protocol v5, op allowlist (`assistant.context`), environment scrubbing. Tests: round trip, foreign-session rejection, unknown ops, offline node.
-2. **Assistant home and USER/MEMORY**: schema, snapshot, tools, approval flow, web Settings → Assistant and Memory.
-3. **Delegation**: tool, daemon-owned confirmation, the `deliver` RPC and daemon → agent pushes, dispatch and follow-up, result delivery, status tool. An end-to-end test with two nodes.
-4. **Records and search**: mirroring, FTS, search tool, cross-node recall.
-5. **Later**: consolidation, skills, USER in coding sessions, Android screens.
+2. **Chat workspaces**: workspace `kind`, the chat node and its top-level `chats`, projects from the web, hidden per-session directories, the assistant base prompt, `assistant.context` enabled for chat sessions, web New chat / New project and the chat-first sidebar.
+3. **USER/MEMORY**: schema, snapshot, tools, approval flow, web Memory page.
+4. **Delegation**: tool, daemon-owned confirmation, the `deliver` RPC and daemon → agent pushes, dispatch and follow-up, result delivery, status tool. An end-to-end test with two nodes.
+5. **Records and search**: mirroring, FTS, search tool, cross-node recall.
+6. **Later**: consolidation, skills, USER in coding sessions, Android screens.
 
 ## Open questions
 
+- One chat node is assumed. Would a second one (for example a laptop while travelling) be worth supporting?
 - Should approved USER entries also reach coding sessions, replacing preferences duplicated in each node's `~/.config/.pirc/AGENTS.md`?
 - Are the budget defaults (USER 2,000, MEMORY 8,000 characters) right once in use?
 - Should a delegated session settle automatically after its result is delivered?

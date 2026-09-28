@@ -11,6 +11,7 @@ import {
   thinkingLevels,
   type ThinkingLevel,
 } from '../models.js';
+import type { WorkspaceKind } from '../types.js';
 import type { SessionEntry } from './session-store.js';
 
 export {
@@ -91,6 +92,8 @@ export interface AgentConfig {
   limits: z.infer<typeof limitsSchema>;
   features: Record<string, unknown>;
   systemPrompt: string;
+  /** `chat` when the node runs this agent in a chat workspace (PIRC_WORKSPACE_KIND). */
+  workspaceKind: WorkspaceKind;
 }
 
 function readJson(file: string): unknown {
@@ -109,6 +112,11 @@ function readText(file: string): string {
 const basePrompt = `You are pirc, a coding agent operating inside a user's workspace through tools.
 Work carefully: read before editing, keep changes minimal and verified, and report blockers honestly.
 File tools are limited to the workspace and explicitly allowed paths.`;
+
+/** For chats (plans/assistant.md): the working directory is the chat's own, not a project. */
+const chatPrompt = `You are pirc, the user's personal assistant, chatting with them on one of their machines.
+Answer directly; use tools when they help, and report what you did and any blockers honestly.
+This chat has its own private working directory; file tools are limited to it and explicitly allowed paths.`;
 
 /** Keys of the node's config.json that moved to the gateway and are now ignored. */
 export function legacyModelKeys(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -140,8 +148,9 @@ export function loadAgentConfig(
       [...list, ...(project.hooks[key as keyof HooksConfig] ?? [])],
     ]),
   ) as HooksConfig;
+  const workspaceKind: WorkspaceKind = env.PIRC_WORKSPACE_KIND === 'chat' ? 'chat' : 'directory';
   const prompts = [
-    basePrompt,
+    workspaceKind === 'chat' ? chatPrompt : basePrompt,
     readText(path.join(configDir, 'AGENTS.md')),
     readText(path.join(workspace, 'AGENTS.md')),
     readText(path.join(projectDir, 'AGENTS.md')),
@@ -160,6 +169,7 @@ export function loadAgentConfig(
     limits: global.limits,
     features: global.features,
     systemPrompt: prompts.join('\n\n'),
+    workspaceKind,
   };
 }
 

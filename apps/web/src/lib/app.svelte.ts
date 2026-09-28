@@ -4,6 +4,7 @@
  * the UI sends. Components read it directly instead of receiving it as props.
  */
 import { api, connectEvents, type EventConnection } from './api';
+import type { NewWorkspace } from './chats';
 import { syncControl } from './control';
 import { errorMessage } from './errors';
 import { GOAL_WIDGET, parseGoalWidget } from './goal';
@@ -658,7 +659,7 @@ class AppState {
   }
 
   /** Add a workspace on a device. Throws with a displayable message on failure. */
-  async createWorkspace(input: { nodeId: string; path: string; displayName: string }) {
+  async createWorkspace(input: NewWorkspace) {
     const workspace = await api.createWorkspace(input);
     this.workspaces = [...this.workspaces.filter((item) => item.id !== workspace.id), workspace];
     this.nodes = await api.nodes();

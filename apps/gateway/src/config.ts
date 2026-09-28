@@ -89,6 +89,8 @@ export interface NodeConfig {
   /** Arguments placed before the agent flags (default: `agent`, or `<cli.ts> agent` when unbundled). */
   agentArgs: string[];
   workspaces: ConfigWorkspace[];
+  /** Hosts the assistant's chat workspaces (PIRC_CHAT, default off; see plans/assistant.md). */
+  chat: boolean;
   eventBufferSize: number;
   rpcMaxLineBytes: number;
   uploadMaxBytes: number;
@@ -100,6 +102,9 @@ export interface NodeConfig {
   interactionTtlMs: number;
   shutdownGraceMs: number;
 }
+
+/** Local id of the top-level chat workspace a chat node creates for uncategorized chats. */
+export const CHAT_WORKSPACE_ID = 'chats';
 
 /** Workspaces a node starts with; more can be added from the web client. */
 export function parseWorkspaces(env: NodeJS.ProcessEnv): ConfigWorkspace[] {
@@ -224,6 +229,12 @@ export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig
   const dirs = stateDirs(env);
   const sessionsDir = path.resolve(env.PIRC_SESSIONS_DIR ?? path.join(dirs.stateDir, 'sessions'));
   mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
+  const chat = bool(env.PIRC_CHAT, false);
+  const workspaces = parseWorkspaces(env);
+  if (chat && workspaces.some((workspace) => workspace.id === CHAT_WORKSPACE_ID))
+    throw new Error(
+      `PIRC_WORKSPACES must not use the id "${CHAT_WORKSPACE_ID}": it is the chat node's top-level chats`,
+    );
   return {
     nodeId,
     nodeToken,
@@ -232,7 +243,8 @@ export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig
     ...dirs,
     sessionsDir,
     ...defaultAgentCommand(env),
-    workspaces: parseWorkspaces(env),
+    workspaces,
+    chat,
     eventBufferSize: integer(env.PIRC_EVENT_BUFFER_SIZE, 1000),
     rpcMaxLineBytes: integer(env.PIRC_RPC_MAX_LINE_BYTES, 1_048_576),
     uploadMaxBytes: uploadLimit(env),

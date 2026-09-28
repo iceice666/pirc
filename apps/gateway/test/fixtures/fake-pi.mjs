@@ -172,6 +172,8 @@ rl.on('line', (raw) => {
       });
       return;
     }
+    // `cwd` reports the directory the node started this agent in.
+    if (command.message === 'cwd') return reply(`cwd:${process.cwd()}`);
     // `env <NAME>` reports what the node put in this agent's environment.
     const env = /^env (\S+)$/.exec(command.message);
     if (env) {

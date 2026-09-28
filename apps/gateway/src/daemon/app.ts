@@ -29,11 +29,21 @@ import { registerBackendRoutes } from '../backends/routes.js';
 import { GatewayInference } from '../backends/inference.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
-const createWorkspaceBody = z.object({
-  nodeId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
-  path: z.string().trim().min(1).max(4096),
-  displayName: z.string().trim().min(1).max(200),
-});
+const nodeIdField = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);
+const createWorkspaceBody = z.union([
+  // A chat project on a chat node, which picks and hides its directory.
+  z.object({
+    nodeId: nodeIdField,
+    kind: z.literal('chat'),
+    displayName: z.string().trim().min(1).max(200),
+  }),
+  z.object({
+    nodeId: nodeIdField,
+    kind: z.literal('directory').optional(),
+    path: z.string().trim().min(1).max(4096),
+    displayName: z.string().trim().min(1).max(200),
+  }),
+]);
 const createSessionBody = z.object({ workspaceId: z.string().min(1) });
 /** Rename, pin and settle, in any combination. Only a rename reaches the node. */
 const updateSessionBody = z
@@ -284,7 +294,10 @@ export async function buildDaemonApp(
     const remote = await expectOk(reply, body.nodeId, request, {
       method: 'POST',
       url: '/api/workspaces',
-      payload: { path: body.path, displayName: body.displayName },
+      payload:
+        body.kind === 'chat'
+          ? { kind: 'chat', displayName: body.displayName }
+          : { path: body.path, displayName: body.displayName },
     });
     if (!remote) return reply;
     // A lost acknowledgement is reconciled when the node registers again.

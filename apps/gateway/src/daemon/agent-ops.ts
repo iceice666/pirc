@@ -8,11 +8,13 @@
 import { z } from 'zod';
 import type { GatewayDatabase, SessionRow } from '../database.js';
 import { ApiError } from '../errors.js';
+import type { Workspace } from '../types.js';
 import { agentError, type AgentAnswer } from '../protocol.js';
 
 export interface AgentOpContext {
   nodeId: string;
   session: SessionRow;
+  workspace: Workspace;
   user: string;
 }
 interface AgentOp {
@@ -22,11 +24,13 @@ interface AgentOp {
 
 const ops: Record<string, AgentOp> = {
   /**
-   * What an assistant session gets at start-up. No workspace can be made an
-   * assistant home yet (plans/assistant.md, milestone 2), so every session is
-   * an ordinary one.
+   * What an assistant session gets at start-up: every session in a chat
+   * workspace is one (plans/assistant.md). USER and MEMORY join in milestone 3.
    */
-  'assistant.context': { args: z.object({}).strict(), run: () => ({ enabled: false }) },
+  'assistant.context': {
+    args: z.object({}).strict(),
+    run: ({ workspace }) => ({ enabled: workspace.kind === 'chat' }),
+  },
 };
 
 export async function runAgentOp(
@@ -46,7 +50,8 @@ export async function runAgentOp(
   const args = op.args.safeParse(request.args);
   if (!args.success) return agentError(400, 'invalid_input', `Invalid arguments for ${request.op}`);
   try {
-    const result = await op.run({ nodeId, session, user }, args.data);
+    const workspace = db.getWorkspace(session.workspaceId);
+    const result = await op.run({ nodeId, session, workspace, user }, args.data);
     return { status: 200, body: { result: result ?? null } };
   } catch (error) {
     if (error instanceof ApiError) return agentError(error.statusCode, error.code, error.message);

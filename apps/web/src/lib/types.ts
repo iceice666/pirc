@@ -29,6 +29,8 @@ export interface Workspace {
   id: string;
   hostId: string;
   displayName: string;
+  /** `chat`: the assistant's chats or a chat project (absent from older gateways: `directory`). */
+  kind?: 'directory' | 'chat';
   canonicalPath?: string;
   color?: string;
   defaults: WorkspaceDefaults;

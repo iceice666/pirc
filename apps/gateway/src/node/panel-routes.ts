@@ -27,6 +27,7 @@ import {
   readWorkspaceFile,
 } from './inspect.js';
 import type { BranchCache } from './branch-cache.js';
+import { sessionRoot } from './chat.js';
 import type { RunnerManager } from './runner.js';
 import { withoutSecrets } from './secrets.js';
 import { TerminalManager } from './terminals.js';
@@ -92,7 +93,7 @@ export function registerPanelRoutes(
     async function (request: FastifyRequest) {
       const session = claim(request);
       return handler(
-        { session, root: db.getWorkspace(session.workspaceId).canonicalPath },
+        { session, root: sessionRoot(db.getWorkspace(session.workspaceId), session.id) },
         request,
       );
     };
@@ -262,7 +263,7 @@ export function registerPanelRoutes(
     );
     db.validateLease(session.id, body.clientId, body.generation);
     const workspace = db.getWorkspace(session.workspaceId);
-    const terminal = terminals.create(session.id, workspace.canonicalPath, {
+    const terminal = terminals.create(session.id, sessionRoot(workspace, session.id), {
       cols: body.cols ?? 80,
       rows: body.rows ?? 24,
     });

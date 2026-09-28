@@ -22,6 +22,7 @@
   import JobsMenu from './lib/components/JobsMenu.svelte';
   import Message from './lib/components/Message.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
+  import NewProjectDialog from './lib/components/dialogs/NewProjectDialog.svelte';
   import NewSessionDialog from './lib/components/dialogs/NewSessionDialog.svelte';
   import NewWorkspaceDialog from './lib/components/dialogs/NewWorkspaceDialog.svelte';
   import SettingsDialog from './lib/components/dialogs/SettingsDialog.svelte';
@@ -65,6 +66,8 @@
   let panelTab: PanelTab = $state('files');
   let settingsOpen = $state(false);
   let newSessionOpen = $state(false);
+  let newProjectOpen = $state(false);
+  let newProjectNodeId = $state('');
   let newWorkspaceOpen = $state(false);
   let newWorkspaceNodeId = $state('');
   let creatingSession = false;
@@ -320,6 +323,12 @@
     sidebarOpen = false;
   }
 
+  function showNewProject(nodeId: string) {
+    newProjectNodeId = nodeId;
+    newProjectOpen = true;
+    sidebarOpen = false;
+  }
+
   /** With a workspace (its `+` button, or one just added) the session is created right away. */
   async function showNewSession(workspaceId?: string) {
     if (!workspaceId) {
@@ -355,6 +364,7 @@
     onselect={openSession}
     onnew={showNewSession}
     onaddworkspace={showNewWorkspace}
+    onaddproject={showNewProject}
     onclose={() => (sidebarOpen = false)}
     {showSettled}
     onsettings={() => {
@@ -526,6 +536,11 @@
 <NewWorkspaceDialog
   bind:open={newWorkspaceOpen}
   nodeId={newWorkspaceNodeId}
+  oncreated={(workspaceId) => showNewSession(workspaceId)}
+/>
+<NewProjectDialog
+  bind:open={newProjectOpen}
+  nodeId={newProjectNodeId}
   oncreated={(workspaceId) => showNewSession(workspaceId)}
 />
 <NewSessionDialog bind:open={newSessionOpen} />

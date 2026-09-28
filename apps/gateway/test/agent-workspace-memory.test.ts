@@ -455,4 +455,34 @@ describe('workspace memory agent flow', () => {
     expect(gone!.result.content[0].text).toContain('forgotten at the user');
     expect(gone!.result.content[0].text).not.toContain('Store uploads in S3');
   }, 30_000);
+
+  it('runs chat sessions as a personal assistant without workspace memory', async () => {
+    const workspace = tmp('pirc-chat-ws-');
+    const env = { PIRC_WORKSPACE_MEMORY_DIR: tmp('pirc-chat-mem-') };
+    // A note a session in this directory would normally receive.
+    WorkspaceLedger.forCwd(workspace, env).append({
+      type: 'recorded',
+      at: 1,
+      items: [item('Deploys go through staging first.')],
+    });
+    const systemPrompt = async (extra: Record<string, string>) => {
+      const agent = await startAgent({ workspace, env: { ...env, ...extra } });
+      agents.push(agent);
+      agent.llm.push({ text: 'Hi.' });
+      const from = agent.events.length;
+      await agent.send({ type: 'prompt', message: 'hello' });
+      await settledAfter(agent, from);
+      const main = agent.llm.requests.find(
+        (r) => !r.body.tools?.some((t: any) => /^record_/.test(t.function?.name)),
+      );
+      return String(main!.body.messages[0].content);
+    };
+    const chat = await systemPrompt({ PIRC_WORKSPACE_KIND: 'chat' });
+    expect(chat).toContain("the user's personal assistant");
+    expect(chat).not.toContain('coding agent');
+    expect(chat).not.toContain('## Workspace memory');
+    const directory = await systemPrompt({});
+    expect(directory).toContain('coding agent');
+    expect(directory).toContain('Deploys go through staging first.');
+  });
 });

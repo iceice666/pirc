@@ -24,16 +24,22 @@ import { loadAgentConfig, sessionSettings } from '../agent/config.js';
 import { historyOf } from '../agent/session-store.js';
 import { offlineGateway, type AgentGateway } from './agent-gateway.js';
 import { BranchCache } from './branch-cache.js';
+import { chatWorkspaceDir, ensureTopLevelChats, sessionRoot } from './chat.js';
 import { WriteBroker } from './write-broker.js';
 import { registerPanelRoutes, type TerminalStreams } from './panel-routes.js';
 import { RunnerManager } from './runner.js';
 import type { TerminalManager } from './terminals.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
-const createWorkspaceBody = z.object({
-  path: z.string().trim().min(1).max(4096),
-  displayName: z.string().trim().min(1).max(200),
-});
+const createWorkspaceBody = z.union([
+  // A chat project: the node picks and hides its directory.
+  z.object({ kind: z.literal('chat'), displayName: z.string().trim().min(1).max(200) }),
+  z.object({
+    kind: z.literal('directory').optional(),
+    path: z.string().trim().min(1).max(4096),
+    displayName: z.string().trim().min(1).max(200),
+  }),
+]);
 const interactionParams = z.object({ id: z.string().min(1), interactionId: z.string().min(1) });
 const uploadQuery = z.object({ filename: z.string().trim().min(1).max(255).optional() });
 /** Sessions are never named at creation: the agent titles them; rename later with PATCH. */
@@ -124,6 +130,7 @@ export async function buildNodeApp(
   registerImageParsers(app, config.uploadMaxBytes);
   const db = new GatewayDatabase(config.databasePath);
   db.syncWorkspaces(config.nodeId, config.workspaces);
+  if (config.chat) ensureTopLevelChats(config, db);
   const recovery = db.recoverStartup();
   app.log.info({ recovery }, 'node startup recovery complete');
   const events = new EventHub(config.eventBufferSize);
@@ -152,6 +159,19 @@ export async function buildNodeApp(
 
   app.post('/api/workspaces', async (request, reply) => {
     const body = parse(createWorkspaceBody, request.body);
+    if (body.kind === 'chat') {
+      if (!config.chat)
+        throw new ApiError(403, 'forbidden', 'This node does not host chats (PIRC_CHAT)');
+      const workspaceId = id('workspace').replaceAll('-', '_');
+      const workspace = db.addWorkspace(
+        workspaceId,
+        config.nodeId,
+        body.displayName,
+        chatWorkspaceDir(config, workspaceId),
+        'chat',
+      );
+      return reply.status(201).send({ workspace });
+    }
     const home = realpathSync(process.env.HOME ?? os.homedir());
     const requested = body.path.startsWith('~/') ? path.join(home, body.path.slice(2)) : body.path;
     if (!path.isAbsolute(requested))
@@ -236,7 +256,7 @@ export async function buildNodeApp(
     // to another model and overwrite them on the next prompt.
     if (!agent) {
       try {
-        const root = db.getWorkspace(session.workspaceId).canonicalPath;
+        const root = sessionRoot(db.getWorkspace(session.workspaceId), sessionId);
         const settings = sessionSettings(branch, loadAgentConfig(root, models.current));
         agent = { model: settings.model, thinkingLevel: settings.thinking };
       } catch {

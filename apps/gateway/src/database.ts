@@ -7,6 +7,7 @@ import type {
   RunStatus,
   SessionSummary,
   Workspace,
+  WorkspaceKind,
 } from './types.js';
 import { id, now, safeJson } from './util.js';
 
@@ -76,7 +77,12 @@ const migrations = [
   ALTER TABLE uploads ADD COLUMN filename TEXT;
   ALTER TABLE uploads ADD COLUMN kind TEXT NOT NULL DEFAULT 'image';
   `,
+  `
+  ALTER TABLE workspaces ADD COLUMN kind TEXT NOT NULL DEFAULT 'directory';
+  `,
 ];
+
+const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');
 
 export const PLACEHOLDER_SESSION_NAME = 'New session';
 
@@ -166,7 +172,7 @@ export class GatewayDatabase {
   /** Upsert a node's configured workspaces (`PIRC_WORKSPACES`). */
   syncWorkspaces(hostId: string, workspaces: ConfigWorkspace[]): void {
     const insert = this.raw.prepare(
-      'INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET host_id=excluded.host_id, display_name=excluded.display_name, canonical_path=excluded.canonical_path, defaults_json=excluded.defaults_json',
+      "INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET host_id=excluded.host_id, display_name=excluded.display_name, canonical_path=excluded.canonical_path, defaults_json=excluded.defaults_json, kind='directory'",
     );
     this.raw.transaction(() => {
       for (const workspace of workspaces)
@@ -183,10 +189,10 @@ export class GatewayDatabase {
 
   syncRemoteWorkspaces(
     nodeId: string,
-    workspaces: Array<{ id: string; displayName: string }>,
+    workspaces: Array<{ id: string; displayName: string; kind?: WorkspaceKind | undefined }>,
   ): void {
     const insert = this.raw.prepare(
-      'INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name',
+      'INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at,kind) VALUES (?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name, kind=excluded.kind',
     );
     this.raw.transaction(() => {
       for (const workspace of workspaces)
@@ -197,8 +203,24 @@ export class GatewayDatabase {
           `node://${nodeId}/${workspace.id}`,
           '{}',
           now(),
+          workspaceKind(workspace.kind),
         );
     })();
+  }
+
+  /** Create or repair a chat workspace the node itself manages (its directory never changes). */
+  ensureChatWorkspace(
+    workspaceId: string,
+    hostId: string,
+    displayName: string,
+    canonicalPath: string,
+  ): Workspace {
+    this.raw
+      .prepare(
+        "INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at,kind) VALUES (?,?,?,?,?,?,'chat') ON CONFLICT(id) DO UPDATE SET host_id=excluded.host_id, canonical_path=excluded.canonical_path, kind='chat'",
+      )
+      .run(workspaceId, hostId, displayName, canonicalPath, '{}', now());
+    return this.getWorkspace(workspaceId);
   }
 
   addWorkspace(
@@ -206,13 +228,14 @@ export class GatewayDatabase {
     hostId: string,
     displayName: string,
     canonicalPath: string,
+    kind: WorkspaceKind = 'directory',
   ): Workspace {
     try {
       this.raw
         .prepare(
-          'INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at) VALUES (?,?,?,?,?,?)',
+          'INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at,kind) VALUES (?,?,?,?,?,?,?)',
         )
-        .run(workspaceId, hostId, displayName, canonicalPath, '{}', now());
+        .run(workspaceId, hostId, displayName, canonicalPath, '{}', now(), kind);
     } catch (error) {
       if ((error as { code?: string }).code?.startsWith('SQLITE_CONSTRAINT'))
         throw new ApiError(409, 'conflict', 'Workspace ID or path is already registered');
@@ -229,6 +252,7 @@ export class GatewayDatabase {
         displayName: row.display_name,
         canonicalPath: row.canonical_path,
         defaults: safeJson(row.defaults_json, {}),
+        kind: workspaceKind(row.kind),
       }),
     );
   }
@@ -242,6 +266,7 @@ export class GatewayDatabase {
       displayName: row.display_name,
       canonicalPath: row.canonical_path,
       defaults: safeJson(row.defaults_json, {}),
+      kind: workspaceKind(row.kind),
     };
   }
 

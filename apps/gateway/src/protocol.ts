@@ -6,6 +6,7 @@
  */
 import type { ModelsConfig } from './models.js';
 import type { InferenceEvent, InferenceRequest } from './inference-wire.js';
+import type { WorkspaceKind } from './types.js';
 
 export const NODE_PROTOCOL_VERSION = 5;
 
@@ -41,6 +42,8 @@ export interface NodeHttpResponse {
 export interface RegisteredWorkspace {
   id: string;
   displayName: string;
+  /** Absent from older nodes: `directory`. */
+  kind?: WorkspaceKind | undefined;
 }
 
 /**

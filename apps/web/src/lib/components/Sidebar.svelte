@@ -18,8 +18,9 @@
   } from '@lucide/svelte';
   import { tick } from 'svelte';
   import { app } from '../app.svelte';
+  import { isChatWorkspace, topLevelChats } from '../chats';
   import { shortAgo } from '../time';
-  import type { SessionSummary } from '../types';
+  import type { SessionSummary, Workspace } from '../types';
   import { watch } from '../watch.svelte';
 
   interface Props {
@@ -30,6 +31,8 @@
     onselect: (id: string) => void;
     onnew: (workspaceId?: string) => void;
     onaddworkspace: (nodeId: string) => void;
+    /** New chat project on the chat node. */
+    onaddproject: (nodeId: string) => void;
     onclose: () => void;
     onsettings: () => void;
     /** Settled sessions are hidden entirely unless enabled in settings. */
@@ -43,6 +46,7 @@
     onselect,
     onnew,
     onaddworkspace,
+    onaddproject,
     onclose,
     onsettings,
     showSettled = false,
@@ -61,8 +65,16 @@
   $effect.pre(() => {
     if (selectedNodeId && !nodes.some((node) => node.id === selectedNodeId)) selectedNodeId = '';
   });
+  /** Chats come first, like the ChatGPT and Claude web apps; directory workspaces follow by device. */
+  const chats = $derived(topLevelChats(app.workspaces));
+  const projects = $derived(
+    app.workspaces.filter((workspace) => isChatWorkspace(workspace) && workspace !== chats),
+  );
   let shownWorkspaces = $derived(
-    app.workspaces.filter((workspace) => !selectedNodeId || workspace.hostId === selectedNodeId),
+    app.workspaces.filter(
+      (workspace) =>
+        !isChatWorkspace(workspace) && (!selectedNodeId || workspace.hostId === selectedNodeId),
+    ),
   );
 
   let visibleSessions = $derived(
@@ -183,100 +195,84 @@
       onclick={onclose}><X size={19} /></button
     >
   </div>
-  <button class="new-session" type="button" onclick={() => onnew()}
-    ><SquarePen size={16} /> New session</button
-  >
+  {#if chats}
+    <button
+      class="new-session"
+      type="button"
+      onclick={() => onnew(chats.id)}
+      disabled={!app.workspaceOnline(chats)}><SquarePen size={16} /> New chat</button
+    >
+  {:else}
+    <button class="new-session" type="button" onclick={() => onnew()}
+      ><SquarePen size={16} /> New session</button
+    >
+  {/if}
   <label class="search">
     <Search size={16} />
     <span class="sr-only">Search sessions</span>
     <input bind:value={query} placeholder="Search sessions" />
   </label>
 
-  <div class="device-switcher" role="group" aria-label="Select device">
-    <strong>Devices</strong>
-    <div class="device-options">
-      <button
-        type="button"
-        class:chosen={!selectedNodeId}
-        aria-pressed={!selectedNodeId}
-        onclick={() => (selectedNodeId = '')}>All</button
-      >
-      {#each nodes as node (node.id)}
-        <button
-          type="button"
-          class:chosen={selectedNodeId === node.id}
-          aria-pressed={selectedNodeId === node.id}
-          onclick={() => (selectedNodeId = node.id)}>{node.id}</button
-        >
-      {/each}
-    </div>
-  </div>
-  <div class="workspace-tools">
-    <strong>Workspaces</strong>
-    <button
-      type="button"
-      onclick={() => onaddworkspace(selectedNodeId || nodes[0]?.id)}
-      disabled={!nodes.length}
-      aria-label="Add workspace"><Plus size={16} /> Add</button
-    >
-  </div>
-  <nav class="workspace-list">
-    {#each shownWorkspaces as workspace (workspace.id)}
-      <section class="workspace-group">
-        <div class="workspace-heading">
+  <div class="sidebar-scroll">
+    {#if chats}
+      <section class="chat-section" aria-label="Chats">
+        <div class="workspace-tools">
+          <strong>Chats</strong>
+          {#if !app.workspaceOnline(chats)}<small>offline</small>{/if}
+        </div>
+        <div class="workspace-list">{@render sessionList(chats.id)}</div>
+      </section>
+      <section class="chat-section" aria-label="Projects">
+        <div class="workspace-tools">
+          <strong>Projects</strong>
           <button
             type="button"
-            onclick={() => toggleWorkspace(workspace.id)}
-            aria-expanded={!collapsedGroups.has(workspace.id)}
-          >
-            <span class:collapsed={collapsedGroups.has(workspace.id)} class="chevron">
-              <ChevronDown size={15} />
-            </span>
-            <strong>{workspace.displayName}</strong>
-            <small
-              >· {workspace.hostId}{nodes.some((node) => node.id === workspace.hostId)
-                ? ' · online'
-                : workspace.id.includes(':')
-                  ? ' · offline'
-                  : ''}</small
-            >
-          </button>
-          <button
-            class="mini-action"
-            type="button"
-            aria-label="New session in {workspace.displayName}"
-            onclick={() => onnew(workspace.id)}><Plus size={15} /></button
+            onclick={() => onaddproject(chats.hostId)}
+            disabled={!app.workspaceOnline(chats)}
+            aria-label="New project"><Plus size={16} /> New</button
           >
         </div>
-        {#if !collapsedGroups.has(workspace.id)}
-          {@const group = groups.get(workspace.id) ?? EMPTY_GROUP}
-          <div class="session-list">
-            {#each group.open as session (session.id)}
-              {@render sessionRow(session)}
-            {/each}
-            {#if showSettled && group.settled.length}
-              <button
-                class="settled-toggle"
-                type="button"
-                aria-expanded={!!query || openSettled.has(workspace.id)}
-                onclick={() => toggleSettled(workspace.id)}
-              >
-                <span class:collapsed={!query && !openSettled.has(workspace.id)} class="chevron">
-                  <ChevronDown size={13} />
-                </span>
-                Settled · {group.settled.length}
-              </button>
-              {#if query || openSettled.has(workspace.id)}
-                {#each group.settled as session (session.id)}
-                  {@render sessionRow(session)}
-                {/each}
-              {/if}
-            {/if}
-          </div>
-        {/if}
+        <div class="workspace-list">
+          {#each projects as project (project.id)}
+            {@render workspaceGroup(project)}
+          {/each}
+        </div>
       </section>
-    {/each}
-  </nav>
+    {/if}
+    <div class="device-switcher" role="group" aria-label="Select device">
+      <strong>Devices</strong>
+      <div class="device-options">
+        <button
+          type="button"
+          class:chosen={!selectedNodeId}
+          aria-pressed={!selectedNodeId}
+          onclick={() => (selectedNodeId = '')}>All</button
+        >
+        {#each nodes as node (node.id)}
+          <button
+            type="button"
+            class:chosen={selectedNodeId === node.id}
+            aria-pressed={selectedNodeId === node.id}
+            onclick={() => (selectedNodeId = node.id)}>{node.id}</button
+          >
+        {/each}
+      </div>
+    </div>
+    <div class="workspace-tools">
+      <strong>Workspaces</strong>
+      <button
+        type="button"
+        onclick={() => onaddworkspace(selectedNodeId || nodes[0]?.id)}
+        disabled={!nodes.length}
+        aria-label="Add workspace"><Plus size={16} /> Add</button
+      >
+    </div>
+    <nav class="workspace-list">
+      {#each shownWorkspaces as workspace (workspace.id)}
+        {@render workspaceGroup(workspace)}
+      {/each}
+    </nav>
+  </div>
 
   <div class="sidebar-footer">
     <button class="settings-entry" type="button" onclick={onsettings}>
@@ -293,6 +289,71 @@
   aria-label="Open navigation"
   onclick={() => (open = true)}><Menu size={21} /></button
 >
+
+{#snippet sessionList(workspaceId: string)}
+  {@const group = groups.get(workspaceId) ?? EMPTY_GROUP}
+  <div class="session-list">
+    {#each group.open as session (session.id)}
+      {@render sessionRow(session)}
+    {/each}
+    {#if showSettled && group.settled.length}
+      <button
+        class="settled-toggle"
+        type="button"
+        aria-expanded={!!query || openSettled.has(workspaceId)}
+        onclick={() => toggleSettled(workspaceId)}
+      >
+        <span class:collapsed={!query && !openSettled.has(workspaceId)} class="chevron">
+          <ChevronDown size={13} />
+        </span>
+        Settled · {group.settled.length}
+      </button>
+      {#if query || openSettled.has(workspaceId)}
+        {#each group.settled as session (session.id)}
+          {@render sessionRow(session)}
+        {/each}
+      {/if}
+    {/if}
+  </div>
+{/snippet}
+
+{#snippet workspaceGroup(workspace: Workspace)}
+  {@const chat = isChatWorkspace(workspace)}
+  <section class="workspace-group">
+    <div class="workspace-heading">
+      <button
+        type="button"
+        onclick={() => toggleWorkspace(workspace.id)}
+        aria-expanded={!collapsedGroups.has(workspace.id)}
+      >
+        <span class:collapsed={collapsedGroups.has(workspace.id)} class="chevron">
+          <ChevronDown size={15} />
+        </span>
+        <strong>{workspace.displayName}</strong>
+        {#if chat}
+          {#if !app.workspaceOnline(workspace)}<small>· offline</small>{/if}
+        {:else}
+          <small
+            >· {workspace.hostId}{nodes.some((node) => node.id === workspace.hostId)
+              ? ' · online'
+              : workspace.id.includes(':')
+                ? ' · offline'
+                : ''}</small
+          >
+        {/if}
+      </button>
+      <button
+        class="mini-action"
+        type="button"
+        aria-label="New {chat ? 'chat' : 'session'} in {workspace.displayName}"
+        onclick={() => onnew(workspace.id)}><Plus size={15} /></button
+      >
+    </div>
+    {#if !collapsedGroups.has(workspace.id)}
+      {@render sessionList(workspace.id)}
+    {/if}
+  </section>
+{/snippet}
 
 {#snippet sessionRow(session: SessionSummary)}
   <div
@@ -536,10 +597,17 @@
     padding: 0 8px;
     background: transparent;
   }
-  .workspace-list {
+  /* Chats, projects and workspaces scroll together, like one chat list. */
+  .sidebar-scroll {
     flex: 1;
+    min-height: 0;
     overflow: auto;
+  }
+  .workspace-list {
     padding: 0 8px 16px;
+  }
+  .chat-section .workspace-list {
+    padding-bottom: 12px;
   }
   .workspace-group + .workspace-group {
     margin-top: 8px;

@@ -3,13 +3,13 @@ import { afterEach, expect, it } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import WebSocket from 'ws';
 import { buildDaemonApp } from '../src/daemon/app.js';
-import type { EventHub } from '../src/events.js';
 import { buildNodeApp } from '../src/node/app.js';
 import { NODE_PROTOCOL_VERSION } from '../src/protocol.js';
 import {
   daemonConfig,
   headers,
   nodeHeaders,
+  promptSession,
   startCluster,
   testConfig,
   waitFor,
@@ -25,53 +25,6 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
-/** Prompt the fake agent through `app` (daemon or node router) and return its reply. */
-async function prompter(app: FastifyInstance, events: EventHub, requestHeaders: object) {
-  const workspaceId = requestHeaders === headers ? 'test:test' : 'test';
-  const created = await app.inject({
-    method: 'POST',
-    url: '/api/sessions',
-    headers: requestHeaders as Record<string, string>,
-    payload: { workspaceId },
-  });
-  expect(created.statusCode).toBe(201);
-  const sessionId = created.json().session.id as string;
-  const acquired = await app.inject({
-    method: 'POST',
-    url: `/api/sessions/${sessionId}/control/acquire`,
-    headers: requestHeaders as Record<string, string>,
-    payload: { clientId: 'browser' },
-  });
-  const generation = acquired.json().lease.generation as number;
-  const settled = () =>
-    events
-      .replay(sessionId, null)
-      .events.filter(
-        (event) => event.type === 'pi_event' && (event.data as any)?.type === 'agent_settled',
-      ).length;
-  let count = 0;
-  return async (message: string): Promise<string> => {
-    const command = await app.inject({
-      method: 'POST',
-      url: `/api/sessions/${sessionId}/commands`,
-      headers: requestHeaders as Record<string, string>,
-      payload: {
-        commandId: `command-${++count}`,
-        clientId: 'browser',
-        generation,
-        payload: { type: 'prompt', message },
-      },
-    });
-    expect(command.statusCode).toBe(202);
-    await waitFor(settled, count);
-    const snapshot = await app.inject({
-      method: 'GET',
-      url: `/api/sessions/${sessionId}/snapshot`,
-      headers: requestHeaders as Record<string, string>,
-    });
-    return snapshot.json().history.at(-1).content[0].text as string;
-  };
-}
 const errorOf = (text: string) => {
   expect(text.startsWith('gateway:error ')).toBe(true);
   return JSON.parse(text.slice('gateway:error '.length));
@@ -82,7 +35,7 @@ it('carries an agent request to the gateway and back through its node', async ()
   clusters.push(cluster);
   const { app, services } = cluster;
   await waitFor(() => services.db.listWorkspaces().some((w) => w.id === 'test:test'), true);
-  const ask = await prompter(app, services.events, headers);
+  const { ask } = await promptSession(app, services.events, headers, 'test:test');
   expect(await ask('gateway assistant.context {}')).toBe('gateway:ok {"enabled":false}');
   expect(errorOf(await ask('gateway nope.op {}'))).toMatchObject({
     status: 404,
@@ -106,7 +59,7 @@ it('answers offline without a gateway link and keeps the node secrets from its a
   try {
     const { app, services } = await buildNodeApp(testConfig());
     apps.push(app);
-    const ask = await prompter(app, services.events, nodeHeaders);
+    const { ask } = await promptSession(app, services.events, nodeHeaders, 'test');
     expect(errorOf(await ask('gateway assistant.context {}'))).toMatchObject({
       status: 503,
       code: 'gateway_offline',

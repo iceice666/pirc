@@ -2,8 +2,10 @@ import { mkdtempSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
+import { expect } from 'bun:test';
 import type { DaemonConfig, NodeConfig } from '../src/config.js';
 import { buildDaemonApp, type DaemonServices } from '../src/daemon/app.js';
+import type { EventHub } from '../src/events.js';
 import { startNode } from '../src/node/runtime.js';
 
 const USER = 'test@example.com';
@@ -32,6 +34,7 @@ export function testConfig(overrides: Partial<NodeConfig> = {}): NodeConfig {
     agentCommand: process.execPath,
     agentArgs: [path.resolve('test/fixtures/fake-pi.mjs')],
     workspaces: [{ id: 'test', path: workspace, displayName: 'Test', defaults: {} }],
+    chat: false,
     eventBufferSize: 20,
     rpcMaxLineBytes: 1024 * 1024,
     uploadMaxBytes: 1024 * 1024,
@@ -128,4 +131,61 @@ export async function waitFor<T>(read: () => T | Promise<T>, expected: T, timeou
   }
   if (!Object.is(last, expected))
     throw new Error(`waitFor timed out: expected ${String(expected)}, got ${String(last)}`);
+}
+
+/**
+ * Open a session in `workspaceId` through `app` (the daemon or a node router)
+ * and return `ask`, which prompts the fake agent and resolves with its reply.
+ */
+export async function promptSession(
+  app: FastifyInstance,
+  events: EventHub,
+  requestHeaders: Record<string, string>,
+  workspaceId: string,
+): Promise<{ sessionId: string; ask: (message: string) => Promise<string> }> {
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/sessions',
+    headers: requestHeaders,
+    payload: { workspaceId },
+  });
+  expect(created.statusCode).toBe(201);
+  const sessionId = created.json().session.id as string;
+  const acquired = await app.inject({
+    method: 'POST',
+    url: `/api/sessions/${sessionId}/control/acquire`,
+    headers: requestHeaders,
+    payload: { clientId: 'browser' },
+  });
+  const generation = acquired.json().lease.generation as number;
+  const settled = () =>
+    events
+      .replay(sessionId, null)
+      .events.filter(
+        (event) => event.type === 'pi_event' && (event.data as any)?.type === 'agent_settled',
+      ).length;
+  let count = 0;
+  const ask = async (message: string): Promise<string> => {
+    const command = await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/commands`,
+      headers: requestHeaders,
+      payload: {
+        // Command ids are unique across sessions.
+        commandId: `${sessionId}-command-${++count}`,
+        clientId: 'browser',
+        generation,
+        payload: { type: 'prompt', message },
+      },
+    });
+    expect(command.statusCode).toBe(202);
+    await waitFor(settled, count);
+    const snapshot = await app.inject({
+      method: 'GET',
+      url: `/api/sessions/${sessionId}/snapshot`,
+      headers: requestHeaders,
+    });
+    return snapshot.json().history.at(-1).content[0].text as string;
+  };
+  return { sessionId, ask };
 }

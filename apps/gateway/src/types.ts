@@ -11,12 +11,20 @@ export type RunStatus =
 export type CommandStatus = 'received' | 'dispatched' | 'accepted' | 'rejected' | 'outcome_unknown';
 export type InteractionStatus = 'pending' | 'answered' | 'cancelled' | 'expired' | 'stale';
 
+/**
+ * `directory`: a real directory on the node (a repository or folder).
+ * `chat`: the assistant's chats, in a directory the node manages and hides
+ * (plans/assistant.md, chat workspaces).
+ */
+export type WorkspaceKind = 'directory' | 'chat';
+
 export interface Workspace {
   id: string;
   hostId: string;
   displayName: string;
   canonicalPath: string;
   defaults: Record<string, unknown>;
+  kind: WorkspaceKind;
 }
 
 export interface SessionSummary {

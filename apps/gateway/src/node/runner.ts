@@ -9,6 +9,7 @@ import { ApiError } from '../errors.js';
 import type { EventHub } from '../events.js';
 import { applySessionName } from '../session-name.js';
 import type { AgentGateway } from './agent-gateway.js';
+import { sessionRoot } from './chat.js';
 import { withoutSecrets } from './secrets.js';
 import type { WriteBroker } from './write-broker.js';
 import { emptyReducedState, reducePiEvent, type ReducedSessionState } from './reducer.js';
@@ -58,7 +59,7 @@ class PiRunner {
     ];
     if (session.piSessionId) args.push('--continue');
     this.child = spawn(config.agentCommand, args, {
-      cwd: workspace.canonicalPath,
+      cwd: sessionRoot(workspace, session.id),
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         // The node token must not reach the agent: its tools and shells run whatever the model asks.
@@ -68,6 +69,8 @@ class PiRunner {
         PIRC_WRITE_BROKER: '1',
         // Allowlisted operations on the gateway go through this node (gateway_request).
         PIRC_GATEWAY: '1',
+        // `chat` makes the agent a personal assistant (see node/chat.ts).
+        PIRC_WORKSPACE_KIND: workspace.kind,
         PIRC_WORKSPACE_MEMORY_DIR:
           process.env.PIRC_WORKSPACE_MEMORY_DIR ?? path.join(config.stateDir, 'workspace-memory'),
       },
@@ -451,7 +454,7 @@ export class RunnerManager {
     if (!files.length) return [];
     const session = this.db.getSession(sessionId);
     const workspace = this.db.getWorkspace(session.workspaceId);
-    const destDir = path.join(workspace.canonicalPath, '.pirc', 'uploads');
+    const destDir = path.join(sessionRoot(workspace, sessionId), '.pirc', 'uploads');
     mkdirSync(destDir, { recursive: true, mode: 0o700 });
     return files.map((upload) => {
       if (upload.ownerUser !== user)

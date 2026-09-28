@@ -415,8 +415,12 @@ export function memoryFeature(): Feature {
   let ledger: WorkspaceLedger | undefined;
   let promoting: Promise<void> | null = null;
   let snapshotText: string | undefined;
+  // Chats have no repository to hand over; the gateway's MEMORY serves them (plans/assistant.md).
   const workspaceOn = (agent: Agent, config = memoryConfig(agent)) =>
-    config.enabled && config.workspace.enabled && teamChildMode() === undefined;
+    config.enabled &&
+    config.workspace.enabled &&
+    teamChildMode() === undefined &&
+    agent.config.workspaceKind !== 'chat';
   const workspaceLedger = (agent: Agent) =>
     (ledger ??= WorkspaceLedger.forCwd(agent.config.workspace));
 

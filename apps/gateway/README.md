@@ -70,6 +70,8 @@ On Traefik v2 the matcher is `HeadersRegexp`. The NixOS module does the equivale
 ### Node
 
 Set `PIRC_NODE_ID`, its matching `PIRC_NODE_TOKEN`, `PIRC_DAEMON_URL`, `PIRC_ALLOWED_USERS`, the machine's own `PIRC_STATE_DIR`, optionally `PIRC_WORKSPACES`, and the node-local agent config (`PIRC_CONFIG_DIR`, default `~/.config/.pirc`; limits, features, hooks, and the system prompt, but no providers).
+
+`PIRC_CHAT=1` (NixOS: `services.pirc.chat`) makes a node the chat node, which hosts the assistant's chats: a top-level workspace `chats` for uncategorized chats, plus projects created with the web's **New project** button. Chat workspaces have no path to pick; the node keeps them under `$PIRC_STATE_DIR/chat/`, with one directory per chat as the agent's working directory. Their agents get a personal-assistant prompt and no workspace memory. Run one chat node, on an always-on machine.
 A node gets the model catalog from the gateway when it registers and sends every model request back over the link, so its agents cannot call a model while it is disconnected (they report `Gateway inference is unavailable`). Provider keys never reach nodes; a leaked node token still allows using the gateway's models. The link must use `wss://` unless the gateway is on loopback; only local development should set `PIRC_ALLOW_INSECURE_NODE_TRANSPORT=true`.
 
 The node runs its own binary with the `agent` subcommand for each session. To use a different agent executable, set `PIRC_AGENT_COMMAND` (and optionally `PIRC_AGENT_ARGS` as a JSON array). `PIRC_TERMINALS=false` disables side-panel shells; the shell comes from `PIRC_TERMINAL_SHELL` or `$SHELL`.

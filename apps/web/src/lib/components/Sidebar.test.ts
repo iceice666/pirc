@@ -23,6 +23,7 @@ const handlers = {
   onselect: vi.fn(),
   onnew: vi.fn(),
   onaddworkspace: vi.fn(),
+  onaddproject: vi.fn(),
   onclose: vi.fn(),
   onsettings: vi.fn(),
 };
@@ -136,5 +137,48 @@ describe('Sidebar', () => {
     props.open = false;
     flushSync();
     expect(document.activeElement).toBe(menu);
+  });
+
+  it('starts new sessions from a dialog when no node hosts chats', () => {
+    render();
+    const button = target.querySelector<HTMLButtonElement>('.new-session')!;
+    expect(button.textContent).toContain('New session');
+    button.click();
+    expect(handlers.onnew).toHaveBeenCalledWith();
+    expect(target.querySelector('[aria-label="Chats"]')).toBeNull();
+  });
+
+  it('puts chats and projects first when a chat node is connected', () => {
+    app.nodes = [{ id: 'node' } as never, { id: 'home' } as never];
+    app.workspaces = [
+      { id: 'node:ws', hostId: 'node', displayName: 'Project' } as never,
+      { id: 'home:chats', hostId: 'home', displayName: 'Chats', kind: 'chat' } as never,
+      { id: 'home:trip', hostId: 'home', displayName: 'Trip', kind: 'chat' } as never,
+    ];
+    app.sessions = [
+      session('a', 'Alpha'),
+      session('t', 'Top chat', { workspaceId: 'home:chats' }),
+      session('p', 'Planning', { workspaceId: 'home:trip' }),
+    ];
+    render();
+    const text = (selector: string) => target.querySelector(selector)?.textContent ?? '';
+    // New chat opens a top-level chat right away, like ChatGPT's.
+    const button = target.querySelector<HTMLButtonElement>('.new-session')!;
+    expect(button.textContent).toContain('New chat');
+    button.click();
+    expect(handlers.onnew).toHaveBeenCalledWith('home:chats');
+    expect(text('[aria-label="Chats"]')).toContain('Top chat');
+    expect(text('[aria-label="Projects"]')).toContain('Trip');
+    expect(text('[aria-label="Projects"]')).toContain('Planning');
+    // Chat workspaces never appear among the directory workspaces.
+    const workspaces = text('nav.workspace-list');
+    expect(workspaces).toContain('Project');
+    expect(workspaces).toContain('Alpha');
+    expect(workspaces).not.toContain('Trip');
+    expect(workspaces).not.toContain('Top chat');
+    target.querySelector<HTMLButtonElement>('[aria-label="New project"]')!.click();
+    expect(handlers.onaddproject).toHaveBeenCalledWith('home');
+    target.querySelector<HTMLButtonElement>('[aria-label="New chat in Trip"]')!.click();
+    expect(handlers.onnew).toHaveBeenLastCalledWith('home:trip');
   });
 });

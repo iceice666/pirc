@@ -44,6 +44,7 @@ const registration = z.object({
       z.object({
         id: z.string().regex(NODE_ID_PATTERN),
         displayName: z.string().min(1).max(200),
+        kind: z.enum(['directory', 'chat']).optional(),
       }),
     )
     .max(100),

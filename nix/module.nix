@@ -85,6 +85,7 @@ let
     PIRC_WORKSPACES = json workspaceList;
     PIRC_CONFIG_DIR = "${agentConfigDir}";
     PIRC_TERMINALS = lib.boolToString cfg.terminals;
+    PIRC_CHAT = lib.boolToString cfg.chat;
   }
   // cfg.environment;
 
@@ -344,6 +345,16 @@ in
         Allow interactive shells in the web side panel. Shells run in the
         session's workspace as the pirc account, like the agent's own tools,
         and require holding session control.
+      '';
+    };
+    chat = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Make the local node the chat node (PIRC_CHAT): it hosts the
+        assistant's chats, a top-level "Chats" plus projects created from
+        the web, in directories it manages under its state directory. Keep a
+        single chat node on an always-on machine.
       '';
     };
     workspaces = mkOption {

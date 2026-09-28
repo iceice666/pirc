@@ -11,6 +11,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { rovingFocus } from '../../a11y';
   import { app } from '../../app.svelte';
+  import { isChatWorkspace } from '../../chats';
   import { onFilePreviewRequest, type FileTarget } from '../../file-links';
   import type { PanelTab } from '../../panel-api';
   import FilesTab from './FilesTab.svelte';
@@ -58,6 +59,18 @@
   ];
 
   const sessionId = $derived(app.sessionState?.session.id ?? '');
+  /** Chats keep Files (their own directory, where uploads and outputs land) but have no Git or terminal. */
+  const chat = $derived(
+    isChatWorkspace(
+      app.workspaces.find((workspace) => workspace.id === app.sessionState?.session.workspaceId),
+    ),
+  );
+  const shownTabs = $derived(
+    chat ? tabs.filter((item) => item.id !== 'git' && item.id !== 'terminal') : tabs,
+  );
+  $effect.pre(() => {
+    if (!shownTabs.some((item) => item.id === tab)) tab = 'files';
+  });
   $effect.pre(() => {
     if (open) mounted.add(tab);
   });
@@ -144,7 +157,7 @@
     aria-label="Side panel"
     use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
   >
-    {#each tabs as item (item.id)}
+    {#each shownTabs as item (item.id)}
       <button
         type="button"
         role="tab"
@@ -169,7 +182,7 @@
     {#if app.usingDemo}
       <p class="panel-empty">Connect to a gateway to use this panel.</p>
     {:else if sessionId}
-      {#each tabs as item (item.id)}
+      {#each shownTabs as item (item.id)}
         {#if mounted.has(item.id)}
           <div
             class="tab-slot"

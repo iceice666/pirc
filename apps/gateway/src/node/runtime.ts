@@ -82,7 +82,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
     services.db
       .listWorkspaces()
       .filter((workspace) => workspace.hostId === config.nodeId)
-      .map(({ id, displayName }) => ({ id, displayName }));
+      .map(({ id, displayName, kind }) => ({ id, displayName, kind }));
   let stopped = false;
   let socket: WebSocket | undefined;
   let registered = false;
