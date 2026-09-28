@@ -13,7 +13,7 @@
     Terminal,
     Wrench,
   } from '@lucide/svelte';
-  import { highlightCode, languageForPath, rendererTick } from '../markdown';
+  import { clipText, highlightCode, languageForPath, rendererTick } from '../markdown';
   import { elapsed } from '../time';
   import type { ToolCall } from '../types';
 
@@ -113,9 +113,10 @@
       ? String(tool.input)
       : residualInput(tool.name, args),
   );
-  let diffLines = $derived((tool.diff ?? '').split('\n'));
+  // Only an expanded card shows the diff; a collapsed one skips splitting it.
+  let diffLines = $derived(open && tool.diff ? tool.diff.split('\n') : []);
   let pendingEdits = $derived(
-    !tool.diff && tool.name === 'edit' && Array.isArray(args.edits) ? args.edits : [],
+    open && !tool.diff && tool.name === 'edit' && Array.isArray(args.edits) ? args.edits : [],
   );
   const commandHtml = $derived.by(() => {
     void $rendererTick;
@@ -126,7 +127,7 @@
   const contentHtml = $derived.by(() => {
     void $rendererTick;
     return open && tool.name === 'write' && typeof args.content === 'string'
-      ? highlightCode(args.content, fileLanguage)
+      ? highlightCode(clipText(args.content), fileLanguage)
       : '';
   });
   const inputHtml = $derived.by(() => {
@@ -139,9 +140,10 @@
   const outputHtml = $derived.by(() => {
     void $rendererTick;
     if (!open || !tool.output) return '';
+    const output = clipText(tool.output);
     return tool.name === 'read' && tool.status !== 'failed'
-      ? highlightCode(tool.output, fileLanguage)
-      : highlightCode(tool.output);
+      ? highlightCode(output, fileLanguage)
+      : highlightCode(output);
   });
 </script>
 
@@ -262,6 +264,11 @@
     text-align: left;
     font-size: 14px;
   }
+  @media (hover: none) {
+    .tool-summary {
+      min-height: 40px;
+    }
+  }
   .tool-summary:hover {
     background: var(--bg-hover);
   }
@@ -301,7 +308,7 @@
   }
   .tool-duration {
     flex: none;
-    color: var(--faint);
+    color: var(--muted);
     font-size: 12px;
     white-space: nowrap;
   }

@@ -6,6 +6,7 @@
   import { ChevronDown } from '@lucide/svelte';
   import type { Snippet } from 'svelte';
   import { slide } from 'svelte/transition';
+  import { motion } from '../motion';
   import './dock.css';
 
   interface Props {
@@ -55,7 +56,7 @@
     {@render actions?.()}
   </div>
   {#if expanded}
-    <div id={bodyId} transition:slide={{ duration: 160 }}>
+    <div id={bodyId} transition:slide={{ duration: motion(160) }}>
       {@render children()}
     </div>
   {/if}
@@ -87,6 +88,14 @@
   .dock-toggle {
     flex: 1;
     min-width: 0;
+  }
+  @media (hover: none) {
+    .dock-head {
+      height: 44px;
+    }
+    .dock-toggle {
+      height: 40px;
+    }
   }
   .dock-toggle:hover {
     color: var(--ink);

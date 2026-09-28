@@ -4,7 +4,13 @@
   import { app } from '../../app.svelte';
   import type { FileTarget } from '../../file-links';
   import { Loader } from '../../loader.svelte';
-  import { highlightCode, highlighterReady, languageForPath, rendererTick } from '../../markdown';
+  import {
+    highlightCode,
+    highlighterReady,
+    languageForPath,
+    MAX_HIGHLIGHT,
+    rendererTick,
+  } from '../../markdown';
   import { panelApi, type DirEntry, type FileContent } from '../../panel-api';
   import { watch } from '../../watch.svelte';
   import Markdown from '../Markdown.svelte';
@@ -33,7 +39,6 @@
   const fileLoader = new Loader();
   const error = $derived(fileLoader.error || dirLoader.error);
 
-  const MAX_HIGHLIGHT = 200_000;
   /** `.code-view pre`: 12px font × 1.55 line height, 8px top padding (app.css). */
   const LINE_HEIGHT = 12 * 1.55;
   const CODE_PAD = 8;

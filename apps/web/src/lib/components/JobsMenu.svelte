@@ -9,6 +9,7 @@
   import { Bot, ChevronDown, ChevronRight, LoaderCircle, Square, Users } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { fade } from 'svelte/transition';
+  import { motion } from '../motion';
   import { tick } from 'svelte';
   import { rovingFocus } from '../a11y';
   import { app } from '../app.svelte';
@@ -223,7 +224,7 @@
 </script>
 
 {#if visible}
-  <div class="jobs-menu" bind:this={root} transition:fade={{ duration: 120 }}>
+  <div class="jobs-menu" bind:this={root} transition:fade={{ duration: motion(120) }}>
     <button
       class="jobs-trigger"
       class:open
@@ -318,7 +319,7 @@
       </button>
       {#if task.status === 'running' && hasControl}
         <button
-          class="job-stop"
+          class="job-stop touch-target"
           class:armed={armed === task.id}
           type="button"
           aria-label={armed === task.id ? 'Confirm stop' : `Stop ${task.id}`}

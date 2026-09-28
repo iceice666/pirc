@@ -12,6 +12,7 @@
     X,
   } from '@lucide/svelte';
   import { slide } from 'svelte/transition';
+  import { motion } from '../motion';
   import { app } from '../app.svelte';
   import type { ThinkingLevel } from '../types';
   import { modelKey } from '../types';
@@ -92,6 +93,24 @@
     if (canSubmit) void app.sendCommand(mode);
   }
 
+  /** Images pasted or dropped into the text box are attached like picked files. */
+  function imageFiles(data: DataTransfer | null): File[] {
+    return Array.from(data?.files ?? []).filter((file) => file.type.startsWith('image/'));
+  }
+  function paste(event: ClipboardEvent) {
+    const files = imageFiles(event.clipboardData);
+    if (!files.length) return;
+    // Keep pasted text; only an image-only paste is taken over.
+    if (!event.clipboardData?.getData('text/plain')) event.preventDefault();
+    void app.uploadImages(files);
+  }
+  function drop(event: DragEvent) {
+    const files = imageFiles(event.dataTransfer);
+    if (!files.length) return;
+    event.preventDefault();
+    void app.uploadImages(files);
+  }
+
   /**
    * `field-sizing: content` grows the textarea with its text; Safari lacks it,
    * so there the height follows `scrollHeight` (bounded by the CSS max-height).
@@ -109,7 +128,7 @@
 <div class="composer-wrap">
   {#if app.goal || app.todo || queue.length > 0}
     <!-- Cards tucked on top of the composer: the goal, the task list, then queued messages. -->
-    <div class="composer-dock" transition:slide={{ duration: 180 }}>
+    <div class="composer-dock" transition:slide={{ duration: motion(180) }}>
       {#if app.goal}<GoalDock
           goal={app.goal}
           disabled={!app.canCommand || busy}
@@ -140,7 +159,7 @@
                 </span>
                 <span class="queue-dock-text">{item.content}</span>
                 <button
-                  class="queue-send-now"
+                  class="queue-send-now touch-target"
                   type="button"
                   onclick={() => app.sendQueuedNow(item)}
                   disabled={!hasControl || busy}
@@ -172,6 +191,7 @@
               />{/if}
             <span>{attachment.uploading ? 'Uploading…' : attachment.name}</span>
             {#if attachment.uploading}<LoaderCircle class="spin" size={15} />{:else}<button
+                class="touch-target"
                 type="button"
                 aria-label="Remove {attachment.name}"
                 onclick={() => app.removeUpload(attachment.id)}><X size={14} /></button
@@ -189,6 +209,11 @@
       {value}
       oninput={(event) => app.setDraft(event.currentTarget.value)}
       onkeydown={keydown}
+      onpaste={paste}
+      ondrop={drop}
+      ondragover={(event) => {
+        if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
+      }}
     ></textarea>
     <div class="composer-tools">
       <input

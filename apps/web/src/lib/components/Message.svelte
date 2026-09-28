@@ -138,7 +138,7 @@
       {/if}
       {#if message.images?.length}
         <div class="message-images">
-          {#each message.images as image}<img
+          {#each message.images as image, index (`${index}:${image.url}`)}<img
               src={image.url}
               alt="Attachment"
               loading="lazy"
@@ -210,7 +210,7 @@
       {/if}
       {#if message.images?.length}
         <div class="message-images">
-          {#each message.images as image}<img
+          {#each message.images as image, index (`${index}:${image.url}`)}<img
               src={image.url}
               alt="Attachment"
               loading="lazy"
@@ -238,7 +238,7 @@
           {#if message.content}
             <button
               type="button"
-              class="icon-action"
+              class="icon-action touch-target"
               aria-label="Copy message"
               title="Copy"
               onclick={() => navigator.clipboard.writeText(message.content)}
@@ -332,7 +332,7 @@
     gap: 6px;
     min-height: 24px;
     margin-top: 2px;
-    color: var(--faint);
+    color: var(--muted);
     font-size: 12px;
     opacity: 0;
     transition: opacity 0.15s var(--ease);
@@ -340,6 +340,12 @@
   .message:hover .message-actions,
   .message-actions:focus-within {
     opacity: 1;
+  }
+  /* No hover on touch (phones and tablets): keep copy reachable, but quieter than the text. */
+  @media (hover: none) {
+    .message-actions {
+      opacity: 0.7;
+    }
   }
   .message-model {
     overflow: hidden;
@@ -485,7 +491,7 @@
   .system-line > time {
     margin-left: auto;
     flex: none;
-    color: var(--faint);
+    color: var(--muted);
     font-size: 12px;
   }
   .system-line > :global(svg) {
@@ -519,7 +525,7 @@
   }
   .system-title span {
     flex: none;
-    color: var(--faint);
+    color: var(--muted);
     font-size: 12px;
   }
   .system-body {
@@ -619,10 +625,8 @@
     .message.user .message-copy {
       padding: 9px 14px;
     }
-    /* No hover on touch: keep copy reachable, but quieter than the text. */
     .message-actions {
       min-height: 20px;
-      opacity: 0.7;
     }
     /* Timeline rows drop their clock time: the width goes to the tool name and detail. */
     .system-line > time {

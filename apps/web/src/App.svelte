@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    ArrowDown,
     CircleAlert,
     CloudOff,
     Download,
@@ -31,6 +32,7 @@
   import { activateUpdate, registerPwa } from './lib/pwa';
   import { loadLayout, saveLayout } from './lib/storage';
   import { MESSAGE_PAGE } from './lib/app.svelte';
+  import { motion } from './lib/motion';
   import { trackViewportHeight } from './lib/viewport';
   import { watch } from './lib/watch.svelte';
 
@@ -156,7 +158,9 @@
    * events only (scrolling up detaches, reaching the bottom re-attaches), so
    * streamed deltas never measure the layout.
    */
-  let following = true;
+  let following = $state(true);
+  /** Content arrived while the reader was scrolled up: offer a way back down. */
+  let unseenContent = $state(false);
   let lastScrollTop = 0;
   function onTimelineScroll() {
     if (!timeline) return;
@@ -164,6 +168,7 @@
     const nearBottom = timeline.scrollHeight - top - timeline.clientHeight < 80;
     if (top < lastScrollTop - 1) following = nearBottom;
     else if (nearBottom) following = true;
+    if (following) unseenContent = false;
     lastScrollTop = top;
   }
 
@@ -181,6 +186,16 @@
     if (node.parentElement) observer.observe(node.parentElement);
     return { destroy: () => observer.disconnect() };
   }
+
+  // A new or growing last entry, or a new question, while scrolled up.
+  const markUnseen = () => {
+    if (!following) unseenContent = true;
+  };
+  watch(() => sessionState?.messages[sessionState.messages.length - 1], markUnseen);
+  watch(
+    () => app.pendingInteractions.length,
+    (count, previous) => count > (previous ?? 0) && markUnseen(),
+  );
 
   /**
    * Screen readers hear finished replies and new questions once, from a
@@ -226,6 +241,7 @@
   app.scroller = {
     toLatest: async (smooth = true) => {
       following = true;
+      unseenContent = false;
       await tick();
       timeline?.scrollTo({ top: timeline.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
     },
@@ -360,7 +376,7 @@
             type="button"
             aria-label="Show sidebar"
             title="Show sidebar"
-            transition:fade={{ duration: 160 }}
+            transition:fade={{ duration: motion(160) }}
             onclick={() => (sidebarCollapsed = false)}><PanelLeftOpen size={19} /></button
           >
         {/if}
@@ -444,6 +460,16 @@
                   onanswer={(answer) => app.answerInteraction(interaction.id, answer)}
                 />
               {/each}
+              {#if unseenContent && !following}
+                <div class="jump-latest">
+                  <button
+                    type="button"
+                    transition:fade={{ duration: motion(120) }}
+                    onclick={() => app.scroller?.toLatest()}
+                    ><ArrowDown size={15} /> New messages</button
+                  >
+                </div>
+              {/if}
               {#if sessionState.messages.length === 0}
                 <div class="empty-conversation">
                   <span><Plus size={24} /></span>
@@ -466,7 +492,7 @@
             type="button"
             tabindex="-1"
             aria-label="Close side panel"
-            transition:fade={{ duration: 160 }}
+            transition:fade={{ duration: motion(160) }}
             onclick={closePanel}
           ></button>
         {/if}
@@ -722,6 +748,34 @@
   .earlier-messages:hover {
     background: var(--bg-hover);
     color: var(--ink);
+  }
+  /* Sticks to the bottom of the timeline without taking room in the transcript. */
+  .jump-latest {
+    position: sticky;
+    z-index: 3;
+    bottom: 12px;
+    height: 0;
+    display: flex;
+    justify-content: center;
+    order: 1;
+  }
+  .jump-latest button {
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--ink);
+    background: var(--bg-layer);
+    box-shadow: var(--shadow-pop);
+    font-size: 13px;
+    font-weight: 500;
+    transform: translateY(-100%);
+  }
+  .jump-latest button:hover {
+    background: var(--bg-subtle);
   }
   .empty-conversation {
     flex: 1;

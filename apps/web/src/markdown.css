@@ -191,6 +191,12 @@
   background: transparent;
   font-size: 12px;
 }
+@media (hover: none) {
+  .markdown .code-copy {
+    min-height: 36px;
+    padding: 4px 14px;
+  }
+}
 .markdown .code-copy:hover {
   color: var(--ink);
   background: var(--bg-hover);

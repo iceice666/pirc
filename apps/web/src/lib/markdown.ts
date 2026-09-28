@@ -285,9 +285,22 @@ export function renderMarkdownChecked(
   };
 }
 
+/**
+ * Longer text is shown without highlighting: highlight.js runs synchronously
+ * on the main thread and would freeze the page on a large file.
+ */
+export const MAX_HIGHLIGHT = 200_000;
+
 /** Highlight a standalone snippet (tool input/output). Returns sanitized HTML. */
 export function highlightCode(code: string, language?: string): string {
-  return highlight(code, language ?? '');
+  return code.length > MAX_HIGHLIGHT ? escapeHtml(code) : highlight(code, language ?? '');
+}
+
+/** At most `MAX_HIGHLIGHT` characters of `text`, with a note of how much was cut. */
+export function clipText(text: string): string {
+  if (text.length <= MAX_HIGHLIGHT) return text;
+  const rest = text.length - MAX_HIGHLIGHT;
+  return `${text.slice(0, MAX_HIGHLIGHT)}\n… ${rest.toLocaleString('en')} more characters not shown`;
 }
 
 const EXTENSION_LANGUAGES: Record<string, string> = {

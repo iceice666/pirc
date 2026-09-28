@@ -217,6 +217,14 @@
   .terminal-chip .chip-close:hover {
     color: var(--danger);
   }
+  @media (hover: none) {
+    .terminal-chip > button {
+      height: 40px;
+    }
+    .terminal-chip .chip-close {
+      padding: 0 12px 0 8px;
+    }
+  }
   .terminal-empty {
     display: grid;
     justify-items: center;

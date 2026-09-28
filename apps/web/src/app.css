@@ -25,7 +25,9 @@
   /* Text */
   --ink: rgb(15 17 21);
   --text-2: rgb(97 102 107);
-  --muted: rgb(129 133 140);
+  /* ≥4.5:1 on the light surfaces: small secondary text uses it. */
+  --muted: rgb(110 114 120);
+  /* Placeholders, icons and decoration only; never text below 13px. */
   --faint: rgb(173 178 184);
   /* Lines */
   --line: rgb(0 0 0 / 6%);
@@ -307,6 +309,25 @@ select:disabled {
   70%,
   100% {
     box-shadow: 0 0 0 5px transparent;
+  }
+}
+
+/*
+ * Small buttons in dense rows keep their look on touch screens but get a
+ * finger-sized (44px) hit area that extends past their visible edge.
+ */
+@media (hover: none) {
+  .touch-target {
+    position: relative;
+  }
+  .touch-target::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
   }
 }
 

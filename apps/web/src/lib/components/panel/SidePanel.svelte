@@ -281,6 +281,12 @@
     font-size: 12.5px;
     font-weight: 500;
   }
+  @media (hover: none) {
+    .panel-tabs > button[role='tab'] {
+      height: 40px;
+      padding: 0 12px;
+    }
+  }
   .panel-tabs > button[role='tab']:hover {
     color: var(--ink);
     background: var(--bg-hover);

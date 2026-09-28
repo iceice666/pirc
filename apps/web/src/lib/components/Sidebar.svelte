@@ -534,7 +534,7 @@
     overflow: hidden;
     flex: none;
     max-width: 45%;
-    color: var(--faint);
+    color: var(--muted);
     font-size: 11px;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -696,7 +696,7 @@
     padding: 0 10px 0 24px;
     border: 0;
     border-radius: var(--radius-sm);
-    color: var(--faint);
+    color: var(--muted);
     background: transparent;
     font-size: 12px;
     text-align: left;
@@ -718,7 +718,7 @@
   }
   .session-card small {
     flex: none;
-    color: var(--faint);
+    color: var(--muted);
     font-size: 11px;
   }
   .status-dot {
