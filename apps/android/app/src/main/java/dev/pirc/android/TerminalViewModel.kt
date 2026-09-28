@@ -209,6 +209,14 @@ class TerminalViewModel(
                 }
             }
 
+            // The gateway closes first (4401, 4404, ...): answer, and act on its code now
+            // rather than when the half-closed connection finally drops.
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                Log.d(TERMINAL_LOG, "closing $terminalId: $code $reason")
+                webSocket.close(1000, null)
+                ended(webSocket, code, reason)
+            }
+
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TERMINAL_LOG, "closed $terminalId: $code $reason")
                 ended(webSocket, code, reason)
