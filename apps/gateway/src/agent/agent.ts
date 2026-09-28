@@ -402,9 +402,9 @@ export class Agent {
     return cleared;
   }
 
-  /** Run `/name args` if a feature registered it. Returns true when handled. */
+  /** Run `/name args` if a feature registered it (names may be namespaced, e.g. `om:status`). Returns true when handled. */
   private tryCommand(text: string): boolean {
-    const match = /^\/([a-z][\w-]*)(?:\s+([\s\S]*))?$/i.exec(text.trim());
+    const match = /^\/([a-z][\w:-]*)(?:\s+([\s\S]*))?$/i.exec(text.trim());
     if (!match) return false;
     for (const feature of this.features) {
       const command = feature.commands?.[match[1]!];
