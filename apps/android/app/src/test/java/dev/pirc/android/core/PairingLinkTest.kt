@@ -20,8 +20,14 @@ class PairingLinkTest {
 
     @Test
     fun allowsPlainHttpOnlyForLocalDevelopment() {
-        assertEquals("http://10.0.2.2:5173", PairingLink.parse(link("http://10.0.2.2:5173")).baseUrl)
-        assertThrows(InvalidPairingLink::class.java) { PairingLink.parse(link("http://pirc.example")) }
+        assertEquals("http://10.0.2.2:5173", PairingLink.parse(link("http://10.0.2.2:5173"), allowDevHosts = true).baseUrl)
+        assertThrows(InvalidPairingLink::class.java) { PairingLink.parse(link("http://pirc.example"), allowDevHosts = true) }
+    }
+
+    @Test
+    fun releaseBuildsRefusePlainHttpEverywhere() {
+        for (host in listOf("http://10.0.2.2:5173", "http://localhost:8080", "http://127.0.0.1"))
+            assertThrows(host, InvalidPairingLink::class.java) { PairingLink.parse(link(host), allowDevHosts = false) }
     }
 
     @Test

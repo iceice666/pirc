@@ -31,6 +31,8 @@ android {
 
     buildFeatures {
         compose = true
+        // BuildConfig.DEBUG gates development-only behaviour (plain-HTTP pairing, diagnostics).
+        buildConfig = true
     }
 }
 

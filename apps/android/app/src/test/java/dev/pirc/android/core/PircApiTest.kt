@@ -43,7 +43,37 @@ class PircApiTest {
         } catch (error: ApiException) {
             assertTrue(error.unauthorized)
             assertEquals("unauthenticated", error.code)
+            assertEquals("Device token is invalid, expired or revoked. Pair this phone again.", error.message)
         }
+    }
+
+    @Test
+    fun reportsAnUnreadableReplyAsAnApiError() = runTest {
+        // A proxy answering with its own page must not end the app.
+        server.enqueue(MockResponse.Builder().body("<html>login</html>").build())
+        server.enqueue(MockResponse.Builder().body("""{"ok":true}""").build())
+        server.enqueue(MockResponse.Builder().body("""{"session":{"unexpected":1}}""").build())
+        for (call in listOf<suspend () -> Unit>(
+            { api.sessions() },
+            { api.createSession("w") },
+            { api.updateSession("s", name = "x") },
+        )) {
+            try {
+                call()
+                fail("expected ApiException")
+            } catch (error: ApiException) {
+                assertEquals("bad_reply", error.code)
+                assertTrue(!error.unauthorized)
+            }
+        }
+    }
+
+    @Test
+    fun anEventStreamClosedFor4401CarriesTheReason() {
+        val error = EventStream(api).fatal(4401, null, "device token revoked or expired")!!
+        assertTrue(error.unauthorized)
+        assertEquals("Device token revoked or expired. Pair this phone again.", error.message)
+        assertEquals(null, EventStream(api).fatal(1006, null))
     }
 
     @Test

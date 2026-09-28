@@ -1,5 +1,6 @@
 package dev.pirc.android.core
 
+import dev.pirc.android.BuildConfig
 import java.net.URI
 import java.net.URLDecoder
 
@@ -12,13 +13,13 @@ class InvalidPairingLink(message: String) : IllegalArgumentException(message)
 
 /**
  * Parses the `pirc://pair?url=<origin>&token=<token>` link the web shows as a QR code.
- * Only HTTPS gateways are accepted, except loopback and the emulator's host alias for development.
+ * Only HTTPS gateways are accepted, except (in debug builds) loopback and the emulator's host alias for development.
  */
 object PairingLink {
     private val TOKEN = Regex("^pirc_dev_[A-Za-z0-9_-]{43}$")
     private val DEV_HOSTS = setOf("localhost", "127.0.0.1", "10.0.2.2")
 
-    fun parse(text: String): Pairing {
+    fun parse(text: String, allowDevHosts: Boolean = BuildConfig.DEBUG): Pairing {
         val link = try {
             URI(text.trim())
         } catch (_: Exception) {
@@ -31,11 +32,11 @@ object PairingLink {
         }
         val token = params["token"].orEmpty()
         if (!TOKEN.matches(token)) throw InvalidPairingLink("The pairing link has no valid device token.")
-        return Pairing(origin(params["url"].orEmpty()), token)
+        return Pairing(origin(params["url"].orEmpty(), allowDevHosts), token)
     }
 
     /** The gateway origin (`scheme://host[:port]`), refusing paths, credentials and plain HTTP. */
-    fun origin(text: String): String {
+    fun origin(text: String, allowDevHosts: Boolean = BuildConfig.DEBUG): String {
         val url = try {
             URI(text.trim())
         } catch (_: Exception) {
@@ -43,7 +44,7 @@ object PairingLink {
         }
         val host = url.host ?: throw InvalidPairingLink("The gateway address has no host.")
         val secure = url.scheme == "https"
-        if (!secure && !(url.scheme == "http" && host in DEV_HOSTS))
+        if (!secure && !(allowDevHosts && url.scheme == "http" && host in DEV_HOSTS))
             throw InvalidPairingLink("The gateway must use HTTPS.")
         if (url.rawUserInfo != null || url.rawQuery != null || url.rawFragment != null || (url.rawPath ?: "") !in setOf("", "/"))
             throw InvalidPairingLink("The gateway address must be an origin, without a path.")

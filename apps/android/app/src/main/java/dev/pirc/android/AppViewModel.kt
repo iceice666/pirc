@@ -118,10 +118,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _pairState.value = PairState.Idle
                 refresh()
             } catch (error: ApiException) {
-                _pairState.value = PairState.Failed(
-                    if (error.unauthorized) "The gateway refused this token. It may have expired; pair again from the web."
-                    else error.message ?: "The gateway refused the request.",
-                )
+                // A 401 carries the gateway's reason (expired, revoked, ...).
+                _pairState.value = PairState.Failed(error.message ?: "The gateway refused the request.")
             } catch (error: IOException) {
                 _pairState.value = PairState.Failed("Cannot reach ${pairing.baseUrl}: ${error.message ?: "network error"}")
             }

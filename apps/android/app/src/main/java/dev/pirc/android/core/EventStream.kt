@@ -49,8 +49,7 @@ class EventStream(
                 .addQueryParameter("sessionId", sessionId)
                 .apply { cursor?.let { addQueryParameter("cursor", it) } }
                 .build()
-            /** Close code, or null for a network failure; a status for a refused upgrade. */
-            val ended = CompletableDeferred<Pair<Int?, Int?>>()
+            val ended = CompletableDeferred<Ended>()
             val socket = client.newWebSocket(
                 api.request("").url(url).build(),
                 object : WebSocketListener() {
@@ -72,24 +71,24 @@ class EventStream(
 
                     override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                         webSocket.close(1000, null)
-                        ended.complete(code to null)
+                        ended.complete(Ended(code, null, reason))
                     }
 
                     override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                        ended.complete(code to null)
+                        ended.complete(Ended(code, null, reason))
                     }
 
                     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                        ended.complete(null to response?.code)
+                        ended.complete(Ended(null, response?.code, null))
                     }
                 },
             )
-            val (code, status) = try {
+            val end = try {
                 ended.await()
             } finally {
                 socket.cancel()
             }
-            fatal(code, status)?.let {
+            fatal(end)?.let {
                 send(StreamSignal.Closed(it))
                 return@channelFlow
             }
@@ -98,8 +97,14 @@ class EventStream(
         }
     }.buffer(Channel.UNLIMITED)
 
-    private fun fatal(code: Int?, status: Int?): ApiException? = when {
-        code == 4401 || status == 401 -> ApiException(401, "unauthenticated", "This phone's device token is invalid, expired or revoked. Pair it again.")
+    /** Close [code] (null for a network failure) with its [reason], or the [status] of a refused upgrade. */
+    private data class Ended(val code: Int?, val status: Int?, val reason: String?)
+
+    private fun fatal(end: Ended): ApiException? = fatal(end.code, end.status, end.reason)
+
+    internal fun fatal(code: Int?, status: Int?, reason: String? = null): ApiException? = when {
+        code == 4401 -> ApiException(401, "unauthenticated", unauthorizedMessage(reason))
+        status == 401 -> ApiException(401, "unauthenticated", unauthorizedMessage(null))
         code == 4403 || status == 403 -> ApiException(403, "forbidden", "The gateway refused this session's events.")
         code == 4404 -> ApiException(404, "not_found", "This session no longer exists.")
         code == 4400 -> ApiException(400, "invalid_input", "The gateway rejected the event stream request.")

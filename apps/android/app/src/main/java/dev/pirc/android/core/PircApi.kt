@@ -21,8 +21,30 @@ import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 /** A failed gateway request. `unauthorized` means the device token is dead: pair again. */
-class ApiException(val status: Int, val code: String?, message: String) : IOException(message) {
+class ApiException(val status: Int, val code: String?, message: String, cause: Throwable? = null) : IOException(message, cause) {
     val unauthorized get() = status == 401
+}
+
+/**
+ * Read a successful reply. Anything but the JSON this client expects (a proxy's
+ * HTML page, a truncated body, an older gateway) becomes an [ApiException] like
+ * any other failed request, instead of an unchecked exception that would end the app.
+ */
+internal inline fun <T> readingReply(status: Int = 200, read: () -> T): T = try {
+    read()
+} catch (error: IOException) {
+    throw error
+} catch (error: kotlin.coroutines.cancellation.CancellationException) {
+    throw error
+} catch (error: RuntimeException) {
+    throw ApiException(status, "bad_reply", "The gateway sent a reply this app cannot read; check the address points at pirc.", error)
+}
+
+/** Why the gateway refused this phone's token, as shown to the user. */
+internal fun unauthorizedMessage(reason: String?): String {
+    val why = reason?.trim()?.trimEnd('.')?.takeIf { it.isNotEmpty() }?.replaceFirstChar { it.uppercase() }
+        ?: "This phone's device token is invalid, expired or revoked"
+    return "$why. Pair this phone again."
 }
 
 internal fun String.urlSegment(): String = URLEncoder.encode(this, Charsets.UTF_8).replace("+", "%20")
@@ -37,6 +59,8 @@ val PircJson = Json {
 fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
     .connectTimeout(15, TimeUnit.SECONDS)
     .readTimeout(30, TimeUnit.SECONDS)
+    // Image uploads (up to 8 MiB) over mobile data take longer than the default 10 s.
+    .writeTimeout(60, TimeUnit.SECONDS)
     // Tokens must never follow a redirect to another origin.
     .followRedirects(false)
     .followSslRedirects(false)
@@ -81,11 +105,12 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
             put("path", path)
             put("displayName", displayName)
         })
-        return PircJson.decodeFromJsonElement(Workspace.serializer(), reply["workspace"] ?: error("no workspace in the reply"))
+        return readingReply { PircJson.decodeFromJsonElement(Workspace.serializer(), reply["workspace"] ?: error("no workspace in the reply")) }
     }
 
-    private fun decodeSession(reply: JsonElement?) =
+    private fun decodeSession(reply: JsonElement?) = readingReply {
         PircJson.decodeFromJsonElement(Session.serializer(), reply["session"] ?: error("no session in the reply"))
+    }
 
     // ---- workspace files (read-only, confined to the session's workspace) ----
 
@@ -114,25 +139,23 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
         get("${session(sessionId)}/panel/background/${taskId.urlSegment()}?lines=$lines")
 
     /** Needs the control lease; returns once the stop is requested (status `stopping`). */
-    suspend fun stopBackground(sessionId: String, taskId: String, clientId: String, generation: Long): BackgroundTask =
-        PircJson.decodeFromJsonElement(
-            TaskResponse.serializer(),
-            send("POST", "${session(sessionId)}/panel/background/${taskId.urlSegment()}/stop", held(clientId, generation))!!,
-        ).task
+    suspend fun stopBackground(sessionId: String, taskId: String, clientId: String, generation: Long): BackgroundTask {
+        val reply = send("POST", "${session(sessionId)}/panel/background/${taskId.urlSegment()}/stop", held(clientId, generation))
+        return readingReply { PircJson.decodeFromJsonElement(TaskResponse.serializer(), reply ?: error("empty reply")).task }
+    }
 
     suspend fun terminals(sessionId: String): List<TerminalInfo> = get<TerminalsResponse>("${session(sessionId)}/terminals").terminals
 
     /** Needs the control lease. */
-    suspend fun createTerminal(sessionId: String, clientId: String, generation: Long, cols: Int, rows: Int): TerminalInfo =
-        PircJson.decodeFromJsonElement(
-            TerminalResponse.serializer(),
-            send("POST", "${session(sessionId)}/terminals", buildJsonObject {
-                put("clientId", clientId)
-                put("generation", generation)
-                put("cols", cols)
-                put("rows", rows)
-            })!!,
-        ).terminal
+    suspend fun createTerminal(sessionId: String, clientId: String, generation: Long, cols: Int, rows: Int): TerminalInfo {
+        val reply = send("POST", "${session(sessionId)}/terminals", buildJsonObject {
+            put("clientId", clientId)
+            put("generation", generation)
+            put("cols", cols)
+            put("rows", rows)
+        })
+        return readingReply { PircJson.decodeFromJsonElement(TerminalResponse.serializer(), reply ?: error("empty reply")).terminal }
+    }
 
     suspend fun closeTerminal(sessionId: String, terminalId: String, clientId: String, generation: Long) {
         send("POST", "${session(sessionId)}/terminals/${terminalId.urlSegment()}/close", held(clientId, generation))
@@ -204,7 +227,9 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
     suspend fun upload(sessionId: String, bytes: ByteArray, mimeType: String): Upload {
         val reply = send("POST", "${session(sessionId)}/uploads", bytes.toRequestBody(mimeType.toMediaType()))
         val upload = reply["upload"]
-        return Upload(upload["id"].text ?: error("upload without an id"), upload["mimeType"].text ?: mimeType, upload["byteSize"].number ?: bytes.size.toLong())
+        return readingReply {
+            Upload(upload["id"].text ?: error("upload without an id"), upload["mimeType"].text ?: mimeType, upload["byteSize"].number ?: bytes.size.toLong())
+        }
     }
 
     private fun session(sessionId: String) = "/api/sessions/${sessionId.urlSegment()}"
@@ -242,14 +267,15 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
         client.newCall(request).execute().use { response ->
             val body = response.body.string()
             if (!response.isSuccessful) throw failure(response, body)
-            PircJson.decodeFromString<T>(body)
+            readingReply(response.code) { PircJson.decodeFromString<T>(body) }
         }
     }
 
     internal fun failure(response: Response, body: String): ApiException {
         val detail = runCatching { PircJson.decodeFromString<ErrorBody>(body).error }.getOrNull()
         val message = when {
-            response.code == 401 -> "This phone's device token is invalid, expired or revoked. Pair it again."
+            // The gateway says whether the token expired or was revoked.
+            response.code == 401 -> unauthorizedMessage(detail?.message)
             response.isRedirect -> "The gateway redirected the request; check the proxy routes device tokens to pirc."
             else -> detail?.message ?: "Request failed (${response.code})"
         }

@@ -10,6 +10,7 @@ import dev.pirc.android.core.Drafts
 import dev.pirc.android.core.InteractionAnswer
 import dev.pirc.android.core.ModelOption
 import dev.pirc.android.core.PircApi
+import dev.pirc.android.core.readingReply
 import dev.pirc.android.core.StreamSignal
 import dev.pirc.android.core.syncControl
 import dev.pirc.android.core.timeline.Interaction
@@ -147,7 +148,8 @@ class SessionViewModel(
         stream?.cancel()
         loading = viewModelScope.launch {
             try {
-                _state.value = snapshotState(api.snapshot(sessionId))
+                val raw = api.snapshot(sessionId)
+                _state.value = readingReply { snapshotState(raw) }
                 _error.value = null
                 if (visible) follow()
             } catch (error: IOException) {
