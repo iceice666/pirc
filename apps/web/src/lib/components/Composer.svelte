@@ -256,7 +256,6 @@
         />
       </div>
       <span class="spacer"></span>
-      <span class="send-hint">↵ send</span>
       {#if active && !showStopPrimary}
         <!-- While typing mid-run, stopping stays one click away beside send. -->
         <button
@@ -458,9 +457,6 @@
   }
   .composer-tools .thinking-select {
     flex-shrink: 0;
-  }
-  .send-hint {
-    display: none;
   }
   .send-button {
     width: 34px;

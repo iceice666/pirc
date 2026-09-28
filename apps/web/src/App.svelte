@@ -363,7 +363,12 @@
     }}
   />
 
-  <main class:details-collapsed={!detailsOpen} class="workspace">
+  <!-- The open phone drawer is modal: the page behind it is inert. -->
+  <main
+    class:details-collapsed={!detailsOpen}
+    class="workspace"
+    inert={sidebarOpen && viewportWidth <= 650}
+  >
     {#if app.loading}
       <div class="loading-state">
         <span class="large-mark"><Sparkles size={24} /></span>

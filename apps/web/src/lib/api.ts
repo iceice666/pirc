@@ -23,6 +23,7 @@ import type {
   ModelOption,
   NodeSummary,
   PendingInteraction,
+  QueueItem,
   SessionCommandInput,
   SessionSnapshot,
   SessionSummary,
@@ -134,22 +135,7 @@ export function snapshotFromRaw(raw: any, lease: unknown): SessionSnapshot {
     ),
     partialMessage: partial,
     interactions: (raw.interactions ?? []).map(interaction),
-    queue: [
-      ...(raw.queue?.steering ?? []).map((content: string, index: number) => ({
-        id: `steer-${index}`,
-        kind: 'steer' as const,
-        index,
-        content,
-        createdAt: new Date().toISOString(),
-      })),
-      ...(raw.queue?.followUp ?? []).map((content: string, index: number) => ({
-        id: `follow-${index}`,
-        kind: 'follow_up' as const,
-        index,
-        content,
-        createdAt: new Date().toISOString(),
-      })),
-    ],
+    queue: queueItems(raw.queue ?? {}, iso(undefined)),
     control: controlLease(lease),
     cursor: `${raw.watermark?.epoch ?? 0}:${raw.watermark?.sequence ?? 0}`,
     runnerEpoch: String(raw.watermark?.epoch ?? raw.session.runnerEpoch ?? 0),
@@ -161,6 +147,29 @@ export function snapshotFromRaw(raw: any, lease: unknown): SessionSnapshot {
       ? { thinkingLevel: raw.agent.thinkingLevel as ThinkingLevel }
       : {}),
   };
+}
+
+/** Pi's steering and follow-up queues (snapshot or `queue_update`) as queue items. */
+function queueItems(
+  raw: { steering?: string[]; followUp?: string[] },
+  createdAt: string,
+): QueueItem[] {
+  return [
+    ...(raw.steering ?? []).map((content, index) => ({
+      id: `steer-${index}`,
+      kind: 'steer' as const,
+      index,
+      content,
+      createdAt,
+    })),
+    ...(raw.followUp ?? []).map((content, index) => ({
+      id: `follow-${index}`,
+      kind: 'follow_up' as const,
+      index,
+      content,
+      createdAt,
+    })),
+  ];
 }
 
 const thinkingLevels: unknown[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
@@ -481,25 +490,7 @@ function piEvent(pi: any, timestamp: unknown): GatewayEvent {
         },
       };
     case 'queue_update':
-      return {
-        type: 'queue_updated',
-        queue: [
-          ...(pi.steering ?? []).map((content: string, index: number) => ({
-            id: `steer-${index}`,
-            kind: 'steer' as const,
-            index,
-            content,
-            createdAt: iso(timestamp),
-          })),
-          ...(pi.followUp ?? []).map((content: string, index: number) => ({
-            id: `follow-${index}`,
-            kind: 'follow_up' as const,
-            index,
-            content,
-            createdAt: iso(timestamp),
-          })),
-        ],
-      };
+      return { type: 'queue_updated', queue: queueItems(pi, iso(timestamp)) };
     case 'panel_changed':
       return {
         type: 'panel_changed',

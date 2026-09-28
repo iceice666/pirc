@@ -1,3 +1,4 @@
+import { errorMessage } from './errors';
 import { isAbort } from './http';
 import { panelApi, type BackgroundTask, type PanelState } from './panel-api';
 
@@ -50,7 +51,7 @@ export class PanelStateResource {
         this.error = '';
       } catch (cause) {
         if (controller.signal.aborted || isAbort(cause)) return;
-        this.error = cause instanceof Error ? cause.message : 'Unable to load panel state.';
+        this.error = errorMessage(cause, 'Unable to load panel state.');
       } finally {
         if (this.#controller === controller) {
           this.#controller = undefined;

@@ -2,6 +2,7 @@
   import { ArrowLeft, ChevronRight, Code, Eye, File, Folder, RefreshCw } from '@lucide/svelte';
   import { onDestroy, tick } from 'svelte';
   import { app } from '../../app.svelte';
+  import { errorMessage } from '../../errors';
   import type { FileTarget } from '../../file-links';
   import { Loader } from '../../loader.svelte';
   import {
@@ -66,7 +67,7 @@
     const id = sessionId;
     const result = await fileLoader.run(
       (signal) => panelApi.file(id, path, signal),
-      (cause) => `${path}: ${cause instanceof Error ? cause.message : 'Unable to open file.'}`,
+      (cause) => `${path}: ${errorMessage(cause, 'Unable to open file.')}`,
     );
     if (id !== sessionId) return;
     if (!result) {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Plus, SquareTerminal, X } from '@lucide/svelte';
   import { rovingFocus } from '../../a11y';
+  import { errorMessage } from '../../errors';
   import { Loader } from '../../loader.svelte';
   import { panelApi, type TerminalInfo } from '../../panel-api';
   import { watch } from '../../watch.svelte';
@@ -46,7 +47,7 @@
       terminals = [...terminals.filter((t) => !t.exited), terminal];
       current = terminal.id;
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Unable to open a terminal.';
+      error = errorMessage(cause, 'Unable to open a terminal.');
     } finally {
       busy = false;
     }
@@ -62,7 +63,7 @@
         await panelApi.closeTerminal(sessionId, terminal.id, generation);
       } catch (cause) {
         if (!(cause instanceof Error && /not found/i.test(cause.message))) {
-          error = cause instanceof Error ? cause.message : 'Unable to close the terminal.';
+          error = errorMessage(cause, 'Unable to close the terminal.');
           return;
         }
       }

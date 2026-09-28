@@ -4,6 +4,7 @@
     ArchiveRestore,
     ChevronDown,
     Command,
+    Ellipsis,
     Menu,
     PanelLeftClose,
     Pencil,
@@ -19,6 +20,7 @@
   import { app } from '../app.svelte';
   import { shortAgo } from '../time';
   import type { SessionSummary } from '../types';
+  import { watch } from '../watch.svelte';
 
   interface Props {
     open?: boolean;
@@ -118,6 +120,29 @@
     if (commit && name && current && name !== current.name) onrename(id, name);
   }
 
+  /**
+   * Touch screens have no hover: a row's pin/settle/rename buttons show on the
+   * open session, or on the row whose "more" button was tapped.
+   */
+  let revealedId: string | undefined = $state();
+
+  let aside: HTMLElement | undefined = $state();
+  let closeButton: HTMLButtonElement | undefined = $state();
+  let menuButton: HTMLButtonElement | undefined = $state();
+  // The phone drawer takes focus while open and hands it back when it closes.
+  watch(
+    () => open,
+    async (isOpen) => {
+      if (isOpen) {
+        await tick();
+        closeButton?.focus();
+      } else {
+        revealedId = undefined;
+        if (aside?.contains(document.activeElement)) menuButton?.focus();
+      }
+    },
+  );
+
   function toggleWorkspace(id: string) {
     const next = new Set(collapsedGroups);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -131,7 +156,14 @@
     aria-label="Close navigation"
     onclick={onclose}
   ></button>{/if}
-<aside class:open class:collapsed class="sidebar" aria-label="Sessions" inert={collapsed && !open}>
+<aside
+  bind:this={aside}
+  class:open
+  class:collapsed
+  class="sidebar"
+  aria-label="Sessions"
+  inert={collapsed && !open}
+>
   <div class="brand-row">
     <a class="brand" href="/" aria-label="pirc home">
       <span class="brand-mark"><Command size={16} /></span><span>pirc</span>
@@ -144,6 +176,7 @@
       onclick={oncollapse}><PanelLeftClose size={18} /></button
     >
     <button
+      bind:this={closeButton}
       class="mobile-close icon-button"
       type="button"
       aria-label="Close navigation"
@@ -254,6 +287,7 @@
 </aside>
 
 <button
+  bind:this={menuButton}
   class="mobile-menu icon-button"
   type="button"
   aria-label="Open navigation"
@@ -266,6 +300,7 @@
     class:active={session.id === activeSessionId}
     class:settled={session.settled}
     class:renaming={renamingId === session.id}
+    class:revealed={revealedId === session.id}
   >
     {#if renamingId === session.id}
       <form
@@ -318,6 +353,14 @@
             >{/if}
         </span>
       </button>
+      {#if session.id !== activeSessionId && revealedId !== session.id}
+        <button
+          class="session-more"
+          type="button"
+          aria-label="Actions for {session.name}"
+          onclick={() => (revealedId = session.id)}><Ellipsis size={16} /></button
+        >
+      {/if}
       <div class="session-actions">
         <button
           type="button"
@@ -652,19 +695,50 @@
   .session-item:focus-within .session-meta {
     display: none;
   }
+  .session-more {
+    display: none;
+  }
   @media (hover: none) {
-    .session-item.active .session-actions {
+    .session-item.active .session-actions,
+    .session-item.revealed .session-actions {
       opacity: 1;
       pointer-events: auto;
     }
-    .session-item.active .session-card {
+    .session-item.active .session-card,
+    .session-item.revealed .session-card {
       padding-right: 88px;
     }
-    .session-item.active .session-meta {
+    .session-item.active .session-meta,
+    .session-item.revealed .session-meta {
       display: none;
     }
     .mini-action {
       opacity: 1;
+    }
+    /* Other rows: a "more" button after the time reveals the row's actions. */
+    .session-more {
+      position: absolute;
+      top: 50%;
+      right: 2px;
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 0;
+      border-radius: 6px;
+      color: var(--muted);
+      background: transparent;
+      transform: translateY(-50%);
+    }
+    .session-item:not(.active, .revealed) .session-card {
+      padding-right: 40px;
+    }
+  }
+  @media (hover: none) and (max-width: 650px) {
+    .session-item.active .session-card,
+    .session-item.revealed .session-card {
+      padding-right: 112px;
     }
   }
   .session-rename {
@@ -780,18 +854,23 @@
     display: none;
   }
   @media (max-width: 650px) {
+    /* Closed, the drawer is hidden (out of the focus order), not just moved off screen. */
     .sidebar {
       position: fixed;
       inset: 0 auto 0 0;
       width: min(86vw, 300px);
+      visibility: hidden;
       transform: translateX(-102%);
       box-shadow: var(--shadow-pop);
-      transition: transform 0.22s var(--ease);
+      transition:
+        transform 0.22s var(--ease),
+        visibility 0.22s;
     }
     .sidebar-collapse {
       display: none;
     }
     .sidebar.open {
+      visibility: visible;
       transform: translateX(0);
     }
     .sidebar-scrim {

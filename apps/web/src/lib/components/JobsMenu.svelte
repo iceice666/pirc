@@ -13,6 +13,7 @@
   import { tick } from 'svelte';
   import { rovingFocus } from '../a11y';
   import { app } from '../app.svelte';
+  import { errorMessage } from '../errors';
   import { Loader } from '../loader.svelte';
   import { panelApi, type BackgroundTask, type TeamMember } from '../panel-api';
   import { duration } from '../time';
@@ -115,8 +116,7 @@
       const { task: next } = await panelApi.stopBackground(session, task.id, generation);
       if (session === sessionId) app.panel.updateTask(next);
     } catch (cause) {
-      if (session === sessionId)
-        stopError = cause instanceof Error ? cause.message : 'Could not stop the task.';
+      if (session === sessionId) stopError = errorMessage(cause, 'Could not stop the task.');
     }
   }
   function clearFinished() {
@@ -383,7 +383,7 @@
     z-index: 40;
     top: calc(100% + 6px);
     right: 0;
-    width: min(480px, calc(100vw - 24px));
+    width: min(480px, calc(100dvw - 24px));
     max-height: min(480px, calc(100dvh - 120px));
     display: flex;
     flex-direction: column;

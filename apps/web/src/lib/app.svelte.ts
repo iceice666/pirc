@@ -5,6 +5,7 @@
  */
 import { api, connectEvents, type EventConnection } from './api';
 import { syncControl } from './control';
+import { errorMessage } from './errors';
 import { GOAL_WIDGET, parseGoalWidget } from './goal';
 import { PanelStateResource } from './panel-state.svelte';
 import { fromSnapshot, reduceEvent } from './state';
@@ -55,9 +56,6 @@ const DOCKED_WIDGETS = new Set([TODO_WIDGET, GOAL_WIDGET]);
  * members live in the jobs menu. Other extension widgets show their header.
  */
 const SHOWN_ELSEWHERE = new Set(['background-task', 'agent-team']);
-
-const message = (error: unknown, fallback: string) =>
-  error instanceof Error ? error.message : fallback;
 
 class AppState {
   workspaces = $state.raw<Workspace[]>([]);
@@ -181,7 +179,7 @@ class AppState {
         this.activeSessionId = demo.demoSnapshot.session.id;
       } else {
         this.#bootstrapFailed = true;
-        this.pageError = message(error, 'Unable to connect to the gateway.');
+        this.pageError = errorMessage(error, 'Unable to connect to the gateway.');
       }
     }
     if (this.activeSessionId) await this.openSession(this.activeSessionId);
@@ -282,7 +280,8 @@ class AppState {
       }
       await this.scroller?.toLatest(false);
     } catch (error) {
-      if (seq === this.#openSeq) this.pageError = message(error, 'Unable to load this session.');
+      if (seq === this.#openSeq)
+        this.pageError = errorMessage(error, 'Unable to load this session.');
     }
   }
 
@@ -311,7 +310,8 @@ class AppState {
       const { id, name } = this.sessionState.session;
       this.sessions = this.sessions.map((item) => (item.id === id ? { ...item, name } : item));
     } catch (error) {
-      if (seq === this.#openSeq) this.pageError = message(error, 'Could not refresh the session.');
+      if (seq === this.#openSeq)
+        this.pageError = errorMessage(error, 'Could not refresh the session.');
     } finally {
       this.#snapshotLoading = false;
       if (this.#snapshotAgain) {
@@ -340,7 +340,7 @@ class AppState {
       if (updated.settled && id !== this.activeSessionId) removeDraft(id);
     } catch (error) {
       apply({ name: previous.name, pinned: previous.pinned, settled: previous.settled });
-      this.pageError = message(error, 'Could not update the session.');
+      this.pageError = errorMessage(error, 'Could not update the session.');
     }
   }
 
@@ -421,7 +421,7 @@ class AppState {
         await this.scroller?.toLatest();
       }
     } catch (error) {
-      this.pageError = message(error, 'The command was not accepted.');
+      this.pageError = errorMessage(error, 'The command was not accepted.');
     } finally {
       this.commandBusy = false;
     }
@@ -452,7 +452,7 @@ class AppState {
         content: `/goal ${action}`,
       });
     } catch (error) {
-      this.pageError = message(error, 'The command was not accepted.');
+      this.pageError = errorMessage(error, 'The command was not accepted.');
     } finally {
       this.commandBusy = false;
     }
@@ -502,7 +502,7 @@ class AppState {
         queued: { kind: item.kind, index: item.index },
       });
     } catch (error) {
-      const text = message(error, 'The message could not be sent now.');
+      const text = errorMessage(error, 'The message could not be sent now.');
       // The run delivered or cleared it meanwhile; the next queue update shows that.
       if (!/no longer queued/.test(text)) this.pageError = text;
     } finally {
@@ -528,7 +528,7 @@ class AppState {
         : await api.takeControl(this.activeSessionId, this.clientId);
       if (this.sessionState) this.sessionState = { ...this.sessionState, control };
     } catch (error) {
-      this.pageError = message(error, 'Control could not be transferred.');
+      this.pageError = errorMessage(error, 'Control could not be transferred.');
     }
   }
 
@@ -550,7 +550,7 @@ class AppState {
           interactions: current.interactions.filter((item) => item.id !== interactionId),
         };
     } catch (error) {
-      this.pageError = message(error, 'Your answer was not accepted.');
+      this.pageError = errorMessage(error, 'Your answer was not accepted.');
     }
   }
 
@@ -583,7 +583,7 @@ class AppState {
       } catch (error) {
         this.uploads = this.uploads.filter((item) => item.id !== localId);
         URL.revokeObjectURL(preview);
-        this.pageError = message(error, `Could not upload ${file.name}.`);
+        this.pageError = errorMessage(error, `Could not upload ${file.name}.`);
       }
     }
   }
@@ -613,7 +613,7 @@ class AppState {
           modelId: model.id,
         });
       } catch (error) {
-        this.pageError = message(error, 'Model could not be changed.');
+        this.pageError = errorMessage(error, 'Model could not be changed.');
       }
     }
   }
@@ -631,7 +631,7 @@ class AppState {
           thinkingLevel: level,
         });
       } catch (error) {
-        this.pageError = message(error, 'Thinking level could not be changed.');
+        this.pageError = errorMessage(error, 'Thinking level could not be changed.');
       }
     }
   }
@@ -688,7 +688,7 @@ class AppState {
       } else await this.openSession(created.id);
       return true;
     } catch (error) {
-      this.pageError = message(error, 'Could not create the session.');
+      this.pageError = errorMessage(error, 'Could not create the session.');
       return false;
     }
   }

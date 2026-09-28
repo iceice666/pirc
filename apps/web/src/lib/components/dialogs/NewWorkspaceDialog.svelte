@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { app } from '../../app.svelte';
+  import { errorMessage } from '../../errors';
   import Modal from './Modal.svelte';
   import { watch } from '../../watch.svelte';
 
@@ -46,7 +47,7 @@
       open = false;
       oncreated(workspace.id);
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Could not add workspace.';
+      error = errorMessage(cause, 'Could not add workspace.');
     } finally {
       busy = false;
     }

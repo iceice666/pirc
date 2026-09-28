@@ -172,7 +172,7 @@
     z-index: 50;
     width: max-content;
     min-width: 220px;
-    max-width: min(320px, calc(100vw - 80px));
+    max-width: min(320px, calc(100dvw - 80px));
     max-height: min(400px, 55dvh);
     overflow-y: auto;
     overscroll-behavior: contain;
