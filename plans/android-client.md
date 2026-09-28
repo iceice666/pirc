@@ -1,6 +1,6 @@
 # Native Android client
 
-Status: milestones 1 (gateway device tokens, web pairing), 2 (Android skeleton: pairing, session list), 3 (read-only chat), 4 (interactive chat) and 5 (files panel) implemented.
+Status: milestones 1 (gateway device tokens, web pairing), 2 (Android skeleton: pairing, session list), 3 (read-only chat), 4 (interactive chat) and 5 (files panel) implemented, plus session management and the Git, tasks, memory and terminal panels.
 
 ## Why
 

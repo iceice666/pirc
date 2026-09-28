@@ -2,6 +2,15 @@ package dev.pirc.android.ui
 
 import android.text.format.DateUtils
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +63,24 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
     val scroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
     var menu by remember { mutableStateOf(false) }
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    val actionError by viewModel.actionError.collectAsStateWithLifecycle()
+    var creating by remember { mutableStateOf(false) }
+    var addingWorkspace by remember { mutableStateOf(false) }
+    var acting by remember { mutableStateOf<Session?>(null) }
+    var renaming by remember { mutableStateOf<Session?>(null) }
+    val snackbar = remember { SnackbarHostState() }
+
+    // Back from a session: its name, pin or activity may have changed.
+    LifecycleResumeEffect(Unit) {
+        viewModel.refresh()
+        onPauseOrDispose { }
+    }
+    LaunchedEffect(actionError) {
+        actionError?.let {
+            snackbar.showSnackbar(it)
+            viewModel.dismissActionError()
+        }
+    }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
@@ -83,6 +110,15 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
                 scrollBehavior = scroll,
             )
         },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { creating = true },
+                icon = { Icon(PircIcons.Plus, contentDescription = null) },
+                text = { Text("New session") },
+                expanded = scroll.state.collapsedFraction < 0.5f,
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = state.loading,
@@ -91,7 +127,7 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 24.dp),
+                contentPadding = PaddingValues(bottom = 96.dp),
             ) {
                 state.error?.let { error ->
                     item(key = "error") {
@@ -105,7 +141,7 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
                 if (!state.loading && state.error == null && state.groups.isEmpty()) {
                     item(key = "empty") {
                         Text(
-                            "No sessions yet. Start one from the web for now.",
+                            "No sessions yet. Start one with New session.",
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(24.dp).animateItem(),
                         )
@@ -114,7 +150,7 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
                 state.groups.forEach { group ->
                     stickyHeader(key = "h:${group.workspaceId}") { GroupHeader(group) }
                     items(group.open, key = { it.id }) { session ->
-                        SessionRow(session, Modifier.animateItem()) { onOpen(session) }
+                        SessionRow(session, Modifier.animateItem(), onLongClick = { acting = session }) { onOpen(session) }
                     }
                     if (group.settled.isNotEmpty()) {
                         val open = expanded[group.workspaceId] == true
@@ -125,12 +161,61 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
                             ) { Text(if (open) "Hide settled" else "${group.settled.size} settled") }
                         }
                         if (open) items(group.settled, key = { it.id }) { session ->
-                            SessionRow(session, Modifier.animateItem()) { onOpen(session) }
+                            SessionRow(session, Modifier.animateItem(), onLongClick = { acting = session }) { onOpen(session) }
                         }
                     }
                 }
             }
         }
+    }
+
+    if (creating) NewSessionSheet(
+        state = state,
+        onCreate = { workspace ->
+            creating = false
+            viewModel.createSession(workspace.id, onOpen)
+        },
+        onAddWorkspace = {
+            creating = false
+            addingWorkspace = true
+        },
+        onDismiss = { creating = false },
+    )
+    if (addingWorkspace) AddWorkspaceDialog(
+        state = state,
+        onAdd = { node, path, name ->
+            addingWorkspace = false
+            viewModel.createWorkspace(node, path, name) { creating = true }
+        },
+        onDismiss = { addingWorkspace = false },
+    )
+    acting?.let { session ->
+        SessionActionsSheet(
+            session = session,
+            onRename = {
+                acting = null
+                renaming = session
+            },
+            onPin = {
+                acting = null
+                viewModel.updateSession(session, pinned = it)
+            },
+            onSettle = {
+                acting = null
+                viewModel.updateSession(session, settled = it)
+            },
+            onDismiss = { acting = null },
+        )
+    }
+    renaming?.let { session ->
+        RenameDialog(
+            name = session.name,
+            onRename = {
+                renaming = null
+                viewModel.updateSession(session, name = it)
+            },
+            onDismiss = { renaming = null },
+        )
     }
 }
 
@@ -158,10 +243,18 @@ private fun GroupHeader(group: WorkspaceGroup) {
 }
 
 @Composable
-private fun SessionRow(session: Session, modifier: Modifier, onClick: () -> Unit) {
+private fun SessionRow(session: Session, modifier: Modifier, onLongClick: () -> Unit, onClick: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
     Column(modifier) {
         ListItem(
-            modifier = Modifier.clickable(onClick = onClick),
+            modifier = Modifier.combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick()
+                },
+                onLongClickLabel = "Session actions",
+            ),
             headlineContent = {
                 Text(session.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
             },

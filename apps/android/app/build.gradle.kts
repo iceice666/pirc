@@ -38,6 +38,41 @@ kotlin {
     jvmToolchain(21)
 }
 
+/**
+ * xterm.js for the terminal screen, taken from the web client's pinned
+ * dependencies (run `bun install` first) instead of a second copy in git.
+ */
+abstract class VendorXterm : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val modules: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val output: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val from = modules.get().asFile
+        val into = output.get().asFile.resolve("terminal").apply { deleteRecursively(); mkdirs() }
+        for (file in listOf("xterm/lib/xterm.js", "xterm/css/xterm.css", "addon-fit/lib/addon-fit.js", "xterm/LICENSE")) {
+            val source = from.resolve(file)
+            check(source.isFile) { "$source is missing: run bun install in the repository first" }
+            source.copyTo(into.resolve(if (file.endsWith("LICENSE")) "xterm-LICENSE.txt" else source.name), overwrite = true)
+        }
+    }
+}
+
+val vendorXterm = tasks.register<VendorXterm>("vendorXterm") {
+    modules.set(rootProject.layout.projectDirectory.dir("../web/node_modules/@xterm"))
+    output.set(layout.buildDirectory.dir("generated/xterm"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(vendorXterm, VendorXterm::output)
+    }
+}
+
 // Golden timeline cases shared with the web client.
 val sharedFixtures = rootProject.layout.projectDirectory.dir("../../fixtures")
 tasks.withType<Test>().configureEach {

@@ -58,6 +58,35 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
     /** The live event stream of one session; see [EventStream]. */
     fun events(sessionId: String, cursor: String?) = EventStream(this).open(sessionId, cursor)
 
+    // ---- sessions and workspaces ----
+
+    /** A new session in [workspaceId]; the agent titles it from the first message. */
+    suspend fun createSession(workspaceId: String): Session =
+        decodeSession(send("POST", "/api/sessions", buildJsonObject { put("workspaceId", workspaceId) }))
+
+    /** Rename, pin or settle a session (any combination). */
+    suspend fun updateSession(sessionId: String, name: String? = null, pinned: Boolean? = null, settled: Boolean? = null): Session =
+        decodeSession(
+            send("PATCH", session(sessionId), buildJsonObject {
+                name?.let { put("name", it) }
+                pinned?.let { put("pinned", it) }
+                settled?.let { put("settled", it) }
+            }),
+        )
+
+    /** Register a folder on an online node; it must exist inside that account's home. */
+    suspend fun createWorkspace(nodeId: String, path: String, displayName: String): Workspace {
+        val reply = send("POST", "/api/workspaces", buildJsonObject {
+            put("nodeId", nodeId)
+            put("path", path)
+            put("displayName", displayName)
+        })
+        return PircJson.decodeFromJsonElement(Workspace.serializer(), reply["workspace"] ?: error("no workspace in the reply"))
+    }
+
+    private fun decodeSession(reply: JsonElement?) =
+        PircJson.decodeFromJsonElement(Session.serializer(), reply["session"] ?: error("no session in the reply"))
+
     // ---- workspace files (read-only, confined to the session's workspace) ----
 
     suspend fun files(sessionId: String, path: String): DirListing =
@@ -65,6 +94,53 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
 
     suspend fun file(sessionId: String, path: String): FileContent =
         get<FileContent>("${session(sessionId)}/files/content?path=${path.urlSegment()}")
+
+    // ---- side panels ----
+
+    suspend fun gitStatus(sessionId: String): GitStatus = get("${session(sessionId)}/git/status")
+
+    suspend fun gitDiff(sessionId: String, path: String, staged: Boolean, untracked: Boolean): Diff =
+        get("${session(sessionId)}/git/diff?path=${path.urlSegment()}" + (if (staged) "&staged=1" else "") + (if (untracked) "&untracked=1" else ""))
+
+    suspend fun gitLog(sessionId: String, skip: Int, limit: Int = 50): CommitPage =
+        get("${session(sessionId)}/git/log?skip=$skip&limit=$limit")
+
+    suspend fun gitShow(sessionId: String, sha: String): CommitDetail =
+        get("${session(sessionId)}/git/commits/${sha.urlSegment()}")
+
+    suspend fun panelState(sessionId: String): PanelState = get("${session(sessionId)}/panel/state")
+
+    suspend fun backgroundOutput(sessionId: String, taskId: String, lines: Int = 400): BackgroundOutput =
+        get("${session(sessionId)}/panel/background/${taskId.urlSegment()}?lines=$lines")
+
+    /** Needs the control lease; returns once the stop is requested (status `stopping`). */
+    suspend fun stopBackground(sessionId: String, taskId: String, clientId: String, generation: Long): BackgroundTask =
+        PircJson.decodeFromJsonElement(
+            TaskResponse.serializer(),
+            send("POST", "${session(sessionId)}/panel/background/${taskId.urlSegment()}/stop", held(clientId, generation))!!,
+        ).task
+
+    suspend fun terminals(sessionId: String): List<TerminalInfo> = get<TerminalsResponse>("${session(sessionId)}/terminals").terminals
+
+    /** Needs the control lease. */
+    suspend fun createTerminal(sessionId: String, clientId: String, generation: Long, cols: Int, rows: Int): TerminalInfo =
+        PircJson.decodeFromJsonElement(
+            TerminalResponse.serializer(),
+            send("POST", "${session(sessionId)}/terminals", buildJsonObject {
+                put("clientId", clientId)
+                put("generation", generation)
+                put("cols", cols)
+                put("rows", rows)
+            })!!,
+        ).terminal
+
+    suspend fun closeTerminal(sessionId: String, terminalId: String, clientId: String, generation: Long) {
+        send("POST", "${session(sessionId)}/terminals/${terminalId.urlSegment()}/close", held(clientId, generation))
+    }
+
+    /** The terminal's WebSocket request (bearer-authenticated, so the app owns the socket). */
+    internal fun terminalRequest(sessionId: String, terminalId: String) =
+        request("${session(sessionId)}/terminals/${terminalId.urlSegment()}/stream").build()
 
     // ---- acting on a session (needs the control lease) ----
 

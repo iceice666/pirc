@@ -2,7 +2,7 @@
 
 A native Jetpack Compose client for the pirc gateway. See [`plans/android-client.md`](../../plans/android-client.md) for the design and milestones.
 
-Current state: pairing, the session list, and a live chat: markdown with highlighted, copyable code; collapsible thinking, tool calls and system entries; a composer that rides on the keyboard (prompt, steer or queue while a run is active, stop, image attachments, model and thinking level); answering the agent's questions; the control lease (kept alive while the chat is open, taken over on request); and the workspace files: a folder browser and a viewer with highlighted source, line numbers, optional wrapping and Markdown preview. File links and bare paths in messages, and files named by tool calls, open the viewer at the cited lines.
+Current state: pairing, the session list, and a live chat: markdown with highlighted, copyable code; collapsible thinking, tool calls and system entries; a composer that rides on the keyboard (prompt, steer or queue while a run is active, stop, image attachments, model and thinking level); answering the agent's questions; the control lease (kept alive while the chat is open, taken over on request); session management (new session in any online workspace, adding a workspace, rename, pin, settle); and the side panels: workspace files (folder browser; viewer with highlighted source, line numbers, optional wrapping and Markdown preview), Git (branch, changes, diffs, history, commits), tasks (background jobs with live output and stop, subagents, teammates, the task board and team messages), observational memory, and terminals. File links and bare paths in messages, and files named by tool calls, open the viewer at the cited lines.
 
 ## Pairing
 
@@ -26,6 +26,8 @@ cd apps/android
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
+The terminal draws with xterm.js in a WebView that loads only bundled assets; the app keeps the WebSocket (it needs the device token). The build copies xterm.js from the web client's pinned dependencies, so run `bun install` in the repository first.
+
 This project is not part of the Bun workspace, `bun run check`, or the Nix package.
 
 ## Timeline port
@@ -34,7 +36,7 @@ This project is not part of the Bun workspace, `bun run check`, or the Nix packa
 
 ## Trying it without a gateway
 
-`dev/fake-gateway.ts` serves one session from the fixtures, streams a demo reply each time the chat opens, hands out the control lease, accepts uploads, echoes prompts back, and serves a small in-memory workspace for the files panel:
+`dev/fake-gateway.ts` serves one session from the fixtures, streams a demo reply each time the chat opens, hands out the control lease, accepts uploads, echoes prompts back, and serves a small in-memory workspace, Git data, tasks, memory and an echoing pretend terminal for the panels:
 
 ```sh
 bun apps/android/dev/fake-gateway.ts   # http://127.0.0.1:8799 (the emulator sees it as 10.0.2.2)

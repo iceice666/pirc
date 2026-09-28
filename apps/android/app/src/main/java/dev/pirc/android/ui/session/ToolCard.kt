@@ -34,6 +34,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -145,8 +146,8 @@ private fun OutputPane(output: String) {
 
 /** Monospace, never wrapped: scrolls sideways, and at most a screenful tall. */
 @Composable
-fun CodePane(label: String, text: AnnotatedString) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+fun CodePane(label: String, text: AnnotatedString, modifier: Modifier = Modifier, maxHeight: Dp = 420.dp) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = MaterialTheme.shapes.small) {
             SelectionContainer {
@@ -156,7 +157,7 @@ fun CodePane(label: String, text: AnnotatedString) {
                     softWrap = false,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 420.dp)
+                        .heightIn(max = maxHeight)
                         .verticalScroll(rememberScrollState())
                         .horizontalScroll(rememberScrollState())
                         .padding(10.dp),

@@ -51,6 +51,11 @@ import dev.pirc.android.core.timeline.Message
 import dev.pirc.android.core.timeline.QueueItem
 import dev.pirc.android.core.timeline.SessionState
 import dev.pirc.android.ui.session.Composer
+import dev.pirc.android.PanelTab
+import dev.pirc.android.core.Session
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import dev.pirc.android.ui.session.InteractionCard
 import dev.pirc.android.ui.session.LocalFileOpener
 import dev.pirc.android.ui.session.MessageView
@@ -70,9 +75,12 @@ fun SessionScreen(
     viewModel: SessionViewModel,
     fallbackName: String,
     onBack: () -> Unit,
-    onOpenFiles: () -> Unit,
+    onOpenPanels: (title: String, tab: PanelTab) -> Unit,
     onOpenFile: (FileTarget) -> Unit,
+    onChanged: (Session) -> Unit,
 ) {
+    var menu by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf(false) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val connection by viewModel.connection.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
@@ -105,7 +113,34 @@ fun SessionScreen(
                     }
                 },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(PircIcons.Back, contentDescription = "Back") } },
-                actions = { TextButton(onClick = onOpenFiles) { Text("Files") } },
+                actions = {
+                    val title = state?.session?.name ?: fallbackName
+                    TextButton(onClick = { onOpenPanels(title, PanelTab.Files) }) { Text("Files") }
+                    TextButton(onClick = { menu = true }) { Text("More") }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        for (tab in listOf(PanelTab.Git, PanelTab.Tasks, PanelTab.Memory, PanelTab.Terminal))
+                            DropdownMenuItem(text = { Text(tab.label) }, onClick = {
+                                menu = false
+                                onOpenPanels(title, tab)
+                            })
+                        HorizontalDivider()
+                        val session = state?.session
+                        if (session != null) {
+                            DropdownMenuItem(text = { Text("Rename") }, onClick = {
+                                menu = false
+                                renaming = true
+                            })
+                            DropdownMenuItem(text = { Text(if (session.pinned) "Unpin" else "Pin to the top") }, onClick = {
+                                menu = false
+                                viewModel.updateSession(pinned = !session.pinned, onChanged = onChanged)
+                            })
+                            DropdownMenuItem(text = { Text(if (session.settled) "Reopen" else "Mark as settled") }, onClick = {
+                                menu = false
+                                viewModel.updateSession(settled = !session.settled, onChanged = onChanged)
+                            })
+                        }
+                    }
+                },
             )
         },
         bottomBar = {
@@ -132,6 +167,16 @@ fun SessionScreen(
                 Text(error!!, modifier = Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onErrorContainer)
             }
         }
+    }
+    if (renaming) state?.session?.let { session ->
+        RenameDialog(
+            name = session.name,
+            onRename = {
+                renaming = false
+                viewModel.updateSession(name = it, onChanged = onChanged)
+            },
+            onDismiss = { renaming = false },
+        )
     }
 }
 

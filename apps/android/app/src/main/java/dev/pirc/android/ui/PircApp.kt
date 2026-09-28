@@ -20,8 +20,15 @@ import dev.pirc.android.FileViewModel
 import dev.pirc.android.FilesViewModel
 import dev.pirc.android.SessionViewModel
 import dev.pirc.android.core.FileTarget
+import dev.pirc.android.PanelTab
+import dev.pirc.android.PanelsViewModel
+import dev.pirc.android.TerminalViewModel
+import dev.pirc.android.core.ApiException
 import dev.pirc.android.ui.files.FileScreen
-import dev.pirc.android.ui.files.FilesScreen
+import dev.pirc.android.ui.panels.CommitScreen
+import dev.pirc.android.ui.panels.DiffScreen
+import dev.pirc.android.ui.panels.PanelsScreen
+import dev.pirc.android.ui.panels.TerminalScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -30,8 +37,18 @@ data object SessionsRoute
 @Serializable
 data class SessionRoute(val id: String, val name: String)
 
+/** [tab]: a [PanelTab] name. */
 @Serializable
-data class FilesRoute(val sessionId: String)
+data class PanelsRoute(val sessionId: String, val title: String, val tab: String = "Files")
+
+@Serializable
+data class DiffRoute(val sessionId: String, val path: String, val staged: Boolean, val untracked: Boolean)
+
+@Serializable
+data class CommitRoute(val sessionId: String, val sha: String)
+
+@Serializable
+data class TerminalRoute(val sessionId: String, val terminalId: String, val title: String)
 
 /** [line]/[endLine] 0: no line to mark. */
 @Serializable
@@ -65,19 +82,54 @@ fun PircApp(viewModel: AppViewModel) {
                         session,
                         fallbackName = route.name,
                         onBack = { nav.popBackStack() },
-                        onOpenFiles = { nav.navigate(FilesRoute(route.id)) },
+                        onOpenPanels = { title, tab -> nav.navigate(PanelsRoute(route.id, title, tab.name)) },
                         onOpenFile = { nav.navigate(FileRoute(route.id, it.path, it.line ?: 0, it.endLine ?: 0)) },
+                        onChanged = viewModel::replaceSession,
                     )
                 }
-                composable<FilesRoute> { entry ->
-                    val route = entry.toRoute<FilesRoute>()
+                composable<PanelsRoute> { entry ->
+                    val route = entry.toRoute<PanelsRoute>()
                     val api = viewModel.api() ?: return@composable
+                    val unauthorized = { error: ApiException -> viewModel.handle(error) }
                     val files = viewModel<FilesViewModel>(key = "files|${api.pairing.baseUrl}|${route.sessionId}") {
-                        FilesViewModel(api, route.sessionId, onUnauthorized = { viewModel.handle(it) })
+                        FilesViewModel(api, route.sessionId, unauthorized)
                     }
-                    FilesScreen(
+                    val panels = viewModel<PanelsViewModel>(key = "panels|${api.pairing.baseUrl}|${route.sessionId}") {
+                        PanelsViewModel(api, route.sessionId, viewModel.local.clientId, PanelTab.valueOf(route.tab), unauthorized)
+                    }
+                    PanelsScreen(
+                        panels,
                         files,
+                        api,
+                        title = route.title,
+                        onUnauthorized = unauthorized,
                         onOpenFile = { nav.navigate(FileRoute(route.sessionId, it)) },
+                        onOpenDiff = { file, staged -> nav.navigate(DiffRoute(route.sessionId, file.path, staged, file.untracked && !staged)) },
+                        onOpenCommit = { nav.navigate(CommitRoute(route.sessionId, it.sha)) },
+                        onOpenTerminal = { nav.navigate(TerminalRoute(route.sessionId, it.id, it.title.ifEmpty { "Terminal" })) },
+                        onBack = { nav.popBackStack() },
+                    )
+                }
+                composable<DiffRoute> { entry ->
+                    val route = entry.toRoute<DiffRoute>()
+                    val api = viewModel.api() ?: return@composable
+                    DiffScreen(api, route.sessionId, route.path, route.staged, route.untracked, { viewModel.handle(it) }) { nav.popBackStack() }
+                }
+                composable<CommitRoute> { entry ->
+                    val route = entry.toRoute<CommitRoute>()
+                    val api = viewModel.api() ?: return@composable
+                    CommitScreen(api, route.sessionId, route.sha, { viewModel.handle(it) }) { nav.popBackStack() }
+                }
+                composable<TerminalRoute> { entry ->
+                    val route = entry.toRoute<TerminalRoute>()
+                    val api = viewModel.api() ?: return@composable
+                    val terminal = viewModel<TerminalViewModel>(key = "terminal|${api.pairing.baseUrl}|${route.sessionId}|${route.terminalId}") {
+                        TerminalViewModel(api, route.sessionId, route.terminalId, viewModel.local.clientId) { viewModel.handle(it) }
+                    }
+                    TerminalScreen(
+                        terminal,
+                        title = route.title,
+                        onClose = { terminal.close { nav.popBackStack() } },
                         onBack = { nav.popBackStack() },
                     )
                 }

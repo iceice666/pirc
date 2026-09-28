@@ -11,6 +11,9 @@ import dev.pirc.android.core.LocalStore
 import dev.pirc.android.core.Pairing
 import dev.pirc.android.core.PairingLink
 import dev.pirc.android.core.PircApi
+import dev.pirc.android.core.NodeSummary
+import dev.pirc.android.core.Session
+import dev.pirc.android.core.Workspace
 import dev.pirc.android.core.WorkspaceGroup
 import dev.pirc.android.core.groupSessions
 import kotlinx.coroutines.Job
@@ -30,9 +33,15 @@ sealed interface PairState {
 
 data class SessionsState(
     val groups: List<WorkspaceGroup> = emptyList(),
+    val sessions: List<Session> = emptyList(),
+    val workspaces: List<Workspace> = emptyList(),
+    val nodes: List<NodeSummary> = emptyList(),
     val loading: Boolean = true,
     val error: String? = null,
-)
+) {
+    /** A workspace can take new sessions while its node is connected. */
+    fun online(workspace: Workspace) = nodes.any { node -> node.workspaces.any { "${node.id}:${it.id}" == workspace.id } }
+}
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val store: CredentialStore = KeystoreCredentialStore(application)
@@ -125,19 +134,72 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _sessions.value = _sessions.value.copy(loading = true, error = null)
         refreshJob = viewModelScope.launch {
             try {
-                val groups = coroutineScope {
+                _sessions.value = coroutineScope {
                     val sessions = async { api.sessions() }
                     val workspaces = async { api.workspaces() }
                     val nodes = async { api.nodes() }
-                    groupSessions(sessions.await(), workspaces.await(), nodes.await())
+                    listed(sessions.await(), workspaces.await(), nodes.await())
                 }
-                _sessions.value = SessionsState(groups = groups, loading = false)
             } catch (error: IOException) {
                 handle(error)
                 _sessions.value = _sessions.value.copy(loading = false, error = error.message ?: "Network error")
             }
         }
     }
+
+    private fun listed(sessions: List<Session>, workspaces: List<Workspace>, nodes: List<NodeSummary>) = SessionsState(
+        groups = groupSessions(sessions, workspaces, nodes),
+        sessions = sessions,
+        workspaces = workspaces,
+        nodes = nodes,
+        loading = false,
+    )
+
+    /** An action on the list (create, rename, ...) failed. */
+    private val _actionError = MutableStateFlow<String?>(null)
+    val actionError: StateFlow<String?> = _actionError.asStateFlow()
+
+    fun dismissActionError() {
+        _actionError.value = null
+    }
+
+    private fun act(fallback: String, action: suspend (PircApi) -> Unit) {
+        val api = api() ?: return
+        _actionError.value = null
+        viewModelScope.launch {
+            try {
+                action(api)
+            } catch (error: IOException) {
+                handle(error)
+                _actionError.value = (error as? ApiException)?.message ?: fallback
+            }
+        }
+    }
+
+    /** Put a changed session into the list without refetching everything. */
+    fun replaceSession(session: Session) {
+        val state = _sessions.value
+        val sessions = state.sessions.filterNot { it.id == session.id } + session
+        _sessions.value = listed(sessions, state.workspaces, state.nodes)
+    }
+
+    fun createSession(workspaceId: String, onCreated: (Session) -> Unit) = act("Could not create the session.") { api ->
+        val session = api.createSession(workspaceId)
+        replaceSession(session)
+        onCreated(session)
+    }
+
+    fun updateSession(session: Session, name: String? = null, pinned: Boolean? = null, settled: Boolean? = null) =
+        act("Could not update the session.") { api -> replaceSession(api.updateSession(session.id, name, pinned, settled)) }
+
+    fun createWorkspace(nodeId: String, path: String, displayName: String, onCreated: (Workspace) -> Unit) =
+        act("Could not add the workspace.") { api ->
+            val workspace = api.createWorkspace(nodeId, path, displayName)
+            val state = _sessions.value
+            val nodes = api.nodes()
+            _sessions.value = listed(state.sessions, state.workspaces.filterNot { it.id == workspace.id } + workspace, nodes)
+            onCreated(workspace)
+        }
 
     /** A dead token unpairs the phone; anything else is shown where it happened. */
     fun handle(error: Throwable) {

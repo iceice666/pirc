@@ -267,6 +267,19 @@ class SessionViewModel(
 
     fun clearQueue() = perform("The queue could not be cleared.") { command(it, Commands.simple("clear_queue")) }
 
+    /** Rename, pin or settle this session; needs no control (it is the owner's list, not the agent). */
+    fun updateSession(name: String? = null, pinned: Boolean? = null, settled: Boolean? = null, onChanged: (dev.pirc.android.core.Session) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val session = api.updateSession(sessionId, name, pinned, settled)
+                _state.update { it?.copy(session = session) }
+                onChanged(session)
+            } catch (error: IOException) {
+                act(error, "Could not update the session.")
+            }
+        }
+    }
+
     fun takeControl() {
         viewModelScope.launch {
             try {

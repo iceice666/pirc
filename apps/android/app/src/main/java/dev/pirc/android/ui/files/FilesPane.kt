@@ -11,6 +11,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -44,60 +45,51 @@ import dev.pirc.android.Loadable
 import dev.pirc.android.core.DirEntry
 import dev.pirc.android.ui.PircIcons
 
-/** The session's workspace, one folder at a time. Back goes up a folder before leaving. */
+/**
+ * The session's workspace, one folder at a time (the Files tab). While
+ * [active], Back goes up a folder before it leaves.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FilesScreen(viewModel: FilesViewModel, onOpenFile: (String) -> Unit, onBack: () -> Unit) {
+fun FilesPane(viewModel: FilesViewModel, active: Boolean, onOpenFile: (String) -> Unit) {
     val path by viewModel.path.collectAsStateWithLifecycle()
     val listing by viewModel.listing.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val parent = viewModel.parent()
-    BackHandler(enabled = parent != null) { viewModel.open(parent!!) }
+    BackHandler(enabled = active && parent != null) { viewModel.open(parent!!) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Files") },
-                navigationIcon = {
-                    IconButton(onClick = { parent?.let(viewModel::open) ?: onBack() }) { Icon(PircIcons.Back, contentDescription = "Back") }
-                },
-            )
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            val segments = if (path.isEmpty()) emptyList() else path.split('/')
-            LazyRow(contentPadding = PaddingValues(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                item { TextButton(onClick = { viewModel.open("") }) { Text("Workspace") } }
-                itemsIndexed(segments) { index, name ->
-                    TextButton(onClick = { viewModel.open(segments.take(index + 1).joinToString("/")) }) {
-                        Text("/ $name", maxLines = 1)
-                    }
+    Column(Modifier.fillMaxSize()) {
+        val segments = if (path.isEmpty()) emptyList() else path.split('/')
+        LazyRow(contentPadding = PaddingValues(horizontal = 8.dp)) {
+            item { TextButton(onClick = { viewModel.open("") }) { Text("Workspace") } }
+            itemsIndexed(segments) { index, name ->
+                TextButton(onClick = { viewModel.open(segments.take(index + 1).joinToString("/")) }) {
+                    Text("/ $name", maxLines = 1)
                 }
             }
-            AnimatedContent(
-                targetState = path to listing,
-                contentKey = { it.first to (it.second is Loadable.Ready) },
-                transitionSpec = { (fadeIn() + slideInHorizontally { it / 8 }) togetherWith (fadeOut() + slideOutHorizontally { -it / 8 }) },
-                label = "folder",
-                modifier = Modifier.padding(top = 48.dp),
-            ) { (folder, state) ->
-                when (state) {
-                    Loadable.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                    is Loadable.Failed -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                        Text(state.message, color = MaterialTheme.colorScheme.error)
-                    }
-                    is Loadable.Ready -> PullToRefreshBox(isRefreshing = false, onRefresh = { viewModel.open(folder, refresh = true) }) {
-                        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-                            items(state.value.entries, key = { it.name }) { entry ->
-                                EntryRow(entry, detail = entry.size?.let { Formatter.formatShortFileSize(context, it) }) {
-                                    val full = if (folder.isEmpty()) entry.name else "$folder/${entry.name}"
-                                    if (entry.kind == "dir") viewModel.open(full) else onOpenFile(full)
-                                }
+        }
+        AnimatedContent(
+            targetState = path to listing,
+            contentKey = { it.first to (it.second is Loadable.Ready) },
+            transitionSpec = { (fadeIn() + slideInHorizontally { it / 8 }) togetherWith (fadeOut() + slideOutHorizontally { -it / 8 }) },
+            label = "folder",
+        ) { (folder, state) ->
+            when (state) {
+                Loadable.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                is Loadable.Failed -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Text(state.message, color = MaterialTheme.colorScheme.error)
+                }
+                is Loadable.Ready -> PullToRefreshBox(isRefreshing = false, onRefresh = { viewModel.open(folder, refresh = true) }) {
+                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+                        items(state.value.entries, key = { it.name }) { entry ->
+                            EntryRow(entry, detail = entry.size?.let { Formatter.formatShortFileSize(context, it) }) {
+                                val full = if (folder.isEmpty()) entry.name else "$folder/${entry.name}"
+                                if (entry.kind == "dir") viewModel.open(full) else onOpenFile(full)
                             }
-                            if (state.value.entries.isEmpty()) item { Text("This folder is empty.", modifier = Modifier.padding(24.dp)) }
-                            if (state.value.truncated) item {
-                                Text("Only the first entries are shown.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(16.dp))
-                            }
+                        }
+                        if (state.value.entries.isEmpty()) item { Text("This folder is empty.", modifier = Modifier.padding(24.dp)) }
+                        if (state.value.truncated) item {
+                            Text("Only the first entries are shown.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(16.dp))
                         }
                     }
                 }
