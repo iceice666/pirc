@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeAll, describe, expect, it } from 'vitest';
-import { preloadRenderers, renderMarkdown } from './markdown';
+import { preloadRenderers, renderMarkdown, stableBlockEnd } from './markdown';
 
 describe('renderMarkdown', () => {
   beforeAll(() => preloadRenderers());
@@ -69,5 +69,35 @@ describe('renderMarkdown', () => {
   it('closes an open fence while streaming', () => {
     const html = renderMarkdown('text\n\n```py\nprint(1)', { streaming: true });
     expect(html).toContain('class="code-block"');
+  });
+});
+
+describe('stableBlockEnd', () => {
+  it.each([
+    ['# Title\n\npara one\n\n- a\n- b\n\nlast', 28],
+    ['```ts\nx\n\ny\n```\n\nafter', 16],
+    ['| a | b |\n|---|---|\n| 1 | 2 |\n\ntext', 31],
+    ['$$\nx\n\ny\n$$\n\nz', 12],
+    ['> q\n\n> r\n\nz', 10],
+  ])('splits %j where both halves render like the whole', (source, end) => {
+    expect(stableBlockEnd(source)).toBe(end);
+    expect(renderMarkdown(source.slice(0, end)) + renderMarkdown(source.slice(end))).toBe(
+      renderMarkdown(source),
+    );
+  });
+
+  it.each([
+    ['one block', 'just a paragraph'],
+    // A loose list is one block: splitting it would restart the numbering.
+    ['a loose list', '1. a\n\n2. b\n\n3. c'],
+    ['an open fence', '```ts\nopen\n\nstill'],
+    ['CRLF text', 'a\r\n\r\nb'],
+  ])('keeps %s whole', (_, source) => {
+    expect(stableBlockEnd(source)).toBe(0);
+  });
+
+  it('continues from an earlier boundary', () => {
+    const source = 'one\n\ntwo\n\nthree';
+    expect(stableBlockEnd(source, 5)).toBe(10);
   });
 });

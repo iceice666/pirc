@@ -31,7 +31,10 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
+
+const lastSocket = () => FakeSocket.all[FakeSocket.all.length - 1]!;
 
 const connect = () =>
   connectEvents({ sessionId: 's1', onEvent: () => undefined, onState: () => undefined });
@@ -57,5 +60,85 @@ it("ignores a replaced socket's late error and close", async () => {
   expect(second.readyState).toBe(FakeSocket.CONNECTING);
   vi.advanceTimersByTime(30_000);
   expect(FakeSocket.all).toHaveLength(2);
+  connection.close();
+});
+
+it('caps the reconnect backoff at about 20 seconds', () => {
+  vi.spyOn(Math, 'random').mockReturnValue(0);
+  const connection = connect();
+  // Fail every attempt; each close schedules the next one with a longer wait.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const socket = lastSocket();
+    socket.readyState = FakeSocket.CLOSED;
+    socket.dispatchEvent(new Event('close'));
+    vi.advanceTimersByTime(20_000);
+  }
+  const opened = FakeSocket.all.length;
+  // Well past the cap: the wait no longer doubles (750 ms × 2^8 would be 192 s).
+  lastSocket().readyState = FakeSocket.CLOSED;
+  lastSocket().dispatchEvent(new Event('close'));
+  vi.advanceTimersByTime(19_999);
+  expect(FakeSocket.all).toHaveLength(opened);
+  vi.advanceTimersByTime(1);
+  expect(FakeSocket.all).toHaveLength(opened + 1);
+  connection.close();
+});
+
+it('reconnects at once when back online or on reconnectNow(), skipping the backoff', () => {
+  const states: string[] = [];
+  const connection = connectEvents({
+    sessionId: 's1',
+    onEvent: () => undefined,
+    onState: (state) => states.push(state),
+  });
+  const first = FakeSocket.all[0]!;
+  first.readyState = FakeSocket.CLOSED;
+  first.dispatchEvent(new Event('close'));
+  expect(states[states.length - 1]).toBe('reconnecting');
+  // A retry is scheduled; `online` does not wait for it.
+  window.dispatchEvent(new Event('online'));
+  expect(FakeSocket.all).toHaveLength(2);
+  const second = FakeSocket.all[1]!;
+  second.readyState = FakeSocket.CLOSED;
+  second.dispatchEvent(new Event('close'));
+  connection.reconnectNow();
+  expect(FakeSocket.all).toHaveLength(3);
+  // The cancelled retry timers never open another socket.
+  vi.advanceTimersByTime(30_000);
+  expect(FakeSocket.all).toHaveLength(3);
+  // An open socket is left alone.
+  FakeSocket.all[2]!.readyState = FakeSocket.OPEN;
+  connection.reconnectNow();
+  expect(FakeSocket.all).toHaveLength(3);
+  connection.close();
+});
+
+it('routes directory changes without moving the cursor', () => {
+  const events: unknown[] = [];
+  let directory = 0;
+  const connection = connectEvents({
+    sessionId: 's1',
+    cursor: '2:5',
+    onEvent: (event) => events.push(event),
+    onState: () => undefined,
+    onDirectory: () => directory++,
+  });
+  const first = FakeSocket.all[0]!;
+  expect(new URL(first.url).searchParams.get('directory')).toBe('1');
+  first.dispatchEvent(
+    new MessageEvent('message', { data: JSON.stringify({ type: 'directory_changed' }) }),
+  );
+  expect(directory).toBe(1);
+  expect(events).toHaveLength(0);
+  // The next socket resumes from the session cursor, not from the directory event.
+  first.readyState = FakeSocket.CLOSED;
+  connection.reconnectNow();
+  expect(new URL(FakeSocket.all[1]!.url).searchParams.get('cursor')).toBe('2:5');
+  connection.close();
+});
+
+it('does not ask for directory changes without a handler', () => {
+  const connection = connect();
+  expect(new URL(FakeSocket.all[0]!.url).searchParams.has('directory')).toBe(false);
   connection.close();
 });
