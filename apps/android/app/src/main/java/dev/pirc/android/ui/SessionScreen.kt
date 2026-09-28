@@ -105,10 +105,13 @@ fun SessionScreen(
         topBar = {
             TopAppBar(
                 title = {
+                    // Derived, so streamed text does not recompose the bar.
+                    val name by remember { derivedStateOf { state?.session?.name } }
+                    val runStatus by remember { derivedStateOf { state?.run?.status } }
                     Column {
-                        Text(state?.session?.name ?: fallbackName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(name ?: fallbackName, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
-                            subtitle(state, connection),
+                            subtitle(runStatus, connection),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -116,7 +119,8 @@ fun SessionScreen(
                 },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(PircIcons.Back, contentDescription = "Back") } },
                 actions = {
-                    val title = state?.session?.name ?: fallbackName
+                    val session by remember { derivedStateOf { state?.session } }
+                    val title = session?.name ?: fallbackName
                     TextButton(onClick = { onOpenPanels(title, PanelTab.Files) }) { Text("Files") }
                     TextButton(onClick = { menu = true }) { Text("More") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -126,19 +130,19 @@ fun SessionScreen(
                                 onOpenPanels(title, tab)
                             })
                         HorizontalDivider()
-                        val session = state?.session
-                        if (session != null) {
+                        val current = session
+                        if (current != null) {
                             DropdownMenuItem(text = { Text("Rename") }, onClick = {
                                 menu = false
                                 renaming = true
                             })
-                            DropdownMenuItem(text = { Text(if (session.pinned) "Unpin" else "Pin to the top") }, onClick = {
+                            DropdownMenuItem(text = { Text(if (current.pinned) "Unpin" else "Pin to the top") }, onClick = {
                                 menu = false
-                                viewModel.updateSession(pinned = !session.pinned, onChanged = onChanged)
+                                viewModel.updateSession(pinned = !current.pinned, onChanged = onChanged)
                             })
-                            DropdownMenuItem(text = { Text(if (session.settled) "Reopen" else "Mark as settled") }, onClick = {
+                            DropdownMenuItem(text = { Text(if (current.settled) "Reopen" else "Mark as settled") }, onClick = {
                                 menu = false
-                                viewModel.updateSession(settled = !session.settled, onChanged = onChanged)
+                                viewModel.updateSession(settled = !current.settled, onChanged = onChanged)
                             })
                         }
                     }
@@ -147,7 +151,8 @@ fun SessionScreen(
         },
         bottomBar = {
             // The larger of keyboard and navigation bar, not both stacked.
-            if (state != null) Composer(viewModel, Modifier.windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime)))
+            val loaded by remember { derivedStateOf { state != null } }
+            if (loaded) Composer(viewModel, Modifier.windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime)))
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -182,8 +187,8 @@ fun SessionScreen(
     }
 }
 
-private fun subtitle(state: SessionState?, connection: Connection): String {
-    val run = when (state?.run?.status) {
+private fun subtitle(runStatus: String?, connection: Connection): String {
+    val run = when (runStatus) {
         "queued", "running" -> "Running"
         "waiting_input" -> "Needs your input"
         "stopping" -> "Stopping"

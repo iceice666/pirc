@@ -33,6 +33,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,7 +49,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,6 +77,8 @@ import dev.pirc.android.core.THINKING_LEVELS
 import dev.pirc.android.ui.PircIcons
 import dev.pirc.android.ui.WheelPicker
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -86,12 +96,27 @@ private val THINKING_LABELS = mapOf(
  * attach, the model and thinking level as one label, and send (stop while a
  * run is active and nothing is typed). The caller makes it ride the keyboard.
  */
+@OptIn(FlowPreview::class)
 @Composable
 fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    // Only the fields shown here: streamed text must not recompose the composer.
+    val settings by viewModel.composerSettings.collectAsStateWithLifecycle()
     val control by viewModel.control.collectAsStateWithLifecycle()
     val connection by viewModel.connection.collectAsStateWithLifecycle()
-    val draft by viewModel.draft.collectAsStateWithLifecycle()
+    // The field owns its text, so fast typing and IME composition (Zhuyin,
+    // kana) never wait on a round trip; the view model hears about it debounced.
+    val field = rememberTextFieldState(viewModel.initialDraft)
+    val blank by remember { derivedStateOf { field.text.isBlank() } }
+    LaunchedEffect(field) {
+        snapshotFlow { field.text.toString() }.debounce(300).collect(viewModel::setDraft)
+    }
+    LaunchedEffect(field) {
+        viewModel.draftResets.collect { text ->
+            if (text.isEmpty()) field.clearText() else field.setTextAndPlaceCursorAtEnd(text)
+        }
+    }
+    // Leaving within the debounce window must not lose the last keystrokes.
+    DisposableEffect(field) { onDispose { viewModel.setDraft(field.text.toString()) } }
     val attachments by viewModel.attachments.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
@@ -100,13 +125,13 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     var picking by remember { mutableStateOf(false) }
 
-    val active = viewModel.runActive(state)
-    val stopping = state?.run?.status == "stopping"
+    val active = viewModel.runActive(settings)
+    val stopping = settings.runStatus == "stopping"
     val hasControl = control.heldByCurrentClient
-    val canSend = hasControl && connection == Connection.Live && !busy && draft.isNotBlank() && attachments.none { it.uploading }
-    val showStop = active && draft.isBlank()
-    val model = viewModel.selectedModel(state)
-    val level = viewModel.thinkingLevel(state)
+    val canSend = hasControl && connection == Connection.Live && !busy && !blank && attachments.none { it.uploading }
+    val showStop = active && blank
+    val model = viewModel.selectedModel(settings)
+    val level = viewModel.thinkingLevel(settings)
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(4)) { uris ->
         scope.launch {
@@ -161,16 +186,15 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
                     else -> "Steer the current run"
                 }
                 BasicTextField(
-                    value = draft,
-                    onValueChange = viewModel::setDraft,
+                    state = field,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    maxLines = 8,
+                    lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 14.dp, vertical = 12.dp),
-                    decorationBox = { field ->
+                    decorator = { inner ->
                         Box {
-                            if (draft.isEmpty()) Text(hint, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            field()
+                            if (field.text.isEmpty()) Text(hint, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            inner()
                         }
                     },
                 )
@@ -205,7 +229,7 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
                         )
                     }
                     SendButton(showStop = showStop, stopping = stopping, busy = busy, canSend = canSend, canStop = hasControl && !stopping,
-                        onSend = viewModel::send, onStop = viewModel::stopRun)
+                        onSend = { viewModel.send(field.text.toString()) }, onStop = viewModel::stopRun)
                 }
             }
         }

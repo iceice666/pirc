@@ -22,11 +22,18 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import dev.pirc.android.core.timeline.TimelineEvent
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,6 +57,17 @@ data class Attachment(
 
 private val ACTIVE_RUN = setOf("queued", "running", "waiting_input", "stopping")
 private const val HEARTBEAT_MS = 10_000L
+
+/** Streamed text is published at most this often; every other event at once. */
+internal const val DELTA_BATCH_MS = 32L
+
+/** What the composer shows of the session, so streamed text does not recompose it. */
+data class ComposerSettings(
+    val runStatus: String? = null,
+    val modelId: String? = null,
+    val modelProvider: String? = null,
+    val thinkingLevel: String? = null,
+)
 
 /**
  * One open session: its snapshot, kept current by the event stream while the
@@ -83,8 +101,24 @@ class SessionViewModel(
     private val _models = MutableStateFlow<List<ModelOption>>(emptyList())
     val models: StateFlow<List<ModelOption>> = _models.asStateFlow()
 
-    private val _draft = MutableStateFlow(drafts.draft(sessionId))
-    val draft: StateFlow<String> = _draft.asStateFlow()
+    /**
+     * The composer owns the text while typing (a TextFieldState, so IME
+     * composition never round-trips through here); it reports the text,
+     * debounced, and the view model only writes back through [draftResets].
+     */
+    private var draftText = drafts.draft(sessionId)
+
+    /** The saved draft, the text field's starting value. */
+    val initialDraft: String get() = draftText
+
+    private val _draftResets = Channel<String>(Channel.CONFLATED)
+
+    /** Text the composer must replace its content with (after a message is sent). */
+    val draftResets: Flow<String> = _draftResets.receiveAsFlow()
+
+    val composerSettings: StateFlow<ComposerSettings> = _state
+        .map { ComposerSettings(it?.run?.status, it?.selectedModelId, it?.selectedModelProvider, it?.thinkingLevel) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ComposerSettings())
 
     private val _attachments = MutableStateFlow<List<Attachment>>(emptyList())
     val attachments: StateFlow<List<Attachment>> = _attachments.asStateFlow()
@@ -97,6 +131,10 @@ class SessionViewModel(
     private var loading: Job? = null
     private var heartbeat: Job? = null
     private var syncing: Job? = null
+
+    /** Streamed text reduced but not yet published, and the job that publishes it. */
+    private var unpublished: SessionState? = null
+    private var publishing: Job? = null
 
     private val controlApi = object : ControlApi {
         override suspend fun control() = api.control(sessionId, clientId)
@@ -130,13 +168,14 @@ class SessionViewModel(
         stream?.cancel()
         heartbeat?.cancel()
         stream = null
+        publishDeltas()
         _connection.value = Connection.Stopped
-        drafts.saveDraft(sessionId, _draft.value)
+        drafts.saveDraft(sessionId, draftText)
     }
 
     /** Leaving the session: hand control back at once instead of waiting out the TTL. */
     override fun onCleared() {
-        drafts.saveDraft(sessionId, _draft.value)
+        drafts.saveDraft(sessionId, draftText)
         val lease = _control.value
         val generation = lease.generation
         if (lease.heldByCurrentClient && generation != null)
@@ -146,6 +185,7 @@ class SessionViewModel(
     fun reload() {
         if (loading?.isActive == true) return
         stream?.cancel()
+        dropDeltas()
         loading = viewModelScope.launch {
             try {
                 val raw = api.snapshot(sessionId)
@@ -161,6 +201,7 @@ class SessionViewModel(
     private fun follow() {
         val cursor = _state.value?.cursor ?: return
         stream?.cancel()
+        publishDeltas()
         _connection.value = Connection.Connecting
         stream = viewModelScope.launch {
             api.events(sessionId, cursor).collect { signal ->
@@ -174,15 +215,49 @@ class SessionViewModel(
                         _connection.value = Connection.Stopped
                         fail(signal.error)
                     }
-                    is StreamSignal.Event -> {
-                        val next = _state.value?.reduce(signal.envelope) ?: return@collect
-                        _state.value = next
-                        // The snapshot's watermark is where the new stream resumes.
-                        if (next.needsSnapshot) reload()
-                    }
+                    is StreamSignal.Event -> apply(signal)
                 }
             }
         }
+    }
+
+    /**
+     * Streamed text arrives as dozens of deltas a second; each would copy the
+     * state and recompose the screen. Deltas are reduced into [unpublished] and
+     * published every [DELTA_BATCH_MS]; any other event publishes at once.
+     */
+    private fun apply(signal: StreamSignal.Event) {
+        if (signal.envelope.event is TimelineEvent.MessageDelta) {
+            val next = (unpublished ?: _state.value)?.reduce(signal.envelope) ?: return
+            if (!next.needsSnapshot) {
+                unpublished = next
+                if (publishing?.isActive != true) publishing = viewModelScope.launch {
+                    delay(DELTA_BATCH_MS)
+                    publishDeltas()
+                }
+                return
+            }
+        }
+        publishDeltas()
+        val next = _state.value?.reduce(signal.envelope) ?: return
+        _state.value = next
+        // The snapshot's watermark is where the new stream resumes.
+        if (next.needsSnapshot) reload()
+    }
+
+    /** A delta only changes the messages and the cursor; anything else may have been updated meanwhile. */
+    private fun publishDeltas() {
+        publishing?.cancel()
+        publishing = null
+        val pending = unpublished ?: return
+        unpublished = null
+        _state.update { it?.copy(messages = pending.messages, cursor = pending.cursor) }
+    }
+
+    private fun dropDeltas() {
+        publishing?.cancel()
+        publishing = null
+        unpublished = null
     }
 
     private fun syncNow() {
@@ -203,8 +278,11 @@ class SessionViewModel(
 
     // ---- composing ----
 
+    /** The composer's text changed (debounced); kept so it survives leaving the session. */
     fun setDraft(text: String) {
-        _draft.value = text
+        if (text == draftText) return
+        draftText = text
+        drafts.saveDraft(sessionId, text)
     }
 
     fun dismissActionError() {
@@ -230,8 +308,8 @@ class SessionViewModel(
     }
 
     /** A prompt when idle; while a run is active, a steer (it joins after the current tool batch). */
-    fun send() {
-        val text = _draft.value.trim()
+    fun send(draft: String) {
+        val text = draft.trim()
         val attachments = _attachments.value
         if (text.isEmpty() || attachments.any { it.uploading }) return
         val kind = if (runActive()) "steer" else "prompt"
@@ -242,9 +320,9 @@ class SessionViewModel(
                 Commands.message(kind, text, attachments.mapNotNull { it.uploadId }),
             )
             if (!receipt.accepted) throw ApiException(503, receipt.status, receipt.message ?: "The message was not accepted.")
-            _draft.value = ""
+            setDraft("")
+            _draftResets.trySend("")
             _attachments.value = emptyList()
-            drafts.saveDraft(sessionId, "")
         }
     }
 
@@ -296,15 +374,22 @@ class SessionViewModel(
             _state.update { state -> state?.copy(interactions = state.interactions.filterNot { it.id == interaction.id }) }
         }
 
-    fun selectedModel(state: SessionState? = _state.value): ModelOption? {
+    fun selectedModel(state: SessionState? = _state.value): ModelOption? =
+        selectedModel(state?.selectedModelId, state?.selectedModelProvider)
+
+    fun selectedModel(settings: ComposerSettings): ModelOption? = selectedModel(settings.modelId, settings.modelProvider)
+
+    private fun selectedModel(id: String?, provider: String?): ModelOption? {
         val models = _models.value
-        return models.firstOrNull {
-            it.id == state?.selectedModelId && (state.selectedModelProvider == null || it.provider == state.selectedModelProvider)
-        } ?: models.firstOrNull()
+        return models.firstOrNull { it.id == id && (provider == null || it.provider == provider) } ?: models.firstOrNull()
     }
 
     /** The thinking level shown and sent: the session's, else the web's default. */
     fun thinkingLevel(state: SessionState? = _state.value): String = state?.thinkingLevel ?: "medium"
+
+    fun thinkingLevel(settings: ComposerSettings): String = settings.thinkingLevel ?: "medium"
+
+    fun runActive(settings: ComposerSettings) = settings.runStatus in ACTIVE_RUN
 
     /**
      * Pick a model and thinking level together. Only what changed is sent,
