@@ -1,12 +1,12 @@
 package dev.pirc.android.ui.panels
 
 import android.annotation.SuppressLint
-import android.content.pm.ApplicationInfo
 import android.util.Log
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.horizontalScroll
@@ -36,7 +36,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -52,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.pirc.android.BuildConfig
 import dev.pirc.android.TERMINAL_LOG
 import dev.pirc.android.TerminalFrame
 import dev.pirc.android.TerminalViewModel
@@ -69,6 +69,27 @@ private const val MIN_FONT = 7f
 private const val MAX_FONT = 28f
 
 private fun Color.css() = String.format("#%06X", toArgb() and 0xFFFFFF)
+
+/**
+ * The bundled page is served from this https origin instead of `file://`, as
+ * WebViewAssetLoader does: only files under [PAGE_DIR] of the app's assets.
+ */
+private const val ASSET_ORIGIN = "https://appassets.androidplatform.net"
+private const val PAGE_DIR = "terminal/"
+private const val PAGE_URL = "$ASSET_ORIGIN/assets/${PAGE_DIR}terminal.html"
+
+private val MIME_TYPES = mapOf("html" to "text/html", "js" to "text/javascript", "css" to "text/css", "txt" to "text/plain")
+
+/** A bundled page asset for [request]; an empty 404 for anything else, so nothing reaches the network. */
+private fun WebView.asset(request: WebResourceRequest): WebResourceResponse? {
+    val url = request.url
+    if (url.scheme != "https" || url.host != "appassets.androidplatform.net") return notFound()
+    val path = url.path?.removePrefix("/assets/")?.takeIf { it.startsWith(PAGE_DIR) && ".." !in it } ?: return notFound()
+    val type = MIME_TYPES[path.substringAfterLast('.')] ?: return notFound()
+    return runCatching { WebResourceResponse(type, "utf-8", context.assets.open(path)) }.getOrElse { notFound() }
+}
+
+private fun notFound() = WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), java.io.ByteArrayInputStream(ByteArray(0)))
 
 /** Keys a phone keyboard lacks, as the bytes a terminal expects. */
 private val KEYS = listOf(
@@ -111,6 +132,7 @@ fun TerminalScreen(
 
     val pageSettings = remember(colors, fontSize) {
         buildJsonObject {
+            put("debug", BuildConfig.DEBUG)
             put("fontSize", (fontSize * 4).roundToInt() / 4f)
             put("theme", buildJsonObject {
                 put("background", colors.surface.css())
@@ -172,6 +194,8 @@ fun TerminalScreen(
                 )
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
+                    // Released even if the page never became ready (a JS error, leaving early).
+                    onRelease = { it.destroy() },
                     factory = { context ->
                         TerminalWebView(
                             context,
@@ -187,19 +211,22 @@ fun TerminalScreen(
                             settings.allowFileAccess = false
                             settings.allowContentAccess = false
                             setBackgroundColor(colors.surface.toArgb())
-                            // Debug builds: the page is inspectable from chrome://inspect over adb.
-                            if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
-                                WebView.setWebContentsDebuggingEnabled(true)
-                            }
                             webViewClient = object : WebViewClient() {
                                 // Only the bundled page: never navigate anywhere else.
                                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = true
+
+                                // Every request is answered locally; nothing reaches the network.
+                                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest) = view.asset(request)
                             }
-                            webChromeClient = object : WebChromeClient() {
-                                // The page's console (xterm state, JS errors) next to the socket log.
-                                override fun onConsoleMessage(message: ConsoleMessage): Boolean {
-                                    Log.d(TERMINAL_LOG, "page: ${message.message()} (${message.sourceId()}:${message.lineNumber()})")
-                                    return true
+                            if (BuildConfig.DEBUG) {
+                                // The page is inspectable from chrome://inspect over adb.
+                                WebView.setWebContentsDebuggingEnabled(true)
+                                webChromeClient = object : WebChromeClient() {
+                                    // The page's console (xterm state, JS errors) next to the socket log.
+                                    override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                                        Log.d(TERMINAL_LOG, "page: ${message.message()} (${message.sourceId()}:${message.lineNumber()})")
+                                        return true
+                                    }
                                 }
                             }
                             addJavascriptInterface(
@@ -227,7 +254,7 @@ fun TerminalScreen(
                                 },
                                 "Pirc",
                             )
-                            loadUrl("file:///android_asset/terminal/terminal.html")
+                            loadUrl(PAGE_URL)
                         }
                     },
                 )
@@ -270,5 +297,4 @@ fun TerminalScreen(
     LaunchedEffect(view, colors) {
         view?.evaluateJavascript("pirc.theme(${org.json.JSONObject(pageSettings).getJSONObject("theme")})", null)
     }
-    DisposableEffect(Unit) { onDispose { web?.destroy() } }
 }

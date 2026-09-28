@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import dev.pirc.android.core.ApiException
 import dev.pirc.android.core.PircApi
 import dev.pirc.android.core.PircJson
+import dev.pirc.android.core.unauthorizedMessage
 import dev.pirc.android.core.timeline.get
 import dev.pirc.android.core.timeline.number
 import dev.pirc.android.core.timeline.string
@@ -28,8 +29,11 @@ import okhttp3.WebSocketListener
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
-/** Logcat tag for terminal diagnostics: `adb logcat -s PircTerminal`. */
+/** Logcat tag for terminal diagnostics: `adb logcat -s PircTerminal`. Debug logs are stripped from release builds. */
 const val TERMINAL_LOG = "PircTerminal"
+
+/** Output is handed to the view at most once a frame. */
+private const val FRAME_MS = 16L
 
 /** Ctrl+[text] for a letter or one of @[\]^_ (the C0 control codes); anything else unchanged. */
 fun controlKey(text: String): String {
@@ -71,8 +75,15 @@ class TerminalViewModel(
 
     /** Everything drawn since the last reset, so a recreated view can catch up. */
     private val screen = StringBuilder()
-    private val _frames = MutableSharedFlow<TerminalFrame>(extraBufferCapacity = 4096, onBufferOverflow = BufferOverflow.SUSPEND)
+    private val _frames = MutableSharedFlow<TerminalFrame>(extraBufferCapacity = 1024, onBufferOverflow = BufferOverflow.SUSPEND)
     val frames: SharedFlow<TerminalFrame> = _frames
+
+    /** Output not yet handed to the view: `cat` of a big file is thousands of frames, drawn as a few writes. */
+    private val pending = StringBuilder()
+    private var flushing: Job? = null
+
+    /** A frame could not be buffered: the view must start over from [screen]. */
+    private var overflowed = false
 
     private val _notice = MutableStateFlow<String?>("Connecting…")
     val notice: StateFlow<String?> = _notice.asStateFlow()
@@ -91,27 +102,60 @@ class TerminalViewModel(
 
     /** What a newly attached view starts from, and the last frame it includes. */
     @Synchronized
-    fun snapshot(): Pair<String, Long> = screen.toString() to seq
+    fun snapshot(): Pair<String, Long> {
+        flush()
+        return screen.toString() to seq
+    }
 
     @Synchronized
-    private fun draw(next: TerminalFrame) {
-        seq++
-        val frame = when (next) {
-            is TerminalFrame.Reset -> next.copy(seq = seq)
-            is TerminalFrame.Write -> next.copy(seq = seq)
-        }
-        when (frame) {
+    internal fun draw(next: TerminalFrame) {
+        when (next) {
             is TerminalFrame.Reset -> {
+                pending.setLength(0)
+                overflowed = false
                 screen.setLength(0)
-                screen.append(frame.text)
+                screen.append(next.text)
+                emit(next.copy(seq = ++seq))
             }
             is TerminalFrame.Write -> {
-                screen.append(frame.text)
+                screen.append(next.text)
                 // Keep roughly the node's own scrollback, not the whole session.
                 if (screen.length > 512_000) screen.delete(0, screen.length - 256_000)
+                pending.append(next.text)
+                if (flushing?.isActive != true) flushing = viewModelScope.launch {
+                    delay(FRAME_MS)
+                    flush()
+                }
             }
         }
-        _frames.tryEmit(frame)
+    }
+
+    /** Hand the output gathered since the last frame to the view, as one write. */
+    @Synchronized
+    internal fun flush() {
+        flushing?.cancel()
+        flushing = null
+        if (overflowed) {
+            overflowed = false
+            pending.setLength(0)
+            emit(TerminalFrame.Reset(screen.toString(), ++seq))
+            return
+        }
+        if (pending.isEmpty()) return
+        val text = pending.toString()
+        pending.setLength(0)
+        emit(TerminalFrame.Write(text, ++seq))
+    }
+
+    private fun emit(frame: TerminalFrame) {
+        if (!_frames.tryEmit(frame)) {
+            Log.w(TERMINAL_LOG, "view is behind; redrawing from the screen")
+            overflowed = true
+            if (flushing?.isActive != true) flushing = viewModelScope.launch {
+                delay(FRAME_MS)
+                flush()
+            }
+        }
     }
 
     fun start() {
@@ -167,7 +211,7 @@ class TerminalViewModel(
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TERMINAL_LOG, "closed $terminalId: $code $reason")
-                ended(webSocket, code)
+                ended(webSocket, code, reason)
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -177,14 +221,15 @@ class TerminalViewModel(
         })
     }
 
-    private fun ended(webSocket: WebSocket, code: Int?) {
+    private fun ended(webSocket: WebSocket, code: Int?, reason: String? = null) {
         if (webSocket !== socket) return
         socket = null
         when {
             _exited.value || !visible -> Unit
             code == 4401 -> {
-                _notice.value = "This phone's device token is invalid, expired or revoked."
-                onUnauthorized(ApiException(401, "unauthenticated", "This phone's device token is invalid, expired or revoked. Pair it again."))
+                val message = unauthorizedMessage(reason)
+                _notice.value = message
+                onUnauthorized(ApiException(401, "unauthenticated", message))
             }
             code == 4404 -> {
                 _exited.value = true

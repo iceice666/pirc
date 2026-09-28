@@ -34,10 +34,10 @@
     <script src="xterm.js"></script>
     <script src="addon-fit.js"></script>
     <script>
-      // Diagnostics reach logcat through the app's WebChromeClient.
-      const log = (...parts) => console.log('[pirc-term]', ...parts);
-      window.onerror = (message, source, line) => log('error', message, source, line);
       const settings = JSON.parse(Pirc.settings());
+      // Diagnostics reach logcat through the app's WebChromeClient (debug builds only).
+      const log = settings.debug ? (...parts) => console.log('[pirc-term]', ...parts) : () => {};
+      window.onerror = (message, source, line) => log('error', message, source, line);
       document.body.style.background = settings.theme.background;
       const term = new Terminal({
         cursorBlink: true,
@@ -77,7 +77,7 @@
         const next = term.cols + 'x' + term.rows;
         if (next === size) return;
         size = next;
-        log('resize', state());
+        if (settings.debug) log('resize', state());
         Pirc.resize(term.cols, term.rows);
       };
       window.addEventListener('resize', resize);
@@ -86,7 +86,7 @@
         write: (data) => term.write(data),
         reset: (data) => {
           term.reset();
-          term.write(data, () => log('reset', data.length, 'chars', state()));
+          term.write(data, settings.debug ? () => log('reset', data.length, 'chars', state()) : undefined);
         },
         // Called when the user types: xterm only does this itself for keys it handles.
         scrollToBottom: () => term.scrollToBottom(),
@@ -101,7 +101,7 @@
         },
       };
       resize();
-      log('ready', state());
+      if (settings.debug) log('ready', state());
       Pirc.ready();
     </script>
   </body>
