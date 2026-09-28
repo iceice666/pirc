@@ -89,6 +89,16 @@ export function writeAgentConfig(configDir: string, extra: Record<string, unknow
   );
 }
 
+/**
+ * Variables a surrounding pirc node or session sets: the write broker, team
+ * mode, session dir and node credentials. Test agents must not inherit them,
+ * or tests run from inside pirc wait on a write broker that nobody answers.
+ * Tests that need one pass it through `options.env`.
+ */
+const HOST_PIRC_ENV = /^(PIRC_|PI_CODING_AGENT_)/;
+const testEnv = () =>
+  Object.fromEntries(Object.entries(process.env).filter(([name]) => !HOST_PIRC_ENV.test(name)));
+
 export async function startAgent(
   options: {
     config?: Record<string, unknown>;
@@ -111,7 +121,7 @@ export async function startAgent(
     {
       cwd: workspace,
       env: {
-        ...process.env,
+        ...testEnv(),
         PIRC_CONFIG_DIR: configDir,
         PIRC_WORKSPACE_MEMORY_DIR: path.join(root, 'workspace-memory'),
         ...options.env,
