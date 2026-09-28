@@ -24,7 +24,13 @@ class LocalStore(context: Context) : Drafts {
         prefs.edit().apply { if (text.isEmpty()) remove(DRAFT + sessionId) else putString(DRAFT + sessionId, text) }.apply()
     }
 
+    /** The terminal's text size, as last pinched. */
+    var terminalFontSize: Float
+        get() = prefs.getFloat(TERMINAL_FONT, 13f)
+        set(value) = prefs.edit().putFloat(TERMINAL_FONT, value).apply()
+
     private companion object {
+        const val TERMINAL_FONT = "terminal_font_size"
         const val CLIENT_ID = "client_id"
         const val DRAFT = "draft:"
     }

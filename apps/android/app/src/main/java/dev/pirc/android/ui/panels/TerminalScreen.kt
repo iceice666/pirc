@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -51,10 +52,16 @@ import dev.pirc.android.TerminalFrame
 import dev.pirc.android.TerminalViewModel
 import dev.pirc.android.controlKey
 import dev.pirc.android.ui.PircIcons
+import androidx.compose.runtime.mutableFloatStateOf
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.onSubscription
+import kotlin.math.roundToInt
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+
+private const val MIN_FONT = 7f
+private const val MAX_FONT = 28f
 
 private fun Color.css() = String.format("#%06X", toArgb() and 0xFFFFFF)
 
@@ -72,14 +79,22 @@ private val KEYS = listOf(
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TerminalScreen(viewModel: TerminalViewModel, title: String, onClose: () -> Unit, onBack: () -> Unit) {
+fun TerminalScreen(
+    viewModel: TerminalViewModel,
+    title: String,
+    initialFontSize: Float,
+    onFontSize: (Float) -> Unit,
+    onClose: () -> Unit,
+    onBack: () -> Unit,
+) {
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val exited by viewModel.exited.collectAsStateWithLifecycle()
     val lease by viewModel.control.lease.collectAsStateWithLifecycle()
     var ctrl by remember { mutableStateOf(false) }
-    var fontSize by rememberSaveable { mutableIntStateOf(13) }
+    var fontSize by rememberSaveable { mutableFloatStateOf(initialFontSize) }
     var menu by remember { mutableStateOf(false) }
-    var web by remember { mutableStateOf<WebView?>(null) }
+    var web by remember { mutableStateOf<TerminalWebView?>(null) }
+    var keyboard by remember { mutableStateOf<TerminalInputView?>(null) }
     val colors = MaterialTheme.colorScheme
     val currentCtrl by rememberUpdatedState(ctrl)
 
@@ -91,7 +106,7 @@ fun TerminalScreen(viewModel: TerminalViewModel, title: String, onClose: () -> U
 
     val pageSettings = remember(colors, fontSize) {
         buildJsonObject {
-            put("fontSize", fontSize)
+            put("fontSize", (fontSize * 4).roundToInt() / 4f)
             put("theme", buildJsonObject {
                 put("background", colors.surface.css())
                 put("foreground", colors.onSurface.css())
@@ -116,8 +131,10 @@ fun TerminalScreen(viewModel: TerminalViewModel, title: String, onClose: () -> U
                     if (!lease.heldByCurrentClient && !lease.free) TextButton(onClick = viewModel.control::take) { Text("Take control") }
                     TextButton(onClick = { menu = true }) { Text("More") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text("Larger text") }, onClick = { fontSize = (fontSize + 1).coerceAtMost(24) })
-                        DropdownMenuItem(text = { Text("Smaller text") }, onClick = { fontSize = (fontSize - 1).coerceAtLeast(8) })
+                        DropdownMenuItem(text = { Text("Show keyboard") }, onClick = {
+                            menu = false
+                            keyboard?.showKeyboard()
+                        })
                         DropdownMenuItem(text = { Text(if (exited) "Remove" else "Close terminal") }, onClick = {
                             menu = false
                             onClose()
@@ -134,10 +151,28 @@ fun TerminalScreen(viewModel: TerminalViewModel, title: String, onClose: () -> U
                 }
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
+                // Holds the keyboard; the WebView itself never takes focus.
+                AndroidView(
+                    modifier = Modifier.size(1.dp),
+                    factory = { context ->
+                        TerminalInputView(context) { data ->
+                            viewModel.input(if (currentCtrl) controlKey(data) else data)
+                            if (currentCtrl) ctrl = false
+                        }.also { keyboard = it }
+                    },
+                )
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { context ->
-                        WebView(context).apply {
+                        TerminalWebView(
+                            context,
+                            onTap = {
+                                keyboard?.showKeyboard()
+                                web?.evaluateJavascript("pirc.focus()", null)
+                            },
+                            // Pinch to zoom, like tmux clients: the pty is resized to the new grid.
+                            onScale = { factor -> fontSize = (fontSize * factor).coerceIn(MIN_FONT, MAX_FONT) },
+                        ).apply {
                             settings.javaScriptEnabled = true
                             // Bundled assets load regardless; nothing else on disk is reachable.
                             settings.allowFileAccess = false
@@ -151,6 +186,7 @@ fun TerminalScreen(viewModel: TerminalViewModel, title: String, onClose: () -> U
                                 object {
                                     @JavascriptInterface fun settings(): String = currentSettings
 
+                                    // The terminal's own replies to queries (keys go through TerminalInputView).
                                     @JavascriptInterface fun input(data: String) {
                                         post {
                                             viewModel.input(if (currentCtrl) controlKey(data) else data)
@@ -161,7 +197,12 @@ fun TerminalScreen(viewModel: TerminalViewModel, title: String, onClose: () -> U
                                     @JavascriptInterface fun resize(cols: Int, rows: Int) = viewModel.resize(cols, rows)
 
                                     @JavascriptInterface fun ready() {
-                                        post { web = this@apply }
+                                        post {
+                                            web = this@apply
+                                            // Ready to type, as in a terminal app.
+                                            keyboard?.showKeyboard()
+                                            evaluateJavascript("pirc.focus()", null)
+                                        }
                                     }
                                 },
                                 "Pirc",
@@ -199,7 +240,13 @@ fun TerminalScreen(viewModel: TerminalViewModel, title: String, onClose: () -> U
             view.evaluateJavascript(script, null)
         }
     }
-    LaunchedEffect(view, fontSize) { view?.evaluateJavascript("pirc.fontSize($fontSize)", null) }
+    // Steps of a quarter point: a pinch sends a stream of tiny factors.
+    val shownFont = (fontSize * 4).roundToInt() / 4f
+    LaunchedEffect(view, shownFont) { view?.evaluateJavascript("pirc.fontSize($shownFont)", null) }
+    LaunchedEffect(shownFont) {
+        delay(500)
+        onFontSize(shownFont)
+    }
     LaunchedEffect(view, colors) {
         view?.evaluateJavascript("pirc.theme(${org.json.JSONObject(pageSettings).getJSONObject("theme")})", null)
     }

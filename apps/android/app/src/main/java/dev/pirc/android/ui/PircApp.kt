@@ -129,6 +129,8 @@ fun PircApp(viewModel: AppViewModel) {
                     TerminalScreen(
                         terminal,
                         title = route.title,
+                        initialFontSize = viewModel.local.terminalFontSize,
+                        onFontSize = { viewModel.local.terminalFontSize = it },
                         onClose = { terminal.close { nav.popBackStack() } },
                         onBack = { nav.popBackStack() },
                     )
