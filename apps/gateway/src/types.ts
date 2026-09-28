@@ -40,6 +40,7 @@ export type CommandPayload =
   | { type: 'prompt' | 'steer' | 'follow_up'; message: string; uploadIds?: string[] }
   | { type: 'stop' }
   | { type: 'clear_queue' }
+  | { type: 'send_now'; queue: 'steering' | 'followUp'; index: number; message: string }
   | { type: 'set_model'; provider: string; modelId: string }
   | {
       type: 'set_thinking';

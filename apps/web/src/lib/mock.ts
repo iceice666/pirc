@@ -257,6 +257,7 @@ export const demoSnapshot: SessionSnapshot = {
     {
       id: 'queue-1',
       kind: 'follow_up',
+      index: 0,
       content: 'After the UI, run the reducer tests and production build.',
       createdAt: new Date().toISOString(),
     },

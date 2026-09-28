@@ -15,6 +15,7 @@ export type CommandKind =
   | 'follow_up'
   | 'stop'
   | 'clear_queue'
+  | 'send_now'
   | 'set_model'
   | 'set_thinking';
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -176,6 +177,8 @@ export type PendingInteraction =
 export interface QueueItem {
   id: string;
   kind: 'steer' | 'follow_up';
+  /** Position among the user messages of its queue; `send_now` addresses it by this. */
+  index: number;
   content: string;
   createdAt: string;
 }
@@ -310,6 +313,8 @@ export interface SessionCommandInput {
   provider?: string;
   thinkingLevel?: ThinkingLevel;
   attachmentIds?: string[];
+  /** `send_now`: the queued message to deliver immediately (`content` must match it). */
+  queued?: Pick<QueueItem, 'kind' | 'index'>;
 }
 
 export interface CommandReceipt {

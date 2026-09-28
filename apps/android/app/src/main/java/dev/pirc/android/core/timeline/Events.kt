@@ -52,8 +52,8 @@ private val RUN_EVENTS = setOf("agent_start", "agent_end", "agent_settled")
 private val THINKING_LEVELS = setOf("off", "minimal", "low", "medium", "high", "xhigh")
 
 private fun queue(steering: JsonElement?, followUp: JsonElement?) =
-    steering.array.orEmpty().mapIndexed { index, item -> QueueItem("steer-$index", "steer", item.text ?: "") } +
-        followUp.array.orEmpty().mapIndexed { index, item -> QueueItem("follow-$index", "follow_up", item.text ?: "") }
+    steering.array.orEmpty().mapIndexed { index, item -> QueueItem("steer-$index", "steer", item.text ?: "", index) } +
+        followUp.array.orEmpty().mapIndexed { index, item -> QueueItem("follow-$index", "follow_up", item.text ?: "", index) }
 
 private fun piEvent(pi: JsonElement?, timestamp: JsonElement?, now: () -> Long): TimelineEvent {
     return when (pi["type"].string) {

@@ -4,11 +4,19 @@
  */
 export type Reply =
   | { text: string; thinking?: string; promptTokens?: number }
-  | { tool: { id: string; name: string; args: Record<string, unknown> }; text?: string }
+  | {
+      tool: ToolSpec;
+      /** Further calls in the same assistant message. */
+      also?: ToolSpec[];
+      text?: string;
+    }
   | { status: number; body: string }
-  | { hang: true }
+  /** Stream `text` (if any), then keep the response open until the client aborts. */
+  | { hang: true; text?: string }
   /** Compute the reply from the request body. */
   | { dynamic: (body: any) => Reply };
+
+type ToolSpec = { id: string; name: string; args: Record<string, unknown> };
 
 export interface FakeLlm {
   url: string;
@@ -34,22 +42,19 @@ function openai(reply: Reply): string[] {
     );
   }
   if ('tool' in reply) {
-    const args = JSON.stringify(reply.tool.args);
-    out.push(
-      chunk({
-        tool_calls: [
-          {
-            index: 0,
-            id: reply.tool.id,
-            type: 'function',
-            function: { name: reply.tool.name, arguments: '' },
-          },
-        ],
-      }),
-      chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(0, 5) } }] }),
-      chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(5) } }] }),
-      chunk({}, 'tool_calls'),
-    );
+    [reply.tool, ...(reply.also ?? [])].forEach((tool, index) => {
+      const args = JSON.stringify(tool.args);
+      out.push(
+        chunk({
+          tool_calls: [
+            { index, id: tool.id, type: 'function', function: { name: tool.name, arguments: '' } },
+          ],
+        }),
+        chunk({ tool_calls: [{ index, function: { arguments: args.slice(0, 5) } }] }),
+        chunk({ tool_calls: [{ index, function: { arguments: args.slice(5) } }] }),
+      );
+    });
+    out.push(chunk({}, 'tool_calls'));
   } else out.push(chunk({}, 'stop'));
   out.push(
     `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 'promptTokens' in reply && reply.promptTokens ? reply.promptTokens : 100, completion_tokens: 10, total_tokens: ('promptTokens' in reply && reply.promptTokens ? reply.promptTokens : 100) + 10, prompt_tokens_details: { cached_tokens: 40 } } })}\n\n`,
@@ -87,19 +92,21 @@ function anthropic(reply: Reply): string[] {
     );
     index++;
   }
-  if ('tool' in reply) {
-    out.push(
-      ev('content_block_start', {
-        index,
-        content_block: { type: 'tool_use', id: reply.tool.id, name: reply.tool.name, input: {} },
-      }),
-      ev('content_block_delta', {
-        index,
-        delta: { type: 'input_json_delta', partial_json: JSON.stringify(reply.tool.args) },
-      }),
-      ev('content_block_stop', { index }),
-    );
-  }
+  if ('tool' in reply)
+    for (const tool of [reply.tool, ...(reply.also ?? [])]) {
+      out.push(
+        ev('content_block_start', {
+          index,
+          content_block: { type: 'tool_use', id: tool.id, name: tool.name, input: {} },
+        }),
+        ev('content_block_delta', {
+          index,
+          delta: { type: 'input_json_delta', partial_json: JSON.stringify(tool.args) },
+        }),
+        ev('content_block_stop', { index }),
+      );
+      index++;
+    }
   out.push(
     ev('message_delta', {
       delta: { stop_reason: 'tool' in reply ? 'tool_use' : 'end_turn' },
@@ -129,6 +136,12 @@ export function startFakeLlm(): FakeLlm {
           new ReadableStream({
             start(controller) {
               controller.enqueue(encoder.encode(': keepalive\n\n'));
+              if (reply.text && !url.pathname.endsWith('/v1/messages'))
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: reply.text }, finish_reason: null }] })}\n\n`,
+                  ),
+                );
             },
           }),
           { headers: { 'content-type': 'text/event-stream' } },

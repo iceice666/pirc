@@ -16,10 +16,13 @@ const userTexts = (body: any) =>
     .map((m: any) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)));
 
 describe('queueing and abort', () => {
-  it('delivers steer after the current tool and skips remaining calls', async () => {
+  it('delivers steer after the whole tool batch without skipping calls', async () => {
     const agent = await start();
     agent.llm.push(
-      { tool: { id: 's1', name: 'bash', args: { command: 'sleep 0.4; echo slept' } } },
+      {
+        tool: { id: 's1', name: 'bash', args: { command: 'sleep 0.4; echo slept' } },
+        also: [{ id: 's2', name: 'bash', args: { command: 'echo second' } }],
+      },
       { text: 'adjusted' },
     );
     await agent.send({ type: 'prompt', message: 'long task' });
@@ -29,9 +32,84 @@ describe('queueing and abort', () => {
     const queued = await agent.waitFor((e) => e.type === 'queue_update' && e.steering.length === 1);
     expect(queued.steering).toEqual(['actually do X']);
     await settledAfter(agent, 0);
+    const ends = agent.events.filter((e) => e.type === 'tool_execution_end');
+    expect(ends.map((e) => e.toolCallId)).toEqual(['s1', 's2']);
+    expect(ends[1]!.result.content[0].text).toContain('second');
     const second = agent.llm.requests[1]!.body;
     expect(userTexts(second)).toEqual(['long task', 'actually do X']);
     expect(second.messages.at(-1).content).toBe('actually do X');
+  });
+
+  it('send_now interrupts a streaming reply without ending the run', async () => {
+    const agent = await start();
+    agent.llm.push({ hang: true, text: 'half an answer' }, { text: 'redirected' });
+    await agent.send({ type: 'prompt', message: 'start' });
+    await agent.waitFor(
+      (e) => e.type === 'message_update' && e.assistantMessageEvent.type === 'text_delta',
+    );
+    await agent.send({ type: 'steer', message: 'go left' });
+    await agent.waitFor((e) => e.type === 'queue_update' && e.steering.length === 1);
+    const now = await agent.send({
+      type: 'send_now',
+      queue: 'steering',
+      index: 0,
+      message: 'go left',
+    });
+    expect(now.success).toBe(true);
+    await settledAfter(agent, 0);
+    expect(agent.llm.requests).toHaveLength(2);
+    const second = agent.llm.requests[1]!.body;
+    const context = JSON.stringify(second.messages);
+    expect(context).toContain('interrupted by the user');
+    expect(context).toContain('half an answer');
+    expect(second.messages.at(-1).content).toBe('go left');
+    expect(agent.events.filter((e) => e.type === 'agent_end')).toHaveLength(1);
+  }, 20_000);
+
+  it('send_now aborts a running tool and skips the rest of the batch', async () => {
+    const agent = await start();
+    agent.llm.push(
+      {
+        tool: { id: 'n1', name: 'bash', args: { command: 'sleep 30; echo never' } },
+        also: [{ id: 'n2', name: 'bash', args: { command: 'echo should-not-run' } }],
+      },
+      { text: 'ok' },
+    );
+    await agent.send({ type: 'prompt', message: 'slow' });
+    await agent.waitFor((e) => e.type === 'tool_execution_start');
+    await agent.send({ type: 'follow_up', message: 'do this now' });
+    await agent.waitFor((e) => e.type === 'queue_update' && e.followUp.length === 1);
+    const started = Date.now();
+    const now = await agent.send({
+      type: 'send_now',
+      queue: 'followUp',
+      index: 0,
+      message: 'do this now',
+    });
+    expect(now.success).toBe(true);
+    await settledAfter(agent, 0);
+    expect(Date.now() - started).toBeLessThan(3000);
+    const ends = agent.events.filter((e) => e.type === 'tool_execution_end');
+    expect(ends.map((e) => e.toolCallId)).toEqual(['n1']);
+    const second = agent.llm.requests[1]!.body;
+    const context = JSON.stringify(second.messages);
+    expect(context).toContain('Interrupted: the user sent a message before this tool ran.');
+    expect(context).not.toContain('should-not-run\\n');
+    expect(context).not.toContain('interrupted by the user');
+    expect(second.messages.at(-1).content).toBe('do this now');
+    expect(agent.events.filter((e) => e.type === 'agent_end')).toHaveLength(1);
+  });
+
+  it('rejects send_now for a message that is no longer queued', async () => {
+    const agent = await start();
+    const stale = await agent.send({
+      type: 'send_now',
+      queue: 'steering',
+      index: 0,
+      message: 'gone',
+    });
+    expect(stale.success).toBe(false);
+    expect(stale.error).toContain('no longer queued');
   });
 
   it('runs follow-ups only after the agent would otherwise stop', async () => {

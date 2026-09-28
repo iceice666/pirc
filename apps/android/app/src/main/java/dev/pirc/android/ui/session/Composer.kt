@@ -63,7 +63,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.pirc.android.Attachment
 import dev.pirc.android.Connection
-import dev.pirc.android.Delivery
 import dev.pirc.android.SessionViewModel
 import dev.pirc.android.core.ModelOption
 import dev.pirc.android.core.THINKING_LEVELS
@@ -94,7 +93,6 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
     val connection by viewModel.connection.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val attachments by viewModel.attachments.collectAsStateWithLifecycle()
-    val delivery by viewModel.delivery.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
     val models by viewModel.models.collectAsStateWithLifecycle()
@@ -160,8 +158,7 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
                 val hint = when {
                     !hasControl -> "Take control to send a message"
                     !active -> "Message pirc"
-                    delivery == Delivery.Steer -> "Steer the current run"
-                    else -> "Queue what comes next"
+                    else -> "Steer the current run"
                 }
                 BasicTextField(
                     value = draft,
@@ -182,11 +179,6 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
                         onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                         modifier = Modifier.size(48.dp),
                     ) { Icon(PircIcons.Plus, contentDescription = "Attach images", modifier = Modifier.size(26.dp)) }
-                    AnimatedVisibility(visible = active, enter = fadeIn(), exit = fadeOut()) {
-                        TextButton(onClick = {
-                            viewModel.setDelivery(if (delivery == Delivery.Steer) Delivery.FollowUp else Delivery.Steer)
-                        }) { Text(if (delivery == Delivery.Steer) "Steer" else "Queue", style = MaterialTheme.typography.labelLarge) }
-                    }
                     // All the room between the buttons; a long name shrinks to fit instead of being cut.
                     Row(
                         Modifier

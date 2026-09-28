@@ -13,6 +13,7 @@ import dev.pirc.android.core.PircApi
 import dev.pirc.android.core.StreamSignal
 import dev.pirc.android.core.syncControl
 import dev.pirc.android.core.timeline.Interaction
+import dev.pirc.android.core.timeline.QueueItem
 import dev.pirc.android.core.timeline.SessionState
 import dev.pirc.android.core.timeline.reduce
 import dev.pirc.android.core.timeline.snapshotState
@@ -45,9 +46,6 @@ data class Attachment(
     override fun equals(other: Any?) = other is Attachment && other.localId == localId && other.uploadId == uploadId
     override fun hashCode() = localId.hashCode()
 }
-
-/** Where a message goes while a run is active. */
-enum class Delivery(val command: String) { Steer("steer"), FollowUp("follow_up") }
 
 private val ACTIVE_RUN = setOf("queued", "running", "waiting_input", "stopping")
 private const val HEARTBEAT_MS = 10_000L
@@ -89,9 +87,6 @@ class SessionViewModel(
 
     private val _attachments = MutableStateFlow<List<Attachment>>(emptyList())
     val attachments: StateFlow<List<Attachment>> = _attachments.asStateFlow()
-
-    private val _delivery = MutableStateFlow(Delivery.Steer)
-    val delivery: StateFlow<Delivery> = _delivery.asStateFlow()
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
@@ -210,10 +205,6 @@ class SessionViewModel(
         _draft.value = text
     }
 
-    fun setDelivery(delivery: Delivery) {
-        _delivery.value = delivery
-    }
-
     fun dismissActionError() {
         _actionError.value = null
     }
@@ -236,12 +227,12 @@ class SessionViewModel(
         _attachments.update { list -> list.filterNot { it.localId == localId } }
     }
 
-    /** A prompt when idle; while a run is active, a steer or a queued follow-up. */
+    /** A prompt when idle; while a run is active, a steer (it joins after the current tool batch). */
     fun send() {
         val text = _draft.value.trim()
         val attachments = _attachments.value
         if (text.isEmpty() || attachments.any { it.uploading }) return
-        val kind = if (runActive()) _delivery.value.command else "prompt"
+        val kind = if (runActive()) "steer" else "prompt"
         perform("The message was not accepted.") { generation ->
             if (kind == "prompt") applySettings(generation)
             val receipt = api.command(
@@ -264,6 +255,13 @@ class SessionViewModel(
     }
 
     fun stopRun() = perform("The run could not be stopped.") { command(it, Commands.simple("stop")) }
+
+    /** Deliver a queued message now; a no-op if the run already took or dropped it. */
+    fun sendQueuedNow(item: QueueItem) = perform("The message could not be sent now.") { generation ->
+        val receipt = api.command(sessionId, clientId, generation, UUID.randomUUID().toString(), Commands.sendNow(item))
+        if (!receipt.accepted && receipt.message?.contains("no longer queued") != true)
+            throw ApiException(503, receipt.status, receipt.message ?: "The message could not be sent now.")
+    }
 
     fun clearQueue() = perform("The queue could not be cleared.") { command(it, Commands.simple("clear_queue")) }
 

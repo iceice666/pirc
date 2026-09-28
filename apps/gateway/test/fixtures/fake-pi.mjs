@@ -116,6 +116,14 @@ rl.on('line', (raw) => {
     line({ type: 'queue_update', ...queue });
     return response();
   }
+  if (command.type === 'send_now') {
+    const list = queue[command.queue];
+    if (!list || list[command.index] !== command.message)
+      return response(false, undefined, 'That message is no longer queued');
+    list.splice(command.index, 1);
+    line({ type: 'queue_update', ...queue });
+    return response();
+  }
   if (command.type === 'follow_up') {
     queue.followUp.push(command.message);
     line({ type: 'queue_update', ...queue });

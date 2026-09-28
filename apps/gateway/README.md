@@ -115,6 +115,10 @@ Gateway cursors are `<runnerEpoch>:<sequence>`. A cursor outside the bounded in-
 
 At startup (of the gateway or a node) unfinished runs become `interrupted`, pending interactions become `stale`, leases are deleted, and commands left `dispatched` become `outcome_unknown`. Such a command is never retried automatically. A runner crash applies the same uncertainty rule to outstanding dispatched commands.
 
+### Queue semantics
+
+`steer` joins the running run once the current assistant message's whole tool batch has finished, before the next model call; no tool call is skipped. `follow_up` waits until the run would otherwise stop. `send_now` (`{queue: 'steering'|'followUp', index, message}`, `index` counting only the queue's user messages, `message` required to match) moves a queued message to the front and interrupts only the current turn: a streaming reply is aborted (the model is told it was interrupted, with its partial text), a running tool is aborted, and the batch's remaining calls are skipped. The run itself continues, so goals, team waits and background notices are unaffected. A message that is no longer queued is rejected.
+
 ### Stop semantics
 
 `stop` sends `clear_queue` before `abort`; cleared steering/follow-up text is returned in the command result. This does not guarantee termination of arbitrary extension background jobs or team children.

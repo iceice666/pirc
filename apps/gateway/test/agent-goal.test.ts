@@ -196,6 +196,39 @@ describe('goal', () => {
     expect(agent.llm.requests).toHaveLength(2);
   });
 
+  it('keeps the goal active when send_now interrupts a turn', async () => {
+    const agent = await start();
+    agent.llm.push(
+      { tool: { id: 'c1', name: 'create_goal', args: { objective: 'Long job' } } },
+      { hang: true },
+      { text: 'redirected' },
+      { hang: true },
+    );
+    await agent.send({ type: 'prompt', message: 'long job' });
+    while (agent.llm.requests.length < 2) await Bun.sleep(5);
+    await agent.send({ type: 'steer', message: 'change course' });
+    await agent.waitFor((e) => e.type === 'queue_update' && e.steering.length === 1);
+    const now = await agent.send({
+      type: 'send_now',
+      queue: 'steering',
+      index: 0,
+      message: 'change course',
+    });
+    expect(now.success).toBe(true);
+    // The interrupted run ends cleanly, so the goal schedules its first round.
+    while (agent.llm.requests.length < 4) await Bun.sleep(5);
+    expect(texts(agent.llm.requests[3]!.body).at(-1)).toContain('Goal continuation round 1');
+    expect(
+      agent.events.some(
+        (e) =>
+          e.type === 'extension_ui_request' &&
+          e.method === 'notify' &&
+          /Goal paused/.test(e.message),
+      ),
+    ).toBe(false);
+    await agent.send({ type: 'abort' });
+  });
+
   it('restores a goal disarmed after a restart and continues on /goal resume', async () => {
     const first = await start();
     first.llm.push(

@@ -380,7 +380,10 @@ export class RunnerManager {
     let rpc: Record<string, unknown>;
     let runId: string | null = null;
     if (['prompt', 'steer', 'follow_up'].includes(payload.type)) {
-      const messagePayload = payload as Extract<CommandPayload, { message: string }>;
+      const messagePayload = payload as Extract<
+        CommandPayload,
+        { type: 'prompt' | 'steer' | 'follow_up' }
+      >;
       rpc = {
         type: payload.type,
         message: messagePayload.message,
@@ -394,6 +397,13 @@ export class RunnerManager {
       rpc = { type: 'set_model', provider: payload.provider, modelId: payload.modelId };
     else if (payload.type === 'set_thinking')
       rpc = { type: 'set_thinking_level', level: payload.level };
+    else if (payload.type === 'send_now')
+      rpc = {
+        type: 'send_now',
+        queue: payload.queue,
+        index: payload.index,
+        message: payload.message,
+      };
     else rpc = { type: payload.type };
     this.db.updateCommand(commandId, 'dispatched');
     try {

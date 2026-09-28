@@ -97,6 +97,33 @@ export function sanitizeHistory(messages: Message[]): Message[] {
   return out;
 }
 
+const INTERRUPTED_PARTIAL_CHARS = 2000;
+
+/**
+ * Providers drop aborted assistant messages from the context, so tell the
+ * model its reply was cut off by the user and what it had written so far.
+ */
+function interruptedNote(message: AssistantMessage): QueueItem {
+  let partial = message.content
+    .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+    .join('')
+    .trim();
+  if (partial.length > INTERRUPTED_PARTIAL_CHARS)
+    partial = `${partial.slice(0, INTERRUPTED_PARTIAL_CHARS)}…`;
+  return {
+    kind: 'custom',
+    message: {
+      role: 'custom',
+      customType: 'interrupted',
+      display: false,
+      timestamp: Date.now(),
+      content: partial
+        ? `[Your previous response was interrupted by the user.] Partial output:\n\n${partial}`
+        : '[Your previous response was interrupted by the user before it produced any text.]',
+    },
+  };
+}
+
 export class Agent {
   readonly config: AgentConfig;
   readonly store: SessionStore;
@@ -194,6 +221,11 @@ export class Agent {
     }
   }
   private controller: AbortController | null = null;
+  /** Aborts only the current model call and tool batch; the run continues. */
+  private turn: AbortController | null = null;
+  private endTurn: () => void = () => {};
+  /** `sendNow` arrived between turns: deliver the queue before the next model call. */
+  private interruptPending = false;
   private runPromise: Promise<void> | null = null;
   private extraSystemPrompt = '';
   private compacting: AbortController | null = null;
@@ -450,6 +482,30 @@ export class Agent {
     this.followUps.push(item);
     this.completionChanged();
     this.emitQueue();
+  }
+
+  /**
+   * Deliver the `index`th queued user message (hidden notifications are not
+   * counted) now: it moves to the front of the steering queue and interrupts
+   * the current model call or tool. `text` must still match, so a message that
+   * was already delivered or cleared is never sent twice.
+   */
+  sendNow(queue: 'steering' | 'followUp', index: number, text: string): void {
+    const list = queue === 'steering' ? this.steering : this.followUps;
+    const at = list.flatMap((item, i) => (item.kind === 'user' ? [i] : []))[index];
+    const item = at === undefined ? undefined : list[at];
+    if (item?.kind !== 'user' || item.text !== text)
+      throw new Error('That message is no longer queued');
+    list.splice(at!, 1);
+    if (!this.running) {
+      this.emitQueue();
+      return this.startRun([item]);
+    }
+    this.steering.unshift(item);
+    this.emitQueue();
+    this.completionChanged();
+    if (this.turn) this.turn.abort();
+    else this.interruptPending = true;
   }
 
   /**
@@ -813,13 +869,31 @@ export class Agent {
       // model call so a final synthesis cannot overlook already-queued results.
       const teamBatch = this.teamBatchSize();
       if (teamBatch) await this.admit(this.followUps.splice(0, teamBatch));
+      this.endTurn();
       await this.maybeCompact(signal);
       if (signal.aborted) break;
+      if (this.interruptPending) {
+        // A `sendNow` during compaction or between turns: nothing to interrupt.
+        this.interruptPending = false;
+        const items = this.steering;
+        this.steering = [];
+        this.emitQueue();
+        await this.admit(items);
+      }
+      const turn = new AbortController();
+      const onRunAbort = () => turn.abort();
+      signal.addEventListener('abort', onRunAbort, { once: true });
+      this.turn = turn;
+      this.endTurn = () => {
+        signal.removeEventListener('abort', onRunAbort);
+        if (this.turn === turn) this.turn = null;
+      };
+      const interrupted = () => turn.signal.aborted && !signal.aborted;
       this.emit({ type: 'turn_start' });
       const compactsInstead = (reply: AssistantMessage) =>
         isContextOverflow(reply) && !overflowRetried && this.compactionSettings.enabled;
       let persisted = false;
-      const message = await this.stream(this.systemPrompt(extraPrompt.trim()), signal, {
+      const message = await this.stream(this.systemPrompt(extraPrompt.trim()), turn.signal, {
         beforeEnd: (reply) => {
           if (compactsInstead(reply)) return;
           this.store.append({ type: 'message', message: reply });
@@ -846,7 +920,8 @@ export class Agent {
       if (message.stopReason === 'toolUse') {
         const calls = message.content.filter((part): part is ToolCall => part.type === 'toolCall');
         for (const call of calls) {
-          if (signal.aborted || this.steering.length) {
+          // Plain steers wait for the whole batch; only an abort or `sendNow` skips calls.
+          if (turn.signal.aborted) {
             results.push(
               this.recordResult(call, {
                 content: [
@@ -854,7 +929,7 @@ export class Agent {
                     type: 'text',
                     text: signal.aborted
                       ? 'Aborted by the user before this tool ran.'
-                      : 'Skipped: the user sent a new message before this tool ran.',
+                      : 'Interrupted: the user sent a message before this tool ran.',
                   },
                 ],
                 isError: true,
@@ -862,7 +937,7 @@ export class Agent {
             );
             continue;
           }
-          results.push(await this.executeTool(call, signal));
+          results.push(await this.executeTool(call, turn.signal));
         }
       }
       // Markers only: every message already went out in its own message_end,
@@ -870,11 +945,14 @@ export class Agent {
       // the node's per-line RPC limit and get the agent killed.
       this.emit({ type: 'turn_end' });
       for (const feature of this.features) await feature.turnEnd?.(this, message);
-      if (message.stopReason === 'error' || message.stopReason === 'aborted') break;
+      if (message.stopReason === 'error') break;
+      if (message.stopReason === 'aborted' && !interrupted()) break;
       if (this.steering.length) {
-        const items = this.steering;
+        const items: QueueItem[] = this.steering;
         this.steering = [];
+        this.interruptPending = false;
         this.emitQueue();
+        if (message.stopReason === 'aborted') items.unshift(interruptedNote(message));
         await this.admit(items);
         continue;
       }
@@ -903,6 +981,8 @@ export class Agent {
       }
       break;
     }
+    this.endTurn();
+    this.interruptPending = false;
     this.emit({ type: 'agent_end', willRetry: false });
   }
 

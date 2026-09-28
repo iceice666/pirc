@@ -85,3 +85,17 @@ it('preserves prompts without explicit settings', async () => {
   });
   expect(bodies.map((body) => body.payload)).toEqual([{ type: 'prompt', message: 'hello' }]);
 });
+
+it('addresses a queued message by its queue and index for send_now', async () => {
+  const { bodies } = mockCommands();
+  await api.command('session', {
+    commandId: 'now',
+    kind: 'send_now',
+    controlGeneration: 1,
+    content: 'do this instead',
+    queued: { kind: 'follow_up', index: 2 },
+  });
+  expect(bodies.map((body) => body.payload)).toEqual([
+    { type: 'send_now', queue: 'followUp', index: 2, message: 'do this instead' },
+  ]);
+});

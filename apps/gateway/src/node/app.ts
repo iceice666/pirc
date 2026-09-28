@@ -52,6 +52,12 @@ const commandPayload = z.discriminatedUnion('type', [
   z.object({ type: z.literal('stop') }),
   z.object({ type: z.literal('clear_queue') }),
   z.object({
+    type: z.literal('send_now'),
+    queue: z.enum(['steering', 'followUp']),
+    index: z.number().int().nonnegative(),
+    message: z.string().min(1).max(1_000_000),
+  }),
+  z.object({
     type: z.literal('set_model'),
     provider: z.string().min(1),
     modelId: z.string().min(1),

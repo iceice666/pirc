@@ -29,6 +29,12 @@ object PircIcons {
         moveTo(6f, 11f); lineTo(12f, 5f); lineTo(18f, 11f)
     }
 
+    /** A paper plane pointing right: deliver a queued message now. */
+    val SendNow = stroke("send-now") {
+        moveTo(4f, 4f); lineTo(21f, 12f); lineTo(4f, 20f); lineTo(7f, 12f); close()
+        moveTo(7f, 12f); lineTo(14f, 12f)
+    }
+
     val ChevronDown = stroke("chevron-down") {
         moveTo(7f, 10f); lineTo(12f, 15f); lineTo(17f, 10f)
     }

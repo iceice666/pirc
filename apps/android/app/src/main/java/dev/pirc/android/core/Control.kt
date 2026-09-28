@@ -1,5 +1,6 @@
 package dev.pirc.android.core
 
+import dev.pirc.android.core.timeline.QueueItem
 import dev.pirc.android.core.timeline.get
 import dev.pirc.android.core.timeline.number
 import dev.pirc.android.core.timeline.text
@@ -109,6 +110,14 @@ object Commands {
     fun setThinking(level: String) = buildJsonObject {
         put("type", "set_thinking")
         put("level", level)
+    }
+
+    /** Deliver a queued message now, interrupting the current model call or tool. */
+    fun sendNow(item: QueueItem) = buildJsonObject {
+        put("type", "send_now")
+        put("queue", if (item.kind == "follow_up") "followUp" else "steering")
+        put("index", item.index)
+        put("message", item.content)
     }
 
     fun simple(type: String) = buildJsonObject { put("type", type) }

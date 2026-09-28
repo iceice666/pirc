@@ -19,6 +19,7 @@ import type {
   InteractionAnswer,
   ModelOption,
   NodeSummary,
+  QueueItem,
   SessionSummary,
   SessionUpdateInput,
   ThinkingLevel,
@@ -352,7 +353,13 @@ class AppState {
           ...state,
           queue: [
             ...state.queue,
-            { id: uuid(), kind, content, createdAt: new Date().toISOString() },
+            {
+              id: uuid(),
+              kind,
+              index: state.queue.filter((item) => item.kind === kind).length,
+              content,
+              createdAt: new Date().toISOString(),
+            },
           ],
         };
       } else if (kind === 'prompt' || kind === 'steer') {
@@ -434,6 +441,35 @@ class AppState {
 
   async stopRun() {
     await this.sendCommand('stop', '');
+  }
+
+  /** Deliver a queued message immediately, interrupting the current model call or tool. */
+  async sendQueuedNow(item: QueueItem) {
+    const state = this.sessionState;
+    const sessionId = this.activeSessionId;
+    if (!state || !sessionId || !state.control.generation || this.connection !== 'connected')
+      return;
+    if (this.demo) {
+      this.sessionState = { ...state, queue: state.queue.filter((queued) => queued !== item) };
+      return;
+    }
+    this.commandBusy = true;
+    this.pageError = '';
+    try {
+      await api.command(sessionId, {
+        commandId: uuid(),
+        kind: 'send_now',
+        controlGeneration: state.control.generation,
+        content: item.content,
+        queued: { kind: item.kind, index: item.index },
+      });
+    } catch (error) {
+      const text = message(error, 'The message could not be sent now.');
+      // The run delivered or cleared it meanwhile; the next queue update shows that.
+      if (!/no longer queued/.test(text)) this.pageError = text;
+    } finally {
+      this.commandBusy = false;
+    }
   }
 
   async clearQueue() {

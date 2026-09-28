@@ -74,7 +74,8 @@ data class RunState(
     val failureReason: String? = null,
 )
 
-data class QueueItem(val id: String, val kind: String, val content: String)
+/** `index` counts the user messages of its queue; `send_now` addresses the message by it. */
+data class QueueItem(val id: String, val kind: String, val content: String, val index: Int)
 
 data class InteractionOption(val value: String, val label: String, val description: String? = null)
 

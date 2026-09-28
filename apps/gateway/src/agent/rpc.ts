@@ -183,6 +183,13 @@ export async function handleCommand(
       agent.abort();
       await agent.idle();
       return undefined;
+    case 'send_now':
+      if (command.queue !== 'steering' && command.queue !== 'followUp')
+        throw new Error('send_now needs queue: steering or followUp');
+      if (!Number.isInteger(command.index) || command.index < 0)
+        throw new Error('send_now needs a non-negative integer index');
+      agent.sendNow(command.queue, command.index, message);
+      return undefined;
     case 'clear_queue':
       return agent.clearQueue();
     case 'get_state':

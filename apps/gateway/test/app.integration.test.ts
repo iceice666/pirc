@@ -171,6 +171,53 @@ describe('node router', () => {
     await waitFor(async () => services.writes.leases(parent.sessionId).length, 0, 5_000);
   });
 
+  it('forwards send_now for a queued message and validates its payload', async () => {
+    const { app } = await buildNodeApp(testConfig());
+    apps.push(app);
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      headers,
+      payload: { workspaceId: 'test' },
+    });
+    const sessionId = created.json().session.id as string;
+    const lease = await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/control/acquire`,
+      headers,
+      payload: { clientId: 'browser' },
+    });
+    let n = 0;
+    const send = (payload: Record<string, unknown>) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/sessions/${sessionId}/commands`,
+        headers,
+        payload: {
+          commandId: `send-now-${++n}`,
+          clientId: 'browser',
+          generation: lease.json().lease.generation,
+          payload,
+        },
+      });
+    const steering = async () =>
+      (
+        await app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/snapshot`, headers })
+      ).json().queue.steering as string[];
+
+    expect((await send({ type: 'steer', message: 'go left' })).statusCode).toBe(202);
+    await waitFor(async () => (await steering()).join(), 'go left', 5_000);
+    expect(
+      (await send({ type: 'send_now', queue: 'steering', index: -1, message: 'go left' }))
+        .statusCode,
+    ).toBe(400);
+    expect(
+      (await send({ type: 'send_now', queue: 'steering', index: 0, message: 'go left' }))
+        .statusCode,
+    ).toBe(202);
+    await waitFor(async () => (await steering()).length, 0, 5_000);
+  });
+
   it('keeps serving history from the session file after the runner dies', async () => {
     const { app, services } = await buildNodeApp(testConfig());
     apps.push(app);

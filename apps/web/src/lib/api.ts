@@ -138,12 +138,14 @@ export function snapshotFromRaw(raw: any, lease: unknown): SessionSnapshot {
       ...(raw.queue?.steering ?? []).map((content: string, index: number) => ({
         id: `steer-${index}`,
         kind: 'steer' as const,
+        index,
         content,
         createdAt: new Date().toISOString(),
       })),
       ...(raw.queue?.followUp ?? []).map((content: string, index: number) => ({
         id: `follow-${index}`,
         kind: 'follow_up' as const,
+        index,
         content,
         createdAt: new Date().toISOString(),
       })),
@@ -265,11 +267,18 @@ export const api = {
     const payload =
       input.kind === 'prompt' || input.kind === 'steer' || input.kind === 'follow_up'
         ? { type: input.kind, message: input.content ?? '', uploadIds: input.attachmentIds }
-        : input.kind === 'set_model'
-          ? { type: input.kind, provider: input.provider ?? '', modelId: input.modelId ?? '' }
-          : input.kind === 'set_thinking'
-            ? { type: input.kind, level: input.thinkingLevel ?? 'off' }
-            : { type: input.kind };
+        : input.kind === 'send_now'
+          ? {
+              type: input.kind,
+              queue: input.queued?.kind === 'follow_up' ? 'followUp' : 'steering',
+              index: input.queued?.index ?? 0,
+              message: input.content ?? '',
+            }
+          : input.kind === 'set_model'
+            ? { type: input.kind, provider: input.provider ?? '', modelId: input.modelId ?? '' }
+            : input.kind === 'set_thinking'
+              ? { type: input.kind, level: input.thinkingLevel ?? 'off' }
+              : { type: input.kind };
     const response = await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/commands`, {
       method: 'POST',
       body: JSON.stringify({
@@ -473,12 +482,14 @@ function piEvent(pi: any, timestamp: unknown): GatewayEvent {
           ...(pi.steering ?? []).map((content: string, index: number) => ({
             id: `steer-${index}`,
             kind: 'steer' as const,
+            index,
             content,
             createdAt: iso(timestamp),
           })),
           ...(pi.followUp ?? []).map((content: string, index: number) => ({
             id: `follow-${index}`,
             kind: 'follow_up' as const,
+            index,
             content,
             createdAt: iso(timestamp),
           })),

@@ -7,12 +7,13 @@
     LoaderCircle,
     Navigation,
     Paperclip,
+    SendHorizontal,
     Square,
     X,
   } from '@lucide/svelte';
   import { slide } from 'svelte/transition';
   import { app } from '../app.svelte';
-  import type { CommandKind, ThinkingLevel } from '../types';
+  import type { ThinkingLevel } from '../types';
   import { modelKey } from '../types';
   import ComposerSelect from './ComposerSelect.svelte';
   import GoalDock from './GoalDock.svelte';
@@ -45,7 +46,6 @@
     { value: 'xhigh', label: 'Extra high' },
   ];
 
-  let mode = $state<CommandKind>('prompt');
   let fileInput: HTMLInputElement | undefined = $state();
   let queueExpanded = $state(true);
 
@@ -55,10 +55,8 @@
       runStatus === 'queued' ||
       runStatus === 'stopping',
   );
-  // A run starts in steer mode; once it ends messages are prompts again.
-  $effect.pre(() => {
-    mode = active ? 'steer' : 'prompt';
-  });
+  /** Mid-run messages steer: they join the run once its current tool batch finishes. */
+  let mode = $derived(active ? ('steer' as const) : ('prompt' as const));
   let canSubmit = $derived(
     value.trim().length > 0 &&
       connection === 'connected' &&
@@ -79,9 +77,7 @@
         ? 'Take control to send a message'
         : mode === 'steer'
           ? 'Steer the current run…'
-          : mode === 'follow_up'
-            ? 'Queue what should happen next…'
-            : 'Tell the agent what to work on…',
+          : 'Tell the agent what to work on…',
   );
 
   function keydown(event: KeyboardEvent) {
@@ -125,6 +121,16 @@
                     />{/if}
                 </span>
                 <span class="queue-dock-text">{item.content}</span>
+                <button
+                  class="queue-send-now"
+                  type="button"
+                  onclick={() => app.sendQueuedNow(item)}
+                  disabled={!hasControl || busy}
+                  aria-label="Send now: {item.content}"
+                  title="Send now — interrupts the current step"
+                >
+                  <SendHorizontal size={14} />
+                </button>
               </li>
             {/each}
           </ol>
@@ -165,7 +171,7 @@
       oninput={(event) => app.setDraft(event.currentTarget.value)}
       onkeydown={keydown}
     ></textarea>
-    <div class="composer-tools" class:running={active}>
+    <div class="composer-tools">
       <input
         class="sr-only"
         bind:this={fileInput}
@@ -206,24 +212,6 @@
         />
       </div>
       <span class="spacer"></span>
-      {#if active}
-        <div class="mode-switch" role="group" aria-label="Message delivery mode">
-          <button
-            class:active={mode === 'steer'}
-            aria-pressed={mode === 'steer'}
-            type="button"
-            title="Deliver into the current run"
-            onclick={() => (mode = 'steer')}>Steer</button
-          >
-          <button
-            class:active={mode === 'follow_up'}
-            aria-pressed={mode === 'follow_up'}
-            type="button"
-            title="Queue for after the current run"
-            onclick={() => (mode = 'follow_up')}>Follow up</button
-          >
-        </div>
-      {/if}
       <span class="send-hint">↵ send</span>
       {#if active && !showStopPrimary}
         <!-- While typing mid-run, stopping stays one click away beside send. -->
@@ -258,8 +246,8 @@
           type="button"
           onclick={() => app.sendCommand(mode)}
           disabled={!canSubmit}
-          aria-label={mode === 'follow_up' ? 'Queue message' : 'Send message'}
-          title={mode === 'follow_up' ? 'Queue message' : 'Send message'}
+          aria-label="Send message"
+          title="Send message"
         >
           {#if busy}<LoaderCircle class="spin" size={18} />{:else}<ArrowUp
               size={19}
@@ -294,28 +282,6 @@
     height: 24px;
     background: linear-gradient(to top, var(--bg), transparent);
     pointer-events: none;
-  }
-  .mode-switch {
-    flex: none;
-    display: flex;
-    margin-right: 4px;
-    padding: 2px;
-    border-radius: 999px;
-    background: var(--bg-hover);
-  }
-  .mode-switch button {
-    height: 30px;
-    padding: 0 11px;
-    border: 0;
-    border-radius: 999px;
-    color: var(--text-2);
-    background: transparent;
-    font-size: 12.5px;
-  }
-  .mode-switch button.active {
-    color: var(--ink);
-    background: var(--bg-layer);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
   }
   /*
   * Composer dock: cards tucked on top of the composer (as in Codex and
@@ -363,6 +329,23 @@
     -webkit-line-clamp: 2;
     line-clamp: 2;
     -webkit-box-orient: vertical;
+  }
+  .queue-send-now {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    margin: -3px 0;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: var(--text-2);
+    background: transparent;
+  }
+  .queue-send-now:hover:not(:disabled) {
+    color: var(--accent);
+    background: var(--bg-hover);
   }
   .composer {
     position: relative;
@@ -538,14 +521,6 @@
     .composer-dock {
       width: calc(100% - 24px);
     }
-    .mode-switch {
-      margin-right: 2px;
-    }
-    .mode-switch button {
-      height: 28px;
-      padding: 0 9px;
-      font-size: 12px;
-    }
     .composer {
       border-radius: var(--radius-xl);
     }
@@ -562,13 +537,6 @@
     }
     .composer-tools .model-select {
       max-width: 112px;
-    }
-    /* The model is locked while a run is active, so its slot goes to Steer/Follow up. */
-    .composer-tools.running .model-select {
-      display: none;
-    }
-    .composer-tools.running .thinking-select {
-      max-width: 92px;
     }
   }
 </style>

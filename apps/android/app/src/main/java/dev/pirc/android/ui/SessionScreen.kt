@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
@@ -236,7 +238,9 @@ private fun Timeline(state: SessionState, viewModel: SessionViewModel) {
             modifier = Modifier.fillMaxSize(),
         ) {
             if (state.queue.isNotEmpty())
-                item(key = "queue") { Queue(state.queue, control.heldByCurrentClient, viewModel::clearQueue, Modifier.animateItem()) }
+                item(key = "queue") {
+                    Queue(state.queue, control.heldByCurrentClient && !busy, viewModel::sendQueuedNow, viewModel::clearQueue, Modifier.animateItem())
+                }
             items(state.interactions.filter { it.status == "pending" }, key = { "i:" + it.id }) { interaction ->
                 InteractionCard(
                     interaction,
@@ -268,15 +272,22 @@ private fun Timeline(state: SessionState, viewModel: SessionViewModel) {
 }
 
 @Composable
-private fun Queue(queue: List<QueueItem>, canClear: Boolean, onClear: () -> Unit, modifier: Modifier) {
+private fun Queue(queue: List<QueueItem>, canAct: Boolean, onSendNow: (QueueItem) -> Unit, onClear: () -> Unit, modifier: Modifier) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.medium, modifier = modifier.fillMaxWidth()) {
-        Column(Modifier.padding(start = 14.dp, top = 10.dp, end = 4.dp, bottom = 4.dp)) {
-            for (item in queue) Text(
-                "${if (item.kind == "steer") "Steering" else "Queued"}: ${item.content}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            TextButton(onClick = onClear, enabled = canClear, modifier = Modifier.align(Alignment.End)) { Text("Clear queue") }
+        Column(Modifier.padding(start = 14.dp, top = 4.dp, end = 4.dp, bottom = 4.dp)) {
+            for (item in queue) Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${if (item.kind == "steer") "Steering" else "Queued"}: ${item.content}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                // Interrupts the current model call or tool and delivers this message at once.
+                IconButton(onClick = { onSendNow(item) }, enabled = canAct) {
+                    Icon(PircIcons.SendNow, contentDescription = "Send now", modifier = Modifier.size(20.dp))
+                }
+            }
+            TextButton(onClick = onClear, enabled = canAct, modifier = Modifier.align(Alignment.End)) { Text("Clear queue") }
         }
     }
 }
