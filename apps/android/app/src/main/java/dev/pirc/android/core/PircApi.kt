@@ -223,12 +223,22 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
         )
     }
 
-    /** Store an image on the session's node, where its agent reads it. */
-    open suspend fun upload(sessionId: String, bytes: ByteArray, mimeType: String): Upload {
-        val reply = send("POST", "${session(sessionId)}/uploads", bytes.toRequestBody(mimeType.toMediaType()))
+    /**
+     * Store a file on the session's node. Images ride in the model's context;
+     * anything else is copied into the workspace for the agent's file tools —
+     * [filename] lets the node tell them apart and name the copy.
+     */
+    open suspend fun upload(sessionId: String, bytes: ByteArray, mimeType: String, filename: String? = null): Upload {
+        val query = filename?.let { "?filename=${it.urlSegment()}" } ?: ""
+        val reply = send("POST", "${session(sessionId)}/uploads$query", bytes.toRequestBody(mimeType.toMediaType()))
         val upload = reply["upload"]
         return readingReply {
-            Upload(upload["id"].text ?: error("upload without an id"), upload["mimeType"].text ?: mimeType, upload["byteSize"].number ?: bytes.size.toLong())
+            Upload(
+                upload["id"].text ?: error("upload without an id"),
+                upload["mimeType"].text ?: mimeType,
+                upload["byteSize"].number ?: bytes.size.toLong(),
+                upload["kind"].text ?: "image",
+            )
         }
     }
 

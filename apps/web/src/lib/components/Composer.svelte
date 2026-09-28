@@ -2,6 +2,7 @@
   import {
     ArrowUp,
     CornerDownRight,
+    File as FileIcon,
     Image,
     ListOrdered,
     LoaderCircle,
@@ -183,12 +184,12 @@
       </div>
     {/if}
     {#if attachments.length}
-      <div class="attachment-strip" role="group" aria-label="Attached images">
+      <div class="attachment-strip" role="group" aria-label="Attachments">
         {#each attachments as attachment (attachment.id)}
           <div class="attachment-preview">
-            {#if attachment.preview}<img src={attachment.preview} alt="" />{:else}<Image
+            {#if attachment.preview}<img src={attachment.preview} alt="" />{:else if attachment.kind === 'file'}<FileIcon
                 size={22}
-              />{/if}
+              />{:else}<Image size={22} />{/if}
             <span>{attachment.uploading ? 'Uploading…' : attachment.name}</span>
             {#if attachment.uploading}<LoaderCircle class="spin" size={15} />{:else}<button
                 class="touch-target"
@@ -220,20 +221,19 @@
         class="sr-only"
         bind:this={fileInput}
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
         multiple
         onchange={(event) => {
           const input = event.currentTarget;
-          if (input.files?.length) void app.uploadImages(Array.from(input.files));
-          // Clear the selection so picking the same image again fires `change`.
+          if (input.files?.length) void app.uploadFiles(Array.from(input.files));
+          // Clear the selection so picking the same file again fires `change`.
           input.value = '';
         }}
       />
       <button
         class="icon-button"
         type="button"
-        title="Attach images"
-        aria-label="Attach images"
+        title="Attach files"
+        aria-label="Attach files"
         onclick={() => fileInput?.click()}
       >
         <Paperclip size={18} />

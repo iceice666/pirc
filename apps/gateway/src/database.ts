@@ -72,6 +72,10 @@ const migrations = [
   );
   CREATE INDEX device_tokens_owner ON device_tokens(owner_user);
   `,
+  `
+  ALTER TABLE uploads ADD COLUMN filename TEXT;
+  ALTER TABLE uploads ADD COLUMN kind TEXT NOT NULL DEFAULT 'image';
+  `,
 ];
 
 export const PLACEHOLDER_SESSION_NAME = 'New session';
@@ -712,17 +716,19 @@ export class GatewayDatabase {
     byteSize: number,
     storageName: string,
     sha256: string,
+    kind: 'image' | 'file' = 'image',
+    filename: string | null = null,
   ): void {
     this.raw
       .prepare(
-        'INSERT INTO uploads (id,owner_user,mime_type,byte_size,storage_name,sha256,created_at) VALUES (?,?,?,?,?,?,?)',
+        'INSERT INTO uploads (id,owner_user,mime_type,byte_size,storage_name,sha256,created_at,kind,filename) VALUES (?,?,?,?,?,?,?,?,?)',
       )
-      .run(uploadId, user, mimeType, byteSize, storageName, sha256, now());
+      .run(uploadId, user, mimeType, byteSize, storageName, sha256, now(), kind, filename);
   }
   getUpload(uploadId: string): Record<string, any> {
     const row = this.raw
       .prepare(
-        'SELECT id,owner_user AS ownerUser,mime_type AS mimeType,byte_size AS byteSize,storage_name AS storageName,sha256 FROM uploads WHERE id=?',
+        'SELECT id,owner_user AS ownerUser,mime_type AS mimeType,byte_size AS byteSize,storage_name AS storageName,sha256,kind,filename FROM uploads WHERE id=?',
       )
       .get(uploadId) as Record<string, any> | undefined;
     if (!row) throw new ApiError(404, 'not_found', 'Upload not found');

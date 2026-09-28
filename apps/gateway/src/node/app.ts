@@ -34,6 +34,7 @@ const createWorkspaceBody = z.object({
   displayName: z.string().trim().min(1).max(200),
 });
 const interactionParams = z.object({ id: z.string().min(1), interactionId: z.string().min(1) });
+const uploadQuery = z.object({ filename: z.string().trim().min(1).max(255).optional() });
 /** Sessions are never named at creation: the agent titles them; rename later with PATCH. */
 const createSessionBody = z.object({ workspaceId: z.string().min(1) });
 const renameBody = z.object({ name: z.string().trim().min(1).max(200) });
@@ -322,23 +323,40 @@ export async function buildNodeApp(
     return { interactionId: interaction.id, status: 'answered' };
   });
 
-  /** Images are stored on the node that runs the session's agent. */
+  /** Images and generic files are stored on the node that runs the session's agent. */
   app.post('/api/sessions/:id/uploads', async (request, reply) => {
     claim(request);
     if (!Buffer.isBuffer(request.body))
-      throw new ApiError(400, 'invalid_input', 'Upload body must be raw image bytes');
+      throw new ApiError(400, 'invalid_input', 'Upload body must be raw bytes');
     const buffer = request.body;
     if (!buffer.length || buffer.length > config.uploadMaxBytes)
-      throw new ApiError(413, 'payload_too_large', 'Image exceeds configured limit');
-    const mimeType = sniffImage(buffer);
-    if (!mimeType) throw new ApiError(400, 'invalid_input', 'Unsupported or invalid image content');
-    const declared = request.headers['content-type']?.split(';', 1)[0];
-    if (declared && declared !== 'application/octet-stream' && declared !== mimeType)
-      throw new ApiError(
-        400,
-        'invalid_input',
-        'Declared Content-Type does not match image content',
-      );
+      throw new ApiError(413, 'payload_too_large', 'Upload exceeds configured limit');
+    const query = parse(uploadQuery, request.query);
+    const sniffed = sniffImage(buffer);
+    let mimeType: string;
+    let kind: 'image' | 'file';
+    let filename: string | null = null;
+    if (sniffed) {
+      const declared = request.headers['content-type']?.split(';', 1)[0];
+      if (declared && declared !== 'application/octet-stream' && declared !== sniffed)
+        throw new ApiError(
+          400,
+          'invalid_input',
+          'Declared Content-Type does not match image content',
+        );
+      mimeType = sniffed;
+      kind = 'image';
+    } else {
+      // Not a recognized image: treat as a generic file the agent can read
+      // from the workspace once the prompt is sent.
+      if (!query.filename)
+        throw new ApiError(400, 'invalid_input', 'filename is required for non-image uploads');
+      const cleaned = path.basename(query.filename).trim();
+      if (!cleaned) throw new ApiError(400, 'invalid_input', 'filename is invalid');
+      filename = cleaned;
+      mimeType = request.headers['content-type']?.split(';', 1)[0] || 'application/octet-stream';
+      kind = 'file';
+    }
     const uploadId = id('upload');
     const storageName = `${randomBytes(24).toString('hex')}.bin`;
     writeFileSync(path.join(config.uploadsDir, storageName), buffer, { mode: 0o600, flag: 'wx' });
@@ -349,8 +367,12 @@ export async function buildNodeApp(
       buffer.length,
       storageName,
       createHash('sha256').update(buffer).digest('hex'),
+      kind,
+      filename,
     );
-    return reply.status(201).send({ upload: { id: uploadId, mimeType, byteSize: buffer.length } });
+    return reply
+      .status(201)
+      .send({ upload: { id: uploadId, mimeType, byteSize: buffer.length, kind, filename } });
   });
 
   const { terminals, terminalStreams } = registerPanelRoutes(app, {

@@ -42,13 +42,18 @@ import java.util.UUID
 
 enum class Connection { Connecting, Live, Reconnecting, Stopped }
 
-/** An image picked for the next message; [uploadId] is set once the node stored it. */
+/**
+ * A file picked for the next message; [uploadId] is set once the node stored
+ * it. Images ride in the model's context ([kind] "image"); anything else
+ * ("file") is copied into the workspace for the agent's file tools to read.
+ */
 data class Attachment(
     val localId: String,
     val name: String,
     val mimeType: String,
     val bytes: ByteArray,
     val uploadId: String? = null,
+    val kind: String = "image",
 ) {
     val uploading get() = uploadId == null
     override fun equals(other: Any?) = other is Attachment && other.localId == localId && other.uploadId == uploadId
@@ -326,12 +331,13 @@ class SessionViewModel(
     }
 
     fun attach(name: String, mimeType: String, bytes: ByteArray) {
-        val attachment = Attachment("local-${UUID.randomUUID()}", name, mimeType, bytes)
+        val isImage = mimeType.startsWith("image/")
+        val attachment = Attachment("local-${UUID.randomUUID()}", name, mimeType, bytes, kind = if (isImage) "image" else "file")
         _attachments.update { it + attachment }
         viewModelScope.launch {
             try {
-                val upload = api.upload(sessionId, bytes, mimeType)
-                _attachments.update { list -> list.map { if (it.localId == attachment.localId) it.copy(uploadId = upload.id) else it } }
+                val upload = api.upload(sessionId, bytes, mimeType, filename = if (isImage) null else name)
+                _attachments.update { list -> list.map { if (it.localId == attachment.localId) it.copy(uploadId = upload.id, kind = upload.kind) else it } }
             } catch (error: IOException) {
                 _attachments.update { list -> list.filterNot { it.localId == attachment.localId } }
                 act(error, "Could not upload $name.")

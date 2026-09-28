@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { readFileSync, realpathSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import type { NodeConfig } from '../config.js';
 import { configureLine, type ModelStore } from '../models.js';
@@ -359,14 +359,49 @@ export class RunnerManager {
     user: string,
   ): Array<{ type: 'image'; data: string; mimeType: string }> | undefined {
     if (!uploadIds?.length) return undefined;
-    return uploadIds.map((uploadId) => {
-      const upload = this.db.getUpload(uploadId);
+    const images = uploadIds
+      .map((uploadId) => this.db.getUpload(uploadId))
+      .filter((upload) => (upload.kind ?? 'image') === 'image')
+      .map((upload) => {
+        if (upload.ownerUser !== user)
+          throw new ApiError(403, 'forbidden', 'Upload belongs to another user');
+        const data = readFileSync(path.join(this.config.uploadsDir, upload.storageName)).toString(
+          'base64',
+        );
+        return { type: 'image' as const, data, mimeType: upload.mimeType };
+      });
+    return images.length ? images : undefined;
+  }
+
+  /**
+   * Non-image uploads aren't sent to the model directly: copy each into the
+   * session's workspace (under `.pirc/uploads`, already an allowed root for
+   * the agent's file tools) and return the relative paths so the prompt can
+   * point the agent at them.
+   */
+  private fileAttachments(
+    uploadIds: string[] | undefined,
+    user: string,
+    sessionId: string,
+  ): string[] {
+    if (!uploadIds?.length) return [];
+    const files = uploadIds
+      .map((uploadId) => this.db.getUpload(uploadId))
+      .filter((upload) => upload.kind === 'file');
+    if (!files.length) return [];
+    const session = this.db.getSession(sessionId);
+    const workspace = this.db.getWorkspace(session.workspaceId);
+    const destDir = path.join(workspace.canonicalPath, '.pirc', 'uploads');
+    mkdirSync(destDir, { recursive: true, mode: 0o700 });
+    return files.map((upload) => {
       if (upload.ownerUser !== user)
         throw new ApiError(403, 'forbidden', 'Upload belongs to another user');
-      const data = readFileSync(path.join(this.config.uploadsDir, upload.storageName)).toString(
-        'base64',
-      );
-      return { type: 'image', data, mimeType: upload.mimeType };
+      const safeName = path.basename(upload.filename || upload.id);
+      const destName = `${upload.id}-${safeName}`;
+      const dest = path.join(destDir, destName);
+      if (!existsSync(dest))
+        copyFileSync(path.join(this.config.uploadsDir, upload.storageName), dest);
+      return path.posix.join('.pirc', 'uploads', destName);
     });
   }
 
@@ -384,9 +419,13 @@ export class RunnerManager {
         CommandPayload,
         { type: 'prompt' | 'steer' | 'follow_up' }
       >;
+      const fileNotes = this.fileAttachments(messagePayload.uploadIds, user, sessionId);
+      const message = fileNotes.length
+        ? `${messagePayload.message}\n\nAttached file(s) available to read from the workspace:\n${fileNotes.map((relPath) => `- ${relPath}`).join('\n')}`
+        : messagePayload.message;
       rpc = {
         type: payload.type,
-        message: messagePayload.message,
+        message,
         images: this.imageContents(messagePayload.uploadIds, user),
       };
       if (payload.type === 'prompt') {

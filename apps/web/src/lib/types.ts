@@ -133,6 +133,8 @@ export interface Attachment {
   mimeType: string;
   size: number;
   url?: string;
+  /** Images ride in the model's context; other files are copied into the workspace for tools to read. */
+  kind?: 'image' | 'file';
 }
 
 interface InteractionBase {

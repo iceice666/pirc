@@ -101,6 +101,62 @@ it('stores an uploaded image on the node and passes it to the agent', async () =
   await waitFor(reply, 'echo:look images:image/png');
 });
 
+it('stores a generic file upload in the workspace and points the agent at it', async () => {
+  const cluster = await startCluster();
+  clusters.push(cluster);
+  const { app } = cluster;
+  const { sessionId, control } = await openSession(cluster);
+
+  const uploaded = await app.inject({
+    method: 'POST',
+    url: `/api/sessions/${sessionId}/uploads?filename=${encodeURIComponent('notes.txt')}`,
+    headers: { ...headers, 'content-type': 'text/plain' },
+    payload: Buffer.from('hello file'),
+  });
+  expect(uploaded.statusCode).toBe(201);
+  expect(uploaded.json().upload).toMatchObject({
+    mimeType: 'text/plain',
+    byteSize: 10,
+    kind: 'file',
+    filename: 'notes.txt',
+  });
+
+  // A non-image upload without a filename is rejected.
+  const missingFilename = await app.inject({
+    method: 'POST',
+    url: `/api/sessions/${sessionId}/uploads`,
+    headers: { ...headers, 'content-type': 'text/plain' },
+    payload: Buffer.from('no name'),
+  });
+  expect(missingFilename.statusCode).toBe(400);
+
+  const command = await app.inject({
+    method: 'POST',
+    url: `/api/sessions/${sessionId}/commands`,
+    headers,
+    payload: {
+      commandId: 'with-file',
+      ...control,
+      payload: { type: 'prompt', message: 'look', uploadIds: [uploaded.json().upload.id] },
+    },
+  });
+  expect(command.statusCode).toBe(202);
+  const reply = async () =>
+    (await app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/snapshot`, headers }))
+      .json()
+      .history.at(-1)?.content?.[0]?.text;
+  const deadline = Date.now() + 5000;
+  let text: string | undefined;
+  while (Date.now() < deadline) {
+    text = await reply();
+    if (text?.includes('Attached file(s)')) break;
+    await Bun.sleep(20);
+  }
+  expect(text).toContain('echo:look');
+  expect(text).toContain('Attached file(s) available to read from the workspace:');
+  expect(text).toMatch(/- \.pirc\/uploads\/[^\s]+-notes\.txt/);
+});
+
 it('refuses uploads to a session owned by someone else', async () => {
   const cluster = await startCluster(undefined, {
     allowedUsers: new Set(['test@example.com', 'other@example.com']),

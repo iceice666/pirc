@@ -460,16 +460,18 @@ export async function buildDaemonApp(
     });
   });
 
-  /** Images are stored on the session's node, where its agent reads them. */
+  /** Images and generic files are stored on the session's node, where its agent reads them. */
   app.post('/api/sessions/:id/uploads', async (request, reply) => {
     const session = claim(request);
     if (!Buffer.isBuffer(request.body))
-      throw new ApiError(400, 'invalid_input', 'Upload body must be raw image bytes');
+      throw new ApiError(400, 'invalid_input', 'Upload body must be raw bytes');
     if (!request.body.length || request.body.length > config.uploadMaxBytes)
-      throw new ApiError(413, 'payload_too_large', 'Image exceeds configured limit');
+      throw new ApiError(413, 'payload_too_large', 'Upload exceeds configured limit');
+    const filename = (request.query as { filename?: string } | undefined)?.filename;
+    const suffix = filename ? `?filename=${encodeURIComponent(filename)}` : '';
     return forward(reply, session.nodeId, request, {
       method: 'POST',
-      url: nodeUrl(session, '/uploads'),
+      url: nodeUrl(session, `/uploads${suffix}`),
       bodyBase64: request.body.toString('base64'),
       contentType: request.headers['content-type']?.split(';', 1)[0] ?? 'application/octet-stream',
     });

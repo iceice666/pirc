@@ -359,18 +359,27 @@ export const api = {
       },
     );
   },
-  /** Stored on the session's node, where its agent reads it. */
+  /**
+   * Stored on the session's node. Images ride in the model's context;
+   * anything else is copied into the workspace for the agent's file tools —
+   * `filename` lets the node tell them apart and name the copy.
+   */
   upload: async (sessionId: string, file: File): Promise<Attachment> => {
-    const raw = await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/uploads`, {
-      method: 'POST',
-      headers: { 'content-type': file.type || 'application/octet-stream' },
-      body: file,
-    });
+    const query = `?filename=${encodeURIComponent(file.name)}`;
+    const raw = await request<any>(
+      `/api/sessions/${encodeURIComponent(sessionId)}/uploads${query}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': file.type || 'application/octet-stream' },
+        body: file,
+      },
+    );
     return {
       id: raw.upload.id,
       name: file.name,
       mimeType: raw.upload.mimeType,
       size: raw.upload.byteSize,
+      kind: raw.upload.kind ?? 'image',
     };
   },
   /** The gateway's models; every session and node uses the same list. */

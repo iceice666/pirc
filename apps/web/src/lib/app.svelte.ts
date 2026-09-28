@@ -554,14 +554,15 @@ class AppState {
     }
   }
 
-  async uploadImages(files: ArrayLike<File>) {
-    // Images are stored on the node that runs the session's agent.
+  async uploadFiles(files: ArrayLike<File>) {
+    // Stored on the node that runs the session's agent: images ride in the
+    // model's context, other files are copied into the workspace for tools.
     const sessionId = this.activeSessionId;
     if (!sessionId) return;
     for (const file of Array.from(files)) {
-      if (!file.type.startsWith('image/')) continue;
+      const isImage = file.type.startsWith('image/');
       const localId = `local-${uuid()}`;
-      const preview = URL.createObjectURL(file);
+      const preview = isImage ? URL.createObjectURL(file) : undefined;
       this.uploads = [
         ...this.uploads,
         {
@@ -575,17 +576,27 @@ class AppState {
       ];
       try {
         const attachment = this.demo
-          ? { id: localId, name: file.name, mimeType: file.type, size: file.size }
+          ? {
+              id: localId,
+              name: file.name,
+              mimeType: file.type,
+              size: file.size,
+              kind: (isImage ? 'image' : 'file') as 'image' | 'file',
+            }
           : await api.upload(sessionId, file);
         this.uploads = this.uploads.map((item) =>
           item.id === localId ? { ...attachment, preview } : item,
         );
       } catch (error) {
         this.uploads = this.uploads.filter((item) => item.id !== localId);
-        URL.revokeObjectURL(preview);
+        if (preview) URL.revokeObjectURL(preview);
         this.pageError = errorMessage(error, `Could not upload ${file.name}.`);
       }
     }
+  }
+  /** @deprecated use {@link uploadFiles}; kept as an alias for callers that only ever sent images. */
+  uploadImages(files: ArrayLike<File>) {
+    return this.uploadFiles(files);
   }
 
   removeUpload(id: string) {

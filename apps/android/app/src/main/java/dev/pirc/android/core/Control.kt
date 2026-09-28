@@ -45,7 +45,7 @@ data class CommandReceipt(val commandId: String, val status: String, val message
     val accepted get() = status == "accepted"
 }
 
-data class Upload(val id: String, val mimeType: String, val byteSize: Long)
+data class Upload(val id: String, val mimeType: String, val byteSize: Long, val kind: String = "image")
 
 sealed interface InteractionAnswer {
     data class Text(val value: String) : InteractionAnswer

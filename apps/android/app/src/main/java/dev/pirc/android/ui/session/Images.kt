@@ -26,6 +26,28 @@ private const val MAX_SIDE = 2560
 
 data class PickedImage(val name: String, val mimeType: String, val bytes: ByteArray)
 
+/** A non-image file picked to attach; read whole (up to [MAX_BYTES]) since it isn't re-encoded. */
+data class PickedFile(val name: String, val mimeType: String, val bytes: ByteArray)
+
+/**
+ * Read a picked file of any type. Images go through [readImage] instead, so
+ * they can be re-encoded when the gateway would otherwise refuse them; this
+ * is for everything else (docs, text, archives…), copied byte-for-byte and
+ * capped at [MAX_BYTES] like uploads generally are. Call off the main thread.
+ */
+fun readFile(context: Context, uri: Uri): PickedFile? {
+    val resolver = context.contentResolver
+    var name: String? = null
+    resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+        if (cursor.moveToFirst()) name = cursor.getString(0)
+    }
+    val fileName = name ?: uri.lastPathSegment ?: "file"
+    val mime = resolver.getType(uri) ?: "application/octet-stream"
+    val bytes = resolver.openInputStream(uri)?.use { it.readAtMost(MAX_BYTES + 1) } ?: return null
+    if (bytes.size > MAX_BYTES) return null
+    return PickedFile(fileName, mime, bytes)
+}
+
 /**
  * Read a picked image. Formats the gateway refuses (HEIC from the camera) and
  * oversized files are re-encoded as JPEG, at most [MAX_SIDE] pixels on a side,

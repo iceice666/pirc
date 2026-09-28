@@ -1,7 +1,6 @@
 package dev.pirc.android.ui.session
 
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -136,11 +135,18 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
     val model = viewModel.selectedModel(settings)
     val level = viewModel.thinkingLevel(settings)
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(4)) { uris ->
+    // Any file type, not just photos: the system document picker also offers
+    // the Photos provider, so it replaces the old image-only picker.
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         scope.launch {
             for (uri in uris) {
-                val image = withContext(Dispatchers.IO) { runCatching { readImage(context, uri) }.getOrNull() }
-                if (image != null) viewModel.attach(image.name, image.mimeType, image.bytes)
+                val mime = context.contentResolver.getType(uri) ?: ""
+                withContext(Dispatchers.IO) {
+                    if (mime.startsWith("image/")) runCatching { readImage(context, uri) }.getOrNull()
+                        ?.let { viewModel.attach(it.name, it.mimeType, it.bytes) }
+                    else runCatching { readFile(context, uri) }.getOrNull()
+                        ?.let { viewModel.attach(it.name, it.mimeType, it.bytes) }
+                }
             }
         }
     }
@@ -203,9 +209,9 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        onClick = { picker.launch(arrayOf("*/*")) },
                         modifier = Modifier.size(48.dp),
-                    ) { Icon(PircIcons.Plus, contentDescription = "Attach images", modifier = Modifier.size(26.dp)) }
+                    ) { Icon(PircIcons.Plus, contentDescription = "Attach files", modifier = Modifier.size(26.dp)) }
                     // All the room between the buttons; a long name shrinks to fit instead of being cut.
                     Row(
                         Modifier
@@ -335,9 +341,18 @@ private fun ModelSheet(
 
 @Composable
 private fun AttachmentThumb(attachment: Attachment, onRemove: () -> Unit) {
-    val bitmap = rememberDecodedImage(attachment.localId, 64.dp, 64.dp) { attachment.bytes }
+    val isImage = attachment.kind == "image"
+    val bitmap = if (isImage) rememberDecodedImage(attachment.localId, 64.dp, 64.dp) { attachment.bytes } else null
     Box(Modifier.size(64.dp).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
         if (bitmap != null) Image(bitmap, contentDescription = attachment.name, contentScale = ContentScale.Crop, modifier = Modifier.size(64.dp))
+        else if (!isImage) Column(
+            Modifier.fillMaxWidth().padding(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(PircIcons.File, contentDescription = null, modifier = Modifier.size(22.dp))
+            Text(attachment.name, style = MaterialTheme.typography.labelSmall, maxLines = 2, modifier = Modifier.padding(top = 2.dp))
+        }
         if (attachment.uploading) CircularProgressIndicator(Modifier.align(Alignment.Center).size(22.dp), strokeWidth = 2.dp)
         // A small mark, but a 40dp target (most of the thumbnail's corner).
         Box(

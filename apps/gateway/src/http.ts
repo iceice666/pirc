@@ -15,6 +15,16 @@ export function registerImageParsers(app: FastifyInstance, bodyLimit: number): v
     app.addContentTypeParser(mime, { parseAs: 'buffer', bodyLimit }, (_request, body, done) =>
       done(null, body),
     );
+  // Generic file uploads can arrive with any declared type (or none); accept
+  // whatever isn't already handled above as raw bytes so uploads aren't
+  // limited to images. `text/plain` gets Fastify's own default (string)
+  // parser, so it needs the same override explicitly.
+  app.addContentTypeParser('text/plain', { parseAs: 'buffer', bodyLimit }, (_request, body, done) =>
+    done(null, body),
+  );
+  app.addContentTypeParser('*', { parseAs: 'buffer', bodyLimit }, (_request, body, done) =>
+    done(null, body),
+  );
 }
 
 /** ApiError → its status and `{ error }` body; anything else is a logged 500. */

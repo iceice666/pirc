@@ -3,7 +3,7 @@
 A TypeScript/Fastify service on Bun, together with the built-in coding agent (`src/agent/`). One binary plays two roles:
 
 - **`pirc gateway`** (`src/daemon/`) is the only thing browsers talk to. It authenticates them, indexes sessions and control leases in SQLite, buffers each session's events, and routes every session request to the node that owns it. It never runs agents, shells, or workspace inspection itself, and never learns real workspace paths.
-- **`pirc node`** (`src/node/`) runs on each machine that has workspaces. It connects _out_ to the gateway over one WebSocket and owns everything local: the `pirc agent` subprocesses (JSONL RPC on stdin/stdout), side-panel shells and Git/file inspection, uploaded images, and the session JSONL files and SQLite metadata. It does not listen on any port.
+- **`pirc node`** (`src/node/`) runs on each machine that has workspaces. It connects _out_ to the gateway over one WebSocket and owns everything local: the `pirc agent` subprocesses (JSONL RPC on stdin/stdout), side-panel shells and Git/file inspection, uploads, and the session JSONL files and SQLite metadata. It does not listen on any port.
 
 A single-machine setup runs both on the same host; the node then reaches the gateway at `ws://127.0.0.1:<port>`.
 
@@ -95,7 +95,7 @@ Every session route is answered by the node that owns the session; the gateway c
 - `GET /api/sessions/:id/control`
 - `POST /api/sessions/:id/control/{acquire,heartbeat,release}`
 - `POST /api/sessions/:id/interactions/:interactionId/answer`
-- `POST /api/sessions/:id/uploads` with raw PNG/JPEG/GIF/WebP bytes; stored on the session's node
+- `POST /api/sessions/:id/uploads` with raw bytes; PNG/JPEG/GIF/WebP are sniffed and sent to the model as images, anything else needs `?filename=` and is copied into the session's workspace (`.pirc/uploads/`) for the agent's file tools to read; stored on the session's node
 - `GET /api/models` lists the gateway's models (identical for every session and node; an optional `sessionId` is only checked for access)
 - Model backends (single-user, global; responses are `Cache-Control: no-store` and never contain keys, tokens or file endpoints): `GET /api/providers`; `POST /api/providers` with `{id, api, baseUrl, apiKey?, models}`; `PUT|DELETE /api/providers/:id` (`apiKey` omitted keeps the saved key, `""` clears it; deleting `oauth:<provider>` logs out); `PUT /api/providers/default-model` with `{provider, id, thinking?}` or `null`
 - Subscription login sessions: `POST /api/provider-auth/sessions` with `{providerId, policyConsent?}`; `GET|DELETE /api/provider-auth/sessions/:id`; `POST /api/provider-auth/sessions/:id/input` with `{promptId, value?}`. A session exposes the authorization link, pending prompts (`prompt`, `manual` callback URL, `select`), progress, status and expiry; it expires after 10 minutes
@@ -125,4 +125,4 @@ At startup (of the gateway or a node) unfinished runs become `interrupted`, pend
 
 ## Data
 
-Each process keeps its own SQLite below its `PIRC_STATE_DIR`. The gateway's holds the session index, leases, and command outcomes; a node's also holds runs, interactions, and uploads, and its state directory contains the agent session JSONL files (the conversation source of truth) and uploaded images.
+Each process keeps its own SQLite below its `PIRC_STATE_DIR`. The gateway's holds the session index, leases, and command outcomes; a node's also holds runs, interactions, and uploads, and its state directory contains the agent session JSONL files (the conversation source of truth) and uploaded files. Non-image uploads are also copied into the workspace at `.pirc/uploads/` so the agent's read/bash tools can reach them (that directory is writable by the uploader but protected from the agent's own writes).
