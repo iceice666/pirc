@@ -1,7 +1,11 @@
 package dev.pirc.android
 
 import dev.pirc.android.core.ApiException
+import dev.pirc.android.core.BackgroundTask
 import dev.pirc.android.core.CommandReceipt
+import dev.pirc.android.core.PanelState
+import dev.pirc.android.core.Team
+import dev.pirc.android.core.TeamMember
 import dev.pirc.android.core.ModelOption
 import dev.pirc.android.core.StreamSignal
 import dev.pirc.android.core.timeline.TimelineEvent
@@ -226,5 +230,25 @@ class SessionViewModelTest {
         api.streams.last().trySend(StreamSignal.Connected)
         runCurrent()
         assertEquals(asked, api.calls.count { it == "models" })
+    }
+
+    @Test
+    fun countsRunningJobsOnConnectAndOnPanelChanges() = test {
+        var tasks = listOf(BackgroundTask("b1", "npm test", status = "running"), BackgroundTask("b2", "ls", status = "completed"))
+        api.panel = { PanelState(backgroundTasks = tasks, team = Team(agents = listOf(TeamMember("scout", status = "running")))) }
+        val model = live()
+        assertEquals(2, model.jobs.value)
+        tasks = emptyList()
+        api.streams.last().trySend(StreamSignal.Event(envelope(1, TimelineEvent.PanelChanged(listOf("background")))))
+        advanceTimeBy(1_000)
+        assertEquals(1, model.jobs.value)
+    }
+
+    @Test
+    fun goalButtonsSteerTheGoalCommand() = test {
+        val model = live()
+        model.goalAction("pause")
+        runCurrent()
+        assertTrue(api.calls.any { it == "command:steer:7" })
     }
 }

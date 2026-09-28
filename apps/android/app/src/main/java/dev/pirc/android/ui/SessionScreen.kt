@@ -63,7 +63,11 @@ import dev.pirc.android.ui.session.LocalFileOpener
 import dev.pirc.android.ui.session.MessageView
 import dev.pirc.android.core.FileTarget
 import dev.pirc.android.core.parseFileLink
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalUriHandler
@@ -131,10 +135,13 @@ fun SessionScreen(
                     val title = session?.name ?: fallbackName
                     // The panels as they were left (the web keeps them mounted).
                     TextButton(onClick = { onOpenPanels(title, null) }) { Text("Files") }
-                    TextButton(onClick = { menu = true }) { Text("More") }
+                    val jobs by viewModel.jobs.collectAsStateWithLifecycle()
+                    TextButton(onClick = { menu = true }, modifier = Modifier.semantics { if (jobs > 0) stateDescription = "$jobs running jobs" }) {
+                        if (jobs > 0) BadgedBox(badge = { Badge { Text(jobs.toString()) } }) { Text("More") } else Text("More")
+                    }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         for (tab in listOf(PanelTab.Git, PanelTab.Tasks, PanelTab.Memory, PanelTab.Terminal))
-                            DropdownMenuItem(text = { Text(tab.label) }, onClick = {
+                            DropdownMenuItem(text = { Text(if (tab == PanelTab.Tasks && jobs > 0) "Tasks · $jobs running" else tab.label) }, onClick = {
                                 menu = false
                                 onOpenPanels(title, tab)
                             })

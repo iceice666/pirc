@@ -142,7 +142,10 @@ data class TeamMember(
     val thinking: String? = null,
     val lastError: String? = null,
     val task: String? = null,
-)
+) {
+    /** Still working (the web's jobs menu counts these). */
+    val live get() = (status ?: "stopped") !in setOf("stopped", "failed", "done")
+}
 
 @Serializable
 data class TeamTask(

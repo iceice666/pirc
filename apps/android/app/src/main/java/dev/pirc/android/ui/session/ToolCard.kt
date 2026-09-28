@@ -117,7 +117,9 @@ fun ToolCard(tool: ToolCall, modifier: Modifier = Modifier) {
                     pretty(tool.input)?.takeIf { it.isNotEmpty() }?.let { CodePane("Input", AnnotatedString(it)) }
                     tool.diff?.let { CodePane("Diff", diffText(it)) }
                     tool.output?.let { output -> OutputPane(output) }
-                    if (tool.input == null && tool.output == null && tool.diff == null)
+                    // Screenshots and other images a tool returned.
+                    if (tool.images.isNotEmpty()) Images(tool.images)
+                    if (tool.input == null && tool.output == null && tool.diff == null && tool.images.isEmpty())
                         Text("No details yet.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                     val opener = LocalFileOpener.current
                     val file = toolFile(tool)

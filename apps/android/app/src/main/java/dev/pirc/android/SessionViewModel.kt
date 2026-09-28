@@ -7,6 +7,13 @@ import dev.pirc.android.core.Commands
 import dev.pirc.android.core.Connectivity
 import dev.pirc.android.core.ControlApi
 import dev.pirc.android.core.ControlLease
+import dev.pirc.android.core.GOAL_WIDGET
+import dev.pirc.android.core.GoalView
+import dev.pirc.android.core.TODO_WIDGET
+import dev.pirc.android.core.TodoList
+import dev.pirc.android.core.parseGoalWidget
+import dev.pirc.android.core.parseTodoWidget
+import dev.pirc.android.core.statusLine
 import dev.pirc.android.core.Drafts
 import dev.pirc.android.core.InteractionAnswer
 import dev.pirc.android.core.ModelOption
@@ -73,6 +80,11 @@ internal const val RESNAPSHOT_AFTER_MS = 15_000L
 /** Streamed text is published at most this often; every other event at once. */
 internal const val DELTA_BATCH_MS = 32L
 
+private const val JOBS_DEBOUNCE_MS = 300L
+
+/** The goal and todo docks above the composer and the status line under it. */
+data class Docks(val goal: GoalView? = null, val todo: TodoList? = null, val statusLine: List<String> = emptyList())
+
 /** What the composer shows of the session, so streamed text does not recompose it. */
 data class ComposerSettings(
     val runStatus: String? = null,
@@ -134,8 +146,34 @@ class SessionViewModel(
         .map { ComposerSettings(it?.run?.status, it?.selectedModelId, it?.selectedModelProvider, it?.thinkingLevel) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ComposerSettings())
 
+    val docks: StateFlow<Docks> = _state
+        .map { state ->
+            val widgets = state?.widgets.orEmpty()
+            Docks(parseGoalWidget(widgets[GOAL_WIDGET]), parseTodoWidget(widgets[TODO_WIDGET]), statusLine(widgets, state?.statuses.orEmpty()))
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Docks())
+
+    /** Background tasks and team agents still running (the web's jobs count). */
+    private val _jobs = MutableStateFlow(0)
+    val jobs: StateFlow<Int> = _jobs.asStateFlow()
+    private var jobsLoad: Job? = null
+
     init {
         viewModelScope.launch { _state.collect { state -> state?.cursor?.let { cursors[sessionId] = it } } }
+    }
+
+    /** Count the running jobs after [wait] (a burst of changes is one fetch); failures keep the last count. */
+    private fun loadJobs(wait: Long = JOBS_DEBOUNCE_MS) {
+        jobsLoad?.cancel()
+        jobsLoad = viewModelScope.launch {
+            delay(wait)
+            try {
+                val panel = api.panelState(sessionId)
+                _jobs.value = panel.backgroundTasks.count { it.live } + panel.team.agents.count { it.live }
+            } catch (error: IOException) {
+                if (error is ApiException && error.unauthorized) onUnauthorized(error)
+            }
+        }
     }
 
     private val _attachments = MutableStateFlow<List<Attachment>>(emptyList())
@@ -262,6 +300,7 @@ class SessionViewModel(
                         _connection.value = Connection.Live
                         syncNow()
                         loadModels()
+                        loadJobs(wait = 0)
                     }
                     StreamSignal.Reconnecting -> _connection.value = Connection.Reconnecting
                     is StreamSignal.Closed -> {
@@ -292,8 +331,13 @@ class SessionViewModel(
             }
         }
         publishDeltas()
-        val next = _state.value?.reduce(signal.envelope) ?: return
+        val event = signal.envelope.event
+        if (event is TimelineEvent.PanelChanged && event.sections.any { it == "background" || it == "team" }) loadJobs()
+        val before = _state.value ?: return
+        val next = before.reduce(signal.envelope)
         _state.value = next
+        // A run that ended may have stopped its jobs.
+        if (runActive(before) && !runActive(next)) loadJobs()
         // The snapshot's watermark is where the new stream resumes.
         if (next.needsSnapshot) reload()
     }
@@ -395,6 +439,11 @@ class SessionViewModel(
         val receipt = api.command(sessionId, clientId, generation, UUID.randomUUID().toString(), Commands.sendNow(item))
         if (!receipt.accepted && receipt.message?.contains("no longer queued") != true)
             throw ApiException(503, receipt.status, receipt.message ?: "The message could not be sent now.")
+    }
+
+    /** The goal dock's Pause/Resume: a steer works idle and mid-run and opens no run of its own. */
+    fun goalAction(action: String) = perform("The goal could not be changed.") { generation ->
+        command(generation, Commands.message("steer", "/goal $action", emptyList()))
     }
 
     fun clearQueue() = perform("The queue could not be cleared.") { command(it, Commands.simple("clear_queue")) }

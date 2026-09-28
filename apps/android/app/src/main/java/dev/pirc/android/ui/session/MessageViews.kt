@@ -218,7 +218,7 @@ private fun SystemEntry(message: Message, modifier: Modifier) {
 }
 
 @Composable
-private fun Images(images: List<InlineImage>) {
+internal fun Images(images: List<InlineImage>) {
     for (image in images) key(image.base64) {
         val bitmap = rememberDecodedImage(image.base64, 280.dp, 320.dp) { Base64.decode(image.base64, Base64.DEFAULT) }
         if (bitmap != null) Image(

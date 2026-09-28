@@ -105,6 +105,7 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
     val control by viewModel.control.collectAsStateWithLifecycle()
     val connection by viewModel.connection.collectAsStateWithLifecycle()
     val online by Connectivity.online.collectAsStateWithLifecycle()
+    val docks by viewModel.docks.collectAsStateWithLifecycle()
     // The field owns its text, so fast typing and IME composition (Zhuyin,
     // kana) never wait on a round trip; the view model hears about it debounced.
     val field = rememberTextFieldState(viewModel.initialDraft)
@@ -186,6 +187,7 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
             }
         }
 
+        DockStack(docks, canAct = hasControl && connection == Connection.Live && !busy, onGoal = viewModel::goalAction)
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerLowest,
@@ -258,6 +260,7 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+        StatusLine(docks.statusLine)
     }
 
     if (picking) ModelSheet(
