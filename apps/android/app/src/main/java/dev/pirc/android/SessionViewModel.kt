@@ -58,6 +58,9 @@ data class Attachment(
 private val ACTIVE_RUN = setOf("queued", "running", "waiting_input", "stopping")
 private const val HEARTBEAT_MS = 10_000L
 
+/** A rotation or a glance at another app stops the screen only briefly: keep the stream that long. */
+internal const val STOP_GRACE_MS = 5_000L
+
 /** Streamed text is published at most this often; every other event at once. */
 internal const val DELTA_BATCH_MS = 32L
 
@@ -80,6 +83,8 @@ class SessionViewModel(
     private val clientId: String,
     private val drafts: Drafts,
     private val onUnauthorized: (ApiException) -> Unit,
+    /** Shared with the side panels, which follow the same stream from here. */
+    private val cursors: MutableMap<String, String> = HashMap(),
 ) : ViewModel() {
     private val _state = MutableStateFlow<SessionState?>(null)
     val state: StateFlow<SessionState?> = _state.asStateFlow()
@@ -120,6 +125,10 @@ class SessionViewModel(
         .map { ComposerSettings(it?.run?.status, it?.selectedModelId, it?.selectedModelProvider, it?.thinkingLevel) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ComposerSettings())
 
+    init {
+        viewModelScope.launch { _state.collect { state -> state?.cursor?.let { cursors[sessionId] = it } } }
+    }
+
     private val _attachments = MutableStateFlow<List<Attachment>>(emptyList())
     val attachments: StateFlow<List<Attachment>> = _attachments.asStateFlow()
 
@@ -131,6 +140,9 @@ class SessionViewModel(
     private var loading: Job? = null
     private var heartbeat: Job? = null
     private var syncing: Job? = null
+
+    /** The pending [stop], cancelled if the screen comes back first. */
+    private var stopping: Job? = null
 
     /** Streamed text reduced but not yet published, and the job that publishes it. */
     private var unpublished: SessionState? = null
@@ -148,8 +160,12 @@ class SessionViewModel(
 
     /** The screen is visible: load if needed, follow live events and keep control. */
     fun start() {
+        stopping?.cancel()
+        stopping = null
         visible = true
-        if (_state.value == null || _state.value!!.needsSnapshot) reload() else follow()
+        val current = _state.value
+        if (current == null || current.needsSnapshot) reload()
+        else if (stream?.isActive != true) follow()
         heartbeat?.cancel()
         heartbeat = viewModelScope.launch {
             while (isActive) {
@@ -162,15 +178,26 @@ class SessionViewModel(
         }
     }
 
-    /** The screen is hidden: stop streaming and renewing (the lease lapses on its own). */
+    /**
+     * The screen is hidden: after [STOP_GRACE_MS], stop streaming and renewing
+     * (the lease lapses on its own). Coming back sooner keeps the stream.
+     */
     fun stop() {
         visible = false
+        drafts.saveDraft(sessionId, draftText)
+        stopping?.cancel()
+        stopping = viewModelScope.launch {
+            delay(STOP_GRACE_MS)
+            halt()
+        }
+    }
+
+    private fun halt() {
         stream?.cancel()
         heartbeat?.cancel()
         stream = null
         publishDeltas()
         _connection.value = Connection.Stopped
-        drafts.saveDraft(sessionId, draftText)
     }
 
     /** Leaving the session: hand control back at once instead of waiting out the TTL. */

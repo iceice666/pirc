@@ -9,11 +9,14 @@ import dev.pirc.android.core.ControlLease
 import dev.pirc.android.core.GitStatus
 import dev.pirc.android.core.PanelState
 import dev.pirc.android.core.PircApi
+import dev.pirc.android.core.StreamSignal
 import dev.pirc.android.core.TerminalInfo
 import dev.pirc.android.core.syncControl
+import dev.pirc.android.core.timeline.TimelineEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -77,13 +80,33 @@ class ControlKeeper(
 
 enum class PanelTab(val label: String) { Files("Files"), Git("Git"), Tasks("Tasks"), Memory("Memory"), Terminal("Terminal") }
 
-/** Git, tasks, memory and terminals of one session, refreshed while visible. */
+/** The tabs showing a `panel_changed` section (memory, background, team, git). */
+internal fun tabsFor(sections: List<String>): Set<PanelTab> = sections.mapNotNullTo(HashSet()) { section ->
+    when (section) {
+        "memory" -> PanelTab.Memory
+        "background", "team" -> PanelTab.Tasks
+        "git" -> PanelTab.Git
+        else -> null
+    }
+}
+
+private const val POLL_MS = 5_000L
+private const val SIGNAL_DEBOUNCE_MS = 300L
+
+/**
+ * Git, tasks, memory and terminals of one session, refreshed while visible:
+ * on the session stream's `panel_changed` events (and run changes) when the
+ * session's cursor is known, else by polling. Terminals are always polled.
+ */
 class PanelsViewModel(
     private val api: PircApi,
     val sessionId: String,
     clientId: String,
     initialTab: PanelTab,
     private val onUnauthorized: (ApiException) -> Unit,
+    /** Where the session screen's stream stands; null: poll instead. */
+    private val cursor: () -> String? = { null },
+    private val events: (cursor: String) -> Flow<StreamSignal> = { api.events(sessionId, it) },
 ) : ViewModel() {
     val control = ControlKeeper(viewModelScope, api, sessionId, clientId, ::fail)
     val clientId = clientId
@@ -109,32 +132,77 @@ class PanelsViewModel(
     val actionError: StateFlow<String?> = _actionError.asStateFlow()
 
     private var poll: Job? = null
+    private var signals: Job? = null
+    private var reloading: Job? = null
+
+    /** The stream is connected, so tasks and memory need no polling. */
+    @Volatile
+    private var live = false
 
     fun select(tab: PanelTab) {
         _tab.value = tab
         refresh(tab, quiet = true)
     }
 
-    /** Visible: keep control and poll the live tabs (tasks and memory change as the agent works). */
+    /** Visible: keep control and follow the live tabs (tasks and memory change as the agent works). */
     fun start() {
         control.start()
         poll?.cancel()
         poll = viewModelScope.launch {
             refresh(_tab.value, quiet = true)
             while (isActive) {
-                delay(5_000)
+                delay(POLL_MS)
                 when (_tab.value) {
-                    PanelTab.Tasks, PanelTab.Memory -> loadPanel(quiet = true)
+                    PanelTab.Tasks, PanelTab.Memory -> if (!live) loadPanel(quiet = true)
                     PanelTab.Terminal -> loadTerminals(quiet = true)
                     else -> Unit
                 }
             }
+        }
+        signals?.cancel()
+        live = false
+        val from = cursor() ?: return
+        signals = viewModelScope.launch {
+            var connected = false
+            events(from).collect { signal ->
+                when (signal) {
+                    StreamSignal.Connected -> {
+                        live = true
+                        // Anything may have changed while the stream was down.
+                        if (connected) changed(PanelTab.entries.toSet())
+                        connected = true
+                    }
+                    StreamSignal.Reconnecting -> live = false
+                    is StreamSignal.Closed -> {
+                        live = false
+                        fail(signal.error)
+                    }
+                    is StreamSignal.Event -> when (val event = signal.envelope.event) {
+                        is TimelineEvent.PanelChanged -> changed(tabsFor(event.sections))
+                        // Run starts and ends, runner restarts: tasks and Git may have moved.
+                        is TimelineEvent.Reset -> changed(setOf(PanelTab.Tasks, PanelTab.Memory, PanelTab.Git))
+                        else -> Unit
+                    }
+                }
+            }
+        }
+    }
+
+    /** Reload the shown tab if [tabs] covers it; a burst of signals is one reload. */
+    private fun changed(tabs: Set<PanelTab>) {
+        if (_tab.value !in tabs || reloading?.isActive == true) return
+        reloading = viewModelScope.launch {
+            delay(SIGNAL_DEBOUNCE_MS)
+            refresh(_tab.value, quiet = true)
         }
     }
 
     fun stop() {
         control.stop()
         poll?.cancel()
+        signals?.cancel()
+        reloading?.cancel()
+        live = false
     }
 
     fun refresh(tab: PanelTab = _tab.value, quiet: Boolean = false) {

@@ -57,14 +57,17 @@ data class FileRoute(val sessionId: String, val path: String, val line: Int = 0,
 @Composable
 fun PircApp(viewModel: AppViewModel) {
     val pairing by viewModel.pairing.collectAsStateWithLifecycle()
+    val loaded by viewModel.loaded.collectAsStateWithLifecycle()
     val pendingLink by viewModel.pendingLink.collectAsStateWithLifecycle()
 
-    AnimatedContent(
-        targetState = pairing != null,
+    // Keyed by the pairing itself: pairing with another gateway (or a new
+    // token) starts a fresh back stack, since the old session ids mean nothing there.
+    if (loaded) AnimatedContent(
+        targetState = pairing,
         transitionSpec = { fadeIn() togetherWith fadeOut() },
         label = "paired",
     ) { paired ->
-        if (!paired) {
+        if (paired == null) {
             PairScreen(viewModel)
         } else {
             val nav = rememberNavController()
@@ -76,7 +79,7 @@ fun PircApp(viewModel: AppViewModel) {
                     val route = entry.toRoute<SessionRoute>()
                     val api = viewModel.api() ?: return@composable
                     val session = viewModel<SessionViewModel>(key = "${api.pairing.baseUrl}|${route.id}") {
-                        SessionViewModel(api, route.id, viewModel.local.clientId, viewModel.local, onUnauthorized = { viewModel.handle(it) })
+                        SessionViewModel(api, route.id, viewModel.local.clientId, viewModel.local, onUnauthorized = { viewModel.handle(it) }, cursors = viewModel.cursors)
                     }
                     SessionScreen(
                         session,
@@ -95,7 +98,7 @@ fun PircApp(viewModel: AppViewModel) {
                         FilesViewModel(api, route.sessionId, unauthorized)
                     }
                     val panels = viewModel<PanelsViewModel>(key = "panels|${api.pairing.baseUrl}|${route.sessionId}") {
-                        PanelsViewModel(api, route.sessionId, viewModel.local.clientId, PanelTab.valueOf(route.tab), unauthorized)
+                        PanelsViewModel(api, route.sessionId, viewModel.local.clientId, PanelTab.valueOf(route.tab), unauthorized, cursor = { viewModel.cursors[route.sessionId] })
                     }
                     PanelsScreen(
                         panels,

@@ -1,6 +1,7 @@
 package dev.pirc.android.core
 
 import dev.pirc.android.core.timeline.EventEnvelope
+import dev.pirc.android.core.timeline.TimelineEvent
 import dev.pirc.android.core.timeline.normalizeEvent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
@@ -16,6 +17,9 @@ import okhttp3.WebSocketListener
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
 import kotlin.random.Random
+
+/** A connection open this long counts as stable: the next drop starts the backoff over. */
+private const val STABLE_NANOS = 10_000_000_000L
 
 sealed interface StreamSignal {
     data object Connected : StreamSignal
@@ -50,11 +54,15 @@ class EventStream(
                 .apply { cursor?.let { addQueryParameter("cursor", it) } }
                 .build()
             val ended = CompletableDeferred<Ended>()
+            // Opening proves little (a proxy may accept and drop at once): only a
+            // delivered event or a connection that held resets the backoff.
+            var openedAt = 0L
+            var delivered = false
             val socket = client.newWebSocket(
                 api.request("").url(url).build(),
                 object : WebSocketListener() {
                     override fun onOpen(webSocket: WebSocket, response: Response) {
-                        attempt = 0
+                        openedAt = System.nanoTime()
                         trySend(StreamSignal.Connected)
                     }
 
@@ -66,6 +74,7 @@ class EventStream(
                             return
                         }
                         cursor = envelope.cursor
+                        if (envelope.event !is TimelineEvent.Reset) delivered = true
                         trySend(StreamSignal.Event(envelope))
                     }
 
@@ -92,6 +101,7 @@ class EventStream(
                 send(StreamSignal.Closed(it))
                 return@channelFlow
             }
+            if (delivered || (openedAt != 0L && System.nanoTime() - openedAt >= STABLE_NANOS)) attempt = 0
             send(StreamSignal.Reconnecting)
             delay(backoff(attempt++))
         }

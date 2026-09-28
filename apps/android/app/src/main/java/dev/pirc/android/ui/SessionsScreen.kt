@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,9 +69,23 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
     var addingWorkspace by remember { mutableStateOf(false) }
     var acting by remember { mutableStateOf<Session?>(null) }
     var renaming by remember { mutableStateOf<Session?>(null) }
+    var unpairing by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
 
-    // Back from a session: its name, pin or activity may have changed.
+    if (unpairing) AlertDialog(
+        onDismissRequest = { unpairing = false },
+        title = { Text("Unpair this phone?") },
+        text = { Text("This phone forgets its device token. To use it again, create a new pairing link on the web.") },
+        confirmButton = {
+            TextButton(onClick = {
+                unpairing = false
+                viewModel.unpair()
+            }) { Text("Unpair") }
+        },
+        dismissButton = { TextButton(onClick = { unpairing = false }) { Text("Cancel") } },
+    )
+
+    // Also the first load, and back from a session: its name, pin or activity may have changed.
     LifecycleResumeEffect(Unit) {
         viewModel.refresh()
         onPauseOrDispose { }
@@ -103,7 +118,7 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text("Unpair this phone") }, onClick = {
                             menu = false
-                            viewModel.unpair()
+                            unpairing = true
                         })
                     }
                 },

@@ -10,6 +10,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+/** Load and save touch the Keystore, which can take 100 ms+ on first use: call off the main thread. */
 interface CredentialStore {
     fun load(): Pairing?
     fun save(pairing: Pairing)
@@ -59,11 +60,11 @@ class KeystoreCredentialStore(context: Context) : CredentialStore {
             .putString(URL, pairing.baseUrl)
             .putString(IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             .putString(TOKEN, Base64.encodeToString(sealed, Base64.NO_WRAP))
-            .commit()
+            .apply()
     }
 
     override fun clear() {
-        prefs.edit().clear().commit()
+        prefs.edit().clear().apply()
     }
 
     private companion object {

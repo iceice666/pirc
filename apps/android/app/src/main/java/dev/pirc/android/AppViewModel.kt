@@ -16,6 +16,7 @@ import dev.pirc.android.core.Session
 import dev.pirc.android.core.Workspace
 import dev.pirc.android.core.WorkspaceGroup
 import dev.pirc.android.core.groupSessions
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -23,7 +24,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 
 sealed interface PairState {
     data object Idle : PairState
@@ -47,8 +50,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val store: CredentialStore = KeystoreCredentialStore(application)
     val local = LocalStore(application)
 
-    private val _pairing = MutableStateFlow(store.load())
+    private val _pairing = MutableStateFlow<Pairing?>(null)
     val pairing: StateFlow<Pairing?> = _pairing.asStateFlow()
+
+    /** The stored pairing has been read (the Keystore is slow on first use, so not on the main thread). */
+    private val _loaded = MutableStateFlow(false)
+    val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
+
+    /**
+     * The newest event cursor seen per open session, so the side panels can
+     * follow the same stream from there instead of replaying it all.
+     */
+    val cursors: MutableMap<String, String> = ConcurrentHashMap()
 
     private val _pairState = MutableStateFlow<PairState>(PairState.Idle)
     val pairState: StateFlow<PairState> = _pairState.asStateFlow()
@@ -67,7 +80,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private var refreshJob: Job? = null
 
     init {
-        if (_pairing.value != null) refresh()
+        // The sessions screen refreshes itself when it appears.
+        viewModelScope.launch {
+            val stored = withContext(Dispatchers.IO) { store.load() }
+            // A link confirmed meanwhile wins over what was stored.
+            if (!_loaded.value) {
+                _pairing.value = stored
+                _loaded.value = true
+            }
+        }
     }
 
     private var cachedApi: PircApi? = null
@@ -113,10 +134,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 PircApi(pairing).sessions()
-                store.save(pairing)
+                withContext(Dispatchers.IO) { store.save(pairing) }
+                val same = _pairing.value == pairing
+                if (!same) closeApi()
                 _pairing.value = pairing
+                _loaded.value = true
                 _pairState.value = PairState.Idle
-                refresh()
+                // A new pairing rebuilds the sessions screen, which loads itself.
+                if (same) refresh() else _sessions.value = SessionsState()
             } catch (error: ApiException) {
                 // A 401 carries the gateway's reason (expired, revoked, ...).
                 _pairState.value = PairState.Failed(error.message ?: "The gateway refused the request.")
@@ -207,8 +232,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun unpair(reason: String? = null) {
         refreshJob?.cancel()
         store.clear()
+        closeApi()
+        cursors.clear()
         _pairing.value = null
+        _loaded.value = true
         _sessions.value = SessionsState()
         _notice.value = reason
+    }
+
+    /** Drop the old gateway's pooled connections and calls with its token. */
+    private fun closeApi() {
+        cachedApi?.client?.let { client ->
+            client.dispatcher.cancelAll()
+            client.connectionPool.evictAll()
+        }
+        cachedApi = null
     }
 }
