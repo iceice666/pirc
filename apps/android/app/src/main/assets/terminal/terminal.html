@@ -86,7 +86,10 @@
         write: (data) => term.write(data),
         reset: (data) => {
           term.reset();
-          term.write(data, settings.debug ? () => log('reset', data.length, 'chars', state()) : undefined);
+          term.write(
+            data,
+            settings.debug ? () => log('reset', data.length, 'chars', state()) : undefined,
+          );
         },
         // Called when the user types: xterm only does this itself for keys it handles.
         scrollToBottom: () => term.scrollToBottom(),
