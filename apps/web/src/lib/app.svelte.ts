@@ -603,7 +603,8 @@ class AppState {
       selectedModelId: model.id,
       selectedModelProvider: model.provider,
     };
-    if (!this.demo && this.activeSessionId && state.control.generation) {
+    // Without the lease the command would be refused; the choice rides with the next prompt.
+    if (!this.demo && this.activeSessionId && this.hasControl && state.control.generation) {
       try {
         await api.command(this.activeSessionId, {
           commandId: uuid(),
@@ -622,7 +623,8 @@ class AppState {
     const state = this.sessionState;
     if (!state) return;
     this.sessionState = { ...state, thinkingLevel: level };
-    if (!this.demo && this.activeSessionId && state.control.generation) {
+    // Without the lease the command would be refused; the choice rides with the next prompt.
+    if (!this.demo && this.activeSessionId && this.hasControl && state.control.generation) {
       try {
         await api.command(this.activeSessionId, {
           commandId: uuid(),

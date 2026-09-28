@@ -40,3 +40,28 @@ it('stops accepting answers once the interaction expires', () => {
   expect(buttons().every((button) => button.disabled)).toBe(true);
   expect(target.textContent).toContain('Expired');
 });
+
+it('declines a confirm with No instead of cancelling it', () => {
+  target = document.createElement('div');
+  document.body.append(target);
+  const onanswer = vi.fn();
+  component = mount(InteractionCard, {
+    target,
+    props: {
+      interaction: {
+        id: 'i2',
+        runnerEpoch: '1',
+        kind: 'confirm',
+        title: 'Continue?',
+        status: 'pending',
+      },
+      onanswer,
+    },
+  });
+  flushSync();
+  const no = Array.from(target.querySelectorAll('button')).find((button) =>
+    button.textContent?.includes('No'),
+  );
+  no!.click();
+  expect(onanswer).toHaveBeenCalledWith({ action: 'answer', value: false });
+});

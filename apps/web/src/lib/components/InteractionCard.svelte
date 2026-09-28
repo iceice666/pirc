@@ -131,7 +131,14 @@
       <button
         class="button ghost small"
         type="button"
-        onclick={() => onanswer({ action: 'cancel' })}
+        onclick={() =>
+          // A confirm's "No" is a real decline (`confirmed: false`); cancelling
+          // would read as "did not answer" to the agent.
+          onanswer(
+            interaction.kind === 'confirm'
+              ? { action: 'answer', value: false }
+              : { action: 'cancel' },
+          )}
         disabled={locked}
       >
         <X size={15} />
