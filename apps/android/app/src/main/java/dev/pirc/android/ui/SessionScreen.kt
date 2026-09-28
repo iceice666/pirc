@@ -11,8 +11,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -82,7 +85,8 @@ fun SessionScreen(viewModel: SessionViewModel, fallbackName: String, onBack: () 
             )
         },
         bottomBar = {
-            if (state != null) Composer(viewModel, Modifier.navigationBarsPadding().imePadding())
+            // The larger of keyboard and navigation bar, not both stacked.
+            if (state != null) Composer(viewModel, Modifier.windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime)))
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {

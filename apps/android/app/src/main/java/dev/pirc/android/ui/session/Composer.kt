@@ -4,39 +4,48 @@ import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AssistChip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.ListItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -44,7 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -57,6 +66,8 @@ import dev.pirc.android.Delivery
 import dev.pirc.android.SessionViewModel
 import dev.pirc.android.core.ModelOption
 import dev.pirc.android.core.THINKING_LEVELS
+import dev.pirc.android.ui.PircIcons
+import dev.pirc.android.ui.WheelPicker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -71,11 +82,10 @@ private val THINKING_LABELS = mapOf(
 )
 
 /**
- * The bottom bar: control state, attachments, the message field, model and
- * thinking choices, and send/stop. It rides on the keyboard (the caller
- * applies `imePadding`).
+ * The message card at the bottom, after ChatGPT's: the field on top, then
+ * attach, the model and thinking level as one label, and send (stop while a
+ * run is active and nothing is typed). The caller makes it ride the keyboard.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -89,14 +99,15 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
     val models by viewModel.models.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var sheet by remember { mutableStateOf<String?>(null) }
+    var picking by remember { mutableStateOf(false) }
 
     val active = viewModel.runActive(state)
     val stopping = state?.run?.status == "stopping"
-    val live = connection == Connection.Live
     val hasControl = control.heldByCurrentClient
-    val canSend = hasControl && live && !busy && draft.isNotBlank() && attachments.none { it.uploading }
-    val showStop = active && draft.isBlank() && !busy
+    val canSend = hasControl && connection == Connection.Live && !busy && draft.isNotBlank() && attachments.none { it.uploading }
+    val showStop = active && draft.isBlank()
+    val model = viewModel.selectedModel(state)
+    val level = viewModel.thinkingLevel(state)
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(4)) { uris ->
         scope.launch {
@@ -107,143 +118,191 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
         }
     }
 
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier.fillMaxWidth()) {
-        Column(Modifier.animateContentSize().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            actionError?.let { message ->
-                Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.small) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp)) {
-                        Text(message, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                        TextButton(onClick = viewModel::dismissActionError) { Text("OK") }
-                    }
+    Column(
+        modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp).animateContentSize(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        actionError?.let { message ->
+            Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.medium) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 14.dp)) {
+                    Text(message, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    TextButton(onClick = viewModel::dismissActionError) { Text("OK") }
                 }
             }
-            AnimatedVisibility(visible = !hasControl) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        if (control.free) "Getting control…" else "Another device controls this session.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (!control.free) TextButton(onClick = viewModel::takeControl) { Text("Take control") }
-                }
-            }
-            if (attachments.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(attachments, key = { it.localId }) { AttachmentThumb(it) { viewModel.removeAttachment(it.localId) } }
-            }
-            TextField(
-                value = draft,
-                onValueChange = viewModel::setDraft,
-                placeholder = {
-                    Text(
-                        when {
-                            !hasControl -> "Take control to send a message"
-                            !active -> "Tell the agent what to work on…"
-                            delivery == Delivery.Steer -> "Steer the current run…"
-                            else -> "Queue what should happen next…"
-                        },
-                    )
-                },
-                maxLines = 6,
-                shape = MaterialTheme.shapes.large,
-                colors = TextFieldDefaults.colors(
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                ),
-                textStyle = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                TextButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
-                    Text("＋ Image")
-                }
-                AssistChip(
-                    onClick = { sheet = "model" },
-                    enabled = !active,
-                    label = { Text(viewModel.selectedModel(state)?.displayName ?: "Model", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    modifier = Modifier.weight(1f, fill = false),
+        }
+        AnimatedVisibility(visible = !hasControl) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Text(
+                    if (control.free) "Getting control…" else "Another device controls this session.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
                 )
-                AssistChip(onClick = { sheet = "thinking" }, label = { Text(THINKING_LABELS[state?.thinkingLevel ?: "medium"] ?: "Thinking") })
-                Spacer(Modifier.weight(1f))
-                if (showStop) FilledIconButton(
-                    onClick = viewModel::stopRun,
-                    enabled = hasControl && !stopping,
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    if (stopping) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onError)
-                    else Text("■", color = MaterialTheme.colorScheme.onError)
-                } else FilledIconButton(onClick = viewModel::send, enabled = canSend, modifier = Modifier.size(48.dp)) {
-                    if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text("↑", style = MaterialTheme.typography.titleLarge)
-                }
+                if (!control.free) TextButton(onClick = viewModel::takeControl) { Text("Take control") }
             }
-            AnimatedVisibility(visible = active) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SingleChoiceSegmentedButtonRow(Modifier.weight(1f)) {
-                        Delivery.entries.forEachIndexed { index, option ->
-                            SegmentedButton(
-                                selected = delivery == option,
-                                onClick = { viewModel.setDelivery(option) },
-                                shape = SegmentedButtonDefaults.itemShape(index, Delivery.entries.size),
-                            ) { Text(if (option == Delivery.Steer) "Steer now" else "Queue next") }
+        }
+
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            shadowElevation = 3.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp)) {
+                if (attachments.isNotEmpty()) LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                ) {
+                    items(attachments, key = { it.localId }) { AttachmentThumb(it) { viewModel.removeAttachment(it.localId) } }
+                }
+                val hint = when {
+                    !hasControl -> "Take control to send a message"
+                    !active -> "Message pirc"
+                    delivery == Delivery.Steer -> "Steer the current run"
+                    else -> "Queue what comes next"
+                }
+                BasicTextField(
+                    value = draft,
+                    onValueChange = viewModel::setDraft,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    maxLines = 8,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 14.dp, vertical = 12.dp),
+                    decorationBox = { field ->
+                        Box {
+                            if (draft.isEmpty()) Text(hint, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            field()
                         }
+                    },
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        modifier = Modifier.size(48.dp),
+                    ) { Icon(PircIcons.Plus, contentDescription = "Attach images", modifier = Modifier.size(26.dp)) }
+                    AnimatedVisibility(visible = active, enter = fadeIn(), exit = fadeOut()) {
+                        TextButton(onClick = {
+                            viewModel.setDelivery(if (delivery == Delivery.Steer) Delivery.FollowUp else Delivery.Steer)
+                        }) { Text(if (delivery == Delivery.Steer) "Steer" else "Queue", style = MaterialTheme.typography.labelLarge) }
                     }
-                    if (!showStop) TextButton(onClick = viewModel::stopRun, enabled = hasControl && !stopping) { Text("Stop") }
+                    Spacer(Modifier.weight(1f))
+                    Row(
+                        Modifier
+                            .clip(MaterialTheme.shapes.large)
+                            .clickable { picking = true }
+                            .padding(horizontal = 10.dp, vertical = 10.dp)
+                            .weight(1f, fill = false),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            model?.displayName ?: "Model",
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Text(
+                            " " + (THINKING_LABELS[level] ?: level),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                    SendButton(showStop = showStop, stopping = stopping, busy = busy, canSend = canSend, canStop = hasControl && !stopping,
+                        onSend = viewModel::send, onStop = viewModel::stopRun)
                 }
             }
         }
     }
 
-    when (sheet) {
-        "model" -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
-            ChoiceList(
-                title = "Model",
-                items = models,
-                label = { it.displayName },
-                detail = { it.provider },
-                selected = { it == viewModel.selectedModel(state) },
-            ) { model: ModelOption ->
-                viewModel.selectModel(model)
-                sheet = null
-            }
-        }
-        "thinking" -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
-            val levels = viewModel.selectedModel(state)?.thinkingLevels ?: THINKING_LEVELS
-            ChoiceList(
-                title = "Thinking",
-                items = levels,
-                label = { THINKING_LABELS[it] ?: it },
-                detail = { null },
-                selected = { it == (state?.thinkingLevel ?: "medium") },
-            ) { level: String ->
-                viewModel.selectThinking(level)
-                sheet = null
+    if (picking) ModelSheet(
+        models = models,
+        model = model,
+        level = level,
+        modelLocked = active,
+        onDone = { chosenModel, chosenLevel ->
+            picking = false
+            viewModel.selectSettings(chosenModel, chosenLevel)
+        },
+        onDismiss = { picking = false },
+    )
+}
+
+@Composable
+private fun SendButton(showStop: Boolean, stopping: Boolean, busy: Boolean, canSend: Boolean, canStop: Boolean, onSend: () -> Unit, onStop: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val enabled = if (showStop) canStop else canSend
+    val container by animateColorAsState(if (enabled) colors.onSurface else colors.surfaceContainerHighest, label = "send")
+    val content = if (enabled) colors.surface else colors.onSurfaceVariant
+    Box(
+        Modifier
+            .padding(end = 2.dp)
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(container)
+            .clickable(enabled = enabled, onClick = if (showStop) onStop else onSend),
+        contentAlignment = Alignment.Center,
+    ) {
+        AnimatedContent(targetState = Triple(showStop, stopping, busy), transitionSpec = { (fadeIn() + scaleIn()) togetherWith (fadeOut() + scaleOut()) }, label = "send-icon") { (stop, isStopping, isBusy) ->
+            when {
+                isBusy || isStopping -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = content)
+                stop -> Icon(PircIcons.Stop, contentDescription = "Stop run", tint = content, modifier = Modifier.size(22.dp))
+                else -> Icon(PircIcons.ArrowUp, contentDescription = "Send", tint = content, modifier = Modifier.size(22.dp))
             }
         }
     }
 }
 
+/** Model and thinking level on two wheels, like a date picker's day and month. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun <T> ChoiceList(
-    title: String,
-    items: List<T>,
-    label: (T) -> String,
-    detail: (T) -> String?,
-    selected: (T) -> Boolean,
-    onPick: (T) -> Unit,
+private fun ModelSheet(
+    models: List<ModelOption>,
+    model: ModelOption?,
+    level: String,
+    modelLocked: Boolean,
+    onDone: (ModelOption?, String) -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-    LazyColumn(Modifier.padding(bottom = 24.dp)) {
-        items(items) { item ->
-            ListItem(
-                headlineContent = { Text(label(item)) },
-                supportingContent = detail(item)?.let { { Text(it) } },
-                trailingContent = if (selected(item)) ({ Text("✓", color = MaterialTheme.colorScheme.primary) }) else null,
-                modifier = Modifier.clickable { onPick(item) },
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var modelIndex by remember { mutableIntStateOf(models.indexOf(model).coerceAtLeast(0)) }
+    val chosen = models.getOrNull(modelIndex)
+    val levels = chosen?.thinkingLevels ?: THINKING_LEVELS
+    var chosenLevel by remember { mutableStateOf(level) }
+    // Another model may not offer the level: fall back to its nearest one.
+    val shownLevel = if (chosenLevel in levels) chosenLevel else levels.lastOrNull { THINKING_LEVELS.indexOf(it) <= THINKING_LEVELS.indexOf(chosenLevel) } ?: levels.first()
+    val duplicates = models.groupBy { it.displayName }.filterValues { it.size > 1 }.keys
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Model", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Button(onClick = { onDone(chosen, shownLevel) }) { Text("Done") }
+            }
+            if (modelLocked) Text(
+                "The model can change after this run. The thinking level applies to the next turn.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (models.isEmpty()) Text("No models yet. The gateway's list is still loading.", style = MaterialTheme.typography.bodyLarge)
+            else Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 16.dp)) {
+                WheelPicker(
+                    items = models,
+                    selected = modelIndex,
+                    onSelect = { modelIndex = it },
+                    label = { if (it.displayName in duplicates) "${it.displayName} · ${it.provider}" else it.displayName },
+                    enabled = !modelLocked,
+                    modifier = Modifier.weight(3f),
+                )
+                WheelPicker(
+                    items = levels,
+                    selected = levels.indexOf(shownLevel),
+                    onSelect = { chosenLevel = levels[it] },
+                    label = { THINKING_LABELS[it] ?: it },
+                    modifier = Modifier.weight(2f),
+                )
+            }
         }
-        if (items.isEmpty()) item { Text("Nothing to choose from yet.", modifier = Modifier.padding(24.dp)) }
     }
 }
 
@@ -255,13 +314,18 @@ private fun AttachmentThumb(attachment: Attachment, onRemove: () -> Unit) {
             BitmapFactory.decodeByteArray(attachment.bytes, 0, attachment.bytes.size, options)?.asImageBitmap()
         }.getOrNull()
     }
-    Box(Modifier.size(72.dp).clip(MaterialTheme.shapes.medium)) {
-        if (bitmap != null) Image(bitmap, contentDescription = attachment.name, contentScale = ContentScale.Crop, modifier = Modifier.size(72.dp))
-        if (attachment.uploading) CircularProgressIndicator(Modifier.align(Alignment.Center).size(24.dp), strokeWidth = 2.dp)
-        Surface(
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-            shape = MaterialTheme.shapes.small,
-            modifier = Modifier.align(Alignment.TopEnd).padding(2.dp).clickable(onClick = onRemove),
-        ) { Text("✕", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) }
+    Box(Modifier.size(64.dp).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
+        if (bitmap != null) Image(bitmap, contentDescription = attachment.name, contentScale = ContentScale.Crop, modifier = Modifier.size(64.dp))
+        if (attachment.uploading) CircularProgressIndicator(Modifier.align(Alignment.Center).size(22.dp), strokeWidth = 2.dp)
+        Box(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(4.dp)
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                .clickable(onClick = onRemove),
+            contentAlignment = Alignment.Center,
+        ) { Icon(PircIcons.Close, contentDescription = "Remove ${attachment.name}", tint = MaterialTheme.colorScheme.surface, modifier = Modifier.size(14.dp)) }
     }
 }

@@ -260,7 +260,7 @@ class SessionViewModel(
         val state = _state.value ?: return
         val model = selectedModel(state)
         if (model != null) command(generation, Commands.setModel(model.provider, model.id))
-        state.thinkingLevel?.let { command(generation, Commands.setThinking(it)) }
+        command(generation, Commands.setThinking(thinkingLevel(state)))
     }
 
     fun stopRun() = perform("The run could not be stopped.") { command(it, Commands.simple("stop")) }
@@ -290,16 +290,30 @@ class SessionViewModel(
         } ?: models.firstOrNull()
     }
 
-    fun selectModel(model: ModelOption) {
-        _state.update { it?.copy(selectedModelId = model.id, selectedModelProvider = model.provider) }
-        if (_control.value.heldByCurrentClient)
-            perform("The model could not be changed.") { command(it, Commands.setModel(model.provider, model.id)) }
-    }
+    /** The thinking level shown and sent: the session's, else the web's default. */
+    fun thinkingLevel(state: SessionState? = _state.value): String = state?.thinkingLevel ?: "medium"
 
-    fun selectThinking(level: String) {
-        _state.update { it?.copy(thinkingLevel = level) }
+    /**
+     * Pick a model and thinking level together. Only what changed is sent,
+     * and only with control; otherwise it applies with the next prompt.
+     */
+    fun selectSettings(model: ModelOption?, level: String) {
+        val before = _state.value
+        val modelChanged = model != null && model != selectedModel(before)
+        val levelChanged = level != thinkingLevel(before)
+        if (!modelChanged && !levelChanged) return
+        _state.update { state ->
+            state?.copy(
+                selectedModelId = if (modelChanged) model!!.id else state.selectedModelId,
+                selectedModelProvider = if (modelChanged) model!!.provider else state.selectedModelProvider,
+                thinkingLevel = level,
+            )
+        }
         if (_control.value.heldByCurrentClient)
-            perform("The thinking level could not be changed.") { command(it, Commands.setThinking(level)) }
+            perform("The model settings could not be changed.") { generation ->
+                if (modelChanged) command(generation, Commands.setModel(model!!.provider, model.id))
+                if (levelChanged) command(generation, Commands.setThinking(level))
+            }
     }
 
     private suspend fun command(generation: Long, payload: kotlinx.serialization.json.JsonObject) {
