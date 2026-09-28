@@ -50,11 +50,16 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownCodeBlock
 import com.mikepenz.markdown.compose.elements.MarkdownCodeFence
 import com.mikepenz.markdown.compose.elements.MarkdownHighlightedCode
+import com.mikepenz.markdown.compose.elements.LocalTableRowIndex
+import com.mikepenz.markdown.compose.elements.MarkdownTable
+import com.mikepenz.markdown.compose.elements.MarkdownTableHeader
+import com.mikepenz.markdown.compose.elements.MarkdownTableRow
 import dev.pirc.android.core.linkifyPaths
 import dev.pirc.android.ui.files.syntaxFor
 import com.mikepenz.markdown.m3.Markdown
@@ -65,7 +70,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Markdown with highlighted, copyable code blocks that scroll sideways
- * instead of wrapping. With [linkPaths], bare file paths become links (they
+ * instead of wrapping. Table cells wrap rather than the library default of one
+ * ellipsized line, which cut most prose cells to a few words. With [linkPaths], bare file paths become links (they
  * open the file viewer through `LocalUriHandler`).
  */
 @Composable
@@ -78,6 +84,26 @@ fun MarkdownText(content: String, modifier: Modifier = Modifier, linkPaths: Bool
         markdownComponents(
             codeFence = { MarkdownCodeFence(it.content, it.node, it.typography.code, highlighted) },
             codeBlock = { MarkdownCodeBlock(it.content, it.node, it.typography.code, highlighted) },
+            table = {
+                MarkdownTable(
+                    it.content,
+                    it.node,
+                    style = it.typography.table,
+                    headerBlock = { content, header, tableWidth, style ->
+                        MarkdownTableHeader(
+                            content, header, tableWidth, style,
+                            maxLines = Int.MAX_VALUE, overflow = TextOverflow.Clip,
+                        )
+                    },
+                    rowBlock = { content, row, tableWidth, style ->
+                        MarkdownTableRow(
+                            content, row, tableWidth, style,
+                            rowIndex = LocalTableRowIndex.current,
+                            maxLines = Int.MAX_VALUE, overflow = TextOverflow.Clip,
+                        )
+                    },
+                )
+            },
         )
     }
     val source = remember(content, linkPaths) { if (linkPaths) linkifyPaths(content) else content }
