@@ -47,7 +47,7 @@ fun PircApp(viewModel: AppViewModel) {
                     val route = entry.toRoute<SessionRoute>()
                     val api = viewModel.api() ?: return@composable
                     val session = viewModel<SessionViewModel>(key = "${api.pairing.baseUrl}|${route.id}") {
-                        SessionViewModel(api, route.id, onUnauthorized = { viewModel.handle(it) })
+                        SessionViewModel(api, route.id, viewModel.local.clientId, viewModel.local, onUnauthorized = { viewModel.handle(it) })
                     }
                     SessionScreen(session, fallbackName = route.name, onBack = { nav.popBackStack() })
                 }

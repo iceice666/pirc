@@ -7,6 +7,7 @@ import dev.pirc.android.core.ApiException
 import dev.pirc.android.core.CredentialStore
 import dev.pirc.android.core.InvalidPairingLink
 import dev.pirc.android.core.KeystoreCredentialStore
+import dev.pirc.android.core.LocalStore
 import dev.pirc.android.core.Pairing
 import dev.pirc.android.core.PairingLink
 import dev.pirc.android.core.PircApi
@@ -35,6 +36,7 @@ data class SessionsState(
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val store: CredentialStore = KeystoreCredentialStore(application)
+    val local = LocalStore(application)
 
     private val _pairing = MutableStateFlow(store.load())
     val pairing: StateFlow<Pairing?> = _pairing.asStateFlow()

@@ -2,7 +2,8 @@
  * A stand-in gateway for trying the Android app without a real deployment:
  * serves one session from the shared timeline fixture, plus a markdown-heavy
  * reply, and streams a new answer word by word whenever the events socket
- * opens. Only for local development (plain HTTP on the emulator's host alias).
+ * opens. It hands out the control lease, accepts uploads, and echoes prompts
+ * back as a streamed reply. Only for local development (plain HTTP).
  *
  *   bun apps/android/dev/fake-gateway.ts            # listens on :8799
  *   adb shell am start -a android.intent.action.VIEW \
@@ -94,10 +95,50 @@ const event = (type: string, data: unknown) => ({
   data,
 });
 
+/** Open event sockets, for replies to prompts. */
+const sockets = new Set<import('bun').ServerWebSocket<unknown>>();
+const broadcast = (type: string, data: unknown) => {
+  const message = JSON.stringify(event(type, data));
+  for (const socket of sockets) socket.send(message);
+};
+let lease: { clientId: string; generation: number; expiresAt: number } | null = null;
+const leaseReply = () => ({
+  lease: lease && { ...lease, expired: lease.expiresAt < Date.now() },
+});
+
+async function streamReply(text: string, at = Date.now()) {
+  broadcast('pi_event', {
+    type: 'message_start',
+    message: { role: 'assistant', content: [], timestamp: at },
+  });
+  for (const word of text.split(/(?<= )/)) {
+    broadcast('pi_event', {
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: word },
+    });
+    await Bun.sleep(90);
+  }
+  broadcast('pi_event', {
+    type: 'message_end',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'text', text }],
+      model: 'm1',
+      stopReason: 'stop',
+      timestamp: at,
+      completedAt: Date.now(),
+    },
+  });
+}
+
+async function body(request: Request): Promise<any> {
+  return request.json().catch(() => ({}));
+}
+
 Bun.serve({
   port: PORT,
   hostname: '0.0.0.0',
-  fetch(request, server) {
+  async fetch(request, server) {
     const url = new URL(request.url);
     if (request.headers.get('authorization') !== `Bearer ${TOKEN}`)
       return json({ error: { code: 'unauthenticated', message: 'Bad device token' } }, 401);
@@ -109,10 +150,82 @@ Bun.serve({
       return json({ nodes: [{ id: 'm5pro', workspaces: [{ id: 'pirc', displayName: 'pirc' }] }] });
     if (/^\/api\/sessions\/[^/]+\/snapshot$/.test(url.pathname))
       return json({ ...snapshot, watermark: { epoch: 2, sequence } });
+    if (url.pathname === '/api/models')
+      return json({
+        models: [
+          { id: 'm1', provider: 'p', name: 'Model One', reasoning: true },
+          { id: 'm2', provider: 'p', name: 'Model Two', reasoning: false },
+        ],
+      });
+    const control = /^\/api\/sessions\/[^/]+\/control(?:\/(acquire|heartbeat|release))?$/.exec(
+      url.pathname,
+    );
+    if (control) {
+      const input = request.method === 'POST' ? await body(request) : {};
+      const live = lease && lease.expiresAt > Date.now();
+      if (control[1] === 'acquire') {
+        if (live && lease!.clientId !== input.clientId && !input.force)
+          return json(
+            { error: { code: 'lost_control', message: 'Another client holds control' } },
+            409,
+          );
+        lease = {
+          clientId: input.clientId,
+          generation: (lease?.generation ?? 0) + 1,
+          expiresAt: Date.now() + 30_000,
+        };
+      } else if (control[1] === 'heartbeat') {
+        if (!live || lease!.clientId !== input.clientId || lease!.generation !== input.generation)
+          return json({ error: { code: 'lost_control', message: 'Control lease expired' } }, 409);
+        lease!.expiresAt = Date.now() + 30_000;
+      } else if (control[1] === 'release') {
+        lease = null;
+        return new Response(null, { status: 204 });
+      }
+      return json(leaseReply());
+    }
+    if (/^\/api\/sessions\/[^/]+\/commands$/.test(url.pathname)) {
+      const input = await body(request);
+      if (!lease || lease.clientId !== input.clientId || lease.generation !== input.generation)
+        return json(
+          { error: { code: 'lost_control', message: 'Another client holds control' } },
+          409,
+        );
+      const payload = input.payload ?? {};
+      if (['prompt', 'steer', 'follow_up'].includes(payload.type)) {
+        const at = Date.now();
+        broadcast('pi_event', {
+          type: 'message_end',
+          message: { role: 'user', content: payload.message, timestamp: at },
+        });
+        void streamReply(
+          `You said: “${payload.message}”. This is the fake gateway echoing it back.`,
+          at + 1,
+        );
+      }
+      return json({ command: { id: input.commandId, status: 'accepted' }, duplicate: false }, 202);
+    }
+    if (/^\/api\/sessions\/[^/]+\/uploads$/.test(url.pathname)) {
+      const bytes = await request.arrayBuffer();
+      return json(
+        {
+          upload: {
+            id: `up-${crypto.randomUUID()}`,
+            mimeType: request.headers.get('content-type'),
+            byteSize: bytes.byteLength,
+          },
+        },
+        201,
+      );
+    }
     return json({ error: { code: 'not_found', message: 'Not in the fake gateway' } }, 404);
   },
   websocket: {
+    close(socket) {
+      sockets.delete(socket);
+    },
     async open(socket) {
+      sockets.add(socket);
       const send = (type: string, data: unknown) => socket.send(JSON.stringify(event(type, data)));
       const at = Date.now();
       await Bun.sleep(1500);

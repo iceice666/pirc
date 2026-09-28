@@ -2,7 +2,7 @@
 
 A native Jetpack Compose client for the pirc gateway. See [`plans/android-client.md`](../../plans/android-client.md) for the design and milestones.
 
-Current state: pairing, the session list, and a live read-only chat view (markdown with highlighted, copyable code; collapsible thinking, tool calls and system entries; pending questions and the queue). The composer, answering questions and the files panel come next; until then, use the web client for those.
+Current state: pairing, the session list, and a live chat: markdown with highlighted, copyable code; collapsible thinking, tool calls and system entries; a composer that rides on the keyboard (prompt, steer or queue while a run is active, stop, image attachments, model and thinking level); answering the agent's questions; and the control lease (kept alive while the chat is open, taken over on request). The files panel comes next.
 
 ## Pairing
 
@@ -34,7 +34,7 @@ This project is not part of the Bun workspace, `bun run check`, or the Nix packa
 
 ## Trying it without a gateway
 
-`dev/fake-gateway.ts` serves one session from the fixtures and streams a demo reply each time the chat opens:
+`dev/fake-gateway.ts` serves one session from the fixtures, streams a demo reply each time the chat opens, hands out the control lease, accepts uploads, and echoes prompts back:
 
 ```sh
 bun apps/android/dev/fake-gateway.ts   # http://0.0.0.0:8799

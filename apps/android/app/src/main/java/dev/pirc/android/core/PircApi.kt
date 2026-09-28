@@ -6,7 +6,16 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import dev.pirc.android.core.timeline.get
+import dev.pirc.android.core.timeline.number
+import dev.pirc.android.core.timeline.text
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
@@ -17,6 +26,8 @@ class ApiException(val status: Int, val code: String?, message: String) : IOExce
 }
 
 internal fun String.urlSegment(): String = URLEncoder.encode(this, Charsets.UTF_8).replace("+", "%20")
+
+private val JSON = "application/json".toMediaType()
 
 val PircJson = Json {
     ignoreUnknownKeys = true
@@ -46,6 +57,97 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
 
     /** The live event stream of one session; see [EventStream]. */
     fun events(sessionId: String, cursor: String?) = EventStream(this).open(sessionId, cursor)
+
+    // ---- acting on a session (needs the control lease) ----
+
+    suspend fun models(sessionId: String): List<ModelOption> =
+        get<ModelsResponse>("/api/models?sessionId=${sessionId.urlSegment()}").models.map { it.option() }
+
+    suspend fun control(sessionId: String, clientId: String): ControlLease =
+        ControlLease.from(send("GET", "${session(sessionId)}/control"), clientId)
+
+    /** Without [force], the node refuses while another client holds a live lease (409). */
+    suspend fun acquireControl(sessionId: String, clientId: String, force: Boolean): ControlLease = ControlLease.from(
+        send("POST", "${session(sessionId)}/control/acquire", buildJsonObject {
+            put("clientId", clientId)
+            put("force", force)
+        }),
+        clientId,
+    )
+
+    suspend fun heartbeatControl(sessionId: String, clientId: String, generation: Long): ControlLease = ControlLease.from(
+        send("POST", "${session(sessionId)}/control/heartbeat", held(clientId, generation)),
+        clientId,
+    )
+
+    suspend fun releaseControl(sessionId: String, clientId: String, generation: Long) {
+        send("POST", "${session(sessionId)}/control/release", held(clientId, generation))
+    }
+
+    /**
+     * Send one command. A command the node did not accept still comes back as a
+     * receipt (with its reason), so only transport and lease errors throw.
+     */
+    suspend fun command(sessionId: String, clientId: String, generation: Long, commandId: String, payload: JsonObject): CommandReceipt {
+        val body = buildJsonObject {
+            put("commandId", commandId)
+            put("clientId", clientId)
+            put("generation", generation)
+            put("payload", payload)
+        }
+        val reply = send("POST", "${session(sessionId)}/commands", body, acceptBody = { it["command"] != null })
+        val command = reply["command"]
+        return CommandReceipt(
+            commandId = command["id"].text ?: commandId,
+            status = command["status"].text ?: "outcome_unknown",
+            message = command["error"].text,
+        )
+    }
+
+    suspend fun answer(sessionId: String, interactionId: String, clientId: String, generation: Long, answer: InteractionAnswer) {
+        send(
+            "POST",
+            "${session(sessionId)}/interactions/${interactionId.urlSegment()}/answer",
+            buildJsonObject {
+                put("clientId", clientId)
+                put("generation", generation)
+                put("answer", answer.rpc())
+            },
+        )
+    }
+
+    /** Store an image on the session's node, where its agent reads it. */
+    suspend fun upload(sessionId: String, bytes: ByteArray, mimeType: String): Upload {
+        val reply = send("POST", "${session(sessionId)}/uploads", bytes.toRequestBody(mimeType.toMediaType()))
+        val upload = reply["upload"]
+        return Upload(upload["id"].text ?: error("upload without an id"), upload["mimeType"].text ?: mimeType, upload["byteSize"].number ?: bytes.size.toLong())
+    }
+
+    private fun session(sessionId: String) = "/api/sessions/${sessionId.urlSegment()}"
+
+    private fun held(clientId: String, generation: Long) = buildJsonObject {
+        put("clientId", clientId)
+        put("generation", generation)
+    }
+
+    private suspend fun send(method: String, path: String, json: JsonObject, acceptBody: (JsonElement?) -> Boolean = { false }): JsonElement? =
+        send(method, path, PircJson.encodeToString(JsonObject.serializer(), json).toRequestBody(JSON), acceptBody)
+
+    /** A JSON request; the reply body, or null for 204. */
+    private suspend fun send(
+        method: String,
+        path: String,
+        body: RequestBody? = null,
+        acceptBody: (JsonElement?) -> Boolean = { false },
+    ): JsonElement? = withContext(Dispatchers.IO) {
+        val request = request(path).header("Accept", "application/json").method(method, body).build()
+        client.newCall(request).execute().use { response ->
+            val text = response.body.string()
+            val parsed = runCatching { PircJson.parseToJsonElement(text) }.getOrNull()
+            if (!response.isSuccessful && !(response.code != 401 && acceptBody(parsed))) throw failure(response, text)
+            if (response.code == 204 || text.isBlank()) null else parsed
+        }
+    }
 
     internal fun request(path: String): Request.Builder = Request.Builder()
         .url(pairing.baseUrl + path)

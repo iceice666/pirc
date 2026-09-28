@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,14 +44,15 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.pirc.android.Connection
 import dev.pirc.android.SessionViewModel
-import dev.pirc.android.core.timeline.Interaction
 import dev.pirc.android.core.timeline.Message
 import dev.pirc.android.core.timeline.QueueItem
 import dev.pirc.android.core.timeline.SessionState
+import dev.pirc.android.ui.session.Composer
+import dev.pirc.android.ui.session.InteractionCard
 import dev.pirc.android.ui.session.MessageView
 import kotlinx.coroutines.launch
 
-/** A session's live timeline (read-only for now: answering and prompting come next). */
+/** A session: its live timeline, and the composer riding on the keyboard. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionScreen(viewModel: SessionViewModel, fallbackName: String, onBack: () -> Unit) {
@@ -78,11 +81,14 @@ fun SessionScreen(viewModel: SessionViewModel, fallbackName: String, onBack: () 
                 navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
             )
         },
+        bottomBar = {
+            if (state != null) Composer(viewModel, Modifier.navigationBarsPadding().imePadding())
+        },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             val current = state
             when {
-                current != null -> Timeline(current)
+                current != null -> Timeline(current, viewModel)
                 error != null -> Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
                     TextButton(onClick = viewModel::reload) { Text("Retry") }
@@ -131,7 +137,9 @@ private fun keys(messages: List<Message>): List<String> {
  * they scroll up, a button brings them back.
  */
 @Composable
-private fun Timeline(state: SessionState) {
+private fun Timeline(state: SessionState, viewModel: SessionViewModel) {
+    val control by viewModel.control.collectAsStateWithLifecycle()
+    val busy by viewModel.busy.collectAsStateWithLifecycle()
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val messages = state.messages.asReversed()
@@ -150,10 +158,19 @@ private fun Timeline(state: SessionState) {
             reverseLayout = true,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+            modifier = Modifier.fillMaxSize(),
         ) {
-            if (state.interactions.isNotEmpty() || state.queue.isNotEmpty())
-                item(key = "footer") { Footer(state.interactions, state.queue, Modifier.animateItem()) }
+            if (state.queue.isNotEmpty())
+                item(key = "queue") { Queue(state.queue, control.heldByCurrentClient, viewModel::clearQueue, Modifier.animateItem()) }
+            items(state.interactions.filter { it.status == "pending" }, key = { "i:" + it.id }) { interaction ->
+                InteractionCard(
+                    interaction,
+                    canAnswer = control.heldByCurrentClient,
+                    busy = busy,
+                    onAnswer = { viewModel.answer(interaction, it) },
+                    modifier = Modifier.animateItem(),
+                )
+            }
             itemsIndexed(messages, key = { index, _ -> messageKeys[index] }) { _, message ->
                 MessageView(message, Modifier.animateItem())
             }
@@ -165,7 +182,7 @@ private fun Timeline(state: SessionState) {
             visible = !atBottom,
             enter = fadeIn() + scaleIn(),
             exit = fadeOut() + scaleOut(),
-            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(16.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
         ) {
             SmallFloatingActionButton(onClick = {
                 follow = true
@@ -176,28 +193,15 @@ private fun Timeline(state: SessionState) {
 }
 
 @Composable
-private fun Footer(interactions: List<Interaction>, queue: List<QueueItem>, modifier: Modifier) {
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (item in queue) Text(
-            "${if (item.kind == "steer") "Steering" else "Queued"}: ${item.content}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        for (interaction in interactions.filter { it.status == "pending" }) Surface(
-            color = MaterialTheme.colorScheme.tertiaryContainer,
-            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(interaction.title, style = MaterialTheme.typography.titleSmall)
-                interaction.description?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                interaction.options.forEach { Text("• ${it.label}", style = MaterialTheme.typography.bodyMedium) }
-                Text(
-                    "The agent is waiting. Answering from the phone comes in the next update; use the web for now.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+private fun Queue(queue: List<QueueItem>, canClear: Boolean, onClear: () -> Unit, modifier: Modifier) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.medium, modifier = modifier.fillMaxWidth()) {
+        Column(Modifier.padding(start = 14.dp, top = 10.dp, end = 4.dp, bottom = 4.dp)) {
+            for (item in queue) Text(
+                "${if (item.kind == "steer") "Steering" else "Queued"}: ${item.content}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = onClear, enabled = canClear, modifier = Modifier.align(Alignment.End)) { Text("Clear queue") }
         }
     }
 }
