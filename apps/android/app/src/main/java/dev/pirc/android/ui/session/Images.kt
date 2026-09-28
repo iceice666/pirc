@@ -2,7 +2,17 @@ package dev.pirc.android.ui.session
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.net.Uri
 import android.provider.OpenableColumns
 import java.io.ByteArrayOutputStream
@@ -60,6 +70,38 @@ fun readImage(context: Context, uri: Uri): PickedImage? {
     } finally {
         bitmap.recycle()
     }
+}
+
+/**
+ * [bytes] decoded for display in at most [maxWidth]×[maxHeight] pixels: bounds
+ * first, then sampled down by powers of two, so a multi-megapixel screenshot
+ * never becomes a full-size bitmap. Call off the main thread.
+ */
+internal fun decodeSampled(bytes: ByteArray, maxWidth: Int, maxHeight: Int): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (bounds.outWidth / (sample * 2) >= maxWidth || bounds.outHeight / (sample * 2) >= maxHeight) sample *= 2
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+}
+
+/**
+ * An image decoded in the background for a box of [maxWidth]×[maxHeight];
+ * null while decoding or if [bytes] is not an image. [bytes] runs off the main
+ * thread too (base64 decoding).
+ */
+@Composable
+internal fun rememberDecodedImage(key: Any, maxWidth: Dp, maxHeight: Dp, bytes: () -> ByteArray): ImageBitmap? {
+    val density = LocalDensity.current
+    val width = with(density) { maxWidth.roundToPx() }
+    val height = with(density) { maxHeight.roundToPx() }
+    val image by produceState<ImageBitmap?>(null, key, width, height) {
+        value = withContext(Dispatchers.Default) {
+            runCatching { decodeSampled(bytes(), width, height)?.asImageBitmap() }.getOrNull()
+        }
+    }
+    return image
 }
 
 /** Up to [limit] bytes of the stream; more than that is left unread. */

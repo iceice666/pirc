@@ -78,11 +78,54 @@ private const val HIGHLIGHT_LIMIT = 300_000
 /** Minified one-line files: show the start of an overlong line. */
 private const val LINE_LIMIT = 2_000
 
-/** [code] with syntax colors, computed off the main thread (plain until ready). */
+/** One styled range of the whole text. */
+private class Span(val start: Int, val end: Int, val style: SpanStyle)
+
+/**
+ * [code] split into lines (overlong ones cut at [LINE_LIMIT]) with [spans]
+ * assigned to the lines they cover. Slicing one AnnotatedString per line would
+ * filter every span for every line; this touches each span once.
+ */
+private fun lines(code: String, spans: List<Span>): List<AnnotatedString> {
+    val starts = ArrayList<Int>().apply {
+        add(0)
+        for (index in code.indices) if (code[index] == '\n') add(index + 1)
+        // A final newline does not start another line.
+        if (size > 1 && last() == code.length) removeAt(size - 1)
+    }
+    val lineSpans = arrayOfNulls<MutableList<Span>>(starts.size)
+    for (span in spans) {
+        if (span.end <= span.start) continue
+        var line = starts.binarySearch(span.start).let { if (it >= 0) it else -it - 2 }.coerceAtLeast(0)
+        while (line < starts.size && starts[line] < span.end) {
+            (lineSpans[line] ?: ArrayList<Span>().also { lineSpans[line] = it }).add(span)
+            line++
+        }
+    }
+    return starts.mapIndexed { line, start ->
+        val end = if (line + 1 < starts.size) starts[line + 1] - 1 else code.length
+        val cut = minOf(end, start + LINE_LIMIT)
+        buildAnnotatedString {
+            append(code, start, cut)
+            lineSpans[line]?.forEach { span ->
+                val from = maxOf(span.start, start) - start
+                val to = minOf(span.end, cut) - start
+                if (to > from) addStyle(span.style, from, to)
+            }
+            if (cut < end) append(" …")
+        }
+    }
+}
+
+/**
+ * [code] as lines with syntax colors, all computed off the main thread: first
+ * plain (empty until then), then highlighted unless the file is huge.
+ */
 @Composable
-fun rememberHighlighted(code: String, language: SyntaxLanguage?): AnnotatedString {
+fun rememberHighlightedLines(code: String, language: SyntaxLanguage?): List<AnnotatedString> {
     val dark = isSystemInDarkTheme()
-    val highlighted by produceState(AnnotatedString(code), code, language, dark) {
+    val highlighted by produceState(emptyList<AnnotatedString>(), code, language, dark) {
+        value = withContext(Dispatchers.Default) { lines(code, emptyList()) }
         if (code.length > HIGHLIGHT_LIMIT) return@produceState
         value = withContext(Dispatchers.Default) {
             val highlights = Highlights.Builder()
@@ -91,16 +134,14 @@ fun rememberHighlighted(code: String, language: SyntaxLanguage?): AnnotatedStrin
                 .let { if (language != null) it.language(language) else it }
                 .build()
                 .getHighlights()
-            buildAnnotatedString {
-                append(code)
-                for (highlight in highlights) {
-                    val style = when (highlight) {
-                        is ColorHighlight -> SpanStyle(color = Color(highlight.rgb).copy(alpha = 1f))
-                        is BoldHighlight -> SpanStyle(fontWeight = FontWeight.Bold)
-                    }
-                    addStyle(style, highlight.location.start, highlight.location.end)
+            val spans = highlights.map { highlight ->
+                val style = when (highlight) {
+                    is ColorHighlight -> SpanStyle(color = Color(highlight.rgb).copy(alpha = 1f))
+                    is BoldHighlight -> SpanStyle(fontWeight = FontWeight.Bold)
                 }
+                Span(highlight.location.start.coerceIn(0, code.length), highlight.location.end.coerceIn(0, code.length), style)
             }
+            lines(code, spans)
         }
     }
     return highlighted
@@ -113,17 +154,7 @@ fun rememberHighlighted(code: String, language: SyntaxLanguage?): AnnotatedStrin
  */
 @Composable
 fun CodeView(content: String, language: SyntaxLanguage?, target: FileTarget?, wrap: Boolean, modifier: Modifier = Modifier) {
-    val text = rememberHighlighted(content, language)
-    val lines = remember(text) {
-        var start = 0
-        buildList {
-            for (index in text.indices) if (text[index] == '\n') {
-                add(text.subSequence(start, index))
-                start = index + 1
-            }
-            if (start < text.length) add(text.subSequence(start, text.length))
-        }.map { if (it.length > LINE_LIMIT) it.subSequence(0, LINE_LIMIT) + AnnotatedString(" …") else it }
-    }
+    val lines = rememberHighlightedLines(content, language)
     val style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp)
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current

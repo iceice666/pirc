@@ -1,6 +1,5 @@
 package dev.pirc.android.ui.session
 
-import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -328,12 +327,7 @@ private fun ModelSheet(
 
 @Composable
 private fun AttachmentThumb(attachment: Attachment, onRemove: () -> Unit) {
-    val bitmap = remember(attachment.localId) {
-        runCatching {
-            val options = BitmapFactory.Options().apply { inSampleSize = 4 }
-            BitmapFactory.decodeByteArray(attachment.bytes, 0, attachment.bytes.size, options)?.asImageBitmap()
-        }.getOrNull()
-    }
+    val bitmap = rememberDecodedImage(attachment.localId, 64.dp, 64.dp) { attachment.bytes }
     Box(Modifier.size(64.dp).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
         if (bitmap != null) Image(bitmap, contentDescription = attachment.name, contentScale = ContentScale.Crop, modifier = Modifier.size(64.dp))
         if (attachment.uploading) CircularProgressIndicator(Modifier.align(Alignment.Center).size(22.dp), strokeWidth = 2.dp)

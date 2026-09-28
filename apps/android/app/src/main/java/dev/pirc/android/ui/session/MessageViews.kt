@@ -1,7 +1,6 @@
 package dev.pirc.android.ui.session
 
 import android.content.ClipData
-import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -33,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -213,14 +213,9 @@ private fun SystemEntry(message: Message, modifier: Modifier) {
 
 @Composable
 private fun Images(images: List<InlineImage>) {
-    for (image in images) {
-        val bitmap = remember(image.base64) {
-            runCatching {
-                val bytes = Base64.decode(image.base64, Base64.DEFAULT)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-            }.getOrNull()
-        } ?: continue
-        Image(
+    for (image in images) key(image.base64) {
+        val bitmap = rememberDecodedImage(image.base64, 280.dp, 320.dp) { Base64.decode(image.base64, Base64.DEFAULT) }
+        if (bitmap != null) Image(
             bitmap,
             contentDescription = "Attached image",
             contentScale = ContentScale.Fit,
