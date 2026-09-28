@@ -80,7 +80,8 @@ fun SessionScreen(
     viewModel: SessionViewModel,
     fallbackName: String,
     onBack: () -> Unit,
-    onOpenPanels: (title: String, tab: PanelTab) -> Unit,
+    /** [tab] null: the tab shown last. */
+    onOpenPanels: (title: String, tab: PanelTab?) -> Unit,
     onOpenFile: (FileTarget) -> Unit,
     onChanged: (Session) -> Unit,
 ) {
@@ -128,7 +129,8 @@ fun SessionScreen(
                 actions = {
                     val session by remember { derivedStateOf { state?.session } }
                     val title = session?.name ?: fallbackName
-                    TextButton(onClick = { onOpenPanels(title, PanelTab.Files) }) { Text("Files") }
+                    // The panels as they were left (the web keeps them mounted).
+                    TextButton(onClick = { onOpenPanels(title, null) }) { Text("Files") }
                     TextButton(onClick = { menu = true }) { Text("More") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         for (tab in listOf(PanelTab.Git, PanelTab.Tasks, PanelTab.Memory, PanelTab.Terminal))

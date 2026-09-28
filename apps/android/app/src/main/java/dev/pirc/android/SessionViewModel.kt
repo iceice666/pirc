@@ -189,7 +189,15 @@ class SessionViewModel(
                 delay(HEARTBEAT_MS)
             }
         }
-        if (_models.value.isEmpty()) viewModelScope.launch {
+        loadModels()
+    }
+
+    private var loadingModels: Job? = null
+
+    /** Until the list arrives: a runner still starting has none yet, so each (re)connect asks again. */
+    private fun loadModels() {
+        if (_models.value.isNotEmpty() || loadingModels?.isActive == true) return
+        loadingModels = viewModelScope.launch {
             runCatching { api.models(sessionId) }.onSuccess { _models.value = it }
         }
     }
@@ -253,6 +261,7 @@ class SessionViewModel(
                     StreamSignal.Connected -> {
                         _connection.value = Connection.Live
                         syncNow()
+                        loadModels()
                     }
                     StreamSignal.Reconnecting -> _connection.value = Connection.Reconnecting
                     is StreamSignal.Closed -> {

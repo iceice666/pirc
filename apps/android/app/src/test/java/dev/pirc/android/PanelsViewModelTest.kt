@@ -1,5 +1,8 @@
 package dev.pirc.android
 
+import dev.pirc.android.core.ApiException
+import dev.pirc.android.core.Commit
+import dev.pirc.android.core.PanelState
 import dev.pirc.android.core.StreamSignal
 import dev.pirc.android.core.timeline.TimelineEvent
 import kotlinx.coroutines.Dispatchers
@@ -99,5 +102,58 @@ class PanelsViewModelTest {
         advanceTimeBy(1_000)
         assertEquals(before + 2, signals)
         model.stop()
+    }
+
+    @Test
+    fun keepsFollowingWhileAnyScreenStillShowsIt() = runTest(dispatcher) {
+        val model = PanelsViewModel(api, SESSION, ME, PanelTab.Tasks, {})
+        // A diff on top starts before the panels below stop.
+        model.start()
+        model.start()
+        model.stop()
+        runCurrent()
+        val loads = api.calls.count { it == "panel" }
+        advanceTimeBy(5_001)
+        assertEquals(loads + 1, api.calls.count { it == "panel" })
+        model.stop()
+        advanceTimeBy(20_000)
+        assertEquals(loads + 1, api.calls.count { it == "panel" })
+    }
+
+    @Test
+    fun aFailedRefreshKeepsWhatIsShownAndSaysSo() = runTest(dispatcher) {
+        var fail = false
+        api.panel = { if (fail) throw ApiException(502, null, "node offline") else PanelState(agentRunning = true) }
+        val model = PanelsViewModel(api, SESSION, ME, PanelTab.Tasks, {})
+        model.start()
+        runCurrent()
+        fail = true
+        model.pullRefresh()
+        assertEquals(true, model.refreshing.value)
+        runCurrent()
+        assertEquals(false, model.refreshing.value)
+        assertEquals(Loadable.Ready(PanelState(agentRunning = true)), model.panel.value)
+        assertEquals("node offline", model.stale.value[PanelTab.Tasks])
+        assertEquals("Could not refresh: node offline", model.actionError.value)
+        fail = false
+        model.pullRefresh()
+        runCurrent()
+        assertEquals(null, model.stale.value[PanelTab.Tasks])
+        model.stop()
+    }
+
+    private fun commit(sha: String) = Commit(sha = sha, short = sha, author = "a", time = 0, subject = sha)
+
+    @Test
+    fun mergesNewCommitsOnTopOfTheLoadedHistory() {
+        val loaded = PanelsViewModel.History(listOf("c", "b", "a").map(::commit), more = true)
+        // Two new commits: prepended, older pages kept.
+        val merged = mergeHistory(loaded, listOf("e", "d", "c", "b").map(::commit), more = true)
+        assertEquals(listOf("e", "d", "c", "b", "a"), merged.commits.map { it.sha })
+        assertEquals(true, merged.more)
+        // Rewritten (no overlap): starts over from the first page.
+        val rewritten = mergeHistory(loaded, listOf("x", "y").map(::commit), more = false)
+        assertEquals(listOf("x", "y"), rewritten.commits.map { it.sha })
+        assertEquals(false, rewritten.more)
     }
 }

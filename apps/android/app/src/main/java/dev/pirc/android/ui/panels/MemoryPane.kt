@@ -55,7 +55,7 @@ fun MemoryPane(viewModel: PanelsViewModel) {
     val panel by viewModel.panel.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableStateOf("active") }
 
-    PullToRefreshBox(isRefreshing = false, onRefresh = { viewModel.refresh() }, modifier = Modifier.fillMaxSize()) {
+    PullToRefreshBox(isRefreshing = viewModel.refreshing.collectAsStateWithLifecycle().value, onRefresh = viewModel::pullRefresh, modifier = Modifier.fillMaxSize()) {
         when (val current = panel) {
             Loadable.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             is Loadable.Failed -> Text(current.message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(24.dp))

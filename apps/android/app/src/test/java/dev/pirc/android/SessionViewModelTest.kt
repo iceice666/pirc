@@ -2,6 +2,7 @@ package dev.pirc.android
 
 import dev.pirc.android.core.ApiException
 import dev.pirc.android.core.CommandReceipt
+import dev.pirc.android.core.ModelOption
 import dev.pirc.android.core.StreamSignal
 import dev.pirc.android.core.timeline.TimelineEvent
 import androidx.lifecycle.ViewModelProvider
@@ -209,5 +210,21 @@ class SessionViewModelTest {
         runCurrent()
         assertEquals(1, unauthorized.size)
         assertEquals("revoked", model.error.value)
+    }
+
+    @Test
+    fun asksForModelsAgainOnReconnectUntilItHasThem() = test {
+        val model = live()
+        assertEquals(emptyList<ModelOption>(), model.models.value)
+        val option = ModelOption("m1", "anthropic", "M1", null, listOf("off"))
+        api.models = { listOf(option) }
+        api.streams.last().trySend(StreamSignal.Reconnecting)
+        api.streams.last().trySend(StreamSignal.Connected)
+        runCurrent()
+        assertEquals(listOf(option), model.models.value)
+        val asked = api.calls.count { it == "models" }
+        api.streams.last().trySend(StreamSignal.Connected)
+        runCurrent()
+        assertEquals(asked, api.calls.count { it == "models" })
     }
 }

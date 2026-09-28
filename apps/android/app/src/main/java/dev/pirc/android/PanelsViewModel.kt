@@ -126,6 +126,10 @@ class PanelsViewModel(
 
     data class History(val commits: List<Commit> = emptyList(), val more: Boolean = true, val loading: Boolean = false, val error: String? = null)
 
+    /** Counts Git status loads that succeeded, equal or not: an open diff reloads on each. */
+    private val _gitLoads = MutableStateFlow(0)
+    val gitLoads: StateFlow<Int> = _gitLoads.asStateFlow()
+
     private val _history = MutableStateFlow(History())
     val history: StateFlow<History> = _history.asStateFlow()
 
@@ -134,6 +138,18 @@ class PanelsViewModel(
 
     private val _actionError = MutableStateFlow<String?>(null)
     val actionError: StateFlow<String?> = _actionError.asStateFlow()
+
+    /** Changes or History in the Git tab; History loads on first view. */
+    private val _gitView = MutableStateFlow(GitView.Changes)
+    val gitView: StateFlow<GitView> = _gitView.asStateFlow()
+
+    /** A pull-to-refresh is under way (it keeps the content on screen). */
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    /** Why the last background refresh of a tab failed; what it shows may be out of date. */
+    private val _stale = MutableStateFlow<Map<PanelTab, String>>(emptyMap())
+    val stale: StateFlow<Map<PanelTab, String>> = _stale.asStateFlow()
 
     private val _filesChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
@@ -148,13 +164,31 @@ class PanelsViewModel(
     @Volatile
     private var live = false
 
+    /** Screens following this session's panels (the panels and a Git diff on top of them). */
+    private var watchers = 0
+
     fun select(tab: PanelTab) {
         _tab.value = tab
         refresh(tab, quiet = true)
     }
 
-    /** Visible: keep control and follow the live tabs (tasks and memory change as the agent works). */
+    /** Open on [tab] (before the screen starts, so no separate load). */
+    fun show(tab: PanelTab) {
+        _tab.value = tab
+    }
+
+    fun showGit(view: GitView) {
+        _gitView.value = view
+        if (view == GitView.History && _history.value.commits.isEmpty()) loadMoreHistory()
+    }
+
+    /**
+     * Visible: keep control and follow the live tabs (tasks and memory change
+     * as the agent works). Counted, so a screen on top that starts before the
+     * one below stops keeps it going.
+     */
     fun start() {
+        if (watchers++ > 0) return
         control.start()
         poll?.cancel()
         poll = viewModelScope.launch {
@@ -208,6 +242,11 @@ class PanelsViewModel(
     }
 
     fun stop() {
+        if (watchers == 0 || --watchers > 0) return
+        halt()
+    }
+
+    private fun halt() {
         control.stop()
         poll?.cancel()
         signals?.cancel()
@@ -224,51 +263,102 @@ class PanelsViewModel(
         }
     }
 
+    /**
+     * Pull to refresh the shown tab: what is shown stays until the new data
+     * arrives, and a failure is reported instead of replacing it.
+     */
+    fun pullRefresh() {
+        val tab = _tab.value
+        if (tab == PanelTab.Files) return refresh(tab)
+        if (_refreshing.value) return
+        _refreshing.value = true
+        viewModelScope.launch {
+            try {
+                when (tab) {
+                    PanelTab.Git -> loadGit(quiet = true)
+                    PanelTab.Tasks, PanelTab.Memory -> loadPanel(quiet = true)
+                    PanelTab.Terminal -> loadTerminals(quiet = true)
+                    PanelTab.Files -> Unit
+                }
+                _stale.value[tab]?.let { _actionError.value = "Could not refresh: $it" }
+            } finally {
+                _refreshing.value = false
+            }
+        }
+    }
+
     fun dismissActionError() {
         _actionError.value = null
     }
 
-    private suspend fun <T> load(target: MutableStateFlow<Loadable<T>>, quiet: Boolean, fallback: String, fetch: suspend () -> T) {
+    private suspend fun <T> load(
+        target: MutableStateFlow<Loadable<T>>,
+        tabs: Set<PanelTab>,
+        quiet: Boolean,
+        fallback: String,
+        fetch: suspend () -> T,
+    ) {
         if (!quiet || target.value !is Loadable.Ready) target.value = Loadable.Loading
         target.value = try {
-            Loadable.Ready(fetch())
+            Loadable.Ready(fetch()).also { _stale.value -= tabs }
         } catch (error: IOException) {
             fail(error)
-            // A background refresh keeps what is shown.
-            if (quiet && target.value is Loadable.Ready) return
+            // A background refresh keeps what is shown, marked out of date.
+            if (quiet && target.value is Loadable.Ready) {
+                val message = error.message ?: fallback
+                _stale.value += tabs.associateWith { message }
+                return
+            }
             Loadable.Failed(error.message ?: fallback)
         }
     }
 
-    private suspend fun loadPanel(quiet: Boolean) = load(_panel, quiet, "Could not load the panel.") { api.panelState(sessionId) }
+    private suspend fun loadPanel(quiet: Boolean) =
+        load(_panel, setOf(PanelTab.Tasks, PanelTab.Memory), quiet, "Could not load the panel.") { api.panelState(sessionId) }
 
     /** Exited terminals hidden here without control; the node still lists them until someone closes them. */
     private val dismissedTerminals = HashSet<String>()
 
-    private suspend fun loadTerminals(quiet: Boolean) = load(_terminals, quiet, "Could not list terminals.") {
+    private suspend fun loadTerminals(quiet: Boolean) = load(_terminals, setOf(PanelTab.Terminal), quiet, "Could not list terminals.") {
         api.terminals(sessionId).filterNot { it.exited && it.id in dismissedTerminals }
     }
 
+    /** The status, and the history's newest commits once it has been viewed (loaded pages are kept). */
     private suspend fun loadGit(quiet: Boolean) {
-        load(_git, quiet, "Could not read Git status.") { api.gitStatus(sessionId) }
-        if (_history.value.commits.isEmpty() || !quiet) {
-            _history.value = History()
-            loadMoreHistory()
+        load(_git, setOf(PanelTab.Git), quiet, "Could not read Git status.") { api.gitStatus(sessionId).also { _gitLoads.value++ } }
+        val current = _history.value
+        when {
+            current.loading -> Unit
+            current.commits.isNotEmpty() -> refreshHistory(current)
+            _gitView.value == GitView.History -> loadMoreHistory()
+        }
+    }
+
+    /** Prepend commits made since the history was loaded; a rewritten history starts over. */
+    private suspend fun refreshHistory(current: History) {
+        try {
+            val page = api.gitLog(sessionId, 0)
+            if (_history.value !== current) return
+            _history.value = mergeHistory(current, page.commits, page.more)
+        } catch (error: IOException) {
+            fail(error)
         }
     }
 
     fun loadMoreHistory() {
         val current = _history.value
         if (current.loading || !current.more) return
-        _history.value = current.copy(loading = true, error = null)
+        val loading = current.copy(loading = true, error = null)
+        _history.value = loading
         viewModelScope.launch {
-            _history.value = try {
+            val next = try {
                 val page = api.gitLog(sessionId, current.commits.size)
-                History(current.commits + page.commits, page.more)
+                History(current.commits + page.commits.filterNot { commit -> current.commits.any { it.sha == commit.sha } }, page.more)
             } catch (error: IOException) {
                 fail(error)
                 current.copy(loading = false, error = error.message ?: "Could not load the history.")
             }
+            if (_history.value === loading) _history.value = next
         }
     }
 
@@ -320,6 +410,21 @@ class PanelsViewModel(
     }
 
     override fun onCleared() {
-        stop()
+        watchers = 0
+        halt()
     }
+}
+
+enum class GitView { Changes, History }
+
+/**
+ * [current] with the newest page [first] on top: commits up to the first one
+ * already shown are new. If none overlaps (history rewritten, or more new
+ * commits than a page), the first page replaces it.
+ */
+internal fun mergeHistory(current: PanelsViewModel.History, first: List<Commit>, more: Boolean): PanelsViewModel.History {
+    val top = current.commits.firstOrNull() ?: return PanelsViewModel.History(first, more)
+    val overlap = first.indexOfFirst { it.sha == top.sha }
+    return if (overlap < 0) PanelsViewModel.History(first, more)
+    else current.copy(commits = first.take(overlap) + current.commits, error = null)
 }

@@ -55,6 +55,7 @@ import dev.pirc.android.ui.PircIcons
 fun FilesPane(viewModel: FilesViewModel, active: Boolean, onOpenFile: (String) -> Unit) {
     val path by viewModel.path.collectAsStateWithLifecycle()
     val listing by viewModel.listing.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val parent = viewModel.parent()
     BackHandler(enabled = active && parent != null) { viewModel.open(parent!!) }
@@ -78,9 +79,12 @@ fun FilesPane(viewModel: FilesViewModel, active: Boolean, onOpenFile: (String) -
             when (state) {
                 Loadable.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 is Loadable.Failed -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                    Text(state.message, color = MaterialTheme.colorScheme.error)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(state.message, color = MaterialTheme.colorScheme.error)
+                        TextButton(onClick = { viewModel.open(folder, refresh = true) }) { Text("Retry") }
+                    }
                 }
-                is Loadable.Ready -> PullToRefreshBox(isRefreshing = false, onRefresh = viewModel::reload) {
+                is Loadable.Ready -> PullToRefreshBox(isRefreshing = refreshing, onRefresh = { viewModel.reload(pulled = true) }) {
                     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
                         items(state.value.entries, key = { it.name }) { entry ->
                             EntryRow(entry, detail = entry.size?.let { Formatter.formatShortFileSize(context, it) }) {

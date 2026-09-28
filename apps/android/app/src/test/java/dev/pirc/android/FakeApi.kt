@@ -48,7 +48,12 @@ open class FakeApi(baseUrl: String = "https://pirc.example") : PircApi(Pairing(b
         return Channel<StreamSignal>(Channel.UNLIMITED).also { streams += it }.receiveAsFlow()
     }
 
-    override suspend fun models(sessionId: String): List<ModelOption> = emptyList()
+    var models: () -> List<ModelOption> = { emptyList() }
+
+    override suspend fun models(sessionId: String): List<ModelOption> {
+        calls += "models"
+        return models()
+    }
 
     override suspend fun control(sessionId: String, clientId: String): ControlLease {
         calls += "control"

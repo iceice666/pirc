@@ -9,6 +9,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavHostController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -37,9 +41,9 @@ data object SessionsRoute
 @Serializable
 data class SessionRoute(val id: String, val name: String)
 
-/** [tab]: a [PanelTab] name. */
+/** [tab]: a [PanelTab] name, or "" for the tab shown last. */
 @Serializable
-data class PanelsRoute(val sessionId: String, val title: String, val tab: String = "Files")
+data class PanelsRoute(val sessionId: String, val title: String, val tab: String = "")
 
 @Serializable
 data class DiffRoute(val sessionId: String, val path: String, val staged: Boolean, val untracked: Boolean)
@@ -85,7 +89,7 @@ fun PircApp(viewModel: AppViewModel) {
                         session,
                         fallbackName = route.name,
                         onBack = { nav.popBackStack() },
-                        onOpenPanels = { title, tab -> nav.navigate(PanelsRoute(route.id, title, tab.name)) },
+                        onOpenPanels = { title, tab -> nav.navigate(PanelsRoute(route.id, title, tab?.name ?: "")) },
                         onOpenFile = { nav.navigate(FileRoute(route.id, it.path, it.line ?: 0, it.endLine ?: 0)) },
                         onChanged = viewModel::replaceSession,
                     )
@@ -94,12 +98,16 @@ fun PircApp(viewModel: AppViewModel) {
                     val route = entry.toRoute<PanelsRoute>()
                     val api = viewModel.api() ?: return@composable
                     val unauthorized = { error: ApiException -> viewModel.handle(error) }
-                    val files = viewModel<FilesViewModel>(key = "files|${api.pairing.baseUrl}|${route.sessionId}") {
+                    // Owned by the session, as the web keeps visited tabs mounted:
+                    // Back to the chat and in again finds the same tab, folder and history.
+                    val owner = sessionOwner(nav, entry)
+                    val files = viewModel<FilesViewModel>(owner, key = "files|${api.pairing.baseUrl}|${route.sessionId}") {
                         FilesViewModel(api, route.sessionId, unauthorized)
                     }
-                    val panels = viewModel<PanelsViewModel>(key = "panels|${api.pairing.baseUrl}|${route.sessionId}") {
-                        PanelsViewModel(api, route.sessionId, viewModel.local.clientId, PanelTab.valueOf(route.tab), unauthorized, cursor = { viewModel.cursors[route.sessionId] })
+                    val panels = viewModel<PanelsViewModel>(owner, key = "panels|${api.pairing.baseUrl}|${route.sessionId}") {
+                        PanelsViewModel(api, route.sessionId, viewModel.local.clientId, PanelTab.Files, unauthorized, cursor = { viewModel.cursors[route.sessionId] })
                     }
+                    remember(entry.id) { route.tab.takeIf { it.isNotEmpty() }?.let { panels.show(PanelTab.valueOf(it)) } }
                     PanelsScreen(
                         panels,
                         files,
@@ -116,7 +124,11 @@ fun PircApp(viewModel: AppViewModel) {
                 composable<DiffRoute> { entry ->
                     val route = entry.toRoute<DiffRoute>()
                     val api = viewModel.api() ?: return@composable
-                    DiffScreen(api, route.sessionId, route.path, route.staged, route.untracked, { viewModel.handle(it) }) { nav.popBackStack() }
+                    // The session's panels (a diff is opened from them): their Git status says when to reload.
+                    val panels = viewModel<PanelsViewModel>(sessionOwner(nav, entry), key = "panels|${api.pairing.baseUrl}|${route.sessionId}") {
+                        PanelsViewModel(api, route.sessionId, viewModel.local.clientId, PanelTab.Git, { viewModel.handle(it) }, cursor = { viewModel.cursors[route.sessionId] })
+                    }
+                    DiffScreen(api, panels, route.path, route.staged, route.untracked, { viewModel.handle(it) }) { nav.popBackStack() }
                 }
                 composable<CommitRoute> { entry ->
                     val route = entry.toRoute<CommitRoute>()
@@ -170,3 +182,8 @@ fun PircApp(viewModel: AppViewModel) {
         )
     }
 }
+
+/** The open session's back-stack entry (panels live as long as the session is open), else [entry] itself. */
+@Composable
+private fun sessionOwner(nav: NavHostController, entry: NavBackStackEntry): ViewModelStoreOwner =
+    remember(entry) { runCatching { nav.getBackStackEntry<SessionRoute>() }.getOrNull() ?: entry }

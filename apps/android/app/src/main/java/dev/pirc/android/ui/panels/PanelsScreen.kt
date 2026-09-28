@@ -5,7 +5,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -113,18 +117,36 @@ fun PanelsScreen(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        AnimatedContent(
-            targetState = tab,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            label = "panel",
-            modifier = Modifier.fillMaxSize().padding(padding),
-        ) { current ->
-            when (current) {
-                PanelTab.Files -> FilesPane(files, active = tab == PanelTab.Files, onOpenFile = onOpenFile)
-                PanelTab.Git -> GitPane(viewModel, onOpenDiff, onOpenCommit)
-                PanelTab.Tasks -> TasksPane(viewModel, api, onUnauthorized)
-                PanelTab.Memory -> MemoryPane(viewModel)
-                PanelTab.Terminal -> TerminalsPane(viewModel, onOpenTerminal)
+        val stale by viewModel.stale.collectAsStateWithLifecycle()
+        val filesStale by files.stale.collectAsStateWithLifecycle()
+        val staleMessage = if (tab == PanelTab.Files) filesStale else stale[tab]
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            AnimatedVisibility(visible = staleMessage != null) {
+                Surface(color = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(start = 16.dp)) {
+                        Text(
+                            "May be out of date: ${staleMessage ?: ""}",
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = viewModel::pullRefresh) { Text("Retry") }
+                    }
+                }
+            }
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "panel",
+                modifier = Modifier.fillMaxSize(),
+            ) { current ->
+                when (current) {
+                    PanelTab.Files -> FilesPane(files, active = tab == PanelTab.Files, onOpenFile = onOpenFile)
+                    PanelTab.Git -> GitPane(viewModel, onOpenDiff, onOpenCommit)
+                    PanelTab.Tasks -> TasksPane(viewModel, api, onUnauthorized)
+                    PanelTab.Memory -> MemoryPane(viewModel)
+                    PanelTab.Terminal -> TerminalsPane(viewModel, onOpenTerminal)
+                }
             }
         }
     }
@@ -134,7 +156,7 @@ fun PanelsScreen(
 private fun TerminalsPane(viewModel: PanelsViewModel, onOpen: (TerminalInfo) -> Unit) {
     val terminals by viewModel.terminals.collectAsStateWithLifecycle()
     val lease by viewModel.control.lease.collectAsStateWithLifecycle()
-    PullToRefreshBox(isRefreshing = false, onRefresh = { viewModel.refresh() }, modifier = Modifier.fillMaxSize()) {
+    PullToRefreshBox(isRefreshing = viewModel.refreshing.collectAsStateWithLifecycle().value, onRefresh = viewModel::pullRefresh, modifier = Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
             item {
                 Column(Modifier.padding(16.dp)) {

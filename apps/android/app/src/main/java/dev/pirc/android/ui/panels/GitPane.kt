@@ -32,9 +32,17 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.LifecycleStartEffect
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,6 +50,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.pirc.android.GitView
 import dev.pirc.android.Loadable
 import dev.pirc.android.PanelsViewModel
 import dev.pirc.android.core.ApiException
@@ -61,9 +70,10 @@ fun GitPane(
 ) {
     val status by viewModel.git.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
-    var view by rememberSaveable { mutableStateOf("changes") }
+    val view by viewModel.gitView.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
-    PullToRefreshBox(isRefreshing = false, onRefresh = { viewModel.refresh() }, modifier = Modifier.fillMaxSize()) {
+    PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::pullRefresh, modifier = Modifier.fillMaxSize()) {
         when (val current = status) {
             Loadable.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             is Loadable.Failed -> Text(current.message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(24.dp))
@@ -80,17 +90,17 @@ fun GitPane(
                             if (git.behind > 0) Chip("↓${git.behind}")
                         }
                         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                            listOf("changes" to "Changes (${git.files.size})", "history" to "History").forEachIndexed { index, (key, label) ->
+                            listOf(GitView.Changes to "Changes (${git.files.size})", GitView.History to "History").forEachIndexed { index, (key, label) ->
                                 SegmentedButton(
                                     selected = view == key,
-                                    onClick = { view = key },
+                                    onClick = { viewModel.showGit(key) },
                                     shape = SegmentedButtonDefaults.itemShape(index, 2),
                                 ) { Text(label) }
                             }
                         }
                     }
                 }
-                if (view == "changes") {
+                if (view == GitView.Changes) {
                     val staged = git.files.filter { it.staged }
                     val unstaged = git.files.filter { it.unstaged }
                     if (staged.isEmpty() && unstaged.isEmpty()) item { Text("No changes.", modifier = Modifier.padding(24.dp)) }
@@ -183,25 +193,102 @@ private fun CommitRow(commit: Commit, onClick: () -> Unit) {
     HorizontalDivider(Modifier.padding(start = 16.dp))
 }
 
-/** A loadable value for a detail screen, with its own retry. */
-@Composable
-private fun <T> rememberLoad(vararg keys: Any, onUnauthorized: (ApiException) -> Unit, fetch: suspend () -> T): Loadable<T> {
-    val state by produceState<Loadable<T>>(Loadable.Loading, *keys) {
-        value = try {
-            Loadable.Ready(fetch())
-        } catch (error: IOException) {
-            if (error is ApiException && error.unauthorized) onUnauthorized(error)
-            Loadable.Failed(error.message ?: "Could not load this.")
+/**
+ * A value for a detail screen. [reload] keeps what is shown until the new
+ * value arrives ([refreshing] meanwhile); a failed reload keeps it too.
+ */
+private class DetailLoad<T>(
+    private val scope: CoroutineScope,
+    private val onUnauthorized: (ApiException) -> Unit,
+    private val fetch: suspend () -> T,
+) {
+    var state by mutableStateOf<Loadable<T>>(Loadable.Loading)
+        private set
+    var refreshing by mutableStateOf(false)
+        private set
+    var stale by mutableStateOf<String?>(null)
+        private set
+    private var job: Job? = null
+    private var again = false
+
+    fun reload(pulled: Boolean = false) {
+        // A change during a load may be missed by it: load once more after.
+        if (job?.isActive == true) {
+            again = true
+            return
+        }
+        again = false
+        val shown = state is Loadable.Ready
+        if (!shown) state = Loadable.Loading
+        refreshing = pulled && shown
+        job = scope.launch {
+            try {
+                state = Loadable.Ready(fetch())
+                stale = null
+            } catch (error: IOException) {
+                if (error is ApiException && error.unauthorized) onUnauthorized(error)
+                val message = error.message ?: "Could not load this."
+                if (shown) stale = message else state = Loadable.Failed(message)
+            } finally {
+                refreshing = false
+                job = null
+                if (again) reload()
+            }
         }
     }
-    return state
 }
 
-/** One file's changes (staged or in the worktree). */
+@Composable
+private fun <T> rememberDetail(vararg keys: Any, onUnauthorized: (ApiException) -> Unit, fetch: suspend () -> T): DetailLoad<T> {
+    val scope = rememberCoroutineScope()
+    val load = remember(*keys) { DetailLoad(scope, onUnauthorized, fetch) }
+    LaunchedEffect(load) { load.reload() }
+    return load
+}
+
+/** A detail screen's body: pull to refresh, Retry after a failure, a note when a reload failed. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DiffScreen(api: PircApi, sessionId: String, path: String, staged: Boolean, untracked: Boolean, onUnauthorized: (ApiException) -> Unit, onBack: () -> Unit) {
-    val diff = rememberLoad(path, staged, onUnauthorized = onUnauthorized) { api.gitDiff(sessionId, path, staged, untracked) }
+private fun <T> DetailBody(load: DetailLoad<T>, modifier: Modifier, content: @Composable (T) -> Unit) {
+    PullToRefreshBox(isRefreshing = load.refreshing, onRefresh = { load.reload(pulled = true) }, modifier = modifier) {
+        when (val state = load.state) {
+            Loadable.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+            is Loadable.Failed -> Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
+                Text(state.message, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { load.reload() }) { Text("Retry") }
+            }
+            is Loadable.Ready -> Column {
+                load.stale?.let {
+                    Text(
+                        "May be out of date: $it",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                }
+                content(state.value)
+            }
+        }
+    }
+}
+
+/**
+ * One file's changes (staged or in the worktree). Live while shown: it
+ * reloads whenever the session's Git status does (as the web's Git tab).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DiffScreen(api: PircApi, panels: PanelsViewModel, path: String, staged: Boolean, untracked: Boolean, onUnauthorized: (ApiException) -> Unit, onBack: () -> Unit) {
+    val sessionId = panels.sessionId
+    val diff = rememberDetail(path, staged, onUnauthorized = onUnauthorized) { api.gitDiff(sessionId, path, staged, untracked) }
+    LifecycleStartEffect(panels) {
+        panels.start()
+        onStopOrDispose { panels.stop() }
+    }
+    LaunchedEffect(panels, diff) {
+        // Skip the load already counted: only a newer one means the file may have changed.
+        panels.gitLoads.drop(1).collect { diff.reload() }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -221,13 +308,7 @@ fun DiffScreen(api: PircApi, sessionId: String, path: String, staged: Boolean, u
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when (diff) {
-                Loadable.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                is Loadable.Failed -> Text(diff.message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(24.dp))
-                is Loadable.Ready -> DiffView(diff.value.diff, diff.value.truncated)
-            }
-        }
+        DetailBody(diff, Modifier.fillMaxSize().padding(padding)) { DiffView(it.diff, it.truncated) }
     }
 }
 
@@ -235,7 +316,7 @@ fun DiffScreen(api: PircApi, sessionId: String, path: String, staged: Boolean, u
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CommitScreen(api: PircApi, sessionId: String, sha: String, onUnauthorized: (ApiException) -> Unit, onBack: () -> Unit) {
-    val commit = rememberLoad(sha, onUnauthorized = onUnauthorized) { api.gitShow(sessionId, sha) }
+    val commit = rememberDetail(sha, onUnauthorized = onUnauthorized) { api.gitShow(sessionId, sha) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -244,22 +325,18 @@ fun CommitScreen(api: PircApi, sessionId: String, sha: String, onUnauthorized: (
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when (commit) {
-                Loadable.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                is Loadable.Failed -> Text(commit.message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(24.dp))
-                is Loadable.Ready -> DiffView(commit.value.diff, commit.value.truncated) {
-                    item {
-                        Column(Modifier.width(360.dp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(commit.value.message.trim(), style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "${commit.value.author} · ${DateUtils.getRelativeTimeSpanString(commit.value.time)}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            if (commit.value.refs.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                commit.value.refs.forEach { Chip(it) }
-                            }
+        DetailBody(commit, Modifier.fillMaxSize().padding(padding)) { detail ->
+            DiffView(detail.diff, detail.truncated) {
+                item {
+                    Column(Modifier.width(360.dp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(detail.message.trim(), style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "${detail.author} · ${DateUtils.getRelativeTimeSpanString(detail.time)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (detail.refs.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            detail.refs.forEach { Chip(it) }
                         }
                     }
                 }
