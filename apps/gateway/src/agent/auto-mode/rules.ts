@@ -524,13 +524,18 @@ function classifyGit(args: Word[], state: State): Classification {
   }
   const sub = args[i]?.text;
   const rest = args.slice(i + 1);
+  if (!cwd) return unknown('git in a directory that cannot be resolved statically');
+  const inner = classifyGitSubcommand(sub, rest);
+  const risk = state.paths.writeRisk(cwd, false);
+  // Repository outside the workspace (or protected): reads are fine, writes are not.
+  if (risk && inner.verdict !== 'read')
+    return danger(`${`git ${sub ?? ''}`.trim()} in ${cwd}: ${risk}`);
+  return inner;
+}
+
+/** Classify a git subcommand on its own, independently of the repository location. */
+function classifyGitSubcommand(sub: string | undefined, rest: Word[]): Classification {
   const words = rest.map((word) => word.text);
-  if (!cwd) return unknown('git -C with an unresolvable directory');
-  if (state.paths.writeRisk(cwd, false)) {
-    // Repository outside the workspace: reads are fine, writes are not.
-    const inner = classifyGit(args.slice(i), state);
-    return inner.verdict === 'read' ? inner : danger(`git ${sub} in ${cwd}, outside the workspace`);
-  }
   switch (sub) {
     case undefined:
     case 'status':

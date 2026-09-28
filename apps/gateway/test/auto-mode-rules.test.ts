@@ -127,6 +127,29 @@ describe('auto-mode shell rules', () => {
     ]);
   });
 
+  it('judges git in a directory outside the workspace without recursing', () => {
+    // Regression: `cd` outside the workspace used to recurse until the stack overflowed.
+    expectAll('read', [
+      'cd .. && git status',
+      'cd .. && git diff HEAD~1',
+      'git -C .. log --oneline',
+      'cd .. && git -C repo status',
+      'cd .pirc && git status',
+    ]);
+    expectAll('danger', [
+      'cd .. && git add README.md',
+      'cd .. && git commit -m x',
+      'cd .. && git push origin main',
+      'cd .. && git clone https://example.com/x',
+      'git -C .. add README.md',
+      'cd .pirc && git commit -m x',
+    ]);
+    // Scratch directories stay ordinary writes, and `-C` back inside is workspace work.
+    expect(verdict('cd /tmp/scratch && git init')).toBe('write');
+    expect(verdict('cd .. && git -C repo commit -m x')).toBe('write');
+    expect(verdict('cd "$X" && git status')).toBe('unknown');
+  });
+
   it('does not let a later segment hide behind an earlier read', () => {
     expect(verdict('ls && rm -rf ~')).toBe('danger');
     expect(verdict('git status; git reset --hard')).toBe('danger');

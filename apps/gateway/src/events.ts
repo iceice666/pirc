@@ -47,9 +47,26 @@ export class EventHub {
     stream.events.push(event);
     if (stream.events.length > this.capacity)
       stream.events.splice(0, stream.events.length - this.capacity);
-    for (const listener of stream.listeners) listener(event);
-    for (const listener of this.global) listener(event);
+    for (const listener of stream.listeners) this.deliver(listener, event);
+    for (const listener of this.global) this.deliver(listener, event);
     return event;
+  }
+
+  /**
+   * One failing subscriber must not stop the others or fail the caller that
+   * published the event (a runner would otherwise treat it as a crash).
+   */
+  private deliver(listener: EventListener, event: GatewayEvent): void {
+    try {
+      listener(event);
+    } catch (error) {
+      process.stderr.write(
+        `event listener failed for ${event.type}: ${(error as Error).stack ?? String(error)}\n`.slice(
+          0,
+          8192,
+        ),
+      );
+    }
   }
 
   watermark(sessionId: string, epoch = 0): EventCursor {

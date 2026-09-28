@@ -14,6 +14,18 @@ describe('events and reducer', () => {
     expect(hub.replay('s', { epoch: 1, sequence: 0 }, 1).reset).toBe(true);
     expect(hub.replay('s', { epoch: 0, sequence: 0 }, 1).reset).toBe(true);
   });
+  it('isolates a failing subscriber from the others and from the publisher', () => {
+    const hub = new EventHub(4);
+    const seen: string[] = [];
+    hub.subscribe('s1', () => {
+      throw new Error('subscriber exploded');
+    });
+    hub.subscribe('s1', (event) => seen.push(`session:${event.type}`));
+    hub.subscribeAll((event) => seen.push(`all:${event.type}`));
+    expect(() => hub.publish('s1', 0, 'runner_ready', {})).not.toThrow();
+    expect(seen).toEqual(['session:runner_ready', 'all:runner_ready']);
+  });
+
   it('assembles deltas but trusts message_end', () => {
     const state = emptyReducedState();
     reducePiEvent(state, { type: 'message_start', message: { role: 'assistant' } });

@@ -79,8 +79,39 @@ export class AutoMode {
   /** Model verdicts that need no human (read/write), by cwd + action. */
   private readonly cache = new Map<string, AutoModeDecision>();
   private warnedFailure = false;
+  private warnedRulesFailure = false;
 
   constructor(private readonly agent: Agent) {}
+
+  /**
+   * Static verdict for an action. A bug in the rules must not surface as a
+   * failed tool call: an unjudgeable action becomes `unknown`, so the model
+   * classifier (or the write fallback) decides instead.
+   */
+  private rulesVerdict(action: ShellAction): Classification {
+    try {
+      return classifyShell(action.text, {
+        cwd: action.cwd,
+        roots: this.agent.guard.allowedRoots,
+        protectedPaths: this.agent.config.protectedPaths,
+      });
+    } catch (error) {
+      process.stderr.write(
+        `auto mode: shell rules failed: ${(error as Error).stack ?? String(error)}\n`.slice(
+          0,
+          8192,
+        ),
+      );
+      if (!this.warnedRulesFailure) {
+        this.warnedRulesFailure = true;
+        this.agent.ui.notify(
+          `Auto mode: shell rules failed (${(error as Error).message}); judging this action without them`,
+          'warning',
+        );
+      }
+      return { verdict: 'unknown', reason: 'the static shell rules failed on this command' };
+    }
+  }
 
   /** The shell action a tool call would perform, or undefined when auto mode does not gate it. */
   actionFor(tool: string, args: Record<string, unknown>): ShellAction | undefined {
@@ -103,11 +134,7 @@ export class AutoMode {
 
   async classify(action: ShellAction, signal: AbortSignal): Promise<AutoModeDecision> {
     const settings = autoModeSettings(this.agent.config.features);
-    const rules = classifyShell(action.text, {
-      cwd: action.cwd,
-      roots: this.agent.guard.allowedRoots,
-      protectedPaths: this.agent.config.protectedPaths,
-    });
+    const rules = this.rulesVerdict(action);
     if (!settings.enabled) {
       // Lease decision only: anything that is not clearly read-only writes.
       return rules.verdict === 'read'

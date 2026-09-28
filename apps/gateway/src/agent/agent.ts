@@ -1075,6 +1075,10 @@ export class Agent {
     try {
       result = await tool.execute(gate.args, this.toolContext(toolCallId, signal, onUpdate));
     } catch (error) {
+      // The model only sees the message; keep the stack for diagnosis (`runner_stderr`).
+      process.stderr.write(
+        `tool ${name} threw: ${(error as Error).stack ?? String(error)}\n`.slice(0, 8192),
+      );
       result = { content: [{ type: 'text', text: (error as Error).message }], isError: true };
     }
     if (this.config.hooks.afterTool.length) {

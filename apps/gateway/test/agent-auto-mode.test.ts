@@ -3,7 +3,9 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'bun:test';
 import { memoryNotes, parseVerdict } from '../src/agent/auto-mode/classifier.js';
 import type { SessionEntry } from '../src/agent/session-store.js';
-import { classifierChoices } from '../src/agent/auto-mode/index.js';
+import { AutoMode, classifierChoices } from '../src/agent/auto-mode/index.js';
+import type { Agent } from '../src/agent/agent.js';
+import type { ShellAction } from '../src/agent/auto-mode/classifier.js';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
 
 const agents: AgentProcess[] = [];
@@ -86,6 +88,41 @@ describe('auto-mode helpers', () => {
     expect(notes.length).toBeLessThanOrEqual(20);
     expect(notes.join('').length).toBeLessThanOrEqual(4_000);
     expect(notes.at(-1)).toContain('note 29');
+  });
+
+  it('survives a failure inside the static shell rules', async () => {
+    // A rules bug must not become a failed bash call; the action stays unjudged.
+    const warnings: string[] = [];
+    const stub = (features: Record<string, unknown>) =>
+      new AutoMode({
+        config: { workspace: '/tmp/pirc-rules-failure', features, protectedPaths: [] },
+        guard: {
+          get allowedRoots(): readonly string[] {
+            throw new Error('rules exploded');
+          },
+        },
+        ui: { notify: (message: string) => warnings.push(message) },
+      } as unknown as Agent);
+    const action: ShellAction = {
+      tool: 'bash',
+      kind: 'command',
+      text: 'ls',
+      cwd: '/tmp/pirc-rules-failure',
+    };
+    const signal = new AbortController().signal;
+
+    const gated = await stub({ autoMode: { useModel: false } }).classify(action, signal);
+    expect(gated).toEqual({
+      verdict: 'write',
+      reason: 'the static shell rules failed on this command (model check disabled)',
+      source: 'fallback',
+    });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('rules exploded');
+
+    // With auto mode off the action only decides the write lease.
+    const off = await stub({ autoMode: { enabled: false } }).classify(action, signal);
+    expect(off.verdict).toBe('write');
   });
 });
 
