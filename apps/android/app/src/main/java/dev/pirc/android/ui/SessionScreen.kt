@@ -68,6 +68,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 /** A session: its live timeline, and the composer riding on the keyboard. */
@@ -99,6 +102,10 @@ fun SessionScreen(
     LifecycleStartEffect(viewModel) {
         viewModel.start()
         onStopOrDispose { viewModel.stop() }
+    }
+    // A rename from another device arrives as an event: keep the list in step.
+    LaunchedEffect(viewModel) {
+        snapshotFlow { state?.session }.filterNotNull().distinctUntilChanged().drop(1).collect { onChanged(it) }
     }
 
     Scaffold(
@@ -222,6 +229,9 @@ private fun keys(messages: List<Message>): List<String> {
 private fun Timeline(state: SessionState, viewModel: SessionViewModel) {
     val control by viewModel.control.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
+    val connection by viewModel.connection.collectAsStateWithLifecycle()
+    // Commands need the lease and the stream; taps while reconnecting would only fail.
+    val canCommand = control.heldByCurrentClient && connection == Connection.Live
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val messages = state.messages.asReversed()
@@ -244,12 +254,13 @@ private fun Timeline(state: SessionState, viewModel: SessionViewModel) {
         ) {
             if (state.queue.isNotEmpty())
                 item(key = "queue") {
-                    Queue(state.queue, control.heldByCurrentClient && !busy, viewModel::sendQueuedNow, viewModel::clearQueue, Modifier.animateItem())
+                    Queue(state.queue, canCommand && !busy, viewModel::sendQueuedNow, viewModel::clearQueue, Modifier.animateItem())
                 }
             items(state.interactions.filter { it.status == "pending" }, key = { "i:" + it.id }) { interaction ->
                 InteractionCard(
                     interaction,
-                    canAnswer = control.heldByCurrentClient,
+                    canAnswer = canCommand,
+                    hasControl = control.heldByCurrentClient,
                     busy = busy,
                     onAnswer = { viewModel.answer(interaction, it) },
                     modifier = Modifier.animateItem(),

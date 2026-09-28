@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -79,7 +80,7 @@ fun FilesPane(viewModel: FilesViewModel, active: Boolean, onOpenFile: (String) -
                 is Loadable.Failed -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                     Text(state.message, color = MaterialTheme.colorScheme.error)
                 }
-                is Loadable.Ready -> PullToRefreshBox(isRefreshing = false, onRefresh = { viewModel.open(folder, refresh = true) }) {
+                is Loadable.Ready -> PullToRefreshBox(isRefreshing = false, onRefresh = viewModel::reload) {
                     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
                         items(state.value.entries, key = { it.name }) { entry ->
                             EntryRow(entry, detail = entry.size?.let { Formatter.formatShortFileSize(context, it) }) {
@@ -101,8 +102,10 @@ fun FilesPane(viewModel: FilesViewModel, active: Boolean, onOpenFile: (String) -
 @Composable
 private fun EntryRow(entry: DirEntry, detail: String?, onClick: () -> Unit) {
     val folder = entry.kind == "dir"
+    // Sockets, devices and the like cannot be read; the web disables them too.
+    val openable = entry.kind != "other"
     ListItem(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier.clickable(enabled = openable, onClick = onClick).alpha(if (openable) 1f else 0.5f),
         leadingContent = {
             Icon(
                 if (folder) PircIcons.Folder else PircIcons.File,

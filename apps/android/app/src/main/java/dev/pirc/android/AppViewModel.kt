@@ -163,6 +163,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     val nodes = async { api.nodes() }
                     listed(sessions.await(), workspaces.await(), nodes.await())
                 }
+                local.pruneDrafts(_sessions.value.sessions.map { it.id })
             } catch (error: IOException) {
                 handle(error)
                 _sessions.value = _sessions.value.copy(loading = false, error = error.message ?: "Network error")
@@ -213,7 +214,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateSession(session: Session, name: String? = null, pinned: Boolean? = null, settled: Boolean? = null) =
-        act("Could not update the session.") { api -> replaceSession(api.updateSession(session.id, name, pinned, settled)) }
+        act("Could not update the session.") { api ->
+            val updated = api.updateSession(session.id, name, pinned, settled)
+            replaceSession(updated)
+            // Settled from the list, so not open: its unsent draft goes (as on the web).
+            if (settled == true && updated.settled) local.saveDraft(updated.id, "")
+        }
 
     fun createWorkspace(nodeId: String, path: String, displayName: String, onCreated: (Workspace) -> Unit) =
         act("Could not add the workspace.") { api ->
@@ -232,6 +238,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun unpair(reason: String? = null) {
         refreshJob?.cancel()
         store.clear()
+        local.clearDrafts()
         closeApi()
         cursors.clear()
         _pairing.value = null

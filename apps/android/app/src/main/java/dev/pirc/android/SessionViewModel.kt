@@ -61,6 +61,9 @@ private const val HEARTBEAT_MS = 10_000L
 /** A rotation or a glance at another app stops the screen only briefly: keep the stream that long. */
 internal const val STOP_GRACE_MS = 5_000L
 
+/** Hidden longer than this, the cursor may have expired: start over from a snapshot (as the web does). */
+internal const val RESNAPSHOT_AFTER_MS = 15_000L
+
 /** Streamed text is published at most this often; every other event at once. */
 internal const val DELTA_BATCH_MS = 32L
 
@@ -144,6 +147,9 @@ class SessionViewModel(
     /** The pending [stop], cancelled if the screen comes back first. */
     private var stopping: Job? = null
 
+    /** When the screen was last hidden (monotonic clock, ms), or null while visible. */
+    private var hiddenAt: Long? = null
+
     /** Streamed text reduced but not yet published, and the job that publishes it. */
     private var unpublished: SessionState? = null
     private var publishing: Job? = null
@@ -163,8 +169,10 @@ class SessionViewModel(
         stopping?.cancel()
         stopping = null
         visible = true
+        val hiddenFor = hiddenAt?.let { System.nanoTime() / 1_000_000 - it }
+        hiddenAt = null
         val current = _state.value
-        if (current == null || current.needsSnapshot) reload()
+        if (current == null || current.needsSnapshot || (hiddenFor != null && hiddenFor > RESNAPSHOT_AFTER_MS)) reload()
         else if (stream?.isActive != true) follow()
         heartbeat?.cancel()
         heartbeat = viewModelScope.launch {
@@ -184,6 +192,7 @@ class SessionViewModel(
      */
     fun stop() {
         visible = false
+        hiddenAt = System.nanoTime() / 1_000_000
         drafts.saveDraft(sessionId, draftText)
         stopping?.cancel()
         stopping = viewModelScope.launch {

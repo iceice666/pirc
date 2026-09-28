@@ -171,7 +171,8 @@ fun RenameDialog(name: String, onRename: (String) -> Unit, onDismiss: () -> Unit
                 onValueChange = { if (it.text.length <= 200) value = it },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { submit() }),
+                // Done with a blank name must not act as Cancel; like the button, it does nothing.
+                keyboardActions = KeyboardActions(onDone = { if (value.text.isNotBlank()) submit() }),
                 modifier = Modifier.focusRequester(focus),
             )
         },

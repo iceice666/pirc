@@ -40,6 +40,12 @@ import dev.pirc.android.PanelsViewModel
 import dev.pirc.android.core.Meter
 import dev.pirc.android.core.Observation
 import java.text.NumberFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+
+private val UNTIL = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(ZoneId.systemDefault())
 
 private fun tokens(value: Number) = NumberFormat.getIntegerInstance().format(value.toLong())
 
@@ -92,8 +98,10 @@ fun MemoryPane(viewModel: PanelsViewModel) {
                             runtime?.lastErrors?.forEach { (phase, message) ->
                                 Text("$phase: $message", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                             }
-                            runtime?.rateLimited?.forEach {
-                                Text("${it.model} is rate limited", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                            // A limit that has passed no longer applies (the panel refreshes often enough).
+                            val now = System.currentTimeMillis()
+                            runtime?.rateLimited?.filter { it.until > now }?.forEach {
+                                Text("${it.model} is rate limited until ${UNTIL.format(Instant.ofEpochMilli(it.until))}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }

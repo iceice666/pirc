@@ -18,8 +18,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -29,8 +31,17 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.pirc.android.core.InteractionAnswer
 import dev.pirc.android.core.timeline.Interaction
+import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
-/** A question from the agent, answered in place. Answering needs the control lease. */
+/**
+ * A question from the agent, answered in place. Answering needs the control
+ * lease and a live stream ([canAnswer]); [hasControl] only picks the hint.
+ * The gateway refuses answers after `expiresAt`, so the card locks then.
+ */
 @Composable
 fun InteractionCard(
     interaction: Interaction,
@@ -38,8 +49,18 @@ fun InteractionCard(
     busy: Boolean,
     onAnswer: (InteractionAnswer) -> Unit,
     modifier: Modifier = Modifier,
+    hasControl: Boolean = canAnswer,
 ) {
-    val enabled = canAnswer && !busy
+    val expiresAt = interaction.expiresAt
+    var expired by remember(interaction.id, expiresAt) {
+        mutableStateOf(expiresAt != null && expiresAt <= System.currentTimeMillis())
+    }
+    LaunchedEffect(interaction.id, expiresAt) {
+        if (expiresAt == null) return@LaunchedEffect
+        delay((expiresAt - System.currentTimeMillis()).coerceAtLeast(0))
+        expired = true
+    }
+    val enabled = canAnswer && !busy && !expired
     Surface(
         color = MaterialTheme.colorScheme.tertiaryContainer,
         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -60,10 +81,16 @@ fun InteractionCard(
             if (interaction.kind != "confirm") TextButton(onClick = { onAnswer(InteractionAnswer.Cancel) }, enabled = enabled) {
                 Text("Dismiss without answering")
             }
-            if (!canAnswer) Text("Take control to answer.", style = MaterialTheme.typography.bodySmall)
+            if (expiresAt != null) Text(
+                "${if (expired) "Expired" else "Expires"} ${EXPIRY_TIME.format(Instant.ofEpochMilli(expiresAt))}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (!hasControl && !expired) Text("Take control to answer.", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
+
+private val EXPIRY_TIME = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(ZoneId.systemDefault())
 
 @Composable
 private fun Select(interaction: Interaction, enabled: Boolean, onAnswer: (InteractionAnswer) -> Unit) {

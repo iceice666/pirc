@@ -16,8 +16,12 @@ import dev.pirc.android.core.timeline.TimelineEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
@@ -131,6 +135,11 @@ class PanelsViewModel(
     private val _actionError = MutableStateFlow<String?>(null)
     val actionError: StateFlow<String?> = _actionError.asStateFlow()
 
+    private val _filesChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** The workspace may have changed (run ended, Git moved, pull): the Files tab re-lists its folder. */
+    val filesChanged: SharedFlow<Unit> = _filesChanged.asSharedFlow()
+
     private var poll: Job? = null
     private var signals: Job? = null
     private var reloading: Job? = null
@@ -178,9 +187,10 @@ class PanelsViewModel(
                         fail(signal.error)
                     }
                     is StreamSignal.Event -> when (val event = signal.envelope.event) {
-                        is TimelineEvent.PanelChanged -> changed(tabsFor(event.sections))
-                        // Run starts and ends, runner restarts: tasks and Git may have moved.
-                        is TimelineEvent.Reset -> changed(setOf(PanelTab.Tasks, PanelTab.Memory, PanelTab.Git))
+                        // A Git change is a change to the workspace's files too.
+                        is TimelineEvent.PanelChanged -> changed(tabsFor(event.sections).let { if (PanelTab.Git in it) it + PanelTab.Files else it })
+                        // Run starts and ends, runner restarts: tasks, Git and files may have moved.
+                        is TimelineEvent.Reset -> changed(setOf(PanelTab.Tasks, PanelTab.Memory, PanelTab.Git, PanelTab.Files))
                         else -> Unit
                     }
                 }
@@ -207,7 +217,7 @@ class PanelsViewModel(
 
     fun refresh(tab: PanelTab = _tab.value, quiet: Boolean = false) {
         when (tab) {
-            PanelTab.Files -> Unit
+            PanelTab.Files -> _filesChanged.tryEmit(Unit)
             PanelTab.Git -> viewModelScope.launch { loadGit(quiet) }
             PanelTab.Tasks, PanelTab.Memory -> viewModelScope.launch { loadPanel(quiet) }
             PanelTab.Terminal -> viewModelScope.launch { loadTerminals(quiet) }
@@ -232,7 +242,12 @@ class PanelsViewModel(
 
     private suspend fun loadPanel(quiet: Boolean) = load(_panel, quiet, "Could not load the panel.") { api.panelState(sessionId) }
 
-    private suspend fun loadTerminals(quiet: Boolean) = load(_terminals, quiet, "Could not list terminals.") { api.terminals(sessionId) }
+    /** Exited terminals hidden here without control; the node still lists them until someone closes them. */
+    private val dismissedTerminals = HashSet<String>()
+
+    private suspend fun loadTerminals(quiet: Boolean) = load(_terminals, quiet, "Could not list terminals.") {
+        api.terminals(sessionId).filterNot { it.exited && it.id in dismissedTerminals }
+    }
 
     private suspend fun loadGit(quiet: Boolean) {
         load(_git, quiet, "Could not read Git status.") { api.gitStatus(sessionId) }
@@ -272,6 +287,16 @@ class PanelsViewModel(
     fun closeTerminal(terminalId: String) = act("Could not close the terminal.") { generation ->
         api.closeTerminal(sessionId, terminalId, clientId, generation)
         loadTerminals(quiet = true)
+    }
+
+    /**
+     * Take an exited terminal off the list. With control the node forgets it;
+     * without, it is only hidden here (as on the web), since there is nothing left to stop.
+     */
+    fun removeExitedTerminal(terminal: TerminalInfo) {
+        if (control.generation != null) return closeTerminal(terminal.id)
+        dismissedTerminals += terminal.id
+        (_terminals.value as? Loadable.Ready)?.let { ready -> _terminals.value = Loadable.Ready(ready.value.filterNot { it.id == terminal.id }) }
     }
 
     private fun act(fallback: String, action: suspend (Long) -> Unit) {

@@ -55,6 +55,29 @@ class FilesViewModel(
         }
     }
 
+    /**
+     * The workspace may have changed: forget every cached folder and re-list
+     * the current one, keeping it on screen meanwhile (a failure keeps it too).
+     */
+    fun reload() {
+        cache.clear()
+        // A load already under way fetches the folder anew.
+        if (loading?.isActive == true) return
+        val path = _path.value
+        val shown = _listing.value
+        if (shown !is Loadable.Ready) return open(path, refresh = true)
+        loading = viewModelScope.launch {
+            try {
+                val listing = api.files(sessionId, path)
+                cache[path] = listing
+                cache[listing.path] = listing
+                if (_path.value == path) _listing.value = Loadable.Ready(listing)
+            } catch (error: IOException) {
+                if (error is ApiException && error.unauthorized) onUnauthorized(error)
+            }
+        }
+    }
+
     /** The parent folder, or null at the root. */
     fun parent(): String? = _path.value.takeIf { it.isNotEmpty() }?.substringBeforeLast('/', "")
 }

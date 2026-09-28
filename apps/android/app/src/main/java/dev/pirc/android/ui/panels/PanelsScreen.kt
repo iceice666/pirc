@@ -77,6 +77,7 @@ fun PanelsScreen(
         viewModel.start()
         onStopOrDispose { viewModel.stop() }
     }
+    LaunchedEffect(viewModel, files) { viewModel.filesChanged.collect { files.reload() } }
     LaunchedEffect(actionError) {
         actionError?.let {
             snackbar.showSnackbar(it)
@@ -167,9 +168,11 @@ private fun TerminalsPane(viewModel: PanelsViewModel, onOpen: (TerminalInfo) -> 
                                     ).joinToString(" · "),
                                 )
                             },
-                            trailingContent = if (lease.heldByCurrentClient) ({
-                                TextButton(onClick = { viewModel.closeTerminal(terminal.id) }) { Text(if (terminal.exited) "Remove" else "Close") }
-                            }) else null,
+                            trailingContent = when {
+                                terminal.exited -> ({ TextButton(onClick = { viewModel.removeExitedTerminal(terminal) }) { Text("Remove") } })
+                                lease.heldByCurrentClient -> ({ TextButton(onClick = { viewModel.closeTerminal(terminal.id) }) { Text("Close") } })
+                                else -> null
+                            },
                         )
                         HorizontalDivider(Modifier.padding(start = 16.dp))
                     }

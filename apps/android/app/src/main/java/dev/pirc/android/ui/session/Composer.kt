@@ -94,7 +94,8 @@ private val THINKING_LABELS = mapOf(
 /**
  * The message card at the bottom, after ChatGPT's: the field on top, then
  * attach, the model and thinking level as one label, and send (stop while a
- * run is active and nothing is typed). The caller makes it ride the keyboard.
+ * run is active and nothing is typed; a separate stop beside send once text
+ * is typed). The caller makes it ride the keyboard.
  */
 @OptIn(FlowPreview::class)
 @Composable
@@ -130,6 +131,8 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
     val hasControl = control.heldByCurrentClient
     val canSend = hasControl && connection == Connection.Live && !busy && !blank && attachments.none { it.uploading }
     val showStop = active && blank
+    // Commands need the stream up; taps while reconnecting would only fail.
+    val canStop = hasControl && connection == Connection.Live && !stopping
     val model = viewModel.selectedModel(settings)
     val level = viewModel.thinkingLevel(settings)
 
@@ -228,7 +231,11 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
                             maxLines = 1,
                         )
                     }
-                    SendButton(showStop = showStop, stopping = stopping, busy = busy, canSend = canSend, canStop = hasControl && !stopping,
+                    // Typing mid-run turns the main button into Send (a steer); stopping stays one tap away.
+                    if (active && !blank) IconButton(onClick = viewModel::stopRun, enabled = canStop && !busy, modifier = Modifier.size(48.dp)) {
+                        Icon(PircIcons.Stop, contentDescription = "Stop run", modifier = Modifier.size(22.dp))
+                    }
+                    SendButton(showStop = showStop, stopping = stopping, busy = busy, canSend = canSend, canStop = canStop,
                         onSend = { viewModel.send(field.text.toString()) }, onStop = viewModel::stopRun)
                 }
             }

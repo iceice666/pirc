@@ -24,6 +24,16 @@ class LocalStore(context: Context) : Drafts {
         prefs.edit().apply { if (text.isEmpty()) remove(DRAFT + sessionId) else putString(DRAFT + sessionId, text) }.apply()
     }
 
+    /** Drop the drafts of sessions that no longer exist. */
+    fun pruneDrafts(sessionIds: Collection<String>) {
+        val known = sessionIds.mapTo(HashSet()) { DRAFT + it }
+        val stale = prefs.all.keys.filter { it.startsWith(DRAFT) && it !in known }
+        if (stale.isNotEmpty()) prefs.edit().apply { stale.forEach(::remove) }.apply()
+    }
+
+    /** Unpairing: the drafts belong to the old gateway's sessions. */
+    fun clearDrafts() = pruneDrafts(emptyList())
+
     /** The terminal's text size, as last pinched. */
     var terminalFontSize: Float
         get() = prefs.getFloat(TERMINAL_FONT, 13f)

@@ -4,6 +4,7 @@ import dev.pirc.android.core.StreamSignal
 import dev.pirc.android.core.timeline.TimelineEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
@@ -70,6 +71,33 @@ class PanelsViewModelTest {
         advanceTimeBy(10_001)
         assertEquals(loads + 2, api.calls.count { it == "panel" })
         assertEquals(0, api.streams.size)
+        model.stop()
+    }
+
+    @Test
+    fun asksTheFilesTabToReListWhenTheWorkspaceMayHaveChanged() = runTest(dispatcher) {
+        val model = PanelsViewModel(api, SESSION, ME, PanelTab.Files, {}, cursor = { "$EPOCH:4" })
+        var signals = 0
+        backgroundScope.launch { model.filesChanged.collect { signals++ } }
+        model.start()
+        runCurrent()
+        val stream = api.streams.single()
+        stream.trySend(StreamSignal.Connected)
+        runCurrent()
+        val before = signals
+
+        // A run ending (reset) and a Git change both reach the Files tab.
+        stream.trySend(StreamSignal.Event(envelope(5, TimelineEvent.Reset("run_finished"))))
+        advanceTimeBy(1_000)
+        assertEquals(before + 1, signals)
+        stream.trySend(StreamSignal.Event(envelope(6, TimelineEvent.PanelChanged(listOf("git")))))
+        advanceTimeBy(1_000)
+        assertEquals(before + 2, signals)
+
+        // Memory changes do not.
+        stream.trySend(StreamSignal.Event(envelope(7, TimelineEvent.PanelChanged(listOf("memory")))))
+        advanceTimeBy(1_000)
+        assertEquals(before + 2, signals)
         model.stop()
     }
 }

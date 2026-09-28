@@ -287,14 +287,17 @@ private fun SessionRow(session: Session, modifier: Modifier, onLongClick: () -> 
     }
 }
 
-private data class Status(val label: String, val attention: Boolean)
+private enum class Tone { Neutral, Waiting, Error }
+
+private data class Status(val label: String, val tone: Tone)
 
 private fun status(session: Session): Status? = when (session.runStatus) {
-    "queued", "running" -> Status("Running", false)
-    "stopping" -> Status("Stopping", false)
-    "waiting_input" -> Status("Needs input", true)
-    "failed" -> Status("Failed", true)
-    else -> if (session.runnerState == "failed") Status("Offline", true) else null
+    "queued", "running" -> Status("Running", Tone.Neutral)
+    "stopping" -> Status("Stopping", Tone.Neutral)
+    // Waiting for the user is not a failure (the web shows it amber, not red).
+    "waiting_input" -> Status("Needs input", Tone.Waiting)
+    "failed" -> Status("Failed", Tone.Error)
+    else -> if (session.runnerState == "failed") Status("Offline", Tone.Error) else null
 }
 
 @Composable
@@ -302,8 +305,16 @@ private fun StatusLabel(status: Status) {
     val colors = MaterialTheme.colorScheme
     Surface(
         shape = MaterialTheme.shapes.small,
-        color = if (status.attention) colors.errorContainer else colors.secondaryContainer,
-        contentColor = if (status.attention) colors.onErrorContainer else colors.onSecondaryContainer,
+        color = when (status.tone) {
+            Tone.Neutral -> colors.secondaryContainer
+            Tone.Waiting -> colors.tertiaryContainer
+            Tone.Error -> colors.errorContainer
+        },
+        contentColor = when (status.tone) {
+            Tone.Neutral -> colors.onSecondaryContainer
+            Tone.Waiting -> colors.onTertiaryContainer
+            Tone.Error -> colors.onErrorContainer
+        },
     ) {
         Text(status.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
     }

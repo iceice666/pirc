@@ -52,11 +52,13 @@ import kotlinx.coroutines.launch
  * request), or rendered Markdown. [target] lines are marked and scrolled to;
  * links in rendered Markdown open other files relative to this one.
  */
+private val MARKDOWN_EXTENSIONS = listOf(".md", ".markdown", ".mdx")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileScreen(viewModel: FileViewModel, target: FileTarget?, onOpenFile: (FileTarget) -> Unit, onBack: () -> Unit) {
     val state by viewModel.file.collectAsStateWithLifecycle()
-    val markdown = viewModel.path.endsWith(".md", ignoreCase = true) || viewModel.path.endsWith(".markdown", ignoreCase = true)
+    val markdown = MARKDOWN_EXTENSIONS.any { viewModel.path.endsWith(it, ignoreCase = true) }
     var preview by rememberSaveable { mutableStateOf(markdown && target?.line == null) }
     var wrap by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
