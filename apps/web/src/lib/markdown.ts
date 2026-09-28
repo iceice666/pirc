@@ -259,6 +259,25 @@ function closeOpenFence(source: string): string {
   return `${source}\n${fence}`;
 }
 
+/**
+ * Where the last top-level block of `source` starts, searching from `from`
+ * (itself a block boundary). Blocks before it are complete: text arriving
+ * later cannot change how they render, so a streaming message renders them
+ * once and re-renders only the last block. Returns `from` when unsure.
+ */
+export function stableBlockEnd(source: string, from = 0): number {
+  const rest = source.slice(from);
+  if (rest.includes('\r')) return from;
+  const tokens = marked.lexer(rest);
+  let last = tokens.length - 1;
+  while (last >= 0 && tokens[last]!.type === 'space') last--;
+  if (last <= 0) return from;
+  let raw = '';
+  for (let index = 0; index < last; index++) raw += tokens[index]!.raw;
+  // Token offsets are only trusted when their raw text is the source verbatim.
+  return rest.startsWith(raw) ? from + raw.length : from;
+}
+
 export function renderMarkdown(source: string, options: { streaming?: boolean } = {}): string {
   return renderMarkdownChecked(source, options).html;
 }

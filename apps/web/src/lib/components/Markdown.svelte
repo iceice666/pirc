@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { enhanceMarkdown, renderMarkdownChecked, rendererTick } from '../markdown';
+  import {
+    enhanceMarkdown,
+    renderMarkdownChecked,
+    rendererTick,
+    stableBlockEnd,
+  } from '../markdown';
   import { watch } from '../watch.svelte';
 
   interface Props {
@@ -16,11 +21,20 @@
   /**
    * While streaming, every delta would otherwise re-parse the whole message and
    * swap its innerHTML; on a long reply that is quadratic and visibly janky.
-   * Coalesce deltas into at most one render per interval. A finished message
-   * (or a non-streaming one) renders synchronously so the final HTML is exact.
+   * Coalesce deltas into at most one render per interval, and render each
+   * completed top-level block once: only the last block, the one still being
+   * written, is re-parsed and replaced. A finished message (or a non-streaming
+   * one) renders whole and synchronously so the final HTML is exact.
    */
   const STREAM_INTERVAL = 80;
 
+  /** Streaming: HTML of the completed blocks, one entry per render that added some. */
+  let stableChunks: string[] = $state([]);
+  /** Source length covered by `stableChunks`. */
+  let stableEnd = 0;
+  let stableSource = '';
+  let stablePending = false;
+  /** The last (or, when not streaming, the only) part. */
   let html = $state('');
   /** The last render showed math or code as plain text while its renderer loads. */
   let pending = false;
@@ -28,10 +42,34 @@
   let idle: number | undefined;
   let lastRender = 0;
 
+  function resetStable() {
+    if (stableChunks.length) stableChunks = [];
+    stableEnd = 0;
+    stableSource = '';
+    stablePending = false;
+  }
+
   function render() {
     timer = undefined;
     lastRender = Date.now();
-    ({ html, pending } = renderMarkdownChecked(source, { streaming }));
+    if (!streaming) {
+      resetStable();
+      ({ html, pending } = renderMarkdownChecked(source));
+      return;
+    }
+    // The text was replaced rather than extended: start over.
+    if (!source.startsWith(stableSource)) resetStable();
+    const end = stableBlockEnd(source, stableEnd);
+    if (end > stableEnd) {
+      const blocks = renderMarkdownChecked(source.slice(stableEnd, end));
+      stableChunks.push(blocks.html);
+      stablePending ||= blocks.pending;
+      stableEnd = end;
+      stableSource = source.slice(0, end);
+    }
+    const tail = renderMarkdownChecked(source.slice(stableEnd), { streaming: true });
+    html = tail.html;
+    pending = stablePending || tail.pending;
   }
 
   function schedule() {
@@ -63,7 +101,10 @@
       if (!pending || idle !== undefined) return;
       const run = () => {
         idle = undefined;
-        if (pending) schedule();
+        if (!pending) return;
+        // Completed blocks that fell back render again too.
+        if (stablePending) resetStable();
+        schedule();
       };
       idle =
         typeof requestIdleCallback === 'function'
@@ -86,5 +127,5 @@
   class:streaming
   use:enhanceMarkdown={{ html, ready: !streaming, linkBase }}
 >
-  {@html html}
+  {#each stableChunks as chunk, index (index)}{@html chunk}{/each}{@html html}
 </div>
