@@ -5,7 +5,7 @@
  * opens. It hands out the control lease, accepts uploads, and echoes prompts
  * back as a streamed reply. Only for local development (plain HTTP).
  *
- *   bun apps/android/dev/fake-gateway.ts            # listens on :8799
+ *   bun apps/android/dev/fake-gateway.ts            # listens on 127.0.0.1:8799
  *   adb shell am start -a android.intent.action.VIEW \
  *     -d "pirc://pair?url=http%3A%2F%2F10.0.2.2%3A8799&token=$(bun apps/android/dev/fake-gateway.ts --token)"
  */
@@ -84,6 +84,39 @@ const ANSWER =
   'Streaming works: each word arrives as its own **delta**, and the list stays pinned to the bottom while it grows. ' +
   'Scroll up to stop following; the ↓ button brings you back.';
 
+/** A small in-memory workspace for the files panel (never the real disk). */
+const FILES: Record<string, string> = {
+  'README.md':
+    '# Demo workspace\n\nSee [the parser](src/parser.ts#L3-L5) and `src/lexer.ts:2`.\n\n- [notes](docs/notes.md)\n',
+  'docs/notes.md': 'Back to [the README](../README.md).\n',
+  'src/lexer.ts':
+    "export type Token = { kind: 'number' | 'name'; text: string };\nexport const tokenize = (source: string): Token[] =>\n  source.trim().split(/\\s+/).map((text) => ({ kind: /^\\d/.test(text) ? 'number' : 'name', text }));\n",
+  'src/parser.ts': RICH.split('```ts\n')[1]!.split('```')[0]!,
+};
+function listing(dir: string) {
+  const prefix = dir ? `${dir}/` : '';
+  const names = new Map<string, 'dir' | 'file'>();
+  for (const file of Object.keys(FILES))
+    if (file.startsWith(prefix)) {
+      const [head, ...rest] = file.slice(prefix.length).split('/');
+      names.set(head!, rest.length ? 'dir' : 'file');
+    }
+  if (dir && !names.size) return null;
+  return {
+    path: dir,
+    truncated: false,
+    entries: [...names]
+      .map(([name, kind]) => ({
+        name,
+        kind,
+        ...(kind === 'file' ? { size: FILES[prefix + name]!.length } : {}),
+      }))
+      .sort((a, b) =>
+        a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1,
+      ),
+  };
+}
+
 const json = (value: unknown, status = 200) => Response.json(value, { status });
 let sequence = 10;
 const event = (type: string, data: unknown) => ({
@@ -137,7 +170,8 @@ async function body(request: Request): Promise<any> {
 
 Bun.serve({
   port: PORT,
-  hostname: '0.0.0.0',
+  // The emulator reaches the host's loopback as 10.0.2.2; nothing else needs to.
+  hostname: '127.0.0.1',
   async fetch(request, server) {
     const url = new URL(request.url);
     if (request.headers.get('authorization') !== `Bearer ${TOKEN}`)
@@ -150,6 +184,26 @@ Bun.serve({
       return json({ nodes: [{ id: 'm5pro', workspaces: [{ id: 'pirc', displayName: 'pirc' }] }] });
     if (/^\/api\/sessions\/[^/]+\/snapshot$/.test(url.pathname))
       return json({ ...snapshot, watermark: { epoch: 2, sequence } });
+    if (/^\/api\/sessions\/[^/]+\/files$/.test(url.pathname)) {
+      const found = listing((url.searchParams.get('path') ?? '').replace(/^\/+|\/+$/g, ''));
+      return found
+        ? json(found)
+        : json({ error: { code: 'not_found', message: 'Path not found' } }, 404);
+    }
+    if (/^\/api\/sessions\/[^/]+\/files\/content$/.test(url.pathname)) {
+      const path = (url.searchParams.get('path') ?? '').replace(/^\/+/, '');
+      const content = FILES[path];
+      if (content === undefined)
+        return json({ error: { code: 'not_found', message: 'Path not found' } }, 404);
+      return json({
+        path,
+        size: content.length,
+        modifiedAt: Date.now() - 60_000,
+        binary: false,
+        truncated: false,
+        content,
+      });
+    }
     if (url.pathname === '/api/models')
       return json({
         models: [
@@ -267,4 +321,4 @@ Bun.serve({
     message() {},
   },
 });
-console.log(`fake gateway on http://0.0.0.0:${PORT}; token ${TOKEN}`);
+console.log(`fake gateway on http://127.0.0.1:${PORT}; token ${TOKEN}`);

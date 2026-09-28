@@ -52,16 +52,39 @@ import dev.pirc.android.core.timeline.QueueItem
 import dev.pirc.android.core.timeline.SessionState
 import dev.pirc.android.ui.session.Composer
 import dev.pirc.android.ui.session.InteractionCard
+import dev.pirc.android.ui.session.LocalFileOpener
 import dev.pirc.android.ui.session.MessageView
+import dev.pirc.android.core.FileTarget
+import dev.pirc.android.core.parseFileLink
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import kotlinx.coroutines.launch
 
 /** A session: its live timeline, and the composer riding on the keyboard. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SessionScreen(viewModel: SessionViewModel, fallbackName: String, onBack: () -> Unit) {
+fun SessionScreen(
+    viewModel: SessionViewModel,
+    fallbackName: String,
+    onBack: () -> Unit,
+    onOpenFiles: () -> Unit,
+    onOpenFile: (FileTarget) -> Unit,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val connection by viewModel.connection.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    // File links in messages open the viewer; anything else goes to the browser.
+    val browser = LocalUriHandler.current
+    val links = remember(browser, onOpenFile) {
+        object : UriHandler {
+            override fun openUri(uri: String) {
+                parseFileLink(uri)?.let(onOpenFile) ?: browser.openUri(uri)
+            }
+        }
+    }
 
     LifecycleStartEffect(viewModel) {
         viewModel.start()
@@ -81,7 +104,8 @@ fun SessionScreen(viewModel: SessionViewModel, fallbackName: String, onBack: () 
                         )
                     }
                 },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(PircIcons.Back, contentDescription = "Back") } },
+                actions = { TextButton(onClick = onOpenFiles) { Text("Files") } },
             )
         },
         bottomBar = {
@@ -92,7 +116,9 @@ fun SessionScreen(viewModel: SessionViewModel, fallbackName: String, onBack: () 
         Box(Modifier.fillMaxSize().padding(padding)) {
             val current = state
             when {
-                current != null -> Timeline(current, viewModel)
+                current != null -> CompositionLocalProvider(LocalUriHandler provides links, LocalFileOpener provides onOpenFile) {
+                    Timeline(current, viewModel)
+                }
                 error != null -> Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
                     TextButton(onClick = viewModel::reload) { Text("Retry") }

@@ -58,6 +58,14 @@ class PircApi(val pairing: Pairing, internal val client: OkHttpClient = defaultH
     /** The live event stream of one session; see [EventStream]. */
     fun events(sessionId: String, cursor: String?) = EventStream(this).open(sessionId, cursor)
 
+    // ---- workspace files (read-only, confined to the session's workspace) ----
+
+    suspend fun files(sessionId: String, path: String): DirListing =
+        get<DirListing>("${session(sessionId)}/files?path=${path.urlSegment()}")
+
+    suspend fun file(sessionId: String, path: String): FileContent =
+        get<FileContent>("${session(sessionId)}/files/content?path=${path.urlSegment()}")
+
     // ---- acting on a session (needs the control lease) ----
 
     suspend fun models(sessionId: String): List<ModelOption> =

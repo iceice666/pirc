@@ -36,6 +36,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.staticCompositionLocalOf
+import dev.pirc.android.core.FileTarget
+import dev.pirc.android.core.parseFileLink
 import dev.pirc.android.core.timeline.ToolCall
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -43,6 +46,18 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 private val prettyJson = Json { prettyPrint = true }
+
+/** Opens a workspace file in the viewer; provided by the session screen. */
+val LocalFileOpener = staticCompositionLocalOf<((FileTarget) -> Unit)?> { null }
+
+/** The file a call works on (`read`, `write`, `edit`, ...), if its input names one. */
+internal fun toolFile(tool: ToolCall): FileTarget? {
+    val input = tool.input as? JsonObject ?: return null
+    val path = listOf("path", "file_path", "filePath").firstNotNullOfOrNull { key ->
+        (input[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
+    } ?: return null
+    return parseFileLink(path)
+}
 
 /** Long outputs are cut until the reader asks for all of it. */
 private const val OUTPUT_PREVIEW = 4_000
@@ -99,6 +114,9 @@ fun ToolCard(tool: ToolCall, modifier: Modifier = Modifier) {
                     tool.output?.let { output -> OutputPane(output) }
                     if (tool.input == null && tool.output == null && tool.diff == null)
                         Text("No details yet.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    val opener = LocalFileOpener.current
+                    val file = toolFile(tool)
+                    if (opener != null && file != null) TextButton(onClick = { opener(file) }) { Text("Open ${file.path.substringAfterLast('/')}") }
                 }
             }
         }

@@ -16,7 +16,12 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.pirc.android.AppViewModel
+import dev.pirc.android.FileViewModel
+import dev.pirc.android.FilesViewModel
 import dev.pirc.android.SessionViewModel
+import dev.pirc.android.core.FileTarget
+import dev.pirc.android.ui.files.FileScreen
+import dev.pirc.android.ui.files.FilesScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -24,6 +29,13 @@ data object SessionsRoute
 
 @Serializable
 data class SessionRoute(val id: String, val name: String)
+
+@Serializable
+data class FilesRoute(val sessionId: String)
+
+/** [line]/[endLine] 0: no line to mark. */
+@Serializable
+data class FileRoute(val sessionId: String, val path: String, val line: Int = 0, val endLine: Int = 0)
 
 @Composable
 fun PircApp(viewModel: AppViewModel) {
@@ -49,7 +61,38 @@ fun PircApp(viewModel: AppViewModel) {
                     val session = viewModel<SessionViewModel>(key = "${api.pairing.baseUrl}|${route.id}") {
                         SessionViewModel(api, route.id, viewModel.local.clientId, viewModel.local, onUnauthorized = { viewModel.handle(it) })
                     }
-                    SessionScreen(session, fallbackName = route.name, onBack = { nav.popBackStack() })
+                    SessionScreen(
+                        session,
+                        fallbackName = route.name,
+                        onBack = { nav.popBackStack() },
+                        onOpenFiles = { nav.navigate(FilesRoute(route.id)) },
+                        onOpenFile = { nav.navigate(FileRoute(route.id, it.path, it.line ?: 0, it.endLine ?: 0)) },
+                    )
+                }
+                composable<FilesRoute> { entry ->
+                    val route = entry.toRoute<FilesRoute>()
+                    val api = viewModel.api() ?: return@composable
+                    val files = viewModel<FilesViewModel>(key = "files|${api.pairing.baseUrl}|${route.sessionId}") {
+                        FilesViewModel(api, route.sessionId, onUnauthorized = { viewModel.handle(it) })
+                    }
+                    FilesScreen(
+                        files,
+                        onOpenFile = { nav.navigate(FileRoute(route.sessionId, it)) },
+                        onBack = { nav.popBackStack() },
+                    )
+                }
+                composable<FileRoute> { entry ->
+                    val route = entry.toRoute<FileRoute>()
+                    val api = viewModel.api() ?: return@composable
+                    val file = viewModel<FileViewModel>(key = "file|${api.pairing.baseUrl}|${route.sessionId}|${route.path}") {
+                        FileViewModel(api, route.sessionId, route.path, onUnauthorized = { viewModel.handle(it) })
+                    }
+                    FileScreen(
+                        file,
+                        target = FileTarget(route.path, route.line.takeIf { it > 0 }, route.endLine.takeIf { it > 0 }),
+                        onOpenFile = { nav.navigate(FileRoute(route.sessionId, it.path, it.line ?: 0, it.endLine ?: 0)) },
+                        onBack = { nav.popBackStack() },
+                    )
                 }
             }
         }

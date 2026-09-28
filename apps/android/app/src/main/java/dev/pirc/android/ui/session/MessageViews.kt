@@ -50,25 +50,37 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.compose.components.markdownComponents
-import com.mikepenz.markdown.compose.elements.MarkdownHighlightedCodeBlock
-import com.mikepenz.markdown.compose.elements.MarkdownHighlightedCodeFence
+import com.mikepenz.markdown.compose.elements.MarkdownCodeBlock
+import com.mikepenz.markdown.compose.elements.MarkdownCodeFence
+import com.mikepenz.markdown.compose.elements.MarkdownHighlightedCode
+import dev.pirc.android.core.linkifyPaths
+import dev.pirc.android.ui.files.syntaxFor
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.model.rememberMarkdownState
 import dev.pirc.android.core.timeline.InlineImage
 import dev.pirc.android.core.timeline.Message
 import kotlinx.coroutines.launch
 
-/** Markdown with highlighted, copyable code blocks that scroll sideways instead of wrapping. */
+/**
+ * Markdown with highlighted, copyable code blocks that scroll sideways
+ * instead of wrapping. With [linkPaths], bare file paths become links (they
+ * open the file viewer through `LocalUriHandler`).
+ */
 @Composable
-fun MarkdownText(content: String, modifier: Modifier = Modifier) {
+fun MarkdownText(content: String, modifier: Modifier = Modifier, linkPaths: Boolean = true) {
     val components = remember {
+        val highlighted: @Composable (String, String?, androidx.compose.ui.text.TextStyle) -> Unit = { code, language, style ->
+            // Fence names like `ts` or `bash` map onto the highlighter's languages.
+            MarkdownHighlightedCode(code, syntaxFor(language)?.name, style, showHeader = true)
+        }
         markdownComponents(
-            codeFence = { MarkdownHighlightedCodeFence(it.content, it.node, it.typography.code, showHeader = true) },
-            codeBlock = { MarkdownHighlightedCodeBlock(it.content, it.node, it.typography.code, showHeader = true) },
+            codeFence = { MarkdownCodeFence(it.content, it.node, it.typography.code, highlighted) },
+            codeBlock = { MarkdownCodeBlock(it.content, it.node, it.typography.code, highlighted) },
         )
     }
+    val source = remember(content, linkPaths) { if (linkPaths) linkifyPaths(content) else content }
     // retainState: while a reply streams, keep the last rendering instead of flashing empty.
-    val state = rememberMarkdownState(content, retainState = true)
+    val state = rememberMarkdownState(source, retainState = true)
     Markdown(markdownState = state, components = components, modifier = modifier.fillMaxWidth())
 }
 

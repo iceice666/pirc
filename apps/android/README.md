@@ -2,7 +2,7 @@
 
 A native Jetpack Compose client for the pirc gateway. See [`plans/android-client.md`](../../plans/android-client.md) for the design and milestones.
 
-Current state: pairing, the session list, and a live chat: markdown with highlighted, copyable code; collapsible thinking, tool calls and system entries; a composer that rides on the keyboard (prompt, steer or queue while a run is active, stop, image attachments, model and thinking level); answering the agent's questions; and the control lease (kept alive while the chat is open, taken over on request). The files panel comes next.
+Current state: pairing, the session list, and a live chat: markdown with highlighted, copyable code; collapsible thinking, tool calls and system entries; a composer that rides on the keyboard (prompt, steer or queue while a run is active, stop, image attachments, model and thinking level); answering the agent's questions; the control lease (kept alive while the chat is open, taken over on request); and the workspace files: a folder browser and a viewer with highlighted source, line numbers, optional wrapping and Markdown preview. File links and bare paths in messages, and files named by tool calls, open the viewer at the cited lines.
 
 ## Pairing
 
@@ -34,10 +34,10 @@ This project is not part of the Bun workspace, `bun run check`, or the Nix packa
 
 ## Trying it without a gateway
 
-`dev/fake-gateway.ts` serves one session from the fixtures, streams a demo reply each time the chat opens, hands out the control lease, accepts uploads, and echoes prompts back:
+`dev/fake-gateway.ts` serves one session from the fixtures, streams a demo reply each time the chat opens, hands out the control lease, accepts uploads, echoes prompts back, and serves a small in-memory workspace for the files panel:
 
 ```sh
-bun apps/android/dev/fake-gateway.ts   # http://0.0.0.0:8799
+bun apps/android/dev/fake-gateway.ts   # http://127.0.0.1:8799 (the emulator sees it as 10.0.2.2)
 adb shell am start -a android.intent.action.VIEW \
   -d "pirc://pair?url=http%3A%2F%2F10.0.2.2%3A8799&token=$(bun apps/android/dev/fake-gateway.ts --token)"
 ```

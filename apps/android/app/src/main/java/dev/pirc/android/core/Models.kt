@@ -38,6 +38,29 @@ data class NodeSummary(
 )
 
 @Serializable
+data class DirEntry(
+    val name: String,
+    /** `dir`, `file`, `symlink` or `other`. */
+    val kind: String,
+    val size: Long? = null,
+)
+
+/** One directory of the workspace; [path] is workspace-relative ("" is the root). */
+@Serializable
+data class DirListing(val path: String, val entries: List<DirEntry>, val truncated: Boolean = false)
+
+/** A workspace file, cut at 1 MiB ([truncated]); binary files come without [content]. */
+@Serializable
+data class FileContent(
+    val path: String,
+    val size: Long,
+    val modifiedAt: Double = 0.0,
+    val binary: Boolean = false,
+    val truncated: Boolean = false,
+    val content: String? = null,
+)
+
+@Serializable
 internal data class SessionsResponse(val sessions: List<Session>)
 
 @Serializable
