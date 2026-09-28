@@ -15,6 +15,8 @@ export interface Observation {
   timestamp: string;
   relevance: Relevance;
   sourceEntryIds: string[];
+  /** Origins of the source entries (`messageOrigin`), set by code; absent on older records. */
+  origins?: string[];
   tokenCount: number;
 }
 export interface Reflection {
@@ -47,6 +49,13 @@ export const hashId = (content: string) =>
   createHash('sha256').update(content).digest('hex').slice(0, 12);
 export const estimateStringTokens = (text: string) => Math.ceil(text.length / 4);
 
+/** Union of origin sets; a record without origins (written before they existed) counts as `unknown`. */
+export function mergeOrigins(sets: Array<readonly string[] | undefined>): string[] {
+  const out = new Set<string>();
+  for (const set of sets) for (const origin of set?.length ? set : ['unknown']) out.add(origin);
+  return [...out].sort();
+}
+
 export const observationLine = (o: Observation) =>
   `[${o.id}] ${o.timestamp} [${o.relevance}] ${o.content}`;
 export const reflectionLine = (r: Reflection) => `[${r.id}] ${r.content}`;
@@ -71,6 +80,9 @@ export function isObservation(value: any): value is Observation {
     typeof value.timestamp === 'string' &&
     RELEVANCES.includes(value.relevance) &&
     strings(value.sourceEntryIds) &&
+    (value.origins === undefined ||
+      (Array.isArray(value.origins) &&
+        value.origins.every((item: unknown) => typeof item === 'string'))) &&
     typeof value.tokenCount === 'number'
   );
 }

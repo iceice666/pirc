@@ -10,8 +10,10 @@ import {
   WorkspaceLedger,
   foldWorkspace,
   gitState,
+  promoterPrompt as buildPromoterPrompt,
   promoterTool,
   promotionCandidates,
+  recallFromWorkspace,
   recallWorkspaceItem,
   renderWorkspaceMemory,
   resolveWorkspace,
@@ -110,6 +112,29 @@ describe('workspace memory', () => {
     expect(cleared.items.has(a.id)).toBe(false);
   });
 
+  it('forgets items for good, even across a clear', () => {
+    const a = item('first');
+    const b = item('second');
+    const fold = foldWorkspace([
+      { type: 'recorded', at: 1, items: [a, b] },
+      { type: 'retired', at: 2, ids: [a.id], reason: 'forgotten' },
+      { type: 'retired', at: 3, ids: [b.id], reason: 'superseded' },
+    ]);
+    expect(fold.active).toEqual([]);
+    // Superseded items stay recallable; forgotten ones do not.
+    expect(fold.items.has(b.id)).toBe(true);
+    expect(fold.items.has(a.id)).toBe(false);
+    expect(fold.forgotten.get(a.id)).toBe('first');
+    const later = foldWorkspace([
+      { type: 'recorded', at: 1, items: [a] },
+      { type: 'retired', at: 2, ids: [a.id], reason: 'forgotten' },
+      { type: 'cleared', at: 3 },
+      { type: 'recorded', at: 4, items: [a] },
+    ]);
+    expect(later.active).toEqual([]);
+    expect(later.forgotten.get(a.id)).toBe('first');
+  });
+
   it('selects reflections and important observations not yet promoted', () => {
     const high = obs('decided X', 'high');
     const low = obs('ran ls', 'low');
@@ -131,11 +156,30 @@ describe('workspace memory', () => {
     ]);
   });
 
+  it('carries origins from session memory to candidates', () => {
+    const fromUser = { ...obs('user chose X', 'high'), origins: ['user'] };
+    const legacy = obs('old decision', 'critical');
+    const ref = {
+      id: hashId('durable X'),
+      content: 'durable X',
+      supportingObservationIds: [fromUser.id, legacy.id],
+      tokenCount: 3,
+    };
+    const branch = [
+      custom('om.observations.recorded', { observations: [fromUser, legacy], coversUpToId: 'x' }),
+      custom('om.reflections.recorded', { reflections: [ref], coversUpToId: 'x' }),
+    ];
+    const origins = new Map(promotionCandidates(branch).map((c) => [c.content, c.origins]));
+    expect(origins.get('durable X')).toEqual(['unknown', 'user']);
+    expect(origins.get('user chose X')).toEqual(['user']);
+    expect(origins.get('old decision')).toEqual(['unknown']);
+  });
+
   it('validates promoter tool calls', () => {
     const existing = item('old note');
     const out = { add: [] as WorkspaceItem[], retire: [] as string[] };
     const tool = promoterTool(
-      [existing],
+      foldWorkspace([{ type: 'recorded', at: 1, items: [existing] }]),
       [{ id: 'bbbbbbbbbbbb', kind: 'reflection', content: 'x' }],
       {
         sessionId: 's2',
@@ -153,10 +197,50 @@ describe('workspace memory', () => {
       retire: [existing.id, 'ffffffffffff'],
     });
     expect(receipt).toContain('Added 1, retired 1, rejected 1');
+    expect(receipt).toContain('skipped 1 already in workspace memory');
     expect(out.add).toHaveLength(1);
     expect(out.add[0]!.sourceMemoryIds).toEqual(['bbbbbbbbbbbb']);
+    // The candidate carried no origins (older session memory).
+    expect(out.add[0]!.origins).toEqual(['unknown']);
     expect(out.add[0]!.git?.branch).toBe('main');
     expect(out.retire).toEqual([existing.id]);
+  });
+
+  it('skips notes the ledger already knows and records origins without secrets', () => {
+    const superseded = item('retired note');
+    const gone = item('forgotten note');
+    const fold = foldWorkspace([
+      { type: 'recorded', at: 1, items: [superseded, gone] },
+      { type: 'retired', at: 2, ids: [superseded.id], reason: 'superseded' },
+      { type: 'retired', at: 3, ids: [gone.id], reason: 'forgotten' },
+    ]);
+    const out = { add: [] as WorkspaceItem[], retire: [] as string[] };
+    const tool = promoterTool(
+      fold,
+      [{ id: 'cccccccccccc', kind: 'observation', content: 'y', origins: ['tool:bash', 'user'] }],
+      { sessionId: 's3', sessionDir: '/s3', git: undefined },
+      out,
+    );
+    const token = `ghp_${'a'.repeat(36)}`;
+    const receipt = tool.execute({
+      add: [
+        { content: 'retired note', relevance: 'high', sourceMemoryIds: ['cccccccccccc'] },
+        { content: 'forgotten note', relevance: 'high', sourceMemoryIds: ['cccccccccccc'] },
+        { content: `CI uses ${token}`, relevance: 'high', sourceMemoryIds: ['cccccccccccc'] },
+      ],
+    });
+    expect(receipt).toContain('Added 1, retired 0, rejected 0');
+    expect(receipt).toContain('1 recorded before and retired');
+    expect(receipt).toContain('1 forgotten by the user');
+    expect(out.add.map((i) => i.content)).toEqual(['CI uses ghp_[REDACTED]']);
+    expect(out.add[0]!.origins).toEqual(['tool:bash', 'user']);
+    // The promoter is told what was forgotten; superseded notes are not listed.
+    const prompt = buildPromoterPrompt(fold, [], undefined, 100);
+    expect(prompt).toContain(
+      'FORGOTTEN (the user asked to forget these; never record them again):\n- forgotten note',
+    );
+    expect(prompt).not.toContain('retired note');
+    expect(buildPromoterPrompt(foldWorkspace([]), [], undefined, 100)).not.toContain('FORGOTTEN');
   });
 
   it('renders within budget preferring relevant and recent items', () => {
@@ -201,6 +285,20 @@ describe('workspace memory', () => {
     expect(found.status).toBe('ok');
     expect(found.text).toContain('We chose sqlite over postgres.');
     expect(recallWorkspaceItem(item('gone'), recall).status).toBe('source_unavailable');
+
+    // Through the fold: superseded items still recall, forgotten ones answer without content.
+    const kept = item('Chose sqlite', { sessionDir: dir, sourceMemoryIds: [o.id] });
+    const dropped = item('Also chose sqlite', { sessionDir: dir, sourceMemoryIds: [o.id] });
+    const fold = foldWorkspace([
+      { type: 'recorded', at: 1, items: [kept, dropped] },
+      { type: 'retired', at: 2, ids: [kept.id], reason: 'superseded' },
+      { type: 'retired', at: 3, ids: [dropped.id], reason: 'forgotten' },
+    ]);
+    expect(recallFromWorkspace(fold, kept.id, recall)?.status).toBe('ok');
+    const forgotten = recallFromWorkspace(fold, dropped.id, recall)!;
+    expect(forgotten.status).toBe('forgotten');
+    expect(forgotten.text).not.toContain('sqlite');
+    expect(recallFromWorkspace(fold, 'ffffffffffff', recall)).toBeUndefined();
   });
 
   it('skips work when another process holds the lock', async () => {
@@ -341,5 +439,20 @@ describe('workspace memory agent flow', () => {
     await settledAfter(second, third);
     const end = second.events.findLast((e) => e.type === 'tool_execution_end');
     expect(end!.result.content[0].text).toContain('Store uploads in S3, not on disk.');
+
+    // Forgetting it (a namespaced command typed as a prompt) makes recall refuse it.
+    await second.send({ type: 'prompt', message: `/om:workspace forget ${id}` });
+    await second.waitFor(
+      (e) =>
+        e.method === 'notify' && String(e.message).startsWith(`Workspace memory: forgot ${id}`),
+    );
+    expect(read()).toContain('"reason":"forgotten"');
+    second.llm.push({ tool: { id: 'rc2', name: 'recall', args: { id } } }, { text: 'gone' });
+    const fourth = second.events.length;
+    await second.send({ type: 'prompt', message: 'recall it again' });
+    await settledAfter(second, fourth);
+    const gone = second.events.findLast((e) => e.type === 'tool_execution_end');
+    expect(gone!.result.content[0].text).toContain('forgotten at the user');
+    expect(gone!.result.content[0].text).not.toContain('Store uploads in S3');
   }, 30_000);
 });

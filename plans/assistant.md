@@ -1,6 +1,6 @@
 # Personal assistant: global memory and delegation
 
-Status: proposed 2026-09-28; nothing implemented. Decisions taken with the user:
+Status: proposed 2026-09-28. Milestone 0 (workspace memory fixes) is implemented; the rest is not. Decisions taken with the user:
 
 - Global memory lives on the gateway from the start (no node-local interim store).
 - Only USER (profile) changes need the user's approval. The assistant writes MEMORY notes directly; the user can review, revert and forget them.

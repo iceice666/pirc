@@ -10,6 +10,7 @@ import {
   type Reflection,
   type Relevance,
 } from './ledger.js';
+import { redactSecrets } from './redact.js';
 import type { Chunk } from './serialize.js';
 import type { WorkerTool } from './worker.js';
 
@@ -35,8 +36,11 @@ NEW CONVERSATION CHUNK:
 ${chunk.text.trim()}`;
 }
 
-export function observerTool(allowedIds: string[], out: Observation[]): WorkerTool {
-  const order = new Map(allowedIds.map((id, index) => [id, index]));
+export function observerTool(
+  chunk: Pick<Chunk, 'sourceEntryIds' | 'origins'>,
+  out: Observation[],
+): WorkerTool {
+  const order = new Map(chunk.sourceEntryIds.map((id, index) => [id, index]));
   return {
     name: 'record_observations',
     description:
@@ -95,18 +99,20 @@ export function observerTool(allowedIds: string[], out: Observation[]): WorkerTo
           rejected++;
           continue;
         }
-        const text = truncateContent(content.replace(/\s*[\r\n]+\s*/g, ' '));
+        const text = truncateContent(redactSecrets(content).replace(/\s*[\r\n]+\s*/g, ' '));
         const id = hashId(text);
         if (out.some((o) => o.id === id)) {
           duplicates++;
           continue;
         }
+        const sourceEntryIds = [...new Set(ids)].sort((a, b) => order.get(a)! - order.get(b)!);
         const observation: Observation = {
           id,
           content: text,
           timestamp: item.timestamp,
           relevance: item.relevance as Relevance,
-          sourceEntryIds: [...new Set(ids)].sort((a, b) => order.get(a)! - order.get(b)!),
+          sourceEntryIds,
+          origins: [...new Set(sourceEntryIds.map((id) => chunk.origins[id] ?? 'unknown'))].sort(),
           tokenCount: 0,
         };
         observation.tokenCount = observationTokens(observation);
@@ -177,7 +183,9 @@ export function reflectorTool(
       let rejected = 0;
       for (const item of Array.isArray(args.reflections) ? args.reflections : []) {
         const content =
-          typeof item?.content === 'string' ? truncateContent(item.content.trim()) : '';
+          typeof item?.content === 'string'
+            ? truncateContent(redactSecrets(item.content.trim()))
+            : '';
         const ids: string[] = Array.isArray(item?.supportingObservationIds)
           ? item.supportingObservationIds
           : [];

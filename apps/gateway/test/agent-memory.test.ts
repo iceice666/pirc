@@ -7,9 +7,17 @@ import {
   hashId,
   renderSummary,
   type Observation,
+  type Reflection,
 } from '../src/agent/features/memory/ledger.js';
-import { poolMetrics, selectDrops } from '../src/agent/features/memory/agents.js';
+import {
+  observerTool,
+  poolMetrics,
+  reflectorTool,
+  selectDrops,
+} from '../src/agent/features/memory/agents.js';
 import { recall } from '../src/agent/features/memory/index.js';
+import { redactSecrets } from '../src/agent/features/memory/redact.js';
+import { RECALL_OMITTED, serializeChunk } from '../src/agent/features/memory/serialize.js';
 import type { SessionEntry } from '../src/agent/session-store.js';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
 
@@ -157,6 +165,93 @@ describe('memory ledger', () => {
     expect(byRef.text).toContain('Sources:');
     expect(recall(branch, 'XYZ').status).toBe('invalid_id');
     expect(recall(branch, 'aaaaaaaaaaaa').status).toBe('not_found');
+  });
+
+  it('hides recall output from the observer and records origins', () => {
+    const key = `sk-${'x'.repeat(24)}`;
+    const user = msg('user', `Deploy with key ${key}`);
+    const reply = msg('assistant', 'Checking earlier memory.');
+    const recalled: SessionEntry = {
+      id: `t${++n}`,
+      parentId: null,
+      timestamp: 0,
+      type: 'message',
+      message: {
+        role: 'toolResult',
+        toolCallId: 'c1',
+        toolName: 'recall',
+        content: [{ type: 'text', text: 'We chose sqlite over postgres.' }],
+        isError: false,
+        timestamp: 0,
+      },
+    };
+    const chunk = serializeChunk([user, reply, recalled], 10_000);
+    // Recall output is still covered, but the observer cannot learn it again.
+    expect(chunk.sourceEntryIds).toEqual([user.id, reply.id, recalled.id]);
+    expect(chunk.text).toContain(RECALL_OMITTED);
+    expect(chunk.text).not.toContain('We chose sqlite');
+    expect(chunk.origins).toEqual({
+      [user.id]: 'user',
+      [reply.id]: 'assistant',
+      [recalled.id]: 'tool:recall',
+    });
+    const observations: Observation[] = [];
+    observerTool(chunk, observations).execute({
+      observations: [
+        {
+          timestamp: '2026-09-28 10:00',
+          content: `User shared the deploy key ${key}`,
+          relevance: 'high',
+          sourceEntryIds: [reply.id, user.id],
+        },
+      ],
+    });
+    expect(observations[0]!.content).toBe('User shared the deploy key sk-[REDACTED]');
+    expect(observations[0]!.sourceEntryIds).toEqual([user.id, reply.id]);
+    expect(observations[0]!.origins).toEqual(['assistant', 'user']);
+    const reflections: Reflection[] = [];
+    reflectorTool([], observations, reflections).execute({
+      reflections: [
+        {
+          content: `The deploy key is ${key}`,
+          supportingObservationIds: [observations[0]!.id],
+        },
+      ],
+    });
+    expect(reflections[0]!.content).toBe('The deploy key is sk-[REDACTED]');
+  });
+
+  it('redacts credentials before memory stores them', () => {
+    const env = {
+      MY_API_KEY: 'q'.repeat(20),
+      PATH: `/usr/bin:${'z'.repeat(30)}`,
+      SHORT_TOKEN: 'abc',
+    };
+    const pem = '-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----';
+    const text = [
+      `pirc_dev_${'a'.repeat(43)}`,
+      `github_pat_${'b'.repeat(30)}`,
+      `AKIA${'C'.repeat(16)}`,
+      `Authorization: Bearer ${'d'.repeat(24)}`,
+      pem,
+      'q'.repeat(20),
+      'abc',
+      'z'.repeat(30),
+      `task-${'e'.repeat(30)}`,
+    ].join(' | ');
+    expect(redactSecrets(text, env)).toBe(
+      [
+        'pirc_dev_[REDACTED]',
+        'github_pat_[REDACTED]',
+        '[REDACTED AWS KEY]',
+        'Authorization: Bearer [REDACTED]',
+        '[REDACTED PRIVATE KEY]',
+        '[REDACTED MY_API_KEY]',
+        'abc',
+        'z'.repeat(30),
+        `task-${'e'.repeat(30)}`,
+      ].join(' | '),
+    );
   });
 });
 

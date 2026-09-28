@@ -50,13 +50,12 @@ import {
   WS_PROMOTED,
   WS_SNAPSHOT,
   WorkspaceLedger,
-  findWorkspaceItem,
   gitLabel,
   gitState,
   promoterPrompt,
   promoterTool,
   promotionCandidates,
-  recallWorkspaceItem,
+  recallFromWorkspace,
   renderWorkspaceMemory,
   workspaceItemLine,
   type PromotionOutput,
@@ -304,7 +303,7 @@ export function memoryFeature(): Feature {
           model,
           OBSERVER_SYSTEM,
           observerPrompt(chunk, prior.reflections, prior.observations),
-          observerTool(chunk.sourceEntryIds, out),
+          observerTool(chunk, out),
         );
         if (!out.length && result.error) {
           lastError.observer = result.error;
@@ -433,16 +432,16 @@ export function memoryFeature(): Feature {
     tracker ??= new RateLimitTracker(() => memoryConfig(agent).rateLimitCooldownMs);
     const target = workspaceLedger(agent);
     const result = await target.withLock(async () => {
-      const active = target.fold().active;
+      const fold = target.fold();
       const git = gitState(agent.config.workspace);
       const out: PromotionOutput = { add: [], retire: [] };
       const run = await runWorker(agent, {
         model,
         tracker: tracker!,
         systemPrompt: WORKSPACE_PROMOTER_SYSTEM,
-        prompt: promoterPrompt(active, candidates, git, config.workspace.maxTokens),
+        prompt: promoterPrompt(fold, candidates, git, config.workspace.maxTokens),
         tool: promoterTool(
-          active,
+          fold,
           candidates,
           { sessionId: agent.store.sessionId, sessionDir: agent.store.dir, git },
           out,
@@ -538,10 +537,8 @@ export function memoryFeature(): Feature {
       if (ctx.signal.aborted) throw new Error('Aborted');
       const id = String(args.id ?? '');
       let result = recall(agent.store.branch(), id);
-      if (result.status === 'not_found' && workspaceOn(agent)) {
-        const item = findWorkspaceItem(workspaceLedger(agent), id);
-        if (item) result = recallWorkspaceItem(item, recall);
-      }
+      if (result.status === 'not_found' && workspaceOn(agent))
+        result = recallFromWorkspace(workspaceLedger(agent).fold(), id, recall) ?? result;
       return {
         content: [{ type: 'text', text: result.text }],
         details: { status: result.status, id: args.id },
@@ -737,10 +734,17 @@ export function memoryFeature(): Feature {
             return agent.ui.notify(`Workspace memory: ${result}`, 'info');
           }
           if (sub === 'forget') {
-            if (!id || !target.fold().active.some((item) => item.id === id))
-              return agent.ui.notify(`No active workspace memory item ${id ?? ''}`, 'warning');
+            // Superseded items are still recallable, so they can be forgotten too.
+            const fold = target.fold();
+            if (id && fold.forgotten.has(id))
+              return agent.ui.notify(`Workspace memory item ${id} is already forgotten`, 'info');
+            if (!id || !fold.items.has(id))
+              return agent.ui.notify(`No workspace memory item ${id ?? ''}`, 'warning');
             target.append({ type: 'retired', at: Date.now(), ids: [id], reason: 'forgotten' });
-            return agent.ui.notify(`Workspace memory: forgot ${id}`, 'info');
+            return agent.ui.notify(
+              `Workspace memory: forgot ${id}. New sessions will not see it and recall no longer returns it; sessions already open keep the copy frozen into their prompt.`,
+              'info',
+            );
           }
           if (sub === 'clear') {
             target.append({ type: 'cleared', at: Date.now() });

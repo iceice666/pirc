@@ -28,9 +28,11 @@ import {
   foldLedger,
   hashId,
   localStamp,
+  mergeOrigins,
   truncateContent,
   type Relevance,
 } from './ledger.js';
+import { redactSecrets } from './redact.js';
 
 /** Session entry: session memory ids already considered for promotion. */
 export const WS_PROMOTED = 'om.workspace.promoted';
@@ -52,6 +54,8 @@ export interface WorkspaceItem {
   sessionDir: string;
   /** Session observation/reflection ids this item was distilled from (recallable). */
   sourceMemoryIds: string[];
+  /** Union of the cited session memory's origins (`messageOrigin`); absent on older items. */
+  origins?: string[];
   git?: GitState;
   tokenCount: number;
 }
@@ -66,6 +70,7 @@ export interface Candidate {
   content: string;
   timestamp?: string;
   relevance?: Relevance;
+  origins?: string[];
 }
 
 // ---------- location ----------
@@ -148,22 +153,40 @@ export function parseWorkspaceLines(text: string): WorkspaceLine[] {
 }
 
 export interface WorkspaceFold {
-  /** Every item ever recorded since the last clear (first wins), including retired ones. */
+  /** Items recorded since the last clear (first wins), including superseded ones, never forgotten ones. */
   items: Map<string, WorkspaceItem>;
   active: WorkspaceItem[];
+  /**
+   * Ids the user asked to forget, with their content when it was known (the
+   * promoter must not record it again). Kept across `clear`, and a forgotten id
+   * is never recorded again.
+   */
+  forgotten: Map<string, string | undefined>;
 }
 export function foldWorkspace(lines: WorkspaceLine[]): WorkspaceFold {
   const items = new Map<string, WorkspaceItem>();
   const retired = new Set<string>();
+  const forgotten = new Map<string, string | undefined>();
   for (const line of lines) {
     if (line.type === 'cleared') {
       items.clear();
       retired.clear();
     } else if (line.type === 'recorded') {
-      for (const item of line.items) if (!items.has(item.id)) items.set(item.id, item);
-    } else for (const id of line.ids) retired.add(id);
+      for (const item of line.items)
+        if (!items.has(item.id) && !forgotten.has(item.id)) items.set(item.id, item);
+    } else
+      for (const id of line.ids) {
+        retired.add(id);
+        if (line.reason !== 'forgotten') continue;
+        forgotten.set(id, items.get(id)?.content ?? forgotten.get(id));
+        items.delete(id);
+      }
   }
-  return { items, active: [...items.values()].filter((item) => !retired.has(item.id)) };
+  return {
+    items,
+    active: [...items.values()].filter((item) => !retired.has(item.id)),
+    forgotten,
+  };
 }
 
 export class WorkspaceLedger {
@@ -233,7 +256,15 @@ export function promotionCandidates(branch: SessionEntry[]): Candidate[] {
   const folded = foldLedger(branch);
   const out: Candidate[] = [];
   for (const r of folded.reflections)
-    if (!done.has(r.id)) out.push({ id: r.id, kind: 'reflection', content: r.content });
+    if (!done.has(r.id))
+      out.push({
+        id: r.id,
+        kind: 'reflection',
+        content: r.content,
+        origins: mergeOrigins(
+          r.supportingObservationIds.map((id) => folded.observationsById.get(id)?.origins),
+        ),
+      });
   for (const o of folded.activeObservations)
     if (!done.has(o.id) && PROMOTE_MIN.includes(o.relevance))
       out.push({
@@ -242,6 +273,7 @@ export function promotionCandidates(branch: SessionEntry[]): Candidate[] {
         content: o.content,
         timestamp: o.timestamp,
         relevance: o.relevance,
+        origins: mergeOrigins([o.origins]),
       });
   return out;
 }
@@ -274,22 +306,24 @@ Rules:
 - Relevance: critical for hard user constraints, high for decisions and unfinished work, medium for useful context, low otherwise.
 - Retire existing workspace items that the new memory supersedes, completes, or contradicts (for example an "in progress" item that is now done). Retiring and re-adding an updated item is preferred over keeping stale ones.
 - Keep the pool compact. When it is over the target size, retire the least useful or oldest items.
+- Never record anything listed under FORGOTTEN, not even reworded or in part: the user asked to forget it.
 - It is fine to record nothing if nothing is worth carrying over; then do not call the tool.`;
 
 export function promoterPrompt(
-  active: WorkspaceItem[],
+  fold: Pick<WorkspaceFold, 'active' | 'forgotten'>,
   candidates: Candidate[],
   git: GitState | undefined,
   target: number,
 ): string {
-  const tokens = active.reduce((sum, item) => sum + item.tokenCount, 0);
+  const tokens = fold.active.reduce((sum, item) => sum + item.tokenCount, 0);
   const list = (items: string[]) => (items.length ? items.join('\n') : '(none)');
+  const forgotten = [...fold.forgotten.values()].filter((content) => content !== undefined);
   return `Current local time: ${localStamp()}
 Current git state: ${gitLabel(git) || 'not a git repository'}
 
 CURRENT WORKSPACE MEMORY (~${tokens.toLocaleString()} tokens; target ~${target.toLocaleString()}):
-${list(active.map(workspaceItemLine))}
-
+${list(fold.active.map(workspaceItemLine))}
+${forgotten.length ? `\nFORGOTTEN (the user asked to forget these; never record them again):\n${forgotten.map((content) => `- ${content}`).join('\n')}\n` : ''}
 NEW SESSION MEMORY:
 ${list(candidates.map(candidateLine))}`;
 }
@@ -299,13 +333,13 @@ export interface PromotionOutput {
   retire: string[];
 }
 export function promoterTool(
-  active: WorkspaceItem[],
+  fold: WorkspaceFold,
   candidates: Candidate[],
   context: { sessionId: string; sessionDir: string; git: GitState | undefined },
   out: PromotionOutput,
 ): WorkerTool {
-  const candidateIds = new Set(candidates.map((c) => c.id));
-  const activeIds = new Set(active.map((item) => item.id));
+  const candidateOrigins = new Map(candidates.map((c) => [c.id, c.origins]));
+  const activeIds = new Set(fold.active.map((item) => item.id));
   return {
     name: 'record_workspace_memory',
     description:
@@ -341,12 +375,16 @@ export function promoterTool(
       let added = 0;
       let rejected = 0;
       let retired = 0;
+      const skipped = { present: 0, retired: 0, forgotten: 0 };
       for (const raw of Array.isArray(args.add) ? args.add : []) {
-        const content = typeof raw?.content === 'string' ? truncateContent(raw.content.trim()) : '';
+        const content =
+          typeof raw?.content === 'string'
+            ? truncateContent(redactSecrets(raw.content.trim()))
+            : '';
         const ids: string[] = Array.isArray(raw?.sourceMemoryIds)
           ? [
               ...new Set<string>(
-                raw.sourceMemoryIds.filter((id: unknown) => candidateIds.has(String(id))),
+                raw.sourceMemoryIds.map(String).filter((id: string) => candidateOrigins.has(id)),
               ),
             ]
           : [];
@@ -354,8 +392,21 @@ export function promoterTool(
           rejected++;
           continue;
         }
+        // Ids are content hashes, and the fold ignores ids it already knows:
+        // report such an item as skipped instead of claiming it was added.
         const id = hashId(content);
-        if (activeIds.has(id) || out.add.some((item) => item.id === id)) continue;
+        if (fold.forgotten.has(id)) {
+          skipped.forgotten++;
+          continue;
+        }
+        if (activeIds.has(id) || out.add.some((item) => item.id === id)) {
+          skipped.present++;
+          continue;
+        }
+        if (fold.items.has(id)) {
+          skipped.retired++;
+          continue;
+        }
         const item: WorkspaceItem = {
           id,
           content,
@@ -364,6 +415,7 @@ export function promoterTool(
           sessionId: context.sessionId,
           sessionDir: context.sessionDir,
           sourceMemoryIds: ids,
+          origins: mergeOrigins(ids.map((sourceId) => candidateOrigins.get(sourceId))),
           ...(context.git ? { git: context.git } : {}),
           tokenCount: 0,
         };
@@ -376,7 +428,13 @@ export function promoterTool(
           out.retire.push(String(id));
           retired++;
         }
-      return `Added ${added}, retired ${retired}, rejected ${rejected} (missing content or valid sourceMemoryIds). Call again if more remains; otherwise reply briefly to finish.`;
+      const notes = [
+        skipped.present && `${skipped.present} already in workspace memory`,
+        skipped.retired &&
+          `${skipped.retired} recorded before and retired (describe the current state instead)`,
+        skipped.forgotten && `${skipped.forgotten} forgotten by the user (never record it)`,
+      ].filter(Boolean);
+      return `Added ${added}, retired ${retired}, rejected ${rejected} (missing content or valid sourceMemoryIds)${notes.length ? `; skipped ${notes.join(', ')}` : ''}. Call again if more remains; otherwise reply briefly to finish.`;
     },
   };
 }
@@ -417,8 +475,22 @@ ${items.map(workspaceItemLine).join('\n')}`;
 }
 
 // ---------- recall ----------
-export function findWorkspaceItem(ledger: WorkspaceLedger, id: string): WorkspaceItem | undefined {
-  return ledger.fold().items.get(id);
+/**
+ * Recall a workspace id. Forgotten ids answer without their content or
+ * sources; ids the workspace never recorded (or cleared) return undefined.
+ */
+export function recallFromWorkspace(
+  fold: WorkspaceFold,
+  id: string,
+  recallInBranch: (branch: SessionEntry[], id: string) => { text: string; status: string },
+): { text: string; status: string } | undefined {
+  if (fold.forgotten.has(id))
+    return {
+      text: `Workspace memory item ${id} was forgotten at the user's request; its content and sources are no longer available.`,
+      status: 'forgotten',
+    };
+  const item = fold.items.get(id);
+  return item ? recallWorkspaceItem(item, recallInBranch) : undefined;
 }
 
 /** Recall a workspace item via its source session (read-only). */
