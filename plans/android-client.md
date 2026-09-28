@@ -13,7 +13,7 @@ The web client stays the primary and complete client. Android is a second client
 **v1**
 
 - Pairing with a gateway via a device token (below).
-- Session list grouped by node/workspace; create, rename and delete sessions.
+- Session list grouped by node/workspace; create, rename, pin and settle sessions (the gateway has no session delete; settling is the archive).
 - Chat: live event stream, markdown with highlighted code, collapsible tool calls, copy per message and per code block, text selection.
 - Composer: prompt, image attachments (`/uploads`), model picker, stop/commands, glued to the keyboard.
 - Control lease: acquire, heartbeat, release, and a clear "read-only, take control" state.
