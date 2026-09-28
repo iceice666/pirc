@@ -22,6 +22,7 @@ import type { EventCursor } from '../types.js';
 import { parse, payloadHash } from '../util.js';
 import { authHook, validateRequest } from './auth.js';
 import { DeviceTokens, registerDeviceRoutes } from './devices.js';
+import { runAgentOp } from './agent-ops.js';
 import { NodeRegistry, validNodeToken } from './nodes.js';
 import { BackendService } from '../backends/service.js';
 import { registerBackendRoutes } from '../backends/routes.js';
@@ -171,6 +172,8 @@ export async function buildDaemonApp(
     }
   };
   nodes.resolveSession = (nodeId, remoteId) => db.resolveRemoteSession(nodeId, remoteId);
+  nodes.onAgentRequest = async (nodeId, request) =>
+    runAgentOp(db, config.allowedUsers, nodeId, request);
   nodes.onEvent = (nodeId, sessionId, event) => {
     try {
       const session = db.getSession(sessionId);

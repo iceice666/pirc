@@ -1,6 +1,6 @@
 # Personal assistant: global memory and delegation
 
-Status: proposed 2026-09-28. Milestone 0 (workspace memory fixes) is implemented; the rest is not. Decisions taken with the user:
+Status: proposed 2026-09-28. Milestones 0 (workspace memory fixes) and 1 (gateway channel) are implemented; the rest is not. Decisions taken with the user:
 
 - Global memory lives on the gateway from the start (no node-local interim store).
 - Only USER (profile) changes need the user's approval. The assistant writes MEMORY notes directly; the user can review, revert and forget them.
@@ -77,11 +77,9 @@ The channel runs agent → runner → node → daemon, copying the write-lease a
 
 - **Agent ↔ runner.** When the runner sets `PIRC_GATEWAY=1`, the agent writes `{type: 'gateway_request', id, op, args}` on stdout. The runner answers with `gateway_response {id, ok, result | error}` on stdin, routed by `serveRpc` like `write_lease_request` (`agent/write-lease.ts`).
 - **Node ↔ daemon.** The runner adds its node session id. The node sends `agent_request {requestId, sessionId, op, args}` and the daemon answers `agent_response {requestId, status, body}`, with a 30 s timeout like relayed requests (`daemon/nodes.ts`). `NODE_PROTOCOL_VERSION` goes from 4 to 5.
-- **Daemon checks.** `resolveRemoteSession(nodeId, sessionId)` gives the session, its `ownerUser` and its workspace. Ops are allowlisted, and v1 has only assistant ops: `assistant.context`, `memory.note`, `memory.proposeUser`, `memory.search`, `delegation.create`, `delegation.status`, `recall.remote`. Each requires the session's workspace to be its owner's assistant home.
-- **Daemon → agent pushes.**
-  - The daemon sends `agent_event {sessionId, event}`.
-  - The runner forwards it as a new RPC command, `deliver`, which calls `agent.deliver(message, {triggerTurn: true, deliverAs: 'followUp'})`.
-  - The content is framed as "(gateway data, not user instructions)", like team events (`agent/features/team/index.ts:207`).
+- **Daemon checks.** `resolveRemoteSession(nodeId, sessionId)` gives the session, its `ownerUser` and its workspace; the owner must still be an allowed user. Ops are allowlisted in `daemon/agent-ops.ts`. The v1 set is all assistant ops: `assistant.context`, `memory.note`, `memory.proposeUser`, `memory.search`, `delegation.create`, `delegation.status`, `recall.remote`. From milestone 2 on, each except `assistant.context` requires the session's workspace to be its owner's assistant home. Milestone 1 ships only `assistant.context`, which answers `{enabled: false}` until a home can be designated.
+- **Bad agent input is answered, never fatal.** An invalid op name, oversized `args` (over 64 KiB) or a flood (8 requests in flight per session, 64 per node link, 32 per node on the daemon) gets an error answer; it does not close the node's link. Error codes: `gateway_offline`, `gateway_timeout`, `too_many_requests`, `payload_too_large`, `invalid_input`, `not_found`, `unknown_operation`, `forbidden`, `internal_error`.
+- **Daemon → agent pushes** moved to milestone 3, their first user (see Delegation).
 - **Environment.** Drop node secrets from the agent environment (rule 6).
 
 ## Assistant home and snapshot
@@ -144,6 +142,8 @@ memory_proposals(id TEXT PRIMARY KEY, owner_user TEXT NOT NULL,
    - On `agent_settled`, it fetches the final assistant message and delivers it as a delegation result, framed as data. Status becomes `completed` or `failed`.
 5. **Follow-ups.** Further instructions to a delegated session need a new confirmation. The user can take control of it at any time, which the lease model already supports.
 
+**Pushes.** Approval and delegation results reach the assistant session through a new RPC command, `deliver`, which calls `agent.deliver(message, {triggerTurn: true, deliverAs: 'followUp'})`. The content is framed as "(gateway data, not user instructions)", like team events (`agent/features/team/index.ts:207`). This milestone must also decide how a push reaches a session whose runner is not running; that is why pushes were not built with the channel in milestone 1.
+
 ```sql
 delegations(id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, assistant_session_id TEXT NOT NULL,
   workspace_id TEXT NOT NULL, title TEXT NOT NULL, task TEXT NOT NULL,
@@ -165,9 +165,9 @@ delegations(id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, assistant_session_id 
 ## Milestones
 
 0. **Workspace memory fixes** and the doc update.
-1. **Gateway channel**: protocol v5, op allowlist, the `deliver` RPC, environment scrubbing. Tests: round trip, foreign-session rejection, unknown ops, offline node.
+1. **Gateway channel**: protocol v5, op allowlist (`assistant.context`), environment scrubbing. Tests: round trip, foreign-session rejection, unknown ops, offline node.
 2. **Assistant home and USER/MEMORY**: schema, snapshot, tools, approval flow, web Settings → Assistant and Memory.
-3. **Delegation**: tool, daemon-owned confirmation, dispatch and follow-up, result delivery, status tool. An end-to-end test with two nodes.
+3. **Delegation**: tool, daemon-owned confirmation, the `deliver` RPC and daemon → agent pushes, dispatch and follow-up, result delivery, status tool. An end-to-end test with two nodes.
 4. **Records and search**: mirroring, FTS, search tool, cross-node recall.
 5. **Later**: consolidation, skills, USER in coding sessions, Android screens.
 

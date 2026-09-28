@@ -8,6 +8,7 @@ import { TEAM_TOOL_NAMES } from './features/team/index.js';
 import { RpcUi, serveRpc, stdinLines } from './rpc.js';
 import { SessionStore } from './session-store.js';
 import { builtinTools } from './tools/index.js';
+import { nodeGateway } from './gateway.js';
 import { nodeWriteBroker, processWriteLease } from './write-lease.js';
 
 /**
@@ -91,6 +92,7 @@ export async function runAgent(argv: string[]): Promise<void> {
   const shutdown = async () => {
     ui.cancelAll();
     nodeWriteBroker().closeAll();
+    nodeGateway().closeAll();
     await agent.shutdown();
     process.exit(0);
   };

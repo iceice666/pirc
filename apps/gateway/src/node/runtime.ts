@@ -18,6 +18,7 @@ import {
   type NodeHttpResponse,
   type NodeToDaemon,
 } from '../protocol.js';
+import { DaemonAgentGateway } from './agent-gateway.js';
 import { buildNodeApp } from './app.js';
 import { startNodeInference } from './inference.js';
 import {
@@ -56,10 +57,17 @@ const daemonMessage = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('terminal_input'), streamId: z.string(), message: z.unknown() }),
   z.object({ type: z.literal('terminal_close'), streamId: z.string() }),
+  z.object({
+    type: z.literal('agent_response'),
+    requestId: z.string().min(1).max(100),
+    status: z.number().int(),
+    body: z.unknown().optional(),
+  }),
 ]);
 
 export async function startNode(config: NodeConfig): Promise<{ close: () => Promise<void> }> {
-  const { app, services } = await buildNodeApp(config);
+  const gateway = new DaemonAgentGateway();
+  const { app, services } = await buildNodeApp(config, { gateway });
   try {
     const legacy = legacyModelKeys();
     if (legacy.length)
@@ -84,6 +92,14 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
 
   const send = (message: NodeToDaemon) => {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+  };
+  /** Agent requests go out only on a registered link; false tells the gateway to answer offline. */
+  const sendAgentFrame = (message: NodeToDaemon): boolean => {
+    if (!registered || socket?.readyState !== WebSocket.OPEN) return false;
+    const frame = JSON.stringify(message);
+    if (Buffer.byteLength(frame) > NODE_FRAME_MAX_BYTES) return false;
+    socket.send(frame);
+    return true;
   };
   const inference = await startNodeInference({
     stateDir: config.stateDir,
@@ -203,6 +219,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       const message = parsed.data;
       if (message.type === 'registered') {
         registered = true;
+        gateway.connect(sendAgentFrame);
         services.models.set({ ...message.models, inference: inference.config });
         app.log.info(
           { daemon: config.daemonUrl, providers: Object.keys(message.models.providers) },
@@ -245,12 +262,16 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
           terminals.get(message.streamId)?.detach();
           terminals.delete(message.streamId);
           return;
+        case 'agent_response':
+          gateway.receive(message);
+          return;
       }
     });
     connection.on('error', (error) => app.log.warn({ error }, 'node transport failure'));
     connection.on('close', (code, reason) => {
       if (socket !== connection) return;
       registered = false;
+      gateway.disconnect();
       inference.disconnect();
       closeTerminals();
       if (heartbeat) clearInterval(heartbeat);
@@ -270,6 +291,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       if (heartbeat) clearInterval(heartbeat);
       unsubscribeEvents();
       closeTerminals();
+      gateway.disconnect();
       await inference.close();
       socket?.terminate();
       await app.close();

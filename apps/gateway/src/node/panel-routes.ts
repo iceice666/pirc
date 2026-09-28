@@ -28,6 +28,7 @@ import {
 } from './inspect.js';
 import type { BranchCache } from './branch-cache.js';
 import type { RunnerManager } from './runner.js';
+import { withoutSecrets } from './secrets.js';
 import { TerminalManager } from './terminals.js';
 
 const flag = z
@@ -38,9 +39,6 @@ const leaseBody = z.object({
   clientId: z.string().min(1).max(200),
   generation: z.number().int().positive(),
 });
-
-/** Environment secrets the node holds that a user shell has no business seeing. */
-const SECRET_ENV = /^(PIRC_NODE_TOKENS?|PIRC_.*SECRET.*)$/;
 
 export interface PanelContext {
   config: NodeConfig;
@@ -83,10 +81,7 @@ export function registerPanelRoutes(
   ctx: PanelContext,
 ): { terminals: TerminalManager; terminalStreams: TerminalStreams } {
   const { config, db, runners, models, branches: branchCache, claim } = ctx;
-  const terminals = new TerminalManager(
-    () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !SECRET_ENV.test(key))),
-    config.terminalShell,
-  );
+  const terminals = new TerminalManager(() => withoutSecrets(process.env), config.terminalShell);
 
   const local = <T>(
     handler: (

@@ -4,9 +4,14 @@ import { z } from 'zod';
 import { NODE_ID_PATTERN } from '../config.js';
 import { ApiError } from '../errors.js';
 import {
+  AGENT_OP_MAX_LENGTH,
+  AGENT_OP_PATTERN,
+  AGENT_REQUEST_MAX_BYTES,
   NODE_FRAME_MAX_BYTES,
   NODE_PROTOCOL_VERSION,
   PROTOCOL_MISMATCH_CLOSE,
+  agentError,
+  type AgentAnswer,
   type DaemonToNode,
   type NodeHttpRequest,
   type NodeHttpResponse,
@@ -27,6 +32,8 @@ import {
 
 const MAX_PENDING_REQUESTS = 100;
 const MAX_TERMINAL_STREAMS = 64;
+/** Agent requests the daemon works on at once for one node. */
+const MAX_AGENT_REQUESTS = 32;
 const REQUEST_TIMEOUT_MS = 30_000;
 
 const registration = z.object({
@@ -58,6 +65,14 @@ const nodeMessage = z.discriminatedUnion('type', [
     type: z.literal('event'),
     sessionId: z.string(),
     event: z.record(z.unknown()),
+  }),
+  z.object({
+    type: z.literal('agent_request'),
+    requestId: z.string().min(1).max(100),
+    sessionId: z.string().min(1).max(200),
+    // Checked by the handler: an agent chose it, so a bad one gets an answer, not a closed link.
+    op: z.string().max(1000),
+    args: z.unknown().optional(),
   }),
   z.object({ type: z.literal('terminal_frame'), streamId: z.string(), frame: z.unknown() }),
   z.object({
@@ -128,6 +143,12 @@ export class NodeRegistry {
   onDisconnect?: (nodeId: string) => void;
   onRegister?: (node: ConnectedNode) => void;
   resolveSession?: (nodeId: string, remoteSessionId: string) => string | undefined;
+  /** Answers an agent's request that its node forwarded (see protocol.ts). */
+  onAgentRequest?: (
+    nodeId: string,
+    request: { sessionId: string; op: string; args: unknown },
+  ) => Promise<AgentAnswer>;
+  private readonly agentRequests = new Map<string, number>();
 
   constructor(private readonly models: ModelStore) {}
 
@@ -306,6 +327,9 @@ export class NodeRegistry {
           if (sessionId) this.onEvent?.(nodeId, sessionId, current.event);
           return;
         }
+        case 'agent_request':
+          this.answerAgent(nodeId, socket, current);
+          return;
         case 'terminal_frame': {
           const stream = this.streams.get(current.streamId);
           if (stream?.nodeId === nodeId) stream.handlers.onFrame(current.frame);
@@ -327,6 +351,51 @@ export class NodeRegistry {
         this.onDisconnect?.(nodeId);
       }
     });
+  }
+
+  /**
+   * The op and args come from an agent, so a bad value is answered with an
+   * error rather than treated as a protocol violation that closes the link.
+   */
+  private answerAgent(
+    nodeId: string,
+    socket: WebSocket,
+    message: { requestId: string; sessionId: string; op: string; args?: unknown },
+  ): void {
+    const reply = ({ status, body }: AgentAnswer) => {
+      if (socket.readyState === socket.OPEN)
+        this.send(socket, { type: 'agent_response', requestId: message.requestId, status, body });
+    };
+    const inFlight = this.agentRequests.get(nodeId) ?? 0;
+    if (inFlight >= MAX_AGENT_REQUESTS)
+      return reply(
+        agentError(
+          429,
+          'too_many_requests',
+          'Too many gateway requests are in flight for this node',
+        ),
+      );
+    if (message.op.length > AGENT_OP_MAX_LENGTH || !AGENT_OP_PATTERN.test(message.op))
+      return reply(
+        agentError(400, 'invalid_input', 'A gateway operation is named like area.action'),
+      );
+    const args = message.args ?? {};
+    if (Buffer.byteLength(JSON.stringify(args)) > AGENT_REQUEST_MAX_BYTES)
+      return reply(agentError(413, 'payload_too_large', 'Gateway request arguments are too large'));
+    const handler = this.onAgentRequest;
+    if (!handler)
+      return reply(
+        agentError(404, 'unknown_operation', `Unknown gateway operation: ${message.op}`),
+      );
+    this.agentRequests.set(nodeId, inFlight + 1);
+    void handler(nodeId, { sessionId: message.sessionId, op: message.op, args })
+      .catch(() => agentError(500, 'internal_error', 'The gateway operation failed'))
+      .then((answer) => {
+        const left = (this.agentRequests.get(nodeId) ?? 1) - 1;
+        if (left > 0) this.agentRequests.set(nodeId, left);
+        else this.agentRequests.delete(nodeId);
+        reply(answer);
+      });
   }
 
   private cancelInference(nodeId: string, requestId: string): void {

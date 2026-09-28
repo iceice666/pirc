@@ -55,6 +55,11 @@ let configured = false;
 // `write <path>` / `hold <path>` prompts ask the node's write broker for a
 // lease, like a file tool would; `hold` keeps the run open until abort.
 const leases = new Map();
+// `gateway <op> [json args]` asks the gateway through the node, like a feature would.
+const gatewayCalls = new Map();
+let gatewayCount = 0;
+const reply = (text) =>
+  settle({ role: 'assistant', content: [{ type: 'text', text }], stopReason: 'stop' });
 const settle = (message) => {
   messages.push(message);
   persist(message);
@@ -149,6 +154,30 @@ rl.on('line', (raw) => {
       line({ type: 'write_lease_request', id, path: lease[2] });
       return;
     }
+    const gateway = /^gateway (\S+)(?: (.+))?$/s.exec(command.message);
+    if (gateway) {
+      const id = `gateway-${++gatewayCount}`;
+      gatewayCalls.set(id, (answer) =>
+        reply(
+          answer.ok
+            ? `gateway:ok ${JSON.stringify(answer.result)}`
+            : `gateway:error ${JSON.stringify(answer.error)}`,
+        ),
+      );
+      line({
+        type: 'gateway_request',
+        id,
+        op: gateway[1],
+        args: gateway[2] ? JSON.parse(gateway[2]) : {},
+      });
+      return;
+    }
+    // `env <NAME>` reports what the node put in this agent's environment.
+    const env = /^env (\S+)$/.exec(command.message);
+    if (env) {
+      const value = process.env[env[1]];
+      return reply(value === undefined ? `env:${env[1]} unset` : `env:${env[1]}=${value}`);
+    }
     line({ type: 'message_start', message: { role: 'assistant', content: [] } });
     const utf8 = Buffer.from(
       JSON.stringify({
@@ -190,5 +219,10 @@ rl.on('line', (raw) => {
   }
   if (command.type === 'extension_ui_response') return;
   if (command.type === 'write_lease_response') return leases.get(command.id)?.(command);
+  if (command.type === 'gateway_response') {
+    const done = gatewayCalls.get(command.id);
+    gatewayCalls.delete(command.id);
+    return done?.(command);
+  }
   response(false, undefined, 'unsupported');
 });

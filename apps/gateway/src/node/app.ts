@@ -22,6 +22,7 @@ import type { CommandPayload, Snapshot } from '../types.js';
 import { id, parse, payloadHash } from '../util.js';
 import { loadAgentConfig, sessionSettings } from '../agent/config.js';
 import { historyOf } from '../agent/session-store.js';
+import { offlineGateway, type AgentGateway } from './agent-gateway.js';
 import { BranchCache } from './branch-cache.js';
 import { WriteBroker } from './write-broker.js';
 import { registerPanelRoutes, type TerminalStreams } from './panel-routes.js';
@@ -116,6 +117,8 @@ export interface NodeServices {
 
 export async function buildNodeApp(
   config: NodeConfig,
+  /** The daemon link agents reach the gateway through; offline without one. */
+  options: { gateway?: AgentGateway } = {},
 ): Promise<{ app: FastifyInstance; services: NodeServices }> {
   const app = Fastify({ logger: true, bodyLimit: config.uploadMaxBytes });
   registerImageParsers(app, config.uploadMaxBytes);
@@ -127,7 +130,14 @@ export async function buildNodeApp(
   const writes = new WriteBroker();
   // Filled by the daemon on registration; agents started before that get no providers.
   const models = new ModelStore();
-  const runners = new RunnerManager(config, db, events, writes, models);
+  const runners = new RunnerManager(
+    config,
+    db,
+    events,
+    writes,
+    models,
+    options.gateway ?? offlineGateway,
+  );
   const branches = new BranchCache();
   const claim = (request: FastifyRequest, sessionId = parse(sessionParams, request.params).id) =>
     db.claimSession(sessionId, request.identity!.user);

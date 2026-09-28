@@ -3,10 +3,13 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 
 import path from 'node:path';
 import type { NodeConfig } from '../config.js';
 import { configureLine, type ModelStore } from '../models.js';
+import { AGENT_OP_MAX_LENGTH, AGENT_OP_PATTERN, AGENT_REQUEST_MAX_BYTES } from '../protocol.js';
 import type { GatewayDatabase, SessionRow } from '../database.js';
 import { ApiError } from '../errors.js';
 import type { EventHub } from '../events.js';
 import { applySessionName } from '../session-name.js';
+import type { AgentGateway } from './agent-gateway.js';
+import { withoutSecrets } from './secrets.js';
 import type { WriteBroker } from './write-broker.js';
 import { emptyReducedState, reducePiEvent, type ReducedSessionState } from './reducer.js';
 import { JsonlParser } from './rpc-framing.js';
@@ -19,6 +22,8 @@ interface PendingRequest {
 }
 
 const dialogMethods = new Set(['select', 'confirm', 'input', 'editor']);
+/** Gateway requests one session may have in flight. */
+const MAX_GATEWAY_REQUESTS = 8;
 
 class PiRunner {
   readonly state: ReducedSessionState = emptyReducedState();
@@ -29,6 +34,7 @@ class PiRunner {
   private currentRunId: string | null = null;
   /** Error from the latest assistant turn; a later successful turn clears it. */
   private runError: string | null = null;
+  private gatewayRequests = 0;
 
   constructor(
     readonly session: SessionRow,
@@ -37,6 +43,7 @@ class PiRunner {
     private readonly events: EventHub,
     models: ModelStore,
     private readonly writes: WriteBroker,
+    private readonly gateway: AgentGateway,
     private readonly onExit: (runner: PiRunner) => void,
   ) {
     this.epoch = db.incrementEpoch(session.id);
@@ -54,10 +61,13 @@ class PiRunner {
       cwd: workspace.canonicalPath,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
-        ...process.env,
+        // The node token must not reach the agent: its tools and shells run whatever the model asks.
+        ...withoutSecrets(process.env),
         PI_CODING_AGENT_SESSION_DIR: session.privateSessionPath,
         // Ask this node for a write lease before file-tool writes.
         PIRC_WRITE_BROKER: '1',
+        // Allowlisted operations on the gateway go through this node (gateway_request).
+        PIRC_GATEWAY: '1',
         PIRC_WORKSPACE_MEMORY_DIR:
           process.env.PIRC_WORKSPACE_MEMORY_DIR ?? path.join(config.stateDir, 'workspace-memory'),
       },
@@ -150,6 +160,10 @@ class PiRunner {
     }
     if (message.type === 'write_lease_request') {
       this.grantWrite(message);
+      return;
+    }
+    if (message.type === 'gateway_request') {
+      this.forwardGateway(message);
       return;
     }
     if (message.type === 'session_name_changed') {
@@ -252,6 +266,50 @@ class PiRunner {
       );
   }
 
+  /**
+   * Pass the agent's `gateway_request` to the daemon. The runner names the
+   * session, so an agent can only ever act as its own session.
+   */
+  private forwardGateway(message: Record<string, any>): void {
+    if (typeof message.id !== 'string' || !message.id || message.id.length > 100) return;
+    const reply = (response: Record<string, unknown>) => {
+      if (!this.closed && this.child.stdin.writable)
+        this.child.stdin.write(
+          `${JSON.stringify({ type: 'gateway_response', id: message.id, ...response })}\n`,
+        );
+    };
+    const fail = (status: number, code: string, text: string) =>
+      reply({ ok: false, error: { status, code, message: text } });
+    const op = message.op;
+    if (typeof op !== 'string' || op.length > AGENT_OP_MAX_LENGTH || !AGENT_OP_PATTERN.test(op))
+      return fail(400, 'invalid_input', 'A gateway operation is named like area.action');
+    const args = message.args ?? {};
+    if (Buffer.byteLength(JSON.stringify(args)) > AGENT_REQUEST_MAX_BYTES)
+      return fail(413, 'payload_too_large', 'Gateway request arguments are too large');
+    if (this.gatewayRequests >= MAX_GATEWAY_REQUESTS)
+      return fail(429, 'too_many_requests', 'Too many gateway requests are in flight');
+    this.gatewayRequests++;
+    void this.gateway
+      .request(this.session.id, op, args)
+      .catch(() => ({ status: 500, body: null }))
+      .then(({ status, body }) => {
+        this.gatewayRequests--;
+        const answer = (body ?? {}) as {
+          result?: unknown;
+          error?: { code?: unknown; message?: unknown };
+        };
+        if (status >= 200 && status < 300)
+          return reply({ ok: true, result: answer.result ?? null });
+        fail(
+          status,
+          typeof answer.error?.code === 'string' ? answer.error.code : 'internal_error',
+          typeof answer.error?.message === 'string'
+            ? answer.error.message
+            : `The gateway answered ${status}`,
+        );
+      });
+  }
+
   setRun(runId: string): void {
     this.currentRunId = runId;
   }
@@ -317,6 +375,7 @@ export class RunnerManager {
     private readonly events: EventHub,
     private readonly writes: WriteBroker,
     private readonly models: ModelStore,
+    private readonly gateway: AgentGateway,
   ) {}
 
   /**
@@ -336,6 +395,7 @@ export class RunnerManager {
         this.events,
         this.models,
         this.writes,
+        this.gateway,
         (exited) => {
           if (this.runners.get(sessionId) === exited) this.runners.delete(sessionId);
           this.writes.release(sessionId);

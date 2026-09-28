@@ -9,13 +9,15 @@ A single-machine setup runs both on the same host; the node then reaches the gat
 
 `src/protocol.ts` describes the gateway↔node link. Both sides announce `NODE_PROTOCOL_VERSION`; on a mismatch the gateway closes the link with code 4426, so upgrade the gateway and nodes together.
 
+An agent reaches the gateway only through its node (`gateway_request` on the agent's stdout, `agent_request` on the link). The node names the session, so an agent can only act as its own session, and the gateway runs only the allowlisted operations in `src/daemon/agent-ops.ts`, for sessions of that node whose owner is still in `PIRC_ALLOWED_USERS`. Every request gets one answer: the gateway's, `gateway_offline`, or `gateway_timeout` after 30 s.
+
 ## Security model
 
 The gateway must listen only behind a trusted authenticated proxy. It accepts the configured identity header **only** when the TCP peer address exactly matches `PIRC_TRUSTED_PROXIES`, then checks that identity against `PIRC_ALLOWED_USERS`. Host and Origin comparisons are exact allowlist matches; mutating HTTP requests and every WebSocket upgrade with forward auth require an Origin.
 
 Native clients (the Android app) authenticate with a **device token** instead of forward auth. See [Device tokens](#device-tokens).
 
-Nodes authenticate to `/node/connect` with a per-node secret (`PIRC_NODE_TOKENS` on the gateway, `PIRC_NODE_TOKEN` on the node). That path must bypass the browser forward-auth, and the proxy must never hand node tokens to browsers. Each node checks the user of every relayed request against its own `PIRC_ALLOWED_USERS`, and sessions are visible only to the user who created them.
+Nodes authenticate to `/node/connect` with a per-node secret (`PIRC_NODE_TOKENS` on the gateway, `PIRC_NODE_TOKEN` on the node). That path must bypass the browser forward-auth, and the proxy must never hand node tokens to browsers. Each node checks the user of every relayed request against its own `PIRC_ALLOWED_USERS`, and sessions are visible only to the user who created them. Agents and side-panel shells that a node starts do not inherit `PIRC_NODE_TOKEN` (or any `PIRC_*SECRET*` variable). This keeps the token out of their output; it is not isolation, since they still run as the node's account, which can read the token file.
 
 Model credentials (API keys, subscription OAuth tokens) stay on the gateway, which runs every model request. A node forwards its agents' requests over its link and receives only streamed results and a secret-free model catalog. Agents reach the node through a Unix socket in the node's state directory (mode 0600, random per-start token), not a TCP port. Backend settings and logins are in `$PIRC_STATE_DIR/backends/settings.json` (0600); this is file-permission protection for a single-user deployment, not isolation from processes running as the same account.
 
