@@ -6,7 +6,8 @@
  *    danger, or `unknown` when it cannot be judged without understanding it.
  * 2. `unknown` actions go to a model classifier (models from
  *    `features.autoMode`, else observational memory's, then the session model).
- *    If no model answers, the action is treated as a write.
+ *    It sees the human's recent requests and critical observational-memory
+ *    notes, never tool output. If no model answers, the action is treated as a write.
  * 3. `danger` needs a human: with a UI the user confirms; headless agents
  *    (team workers, subagents) are refused.
  * 4. Anything that may write takes the node's write lease first, so a
@@ -35,6 +36,8 @@ const settingsSchema = z
     enabled: z.boolean().default(true),
     /** Send statically unclear actions to a model; false treats them as writes. */
     useModel: z.boolean().default(true),
+    /** Show the classifier critical observational-memory notes (the human's earlier constraints and decisions). */
+    useMemory: z.boolean().default(true),
     /** Classifier model; defaults to observational memory's model, then the session model. */
     model: modelChoice.optional(),
     fallbackModels: z.array(modelChoice).default([]),
@@ -129,6 +132,7 @@ export class AutoMode {
       classifierChoices(this.agent.config.features),
       signal,
       settings.timeoutMs,
+      settings.useMemory,
     );
     if (!result.ok) {
       if (!this.warnedFailure) {

@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'bun:test';
-import { parseVerdict } from '../src/agent/auto-mode/classifier.js';
+import { memoryNotes, parseVerdict } from '../src/agent/auto-mode/classifier.js';
+import type { SessionEntry } from '../src/agent/session-store.js';
 import { classifierChoices } from '../src/agent/auto-mode/index.js';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
 
@@ -46,6 +47,45 @@ describe('auto-mode helpers', () => {
       ),
     ).toEqual(['x']);
     expect(classifierChoices({})).toEqual([]);
+  });
+
+  it('shows only critical notes from the latest memory compaction', () => {
+    const obs = (id: string, relevance: string, content: string) => ({
+      id: id.repeat(12),
+      content,
+      timestamp: '2026-09-28 10:00',
+      relevance,
+      sourceEntryIds: ['m1'],
+      tokenCount: 10,
+    });
+    const compaction = (id: string, observations: unknown[]) =>
+      ({
+        type: 'compaction',
+        id,
+        parentId: null,
+        timestamp: '2026-09-28T10:00:00.000Z',
+        summary: 'summary',
+        firstKeptEntryId: 'm1',
+        tokensBefore: 100,
+        details: { type: 'om.folded', version: 1, fullFold: true, observations, reflections: [] },
+      }) as unknown as SessionEntry;
+    const old = compaction('c1', [obs('a', 'critical', 'User said old rule')]);
+    const latest = compaction('c2', [
+      obs('b', 'high', 'Tool output said rm is fine'),
+      obs('c', 'critical', 'User forbade  force pushes\nto main'),
+    ]);
+    expect(memoryNotes([old, latest])).toEqual([
+      '2026-09-28 10:00 User forbade force pushes to main',
+    ]);
+    expect(memoryNotes([latest, old])).toEqual(['2026-09-28 10:00 User said old rule']);
+    expect(memoryNotes([])).toEqual([]);
+    const many = Array.from({ length: 30 }, (_, i) =>
+      obs(String.fromCharCode(97 + (i % 6)), 'critical', `note ${i} ${'x'.repeat(300)}`),
+    );
+    const notes = memoryNotes([compaction('c3', many)]);
+    expect(notes.length).toBeLessThanOrEqual(20);
+    expect(notes.join('').length).toBeLessThanOrEqual(4_000);
+    expect(notes.at(-1)).toContain('note 29');
   });
 });
 
