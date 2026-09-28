@@ -187,9 +187,12 @@
       <div class="attachment-strip" role="group" aria-label="Attachments">
         {#each attachments as attachment (attachment.id)}
           <div class="attachment-preview">
-            {#if attachment.preview}<img src={attachment.preview} alt="" />{:else if attachment.kind === 'file'}<FileIcon
+            {#if attachment.preview}<img
+                src={attachment.preview}
+                alt=""
+              />{:else if attachment.kind === 'file'}<FileIcon size={22} />{:else}<Image
                 size={22}
-              />{:else}<Image size={22} />{/if}
+              />{/if}
             <span>{attachment.uploading ? 'Uploading…' : attachment.name}</span>
             {#if attachment.uploading}<LoaderCircle class="spin" size={15} />{:else}<button
                 class="touch-target"
