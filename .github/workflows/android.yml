@@ -1,0 +1,69 @@
+name: Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/android/**
+      - fixtures/**
+      - apps/web/package.json
+      - bun.lock
+      - .github/workflows/android.yml
+  pull_request:
+    paths:
+      - apps/android/**
+      - fixtures/**
+      - apps/web/package.json
+      - bun.lock
+      - .github/workflows/android.yml
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    name: Unit tests and debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # The terminal bundles xterm.js from the web client's pinned dependencies.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Accepts the SDK licenses so the Android Gradle plugin can fetch the
+      # platform and build tools it needs.
+      - uses: android-actions/setup-android@v4
+
+      # Caches Gradle and validates the committed wrapper.
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Unit tests and debug build
+        working-directory: apps/android
+        run: ./gradlew --no-configuration-cache testDebugUnitTest assembleDebug
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: unit-test-reports
+          path: apps/android/app/build/reports/tests/
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pirc-android-debug
+          path: apps/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
