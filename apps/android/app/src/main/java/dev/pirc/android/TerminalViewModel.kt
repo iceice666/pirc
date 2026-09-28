@@ -1,5 +1,6 @@
 package dev.pirc.android
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.pirc.android.core.ApiException
@@ -26,6 +27,9 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
+
+/** Logcat tag for terminal diagnostics: `adb logcat -s PircTerminal`. */
+const val TERMINAL_LOG = "PircTerminal"
 
 /** Ctrl+[text] for a letter or one of @[\]^_ (the C0 control codes); anything else unchanged. */
 fun controlKey(text: String): String {
@@ -127,10 +131,19 @@ class TerminalViewModel(
     private fun connect() {
         retry?.cancel()
         val request = api.terminalRequest(sessionId, terminalId)
+        Log.d(TERMINAL_LOG, "connect $terminalId (attempt $attempts)")
         socket = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                Log.d(TERMINAL_LOG, "open $terminalId: HTTP ${response.code}")
+            }
+
             override fun onMessage(webSocket: WebSocket, text: String) {
                 if (webSocket !== socket) return
-                val message = runCatching { PircJson.parseToJsonElement(text) }.getOrNull() ?: return
+                val message = runCatching { PircJson.parseToJsonElement(text) }.getOrElse { error ->
+                    Log.w(TERMINAL_LOG, "unparseable frame (${text.length} chars)", error)
+                    return
+                }
+                if (message["type"].string != "output") Log.d(TERMINAL_LOG, "frame ${message["type"].string} ${text.length} chars")
                 when (message["type"].string) {
                     "ready" -> {
                         attempts = 0
@@ -145,14 +158,22 @@ class TerminalViewModel(
                         val code = message["exitCode"].number
                         draw(TerminalFrame.Write("\r\n\u001b[2m[process exited${code?.let { " with code $it" } ?: ""}]\u001b[0m\r\n"))
                     }
-                    "error" -> if (message["code"].string == "lost_control") _notice.value = "Take control of the session to type here."
+                    "error" -> _notice.value = when (message["code"].string) {
+                        "lost_control" -> "Take control of the session to type here."
+                        else -> message["message"].string ?: "The terminal rejected the input."
+                    }
                 }
             }
 
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = ended(webSocket, code)
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                Log.d(TERMINAL_LOG, "closed $terminalId: $code $reason")
+                ended(webSocket, code)
+            }
 
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) =
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                Log.w(TERMINAL_LOG, "failure $terminalId: HTTP ${response?.code}", t)
                 ended(webSocket, if (response?.code == 401) 4401 else null)
+            }
         })
     }
 
@@ -181,21 +202,26 @@ class TerminalViewModel(
 
     private fun send(type: String, block: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit): Boolean {
         val generation = control.generation ?: run {
+            Log.d(TERMINAL_LOG, "send $type dropped: no control lease")
             _notice.value = "Take control of the session to type here."
             return false
         }
-        val socket = socket ?: return false
-        return socket.send(
-            PircJson.encodeToString(
-                kotlinx.serialization.json.JsonObject.serializer(),
-                buildJsonObject {
-                    put("type", type)
-                    block()
-                    put("clientId", clientId)
-                    put("generation", generation)
-                },
-            ),
+        val socket = socket ?: run {
+            Log.d(TERMINAL_LOG, "send $type dropped: no socket")
+            return false
+        }
+        val text = PircJson.encodeToString(
+            kotlinx.serialization.json.JsonObject.serializer(),
+            buildJsonObject {
+                put("type", type)
+                block()
+                put("clientId", clientId)
+                put("generation", generation)
+            },
         )
+        val queued = socket.send(text)
+        if (!queued || type != "input") Log.d(TERMINAL_LOG, "send $type queued=$queued")
+        return queued
     }
 
     fun input(data: String) {

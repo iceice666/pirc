@@ -19,9 +19,13 @@
         height: 100%;
         overflow: hidden;
       }
+      /* Sized from the script: on some WebViews an absolutely positioned box
+         against the initial containing block resolves to zero height. */
       #terminal {
         position: absolute;
-        inset: 6px 4px 4px 8px;
+        top: 6px;
+        left: 8px;
+        overflow: hidden;
       }
     </style>
   </head>
@@ -30,6 +34,9 @@
     <script src="xterm.js"></script>
     <script src="addon-fit.js"></script>
     <script>
+      // Diagnostics reach logcat through the app's WebChromeClient.
+      const log = (...parts) => console.log('[pirc-term]', ...parts);
+      window.onerror = (message, source, line) => log('error', message, source, line);
       const settings = JSON.parse(Pirc.settings());
       document.body.style.background = settings.theme.background;
       const term = new Terminal({
@@ -45,24 +52,44 @@
       term.open(document.getElementById('terminal'));
       term.onData((data) => Pirc.input(data));
       let size = '';
+      const container = document.getElementById('terminal');
+      const state = () => {
+        const buffer = term.buffer.active;
+        const box = container.getBoundingClientRect();
+        return (
+          `grid=${term.cols}x${term.rows} viewportY=${buffer.viewportY} baseY=${buffer.baseY} ` +
+          `cursor=${buffer.cursorX},${buffer.cursorY} box=${Math.round(box.width)}x${Math.round(box.height)} ` +
+          `window=${window.innerWidth}x${window.innerHeight} dpr=${window.devicePixelRatio}`
+        );
+      };
+      const layout = () => {
+        container.style.width = Math.max(0, window.innerWidth - 8 - 4) + 'px';
+        container.style.height = Math.max(0, window.innerHeight - 6 - 4) + 'px';
+      };
       const resize = () => {
+        layout();
         try {
           fit.fit();
-        } catch {
+        } catch (error) {
+          log('fit failed', String(error));
           return;
         }
         const next = term.cols + 'x' + term.rows;
         if (next === size) return;
         size = next;
+        log('resize', state());
         Pirc.resize(term.cols, term.rows);
       };
-      new ResizeObserver(resize).observe(document.getElementById('terminal'));
+      window.addEventListener('resize', resize);
+      new ResizeObserver(resize).observe(container);
       window.pirc = {
         write: (data) => term.write(data),
         reset: (data) => {
           term.reset();
-          term.write(data);
+          term.write(data, () => log('reset', data.length, 'chars', state()));
         },
+        // Called when the user types: xterm only does this itself for keys it handles.
+        scrollToBottom: () => term.scrollToBottom(),
         focus: () => term.focus(),
         fontSize: (value) => {
           term.options.fontSize = value;
@@ -74,6 +101,7 @@
         },
       };
       resize();
+      log('ready', state());
       Pirc.ready();
     </script>
   </body>

@@ -1,7 +1,11 @@
 package dev.pirc.android.ui.panels
 
 import android.annotation.SuppressLint
+import android.content.pm.ApplicationInfo
+import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -48,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.pirc.android.TERMINAL_LOG
 import dev.pirc.android.TerminalFrame
 import dev.pirc.android.TerminalViewModel
 import dev.pirc.android.controlKey
@@ -67,7 +72,7 @@ private fun Color.css() = String.format("#%06X", toArgb() and 0xFFFFFF)
 
 /** Keys a phone keyboard lacks, as the bytes a terminal expects. */
 private val KEYS = listOf(
-    "Esc" to "\u001b", "Tab" to "\t", "↑" to "\u001b[A", "↓" to "\u001b[B", "←" to "\u001b[D", "→" to "\u001b[C",
+    "Esc" to "\u001b", "Tab" to "\t", "⏎" to "\r", "↑" to "\u001b[A", "↓" to "\u001b[B", "←" to "\u001b[D", "→" to "\u001b[C",
     "|" to "|", "~" to "~", "/" to "/", "-" to "-", "Home" to "\u001b[H", "End" to "\u001b[F",
 )
 
@@ -117,9 +122,12 @@ fun TerminalScreen(
     }
     val currentSettings by rememberUpdatedState(pageSettings)
 
+    // Typing reads as "show me the prompt": xterm only scrolls down by itself
+    // for keys it handles, and ours never reach it.
     fun type(text: String) {
         viewModel.input(if (ctrl) controlKey(text) else text)
         ctrl = false
+        web?.evaluateJavascript("pirc.scrollToBottom()", null)
     }
 
     Scaffold(
@@ -158,6 +166,7 @@ fun TerminalScreen(
                         TerminalInputView(context) { data ->
                             viewModel.input(if (currentCtrl) controlKey(data) else data)
                             if (currentCtrl) ctrl = false
+                            web?.evaluateJavascript("pirc.scrollToBottom()", null)
                         }.also { keyboard = it }
                     },
                 )
@@ -178,9 +187,20 @@ fun TerminalScreen(
                             settings.allowFileAccess = false
                             settings.allowContentAccess = false
                             setBackgroundColor(colors.surface.toArgb())
+                            // Debug builds: the page is inspectable from chrome://inspect over adb.
+                            if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                                WebView.setWebContentsDebuggingEnabled(true)
+                            }
                             webViewClient = object : WebViewClient() {
                                 // Only the bundled page: never navigate anywhere else.
                                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = true
+                            }
+                            webChromeClient = object : WebChromeClient() {
+                                // The page's console (xterm state, JS errors) next to the socket log.
+                                override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                                    Log.d(TERMINAL_LOG, "page: ${message.message()} (${message.sourceId()}:${message.lineNumber()})")
+                                    return true
+                                }
                             }
                             addJavascriptInterface(
                                 object {
