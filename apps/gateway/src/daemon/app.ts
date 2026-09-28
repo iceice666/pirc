@@ -148,10 +148,23 @@ export async function buildDaemonApp(
       : () => {};
   };
 
+  /**
+   * Browsers refresh their node and workspace lists when a node connects or
+   * leaves or a workspace is added. Sent outside the session's sequence (not
+   * replayed: a client that reconnects reloads the lists anyway), and only on
+   * event sockets that ask for it with `directory=1`, so clients that treat
+   * an unknown event as a reset are unaffected.
+   */
+  const directoryListeners = new Set<() => void>();
+  const directoryChanged = () => {
+    for (const listener of directoryListeners) listener();
+  };
+
   // ---- node link ------------------------------------------------------------
 
   nodes.onRegister = (node) => {
     db.syncRemoteWorkspaces(node.id, node.workspaces);
+    directoryChanged();
     for (const sessionId of db.remoteSessionIds(node.id)) {
       const epoch = db.incrementEpoch(sessionId);
       events.publish(sessionId, epoch, 'node_reconnected', { nodeId: node.id });
@@ -182,6 +195,7 @@ export async function buildDaemonApp(
       db.setRunnerState(sessionId, 'failed');
       events.publish(sessionId, db.getSession(sessionId).runnerEpoch, 'node_offline', { nodeId });
     }
+    directoryChanged();
   };
 
   /** The session, if the user owns it, together with its node. */
@@ -273,6 +287,7 @@ export async function buildDaemonApp(
     // A lost acknowledgement is reconciled when the node registers again.
     db.syncRemoteWorkspaces(body.nodeId, [remote.workspace]);
     nodes.addWorkspace(body.nodeId, remote.workspace);
+    directoryChanged();
     return reply.status(201).send({
       workspace: {
         ...db.getWorkspace(`${body.nodeId}:${remote.workspace.id}`),
@@ -502,7 +517,11 @@ export async function buildDaemonApp(
     try {
       validateRequest(request, config, devices, true);
       const query = parse(
-        z.object({ sessionId: z.string().min(1), cursor: z.string().optional() }),
+        z.object({
+          sessionId: z.string().min(1),
+          cursor: z.string().optional(),
+          directory: z.literal('1').optional(),
+        }),
         request.query,
       );
       const session = claim(request, query.sessionId);
@@ -530,9 +549,12 @@ export async function buildDaemonApp(
         });
       else for (const event of replay.events) send(event);
       const unsubscribe = events.subscribe(session.id, send);
+      const onDirectory = () => send({ type: 'directory_changed' });
+      if (query.directory) directoryListeners.add(onDirectory);
       const untrack = trackDevice(request, socket);
       const done = () => {
         unsubscribe();
+        directoryListeners.delete(onDirectory);
         untrack();
       };
       socket.once('close', done);

@@ -259,10 +259,11 @@
     if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 3000 });
     else setTimeout(warm, 1000);
     /*
-     * Visible: renew the lease every 10 s and refresh the device list every
-     * 15 s. Hidden: the device list pauses, and the lease is only renewed as
-     * often as it must be to survive (half its 30 s TTL), so a background tab
-     * keeps control without polling at full rate. Both catch up on return.
+     * Visible: renew the lease every 10 s. Node and workspace changes arrive
+     * over the event stream; a slow 60 s refresh is only a fallback. Hidden:
+     * the list refresh pauses, and the lease is only renewed as often as it
+     * must be to survive (half its 30 s TTL), so a background tab keeps
+     * control without polling at full rate. Both catch up on return.
      */
     let leaseHeartbeat: ReturnType<typeof setInterval> | undefined;
     let nodeRefresh: ReturnType<typeof setInterval> | undefined;
@@ -271,7 +272,7 @@
       clearInterval(nodeRefresh);
       const visible = document.visibilityState === 'visible';
       leaseHeartbeat = setInterval(() => void app.refreshControl(), visible ? 10_000 : 15_000);
-      nodeRefresh = visible ? setInterval(() => void app.refreshNodes(), 15_000) : undefined;
+      nodeRefresh = visible ? setInterval(() => void app.refreshNodes(), 60_000) : undefined;
     };
     schedule();
     // Background tabs and suspended mobile pages skip heartbeats; catch up at once.
@@ -284,7 +285,7 @@
         app.flushDraft();
       }
     };
-    const onOnline = () => void app.refreshControl();
+    const onOnline = () => app.retryBootstrap() || void app.refreshControl();
     const onPageHide = () => app.flushDraft();
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('online', onOnline);
@@ -527,7 +528,7 @@
 {#if updateRegistration}
   <div class="update-toast" role="status">
     <Download size={18} />
-    <div><strong>Update ready</strong><span>Apply it when your draft is safe.</span></div>
+    <div><strong>Update ready</strong><span>The page reloads; your draft is kept.</span></div>
     <button
       type="button"
       onclick={() => {

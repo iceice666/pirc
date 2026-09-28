@@ -555,6 +555,12 @@ export function connectEvents(options: {
   cursor?: string;
   onEvent: (envelope: EventEnvelope) => void;
   onState: (state: 'connected' | 'reconnecting' | 'offline') => void;
+  /**
+   * A node connected or left, or a workspace was added: reload those lists.
+   * Subscribing adds `directory=1`; the gateway sends these outside the
+   * session's sequence, so they never move the cursor.
+   */
+  onDirectory?: () => void;
 }): EventConnection {
   let socket: WebSocket | undefined;
   let closed = false;
@@ -567,6 +573,7 @@ export function connectEvents(options: {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const query = new URLSearchParams({ sessionId: options.sessionId });
     if (cursor) query.set('cursor', cursor);
+    if (options.onDirectory) query.set('directory', '1');
     // Handlers act only for the current socket: a replaced socket's late
     // error/close must not close or reschedule its successor.
     const ws = new WebSocket(`${protocol}//${location.host}/api/events?${query}`);
@@ -579,7 +586,12 @@ export function connectEvents(options: {
     ws.addEventListener('message', (message) => {
       if (ws !== socket) return;
       try {
-        const envelope = normalizeEvent(JSON.parse(String(message.data)));
+        const raw = JSON.parse(String(message.data));
+        if (raw?.type === 'directory_changed') {
+          options.onDirectory?.();
+          return;
+        }
+        const envelope = normalizeEvent(raw);
         cursor = envelope.cursor;
         options.onEvent(envelope);
       } catch {

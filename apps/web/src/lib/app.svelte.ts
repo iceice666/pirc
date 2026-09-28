@@ -89,6 +89,8 @@ class AppState {
   #draftPending: { sessionId: string; value: string } | undefined;
   #snapshotAgain = false;
   #panelListeners = new Set<(signal: PanelSignal) => void>();
+  /** The start could not reach the gateway (e.g. an offline cold start from the cached shell). */
+  #bootstrapFailed = false;
   scroller: Scroller | undefined;
 
   get usingDemo() {
@@ -157,6 +159,8 @@ class AppState {
   async bootstrap() {
     this.clientId = getClientId();
     this.loading = true;
+    this.#bootstrapFailed = false;
+    this.pageError = '';
     try {
       [this.workspaces, this.sessions, this.models, this.nodes] = await Promise.all([
         api.workspaces(),
@@ -176,6 +180,7 @@ class AppState {
         this.models = demo.demoModels;
         this.activeSessionId = demo.demoSnapshot.session.id;
       } else {
+        this.#bootstrapFailed = true;
         this.pageError = message(error, 'Unable to connect to the gateway.');
       }
     }
@@ -195,11 +200,19 @@ class AppState {
     }
   }
 
+  /** Start again if the first start could not reach the gateway. Returns whether it did. */
+  retryBootstrap(): boolean {
+    if (!this.#bootstrapFailed || this.loading) return false;
+    void this.bootstrap();
+    return true;
+  }
+
   /**
    * Back in the foreground after `hiddenFor` ms: reconnect the event stream at
    * once, renew control, and reload what a suspended page may have missed.
    */
   resume(hiddenFor: number) {
+    if (this.retryBootstrap()) return;
     this.#events?.reconnectNow();
     void this.refreshControl();
     void this.refreshNodes();
@@ -233,13 +246,23 @@ class AppState {
       if (!demo) {
         void this.loadModels(id);
         void this.refreshControl();
+        let reconnecting = false;
         this.#events = connectEvents({
           sessionId: id,
           cursor: snapshot.cursor,
           onState: (state) => {
             if (seq !== this.#openSeq) return;
             this.connection = state;
-            if (state === 'connected') void this.refreshControl();
+            if (state !== 'connected') {
+              reconnecting = true;
+              return;
+            }
+            void this.refreshControl();
+            // Node changes while disconnected were not pushed.
+            if (reconnecting) void this.refreshNodes();
+          },
+          onDirectory: () => {
+            if (seq === this.#openSeq) void this.refreshNodes();
           },
           onEvent: (event) => {
             const current = this.sessionState;
