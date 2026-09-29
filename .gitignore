@@ -17,3 +17,6 @@ test-results/
 
 # Local deployment notes (host-specific)
 DEPLOY.md
+
+# Per-workspace agent runtime data (uploads, screenshots, recordings)
+.pirc/
