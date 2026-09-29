@@ -87,7 +87,13 @@ function interaction(raw: any): PendingInteraction {
           : {}),
       })),
     };
-  if (raw.kind === 'confirm') return { ...base, kind: 'confirm' };
+  if (raw.kind === 'confirm')
+    return {
+      ...base,
+      kind: 'confirm',
+      ...(typeof request.confirmLabel === 'string' ? { confirmLabel: request.confirmLabel } : {}),
+      ...(typeof request.cancelLabel === 'string' ? { cancelLabel: request.cancelLabel } : {}),
+    };
   if (raw.kind === 'editor')
     return { ...base, kind: 'editor', initialValue: request.prefill ?? '' };
   return { ...base, kind: 'input', placeholder: request.placeholder };

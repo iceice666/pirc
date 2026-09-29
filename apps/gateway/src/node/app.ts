@@ -81,6 +81,14 @@ const commandBody = z.object({
   generation: z.number().int().positive(),
   payload: commandPayload,
 });
+/** What the gateway may push into a session (see the deliver route). */
+const deliverBody = z
+  .object({
+    customType: z.enum(['assistant-delegation', 'assistant-delegation-update']),
+    content: z.string().min(1).max(100_000),
+    details: z.record(z.unknown()).optional(),
+  })
+  .strict();
 const answerBody = z.object({
   clientId: z.string().min(1),
   generation: z.number().int().positive(),
@@ -278,6 +286,19 @@ export async function buildNodeApp(
       partialOutputLost: session.partialOutputLost,
     };
     return snapshot;
+  });
+
+  /**
+   * The gateway pushes a message into a session: a delegated task, or news of
+   * a delegation for the chat that asked (plans/assistant.md). The daemon
+   * never relays browser requests here. No control lease is needed or taken:
+   * a push must not take a chat away from the user typing in it.
+   */
+  app.post('/api/sessions/:id/deliver', async (request, reply) => {
+    const session = claim(request);
+    const body = parse(deliverBody, request.body);
+    await runners.deliver(session.id, body);
+    return reply.status(202).send({ delivered: true });
   });
 
   app.post('/api/sessions/:id/commands', async (request, reply) => {

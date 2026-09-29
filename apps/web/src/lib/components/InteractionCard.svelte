@@ -195,6 +195,11 @@
     font-size: 13px;
     line-height: 1.55;
   }
+  /* Descriptions can hold paragraphs (a delegated task, a command to confirm). */
+  .interaction-card header p {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
   .confirm-copy {
     margin-top: 12px;
   }

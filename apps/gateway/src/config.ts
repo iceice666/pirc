@@ -74,6 +74,8 @@ export interface DaemonConfig extends BrowserAuthConfig {
    * (PIRC_MEMORY_NOTE_CHARS, default 8000). See plans/assistant.md.
    */
   memoryBudgets: { user: number; note: number };
+  /** How long a delegation waits for the user's approval (PIRC_DELEGATION_TTL_MS, default 1 h). */
+  delegationTtlMs: number;
 }
 
 /**
@@ -214,6 +216,7 @@ export function loadDaemonConfig(env: NodeJS.ProcessEnv = process.env): DaemonCo
       user: integer(env.PIRC_MEMORY_USER_CHARS, 2000),
       note: integer(env.PIRC_MEMORY_NOTE_CHARS, 8000),
     },
+    delegationTtlMs: integer(env.PIRC_DELEGATION_TTL_MS, 3_600_000),
   };
 }
 

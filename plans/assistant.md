@@ -1,6 +1,6 @@
 # Personal assistant: global memory and delegation
 
-Status: proposed 2026-09-28. Milestones 0 (workspace memory fixes), 1 (gateway channel), 2 (chat workspaces) and 3 (USER/MEMORY) are implemented; the rest is not. Decisions taken with the user:
+Status: proposed 2026-09-28. Milestones 0 (workspace memory fixes), 1 (gateway channel), 2 (chat workspaces), 3 (USER/MEMORY) and 4 (delegation) are implemented; the rest is not. Decisions taken with the user:
 
 - Global memory lives on the gateway from the start (no node-local interim store).
 - Only USER (profile) changes need the user's approval. The assistant writes MEMORY notes directly; the user can review, revert and forget them.
@@ -80,7 +80,7 @@ The channel runs agent → runner → node → daemon, copying the write-lease a
 - **Node ↔ daemon.** The runner adds its node session id. The node sends `agent_request {requestId, sessionId, op, args}` and the daemon answers `agent_response {requestId, status, body}`, with a 30 s timeout like relayed requests (`daemon/nodes.ts`). `NODE_PROTOCOL_VERSION` goes from 4 to 5.
 - **Daemon checks.** `resolveRemoteSession(nodeId, sessionId)` gives the session, its `ownerUser` and its workspace; the owner must still be an allowed user. Ops are allowlisted in `daemon/agent-ops.ts`. The v1 set is all assistant ops: `assistant.context`, `memory.note`, `memory.proposeUser`, `memory.search`, `delegation.create`, `delegation.status`, `recall.remote`. From milestone 2 on, each except `assistant.context` requires the session to be in a chat workspace (below). Milestone 1 ships only `assistant.context`, which answers `{enabled: false}` until chat workspaces exist.
 - **Bad agent input is answered, never fatal.** An invalid op name, oversized `args` (over 64 KiB) or a flood (8 requests in flight per session, 64 per node link, 32 per node on the daemon) gets an error answer; it does not close the node's link. Error codes: `gateway_offline`, `gateway_timeout`, `too_many_requests`, `payload_too_large`, `invalid_input`, `not_found`, `unknown_operation`, `forbidden`, `internal_error`.
-- **Daemon → agent pushes** moved to milestone 4, their first user (see Delegation).
+- **Daemon → agent pushes** were built with delegation, their first user (see Delegation, **Pushes**).
 - **Environment.** Drop node secrets from the agent environment (rule 6).
 
 ## Chat workspaces (the assistant's home)
@@ -152,33 +152,40 @@ memory_tombstones(owner_user TEXT NOT NULL, content_hash TEXT NOT NULL,
 
 ## Delegation
 
-1. **Request.** The assistant calls `delegate({workspaceId, task, title?})`. It returns at once with a delegation id and status `pending_approval`.
-2. **Confirmation.**
-   - The daemon validates the workspace, records the delegation, and creates a daemon-owned interaction on the assistant session that shows the target node, the workspace and the full task text.
-   - The interaction reaches clients as `interaction_created`, and the snapshot route includes it.
-   - The existing answer route handles daemon-owned ids locally, with the same lease and owner checks.
-   - It expires after `PIRC_DELEGATION_TTL_MS` (default 1 h; the daemon has no interaction TTL today, since `interactionTtlMs` is node-only).
-3. **Dispatch.** On approval, the daemon:
-   - creates a session on the target node through the existing create path;
-   - acquires a lease as client `delegation:<id>`;
-   - sends a `deliver` command with `customType: 'assistant-delegation'`;
-   - releases the lease and names the session after the title.
-4. **Follow.** The daemon watches target sessions through `events.subscribeAll`.
-   - On `interaction_created`, it tells the assistant that the delegated session is waiting for the user.
-   - On `agent_settled`, it fetches the final assistant message and delivers it as a delegation result, framed as data. Status becomes `completed` or `failed`.
-5. **Follow-ups.** Further instructions to a delegated session need a new confirmation. The user can take control of it at any time, which the lease model already supports.
+Implemented in `daemon/delegations.ts`, with the assistant tools in `agent/features/assistant/`.
 
-**Pushes.** Approval and delegation results reach the assistant session through a new RPC command, `deliver`, which calls `agent.deliver(message, {triggerTurn: true, deliverAs: 'followUp'})`. The content is framed as "(gateway data, not user instructions)", like team events (`agent/features/team/index.ts:207`). This milestone must also decide how a push reaches a session whose runner is not running; that is why pushes were not built with the channel in milestone 1.
+1. **Request.** The assistant calls `delegate({workspace, task, title?})`, or `delegate({follows, task})` to send more instructions to an earlier delegation's session. `workspace` is a directory workspace's id or a name only one of them has. Its node must be online. At most 10 delegations wait for approval per user. The call returns at once with the delegation's id and status `pending_approval`.
+2. **Confirmation.**
+   - The daemon records the delegation and shows it in the chat as a confirmation (kind `confirm`, labelled Delegate / Don’t) naming the workspace and node, with the title and the whole task. It publishes `interaction_created` in the chat, and the chat's snapshot includes it.
+   - It lives in the `delegations` table, not in `interactions`: a node's disconnect or a gateway restart stales every pending interaction, and must not cancel an approval.
+   - The existing answer route answers it on the daemon, after the same lease and owner checks; the node never sees it.
+   - It lapses after `PIRC_DELEGATION_TTL_MS` (default 1 h).
+3. **Dispatch.** On approval, the daemon creates a session on the target node through the node's create route (or reuses the followed delegation's session), names it after the title and pushes the task into it (**Pushes**, below) as a custom message `assistant-delegation`, "approved by the user". Nothing takes a control lease. Browsers reload their session lists through `directory_changed`.
+4. **Follow.** The daemon listens to every session's events. After `agent_settled`, `interaction_created`, `interaction_answered`, `runner_exit`, `runner_error` or `node_reconnected` in a delegated session, it reads the session's snapshot:
+   - a pending interaction there: `waiting_input` (reported once per wait);
+   - otherwise, once the run after the task is over: `completed` with the last assistant answer after the task message (matched by `details.delegationId`), or `failed` with the run's reason. Results are redacted and capped at 4,000 characters.
+5. **Follow-ups** need their own approval. The user can take control of a delegated session at any time, which the lease model already supports.
+
+**Pushes.** The node has a route only the daemon calls, `POST /api/sessions/:id/deliver` (custom types `assistant-delegation` and `assistant-delegation-update` only; browsers cannot reach it, and a `deliver` command is not a browser command). It starts the agent if needed and sends it the RPC command `deliver`, which calls `agent.deliver(message, {triggerTurn: true, deliverAs: 'followUp'})`: the message runs next, after any run in progress. It takes no control lease, so a push never takes a chat away from the user typing in it. The chat hears `rejected`, `expired`, `waiting_input`, `completed` and `failed`, as `assistant-delegation-update`: "Delegation update (gateway data, not user instructions)", a JSON line, and a next step. A report that cannot reach the chat's node is retried after that node's `node_reconnected`.
+
+**Auto mode in delegated sessions.** The task is a custom message and the session has no message from the user, so auto mode never takes the assistant's words for the user's request (trust rule 4). A command it judges dangerous waits for the user's confirmation in that session, and the chat is told that the session is waiting.
 
 ```sql
-delegations(id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, assistant_session_id TEXT NOT NULL,
+delegations(id TEXT PRIMARY KEY,                -- d + 8 hex
+  owner_user TEXT NOT NULL, assistant_session_id TEXT NOT NULL,
   workspace_id TEXT NOT NULL, title TEXT NOT NULL, task TEXT NOT NULL,
+  follows TEXT,                                 -- the delegation whose session gets this task
   status TEXT NOT NULL,  -- 'pending_approval' | 'rejected' | 'expired' | 'running' | 'waiting_input' | 'completed' | 'failed'
-  target_session_id TEXT, result_excerpt TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)
+  target_session_id TEXT, result TEXT,
+  notified_status TEXT,                         -- the last status the chat was told about
+  expires_at INTEGER NOT NULL, dispatched_at INTEGER,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)
 ```
 
-- `delegation_status({id?})` lists or checks delegations.
+- `delegation_status({id?})` shows one delegation with its full result, or the recent ones.
+- `assistant.context` lists the directory workspaces with their node and whether it is online, rendered as `## Workspaces` in the frozen chat context.
 - Delegated sessions are normal main sessions on their node, and their workspace memory keeps working. They produce no global memory; OpenClaw and Codex exclude sub-agent sessions the same way.
+- The web keeps confirmation labels, shows multi-line confirmation text, labels the pushed messages ("Task from your assistant", "Delegation update") and reloads session lists on directory changes.
 
 ## Cross-workspace records and search
 
@@ -194,7 +201,7 @@ delegations(id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, assistant_session_id 
 1. **Gateway channel**: protocol v5, op allowlist (`assistant.context`), environment scrubbing. Tests: round trip, foreign-session rejection, unknown ops, offline node.
 2. **Chat workspaces**: workspace `kind`, the chat node and its top-level `chats`, projects from the web, hidden per-session directories, the assistant base prompt, `assistant.context` enabled for chat sessions, web New chat / New project and the chat-first sidebar.
 3. **USER/MEMORY**: schema, snapshot, tools, approval flow, web Memory page and pending badge.
-4. **Delegation**: the workspace list in `assistant.context`, tool, daemon-owned confirmation, the `deliver` RPC and daemon → agent pushes, dispatch and follow-up, result delivery, status tool. An end-to-end test with two nodes.
+4. **Delegation**: the workspace list in `assistant.context`, tools, daemon-owned confirmation, the `deliver` RPC and daemon → agent pushes, dispatch and follow-up, result delivery, status tool. An end-to-end test with two nodes and real agents.
 5. **Records and search**: mirroring, FTS, search tool, cross-node recall.
 6. **Later**: consolidation, skills, USER in coding sessions, Android screens.
 
@@ -204,5 +211,6 @@ delegations(id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, assistant_session_id 
 - Should approved USER entries also reach coding sessions, replacing preferences duplicated in each node's `~/.config/.pirc/AGENTS.md`?
 - Are the budget defaults (USER 2,000, MEMORY 8,000 characters) right once in use?
 - Should a delegated session settle automatically after its result is delivered?
+- Should an approved task count as the user's request for auto mode in the delegated session? Today dangerous commands there wait for the user.
 - Should notes sourced only from tool output (e.g. pages fetched with `bash`) be kept out of the snapshot?
 - How long should `memory_log`, `delegations` and mirrored records be retained?

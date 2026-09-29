@@ -205,6 +205,16 @@ class AppState {
     }
   }
 
+  /** Sessions can appear without this client creating them (a delegated task's session). */
+  async refreshSessions() {
+    if (this.demo) return;
+    try {
+      this.sessions = await api.sessions();
+    } catch {
+      /* keep the last list */
+    }
+  }
+
   /** How many USER proposals wait for you (the badge on Settings). */
   async refreshMemory() {
     if (this.demo) return;
@@ -278,7 +288,9 @@ class AppState {
             if (reconnecting) void this.refreshNodes();
           },
           onDirectory: () => {
-            if (seq === this.#openSeq) void this.refreshNodes();
+            if (seq !== this.#openSeq) return;
+            void this.refreshNodes();
+            void this.refreshSessions();
           },
           onMemory: () => {
             if (seq !== this.#openSeq) return;

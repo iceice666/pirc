@@ -541,6 +541,25 @@ export class RunnerManager {
     }
   }
 
+  /**
+   * Push a message from the gateway into a session: a delegated task, or news
+   * of a delegation for the chat that asked. Starts the agent if needed; the
+   * message runs next, after any run in progress.
+   */
+  async deliver(
+    sessionId: string,
+    message: { customType: string; content: string; details?: Record<string, unknown> | undefined },
+  ): Promise<void> {
+    const runner = await this.ensure(sessionId);
+    const response = await runner.request({ type: 'deliver', message });
+    if (!response.success)
+      throw new ApiError(
+        503,
+        'runner_unavailable',
+        response.error ?? 'The agent refused the message',
+      );
+  }
+
   async answer(
     sessionId: string,
     epoch: number,

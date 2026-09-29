@@ -216,6 +216,25 @@ export async function handleCommand(
       return undefined;
     case 'get_panel_state':
       return agent.panelState();
+    case 'deliver': {
+      // A message from the gateway (a delegated task, news of a delegation):
+      // shown in the chat, never the user's words, and it wakes the agent.
+      const pushed = command.message ?? {};
+      if (typeof pushed.customType !== 'string' || typeof pushed.content !== 'string')
+        throw new Error('deliver needs message.customType and message.content');
+      agent.deliver(
+        {
+          customType: pushed.customType,
+          content: pushed.content,
+          display: true,
+          ...(pushed.details && typeof pushed.details === 'object'
+            ? { details: pushed.details }
+            : {}),
+        },
+        { triggerTurn: true, deliverAs: 'followUp' },
+      );
+      return undefined;
+    }
     default: {
       const handler =
         extra[command.type] ??

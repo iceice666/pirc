@@ -21,6 +21,8 @@ import { messageOrigin } from '../memory/serialize.js';
 export const ASSISTANT_SNAPSHOT = 'assistant.snapshot';
 export const NOTE_TOOL = 'memory_note';
 export const PROPOSE_TOOL = 'memory_propose_user';
+export const DELEGATE_TOOL = 'delegate';
+export const DELEGATIONS_TOOL = 'delegation_status';
 const MEMORY_TOOLS = new Set([NOTE_TOOL, PROPOSE_TOOL]);
 /** A chat waits this long for its memory before starting without it (and trying again next run). */
 const CONTEXT_TIMEOUT_MS = 10_000;
@@ -31,12 +33,29 @@ interface Brief {
   revision: number;
   updatedAt?: number;
 }
+interface WorkspaceBrief {
+  id: string;
+  name: string;
+  node: string;
+  online?: boolean;
+}
 interface MemoryContext {
   enabled?: boolean;
   user?: Brief[];
   notes?: Brief[];
   usage?: Record<'user' | 'note', { used: number; max: number }>;
   pendingProposals?: number;
+  /** Where the assistant can delegate tasks. */
+  workspaces?: WorkspaceBrief[];
+}
+/** A delegation as the gateway reports it (daemon/delegations.ts `brief`). */
+interface DelegationBrief {
+  id: string;
+  title: string;
+  workspace: string;
+  status: string;
+  session?: string;
+  result?: string;
 }
 
 const number = (value: number) => value.toLocaleString('en-US');
@@ -73,6 +92,20 @@ export function renderMemory(context: MemoryContext): string {
             `[${entry.id}] ${entry.updatedAt ? `${localStamp(entry.updatedAt).slice(0, 10)} ` : ''}${entry.content}`,
         )
       : ['(none yet)']),
+  ].join('\n');
+}
+
+/** The user's repositories the assistant can hand tasks to, as of the chat's start. */
+export function renderWorkspaces(workspaces: WorkspaceBrief[] = []): string {
+  if (!workspaces.length) return '';
+  return [
+    '## Workspaces',
+    '',
+    `The user's repositories you can hand tasks to with ${DELEGATE_TOOL}. Online status is as of this chat's start.`,
+    ...workspaces.map(
+      (workspace) =>
+        `[${workspace.id}] ${workspace.name} on ${workspace.node}${workspace.online === false ? ' (offline)' : ''}`,
+    ),
   ].join('\n');
 }
 
@@ -187,7 +220,9 @@ export function assistantFeature(): Feature {
     }
     const shown = context.enabled ? [...(context.user ?? []), ...(context.notes ?? [])] : [];
     for (const entry of shown) revisions.set(entry.id, entry.revision);
-    const section = context.enabled ? renderMemory(context) : '';
+    const section = context.enabled
+      ? [renderMemory(context), renderWorkspaces(context.workspaces)].filter(Boolean).join('\n\n')
+      : '';
     agent.store.append({
       type: 'custom',
       customType: ASSISTANT_SNAPSHOT,
@@ -370,11 +405,109 @@ Propose only what the user said about themselves in this chat, and pass their ex
     },
   });
 
+  const delegateTool = (gateway: NodeGateway): Tool => ({
+    name: DELEGATE_TOOL,
+    description: `Hand a task to an agent working in one of the user's workspaces (see ## Workspaces). The user approves every delegation first, seeing the workspace and your whole task; nothing runs until then. It runs in a new session there, and you get a message when it finishes, fails or needs the user.
+
+The other agent sees nothing of this chat: write the task so it stands on its own, with the goal, the facts it needs and what to report back. To send more instructions to the same session, pass the earlier delegation's id as follows instead of a workspace.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        workspace: {
+          type: 'string',
+          description:
+            'The workspace id (like m5pro:workspace_…), or its name if no other workspace has it.',
+        },
+        task: { type: 'string', description: 'The whole task, standing on its own.' },
+        title: { type: 'string', description: 'A short title; it names the new session.' },
+        follows: {
+          type: 'string',
+          description:
+            "An earlier delegation's id (like d1a2b3c4d): send the task to its session instead.",
+        },
+      },
+      required: ['task'],
+      additionalProperties: false,
+    },
+    async execute(args, ctx) {
+      const field = (key: string) => (typeof args[key] === 'string' ? args[key].trim() : '');
+      const task = field('task');
+      if (!task) return text('task is required', undefined, true);
+      const [workspace, title, follows] = [field('workspace'), field('title'), field('follows')];
+      if (!workspace && !follows)
+        return text(
+          'Name a workspace, or pass follows with an earlier delegation id',
+          undefined,
+          true,
+        );
+      try {
+        const result = (await gateway.request(
+          'delegation.create',
+          {
+            ...(workspace ? { workspace } : {}),
+            task: redactSecrets(task),
+            ...(title ? { title } : {}),
+            ...(follows ? { follows } : {}),
+          },
+          ctx.signal,
+        )) as DelegationBrief;
+        return text(
+          `Asked the user to approve delegation ${result.id} (“${result.title}”, ${result.workspace}). Nothing runs until they do; you will get a message when it finishes, fails or needs them.`,
+          { delegationId: result.id },
+        );
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  });
+
+  const delegationsTool = (gateway: NodeGateway): Tool => ({
+    name: DELEGATIONS_TOOL,
+    description:
+      'Check on delegations: one with its full result, by id, or the recent ones with their status.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'A delegation id, like d1a2b3c4d.' },
+      },
+      additionalProperties: false,
+    },
+    async execute(args, ctx) {
+      const id = typeof args.id === 'string' ? args.id.trim() : '';
+      try {
+        const result = (await gateway.request(
+          'delegation.status',
+          id ? { id } : {},
+          ctx.signal,
+        )) as { delegations: DelegationBrief[] };
+        if (!result.delegations.length) return text('No delegations yet.');
+        return text(
+          result.delegations
+            .map(
+              (delegation) =>
+                `${delegation.id} · ${delegation.status} · “${delegation.title}” → ${delegation.workspace}${delegation.session ? ` (session “${delegation.session}”)` : ''}${delegation.result ? `\n${delegation.result}` : ''}`,
+            )
+            .join('\n\n'),
+          { delegations: result.delegations.map((delegation) => delegation.id) },
+        );
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  });
+
   return {
     name: 'assistant',
     tools: (agent) => {
       const gateway = gatewayOf(agent);
-      return gateway ? [noteTool(agent, gateway), proposeTool(agent, gateway)] : [];
+      return gateway
+        ? [
+            noteTool(agent, gateway),
+            proposeTool(agent, gateway),
+            delegateTool(gateway),
+            delegationsTool(gateway),
+          ]
+        : [];
     },
     init(agent) {
       if (gatewayOf(agent)) learn(agent);

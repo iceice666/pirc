@@ -10,6 +10,7 @@ import type { GatewayDatabase, SessionRow } from '../database.js';
 import { ApiError } from '../errors.js';
 import type { Workspace } from '../types.js';
 import { agentError, type AgentAnswer } from '../protocol.js';
+import type { Delegations } from './delegations.js';
 import type { MemoryStore } from './memory.js';
 
 export interface AgentOpServices {
@@ -18,6 +19,7 @@ export interface AgentOpServices {
   memory: MemoryStore;
   /** Tell the user's open clients that their memory changed. */
   memoryChanged(user: string): void;
+  delegations: Delegations;
 }
 export interface AgentOpContext {
   services: AgentOpServices;
@@ -45,14 +47,52 @@ const entryIds = z.array(z.string().min(1).max(200)).max(20);
 const ops: Record<string, AgentOp> = {
   /**
    * What an assistant session starts with: every session in a chat workspace
-   * is one, and gets the user's USER entries and MEMORY notes.
+   * is one, and gets the user's USER entries and MEMORY notes, and the
+   * workspaces it can delegate to.
    */
   'assistant.context': {
     args: z.object({}).strict(),
     run: ({ services, workspace, user }) =>
       workspace.kind === 'chat'
-        ? { enabled: true, ...services.memory.context(user) }
+        ? {
+            enabled: true,
+            ...services.memory.context(user),
+            workspaces: services.delegations.workspaces(),
+          }
         : { enabled: false },
+  },
+  /**
+   * The assistant hands a task to a new session in a workspace, or more
+   * instructions to an earlier delegation's session. The user approves it in
+   * the chat first.
+   */
+  'delegation.create': {
+    args: z
+      .object({
+        workspace: z.string().min(1).max(300).optional(),
+        task: z.string().max(40_000),
+        title: z.string().max(300).optional(),
+        follows: z.string().min(1).max(40).optional(),
+      })
+      .strict(),
+    run: (context, args) => {
+      requireChat(context);
+      const { delegations } = context.services;
+      return delegations.brief(delegations.create(context.user, context.session, args));
+    },
+  },
+  /** One delegation with its full result, or the user's recent ones. */
+  'delegation.status': {
+    args: z.object({ id: z.string().min(1).max(40).optional() }).strict(),
+    run: (context, args) => {
+      requireChat(context);
+      const { delegations } = context.services;
+      return {
+        delegations: args.id
+          ? [delegations.brief(delegations.get(context.user, args.id), true)]
+          : delegations.list(context.user).map((delegation) => delegations.brief(delegation)),
+      };
+    },
   },
   /** The assistant adds, replaces or removes one of its MEMORY notes. */
   'memory.note': {

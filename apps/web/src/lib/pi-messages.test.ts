@@ -92,6 +92,29 @@ describe('Pi history conversion', () => {
     });
   });
 
+  it('labels what the gateway pushes for delegations', () => {
+    const [task, update] = piHistory([
+      {
+        role: 'custom',
+        customType: 'assistant-delegation',
+        content: "Task from the user's assistant…",
+        display: true,
+        details: { delegationId: 'd1', title: 'Fix build' },
+        timestamp: 1,
+      },
+      {
+        role: 'custom',
+        customType: 'assistant-delegation-update',
+        content: 'Delegation update…',
+        display: true,
+        details: { delegationId: 'd1', status: 'completed' },
+        timestamp: 2,
+      },
+    ]);
+    expect(task).toMatchObject({ label: 'Task from your assistant', meta: 'Fix build' });
+    expect(update).toMatchObject({ label: 'Delegation update', meta: 'd1 · completed' });
+  });
+
   it('marks failed assistant turns', () => {
     const [message] = piHistory([
       {

@@ -188,6 +188,9 @@ export function piMessage(
       const background =
         raw.customType === 'background-task-finished' ||
         raw.customType === 'background-task-output';
+      // Pushed by the gateway: a task the assistant delegated, or news of one.
+      const delegated = raw.customType === 'assistant-delegation';
+      const delegationUpdate = raw.customType === 'assistant-delegation-update';
       const short = (value: unknown) =>
         typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, 100) : '';
       const event = raw.details?.event;
@@ -195,7 +198,13 @@ export function piMessage(
         ? [short(event?.from), short(event?.kind)].filter(Boolean).join(' · ')
         : background
           ? short(text(raw.content).split('\n', 1)[0])
-          : '';
+          : delegated
+            ? short(raw.details?.title)
+            : delegationUpdate
+              ? [short(raw.details?.delegationId), short(raw.details?.status)]
+                  .filter(Boolean)
+                  .join(' · ')
+              : '';
       return {
         id,
         role: 'system',
@@ -204,7 +213,11 @@ export function piMessage(
           ? 'Agent team'
           : background
             ? 'Background task'
-            : (raw.customType ?? 'Extension'),
+            : delegated
+              ? 'Task from your assistant'
+              : delegationUpdate
+                ? 'Delegation update'
+                : (raw.customType ?? 'Extension'),
         ...(summary ? { meta: summary } : {}),
         content: text(raw.content),
         createdAt,

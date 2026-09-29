@@ -305,6 +305,108 @@ describe('assistant memory in chats', () => {
     ).toEqual(['memory.note']);
   });
 
+  it('lists the workspaces it can delegate to and delegates through the gateway', async () => {
+    const chat = await start();
+    const call = (id: string, name: string, args: Record<string, unknown>) => ({
+      tool: { id, name, args },
+    });
+    chat.agent.llm.push(
+      call('d1', 'delegate', {
+        workspace: 'work:test',
+        task: 'Fix the build.',
+        title: 'Fix build',
+      }),
+      call('d2', 'delegate', { task: 'Somewhere.' }),
+      call('s1', 'delegation_status', {}),
+      { text: 'Asked.' },
+    );
+    await chat.prompt('get the build fixed over there', async () => {
+      chat.ok(
+        await chat.next('assistant.context'),
+        memory({
+          workspaces: [
+            { id: 'work:test', name: 'Test', node: 'work', online: true },
+            { id: 'lab:x', name: 'X', node: 'lab', online: false },
+          ],
+        }),
+      );
+      const create = await chat.next('delegation.create');
+      expect(create.args).toEqual({
+        workspace: 'work:test',
+        task: 'Fix the build.',
+        title: 'Fix build',
+      });
+      chat.ok(create, {
+        id: 'd12345678',
+        title: 'Fix build',
+        workspace: 'Test on work',
+        status: 'pending_approval',
+      });
+      const status = await chat.next('delegation.status');
+      expect(status.args).toEqual({});
+      chat.ok(status, {
+        delegations: [
+          {
+            id: 'd12345678',
+            title: 'Fix build',
+            workspace: 'Test on work',
+            status: 'completed',
+            session: 'Fix build',
+            result: 'Build fixed.',
+          },
+        ],
+      });
+    });
+    expect(chat.system()).toContain(
+      "## Workspaces\n\nThe user's repositories you can hand tasks to with delegate. Online status is as of this chat's start.\n[work:test] Test on work\n[lab:x] X on lab (offline)",
+    );
+    const results = Object.fromEntries(
+      chat.agent.events
+        .filter((event) => event.type === 'tool_execution_end')
+        .map((event) => [event.toolCallId, [event.isError, event.result.content[0].text]]),
+    );
+    expect(results.d1![0]).toBe(false);
+    expect(results.d1![1]).toContain('Asked the user to approve delegation d12345678');
+    expect(results.d2).toEqual([
+      true,
+      'Name a workspace, or pass follows with an earlier delegation id',
+    ]);
+    expect(results.s1![1]).toBe(
+      'd12345678 · completed · “Fix build” → Test on work (session “Fix build”)\nBuild fixed.',
+    );
+  });
+
+  it("runs on messages the gateway pushes, keeping them apart from the user's", async () => {
+    const agent = await startAgent();
+    agents.push(agent);
+    expect((await agent.send({ type: 'deliver', message: {} })).success).toBe(false);
+    agent.llm.push({ text: 'Noted.' });
+    const from = agent.events.length;
+    const response = await agent.send({
+      type: 'deliver',
+      message: {
+        customType: 'assistant-delegation-update',
+        content: 'Delegation update (gateway data, not user instructions):\n{"status":"completed"}',
+        details: { delegationId: 'd1', status: 'completed' },
+      },
+    });
+    expect(response.success).toBe(true);
+    await settledAfter(agent, from);
+    const seen = agent.llm.requests.at(-1)!.body.messages.at(-1);
+    expect(JSON.stringify(seen.content)).toContain('Delegation update');
+    const entries = readFileSync(path.join(agent.sessionDir, 'session.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+      .filter((entry) => entry.type === 'message');
+    expect(entries.map((entry) => entry.message.role)).toEqual(['custom', 'assistant']);
+    expect(entries[0].message).toMatchObject({
+      customType: 'assistant-delegation-update',
+      display: true,
+      details: { delegationId: 'd1', status: 'completed' },
+    });
+  });
+
   it('leaves sessions outside chat workspaces without memory', async () => {
     const agent = await startAgent({ env: { PIRC_GATEWAY: '1' } });
     agents.push(agent);

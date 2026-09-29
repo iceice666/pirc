@@ -106,6 +106,19 @@ const migrations = [
     PRIMARY KEY (owner_user, content_hash)
   );
   `,
+  // Tasks the assistant hands to other workspaces (daemon/delegations.ts).
+  `
+  CREATE TABLE delegations (
+    id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, assistant_session_id TEXT NOT NULL,
+    workspace_id TEXT NOT NULL, title TEXT NOT NULL, task TEXT NOT NULL, follows TEXT,
+    status TEXT NOT NULL, target_session_id TEXT, result TEXT, notified_status TEXT,
+    expires_at INTEGER NOT NULL, dispatched_at INTEGER,
+    created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX delegations_owner ON delegations(owner_user, status);
+  CREATE INDEX delegations_assistant ON delegations(assistant_session_id, status);
+  CREATE INDEX delegations_target ON delegations(target_session_id, status);
+  `,
 ];
 
 const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');

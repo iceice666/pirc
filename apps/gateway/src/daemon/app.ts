@@ -23,6 +23,7 @@ import { parse, payloadHash } from '../util.js';
 import { authHook, validateRequest } from './auth.js';
 import { DeviceTokens, registerDeviceRoutes } from './devices.js';
 import { runAgentOp } from './agent-ops.js';
+import { Delegations } from './delegations.js';
 import { MemoryStore } from './memory.js';
 import { registerMemoryRoutes } from './memory-routes.js';
 import { NodeRegistry, validNodeToken } from './nodes.js';
@@ -105,6 +106,8 @@ export interface DaemonServices {
   devices: DeviceTokens;
   /** The assistant's memory, per user (plans/assistant.md). */
   memory: MemoryStore;
+  /** Tasks the assistant hands to other workspaces (plans/assistant.md). */
+  delegations: Delegations;
   /**
    * Re-read the gateway baseline and publish its secret-free catalog.
    * Subsequent inference calls use current credentials, including live agents.
@@ -152,7 +155,6 @@ export async function buildDaemonApp(
     maxAgeMs: config.deviceTokenMaxAgeMs,
   });
   const memory = new MemoryStore(db.raw, config.memoryBudgets);
-  const services = { db, events, nodes, models, backends, devices, memory, reloadModels };
   /** Close a device's WebSocket once its token is revoked or expires. */
   const trackDevice = (
     request: FastifyRequest,
@@ -180,6 +182,25 @@ export async function buildDaemonApp(
   const memoryChanged = (user: string) => {
     for (const listener of memoryListeners.get(user) ?? []) listener();
   };
+  const delegations = new Delegations({
+    db,
+    events,
+    nodes,
+    ttlMs: config.delegationTtlMs,
+    directoryChanged,
+    warn: (message, error) => app.log.warn({ error }, message),
+  });
+  const services = {
+    db,
+    events,
+    nodes,
+    models,
+    backends,
+    devices,
+    memory,
+    delegations,
+    reloadModels,
+  };
 
   // ---- node link ------------------------------------------------------------
 
@@ -193,7 +214,11 @@ export async function buildDaemonApp(
   };
   nodes.resolveSession = (nodeId, remoteId) => db.resolveRemoteSession(nodeId, remoteId);
   nodes.onAgentRequest = async (nodeId, request) =>
-    runAgentOp({ db, allowedUsers: config.allowedUsers, memory, memoryChanged }, nodeId, request);
+    runAgentOp(
+      { db, allowedUsers: config.allowedUsers, memory, memoryChanged, delegations },
+      nodeId,
+      request,
+    );
   nodes.onEvent = (nodeId, sessionId, event) => {
     try {
       const session = db.getSession(sessionId);
@@ -378,6 +403,11 @@ export async function buildDaemonApp(
     return {
       ...remote,
       session: { ...publicSession(session), runnerState: remote.session?.runnerState },
+      // Delegations waiting for the user's approval are the gateway's own confirmations.
+      interactions: [
+        ...(Array.isArray(remote.interactions) ? remote.interactions : []),
+        ...delegations.pendingInteractions(session.id),
+      ],
       watermark: events.watermark(session.id, session.runnerEpoch),
     };
   });
@@ -479,6 +509,14 @@ export async function buildDaemonApp(
     const body = parse(answerBody, request.body);
     db.validateLease(session.id, body.clientId, body.generation);
     db.validateLeaseUser(session.id, request.identity!.user);
+    // A delegation's confirmation is answered here; the node never saw it.
+    const delegation = delegations.answer(
+      session.id,
+      interactionId,
+      request.identity!.user,
+      (body as { answer?: unknown }).answer,
+    );
+    if (delegation) return delegation;
     return forward(reply, session.nodeId, request, {
       method: 'POST',
       url: nodeUrl(session, `/interactions/${encodeURIComponent(interactionId)}/answer`),
@@ -664,6 +702,7 @@ export async function buildDaemonApp(
 
   app.addHook('onClose', async () => {
     inference?.cancelAll();
+    delegations.close();
     devices.close();
     await backends.close();
     nodes.close();

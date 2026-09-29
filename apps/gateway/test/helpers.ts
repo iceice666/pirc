@@ -65,6 +65,7 @@ export function daemonConfig(overrides: Partial<DaemonConfig> = {}): DaemonConfi
     // Absent file: no providers unless a test writes one.
     modelsFile: path.join(tmpdir(), 'pirc-test-no-models.json'),
     memoryBudgets: { user: 2000, note: 8000 },
+    delegationTtlMs: 3_600_000,
     ...overrides,
   };
 }
@@ -135,15 +136,16 @@ export async function waitFor<T>(read: () => T | Promise<T>, expected: T, timeou
 }
 
 /**
- * Open a session in `workspaceId` through `app` (the daemon or a node router)
- * and return `ask`, which prompts the fake agent and resolves with its reply.
+ * Open a session in `workspaceId` through `app` (the daemon or a node router),
+ * holding its control lease as client `browser`, and return `ask`, which
+ * prompts the fake agent and resolves with its reply.
  */
 export async function promptSession(
   app: FastifyInstance,
   events: EventHub,
   requestHeaders: Record<string, string>,
   workspaceId: string,
-): Promise<{ sessionId: string; ask: (message: string) => Promise<string> }> {
+): Promise<{ sessionId: string; generation: number; ask: (message: string) => Promise<string> }> {
   const created = await app.inject({
     method: 'POST',
     url: '/api/sessions',
@@ -159,14 +161,19 @@ export async function promptSession(
     payload: { clientId: 'browser' },
   });
   const generation = acquired.json().lease.generation as number;
-  const settled = () =>
+  /** A run settled after event `sequence` (other runs, such as pushes, may settle too). */
+  const settledAfter = (sequence: number) =>
     events
       .replay(sessionId, null)
-      .events.filter(
-        (event) => event.type === 'pi_event' && (event.data as any)?.type === 'agent_settled',
-      ).length;
+      .events.some(
+        (event) =>
+          event.sequence > sequence &&
+          event.type === 'pi_event' &&
+          (event.data as any)?.type === 'agent_settled',
+      );
   let count = 0;
   const ask = async (message: string): Promise<string> => {
+    const from = events.watermark(sessionId).sequence;
     const command = await app.inject({
       method: 'POST',
       url: `/api/sessions/${sessionId}/commands`,
@@ -179,8 +186,9 @@ export async function promptSession(
         payload: { type: 'prompt', message },
       },
     });
-    expect(command.statusCode).toBe(202);
-    await waitFor(settled, count);
+    if (command.statusCode !== 202)
+      throw new Error(`prompt refused (${command.statusCode}): ${command.body}`);
+    await waitFor(() => settledAfter(from), true);
     const snapshot = await app.inject({
       method: 'GET',
       url: `/api/sessions/${sessionId}/snapshot`,
@@ -188,5 +196,5 @@ export async function promptSession(
     });
     return snapshot.json().history.at(-1).content[0].text as string;
   };
-  return { sessionId, ask };
+  return { sessionId, generation, ask };
 }

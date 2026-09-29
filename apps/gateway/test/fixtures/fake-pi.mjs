@@ -55,6 +55,9 @@ let configured = false;
 // `write <path>` / `hold <path>` prompts ask the node's write broker for a
 // lease, like a file tool would; `hold` keeps the run open until abort.
 const leases = new Map();
+// Dialogs a delivered task opened, answered by `extension_ui_response`.
+const dialogs = new Map();
+let dialogCount = 0;
 // `gateway <op> [json args]` asks the gateway through the node, like a feature would.
 const gatewayCalls = new Map();
 let gatewayCount = 0;
@@ -219,7 +222,46 @@ rl.on('line', (raw) => {
     }, 10);
     return;
   }
-  if (command.type === 'extension_ui_response') return;
+  if (command.type === 'deliver') {
+    // A gateway push (a delegated task, news of one): recorded like the real
+    // agent does, then answered with `done:<delegation>:<type>`. A task that
+    // says "ask the user" first waits for an answer in a dialog.
+    response();
+    const pushed = command.message ?? {};
+    const custom = {
+      role: 'custom',
+      customType: pushed.customType,
+      content: pushed.content,
+      display: true,
+      ...(pushed.details ? { details: pushed.details } : {}),
+      timestamp: Date.now(),
+    };
+    messages.push(custom);
+    persist(custom);
+    line({ type: 'agent_start' });
+    const done = () => reply(`done:${pushed.details?.delegationId ?? ''}:${pushed.customType}`);
+    if (
+      pushed.customType !== 'assistant-delegation' ||
+      !/ask the user/i.test(String(pushed.content))
+    )
+      return done();
+    const id = `dialog-${++dialogCount}`;
+    dialogs.set(id, done);
+    line({
+      type: 'extension_ui_request',
+      id,
+      method: 'confirm',
+      title: 'May I go on?',
+      message: 'The task asked to check with the user first.',
+      timeout: 60_000,
+    });
+    return;
+  }
+  if (command.type === 'extension_ui_response') {
+    const done = dialogs.get(command.id);
+    dialogs.delete(command.id);
+    return done?.();
+  }
   if (command.type === 'write_lease_response') return leases.get(command.id)?.(command);
   if (command.type === 'gateway_response') {
     const done = gatewayCalls.get(command.id);
