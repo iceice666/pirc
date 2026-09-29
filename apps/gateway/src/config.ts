@@ -88,6 +88,8 @@ export interface DaemonConfig extends BrowserAuthConfig {
   delegationTtlMs: number;
   /** Exa key for agents' web_search (EXA_API_KEY); without it web search is off. */
   exaApiKey?: string | undefined;
+  /** Default IANA time zone of schedules agents create (`PIRC_TIMEZONE`, else the system's). */
+  timezone: string;
 }
 
 /**
@@ -240,6 +242,7 @@ export function loadDaemonConfig(env: NodeJS.ProcessEnv = process.env): DaemonCo
     },
     delegationTtlMs: integer(env.PIRC_DELEGATION_TTL_MS, 3_600_000),
     ...(env.EXA_API_KEY?.trim() ? { exaApiKey: env.EXA_API_KEY.trim() } : {}),
+    timezone: timezone(env.PIRC_TIMEZONE),
   };
 }
 
@@ -304,4 +307,15 @@ export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig
     interactionTtlMs: integer(env.PIRC_INTERACTION_TTL_MS, 3_600_000),
     shutdownGraceMs: integer(env.PIRC_SHUTDOWN_GRACE_MS, 5_000),
   };
+}
+
+/** An IANA time zone (`PIRC_TIMEZONE`), else the system's. */
+function timezone(value: string | undefined): string {
+  const zone = value?.trim() || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: zone });
+  } catch {
+    throw new Error(`PIRC_TIMEZONE: unknown time zone ${zone}`);
+  }
+  return zone;
 }

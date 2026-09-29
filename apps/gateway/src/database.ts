@@ -136,6 +136,31 @@ const migrations = [
   CREATE INDEX memory_records_owner ON memory_records(owner_user, status);
   CREATE INDEX memory_records_id ON memory_records(id);
   `,
+  // Scheduled agent runs (daemon/schedules.ts, plans/cron.md).
+  `
+  CREATE TABLE schedules (
+    id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, workspace_id TEXT NOT NULL,
+    title TEXT NOT NULL, prompt TEXT NOT NULL, cron TEXT, run_at INTEGER,
+    timezone TEXT NOT NULL, model_json TEXT, thinking TEXT,
+    status TEXT NOT NULL, next_run_at INTEGER, created_by_session TEXT,
+    created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX schedules_owner ON schedules(owner_user);
+  CREATE INDEX schedules_due ON schedules(status, next_run_at);
+  CREATE TABLE schedule_runs (
+    id TEXT PRIMARY KEY, schedule_id TEXT NOT NULL, owner_user TEXT NOT NULL,
+    due_at INTEGER NOT NULL, status TEXT NOT NULL, session_id TEXT, result TEXT,
+    started_at INTEGER, finished_at INTEGER, created_at INTEGER NOT NULL
+  );
+  CREATE INDEX schedule_runs_schedule ON schedule_runs(schedule_id, created_at);
+  CREATE INDEX schedule_runs_session ON schedule_runs(session_id, status);
+  CREATE TABLE schedule_proposals (
+    id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, session_id TEXT NOT NULL,
+    schedule_id TEXT, spec_json TEXT NOT NULL, status TEXT NOT NULL,
+    expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+  );
+  CREATE INDEX schedule_proposals_session ON schedule_proposals(session_id, status);
+  `,
 ];
 
 const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');

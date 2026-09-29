@@ -50,6 +50,7 @@ if (sessionFile && existsSync(sessionFile))
   }
 else if (sessionDir) mkdirSync(sessionDir, { recursive: true });
 let queue = { steering: [], followUp: [] };
+const agentSettings = { thinkingLevel: 'medium', model: null };
 
 let configured = false;
 // `write <path>` / `hold <path>` prompts ask the node's write broker for a
@@ -91,7 +92,8 @@ rl.on('line', (raw) => {
   if (command.type === 'get_state')
     return response(true, {
       sessionId: 'fake-session',
-      thinkingLevel: 'medium',
+      thinkingLevel: agentSettings.thinkingLevel,
+      ...(agentSettings.model ? { model: agentSettings.model } : {}),
       isStreaming: false,
       isCompacting: false,
       steeringMode: 'one-at-a-time',
@@ -103,6 +105,10 @@ rl.on('line', (raw) => {
   if (command.type === 'get_messages') return response(true, { messages });
   if (command.type === 'get_available_models')
     return response(true, { models: [{ provider: 'fake', id: 'fake-model', name: 'Fake' }] });
+  // Model and thinking changes show in get_state (a scheduled run picks its own).
+  if (command.type === 'set_model')
+    agentSettings.model = { provider: command.provider, id: command.modelId };
+  if (command.type === 'set_thinking_level') agentSettings.thinkingLevel = command.level;
   if (
     command.type === 'set_session_name' ||
     command.type === 'set_model' ||
@@ -239,9 +245,12 @@ rl.on('line', (raw) => {
     messages.push(custom);
     persist(custom);
     line({ type: 'agent_start' });
-    const done = () => reply(`done:${pushed.details?.delegationId ?? ''}:${pushed.customType}`);
+    const done = () =>
+      reply(
+        `done:${pushed.details?.delegationId ?? pushed.details?.runId ?? ''}:${pushed.customType}`,
+      );
     if (
-      pushed.customType !== 'assistant-delegation' ||
+      !['assistant-delegation', 'scheduled-run'].includes(pushed.customType) ||
       !/ask the user/i.test(String(pushed.content))
     )
       return done();

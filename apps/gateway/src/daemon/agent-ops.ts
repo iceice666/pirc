@@ -10,10 +10,11 @@ import type { GatewayDatabase, SessionRow } from '../database.js';
 import { ApiError } from '../errors.js';
 import type { Workspace } from '../types.js';
 import { agentError, type AgentAnswer } from '../protocol.js';
-import type { Delegations } from './delegations.js';
+import { resolveDirectoryWorkspace, type Delegations } from './delegations.js';
 import type { MemoryStore } from './memory.js';
 import type { MemoryRecords } from './memory-records.js';
 import type { NodeRegistry } from './nodes.js';
+import { THINKING_LEVELS, type Schedule, type Schedules } from './schedules.js';
 import { webSearchArgs, type WebSearch } from './web-search.js';
 
 export interface AgentOpServices {
@@ -27,6 +28,8 @@ export interface AgentOpServices {
   nodes: NodeRegistry;
   /** Search the web with the gateway's key (daemon/web-search.ts). */
   webSearch: WebSearch;
+  /** Scheduled agent runs (daemon/schedules.ts). */
+  schedules: Schedules;
 }
 export interface AgentOpContext {
   services: AgentOpServices;
@@ -45,6 +48,63 @@ function requireChat({ workspace }: AgentOpContext): void {
   if (workspace.kind !== 'chat')
     throw new ApiError(403, 'forbidden', 'Only chat sessions have the assistant memory');
 }
+
+/**
+ * Where a session's agent may schedule (plans/cron.md): an assistant chat in
+ * its own chat or any directory workspace it may delegate to; any other
+ * session only in its own workspace.
+ */
+function scheduleScope({ services, workspace: own }: AgentOpContext) {
+  const chat = own.kind === 'chat';
+  return {
+    resolve(ref: string): Workspace {
+      if (ref === own.id || ref.toLowerCase() === own.displayName.toLowerCase()) return own;
+      if (chat) return resolveDirectoryWorkspace(services.db, ref);
+      throw new ApiError(
+        403,
+        'forbidden',
+        'Only the assistant schedules in other workspaces: leave workspace out to schedule here',
+      );
+    },
+    allows: (schedule: Schedule) => chat || schedule.workspaceId === own.id,
+  };
+}
+
+/** An agent's view of the user's schedule `id`, if its session may manage it. */
+function scopedSchedule(context: AgentOpContext, id: string): Schedule {
+  const schedule = context.services.schedules.get(context.user, id);
+  if (!scheduleScope(context).allows(schedule))
+    throw new ApiError(404, 'not_found', `No schedule ${id} in this workspace`);
+  return schedule;
+}
+
+/** A scheduled run may not start more work: no new schedules, resumes or runs from it. */
+function refuseFromScheduledRun({ services, session }: AgentOpContext): void {
+  if (services.schedules.isRunSession(session.id))
+    throw new ApiError(
+      403,
+      'forbidden',
+      'A scheduled run cannot create, change, resume or start schedules',
+    );
+}
+
+const scheduleFields = {
+  title: z.string().max(300).optional(),
+  cron: z.string().max(200).optional(),
+  at: z.string().max(100).optional(),
+  timezone: z.string().max(100).optional(),
+  /** `provider/model-id`; null for the default. */
+  model: z.string().min(3).max(300).nullable().optional(),
+  thinking: z.enum(THINKING_LEVELS).nullable().optional(),
+};
+const modelRef = (value: string | null | undefined) => {
+  if (value === undefined || value === null) return value;
+  const slash = value.indexOf('/');
+  if (slash < 1 || slash === value.length - 1)
+    throw new ApiError(400, 'invalid_input', 'model is provider/model-id');
+  return { provider: value.slice(0, slash), id: value.slice(slash + 1) };
+};
+const scheduleId = z.object({ id: z.string().min(1).max(40) }).strict();
 
 const action = z.enum(['add', 'replace', 'remove']);
 const entryId = z.string().min(1).max(40);
@@ -165,6 +225,105 @@ const ops: Record<string, AgentOp> = {
           ? [delegations.brief(delegations.get(context.user, args.id), true)]
           : delegations.list(context.user).map((delegation) => delegations.brief(delegation)),
       };
+    },
+  },
+  /** The user's schedules this session may manage, and the default time zone. */
+  'schedule.list': {
+    args: z.object({}).strict(),
+    run: (context) => {
+      const { schedules } = context.services;
+      const scope = scheduleScope(context);
+      return {
+        schedules: schedules
+          .list(context.user)
+          .filter(scope.allows)
+          .map((schedule) => schedules.brief(schedule)),
+        timezone: schedules.defaultTimezone,
+      };
+    },
+  },
+  /** Propose a new schedule; it exists once the user approves it in the chat. */
+  'schedule.create': {
+    args: z
+      .object({
+        workspace: z.string().min(1).max(300).optional(),
+        prompt: z.string().max(40_000),
+        ...scheduleFields,
+      })
+      .strict(),
+    run: (context, args) => {
+      refuseFromScheduledRun(context);
+      const { model, workspace, ...input } = args;
+      const { proposalId, spec } = context.services.schedules.propose(
+        context.user,
+        context.session,
+        {
+          ...input,
+          workspace: workspace ?? context.workspace.id,
+          ...(model !== undefined ? { model: modelRef(model) } : {}),
+        },
+        scheduleScope(context).resolve,
+      );
+      return { proposalId, status: 'pending_approval', title: spec.title };
+    },
+  },
+  /** Propose a change to a schedule; it applies once the user approves it. */
+  'schedule.update': {
+    args: z
+      .object({
+        id: z.string().min(1).max(40),
+        workspace: z.string().min(1).max(300).optional(),
+        prompt: z.string().max(40_000).optional(),
+        ...scheduleFields,
+      })
+      .strict(),
+    run: (context, args) => {
+      refuseFromScheduledRun(context);
+      const { id, model, ...input } = args;
+      scopedSchedule(context, id);
+      const { proposalId, spec } = context.services.schedules.propose(
+        context.user,
+        context.session,
+        { ...input, ...(model !== undefined ? { model: modelRef(model) } : {}) },
+        scheduleScope(context).resolve,
+        id,
+      );
+      return { proposalId, status: 'pending_approval', title: spec.title };
+    },
+  },
+  'schedule.pause': {
+    args: scheduleId,
+    run: (context, { id }) => {
+      scopedSchedule(context, id);
+      const { schedules } = context.services;
+      return schedules.brief(schedules.pause(context.user, id));
+    },
+  },
+  'schedule.resume': {
+    args: scheduleId,
+    run: (context, { id }) => {
+      refuseFromScheduledRun(context);
+      scopedSchedule(context, id);
+      const { schedules } = context.services;
+      return schedules.brief(schedules.resume(context.user, id));
+    },
+  },
+  'schedule.delete': {
+    args: scheduleId,
+    run: (context, { id }) => {
+      const schedule = scopedSchedule(context, id);
+      context.services.schedules.delete(context.user, id);
+      return { id, title: schedule.title, deleted: true };
+    },
+  },
+  /** Run a schedule now (the user's /cron run). */
+  'schedule.run': {
+    args: scheduleId,
+    run: (context, { id }) => {
+      refuseFromScheduledRun(context);
+      scopedSchedule(context, id);
+      const run = context.services.schedules.runNow(context.user, id);
+      return { runId: run.id, status: run.status };
     },
   },
   /** The assistant adds, replaces or removes one of its MEMORY notes. */

@@ -93,9 +93,15 @@ const workspaceRecallBody = z
 /** What the gateway may push into a session (see the deliver route). */
 const deliverBody = z
   .object({
-    customType: z.enum(['assistant-delegation', 'assistant-delegation-update']),
+    customType: z.enum(['assistant-delegation', 'assistant-delegation-update', 'scheduled-run']),
     content: z.string().min(1).max(100_000),
     details: z.record(z.unknown()).optional(),
+    /** Run it on this model (a scheduled run's own choice); the session keeps it. */
+    model: z
+      .object({ provider: z.string().min(1), id: z.string().min(1) })
+      .strict()
+      .optional(),
+    thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
   })
   .strict();
 const answerBody = z.object({

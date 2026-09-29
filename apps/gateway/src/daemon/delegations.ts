@@ -12,10 +12,18 @@ import { redactSecrets } from '../agent/features/memory/redact.js';
 import type { GatewayDatabase, SessionRow } from '../database.js';
 import { ApiError } from '../errors.js';
 import type { EventHub } from '../events.js';
-import { applySessionName } from '../session-name.js';
 import type { GatewayEvent, Workspace } from '../types.js';
 import { now } from '../util.js';
 import type { NodeRegistry } from './nodes.js';
+import {
+  clip,
+  deliver,
+  isWatchedEvent,
+  oneLine,
+  readProgress,
+  startSession,
+  workspaceOnline,
+} from './session-dispatch.js';
 
 export type DelegationStatus =
   | 'pending_approval'
@@ -61,15 +69,6 @@ const NOTIFIED = new Set<DelegationStatus>([
   'waiting_input',
   'completed',
   'failed',
-]);
-const TERMINAL_RUNS = new Set(['succeeded', 'failed', 'cancelled', 'interrupted']);
-/** Events of a delegated session after which it may have finished or started waiting. */
-const WATCHED_EVENTS = new Set([
-  'interaction_created',
-  'interaction_answered',
-  'runner_exit',
-  'runner_error',
-  'node_reconnected',
 ]);
 const NEXT_STEP: Partial<Record<DelegationStatus, string>> = {
   completed: 'It finished: tell the user what came of it.',
@@ -120,23 +119,6 @@ export function resolveDirectoryWorkspace(db: GatewayDatabase, ref: string): Wor
     'not_found',
     `No workspace ${ref}. Workspaces: ${all.map((w) => `${w.displayName} (${w.id})`).join(', ') || 'none'}`,
   );
-}
-
-const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim();
-const clip = (text: string, max: number) =>
-  text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
-const part = encodeURIComponent;
-
-/** The text of a history message (the delegated agent's answer). */
-function textOf(message: any): string {
-  const content = message?.content;
-  if (typeof content === 'string') return content.trim();
-  if (!Array.isArray(content)) return '';
-  return content
-    .filter((block: any) => block?.type === 'text' && typeof block.text === 'string')
-    .map((block: any) => block.text)
-    .join('\n')
-    .trim();
 }
 
 const taskMessage = (delegation: Delegation) =>
@@ -393,61 +375,25 @@ export class Delegations {
         if (target.ownerUser !== delegation.ownerUser)
           throw new Error('The session to follow up belongs to another user');
       } else {
-        const created = await this.request(nodeId, delegation.ownerUser, 'POST', '/api/sessions', {
-          workspaceId: workspace.id.slice(nodeId.length + 1),
-        });
-        const remoteId = String(created.session?.id ?? '');
-        if (!remoteId) throw new Error(`${nodeId} did not create a session`);
-        target = db.createSession(
-          workspace.id,
-          `node://${nodeId}/${remoteId}`,
-          nodeId,
-          remoteId,
-          delegation.ownerUser,
-        );
-        try {
-          await this.request(
-            nodeId,
-            delegation.ownerUser,
-            'PATCH',
-            `/api/sessions/${part(remoteId)}`,
-            { name: delegation.title },
-          );
-          applySessionName(db, this.deps.events, target.id, target.runnerEpoch, {
-            name: delegation.title,
-            source: 'user',
-          });
-        } catch {
-          /* it keeps its default name */
-        }
-        this.deps.directoryChanged();
+        target = await startSession(this.deps, workspace, delegation.ownerUser, delegation.title);
       }
       db.raw
         .prepare(
           'UPDATE delegations SET target_session_id=?, dispatched_at=?, updated_at=? WHERE id=?',
         )
         .run(target.id, now(), now(), delegation.id);
-      await this.request(
-        nodeId,
-        delegation.ownerUser,
-        'POST',
-        `/api/sessions/${part(target.piSessionId!)}/deliver`,
-        {
-          customType: 'assistant-delegation',
-          content: taskMessage(delegation),
-          details: { delegationId: delegation.id, title: delegation.title },
-        },
-      );
+      await deliver(this.deps.nodes, target, delegation.ownerUser, {
+        customType: 'assistant-delegation',
+        content: taskMessage(delegation),
+        details: { delegationId: delegation.id, title: delegation.title },
+      });
     } catch (error) {
       this.finish(delegation.id, 'failed', `Could not start the task: ${(error as Error).message}`);
     }
   }
 
   private onEvent(event: GatewayEvent): void {
-    const settled =
-      event.type === 'pi_event' &&
-      (event.data as { type?: unknown } | null)?.type === 'agent_settled';
-    if (!settled && !WATCHED_EVENTS.has(event.type)) return;
+    if (!isWatchedEvent(event)) return;
     for (const delegation of this.rows(
       "target_session_id=? AND status IN ('running','waiting_input')",
       event.sessionId,
@@ -483,50 +429,39 @@ export class Delegations {
       delegation.dispatchedAt === null
     )
       return;
-    const session = this.deps.db.getSession(delegation.targetSessionId);
-    if (!session.nodeId || !session.piSessionId || !this.deps.nodes.get(session.nodeId)) return;
-    const snapshot = await this.request(
-      session.nodeId,
+    const progress = await readProgress(
+      this.deps.nodes,
+      this.deps.db.getSession(delegation.targetSessionId),
       delegation.ownerUser,
-      'GET',
-      `/api/sessions/${part(session.piSessionId)}/snapshot`,
+      delegation.dispatchedAt,
+      (message) => message.details?.delegationId === delegation.id,
     );
-    const history: any[] = Array.isArray(snapshot.history) ? snapshot.history : [];
-    const run = snapshot.run as {
-      status?: unknown;
-      createdAt?: unknown;
-      failureReason?: unknown;
-    } | null;
-    const over = !!run && TERMINAL_RUNS.has(String(run.status));
-    const taken = history.findLastIndex(
-      (message) => message?.role === 'custom' && message.details?.delegationId === delegation.id,
-    );
-    if (taken === -1) {
-      // Still queued behind other work, unless the agent stopped before taking it.
-      if (over && Number(run!.createdAt ?? 0) >= delegation.dispatchedAt)
-        this.finish(id, 'failed', 'The agent stopped before it took the task');
-      return;
+    switch (progress.state) {
+      case 'dropped':
+        return this.finish(id, 'failed', 'The agent stopped before it took the task');
+      case 'waiting':
+        if (delegation.status === 'waiting_input') return;
+        this.update(id, 'waiting_input');
+        void this.report(id);
+        return;
+      case 'working':
+        // Answered: back to work, and a later wait is reported again.
+        if (delegation.status === 'waiting_input') this.update(id, 'running', true);
+        return;
+      case 'over': {
+        const { status, failureReason, answer } = progress;
+        if (status === 'succeeded') this.finish(id, 'completed', answer || '(no final answer)');
+        else
+          this.finish(
+            id,
+            'failed',
+            `The run ${status}${failureReason ? `: ${failureReason}` : ''}${answer ? `\n\nLast answer: ${answer}` : ''}`,
+          );
+        return;
+      }
+      default:
+        return;
     }
-    if (Array.isArray(snapshot.interactions) && snapshot.interactions.length) {
-      if (delegation.status === 'waiting_input') return;
-      this.update(id, 'waiting_input');
-      void this.report(id);
-      return;
-    }
-    if (!over) {
-      // Answered: back to work, and a later wait is reported again.
-      if (delegation.status === 'waiting_input') this.update(id, 'running', true);
-      return;
-    }
-    const answers = history.slice(taken + 1).filter((message) => message?.role === 'assistant');
-    const answer = textOf(answers[answers.length - 1]);
-    if (run!.status === 'succeeded') this.finish(id, 'completed', answer || '(no final answer)');
-    else
-      this.finish(
-        id,
-        'failed',
-        `The run ${String(run!.status)}${typeof run!.failureReason === 'string' ? `: ${run!.failureReason}` : ''}${answer ? `\n\nLast answer: ${answer}` : ''}`,
-      );
   }
 
   private update(id: string, status: DelegationStatus, forgetReport = false): void {
@@ -566,17 +501,11 @@ export class Delegations {
     if (!chat.nodeId || !chat.piSessionId || !this.deps.nodes.get(chat.nodeId)) return;
     this.reporting.add(key);
     try {
-      await this.request(
-        chat.nodeId,
-        delegation.ownerUser,
-        'POST',
-        `/api/sessions/${part(chat.piSessionId)}/deliver`,
-        {
-          customType: 'assistant-delegation-update',
-          content: this.updateMessage(delegation),
-          details: { delegationId: delegation.id, status: delegation.status },
-        },
-      );
+      await deliver(this.deps.nodes, chat, delegation.ownerUser, {
+        customType: 'assistant-delegation-update',
+        content: this.updateMessage(delegation),
+        details: { delegationId: delegation.id, status: delegation.status },
+      });
       this.deps.db.raw
         .prepare('UPDATE delegations SET notified_status=? WHERE id=? AND status=?')
         .run(delegation.status, delegation.id, delegation.status);
@@ -646,9 +575,7 @@ export class Delegations {
   }
 
   private online(workspace: Workspace): boolean {
-    return !!this.deps.nodes
-      .get(workspace.hostId)
-      ?.workspaces.some((item) => `${workspace.hostId}:${item.id}` === workspace.id);
+    return workspaceOnline(this.deps.nodes, workspace);
   }
 
   private label(workspaceId: string): string {
@@ -674,27 +601,5 @@ export class Delegations {
       const id = `d${randomBytes(4).toString('hex')}`;
       if (!exists.get(id)) return id;
     }
-  }
-
-  /** A node request that must succeed; throws its error message otherwise. */
-  private async request(
-    nodeId: string,
-    user: string,
-    method: 'GET' | 'POST' | 'PATCH',
-    url: string,
-    payload?: unknown,
-  ): Promise<any> {
-    const response = await this.deps.nodes.request(nodeId, {
-      method,
-      url,
-      user,
-      ...(payload === undefined ? {} : { payload }),
-    });
-    if (response.status >= 400)
-      throw new Error(
-        (response.body as { error?: { message?: string } } | null)?.error?.message ??
-          `${nodeId} answered ${response.status}`,
-      );
-    return response.body ?? {};
   }
 }

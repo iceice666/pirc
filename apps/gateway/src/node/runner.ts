@@ -614,9 +614,28 @@ export class RunnerManager {
    */
   async deliver(
     sessionId: string,
-    message: { customType: string; content: string; details?: Record<string, unknown> | undefined },
+    delivery: {
+      customType: string;
+      content: string;
+      details?: Record<string, unknown> | undefined;
+      model?: { provider: string; id: string } | undefined;
+      thinking?: string | undefined;
+    },
   ): Promise<void> {
     const runner = await this.ensure(sessionId);
+    const { model, thinking, ...message } = delivery;
+    for (const command of [
+      ...(model ? [{ type: 'set_model', provider: model.provider, modelId: model.id }] : []),
+      ...(thinking ? [{ type: 'set_thinking_level', level: thinking }] : []),
+    ]) {
+      const set = await runner.request(command);
+      if (!set.success)
+        throw new ApiError(
+          503,
+          'runner_unavailable',
+          set.error ?? `The agent refused ${command.type}`,
+        );
+    }
     const response = await runner.request({ type: 'deliver', message });
     if (!response.success)
       throw new ApiError(

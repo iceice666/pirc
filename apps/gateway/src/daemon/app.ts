@@ -28,6 +28,8 @@ import { Delegations } from './delegations.js';
 import { MemoryStore } from './memory.js';
 import { MemoryRecords } from './memory-records.js';
 import { registerMemoryRoutes } from './memory-routes.js';
+import { registerScheduleRoutes } from './schedule-routes.js';
+import { Schedules } from './schedules.js';
 import { NodeRegistry, validNodeToken } from './nodes.js';
 import { BackendService } from '../backends/service.js';
 import { registerBackendRoutes } from '../backends/routes.js';
@@ -125,6 +127,8 @@ export interface DaemonServices {
   delegations: Delegations;
   /** Workspace memory mirrored from the nodes, for the assistant's search. */
   records: MemoryRecords;
+  /** Scheduled agent runs (plans/cron.md). */
+  schedules: Schedules;
   /**
    * Re-read the gateway baseline and publish its secret-free catalog.
    * Subsequent inference calls use current credentials, including live agents.
@@ -209,6 +213,24 @@ export async function buildDaemonApp(
     directoryChanged,
     warn: (message, error) => app.log.warn({ error }, message),
   });
+  /** Like memory changes: per user, opted into with `schedules=1`. */
+  const scheduleListeners = new Map<string, Set<() => void>>();
+  const schedulesChanged = (user: string) => {
+    for (const listener of scheduleListeners.get(user) ?? []) listener();
+  };
+  const defaultTimezone = config.timezone;
+  const schedules = new Schedules({
+    db,
+    events,
+    nodes,
+    models,
+    allowedUsers: config.allowedUsers,
+    proposalTtlMs: config.delegationTtlMs,
+    defaultTimezone,
+    directoryChanged,
+    changed: schedulesChanged,
+    warn: (message, error) => app.log.warn({ error }, message),
+  });
   const services = {
     db,
     events,
@@ -219,6 +241,7 @@ export async function buildDaemonApp(
     memory,
     delegations,
     records,
+    schedules,
     reloadModels,
   };
 
@@ -246,6 +269,7 @@ export async function buildDaemonApp(
         records,
         nodes,
         webSearch,
+        schedules,
       },
       nodeId,
       request,
@@ -438,6 +462,7 @@ export async function buildDaemonApp(
       interactions: [
         ...(Array.isArray(remote.interactions) ? remote.interactions : []),
         ...delegations.pendingInteractions(session.id),
+        ...schedules.pendingInteractions(session.id),
       ],
       watermark: events.watermark(session.id, session.runnerEpoch),
     };
@@ -548,6 +573,14 @@ export async function buildDaemonApp(
       (body as { answer?: unknown }).answer,
     );
     if (delegation) return delegation;
+    // So is an agent's schedule proposal.
+    const proposal = schedules.answer(
+      session.id,
+      interactionId,
+      request.identity!.user,
+      (body as { answer?: unknown }).answer,
+    );
+    if (proposal) return proposal;
     return forward(reply, session.nodeId, request, {
       method: 'POST',
       url: nodeUrl(session, `/interactions/${encodeURIComponent(interactionId)}/answer`),
@@ -575,6 +608,7 @@ export async function buildDaemonApp(
   registerBackendRoutes(app, backends);
   registerDeviceRoutes(app, devices);
   registerMemoryRoutes(app, { db, memory, memoryChanged });
+  registerScheduleRoutes(app, { db, schedules, defaultTimezone });
 
   /** Every node's agents use the gateway's providers, so one list serves all sessions. */
   app.get('/api/models', async (request) => {
@@ -620,6 +654,7 @@ export async function buildDaemonApp(
           cursor: z.string().optional(),
           directory: z.literal('1').optional(),
           memory: z.literal('1').optional(),
+          schedules: z.literal('1').optional(),
         }),
         request.query,
       );
@@ -657,6 +692,12 @@ export async function buildDaemonApp(
         if (!listeners) memoryListeners.set(user, (listeners = new Set()));
         listeners.add(onMemory);
       }
+      const onSchedules = () => send({ type: 'schedules_changed' });
+      if (query.schedules) {
+        let listeners = scheduleListeners.get(user);
+        if (!listeners) scheduleListeners.set(user, (listeners = new Set()));
+        listeners.add(onSchedules);
+      }
       const untrack = trackDevice(request, socket);
       const done = () => {
         unsubscribe();
@@ -664,6 +705,9 @@ export async function buildDaemonApp(
         const listeners = memoryListeners.get(user);
         listeners?.delete(onMemory);
         if (listeners?.size === 0) memoryListeners.delete(user);
+        const scheduled = scheduleListeners.get(user);
+        scheduled?.delete(onSchedules);
+        if (scheduled?.size === 0) scheduleListeners.delete(user);
         untrack();
       };
       socket.once('close', done);
@@ -849,6 +893,7 @@ export async function buildDaemonApp(
   app.addHook('onClose', async () => {
     inference?.cancelAll();
     delegations.close();
+    schedules.close();
     devices.close();
     await backends.close();
     nodes.close();

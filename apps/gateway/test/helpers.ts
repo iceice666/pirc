@@ -79,6 +79,7 @@ export function daemonConfig(overrides: Partial<DaemonConfig> = {}): DaemonConfi
     modelsFile: path.join(tmpdir(), 'pirc-test-no-models.json'),
     memoryBudgets: { user: 2000, note: 8000 },
     delegationTtlMs: 3_600_000,
+    timezone: 'UTC',
     ...overrides,
   };
 }

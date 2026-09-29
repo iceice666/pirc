@@ -10,6 +10,7 @@ import { goalFeature } from './goal/index.js';
 import { memoryFeature } from './memory/index.js';
 import { skillsFeature } from './skills.js';
 import { titleFeature } from './title.js';
+import { schedulesFeature } from './schedules.js';
 import { todoFeature } from './todo/index.js';
 import { webSearchFeature } from './web-search.js';
 
@@ -28,6 +29,8 @@ export function builtinFeatures(): Feature[] {
     browserFeature(),
     // Node agents with a gateway only; the gateway holds the search key.
     webSearchFeature(),
+    // Node agents with a gateway only; the gateway runs the schedules.
+    schedulesFeature(),
     backgroundFeature(),
     teamFeature(),
     // Last: its settle hook starts the next round after the others had their turn.
