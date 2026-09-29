@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import { defaultModelsFile } from './models.js';
+import { findBrowserExecutable, type BrowserSettings } from './node/browser.js';
 import { selfCommand } from './self.js';
 import { canonicalPath } from './util.js';
 
@@ -19,6 +20,15 @@ const integer = (value: string | undefined, fallback: number) =>
     .positive()
     .catch(fallback)
     .parse(value ?? fallback);
+
+/** `1280x800` style browser viewport (PIRC_BROWSER_VIEWPORT). */
+const viewport = (value: string | undefined) => {
+  const match = /^(\d{3,4})x(\d{3,4})$/.exec(value ?? '');
+  const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+  return match
+    ? { width: clamp(Number(match[1]), 320, 3840), height: clamp(Number(match[2]), 240, 2160) }
+    : { width: 1280, height: 800 };
+};
 
 export const NODE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -114,6 +124,8 @@ export interface NodeConfig {
   terminalsEnabled: boolean;
   /** Shell for side-panel terminals (PIRC_TERMINAL_SHELL, default $SHELL). */
   terminalShell?: string;
+  /** Agent browser tools and the Browser panel (plans/browser.md, node/browser.ts). */
+  browser: BrowserSettings;
   leaseTtlMs: number;
   interactionTtlMs: number;
   shutdownGraceMs: number;
@@ -275,6 +287,16 @@ export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig
     uploadMaxBytes: uploadLimit(env),
     terminalsEnabled: bool(env.PIRC_TERMINALS, true),
     ...(env.PIRC_TERMINAL_SHELL ? { terminalShell: env.PIRC_TERMINAL_SHELL } : {}),
+    browser: {
+      enabled: bool(env.PIRC_BROWSER, true),
+      executable: findBrowserExecutable(env.PIRC_BROWSER_EXECUTABLE),
+      ffmpeg: env.PIRC_FFMPEG || 'ffmpeg',
+      profilesDir: path.resolve(
+        env.PIRC_BROWSER_PROFILES_DIR ?? path.join(dirs.stateDir, 'browser'),
+      ),
+      idleMs: integer(env.PIRC_BROWSER_IDLE_MS, 30 * 60_000),
+      viewport: viewport(env.PIRC_BROWSER_VIEWPORT),
+    },
     leaseTtlMs: integer(env.PIRC_LEASE_TTL_MS, 30_000),
     interactionTtlMs: integer(env.PIRC_INTERACTION_TTL_MS, 3_600_000),
     shutdownGraceMs: integer(env.PIRC_SHUTDOWN_GRACE_MS, 5_000),

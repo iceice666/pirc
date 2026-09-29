@@ -8,6 +8,8 @@
  * into or closing a terminal requires the session's control lease (the
  * same authority as prompting the agent).
  */
+import { closeSync, openSync, readSync, statSync } from 'node:fs';
+import path from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { loadAgentConfig } from '../agent/config.js';
@@ -17,6 +19,7 @@ import type { NodeConfig } from '../config.js';
 import type { ModelStore } from '../models.js';
 import type { GatewayDatabase, SessionRow } from '../database.js';
 import { ApiError } from '../errors.js';
+import { RECORDING_CHUNK_BYTES } from '../protocol.js';
 import { parse } from '../util.js';
 import {
   gitDiff,
@@ -31,6 +34,7 @@ import { sessionRoot } from './chat.js';
 import type { RunnerManager } from './runner.js';
 import { withoutSecrets } from './secrets.js';
 import { TerminalManager } from './terminals.js';
+import type { BrowserFrame, BrowserManager } from './browser.js';
 
 const flag = z
   .enum(['1', '0', 'true', 'false'])
@@ -48,6 +52,7 @@ export interface PanelContext {
   models: ModelStore;
   /** Shared with the snapshot route. */
   branches: BranchCache;
+  browser: BrowserManager;
   claim(request: FastifyRequest, sessionId?: string): SessionRow;
 }
 
@@ -77,11 +82,29 @@ export interface TerminalStreams {
   ): TerminalConnection;
 }
 
+export interface BrowserStreams {
+  /**
+   * Watch a session's browser. Anyone who may view the session may watch and
+   * page through the action log; everything else (take over, input, record)
+   * requires the control lease.
+   */
+  open(
+    target: { user: string; sessionId: string },
+    send: (frame: BrowserFrame) => void,
+  ): TerminalConnection;
+}
+
+const RECORDING_PATH = /^\.pirc\/recordings\/[A-Za-z0-9_.-]{1,200}\.webm$/;
+
 export function registerPanelRoutes(
   app: FastifyInstance,
   ctx: PanelContext,
-): { terminals: TerminalManager; terminalStreams: TerminalStreams } {
-  const { config, db, runners, models, branches: branchCache, claim } = ctx;
+): {
+  terminals: TerminalManager;
+  terminalStreams: TerminalStreams;
+  browserStreams: BrowserStreams;
+} {
+  const { config, db, runners, models, branches: branchCache, browser, claim } = ctx;
   const terminals = new TerminalManager(() => withoutSecrets(process.env), config.terminalShell);
 
   const local = <T>(
@@ -317,5 +340,109 @@ export function registerPanelRoutes(
     },
   };
 
-  return { terminals, terminalStreams };
+  // ---- browser -------------------------------------------------------------------
+
+  /** A chunk of a browser recording (`.pirc/recordings/*.webm`), base64 in JSON. */
+  app.get(
+    '/api/sessions/:id/browser/recording',
+    local(({ root }, request) => {
+      const query = parse(
+        z.object({
+          path: z.string().regex(RECORDING_PATH),
+          offset: z.coerce.number().int().min(0).default(0),
+          length: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(RECORDING_CHUNK_BYTES)
+            .default(RECORDING_CHUNK_BYTES),
+        }),
+        request.query,
+      );
+      return readRecordingChunk(root, query.path, query.offset, query.length);
+    }),
+  );
+
+  const browserStreams: BrowserStreams = {
+    open({ user, sessionId }, send) {
+      if (!browser.enabled)
+        throw new ApiError(403, 'forbidden', 'The browser is not available on this node');
+      if (!config.allowedUsers.has(user))
+        throw new ApiError(403, 'forbidden', 'User is not allowed on this node');
+      const session = db.claimSession(sessionId, user);
+      const workspace = db.getWorkspace(session.workspaceId);
+      const target = {
+        sessionId: session.id,
+        workspaceId: workspace.id,
+        root: sessionRoot(workspace, session.id),
+      };
+      const detach = browser.attach(session.id, send);
+      let open = true;
+      return {
+        input(raw) {
+          const message = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+          if (message.type !== 'log_image')
+            try {
+              db.validateLease(
+                session.id,
+                String(message.clientId ?? ''),
+                Number(message.generation),
+              );
+            } catch {
+              send({
+                type: 'error',
+                code: 'lost_control',
+                message: 'Take control of the session to use the browser',
+              });
+              return;
+            }
+          void browser.input(target, message).then(
+            (frame) => {
+              if (frame && open) send(frame);
+            },
+            (error: unknown) => {
+              if (open)
+                send({
+                  type: 'error',
+                  code: error instanceof ApiError ? error.code : 'browser_error',
+                  message: (error instanceof Error ? error.message : String(error)).slice(0, 500),
+                });
+            },
+          );
+        },
+        detach() {
+          open = false;
+          detach();
+        },
+      };
+    },
+  };
+
+  return { terminals, terminalStreams, browserStreams };
+}
+
+function readRecordingChunk(root: string, relative: string, offset: number, length: number) {
+  const file = path.join(root, relative);
+  let stat: ReturnType<typeof statSync>;
+  try {
+    stat = statSync(file);
+  } catch {
+    throw new ApiError(404, 'not_found', 'Recording not found');
+  }
+  if (!stat.isFile()) throw new ApiError(404, 'not_found', 'Recording not found');
+  const size = stat.size;
+  const start = Math.min(offset, size);
+  const buffer = Buffer.alloc(Math.min(length, size - start));
+  const fd = openSync(file, 'r');
+  try {
+    let read = 0;
+    while (read < buffer.length) {
+      const n = readSync(fd, buffer, read, buffer.length - read, start + read);
+      if (!n) break;
+      read += n;
+    }
+  } finally {
+    closeSync(fd);
+  }
+  return { size, offset: start, mimeType: 'video/webm', dataBase64: buffer.toString('base64') };
 }

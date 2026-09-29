@@ -9,6 +9,7 @@ import { RpcUi, serveRpc, stdinLines } from './rpc.js';
 import { SessionStore } from './session-store.js';
 import { builtinTools } from './tools/index.js';
 import { nodeGateway } from './gateway.js';
+import { nodeBrowser } from './browser-channel.js';
 import { nodeWriteBroker, processWriteLease } from './write-lease.js';
 
 /**
@@ -93,6 +94,7 @@ export async function runAgent(argv: string[]): Promise<void> {
     ui.cancelAll();
     nodeWriteBroker().closeAll();
     nodeGateway().closeAll();
+    nodeBrowser().closeAll();
     await agent.shutdown();
     process.exit(0);
   };

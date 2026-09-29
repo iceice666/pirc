@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import WebSocket from 'ws';
 import { loadDaemonConfig, loadNodeConfig } from '../src/config.js';
+import { findBrowserExecutable } from '../src/node/browser.js';
 import { headers, startCluster, waitFor, type Cluster } from './helpers.js';
 
 const clusters: Cluster[] = [];
@@ -315,3 +316,90 @@ it('keeps daemon and node configuration apart', () => {
     );
   expect(() => loadNodeConfig({ ...nodeEnv, PIRC_NODE_TOKEN: 'short' })).toThrow('32');
 });
+
+const browserExecutable = findBrowserExecutable(process.env.PIRC_BROWSER_EXECUTABLE);
+
+it.skipIf(!browserExecutable || !Bun.which('ffmpeg'))(
+  'relays the browser live view and serves its recordings with ranges',
+  async () => {
+    const site = Bun.serve({
+      port: 0,
+      fetch: () =>
+        new Response('<!doctype html><title>Site</title><h1>Hello from the site</h1>', {
+          headers: { 'content-type': 'text/html' },
+        }),
+    });
+    try {
+      const cluster = await startCluster([
+        {
+          nodeId: 'test',
+          browser: {
+            enabled: true,
+            executable: browserExecutable,
+            ffmpeg: 'ffmpeg',
+            profilesDir: mkdtempSync(path.join(os.tmpdir(), 'pirc-relay-browser-')),
+            idleMs: 60_000,
+            viewport: { width: 640, height: 480 },
+          },
+        },
+      ]);
+      clusters.push(cluster);
+      const { app, url } = cluster;
+      const { sessionId, control } = await openSession(cluster);
+      const view = terminalSocket(`${url}/api/sessions/${sessionId}/browser/stream`);
+      await view.until(() => view.messages.some((m) => m.type === 'state'));
+      expect(view.messages[0].state.active).toBe(false);
+
+      const send = (message: Record<string, unknown>) =>
+        view.socket.send(JSON.stringify({ ...control, ...message }));
+      send({ type: 'takeover' });
+      send({ type: 'navigate', url: `http://127.0.0.1:${site.port}/` });
+      await view.until(() =>
+        view.messages.some((m) => m.type === 'state' && m.state.title === 'Site'),
+      );
+      await view.until(() => view.messages.some((m) => m.type === 'frame' && m.width === 640));
+      send({ type: 'record', action: 'start' });
+      await view.until(() =>
+        view.messages.some((m) => m.type === 'state' && m.state.recording !== null),
+      );
+      await Bun.sleep(800);
+      send({ type: 'record', action: 'stop' });
+      await view.until(() =>
+        view.messages.some((m) => m.type === 'log_entry' && m.entry.action.startsWith('Saved')),
+      );
+      const saved = view.messages.find(
+        (m) => m.type === 'log_entry' && m.entry.action.startsWith('Saved'),
+      ).entry.action as string;
+      const file = saved.replace('Saved recording ', '');
+      expect(file).toMatch(/^\.pirc\/recordings\/recording-.*\.webm$/);
+
+      const recording = (range?: string) =>
+        app.inject({
+          method: 'GET',
+          url: `/api/sessions/${sessionId}/browser/recording?path=${encodeURIComponent(file)}`,
+          headers: { ...headers, ...(range ? { range } : {}) },
+        });
+      const full = await recording();
+      expect(full.statusCode).toBe(200);
+      expect(full.headers['content-type']).toBe('video/webm');
+      expect(full.rawPayload.subarray(0, 4)).toEqual(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+      const size = full.rawPayload.length;
+      const part = await recording('bytes=10-19');
+      expect(part.statusCode).toBe(206);
+      expect(part.headers['content-range']).toBe(`bytes 10-19/${size}`);
+      expect(part.rawPayload).toEqual(full.rawPayload.subarray(10, 20));
+      const tail = await recording('bytes=-5');
+      expect(tail.rawPayload).toEqual(full.rawPayload.subarray(size - 5));
+      expect((await recording(`bytes=${size + 10}-`)).statusCode).toBe(416);
+      const escape = await app.inject({
+        method: 'GET',
+        url: `/api/sessions/${sessionId}/browser/recording?path=${encodeURIComponent('../../etc/passwd')}`,
+        headers,
+      });
+      expect(escape.statusCode).toBe(400);
+    } finally {
+      site.stop(true);
+    }
+  },
+  60_000,
+);

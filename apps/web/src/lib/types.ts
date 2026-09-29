@@ -83,6 +83,8 @@ export interface ToolCall {
   /** Unified diff reported by edit-style tools. */
   diff?: string;
   images?: InlineImage[];
+  /** A saved browser recording (`browser_record` stop), relative to the session's workspace. */
+  recording?: string;
   startedAt?: string;
   endedAt?: string;
 }

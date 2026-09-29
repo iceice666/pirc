@@ -16,7 +16,8 @@ import { ApiError } from '../errors.js';
 import { EventHub } from '../events.js';
 import { registerErrorHandler, registerImageParsers } from '../http.js';
 import { listModels, loadModelsFile, ModelStore } from '../models.js';
-import { NODE_FRAME_MAX_BYTES, type NodeHttpRequest } from '../protocol.js';
+import { Readable } from 'node:stream';
+import { NODE_FRAME_MAX_BYTES, RECORDING_CHUNK_BYTES, type NodeHttpRequest } from '../protocol.js';
 import { applySessionName, publicSession } from '../session-name.js';
 import type { EventCursor } from '../types.js';
 import { parse, payloadHash } from '../util.js';
@@ -33,6 +34,18 @@ import { registerBackendRoutes } from '../backends/routes.js';
 import { GatewayInference } from '../backends/inference.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
+/** Live browser frames are skipped while this much is queued to the client. */
+const BROWSER_SOCKET_BACKLOG_BYTES = 2 * 1024 * 1024;
+
+/** A node answered with an error; passed through to the client unchanged. */
+class NodeReplyError extends Error {
+  constructor(
+    readonly status: number,
+    readonly body: unknown,
+  ) {
+    super(`Node answered ${status}`);
+  }
+}
 const nodeIdField = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);
 const createWorkspaceBody = z.union([
   // A chat project on a chat node, which picks and hides its directory.
@@ -706,6 +719,121 @@ export async function buildDaemonApp(
       }
     },
   );
+
+  /**
+   * Browser live view, relayed like a terminal stream. Live frames are
+   * dropped (not queued) while the socket is backed up; the next one catches up.
+   */
+  app.get('/api/sessions/:id/browser/stream', { websocket: true }, (socket, request) => {
+    try {
+      validateRequest(request, config, devices, true);
+      const session = claim(request);
+      const stream = nodes.openTerminal(
+        session.nodeId,
+        {
+          user: request.identity!.user,
+          sessionId: session.piSessionId,
+          terminalId: 'browser',
+          kind: 'browser',
+        },
+        {
+          onFrame(frame) {
+            if (socket.readyState !== socket.OPEN) return;
+            const live = (frame as { type?: unknown })?.type === 'frame';
+            if (live && socket.bufferedAmount > BROWSER_SOCKET_BACKLOG_BYTES) return;
+            if (socket.bufferedAmount > config.websocketMaxBufferedBytes) {
+              socket.close(1013, 'resync required');
+              return;
+            }
+            socket.send(JSON.stringify(frame));
+          },
+          onClose(code, reason) {
+            if (socket.readyState === socket.OPEN) socket.close(code, reason.slice(0, 120));
+          },
+        },
+      );
+      socket.on('message', (raw) => {
+        let message: unknown;
+        try {
+          message = JSON.parse(String(raw));
+        } catch {
+          return;
+        }
+        stream.send(message);
+      });
+      const untrack = trackDevice(request, socket);
+      const done = () => {
+        stream.close();
+        untrack();
+      };
+      socket.once('close', done);
+      socket.once('error', done);
+    } catch (error) {
+      socket.close(
+        wsCloseCode(error),
+        error instanceof Error ? error.message.slice(0, 120) : 'invalid request',
+      );
+    }
+  });
+
+  /**
+   * A browser recording (`.pirc/recordings/*.webm` in the session's
+   * workspace), fetched from the node in chunks. Supports Range so video
+   * players can seek.
+   */
+  app.get('/api/sessions/:id/browser/recording', async (request, reply) => {
+    const session = claim(request);
+    const { path: file } = parse(z.object({ path: z.string().min(1).max(300) }), request.query);
+    const chunk = async (offset: number, length: number) => {
+      const response = await relay(session.nodeId, request, {
+        method: 'GET',
+        url: nodeUrl(
+          session,
+          `/browser/recording?${new URLSearchParams({ path: file, offset: String(offset), length: String(length) })}`,
+        ),
+      });
+      if (response.status >= 400) throw new NodeReplyError(response.status, response.body);
+      const body = response.body as { size: number; dataBase64: string };
+      return { size: body.size, data: Buffer.from(body.dataBase64, 'base64') };
+    };
+    let first: { size: number; data: Buffer };
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(request.headers.range ?? ''));
+    let start = range?.[1] ? Number(range[1]) : 0;
+    try {
+      first = await chunk(start, RECORDING_CHUNK_BYTES);
+    } catch (error) {
+      if (error instanceof NodeReplyError) return reply.status(error.status).send(error.body);
+      throw error;
+    }
+    const size = first.size;
+    if (range && !range[1] && range[2]) {
+      // Suffix range: the last N bytes.
+      start = Math.max(0, size - Number(range[2]));
+      first = await chunk(start, RECORDING_CHUNK_BYTES);
+    }
+    const end = range?.[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+    if (start >= size && size > 0)
+      return reply.status(416).header('content-range', `bytes */${size}`).send();
+    const length = Math.max(0, end - start + 1);
+    async function* body() {
+      let offset = start;
+      let next: Buffer = first.data;
+      while (offset <= end && next.length) {
+        const part = next.subarray(0, end - offset + 1);
+        yield part;
+        offset += part.length;
+        if (offset > end) break;
+        next = (await chunk(offset, RECORDING_CHUNK_BYTES)).data;
+      }
+    }
+    reply
+      .header('content-type', 'video/webm')
+      .header('accept-ranges', 'bytes')
+      .header('cache-control', 'private, max-age=3600')
+      .header('content-length', String(length));
+    if (range) reply.status(206).header('content-range', `bytes ${start}-${end}/${size}`);
+    return reply.send(Readable.from(body()));
+  });
 
   app.addHook('onClose', async () => {
     inference?.cancelAll();

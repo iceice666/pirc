@@ -12,6 +12,8 @@ export const NODE_PROTOCOL_VERSION = 6;
 
 /** One WebSocket frame on the node link. Uploads (base64) must fit, see MAX_UPLOAD_BYTES. */
 export const NODE_FRAME_MAX_BYTES = 16_777_216;
+/** Browser recordings cross the node link in base64 chunks of this many bytes. */
+export const RECORDING_CHUNK_BYTES = 4 * 1024 * 1024;
 
 /** Close code sent to a node that speaks another protocol version. */
 export const PROTOCOL_MISMATCH_CLOSE = 4426;
@@ -122,6 +124,8 @@ export type DaemonToNode =
       user: string;
       sessionId: string;
       terminalId: string;
+      /** `browser`: the session's browser live view (terminalId unused). Default `terminal`. */
+      kind?: 'terminal' | 'browser';
     }
   | { type: 'terminal_input'; streamId: string; message: unknown }
   | { type: 'terminal_close'; streamId: string };

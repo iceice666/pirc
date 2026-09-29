@@ -31,6 +31,8 @@ import type { TerminalConnection } from './panel-routes.js';
 
 const RECONNECT_MS = 3_000;
 const HEARTBEAT_MS = 15_000;
+/** Browser live-view frames are skipped while this much is queued on the daemon link. */
+const BROWSER_FRAME_BACKLOG_BYTES = 4 * 1024 * 1024;
 
 const daemonMessage = z.discriminatedUnion('type', [
   ...inferenceEventFrames,
@@ -65,6 +67,7 @@ const daemonMessage = z.discriminatedUnion('type', [
     user: z.string().min(1),
     sessionId: z.string().min(1),
     terminalId: z.string().min(1),
+    kind: z.enum(['terminal', 'browser']).optional(),
   }),
   z.object({ type: z.literal('terminal_input'), streamId: z.string(), message: z.unknown() }),
   z.object({ type: z.literal('terminal_close'), streamId: z.string() }),
@@ -177,6 +180,16 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
     const { streamId } = message;
     if (terminals.has(streamId)) return;
     try {
+      if (message.kind === 'browser') {
+        const connection = services.browserStreams.open(message, (frame) => {
+          // Live frames are disposable: drop them while the link is backed up.
+          if (frame.type === 'frame' && (socket?.bufferedAmount ?? 0) > BROWSER_FRAME_BACKLOG_BYTES)
+            return;
+          send({ type: 'terminal_frame', streamId, frame });
+        });
+        terminals.set(streamId, connection);
+        return;
+      }
       const connection = services.terminalStreams.open(
         message,
         (frame) => send({ type: 'terminal_frame', streamId, frame }),

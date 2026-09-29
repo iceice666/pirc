@@ -222,7 +222,7 @@ export class NodeRegistry {
   /** Relay a browser terminal WebSocket to a node's terminal. */
   openTerminal(
     nodeId: string,
-    target: { user: string; sessionId: string; terminalId: string },
+    target: { user: string; sessionId: string; terminalId: string; kind?: 'terminal' | 'browser' },
     handlers: TerminalStreamHandlers,
   ): TerminalStream {
     const socket = this.socketFor(nodeId);

@@ -1,12 +1,12 @@
 <script lang="ts">
   /**
    * Right-hand side panel, Codex/ChatGPT style: a tab strip over Files, Git,
-   * Memory, Tasks and Terminal. A tab mounts on first visit and then stays
+   * Memory, Tasks, Terminal and Browser. A tab mounts on first visit and then stays
    * mounted (hidden) so its folder, open file, diff and scroll position survive
    * tab switches; each tab loads and refreshes its own data while it is shown.
    * The left edge is a drag handle that resizes the panel.
    */
-  import { Brain, FolderTree, GitBranch, ListChecks, SquareTerminal } from '@lucide/svelte';
+  import { Brain, FolderTree, GitBranch, Globe, ListChecks, SquareTerminal } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { rovingFocus } from '../../a11y';
@@ -19,6 +19,7 @@
   import MemoryTab from './MemoryTab.svelte';
   import TasksTab from './TasksTab.svelte';
   import TerminalTab from './TerminalTab.svelte';
+  import BrowserTab from './BrowserTab.svelte';
   import './panel.css';
 
   interface Props {
@@ -56,6 +57,7 @@
     { id: 'memory', label: 'Memory', icon: Brain },
     { id: 'tasks', label: 'Tasks', icon: ListChecks },
     { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
+    { id: 'browser', label: 'Browser', icon: Globe },
   ];
 
   const sessionId = $derived(app.sessionState?.session.id ?? '');
@@ -199,6 +201,13 @@
               <MemoryTab active={open && tab === 'memory'} />
             {:else if item.id === 'tasks'}
               <TasksTab {sessionId} active={open && tab === 'tasks'} />
+            {:else if item.id === 'browser'}
+              <BrowserTab
+                {sessionId}
+                generation={app.generation}
+                hasControl={app.hasControl}
+                active={open && tab === 'browser'}
+              />
             {:else}
               <TerminalTab
                 {sessionId}

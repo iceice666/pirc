@@ -165,6 +165,22 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
     internal fun terminalRequest(sessionId: String, terminalId: String) =
         request("${session(sessionId)}/terminals/${terminalId.urlSegment()}/stream").build()
 
+    /** The session's browser live view (plans/browser.md), bearer-authenticated like terminals. */
+    internal fun browserRequest(sessionId: String) =
+        request("${session(sessionId)}/browser/stream").build()
+
+    /**
+     * Save a browser recording (`.pirc/recordings/<name>.webm`) to [dest] for the
+     * system video player; it needs the bearer token, so it is fetched here.
+     */
+    open suspend fun downloadRecording(sessionId: String, path: String, dest: java.io.File) = withContext(Dispatchers.IO) {
+        val url = "${session(sessionId)}/browser/recording?path=${path.urlSegment()}"
+        client.newCall(request(url).build()).execute().use { response ->
+            if (!response.isSuccessful) throw failure(response, response.body.string())
+            dest.outputStream().use { out -> response.body.byteStream().copyTo(out) }
+        }
+    }
+
     // ---- acting on a session (needs the control lease) ----
 
     open suspend fun models(sessionId: String): List<ModelOption> =

@@ -13,7 +13,9 @@
     Terminal,
     Wrench,
   } from '@lucide/svelte';
+  import { app } from '../app.svelte';
   import { clipText, highlightCode, languageForPath, rendererTick } from '../markdown';
+  import { panelApi } from '../panel-api';
   import { elapsed } from '../time';
   import type { ToolCall } from '../types';
 
@@ -106,6 +108,7 @@
                 : Wrench,
   );
   let summary = $derived(describe(tool.name, args));
+  const recordingSession = $derived(app.usingDemo ? '' : (app.sessionState?.session.id ?? ''));
   let fileLanguage = $derived(languageForPath(args.path));
   let duration = $derived(elapsed(tool.startedAt, tool.endedAt));
   let extraInput = $derived(
@@ -171,6 +174,17 @@
     </span>
     <ChevronDown class={open ? 'rotated' : ''} size={16} aria-hidden="true" />
   </button>
+  {#if tool.recording && recordingSession}
+    <!-- A browser recording (browser_record), always visible so it can be reviewed. -->
+    <div class="tool-recording">
+      <!-- svelte-ignore a11y_media_has_caption -->
+      <video
+        controls
+        preload="metadata"
+        src={panelApi.recordingUrl(recordingSession, tool.recording)}
+      ></video>
+    </div>
+  {/if}
   {#if open}
     <div class="tool-content">
       {#if tool.name === 'bash' && typeof args.command === 'string'}
@@ -237,6 +251,16 @@
 </div>
 
 <style>
+  .tool-recording {
+    padding: 0 10px 10px;
+  }
+  .tool-recording video {
+    display: block;
+    width: 100%;
+    max-height: 420px;
+    border-radius: var(--radius-sm);
+    background: #000;
+  }
   .tool-images img {
     max-width: min(100%, 360px);
     max-height: 280px;

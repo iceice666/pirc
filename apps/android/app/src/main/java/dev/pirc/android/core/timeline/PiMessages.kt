@@ -85,17 +85,25 @@ private fun toolFromCall(part: JsonElement?, status: String): ToolCall = ToolCal
     input = parseArguments(part["arguments"] ?: part["toolCall"]["arguments"]),
 )
 
+/** Where browser recordings live in a session's workspace. */
+internal val RECORDING_PATH = Regex("""^\.pirc/recordings/[^/]+\.webm$""")
+
 /** Tool result payload (`toolResult` message or `tool_execution_*` result). */
 internal fun toolResultFields(result: JsonElement?, id: String): ToolUpdate {
     if (result == null) return ToolUpdate(id)
     val output = text(result["content"])
     val diff = result["details"]["diff"].string
     val found = images(result["content"])
+    val details = result["details"]
+    val recording = details["path"].string?.takeIf {
+        (details["recording"] as? JsonPrimitive)?.booleanOrNull == false && RECORDING_PATH.matches(it)
+    }
     return ToolUpdate(
         id = id,
         output = output.ifEmpty { null },
         diff = diff?.ifEmpty { null },
         images = found.ifEmpty { null },
+        recording = recording,
     )
 }
 
@@ -105,6 +113,7 @@ private fun ToolUpdate.with(other: ToolUpdate) = copy(
     output = other.output ?: output,
     diff = other.diff ?: diff,
     images = other.images ?: images,
+    recording = other.recording ?: recording,
     startedAt = other.startedAt ?: startedAt,
     endedAt = other.endedAt ?: endedAt,
     input = other.input ?: input,
@@ -177,6 +186,7 @@ internal fun piMessage(raw: JsonElement?, id: String = piMessageId(raw), now: ()
                         output = result.output,
                         diff = result.diff,
                         images = result.images.orEmpty(),
+                        recording = result.recording,
                     ),
                 ),
             )
@@ -268,13 +278,14 @@ internal fun mergeTool(existing: ToolCall?, update: ToolUpdate): ToolCall {
         images = update.images ?: base.images,
         startedAt = update.startedAt ?: base.startedAt,
         endedAt = update.endedAt ?: base.endedAt,
+        recording = update.recording ?: base.recording,
     )
     // A finished tool never regresses to running because of a stale re-send.
     return if (existing != null && existing.status != "running" && update.status == "running")
         merged.copy(status = existing.status) else merged
 }
 
-internal fun ToolCall.asUpdate() = ToolUpdate(id, name, title, status, input, output, diff, images.ifEmpty { null }, startedAt, endedAt)
+internal fun ToolCall.asUpdate() = ToolUpdate(id, name, title, status, input, output, diff, images.ifEmpty { null }, startedAt, endedAt, recording)
 
 /** Convert a full agent history, folding tool results into their assistant turn. */
 internal fun piHistory(history: List<JsonElement>, now: () -> Long = System::currentTimeMillis): List<Message> {

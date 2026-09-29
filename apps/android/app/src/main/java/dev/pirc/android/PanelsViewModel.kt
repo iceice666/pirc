@@ -82,7 +82,7 @@ class ControlKeeper(
     val generation get() = _lease.value.generation?.takeIf { _lease.value.heldByCurrentClient }
 }
 
-enum class PanelTab(val label: String) { Files("Files"), Git("Git"), Tasks("Tasks"), Memory("Memory"), Terminal("Terminal") }
+enum class PanelTab(val label: String) { Files("Files"), Git("Git"), Tasks("Tasks"), Memory("Memory"), Terminal("Terminal"), Browser("Browser") }
 
 /** The tabs showing a `panel_changed` section (memory, background, team, git). */
 internal fun tabsFor(sections: List<String>): Set<PanelTab> = sections.mapNotNullTo(HashSet()) { section ->
@@ -263,6 +263,8 @@ class PanelsViewModel(
             PanelTab.Git -> viewModelScope.launch { loadGit(quiet) }
             PanelTab.Tasks, PanelTab.Memory -> viewModelScope.launch { loadPanel(quiet) }
             PanelTab.Terminal -> viewModelScope.launch { loadTerminals(quiet) }
+            // The browser screen keeps its own live socket.
+            PanelTab.Browser -> Unit
         }
     }
 
@@ -281,7 +283,7 @@ class PanelsViewModel(
                     PanelTab.Git -> loadGit(quiet = true)
                     PanelTab.Tasks, PanelTab.Memory -> loadPanel(quiet = true)
                     PanelTab.Terminal -> loadTerminals(quiet = true)
-                    PanelTab.Files -> Unit
+                    PanelTab.Files, PanelTab.Browser -> Unit
                 }
                 _stale.value[tab]?.let { _actionError.value = "Could not refresh: $it" }
             } finally {

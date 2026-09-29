@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeEvent } from './api';
-import { interleave, piHistory, piNotification, piPartialMessage } from './pi-messages';
+import {
+  interleave,
+  piHistory,
+  piNotification,
+  piPartialMessage,
+  toolResultFields,
+} from './pi-messages';
 import { fromSnapshot, reduceEvent } from './state';
 import type { ConversationMessage, SessionSnapshot } from './types';
 
@@ -375,5 +381,25 @@ describe('interleave (linear merge)', () => {
       const ids = (list: ConversationMessage[]) => list.map((message) => message.id);
       expect(ids(interleave(messages, notices))).toEqual(ids(reference(messages, notices)));
     }
+  });
+});
+
+describe('browser tool results', () => {
+  it('exposes a saved browser recording, and nothing else that looks like one', () => {
+    expect(
+      toolResultFields({
+        content: [{ type: 'text', text: 'Saved recording' }],
+        details: { recording: false, path: '.pirc/recordings/demo-1.webm' },
+      }).recording,
+    ).toBe('.pirc/recordings/demo-1.webm');
+    // Starting a recording has nothing to play yet.
+    expect(
+      toolResultFields({ details: { recording: true, path: '.pirc/recordings/demo-1.webm' } })
+        .recording,
+    ).toBeUndefined();
+    // Only files under .pirc/recordings.
+    expect(
+      toolResultFields({ details: { recording: false, path: '../secret.webm' } }).recording,
+    ).toBeUndefined();
   });
 });

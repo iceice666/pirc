@@ -28,9 +28,10 @@ import { offlineGateway, type AgentGateway } from './agent-gateway.js';
 import { BranchCache } from './branch-cache.js';
 import { chatWorkspaceDir, ensureTopLevelChats, sessionRoot } from './chat.js';
 import { WriteBroker } from './write-broker.js';
-import { registerPanelRoutes, type TerminalStreams } from './panel-routes.js';
+import { registerPanelRoutes, type BrowserStreams, type TerminalStreams } from './panel-routes.js';
 import { RunnerManager } from './runner.js';
 import type { TerminalManager } from './terminals.js';
+import { BrowserManager } from './browser.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
 const createWorkspaceBody = z.union([
@@ -135,6 +136,8 @@ export interface NodeServices {
   models: ModelStore;
   terminals: TerminalManager;
   terminalStreams: TerminalStreams;
+  browser: BrowserManager;
+  browserStreams: BrowserStreams;
 }
 
 export async function buildNodeApp(
@@ -157,6 +160,7 @@ export async function buildNodeApp(
   const writes = new WriteBroker();
   // Filled by the daemon on registration; agents started before that get no providers.
   const models = new ModelStore();
+  const browser = new BrowserManager(config.browser);
   const runners = new RunnerManager(
     config,
     db,
@@ -164,6 +168,7 @@ export async function buildNodeApp(
     writes,
     models,
     options.gateway ?? offlineGateway,
+    browser,
   );
   const branches = new BranchCache();
   const claim = (request: FastifyRequest, sessionId = parse(sessionParams, request.params).id) =>
@@ -462,19 +467,34 @@ export async function buildNodeApp(
       .send({ upload: { id: uploadId, mimeType, byteSize: buffer.length, kind, filename } });
   });
 
-  const { terminals, terminalStreams } = registerPanelRoutes(app, {
+  const { terminals, terminalStreams, browserStreams } = registerPanelRoutes(app, {
     config,
     db,
     runners,
     models,
     branches,
+    browser,
     claim,
   });
 
   app.addHook('onClose', async () => {
     terminals.shutdown();
     await runners.shutdown();
+    await browser.shutdown();
     db.close();
   });
-  return { app, services: { db, events, runners, writes, models, terminals, terminalStreams } };
+  return {
+    app,
+    services: {
+      db,
+      events,
+      runners,
+      writes,
+      models,
+      terminals,
+      terminalStreams,
+      browser,
+      browserStreams,
+    },
+  };
 }

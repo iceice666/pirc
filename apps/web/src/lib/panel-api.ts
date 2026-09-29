@@ -2,7 +2,7 @@
 import { request } from './http';
 import { getClientId } from './storage';
 
-export type PanelTab = 'files' | 'git' | 'memory' | 'tasks' | 'terminal';
+export type PanelTab = 'files' | 'git' | 'memory' | 'tasks' | 'terminal' | 'browser';
 
 const base = (sessionId: string) => `/api/sessions/${encodeURIComponent(sessionId)}`;
 const qs = (params: Record<string, string | number | boolean | undefined>) => {
@@ -186,6 +186,38 @@ export interface TerminalInfo {
   exited: boolean;
 }
 
+/** The session's browser as the node reports it (node/browser.ts). */
+export interface BrowserViewState {
+  active: boolean;
+  url: string;
+  title: string;
+  mode: 'agent' | 'user';
+  handoff: string | null;
+  agentWaiting: boolean;
+  action: string | null;
+  recording: { path: string; startedAt: number } | null;
+  tabs: Array<{ index: number; url: string; title: string; active: boolean }>;
+  viewport: { width: number; height: number };
+}
+export interface BrowserLogEntry {
+  index: number;
+  at: number;
+  actor: 'agent' | 'user';
+  action: string;
+  url: string;
+  image: boolean;
+}
+export type BrowserFrame =
+  | { type: 'state'; state: BrowserViewState }
+  | { type: 'frame'; data: string; width: number; height: number }
+  | { type: 'log'; entries: BrowserLogEntry[] }
+  | { type: 'log_entry'; entry: BrowserLogEntry }
+  | { type: 'log_image'; index: number; data: string | null }
+  | { type: 'error'; code: string; message: string };
+
+/** `Saved recording <path>` log entries name the file. */
+export const RECORDING_LOG = /^Saved recording (\.pirc\/recordings\/\S+\.webm)$/;
+
 /** Read endpoints take an optional signal so a superseded load can be aborted. */
 const get = <T>(path: string, signal?: AbortSignal) => request<T>(path, { signal });
 
@@ -237,6 +269,13 @@ export const panelApi = {
       method: 'POST',
       body: JSON.stringify({ clientId: getClientId(), generation }),
     }),
+  browserUrl: (sessionId: string) => {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${location.host}${base(sessionId)}/browser/stream`;
+  },
+  /** A browser recording (`.pirc/recordings/*.webm`), playable with seeking. */
+  recordingUrl: (sessionId: string, path: string) =>
+    `${base(sessionId)}/browser/recording${qs({ path })}`,
   terminalUrl: (sessionId: string, terminalId: string) => {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${protocol}//${location.host}${base(sessionId)}/terminals/${encodeURIComponent(terminalId)}/stream`;

@@ -32,6 +32,9 @@ import dev.pirc.android.core.FileTarget
 import dev.pirc.android.PanelTab
 import dev.pirc.android.PanelsViewModel
 import dev.pirc.android.TerminalViewModel
+import dev.pirc.android.BrowserViewModel
+import dev.pirc.android.ui.panels.BrowserScreen
+import dev.pirc.android.ui.panels.RecordingScreen
 import dev.pirc.android.core.ApiException
 import dev.pirc.android.ui.files.FileScreen
 import dev.pirc.android.ui.panels.CommitScreen
@@ -58,6 +61,13 @@ data class CommitRoute(val sessionId: String, val sha: String)
 
 @Serializable
 data class TerminalRoute(val sessionId: String, val terminalId: String, val title: String)
+
+@Serializable
+data class BrowserRoute(val sessionId: String)
+
+/** A browser recording, [path] relative to the session's workspace. */
+@Serializable
+data class RecordingRoute(val sessionId: String, val path: String)
 
 /** [line]/[endLine] 0: no line to mark. */
 @Serializable
@@ -105,6 +115,7 @@ fun PircApp(viewModel: AppViewModel) {
                         onBack = { nav.popBackStack() },
                         onOpenPanels = { title, tab -> nav.navigate(PanelsRoute(route.id, title, tab?.name ?: "")) },
                         onOpenFile = { nav.navigate(FileRoute(route.id, it.path, it.line ?: 0, it.endLine ?: 0)) },
+                        onOpenRecording = { nav.navigate(RecordingRoute(route.id, it)) },
                         onChanged = viewModel::replaceSession,
                     )
                 }
@@ -132,8 +143,26 @@ fun PircApp(viewModel: AppViewModel) {
                         onOpenDiff = { file, staged -> nav.navigate(DiffRoute(route.sessionId, file.path, staged, file.untracked && !staged)) },
                         onOpenCommit = { nav.navigate(CommitRoute(route.sessionId, it.sha)) },
                         onOpenTerminal = { nav.navigate(TerminalRoute(route.sessionId, it.id, it.title.ifEmpty { "Terminal" })) },
+                        onOpenBrowser = { nav.navigate(BrowserRoute(route.sessionId)) },
                         onBack = { nav.popBackStack() },
                     )
+                }
+                composable<BrowserRoute> { entry ->
+                    val route = entry.toRoute<BrowserRoute>()
+                    val api = viewModel.api() ?: return@composable
+                    val browser = viewModel<BrowserViewModel>(key = "browser|${api.pairing.baseUrl}|${route.sessionId}") {
+                        BrowserViewModel(api, route.sessionId, viewModel.local.clientId) { viewModel.handle(it) }
+                    }
+                    BrowserScreen(
+                        browser,
+                        onOpenRecording = { nav.navigate(RecordingRoute(route.sessionId, it)) },
+                        onBack = { nav.popBackStack() },
+                    )
+                }
+                composable<RecordingRoute> { entry ->
+                    val route = entry.toRoute<RecordingRoute>()
+                    val api = viewModel.api() ?: return@composable
+                    RecordingScreen(api, route.sessionId, route.path, { viewModel.handle(it) }) { nav.popBackStack() }
                 }
                 composable<DiffRoute> { entry ->
                     val route = entry.toRoute<DiffRoute>()

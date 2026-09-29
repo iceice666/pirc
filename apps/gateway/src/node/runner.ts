@@ -9,6 +9,7 @@ import { ApiError } from '../errors.js';
 import type { EventHub } from '../events.js';
 import { applySessionName } from '../session-name.js';
 import type { AgentGateway } from './agent-gateway.js';
+import type { BrowserManager } from './browser.js';
 import { sessionRoot } from './chat.js';
 import { withoutSecrets } from './secrets.js';
 import type { WriteBroker } from './write-broker.js';
@@ -25,6 +26,8 @@ interface PendingRequest {
 const dialogMethods = new Set(['select', 'confirm', 'input', 'editor']);
 /** Gateway requests one session may have in flight. */
 const MAX_GATEWAY_REQUESTS = 8;
+/** Browser requests one session may have in flight (handoff waits count). */
+const MAX_BROWSER_REQUESTS = 4;
 
 class PiRunner {
   readonly state: ReducedSessionState = emptyReducedState();
@@ -36,6 +39,7 @@ class PiRunner {
   /** Error from the latest assistant turn; a later successful turn clears it. */
   private runError: string | null = null;
   private gatewayRequests = 0;
+  private readonly browserRequests = new Map<string, AbortController>();
 
   constructor(
     readonly session: SessionRow,
@@ -45,6 +49,7 @@ class PiRunner {
     models: ModelStore,
     private readonly writes: WriteBroker,
     private readonly gateway: AgentGateway,
+    private readonly browser: BrowserManager | undefined,
     private readonly onExit: (runner: PiRunner) => void,
   ) {
     this.epoch = db.incrementEpoch(session.id);
@@ -72,6 +77,8 @@ class PiRunner {
         // `chat` makes the agent a personal assistant (see node/chat.ts).
         PIRC_WORKSPACE_KIND: workspace.kind,
         PIRC_WORKSPACE_MEMORY_DIR: config.workspaceMemoryDir,
+        // This node answers browser_request (node/browser.ts).
+        PIRC_BROWSER: browser?.enabled ? '1' : '0',
       },
     });
     // Public catalog + node-local inference transport; no provider credentials.
@@ -166,6 +173,14 @@ class PiRunner {
     }
     if (message.type === 'gateway_request') {
       this.forwardGateway(message);
+      return;
+    }
+    if (message.type === 'browser_request') {
+      this.handleBrowser(message);
+      return;
+    }
+    if (message.type === 'browser_cancel') {
+      if (typeof message.id === 'string') this.browserRequests.get(message.id)?.abort();
       return;
     }
     if (message.type === 'session_name_changed') {
@@ -316,6 +331,54 @@ class PiRunner {
       });
   }
 
+  /**
+   * Answer the agent's `browser_request` from the node's browser. The runner
+   * names the session, so an agent only ever drives its own tabs.
+   */
+  private handleBrowser(message: Record<string, any>): void {
+    if (typeof message.id !== 'string' || !message.id || message.id.length > 100) return;
+    const reply = (response: Record<string, unknown>) => {
+      if (!this.closed && this.child.stdin.writable)
+        this.child.stdin.write(
+          `${JSON.stringify({ type: 'browser_response', id: message.id, ...response })}\n`,
+        );
+    };
+    const fail = (status: number, code: string, text: string) =>
+      reply({ ok: false, error: { status, code, message: text } });
+    if (!this.browser?.enabled)
+      return fail(403, 'forbidden', 'The browser is not available on this node');
+    const op = message.op;
+    if (typeof op !== 'string' || !/^[a-z_]{1,40}$/.test(op))
+      return fail(400, 'invalid_input', 'Unknown browser operation');
+    const args = message.args && typeof message.args === 'object' ? message.args : {};
+    if (Buffer.byteLength(JSON.stringify(args)) > AGENT_REQUEST_MAX_BYTES)
+      return fail(413, 'payload_too_large', 'Browser request arguments are too large');
+    if (this.browserRequests.size >= MAX_BROWSER_REQUESTS)
+      return fail(429, 'too_many_requests', 'Too many browser requests are in flight');
+    const controller = new AbortController();
+    this.browserRequests.set(message.id, controller);
+    const workspace = this.db.getWorkspace(this.session.workspaceId);
+    void this.browser
+      .handle(
+        {
+          sessionId: this.session.id,
+          workspaceId: workspace.id,
+          root: sessionRoot(workspace, this.session.id),
+        },
+        op,
+        args,
+        controller.signal,
+      )
+      .then(
+        (result) => reply({ ok: true, result: result ?? null }),
+        (error: unknown) =>
+          error instanceof ApiError
+            ? fail(error.statusCode, error.code, error.message)
+            : fail(500, 'browser_error', error instanceof Error ? error.message : String(error)),
+      )
+      .finally(() => this.browserRequests.delete(message.id));
+  }
+
   setRun(runId: string): void {
     this.currentRunId = runId;
   }
@@ -337,6 +400,8 @@ class PiRunner {
     );
     for (const pending of this.pending.values()) pending.reject(error);
     this.pending.clear();
+    for (const controller of this.browserRequests.values()) controller.abort();
+    this.browserRequests.clear();
     this.db.markDispatchedUnknown(this.session.id, error.message);
     if (this.currentRunId) this.db.updateRun(this.currentRunId, 'interrupted', error.message);
     this.db.setRunnerState(this.session.id, 'failed');
@@ -382,6 +447,7 @@ export class RunnerManager {
     private readonly writes: WriteBroker,
     private readonly models: ModelStore,
     private readonly gateway: AgentGateway,
+    private readonly browser?: BrowserManager,
   ) {}
 
   /**
@@ -402,6 +468,7 @@ export class RunnerManager {
         this.models,
         this.writes,
         this.gateway,
+        this.browser,
         (exited) => {
           if (this.runners.get(sessionId) === exited) this.runners.delete(sessionId);
           this.writes.release(sessionId);

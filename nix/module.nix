@@ -86,6 +86,11 @@ let
     PIRC_CONFIG_DIR = "${agentConfigDir}";
     PIRC_TERMINALS = lib.boolToString cfg.terminals;
     PIRC_CHAT = lib.boolToString cfg.chat;
+    PIRC_BROWSER = lib.boolToString cfg.browser.enable;
+  }
+  // lib.optionalAttrs cfg.browser.enable {
+    PIRC_BROWSER_EXECUTABLE = lib.getExe cfg.browser.package;
+    PIRC_FFMPEG = lib.getExe' cfg.browser.ffmpeg "ffmpeg";
   }
   // cfg.environment;
 
@@ -364,6 +369,31 @@ in
     allowedHosts = mkOption {
       type = types.listOf types.str;
       default = [ ];
+    };
+    browser = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Give the local node's agents a Chromium browser (web_fetch and the
+          browser_* tools) with one persistent profile per workspace, watched
+          and taken over from the Browser side panel (holding session
+          control). Not a sandbox: pages load with the pirc account's network
+          access and the profile's logins.
+        '';
+      };
+      package = mkOption {
+        type = types.package;
+        default = pkgs.chromium;
+        defaultText = literalExpression "pkgs.chromium";
+        description = "Chromium (or Chrome) driven over CDP by playwright-core.";
+      };
+      ffmpeg = mkOption {
+        type = types.package;
+        default = pkgs.ffmpeg-headless;
+        defaultText = literalExpression "pkgs.ffmpeg-headless";
+        description = "ffmpeg (with libvpx) that encodes browser recordings to WebM.";
+      };
     };
     terminals = mkOption {
       type = types.bool;

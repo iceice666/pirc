@@ -45,6 +45,13 @@ export function testConfig(overrides: Partial<NodeConfig> = {}): NodeConfig {
     rpcMaxLineBytes: 1024 * 1024,
     uploadMaxBytes: 1024 * 1024,
     terminalsEnabled: true,
+    browser: {
+      enabled: false,
+      ffmpeg: 'ffmpeg',
+      profilesDir: path.join(dirs.stateDir, 'browser'),
+      idleMs: 60_000,
+      viewport: { width: 800, height: 600 },
+    },
     leaseTtlMs: 5000,
     interactionTtlMs: 5000,
     shutdownGraceMs: 100,

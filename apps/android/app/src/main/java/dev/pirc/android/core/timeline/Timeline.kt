@@ -25,6 +25,8 @@ data class ToolCall(
     val images: List<InlineImage> = emptyList(),
     val startedAt: Long? = null,
     val endedAt: Long? = null,
+    /** A saved browser recording (`browser_record` stop), relative to the session's workspace. */
+    val recording: String? = null,
 )
 
 /** Fields of a tool that an event changes; `null` keeps the current value. */
@@ -39,6 +41,7 @@ data class ToolUpdate(
     val images: List<InlineImage>? = null,
     val startedAt: Long? = null,
     val endedAt: Long? = null,
+    val recording: String? = null,
 )
 
 data class Message(

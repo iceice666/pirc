@@ -55,6 +55,9 @@ private val prettyJson = Json { prettyPrint = true }
 /** Opens a workspace file in the viewer; provided by the session screen. */
 val LocalFileOpener = staticCompositionLocalOf<((FileTarget) -> Unit)?> { null }
 
+/** Plays a browser recording (`.pirc/recordings/<name>.webm`) of the session. */
+val LocalRecordingOpener = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
 /** The file a call works on (`read`, `write`, `edit`, ...), if its input names one. */
 internal fun toolFile(tool: ToolCall): FileTarget? {
     val input = tool.input as? JsonObject ?: return null
@@ -111,6 +114,13 @@ fun ToolCard(tool: ToolCall, modifier: Modifier = Modifier) {
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+            }
+            // A browser recording stays one tap away, even collapsed.
+            val playRecording = LocalRecordingOpener.current
+            tool.recording?.let { path ->
+                if (playRecording != null) TextButton(onClick = { playRecording(path) }, modifier = Modifier.padding(start = 4.dp)) {
+                    Text("Play recording ${path.substringAfterLast('/')}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
             AnimatedVisibility(visible = open) {
                 Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

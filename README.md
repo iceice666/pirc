@@ -33,6 +33,7 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 - Phones running the native app authenticate with device tokens paired from the web **Settings → Devices**. A device token still needs the trusted proxy and an allowed `Host`, cannot manage devices or model backends, and dies after 7 days without use, 30 days after pairing, or on revocation. Otherwise, it acts as you, including shells on your nodes; revoke a lost phone at once. The proxy must pass these requests past forward auth and strip the identity header (see [`apps/gateway/README.md`](./apps/gateway/README.md#device-tokens)).
 - Workspaces are allowlisted, but this is **not a sandbox**. The agent and its tools retain the operating-system permissions of the node's account.
 - The web side panel can browse workspace files, show Git changes and history, and open interactive shells in the workspace. Shells run as the node's account, just like the agent's tools, and require holding session control; set `PIRC_TERMINALS=false` on the node to disable them.
+- The agent's browser (see [Browser](#browser)) loads pages with the node account's network access and keeps each workspace's logins in a persistent profile. Taking it over from the side panel requires holding session control; set `PIRC_BROWSER=false` on the node to disable it.
 - Keep the gateway on loopback or a private interface reachable only by the trusted proxy. Do not expose it through Tailscale Funnel or the public Internet.
 
 ## Requirements
@@ -96,6 +97,37 @@ Built-in tools and features:
 - Kind presets in `features.agentTeam.kinds` (for subagents and teammates) can set `model`, `thinking`, and a `tools` allowlist, for example `{ "explorer": { "tools": ["read", "ls", "find", "grep"] } }`. Teammates always keep their coordination tools. `features.agentTeam.limit` (default 4) caps live teammates and `subagentLimit` (default 4) caps running subagents.
 - Session titles: sessions cannot be named when created; each one is named by the model from the first user message that describes work (greetings are skipped). It is a side request with no tools and no thinking, and it retries on later messages if it fails. A name you set by renaming always wins. Configure it in `features.sessionTitle`: `enabled` (default `true`), `model` (`{ "provider", "id" }`; defaults to the session's model, so a small, fast model saves cost), `prompt` (replaces the default system prompt), and `maxAttempts` (default `3`).
 - Auto mode: a check that runs before every `bash` command, `background_task` start or `write`, and the same calls made from `code`. First, static rules sort the action into read-only, workspace write, or dangerous. Dangerous actions include deleting a workspace root or anything outside it, `git reset --hard`/`clean -f`/force push, publishing or deploying, touching credentials, changing system or global configuration, and piping a download into a shell. Any action the rules cannot judge goes to a classifier model, which sees the action, the user's last few requests and the critical observational-memory notes the session currently carries (the user's earlier constraints, corrections and decisions), but never tool output. A dangerous action needs your confirmation; headless agents (teammates and subagents) are refused instead. Anything that may write takes the node's write lease first, so another session writing the same worktree makes the call fail with `workspace_busy`. When no classifier model answers, an unclear action counts as a write. Configure it in `features.autoMode`: `enabled` (default `true`; `false` keeps only the write-lease decision), `useModel` (default `true`), `useMemory` (default `true`; show the classifier those memory notes), `model` and `fallbackModels` (default to `features.observationalMemory`'s, then the session model), and `timeoutMs` (default `30000`). This is not a sandbox: approved or misclassified commands still run with the agent account's permissions.
+
+### Browser
+
+Each node gives its agents a real Chromium through [playwright-core](https://playwright.dev) (plans/browser.md). The node owns one browser per workspace, with a persistent profile under `$PIRC_STATE_DIR/browser/`, so a login made once serves every session in that workspace. Each session drives its own tabs.
+
+- **Tools**:
+  - `web_fetch` renders a URL (JavaScript runs, logins apply) and returns readable markdown, text or HTML, in pages of `maxChars`.
+  - `browser_navigate`/`snapshot`/`click`/`type`/`select`/`press`/`wait_for`/`screenshot`/`tabs` drive pages through accessibility-snapshot refs.
+  - `browser_handoff` asks you to take over, for example to log in or pass a CAPTCHA, and waits until you return control.
+  - `browser_record` records a video.
+
+  Snapshots mask password values, and `browser_type` refuses password fields, so logins go through a handoff. Only the node's main agent has the browser (not teammates or subagents), and only `http(s)` URLs open. Auto mode does not judge browser actions; the system prompt tells the agent to ask before consequential submissions.
+
+- **Side panel → Browser** (web and Android):
+  - A live JPEG screencast of the session's active tab, streamed only while you watch.
+  - **Take over** pauses the agent's browser tools (they wait up to 5 minutes, or for the handoff) and forwards your clicks, scrolling and typing, IME included. **Return control** hands it back.
+  - An address bar, tabs, and a **Record** button.
+  - An activity log whose steps (with a screenshot per agent action) you can replay one by one.
+- **Recordings** are WebM files in `<workspace>/.pirc/recordings/`. Frames are repeated at 10 fps so videos play in real time, and recordings stop after 30 minutes. They play in the `browser_record` tool card (web) or open in the Android player, served with HTTP ranges from `/api/sessions/:id/browser/recording?path=…`.
+- **Node settings**:
+
+  | Variable                    | Meaning                                                    | Default                                                                                    |
+  | --------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+  | `PIRC_BROWSER`              | Enables the browser                                        | `true`; unavailable when no browser is found                                               |
+  | `PIRC_BROWSER_EXECUTABLE`   | Browser executable                                         | `chromium`, `google-chrome`… on `PATH`, then `/Applications/Chromium.app` or Google Chrome |
+  | `PIRC_FFMPEG`               | ffmpeg with libvpx, used for recordings                    | `ffmpeg`                                                                                   |
+  | `PIRC_BROWSER_VIEWPORT`     | Viewport size                                              | `1280x800`                                                                                 |
+  | `PIRC_BROWSER_IDLE_MS`      | Idle time before a session's tabs close; the profile stays | 30 minutes                                                                                 |
+  | `PIRC_BROWSER_PROFILES_DIR` | Where the profiles live                                    | `$PIRC_STATE_DIR/browser`                                                                  |
+
+  `features.browser.enabled: false` in an agent config hides the tools. The NixOS module sets these through `services.pirc.browser.{enable,package,ffmpeg}`.
 
 ### Subscription logins
 

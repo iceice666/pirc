@@ -58,7 +58,7 @@ import dev.pirc.android.core.TerminalInfo
 import dev.pirc.android.ui.PircIcons
 import dev.pirc.android.ui.files.FilesPane
 
-/** A session's side panels, one tab each: files, Git, tasks, memory and terminals. */
+/** A session's side panels, one tab each: files, Git, tasks, memory, terminals and the browser. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PanelsScreen(
@@ -71,6 +71,7 @@ fun PanelsScreen(
     onOpenDiff: (GitFile, Boolean) -> Unit,
     onOpenCommit: (Commit) -> Unit,
     onOpenTerminal: (TerminalInfo) -> Unit,
+    onOpenBrowser: () -> Unit,
     onBack: () -> Unit,
 ) {
     val tab by viewModel.tab.collectAsStateWithLifecycle()
@@ -153,9 +154,23 @@ fun PanelsScreen(
                     PanelTab.Tasks -> TasksPane(viewModel, api, onUnauthorized)
                     PanelTab.Memory -> MemoryPane(viewModel)
                     PanelTab.Terminal -> TerminalsPane(viewModel, onOpenTerminal)
+                    PanelTab.Browser -> BrowserPane(onOpenBrowser)
                 }
             }
         }
+    }
+}
+
+/** The browser opens full screen: its live view needs the room, and a keyboard when taking over. */
+@Composable
+private fun BrowserPane(onOpen: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Text(
+            "The agent's browser for this session. Watch it live, take over to log in or fill forms, record videos, and step through what the agent did.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(onClick = onOpen, modifier = Modifier.padding(top = 12.dp)) { Text("Open browser") }
     }
 }
 

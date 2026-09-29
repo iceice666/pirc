@@ -60,6 +60,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import dev.pirc.android.ui.session.InteractionCard
 import dev.pirc.android.ui.session.LocalFileOpener
+import dev.pirc.android.ui.session.LocalRecordingOpener
 import dev.pirc.android.ui.session.MessageView
 import dev.pirc.android.core.FileTarget
 import dev.pirc.android.core.parseFileLink
@@ -87,6 +88,8 @@ fun SessionScreen(
     /** [tab] null: the tab shown last. */
     onOpenPanels: (title: String, tab: PanelTab?) -> Unit,
     onOpenFile: (FileTarget) -> Unit,
+    /** Play a browser recording (a `browser_record` tool result). */
+    onOpenRecording: (String) -> Unit,
     onChanged: (Session) -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
@@ -140,7 +143,7 @@ fun SessionScreen(
                         if (jobs > 0) BadgedBox(badge = { Badge { Text(jobs.toString()) } }) { Text("More") } else Text("More")
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        for (tab in listOf(PanelTab.Git, PanelTab.Tasks, PanelTab.Memory, PanelTab.Terminal))
+                        for (tab in listOf(PanelTab.Git, PanelTab.Tasks, PanelTab.Memory, PanelTab.Terminal, PanelTab.Browser))
                             DropdownMenuItem(text = { Text(if (tab == PanelTab.Tasks && jobs > 0) "Tasks · $jobs running" else tab.label) }, onClick = {
                                 menu = false
                                 onOpenPanels(title, tab)
@@ -174,7 +177,7 @@ fun SessionScreen(
         Box(Modifier.fillMaxSize().padding(padding)) {
             val current = state
             when {
-                current != null -> CompositionLocalProvider(LocalUriHandler provides links, LocalFileOpener provides onOpenFile) {
+                current != null -> CompositionLocalProvider(LocalUriHandler provides links, LocalFileOpener provides onOpenFile, LocalRecordingOpener provides onOpenRecording) {
                     Timeline(current, viewModel)
                 }
                 error != null -> Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {

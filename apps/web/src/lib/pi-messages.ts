@@ -70,9 +70,16 @@ export function toolResultFields(result: Raw | null | undefined): Partial<ToolCa
   const output = text(result.content);
   const diff = typeof result.details?.diff === 'string' ? result.details.diff : undefined;
   const found = images(result.content);
+  const recording =
+    result.details?.recording === false &&
+    typeof result.details.path === 'string' &&
+    /^\.pirc\/recordings\/[^/]+\.webm$/.test(result.details.path)
+      ? (result.details.path as string)
+      : undefined;
   return {
     ...(output ? { output } : {}),
     ...(diff ? { diff } : {}),
+    ...(recording ? { recording } : {}),
     ...(found.length ? { images: found } : {}),
   };
 }
