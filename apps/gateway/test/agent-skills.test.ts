@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import os, { tmpdir } from 'node:os';
 import path from 'node:path';
-import { discoverSkills, parseSkillFile } from '../src/agent/skills.js';
+import { discoverSkills, parseSkillFile, skillRoots } from '../src/agent/skills.js';
 import { settledAfter, startAgent, writeAgentConfig, type AgentProcess } from './agent-harness.js';
 
 const agents: AgentProcess[] = [];
@@ -20,6 +20,7 @@ function setup() {
   const root = mkdtempSync(path.join(tmpdir(), 'pirc-skills-'));
   const configDir = path.join(root, 'config');
   const workspace = path.join(root, 'workspace');
+  const home = path.join(root, 'home');
   writeAgentConfig(configDir);
   // Linked in from elsewhere, the way a Nix store path or an npm package would be.
   const external = path.join(root, 'store');
@@ -41,13 +42,25 @@ function setup() {
     'name: pdf\ndescription: >\n  Extract text from PDFs,\n  fill forms and OCR scans.',
     'Use pdftotext -layout.',
   );
-  return { root, configDir, workspace, external };
+  // Cross-tool personal skills, shared with other agent harnesses (OpenClaw, Hermes).
+  // Lowest precedence: overridden by both the node config and the workspace above.
+  writeSkill(
+    path.join(home, '.agents', 'skills'),
+    'pdf',
+    'name: pdf\ndescription: Personal PDF skill, should lose to node and workspace.',
+  );
+  writeSkill(
+    path.join(home, '.agents', 'skills'),
+    'gif-search',
+    'name: gif-search\ndescription: Search and send a GIF.',
+  );
+  return { root, configDir, workspace, external, home };
 }
 
 async function start(env: ReturnType<typeof setup>) {
   const agent = await startAgent({
     workspace: env.workspace,
-    env: { PIRC_CONFIG_DIR: env.configDir },
+    env: { PIRC_CONFIG_DIR: env.configDir, HOME: env.home },
   });
   agents.push(agent);
   return agent;
@@ -68,6 +81,31 @@ describe('skill discovery', () => {
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('broken');
     expect(parseSkillFile('no front matter').body).toBe('no front matter');
+  });
+
+  it('puts the cross-tool ~/.agents/skills directory at the lowest precedence', () => {
+    const env = setup();
+    const { skills } = discoverSkills([
+      path.join(env.home, '.agents', 'skills'),
+      path.join(env.configDir, 'skills'),
+      path.join(env.workspace, '.pirc', 'skills'),
+    ]);
+    expect(skills.map((skill) => skill.name)).toEqual(['gif-search', 'moodle-cli', 'pdf']);
+    // The node and workspace `pdf` skills both win over the personal one.
+    expect(skills.find((skill) => skill.name === 'pdf')!.description).toBe(
+      'Extract text from PDFs, fill forms and OCR scans.',
+    );
+  });
+});
+
+describe('skillRoots', () => {
+  it('orders ~/.agents/skills lowest, then the node config dir, then the workspace', () => {
+    const roots = skillRoots('/config', '/workspace');
+    expect(roots).toEqual([
+      path.join(os.homedir(), '.agents', 'skills'),
+      path.join('/config', 'skills'),
+      path.join('/workspace', '.pirc', 'skills'),
+    ]);
   });
 });
 
@@ -103,6 +141,9 @@ describe('skills feature', () => {
     expect(system).toContain('<name>moodle-cli</name>');
     expect(system).toContain('Extract text from PDFs');
     expect(system).not.toContain('Global PDF skill');
+    // Personal ~/.agents/skills skill is discovered, at the lowest precedence.
+    expect(system).toContain('<name>gif-search</name>');
+    expect(system).not.toContain('Personal PDF skill');
     const results = agent.events.filter((e) => e.type === 'tool_execution_end');
     expect(results[0]!.isError).toBe(false);
     expect(results[0]!.result.content[0].text).toContain('moodle grades');
@@ -115,7 +156,7 @@ describe('skills feature', () => {
     const agent = await start(env);
     const commands = await agent.send({ type: 'get_commands' });
     expect(commands.data.commands.map((c: any) => c.name)).toEqual(
-      expect.arrayContaining(['skill', 'skill:moodle-cli', 'skill:pdf']),
+      expect.arrayContaining(['skill', 'skill:moodle-cli', 'skill:pdf', 'skill:gif-search']),
     );
     agent.llm.push({ text: 'extracted' });
     await agent.send({ type: 'prompt', message: '/skill:pdf read notes.pdf' });

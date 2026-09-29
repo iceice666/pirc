@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 /**
@@ -17,9 +18,17 @@ export interface Skill {
   file: string;
 }
 
-/** Where skills are looked up, lowest precedence first: node-wide, then the project's. */
+/**
+ * Where skills are looked up, lowest precedence first: the user's cross-tool
+ * `~/.agents/skills` (a convention shared with other agent harnesses such as
+ * OpenClaw and Hermes), then node-wide, then the project's.
+ */
 export function skillRoots(configDir: string, workspace: string): string[] {
-  return [path.join(configDir, 'skills'), path.join(workspace, '.pirc', 'skills')];
+  return [
+    path.join(os.homedir(), '.agents', 'skills'),
+    path.join(configDir, 'skills'),
+    path.join(workspace, '.pirc', 'skills'),
+  ];
 }
 
 const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
