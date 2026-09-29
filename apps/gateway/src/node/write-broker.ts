@@ -10,6 +10,7 @@ export type WriteGrant = { granted: true } | { granted: false; holder: string; p
  */
 export class WriteBroker {
   private readonly held = new Map<string, Set<string>>();
+  private readonly listeners = new Set<(holders: string[]) => void>();
 
   acquire(sessionId: string, canonicalPath: string): WriteGrant {
     for (const [owner, paths] of this.held) {
@@ -19,8 +20,10 @@ export class WriteBroker {
           return { granted: false, holder: owner, path: heldPath };
     }
     let mine = this.held.get(sessionId);
+    const first = !mine;
     if (!mine) this.held.set(sessionId, (mine = new Set()));
     mine.add(canonicalPath);
+    if (first) this.changed();
     return { granted: true };
   }
 
@@ -34,6 +37,17 @@ export class WriteBroker {
   }
 
   release(sessionId: string): void {
-    this.held.delete(sessionId);
+    if (this.held.delete(sessionId)) this.changed();
+  }
+
+  /** Called with every holder whenever a session gains its first lease or loses them all. */
+  onChange(listener: (holders: string[]) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private changed(): void {
+    const holders = this.holders();
+    for (const listener of this.listeners) listener(holders);
   }
 }

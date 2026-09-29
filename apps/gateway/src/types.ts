@@ -44,6 +44,11 @@ export interface SessionSummary {
   updatedAt: number;
 }
 
+/** What started a session other than the user: a scheduled run or a delegated task. */
+export type SessionOrigin =
+  | { kind: 'schedule'; scheduleId: string; title: string; dueAt: number }
+  | { kind: 'delegation'; delegationId: string; title: string; fromSessionId: string };
+
 export type CommandPayload =
   | { type: 'prompt' | 'steer' | 'follow_up'; message: string; uploadIds?: string[] }
   | { type: 'stop' }

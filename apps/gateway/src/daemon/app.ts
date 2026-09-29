@@ -19,7 +19,7 @@ import { listModels, loadModelsFile, ModelStore } from '../models.js';
 import { Readable } from 'node:stream';
 import { NODE_FRAME_MAX_BYTES, RECORDING_CHUNK_BYTES, type NodeHttpRequest } from '../protocol.js';
 import { applySessionName, publicSession } from '../session-name.js';
-import type { EventCursor } from '../types.js';
+import type { EventCursor, RunStatus } from '../types.js';
 import { parse, payloadHash } from '../util.js';
 import { authHook, validateRequest } from './auth.js';
 import { DeviceTokens, registerDeviceRoutes } from './devices.js';
@@ -39,6 +39,7 @@ import { GatewayInference } from '../backends/inference.js';
 import { WebSearch } from './web-search.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
+type LiveActivity = { run?: RunStatus | undefined; writeLease?: boolean | undefined };
 /** Live browser frames are skipped while this much is queued to the client. */
 const BROWSER_SOCKET_BACKLOG_BYTES = 2 * 1024 * 1024;
 
@@ -239,6 +240,36 @@ export async function buildDaemonApp(
     },
     warn: (message, error) => app.log.warn({ error }, message),
   });
+  /**
+   * Like memory changes, but for the session list (`sessions=1`): a run
+   * started or ended, a write lease was taken or given back somewhere.
+   */
+  const sessionListeners = new Map<string, Set<() => void>>();
+  const sessionsChanged = (user: string | null | undefined) => {
+    if (user) for (const listener of sessionListeners.get(user) ?? []) listener();
+  };
+  /** Open runs and write leases each node reported, by gateway session id. */
+  const activity = new Map<string, Map<string, LiveActivity>>();
+  const replaceActivity = (nodeId: string, next: Map<string, LiveActivity>) => {
+    const before = activity.get(nodeId) ?? new Map();
+    if (next.size) activity.set(nodeId, next);
+    else activity.delete(nodeId);
+    const owners = new Set<string>();
+    for (const sessionId of new Set([...before.keys(), ...next.keys()])) {
+      const a = before.get(sessionId);
+      const b = next.get(sessionId);
+      if (a?.run === b?.run && !!a?.writeLease === !!b?.writeLease) continue;
+      try {
+        const owner = db.getSession(sessionId).ownerUser;
+        if (owner) owners.add(owner);
+      } catch {
+        /* session row gone */
+      }
+    }
+    for (const owner of owners) sessionsChanged(owner);
+  };
+  const activityOf = (session: { id: string; nodeId: string | null }) =>
+    session.nodeId ? activity.get(session.nodeId)?.get(session.id) : undefined;
   /** Like memory changes: per user, opted into with `schedules=1`. */
   const scheduleListeners = new Map<string, Set<() => void>>();
   const schedulesChanged = (user: string) => {
@@ -329,7 +360,7 @@ export async function buildDaemonApp(
     try {
       const session = db.getSession(sessionId);
       if (session.nodeId !== nodeId) return;
-      if (event.type === 'session_renamed' && event.data && typeof event.data === 'object')
+      if (event.type === 'session_renamed' && event.data && typeof event.data === 'object') {
         applySessionName(
           db,
           events,
@@ -337,13 +368,23 @@ export async function buildDaemonApp(
           session.runnerEpoch,
           event.data as Record<string, unknown>,
         );
-      else if (typeof event.type === 'string')
+        sessionsChanged(session.ownerUser);
+      } else if (typeof event.type === 'string')
         events.publish(sessionId, session.runnerEpoch, event.type, event.data);
     } catch {
       /* ignore unknown sessions */
     }
   };
+  nodes.onActivity = (nodeId, sessions) => {
+    const next = new Map<string, LiveActivity>();
+    for (const item of sessions) {
+      const sessionId = db.resolveRemoteSession(nodeId, item.id);
+      if (sessionId) next.set(sessionId, { run: item.run, writeLease: item.writeLease });
+    }
+    replaceActivity(nodeId, next);
+  };
   nodes.onDisconnect = (nodeId) => {
+    replaceActivity(nodeId, new Map());
     for (const sessionId of db.remoteSessionIds(nodeId)) {
       db.interruptRemoteSession(sessionId);
       db.setRunnerState(sessionId, 'failed');
@@ -453,12 +494,26 @@ export async function buildDaemonApp(
     });
   });
 
-  app.get('/api/sessions', async (request) => ({
-    sessions: db
-      .listSessions()
-      .filter((session) => session.nodeId && session.ownerUser === request.identity!.user)
-      .map(publicSession),
-  }));
+  app.get('/api/sessions', async (request) => {
+    const user = request.identity!.user;
+    const origins = db.sessionOrigins(user);
+    return {
+      sessions: db
+        .listSessions()
+        .filter((session) => session.nodeId && session.ownerUser === user)
+        .map((session) => {
+          const live = activityOf(session);
+          const origin = origins.get(session.id);
+          return {
+            ...publicSession(session),
+            // The node reports open runs; the gateway's own table only has finished ones.
+            runStatus: live?.run ?? session.runStatus,
+            ...(live?.writeLease ? { writeLease: true } : {}),
+            ...(origin ? { origin } : {}),
+          };
+        }),
+    };
+  });
   app.post('/api/sessions', async (request, reply) => {
     const body = parse(createSessionBody, request.body);
     const workspace = db.getWorkspace(body.workspaceId);
@@ -707,6 +762,7 @@ export async function buildDaemonApp(
           directory: z.literal('1').optional(),
           memory: z.literal('1').optional(),
           schedules: z.literal('1').optional(),
+          sessions: z.literal('1').optional(),
         }),
         request.query,
       );
@@ -750,9 +806,18 @@ export async function buildDaemonApp(
         if (!listeners) scheduleListeners.set(user, (listeners = new Set()));
         listeners.add(onSchedules);
       }
+      const onSessions = () => send({ type: 'sessions_changed' });
+      if (query.sessions) {
+        let listeners = sessionListeners.get(user);
+        if (!listeners) sessionListeners.set(user, (listeners = new Set()));
+        listeners.add(onSessions);
+      }
       const untrack = trackDevice(request, socket);
       const done = () => {
         unsubscribe();
+        const sessionWatchers = sessionListeners.get(user);
+        sessionWatchers?.delete(onSessions);
+        if (sessionWatchers?.size === 0) sessionListeners.delete(user);
         directoryListeners.delete(onDirectory);
         const listeners = memoryListeners.get(user);
         listeners?.delete(onMemory);

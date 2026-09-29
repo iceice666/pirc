@@ -8,7 +8,7 @@ import type { ModelsConfig } from './models.js';
 import type { InferenceEvent, InferenceRequest } from './inference-wire.js';
 import type { WorkspaceKind } from './types.js';
 
-export const NODE_PROTOCOL_VERSION = 6;
+export const NODE_PROTOCOL_VERSION = 7;
 
 /** One WebSocket frame on the node link. Uploads (base64) must fit, see MAX_UPLOAD_BYTES. */
 export const NODE_FRAME_MAX_BYTES = 16_777_216;
@@ -130,6 +130,13 @@ export type DaemonToNode =
   | { type: 'terminal_input'; streamId: string; message: unknown }
   | { type: 'terminal_close'; streamId: string };
 
+/** A node session's open run and write lease, by the node's session id. */
+export interface SessionActivity {
+  id: string;
+  run?: 'queued' | 'running' | 'waiting_input' | 'stopping' | undefined;
+  writeLease?: boolean | undefined;
+}
+
 /** Messages a node sends to the daemon. */
 export type NodeToDaemon =
   | { type: 'model_start'; requestId: string; request: InferenceRequest }
@@ -138,6 +145,11 @@ export type NodeToDaemon =
   | { type: 'heartbeat' }
   | { type: 'response'; requestId: string; data: NodeHttpResponse }
   | { type: 'event'; sessionId: string; event: Record<string, unknown> }
+  /**
+   * Every session of this node with an open run or a write lease, sent whole
+   * after registering and on each change (the gateway's session list shows it).
+   */
+  | { type: 'activity'; sessions: SessionActivity[] }
   | { type: 'agent_request'; requestId: string; sessionId: string; op: string; args?: unknown }
   | {
       type: 'memory_mirror';

@@ -17,6 +17,7 @@ import {
   PROTOCOL_MISMATCH_CLOSE,
   type NodeHttpResponse,
   type NodeToDaemon,
+  type SessionActivity,
 } from '../protocol.js';
 import { DaemonAgentGateway } from './agent-gateway.js';
 import { buildNodeApp } from './app.js';
@@ -31,6 +32,8 @@ import type { TerminalConnection } from './panel-routes.js';
 
 const RECONNECT_MS = 3_000;
 const HEARTBEAT_MS = 15_000;
+/** Run and lease changes within this window go to the gateway as one message. */
+const ACTIVITY_COALESCE_MS = 100;
 /** Browser live-view frames are skipped while this much is queued on the daemon link. */
 const BROWSER_FRAME_BACKLOG_BYTES = 4 * 1024 * 1024;
 
@@ -145,6 +148,26 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
   const unsubscribeEvents = services.events.subscribeAll((event) => {
     if (registered) send({ type: 'event', sessionId: event.sessionId, event: { ...event } });
   });
+  // The gateway's session list shows open runs and write leases: resent whole
+  // after registering and (coalesced) on each change.
+  const activity = (): SessionActivity[] => {
+    const byId = new Map<string, SessionActivity>();
+    for (const run of services.db.activeRuns())
+      byId.set(run.sessionId, { id: run.sessionId, run: run.status as SessionActivity['run'] });
+    for (const holder of services.writes.holders())
+      byId.set(holder, { ...(byId.get(holder) ?? { id: holder }), writeLease: true });
+    return [...byId.values()];
+  };
+  let activityTimer: NodeJS.Timeout | undefined;
+  const sendActivity = () => {
+    activityTimer = undefined;
+    if (registered) send({ type: 'activity', sessions: activity() });
+  };
+  const activityChanged = () => {
+    activityTimer ??= setTimeout(sendActivity, ACTIVITY_COALESCE_MS);
+  };
+  services.db.onRunsChanged = activityChanged;
+  const unsubscribeLeases = services.writes.onChange(activityChanged);
 
   async function handleRequest(
     data: z.infer<typeof daemonMessage> & { type: 'request' },
@@ -249,6 +272,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
         registered = true;
         gateway.connect(sendAgentFrame);
         mirror.connect(sendAgentFrame, message.mirrors ?? {});
+        sendActivity();
         services.models.set({ ...message.models, inference: inference.config });
         app.log.info(
           { daemon: config.daemonUrl, providers: Object.keys(message.models.providers) },
@@ -323,6 +347,9 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       if (retry) clearTimeout(retry);
       if (heartbeat) clearInterval(heartbeat);
       unsubscribeEvents();
+      unsubscribeLeases();
+      services.db.onRunsChanged = undefined;
+      clearTimeout(activityTimer);
       closeTerminals();
       gateway.disconnect();
       mirror.disconnect();

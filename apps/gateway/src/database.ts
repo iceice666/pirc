@@ -5,6 +5,7 @@ import type {
   CommandStatus,
   InteractionStatus,
   RunStatus,
+  SessionOrigin,
   SessionSummary,
   Workspace,
   WorkspaceKind,
@@ -474,6 +475,39 @@ export class GatewayDatabase {
     return session;
   }
 
+  /**
+   * Sessions of `ownerUser` that a schedule or a delegation started, with what
+   * started them (the newest one when a delegation follows up in the same session).
+   */
+  sessionOrigins(ownerUser: string): Map<string, SessionOrigin> {
+    const origins = new Map<string, SessionOrigin>();
+    const scheduled = this.raw
+      .prepare(
+        'SELECT r.session_id, r.schedule_id, r.due_at, s.title FROM schedule_runs r JOIN schedules s ON s.id=r.schedule_id WHERE r.owner_user=? AND r.session_id IS NOT NULL ORDER BY r.created_at',
+      )
+      .all(ownerUser) as any[];
+    for (const row of scheduled)
+      origins.set(row.session_id, {
+        kind: 'schedule',
+        scheduleId: row.schedule_id,
+        title: row.title,
+        dueAt: row.due_at,
+      });
+    const delegated = this.raw
+      .prepare(
+        'SELECT id, target_session_id, assistant_session_id, title FROM delegations WHERE owner_user=? AND target_session_id IS NOT NULL ORDER BY created_at',
+      )
+      .all(ownerUser) as any[];
+    for (const row of delegated)
+      origins.set(row.target_session_id, {
+        kind: 'delegation',
+        delegationId: row.id,
+        title: row.title,
+        fromSessionId: row.assistant_session_id,
+      });
+    return origins;
+  }
+
   resolveRemoteSession(nodeId: string, remoteId: string): string | undefined {
     return (
       this.raw
@@ -526,6 +560,18 @@ export class GatewayDatabase {
       .run(piSessionId, now(), sessionId);
   }
 
+  /** Called after a run is created or changes status (a node reports its activity). */
+  onRunsChanged: (() => void) | undefined;
+
+  /** The newest run of each session whose run is still open. */
+  activeRuns(): Array<{ sessionId: string; status: RunStatus }> {
+    return this.raw
+      .prepare(
+        `SELECT session_id sessionId, status FROM runs WHERE status IN (${RUNNING.map(() => '?').join(',')})`,
+      )
+      .all(...RUNNING) as Array<{ sessionId: string; status: RunStatus }>;
+  }
+
   createRun(sessionId: string): string {
     const active = this.raw
       .prepare(
@@ -537,6 +583,7 @@ export class GatewayDatabase {
     this.raw
       .prepare("INSERT INTO runs (id,session_id,status,created_at) VALUES (?,?,'queued',?)")
       .run(runId, sessionId, now());
+    this.onRunsChanged?.();
     return runId;
   }
   updateRun(runId: string, status: RunStatus, failureReason?: string): void {
@@ -562,6 +609,7 @@ export class GatewayDatabase {
         failureReason ?? null,
         runId,
       );
+    this.onRunsChanged?.();
   }
   latestRun(sessionId: string): Record<string, unknown> | null {
     return (

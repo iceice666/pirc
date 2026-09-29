@@ -16,6 +16,7 @@ import {
   type NodeHttpRequest,
   type NodeHttpResponse,
   type RegisteredWorkspace,
+  type SessionActivity,
 } from '../protocol.js';
 import { publicModels, type ModelStore } from '../models.js';
 import type { AssistantDelta, AssistantMessage } from '../agent/messages.js';
@@ -66,6 +67,18 @@ const nodeMessage = z.discriminatedUnion('type', [
     type: z.literal('event'),
     sessionId: z.string(),
     event: z.record(z.unknown()),
+  }),
+  z.object({
+    type: z.literal('activity'),
+    sessions: z
+      .array(
+        z.object({
+          id: z.string().max(200),
+          run: z.enum(['queued', 'running', 'waiting_input', 'stopping']).optional(),
+          writeLease: z.boolean().optional(),
+        }),
+      )
+      .max(10_000),
   }),
   z.object({
     type: z.literal('memory_mirror'),
@@ -151,6 +164,8 @@ export class NodeRegistry {
   ) => Promise<AssistantMessage>;
   onEvent?: (nodeId: string, sessionId: string, event: Record<string, unknown>) => void;
   onDisconnect?: (nodeId: string) => void;
+  /** The node's sessions with an open run or a write lease now (the node's own session ids). */
+  onActivity?: (nodeId: string, sessions: SessionActivity[]) => void;
   onRegister?: (node: ConnectedNode) => void;
   resolveSession?: (nodeId: string, remoteSessionId: string) => string | undefined;
   /** Answers an agent's request that its node forwarded (see protocol.ts). */
@@ -351,6 +366,9 @@ export class NodeRegistry {
           if (sessionId) this.onEvent?.(nodeId, sessionId, current.event);
           return;
         }
+        case 'activity':
+          this.onActivity?.(nodeId, current.sessions);
+          return;
         case 'agent_request':
           this.answerAgent(nodeId, socket, current);
           return;
