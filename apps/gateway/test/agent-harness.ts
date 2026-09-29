@@ -113,6 +113,9 @@ export async function startAgent(
   const workspace = options.workspace ?? path.join(root, 'workspace');
   mkdirSync(workspace, { recursive: true });
   const configDir = path.join(root, 'config');
+  // A home of its own: the host's ~/.agents/skills (and other dotfiles) must not leak in.
+  const home = path.join(root, 'home');
+  mkdirSync(home, { recursive: true });
   const sessionDir = options.sessionDir ?? path.join(root, 'session');
   const llm = options.llm ?? startFakeLlm();
   writeAgentConfig(configDir, options.config);
@@ -122,6 +125,7 @@ export async function startAgent(
       cwd: workspace,
       env: {
         ...testEnv(),
+        HOME: home,
         PIRC_CONFIG_DIR: configDir,
         PIRC_WORKSPACE_MEMORY_DIR: path.join(root, 'workspace-memory'),
         ...options.env,

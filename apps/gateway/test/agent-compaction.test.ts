@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'bun:test';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
@@ -61,6 +62,29 @@ describe('compaction', () => {
     const messages = await agent.send({ type: 'get_messages' });
     expect(messages.data.messages.map((m: any) => m.role)).toContain('compactionSummary');
     expect(JSON.stringify(messages.data.messages)).toContain('first question');
+  });
+
+  it('keeps feature additions to the system prompt in the summary request', async () => {
+    // A skill makes the skills feature add to the system prompt before each run.
+    const workspace = mkdtempSync(path.join(tmpdir(), 'pirc-compaction-ws-'));
+    const skill = path.join(workspace, '.pirc', 'skills', 'demo');
+    mkdirSync(skill, { recursive: true });
+    writeFileSync(
+      path.join(skill, 'SKILL.md'),
+      '---\nname: demo\ndescription: A demo skill for the compaction prefix test.\n---\nDo the demo.\n',
+    );
+    const agent = await start({
+      workspace,
+      config: { features: { compaction: { keepRecentTokens: 1 } } },
+    });
+    agent.llm.push({ text: 'answer one' }, { text: 'answer two' });
+    await prompt(agent, 'first question');
+    await prompt(agent, 'second question');
+    agent.llm.push({ text: 'SUMMARY-TEXT' });
+    expect((await agent.send({ type: 'compact' })).success).toBe(true);
+    const turn = agent.llm.requests[1]!.body.messages[0];
+    expect(turn.content).toContain('<name>demo</name>');
+    expect(agent.llm.requests[2]!.body.messages[0]).toEqual(turn);
   });
 
   it('compacts automatically when usage approaches the context window', async () => {

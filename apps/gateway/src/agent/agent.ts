@@ -228,6 +228,13 @@ export class Agent {
   private interruptPending = false;
   private runPromise: Promise<void> | null = null;
   private extraSystemPrompt = '';
+  /**
+   * What features added to the system prompt for the latest run
+   * (`beforeAgentStart`: skills, browser, …). Side requests such as the
+   * compaction summary reuse it, so their prefix matches the turns the
+   * provider has cached.
+   */
+  private runPrompt = '';
   private compacting: AbortController | null = null;
   private closed = false;
   modelRef: { provider: string; id: string } | null = null;
@@ -608,7 +615,8 @@ export class Agent {
     }
   }
 
-  systemPrompt(extra = ''): string {
+  /** The system prompt; `extra` defaults to the latest run's feature additions. */
+  systemPrompt(extra = this.runPrompt): string {
     const parts = [this.config.systemPrompt, this.extraSystemPrompt, extra];
     parts.push(`Current working directory: ${this.config.workspace}`);
     return parts.filter(Boolean).join('\n\n');
@@ -857,6 +865,7 @@ export class Agent {
     } catch (error) {
       this.ui.notify(`Failed to start run: ${(error as Error).message}`, 'error');
     }
+    this.runPrompt = extraPrompt.trim();
     let turns = 0;
     let overflowRetried = false;
     let completionTimedOut = false;
@@ -893,7 +902,7 @@ export class Agent {
       const compactsInstead = (reply: AssistantMessage) =>
         isContextOverflow(reply) && !overflowRetried && this.compactionSettings.enabled;
       let persisted = false;
-      const message = await this.stream(this.systemPrompt(extraPrompt.trim()), turn.signal, {
+      const message = await this.stream(this.systemPrompt(this.runPrompt), turn.signal, {
         beforeEnd: (reply) => {
           if (compactsInstead(reply)) return;
           this.store.append({ type: 'message', message: reply });

@@ -13,8 +13,16 @@ afterEach(async () => {
   for (const agent of agents.splice(0)) await agent.close();
 });
 
+/**
+ * Tests aim `rm -rf ~` at a home that does not exist and lies outside the
+ * scratch directories (the harness's default temporary home counts as
+ * scratch, so deleting it would be allowed): the rules still see a
+ * dangerous delete, and a rules bug could not destroy anything real.
+ */
+const NO_HOME = '/nonexistent/pirc-auto-mode-home';
+
 async function start(options: Parameters<typeof startAgent>[0] = {}) {
-  const agent = await startAgent(options);
+  const agent = await startAgent({ ...options, env: { HOME: NO_HOME, ...options.env } });
   agents.push(agent);
   return agent;
 }
