@@ -290,6 +290,11 @@
           ></span
         >
       {/if}
+      {#if app.scheduleAttention}
+        <span class="pending-count" title="Scheduled runs waiting for you"
+          >{app.scheduleAttention}<span class="sr-only"> scheduled runs waiting for you</span></span
+        >
+      {/if}
     </button>
   </div>
 </aside>

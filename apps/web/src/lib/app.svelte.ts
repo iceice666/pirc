@@ -6,6 +6,7 @@
 import { api, connectEvents, type EventConnection } from './api';
 import type { NewWorkspace } from './chats';
 import { memoryApi } from './memory';
+import { schedulesApi } from './schedules';
 import { syncControl } from './control';
 import { errorMessage } from './errors';
 import { GOAL_WIDGET, parseGoalWidget } from './goal';
@@ -66,6 +67,10 @@ class AppState {
   memoryPending = $state(0);
   /** Bumped whenever the gateway says your memory changed; open memory views reload. */
   memoryRevision = $state(0);
+  /** Scheduled runs waiting for you: missed ones to allow, ones waiting for an answer. */
+  scheduleAttention = $state(0);
+  /** Bumped whenever the gateway says your schedules changed; open schedule views reload. */
+  scheduleRevision = $state(0);
   sessions = $state.raw<SessionSummary[]>([]);
   models = $state.raw<ModelOption[]>([]);
   activeSessionId = $state<string>();
@@ -175,6 +180,7 @@ class AppState {
       this.activeSessionId = this.sessions[0]?.id;
       pruneDrafts(this.sessions.map((session) => session.id));
       void this.refreshMemory();
+      void this.refreshSchedules();
     } catch (error) {
       if (import.meta.env.DEV) {
         const demo = await import('./mock');
@@ -220,6 +226,17 @@ class AppState {
     if (this.demo) return;
     try {
       this.memoryPending = (await memoryApi.view()).proposals.length;
+    } catch {
+      /* keep the last count */
+    }
+  }
+
+  /** How many scheduled runs wait for you (the badge on Settings). */
+  async refreshSchedules() {
+    if (this.demo) return;
+    try {
+      const { schedules } = await schedulesApi.list();
+      this.scheduleAttention = schedules.reduce((sum, item) => sum + item.attention, 0);
     } catch {
       /* keep the last count */
     }
@@ -296,6 +313,11 @@ class AppState {
             if (seq !== this.#openSeq) return;
             this.memoryRevision++;
             void this.refreshMemory();
+          },
+          onSchedules: () => {
+            if (seq !== this.#openSeq) return;
+            this.scheduleRevision++;
+            void this.refreshSchedules();
           },
           onEvent: (event) => {
             const current = this.sessionState;

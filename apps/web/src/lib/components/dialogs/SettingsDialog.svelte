@@ -2,6 +2,7 @@
   const SETTINGS_TABS = [
     { id: 'general', label: 'General' },
     { id: 'memory', label: 'Memory' },
+    { id: 'schedules', label: 'Schedules' },
     { id: 'models', label: 'Models' },
     { id: 'devices', label: 'Devices' },
     { id: 'about', label: 'About' },
@@ -17,6 +18,7 @@
   import BackendSettings from '../BackendSettings.svelte';
   import MemorySettings from '../MemorySettings.svelte';
   import PairedDevices from '../PairedDevices.svelte';
+  import ScheduleSettings from '../ScheduleSettings.svelte';
 
   interface Props {
     open: boolean;
@@ -70,6 +72,9 @@
           >{tab.label}{#if tab.id === 'memory' && app.memoryPending}<span
               class="tab-count"
               aria-label="{app.memoryPending} waiting">{app.memoryPending}</span
+            >{/if}{#if tab.id === 'schedules' && app.scheduleAttention}<span
+              class="tab-count"
+              aria-label="{app.scheduleAttention} waiting">{app.scheduleAttention}</span
             >{/if}</button
         >
       {/each}
@@ -108,6 +113,21 @@
         hidden={settingsTab !== 'memory'}
       >
         <MemorySettings
+          disabled={app.usingDemo}
+          onopenchat={(sessionId) => {
+            open = false;
+            onopenchat?.(sessionId);
+          }}
+        />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="settings-panel-schedules"
+        aria-labelledby="settings-tab-schedules"
+        hidden={settingsTab !== 'schedules'}
+      >
+        <ScheduleSettings
           disabled={app.usingDemo}
           onopenchat={(sessionId) => {
             open = false;

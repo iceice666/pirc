@@ -369,8 +369,9 @@
     onclose={() => (sidebarOpen = false)}
     {showSettled}
     onsettings={() => {
-      // Proposals waiting for approval are why the badge is showing.
+      // What waits for you (memory proposals, scheduled runs) is why the badge is showing.
       if (app.memoryPending) settingsTab = 'memory';
+      else if (app.scheduleAttention) settingsTab = 'schedules';
       settingsOpen = true;
       sidebarOpen = false;
     }}

@@ -141,6 +141,26 @@ it('does not ask for directory changes without a handler', () => {
   const connection = connect();
   expect(new URL(FakeSocket.all[0]!.url).searchParams.has('directory')).toBe(false);
   expect(new URL(FakeSocket.all[0]!.url).searchParams.has('memory')).toBe(false);
+  expect(new URL(FakeSocket.all[0]!.url).searchParams.has('schedules')).toBe(false);
+  connection.close();
+});
+
+it('routes schedule changes, when asked for, without resetting the session', () => {
+  const events: unknown[] = [];
+  let changed = 0;
+  const connection = connectEvents({
+    sessionId: 's1',
+    onEvent: (event) => events.push(event),
+    onState: () => undefined,
+    onSchedules: () => changed++,
+  });
+  const socket = FakeSocket.all[0]!;
+  expect(new URL(socket.url).searchParams.get('schedules')).toBe('1');
+  socket.dispatchEvent(
+    new MessageEvent('message', { data: JSON.stringify({ type: 'schedules_changed' }) }),
+  );
+  expect(changed).toBe(1);
+  expect(events).toHaveLength(0);
   connection.close();
 });
 

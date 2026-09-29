@@ -121,6 +121,20 @@ describe('Pi history conversion', () => {
     expect(update).toMatchObject({ label: 'Delegation update', meta: 'd1 · completed' });
   });
 
+  it('labels a scheduled run with its title', () => {
+    const [run] = piHistory([
+      {
+        role: 'custom',
+        customType: 'scheduled-run',
+        content: 'Scheduled task “CI check”…',
+        display: true,
+        details: { scheduleId: 's1', runId: 'r1', title: 'CI check' },
+        timestamp: 1,
+      },
+    ]);
+    expect(run).toMatchObject({ systemKind: 'custom', label: 'Scheduled task', meta: 'CI check' });
+  });
+
   it('labels a loaded skill with its name', () => {
     const [skill] = piHistory([
       {

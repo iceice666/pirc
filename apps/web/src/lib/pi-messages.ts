@@ -200,6 +200,8 @@ export function piMessage(
       const delegationUpdate = raw.customType === 'assistant-delegation-update';
       // A skill loaded with /skill:<name>; its content is the skill's instructions.
       const skill = raw.customType === 'skill';
+      // A scheduled task the gateway started this session for (plans/cron.md).
+      const scheduled = raw.customType === 'scheduled-run';
       const short = (value: unknown) =>
         typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, 100) : '';
       const event = raw.details?.event;
@@ -215,7 +217,9 @@ export function piMessage(
                   .join(' · ')
               : skill
                 ? short(raw.details?.name)
-                : '';
+                : scheduled
+                  ? short(raw.details?.title)
+                  : '';
       return {
         id,
         role: 'system',
@@ -230,7 +234,9 @@ export function piMessage(
                 ? 'Delegation update'
                 : skill
                   ? 'Skill'
-                  : (raw.customType ?? 'Extension'),
+                  : scheduled
+                    ? 'Scheduled task'
+                    : (raw.customType ?? 'Extension'),
         ...(summary ? { meta: summary } : {}),
         content: text(raw.content),
         createdAt,
