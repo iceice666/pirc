@@ -50,7 +50,7 @@ Agent → runner → node → daemon, modelled on the write lease. With `PIRC_GA
 
 ## Chat workspaces
 
-A workspace has a `kind`: `directory` or `chat` (`workspaces.kind`). A node started with `PIRC_CHAT=1` (NixOS `services.pirc.chat`) is the chat node: it creates the top-level workspace `chats` at start-up and hosts projects created from the web (`POST /api/workspaces {nodeId, kind: 'chat', displayName}`). One chat node on an always-on machine is assumed; the assistant is offline when it is.
+A workspace has a `kind`: `directory` or `chat` (`workspaces.kind`). A node started with `PIRC_CHAT=1` (NixOS `services.pirc.chat`) is the chat node: it creates the top-level workspace `chats` at start-up and hosts projects created from the web (`POST /api/workspaces {nodeId, kind: 'chat', displayName}`). It hosts chat workspaces only: it refuses directory workspaces from `POST /api/workspaces` and fails at start-up when `PIRC_WORKSPACES` is set, and the web leaves it out of **Add workspace**. One chat node on an always-on machine is assumed; the assistant is offline when it is.
 
 - **Directories** are the node's: `<stateDir>/chat/<workspaceId>/sessions/<sessionId>/` is each chat's working directory, so the write broker never blocks one chat with another, and uploads land in `.pirc/uploads` under it. The user never sees a path.
 - **Every session in a chat workspace is an assistant session** with the owner's USER and MEMORY. The base prompt is an assistant's, all tools stay (auto mode gates `bash` as everywhere), workspace memory is off and the gateway's MEMORY replaces it, session OM stays.

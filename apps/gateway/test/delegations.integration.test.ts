@@ -14,12 +14,13 @@ afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
 });
 
-/** A chat node `home` (with a directory workspace too) and a directory node `work`. */
+/** A chat node `home` and directory nodes `work` and `lab`. */
 async function start(daemon: Parameters<typeof startCluster>[1] = {}, agents = {}) {
   const cluster = await startCluster(
     [
       { nodeId: 'home', chat: true, ...agents },
       { nodeId: 'work', ...agents },
+      { nodeId: 'lab', ...agents },
     ],
     daemon,
   );
@@ -27,7 +28,7 @@ async function start(daemon: Parameters<typeof startCluster>[1] = {}, agents = {
   const { services } = cluster;
   await waitFor(
     () =>
-      ['home:chats', 'home:test', 'work:test'].every((id) =>
+      ['home:chats', 'lab:test', 'work:test'].every((id) =>
         services.db.listWorkspaces().some((workspace) => workspace.id === id),
       ),
     true,
@@ -86,7 +87,7 @@ it('asks the user, runs the task in a new session and reports back, then follows
   expect(context.workspaces).toEqual(
     expect.arrayContaining([
       { id: 'work:test', name: 'Test', node: 'work', online: true },
-      { id: 'home:test', name: 'Test', node: 'home', online: true },
+      { id: 'lab:test', name: 'Test', node: 'lab', online: true },
     ]),
   );
   expect(context.workspaces.some((workspace: any) => workspace.id === 'home:chats')).toBe(false);
@@ -202,7 +203,7 @@ it('asks the user, runs the task in a new session and reports back, then follows
   // Only chats delegate.
   const coding = await promptSession(app, services.events, headers, 'work:test');
   expect(
-    reply(await coding.ask('gateway delegation.create {"workspace":"home:test","task":"x"}')).body,
+    reply(await coding.ask('gateway delegation.create {"workspace":"lab:test","task":"x"}')).body,
   ).toMatchObject({ status: 403 });
 }, 30_000);
 
@@ -242,7 +243,7 @@ it('reports refusals and sessions that wait for the user, and refuses offline wo
   await heard(app, chat.sessionId, 3);
 
   await nodes[1]!.close();
-  await waitFor(() => services.nodes.list().length, 1);
+  await waitFor(() => services.nodes.list().length, 2);
   expect(
     reply(await chat.ask('gateway delegation.create {"workspace":"work:test","task":"Anything."}'))
       .body,

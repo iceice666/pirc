@@ -435,6 +435,10 @@ in
           message = "services.pirc.allowedHosts must not be empty";
         }
         {
+          assertion = !cfg.chat || cfg.workspaces == { };
+          message = "services.pirc.chat makes the local node the chat node, which hosts chat workspaces only; move services.pirc.workspaces to another node";
+        }
+        {
           assertion = cfg.localNode.enable || cfg.workspaces == { };
           message = "services.pirc.workspaces belong to the local node; enable services.pirc.localNode";
         }

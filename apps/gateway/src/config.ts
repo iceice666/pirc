@@ -252,9 +252,9 @@ export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig
   mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
   const chat = bool(env.PIRC_CHAT, false);
   const workspaces = parseWorkspaces(env);
-  if (chat && workspaces.some((workspace) => workspace.id === CHAT_WORKSPACE_ID))
+  if (chat && workspaces.length)
     throw new Error(
-      `PIRC_WORKSPACES must not use the id "${CHAT_WORKSPACE_ID}": it is the chat node's top-level chats`,
+      'PIRC_WORKSPACES must be empty on the chat node (PIRC_CHAT): it hosts chat workspaces only',
     );
   return {
     nodeId,

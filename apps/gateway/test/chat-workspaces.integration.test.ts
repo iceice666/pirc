@@ -51,14 +51,28 @@ it('gives a chat node top-level chats, projects and a private directory per chat
   );
   expect(await first.ask('env PIRC_WORKSPACE_KIND')).toBe('env:PIRC_WORKSPACE_KIND=chat');
 
-  const directory = await promptSession(app, services.events, nodeHeaders, 'test');
+  // The chat node hosts chat workspaces only; repositories live on other nodes.
+  const refused = await app.inject({
+    method: 'POST',
+    url: '/api/workspaces',
+    headers: nodeHeaders,
+    payload: { path: config.stateDir, displayName: 'Repo' },
+  });
+  expect(refused.statusCode).toBe(403);
+  expect(services.db.listWorkspaces().every((workspace) => workspace.kind === 'chat')).toBe(true);
+  const repo = testConfig();
+  await expect(buildNodeApp({ ...repo, chat: true })).rejects.toThrow('chat workspaces only');
+
+  const other = await buildNodeApp(repo);
+  apps.push(other.app);
+  const directory = await promptSession(other.app, other.services.events, nodeHeaders, 'test');
   expect(await directory.ask('cwd')).toBe(
-    `cwd:${realpathSync(services.db.getWorkspace('test').canonicalPath)}`,
+    `cwd:${realpathSync(other.services.db.getWorkspace('test').canonicalPath)}`,
   );
   expect(await directory.ask('env PIRC_WORKSPACE_KIND')).toBe('env:PIRC_WORKSPACE_KIND=directory');
 });
 
-it('refuses chat projects on other nodes and reserves the chats id on a chat node', async () => {
+it('refuses chat projects on other nodes and configured workspaces on a chat node', async () => {
   const { app } = await buildNodeApp(testConfig());
   apps.push(app);
   const refused = await app.inject({
@@ -79,20 +93,29 @@ it('refuses chat projects on other nodes and reserves the chats id on a chat nod
     PIRC_CHAT: '1',
     PIRC_WORKSPACES: JSON.stringify([{ id: 'chats', path: stateDir }]),
   };
-  expect(() => loadNodeConfig(env)).toThrow('must not use the id "chats"');
+  expect(() => loadNodeConfig(env)).toThrow('PIRC_WORKSPACES must be empty on the chat node');
+  expect(() =>
+    loadNodeConfig({ ...env, PIRC_WORKSPACES: JSON.stringify([{ id: 'repo', path: stateDir }]) }),
+  ).toThrow('PIRC_WORKSPACES must be empty on the chat node');
   expect(loadNodeConfig({ ...env, PIRC_WORKSPACES: '[]' }).chat).toBe(true);
 });
 
 it('lets the web create chat projects and tells chat sessions they are the assistant', async () => {
-  const cluster = await startCluster([{ nodeId: 'test', chat: true }]);
+  const cluster = await startCluster([{ nodeId: 'test', chat: true }, { nodeId: 'repo' }]);
   clusters.push(cluster);
   const { app, services } = cluster;
-  await waitFor(() => services.db.listWorkspaces().some((w) => w.id === 'test:chats'), true);
+  await waitFor(
+    () =>
+      ['test:chats', 'repo:test'].every((id) =>
+        services.db.listWorkspaces().some((w) => w.id === id),
+      ),
+    true,
+  );
   const listed = (await app.inject({ method: 'GET', url: '/api/workspaces', headers })).json()
     .workspaces as Array<{ id: string; kind: string; canonicalPath?: string }>;
   expect(listed.map((w) => `${w.id}=${w.kind}`).sort()).toEqual([
+    'repo:test=directory',
     'test:chats=chat',
-    'test:test=directory',
   ]);
   expect(listed.every((w) => w.canonicalPath === undefined)).toBe(true);
 
@@ -112,6 +135,13 @@ it('lets the web create chat projects and tells chat sessions they are the assis
     payload: { nodeId: 'test', displayName: 'No path' },
   });
   expect(pathless.statusCode).toBe(400);
+  const directoryOnChatNode = await app.inject({
+    method: 'POST',
+    url: '/api/workspaces',
+    headers,
+    payload: { nodeId: 'test', path: '~', displayName: 'Home' },
+  });
+  expect(directoryOnChatNode.statusCode).toBe(403);
 
   const chat = await promptSession(app, services.events, headers, 'test:chats');
   const context = await chat.ask('gateway assistant.context {}');
@@ -120,6 +150,6 @@ it('lets the web create chat projects and tells chat sessions they are the assis
     user: [],
     notes: [],
   });
-  const directory = await promptSession(app, services.events, headers, 'test:test');
+  const directory = await promptSession(app, services.events, headers, 'repo:test');
   expect(await directory.ask('gateway assistant.context {}')).toBe('gateway:ok {"enabled":false}');
 });

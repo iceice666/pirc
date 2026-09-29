@@ -10,6 +10,10 @@ export const isChatWorkspace = (workspace: Workspace | undefined) => workspace?.
 export const isTopLevelChats = (workspace: Workspace) =>
   isChatWorkspace(workspace) && workspace.id === `${workspace.hostId}:chats`;
 
+/** Nodes hosting top-level chats; they hold chat workspaces only, never directories. */
+export const chatNodeIds = (workspaces: Workspace[]) =>
+  new Set(workspaces.filter(isTopLevelChats).map((workspace) => workspace.hostId));
+
 /** The top-level chats (the first chat node's, if several nodes host chats). */
 export const topLevelChats = (workspaces: Workspace[]) => workspaces.find(isTopLevelChats);
 

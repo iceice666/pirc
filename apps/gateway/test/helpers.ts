@@ -33,7 +33,10 @@ export function testConfig(overrides: Partial<NodeConfig> = {}): NodeConfig {
     sessionsDir,
     agentCommand: process.execPath,
     agentArgs: [path.resolve('test/fixtures/fake-pi.mjs')],
-    workspaces: [{ id: 'test', path: workspace, displayName: 'Test', defaults: {} }],
+    // The chat node hosts chat workspaces only.
+    workspaces: overrides.chat
+      ? []
+      : [{ id: 'test', path: workspace, displayName: 'Test', defaults: {} }],
     chat: false,
     // Never the host's own workspace memory (tests may run inside a pirc session).
     workspaceMemoryDir: path.join(dirs.stateDir, 'workspace-memory'),

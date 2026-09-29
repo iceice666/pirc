@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { app } from '../../app.svelte';
+  import { chatNodeIds } from '../../chats';
   import { errorMessage } from '../../errors';
   import Modal from './Modal.svelte';
   import { watch } from '../../watch.svelte';
@@ -15,6 +16,12 @@
 
   let { open = $bindable(), nodeId, oncreated }: Props = $props();
 
+  // The chat node holds chats and projects only; the server refuses directories there.
+  const deviceNodes = $derived.by(() => {
+    const chatNodes = chatNodeIds(app.workspaces);
+    return app.nodes.filter((node) => !chatNodes.has(node.id));
+  });
+
   let chosenNode = $state('');
   let path = $state('');
   let name = $state('');
@@ -26,7 +33,9 @@
     () => open,
     (isOpen) => {
       if (!isOpen) return;
-      chosenNode = nodeId;
+      chosenNode = deviceNodes.some((node) => node.id === nodeId)
+        ? nodeId
+        : (deviceNodes[0]?.id ?? '');
       path = '';
       name = '';
       error = '';
@@ -66,7 +75,8 @@
   </header>
   <label
     ><span>Device</span><select bind:value={chosenNode}
-      >{#each app.nodes as node (node.id)}<option value={node.id}>{node.id}</option>{/each}</select
+      >{#each deviceNodes as node (node.id)}<option value={node.id}>{node.id}</option
+        >{/each}</select
     ></label
   >
   <label><span>Workspace name</span><input bind:value={name} placeholder="My project" /></label>
@@ -81,6 +91,9 @@
     Choose an existing folder inside that device's home directory. No files or folders will be
     created.
   </p>
+  {#if !deviceNodes.length}<p role="alert">
+      No device can host workspaces: the chat node holds chats and projects only.
+    </p>{/if}
   {#if error}<p role="alert">{error}</p>{/if}
   <footer>
     <button class="button ghost" type="button" onclick={() => (open = false)}>Cancel</button>

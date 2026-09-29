@@ -18,7 +18,7 @@
   } from '@lucide/svelte';
   import { tick } from 'svelte';
   import { app } from '../app.svelte';
-  import { isChatWorkspace, topLevelChats } from '../chats';
+  import { chatNodeIds, isChatWorkspace, topLevelChats } from '../chats';
   import { shortAgo } from '../time';
   import type { SessionSummary, Workspace } from '../types';
   import { watch } from '../watch.svelte';
@@ -53,6 +53,11 @@
   }: Props = $props();
 
   const nodes = $derived(app.nodes);
+  /** Nodes that can host directory workspaces (not the chat node). */
+  const deviceNodes = $derived.by(() => {
+    const chatNodes = chatNodeIds(app.workspaces);
+    return nodes.filter((node) => !chatNodes.has(node.id));
+  });
   const sessions = $derived(app.sessions);
   const activeSessionId = $derived(app.activeSessionId);
   const onrename = (id: string, name: string) => app.updateSession(id, { name });
@@ -262,8 +267,8 @@
       <strong>Workspaces</strong>
       <button
         type="button"
-        onclick={() => onaddworkspace(selectedNodeId || nodes[0]?.id)}
-        disabled={!nodes.length}
+        onclick={() => onaddworkspace(selectedNodeId || deviceNodes[0]!.id)}
+        disabled={!deviceNodes.length}
         aria-label="Add workspace"><Plus size={16} /> Add</button
       >
     </div>

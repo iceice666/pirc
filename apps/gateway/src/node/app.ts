@@ -144,6 +144,10 @@ export async function buildNodeApp(
 ): Promise<{ app: FastifyInstance; services: NodeServices }> {
   const app = Fastify({ logger: true, bodyLimit: config.uploadMaxBytes });
   registerImageParsers(app, config.uploadMaxBytes);
+  if (config.chat && config.workspaces.length)
+    throw new Error(
+      'The chat node (PIRC_CHAT) hosts chat workspaces only; PIRC_WORKSPACES must be empty',
+    );
   const db = new GatewayDatabase(config.databasePath);
   db.syncWorkspaces(config.nodeId, config.workspaces);
   if (config.chat) ensureTopLevelChats(config, db);
@@ -188,6 +192,8 @@ export async function buildNodeApp(
       );
       return reply.status(201).send({ workspace });
     }
+    if (config.chat)
+      throw new ApiError(403, 'forbidden', 'The chat node hosts chat workspaces only (PIRC_CHAT)');
     const home = realpathSync(process.env.HOME ?? os.homedir());
     const requested = body.path.startsWith('~/') ? path.join(home, body.path.slice(2)) : body.path;
     if (!path.isAbsolute(requested))
