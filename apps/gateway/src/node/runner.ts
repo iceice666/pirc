@@ -211,6 +211,10 @@ class PiRunner {
           : null;
       if (this.runError !== null && this.currentRunId)
         this.db.updateRun(this.currentRunId, 'failed', this.runError);
+    } else if (message.type === 'agent_error') {
+      // The agent loop itself failed; the run ends with agent_settled.
+      this.runError = typeof message.error === 'string' ? message.error : 'The agent loop crashed';
+      if (this.currentRunId) this.db.updateRun(this.currentRunId, 'failed', this.runError);
     } else if (message.type === 'auto_retry_start' && this.currentRunId) {
       this.db.updateRun(this.currentRunId, 'running');
     }

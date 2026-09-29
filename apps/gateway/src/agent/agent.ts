@@ -555,7 +555,13 @@ export class Agent {
   private startRun(initial: QueueItem[]): void {
     this.running = true;
     const run = this.run(initial)
-      .catch((error) => this.ui.notify(`Agent loop crashed: ${(error as Error).message}`, 'error'))
+      .catch((error) => {
+        const message = `Agent loop crashed: ${(error as Error).message}`;
+        // The run failed (no model, a broken session...): the node records it,
+        // so nobody reads it as a success, least of all an unattended run.
+        this.emit({ type: 'agent_error', error: message });
+        this.ui.notify(message, 'error');
+      })
       .finally(() => {
         this.running = false;
         this.controller = null;

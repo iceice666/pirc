@@ -245,6 +245,12 @@ rl.on('line', (raw) => {
     messages.push(custom);
     persist(custom);
     line({ type: 'agent_start' });
+    // "crash the loop": the agent loop fails before any answer, as with no model.
+    if (/crash the loop/i.test(String(pushed.content))) {
+      line({ type: 'agent_error', error: 'Agent loop crashed: No model configured' });
+      line({ type: 'agent_settled' });
+      return;
+    }
     const done = () =>
       reply(
         `done:${pushed.details?.delegationId ?? pushed.details?.runId ?? ''}:${pushed.customType}`,

@@ -243,6 +243,14 @@ it('records missed and skipped runs, and runs a missed one only when the user al
     'completed',
   );
 
+  // The agent loop fails before any answer (no model): the run failed, it did not succeed.
+  const broken = await create('Please crash the loop.');
+  due(broken, Date.now());
+  await waitFor(async () => (await runsOf(app, broken))[0]?.status, 'failed');
+  expect((await runsOf(app, broken))[0].result).toBe(
+    'The run failed: Agent loop crashed: No model configured',
+  );
+
   // Its node is offline at the fire time: missed; the user may let it go.
   await nodes[1]!.close();
   await waitFor(() => services.nodes.list().length, 2);
