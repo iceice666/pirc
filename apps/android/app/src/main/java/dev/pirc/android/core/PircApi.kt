@@ -319,6 +319,21 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
     open suspend fun dismissRun(id: String, runId: String): ScheduleRun =
         decodeRun(send("POST", "/api/schedules/${id.urlSegment()}/runs/${runId.urlSegment()}/dismiss", buildJsonObject {}))
 
+    // ---- the assistant's memory (plans/assistant.md): proposals only ----
+
+    open suspend fun memory(): MemoryView = get("/api/memory")
+
+    /** [targetRevision]: the version of the changed entry the user was shown. */
+    open suspend fun approveProposal(id: String, targetRevision: Int? = null): MemoryView =
+        decodeMemory(send("POST", "/api/memory/proposals/${id.urlSegment()}/approve", buildJsonObject { targetRevision?.let { put("targetRevision", it) } }))
+
+    open suspend fun rejectProposal(id: String): MemoryView =
+        decodeMemory(send("POST", "/api/memory/proposals/${id.urlSegment()}/reject", buildJsonObject {}))
+
+    private fun decodeMemory(reply: JsonElement?) = readingReply {
+        reply?.let { PircJson.decodeFromJsonElement(MemoryView.serializer(), it) } ?: MemoryView()
+    }
+
     private fun scheduleBody(input: ScheduleInput) = buildJsonObject {
         put("workspaceId", input.workspaceId)
         put("title", input.title)

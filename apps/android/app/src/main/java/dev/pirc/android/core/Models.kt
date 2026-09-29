@@ -14,6 +14,10 @@ data class Session(
     val settledAt: Long? = null,
     val createdAt: Long = 0,
     val updatedAt: Long = 0,
+    /** The session holds a write lease on its workspace (only while a run is open). */
+    val writeLease: Boolean = false,
+    /** What started it other than the user: a scheduled run or a delegated task. */
+    val origin: SessionOrigin? = null,
 ) {
     val pinned get() = pinnedAt != null
     val settled get() = settledAt != null
@@ -26,12 +30,36 @@ data class Session(
     )
 }
 
+/**
+ * `schedule` ([scheduleId], [dueAt]) or `delegation` ([delegationId], [fromSessionId]:
+ * the assistant chat that delegated it). [title] names the schedule or the task.
+ */
+@Serializable
+data class SessionOrigin(
+    val kind: String,
+    val title: String = "",
+    val scheduleId: String? = null,
+    val dueAt: Long? = null,
+    val delegationId: String? = null,
+    val fromSessionId: String? = null,
+) {
+    val schedule get() = kind == "schedule" && scheduleId != null
+    val delegation get() = kind == "delegation"
+}
+
 @Serializable
 data class Workspace(
     val id: String,
     val hostId: String,
     val displayName: String,
-)
+    /** `chat`: the assistant's chats or a chat project; else a directory (older gateways send none). */
+    val kind: String = "directory",
+) {
+    val isChat get() = kind == "chat"
+
+    /** A chat node's top-level chats (outside any project). */
+    val isTopLevelChats get() = isChat && id == "$hostId:chats"
+}
 
 @Serializable
 data class NodeWorkspace(val id: String, val displayName: String)

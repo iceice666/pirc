@@ -23,6 +23,11 @@ import dev.pirc.android.core.Session
 import dev.pirc.android.core.Workspace
 import dev.pirc.android.core.WorkspaceGroup
 import dev.pirc.android.core.groupSessions
+import dev.pirc.android.core.Inbox
+import dev.pirc.android.core.MemoryProposal
+import dev.pirc.android.core.MissedRun
+import dev.pirc.android.core.inbox
+import dev.pirc.android.core.missedRuns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -36,6 +41,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+
+/** The phone's bottom tabs (plans/ui-redesign.md); the app opens on Chat. */
+enum class HomeTab(val label: String) { Chat("Chat"), Work("Work"), Schedules("Schedules"), Settings("Settings") }
 
 /** How often the visible sessions list reloads (run states, node dots). */
 private const val LIST_POLL_MS = 20_000L
@@ -89,9 +97,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
-    /** Scheduled runs waiting for you, shown on the list's menu. */
-    private val _scheduleAttention = MutableStateFlow(0)
-    val scheduleAttention: StateFlow<Int> = _scheduleAttention.asStateFlow()
+    /** Missed scheduled runs and memory proposals, read on each list refresh. */
+    private val _missed = MutableStateFlow<List<MissedRun>>(emptyList())
+    private val _proposals = MutableStateFlow<List<MemoryProposal>>(emptyList())
+
+    /** Names of the chats memory proposals came from, by id. */
+    private val _proposalSources = MutableStateFlow<Map<String, String>>(emptyMap())
+    val proposalSources: StateFlow<Map<String, String>> = _proposalSources.asStateFlow()
+
+    /** Everything waiting on the user: Work's Needs you, and the tab's badge. */
+    private val _inbox = MutableStateFlow(Inbox())
+    val inbox: StateFlow<Inbox> = _inbox.asStateFlow()
+
+    /** Keys of inbox actions in flight (`run:<id>`, `proposal:<id>`). */
+    private val _inboxBusy = MutableStateFlow<Set<String>>(emptySet())
+    val inboxBusy: StateFlow<Set<String>> = _inboxBusy.asStateFlow()
+
+    /** The bottom tab shown. */
+    var tab by mutableStateOf(HomeTab.Chat)
 
     /** What a tapped notification asks to open; PircApp navigates, then clears it. */
     private val _pendingTarget = MutableStateFlow<PushTarget?>(null)
@@ -206,11 +229,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     listed(sessions.await(), workspaces.await(), nodes.await())
                 }
                 local.pruneDrafts(_sessions.value.sessions.map { it.id })
-                // Optional: an older gateway has no schedules, and the list must not fail for them.
-                try {
-                    _scheduleAttention.value = api.schedules().sumOf { it.attention }
-                } catch (error: IOException) {
-                    if (error is ApiException && error.unauthorized) throw error
+                updateInbox()
+                // Optional: an older gateway has no schedules or memory, and the list must not fail for them.
+                coroutineScope {
+                    launch { optional { loadMissed(api) } }
+                    launch { optional { loadProposals(api) } }
                 }
             } catch (error: IOException) {
                 handle(error)
@@ -220,6 +243,81 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _sessions.value = _sessions.value.copy(loading = false, error = message)
             }
         }
+    }
+
+    private suspend fun optional(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (error: IOException) {
+            if (error is ApiException && error.unauthorized) throw error
+        }
+    }
+
+    /** Missed runs wait in the schedules that ask for attention; their details list them. */
+    private suspend fun loadMissed(api: PircApi) {
+        val schedules = api.schedules()
+        val details = coroutineScope {
+            schedules.filter { it.attention > 0 }.map { schedule ->
+                async {
+                    try {
+                        api.schedule(schedule.id)
+                    } catch (error: IOException) {
+                        if (error is ApiException && error.unauthorized) throw error
+                        null
+                    }
+                }
+            }.map { it.await() }
+        }.filterNotNull()
+        _missed.value = missedRuns(details)
+        updateInbox()
+    }
+
+    private suspend fun loadProposals(api: PircApi) {
+        val view = api.memory()
+        _proposals.value = view.proposals
+        _proposalSources.value = view.sessions
+        updateInbox()
+    }
+
+    private fun updateInbox() {
+        _inbox.value = inbox(_sessions.value.sessions, _missed.value, _proposals.value)
+    }
+
+    /** An inbox action: the item stays (marked busy) until the gateway agrees, then the list reloads. */
+    private fun inboxAct(key: String, fallback: String, action: suspend (PircApi) -> Unit) {
+        if (key in _inboxBusy.value) return
+        _inboxBusy.value += key
+        act(fallback, onError = { _inboxBusy.value -= key }) { api ->
+            action(api)
+            _inboxBusy.value -= key
+            refresh(quiet = true)
+        }
+    }
+
+    /** Allow a missed run: it starts now. */
+    fun allowRun(missed: MissedRun) = inboxAct("run:${missed.run.id}", "Could not start the run.") { api ->
+        api.runSchedule(missed.schedule.id, missed.run.id)
+        _missed.value = _missed.value.filterNot { it.run.id == missed.run.id }
+        updateInbox()
+    }
+
+    fun dismissRun(missed: MissedRun) = inboxAct("run:${missed.run.id}", "Could not dismiss the run.") { api ->
+        api.dismissRun(missed.schedule.id, missed.run.id)
+        _missed.value = _missed.value.filterNot { it.run.id == missed.run.id }
+        updateInbox()
+    }
+
+    /** Approve with the entry's revision as shown, so a change made meanwhile is not overwritten. */
+    fun approveProposal(proposal: MemoryProposal) = inboxAct("proposal:${proposal.id}", "Could not approve the proposal.") { api ->
+        val view = api.approveProposal(proposal.id, proposal.shownRevision)
+        _proposals.value = view.proposals
+        updateInbox()
+    }
+
+    fun rejectProposal(proposal: MemoryProposal) = inboxAct("proposal:${proposal.id}", "Could not reject the proposal.") { api ->
+        val view = api.rejectProposal(proposal.id)
+        _proposals.value = view.proposals
+        updateInbox()
     }
 
     /**
@@ -280,11 +378,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Put a changed session into the list without refetching everything. */
+    /**
+     * Put a changed session into the list without refetching everything. A
+     * session from a snapshot or an update carries no origin or lease: those
+     * stay as the list had them until the next reload.
+     */
     fun replaceSession(session: Session) {
         val state = _sessions.value
-        val sessions = state.sessions.filterNot { it.id == session.id } + session
+        val before = state.sessions.firstOrNull { it.id == session.id }
+        val merged = session.copy(origin = session.origin ?: before?.origin, writeLease = session.writeLease || before?.writeLease == true)
+        val sessions = state.sessions.filterNot { it.id == session.id } + merged
         _sessions.value = listed(sessions, state.workspaces, state.nodes)
+        updateInbox()
     }
 
     fun createSession(workspaceId: String, onCreated: (Session) -> Unit) = act("Could not create the session.") { api ->
@@ -338,7 +443,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _pairing.value = null
         _loaded.value = true
         _sessions.value = SessionsState()
-        _scheduleAttention.value = 0
+        _missed.value = emptyList()
+        _proposals.value = emptyList()
+        _inbox.value = Inbox()
+        tab = HomeTab.Chat
         _notice.value = reason
     }
 

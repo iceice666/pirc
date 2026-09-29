@@ -26,6 +26,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.pirc.android.AppViewModel
+import dev.pirc.android.HomeTab
 import dev.pirc.android.FileViewModel
 import dev.pirc.android.FilesViewModel
 import dev.pirc.android.SessionViewModel
@@ -45,14 +46,12 @@ import dev.pirc.android.ui.panels.PanelsScreen
 import dev.pirc.android.ui.panels.TerminalScreen
 import kotlinx.serialization.Serializable
 
+/** The bottom tabs; which one shows is [AppViewModel.tab]. */
 @Serializable
-data object SessionsRoute
+data object HomeRoute
 
 @Serializable
 data class SessionRoute(val id: String, val name: String)
-
-@Serializable
-data object SchedulesRoute
 
 /** [tab]: a [PanelTab] name, or "" for the tab shown last. */
 @Serializable
@@ -114,35 +113,36 @@ fun PircApp(viewModel: AppViewModel) {
                     }
                     is PushTarget.OpenSchedules -> {
                         viewModel.focusSchedule = target.scheduleId
-                        nav.navigate(SchedulesRoute) { launchSingleTop = true }
+                        viewModel.tab = HomeTab.Schedules
+                        nav.popBackStack(HomeRoute, inclusive = false)
                     }
-                    // The phone has no memory screen: the sessions list, where the web link is.
-                    PushTarget.OpenMemory -> nav.popBackStack(SessionsRoute, inclusive = false)
+                    // Memory proposals are reviewed in Settings (and Work's Needs you).
+                    PushTarget.OpenMemory -> {
+                        viewModel.tab = HomeTab.Settings
+                        nav.popBackStack(HomeRoute, inclusive = false)
+                    }
                     null -> Unit
                 }
             }
-            NavHost(navController = nav, startDestination = SessionsRoute) {
-                composable<SessionsRoute> {
-                    SessionsScreen(
-                        viewModel,
-                        onOpen = { nav.navigate(SessionRoute(it.id, it.name)) },
-                        onOpenSchedules = { nav.navigate(SchedulesRoute) },
-                    )
-                }
-                composable<SchedulesRoute> {
-                    val api = viewModel.api() ?: return@composable
-                    val schedules = viewModel<SchedulesViewModel>(key = "schedules|${api.pairing.baseUrl}") {
-                        SchedulesViewModel(api) { viewModel.handle(it) }
+            NavHost(navController = nav, startDestination = HomeRoute) {
+                composable<HomeRoute> {
+                    val api = viewModel.api()
+                    val schedules = api?.let {
+                        viewModel<SchedulesViewModel>(key = "schedules|${it.pairing.baseUrl}") {
+                            SchedulesViewModel(it) { error -> viewModel.handle(error) }
+                        }
                     }
-                    // A notification about one schedule opens it.
-                    LaunchedEffect(viewModel.focusSchedule) {
-                        viewModel.focusSchedule?.let { schedules.open(it) }
+                    // A notification or a session's "Scheduled" chip about one schedule opens it.
+                    LaunchedEffect(viewModel.focusSchedule, schedules) {
+                        val focus = viewModel.focusSchedule ?: return@LaunchedEffect
+                        schedules?.open(focus)
                         viewModel.focusSchedule = null
                     }
-                    SchedulesScreen(
+                    HomeScreen(
+                        viewModel,
                         schedules,
+                        onOpen = { nav.navigate(SessionRoute(it.id, it.name)) },
                         onOpenSession = { id, name -> nav.navigate(SessionRoute(id, name)) },
-                        onBack = { nav.popBackStack() },
                     )
                 }
                 composable<SessionRoute> { entry ->
@@ -152,9 +152,24 @@ fun PircApp(viewModel: AppViewModel) {
                     val session = viewModel<SessionViewModel>(key = "${api.pairing.baseUrl}|${route.id}") {
                         SessionViewModel(api, route.id, viewModel.local.clientId, viewModel.local, onUnauthorized = { viewModel.handle(it) }, cursors = viewModel.cursors)
                     }
+                    // The list knows what the snapshot does not: the origin, the kind of workspace, leases.
+                    val listed by viewModel.sessions.collectAsStateWithLifecycle()
+                    // Opened at launch or from a notification, before the list ever loaded.
+                    LaunchedEffect(Unit) { if (listed.sessions.isEmpty()) viewModel.refresh(quiet = true) }
+                    val summary = listed.sessions.firstOrNull { it.id == route.id }
+                    val workspace = summary?.let { s -> listed.workspaces.firstOrNull { it.id == s.workspaceId } }
                     SessionScreen(
                         session,
                         fallbackName = route.name,
+                        origin = summary?.origin,
+                        chat = workspace?.isChat == true,
+                        sessions = listed.sessions,
+                        onOpenSchedule = { scheduleId ->
+                            viewModel.focusSchedule = scheduleId
+                            viewModel.tab = HomeTab.Schedules
+                            nav.popBackStack(HomeRoute, inclusive = false)
+                        },
+                        onOpenSession = { id, name -> nav.navigate(SessionRoute(id, name)) },
                         onBack = { nav.popBackStack() },
                         onOpenPanels = { title, tab -> nav.navigate(PanelsRoute(route.id, title, tab?.name ?: "")) },
                         onOpenFile = { nav.navigate(FileRoute(route.id, it.path, it.line ?: 0, it.endLine ?: 0)) },

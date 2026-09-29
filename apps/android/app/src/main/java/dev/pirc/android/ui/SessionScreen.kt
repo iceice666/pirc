@@ -57,6 +57,14 @@ import dev.pirc.android.core.timeline.SessionState
 import dev.pirc.android.ui.session.Composer
 import dev.pirc.android.PanelTab
 import dev.pirc.android.core.Session
+import dev.pirc.android.core.SessionOrigin
+import dev.pirc.android.core.TimelineItem
+import dev.pirc.android.core.blockingSession
+import dev.pirc.android.core.timelineItems
+import dev.pirc.android.ui.session.LocalWriteBlockOpener
+import dev.pirc.android.ui.session.RunCard
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -86,6 +94,14 @@ import kotlinx.coroutines.launch
 fun SessionScreen(
     viewModel: SessionViewModel,
     fallbackName: String,
+    /** What started the session, from the list (the snapshot does not say). */
+    origin: SessionOrigin?,
+    /** An assistant chat: the engineering chrome (jobs, status widgets) stays out of the way. */
+    chat: Boolean,
+    /** The listed sessions, to find the one a blocked write names. */
+    sessions: List<Session>,
+    onOpenSchedule: (scheduleId: String) -> Unit,
+    onOpenSession: (id: String, name: String) -> Unit,
     onBack: () -> Unit,
     /** [tab] null: the tab shown last. */
     onOpenPanels: (title: String, tab: PanelTab?) -> Unit,
@@ -108,6 +124,10 @@ fun SessionScreen(
             }
         }
     }
+    // A write refused for another session's lease links to that session.
+    val blockers = remember(sessions, onOpenSession) {
+        { name: String -> blockingSession(sessions, name)?.takeIf { it.id != viewModel.sessionId }?.let { holder -> { onOpenSession(holder.id, holder.name) } } }
+    }
 
     LifecycleStartEffect(viewModel) {
         viewModel.start()
@@ -124,7 +144,7 @@ fun SessionScreen(
     }
 
     Scaffold(
-        topBar = {
+        topBar = { Column {
             TopAppBar(
                 title = {
                     // Derived, so streamed text does not recompose the bar.
@@ -143,14 +163,16 @@ fun SessionScreen(
                 actions = {
                     val session by remember { derivedStateOf { state?.session } }
                     val title = session?.name ?: fallbackName
-                    // The panels as they were left (the web keeps them mounted).
-                    TextButton(onClick = { onOpenPanels(title, null) }) { Text("Files") }
-                    val jobs by viewModel.jobs.collectAsStateWithLifecycle()
+                    // The panels as they were left (the web keeps them mounted); a chat keeps them in the menu.
+                    if (!chat) TextButton(onClick = { onOpenPanels(title, null) }) { Text("Files") }
+                    val running by viewModel.jobs.collectAsStateWithLifecycle()
+                    val jobs = if (chat) 0 else running
                     TextButton(onClick = { menu = true }, modifier = Modifier.semantics { if (jobs > 0) stateDescription = "$jobs running jobs" }) {
                         if (jobs > 0) BadgedBox(badge = { Badge { Text(jobs.toString()) } }) { Text("More") } else Text("More")
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        for (tab in listOf(PanelTab.Git, PanelTab.Tasks, PanelTab.Memory, PanelTab.Terminal, PanelTab.Browser))
+                        val tabs = listOf(PanelTab.Git, PanelTab.Tasks, PanelTab.Memory, PanelTab.Terminal, PanelTab.Browser)
+                        for (tab in if (chat) listOf(PanelTab.Files) + tabs else tabs)
                             DropdownMenuItem(text = { Text(if (tab == PanelTab.Tasks && jobs > 0) "Tasks · $jobs running" else tab.label) }, onClick = {
                                 menu = false
                                 onOpenPanels(title, tab)
@@ -174,17 +196,18 @@ fun SessionScreen(
                     }
                 },
             )
-        },
+            origin?.let { OriginChip(it, onOpenSchedule, onOpenSession, sessions) }
+        } },
         bottomBar = {
             // The larger of keyboard and navigation bar, not both stacked.
             val loaded by remember { derivedStateOf { state != null } }
-            if (loaded) Composer(viewModel, Modifier.windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime)))
+            if (loaded) Composer(viewModel, Modifier.windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime)), chat = chat)
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             val current = state
             when {
-                current != null -> CompositionLocalProvider(LocalUriHandler provides links, LocalFileOpener provides onOpenFile, LocalRecordingOpener provides onOpenRecording) {
+                current != null -> CompositionLocalProvider(LocalUriHandler provides links, LocalFileOpener provides onOpenFile, LocalRecordingOpener provides onOpenRecording, LocalWriteBlockOpener provides blockers) {
                     Timeline(current, viewModel)
                 }
                 error != null -> Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -213,6 +236,26 @@ fun SessionScreen(
     }
 }
 
+/** "Scheduled · CI check" links to the schedule; "Delegated · Fix it" to the chat that delegated it. */
+@Composable
+private fun OriginChip(origin: SessionOrigin, onOpenSchedule: (String) -> Unit, onOpenSession: (String, String) -> Unit, sessions: List<Session>) {
+    val scheduleId = origin.scheduleId
+    val from = origin.fromSessionId
+    val (label, icon, open) = when {
+        origin.schedule && scheduleId != null -> Triple("Scheduled", PircIcons.Clock) { onOpenSchedule(scheduleId) }
+        origin.delegation && from != null -> Triple("Delegated", PircIcons.Forward) {
+            onOpenSession(from, sessions.firstOrNull { it.id == from }?.name ?: "Chat")
+        }
+        else -> return
+    }
+    AssistChip(
+        onClick = open,
+        label = { Text(listOf(label, origin.title).filter { it.isNotEmpty() }.joinToString(" · "), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
+}
+
 private fun subtitle(runStatus: String?, connection: Connection): String {
     val run = when (runStatus) {
         "queued", "running" -> "Running"
@@ -228,6 +271,25 @@ private fun subtitle(runStatus: String?, connection: Connection): String {
         Connection.Live -> null
     }
     return listOfNotNull(run, link).joinToString(" · ").ifEmpty { "Live" }
+}
+
+/** Timeline items keyed by their (first) message's unique key. */
+private fun timelineEntries(messages: List<Message>): List<Pair<String, TimelineItem>> {
+    val unique = keys(messages)
+    var index = 0
+    return timelineItems(messages).map { item ->
+        val key = unique[index]
+        when (item) {
+            is TimelineItem.Single -> {
+                index += 1
+                key to item
+            }
+            is TimelineItem.Run -> {
+                index += item.messages.size
+                "run:$key" to item
+            }
+        }
+    }
 }
 
 /** Keys must be unique; replays can deliver an entry twice. */
@@ -253,8 +315,10 @@ private fun Timeline(state: SessionState, viewModel: SessionViewModel) {
     val canCommand = control.heldByCurrentClient && connection == Connection.Live
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val messages = state.messages.asReversed()
-    val messageKeys = remember(state.messages) { keys(state.messages).asReversed() }
+    // Consecutive tool-only turns become one run card; newest first for the reversed list.
+    val entries = remember(state.messages) { timelineEntries(state.messages).asReversed() }
+    val messages = state.messages
+    val messageKeys = remember(entries) { entries.map { it.first } }
     val atBottom by remember { derivedStateOf { list.firstVisibleItemIndex == 0 && list.firstVisibleItemScrollOffset < 24 } }
     var follow by remember { mutableStateOf(true) }
 
@@ -285,8 +349,11 @@ private fun Timeline(state: SessionState, viewModel: SessionViewModel) {
                     modifier = Modifier.animateItem(),
                 )
             }
-            itemsIndexed(messages, key = { index, _ -> messageKeys[index] }) { _, message ->
-                MessageView(message, Modifier.animateItem())
+            items(entries, key = { it.first }) { (key, item) ->
+                when (item) {
+                    is TimelineItem.Single -> MessageView(item.message, Modifier.animateItem())
+                    is TimelineItem.Run -> RunCard(key, item.messages, Modifier.animateItem())
+                }
             }
             if (messages.isEmpty()) item(key = "empty") {
                 Text("No messages yet.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -99,7 +99,7 @@ private val THINKING_LABELS = mapOf(
  */
 @OptIn(FlowPreview::class)
 @Composable
-fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
+fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier, chat: Boolean = false) {
     // Only the fields shown here: streamed text must not recompose the composer.
     val settings by viewModel.composerSettings.collectAsStateWithLifecycle()
     val control by viewModel.control.collectAsStateWithLifecycle()
@@ -260,7 +260,8 @@ fun Composer(viewModel: SessionViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
-        StatusLine(docks.statusLine)
+        // Extension status lines are engineering detail; a chat leaves them out.
+        if (!chat) StatusLine(docks.statusLine)
     }
 
     if (picking) ModelSheet(

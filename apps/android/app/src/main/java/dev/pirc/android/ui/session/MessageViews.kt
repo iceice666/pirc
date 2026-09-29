@@ -66,6 +66,12 @@ import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.model.rememberMarkdownState
 import dev.pirc.android.core.timeline.InlineImage
 import dev.pirc.android.core.timeline.Message
+import dev.pirc.android.core.formatDuration
+import dev.pirc.android.core.summarizeRun
+import dev.pirc.android.ui.PircIcons
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.rotate
 import kotlinx.coroutines.launch
 
 /**
@@ -147,7 +153,9 @@ private fun AssistantMessage(message: Message, modifier: Modifier) {
             Thinking(message.thinking.orEmpty(), live = message.isPartial && message.content.isEmpty())
         if (message.content.isNotEmpty()) SelectionContainer { MarkdownText(message.content) }
         Images(message.images)
-        for (tool in message.tools) ToolCard(tool)
+        // Two or more calls in one turn read as one run card.
+        if (message.tools.size >= 2) RunCard("run:${message.id}", listOf(message.copy(thinking = null, thinkingRedacted = false)))
+        else for (tool in message.tools) ToolCard(tool)
         if (message.stopReason != null) Surface(
             color = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer,
@@ -164,6 +172,76 @@ private fun AssistantMessage(message: Message, modifier: Modifier) {
             CopyButton(message.content)
             message.model?.let {
                 Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/**
+ * The tool calls of one or more tool-only turns as one card. Collapsed: count,
+ * duration, status and up to three file names; a failure opens it.
+ */
+@Composable
+fun RunCard(key: String, messages: List<Message>, modifier: Modifier = Modifier) {
+    val tools = messages.flatMap { it.tools }
+    val summary = summarizeRun(tools)
+    val failed = summary.status == "failed"
+    var open by rememberSaveable(key) { mutableStateOf(failed) }
+    // A tool failing after the card was drawn opens it too.
+    LaunchedEffect(failed) { if (failed) open = true }
+    val colors = MaterialTheme.colorScheme
+    Surface(color = colors.surfaceContainerLow, shape = MaterialTheme.shapes.medium, modifier = modifier.fillMaxWidth().animateContentSize()) {
+        Column {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.Button, onClickLabel = if (open) "Collapse" else "Expand") { open = !open }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatusMark(summary.status)
+                    Text(
+                        listOfNotNull(
+                            if (summary.count == 1) "1 tool" else "${summary.count} tools",
+                            summary.durationMs?.let(::formatDuration),
+                            when (summary.status) {
+                                "running" -> "running"
+                                "failed" -> "failed"
+                                else -> null
+                            },
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (failed) colors.error else colors.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        PircIcons.ChevronDown,
+                        contentDescription = null,
+                        tint = colors.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f),
+                    )
+                }
+                if (summary.files.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    for (file in summary.files.take(3)) Surface(color = colors.surfaceContainerHighest, shape = MaterialTheme.shapes.small, modifier = Modifier.weight(1f, fill = false)) {
+                        Text(
+                            file,
+                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        )
+                    }
+                    if (summary.files.size > 3) Text("+${summary.files.size - 3}", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                }
+            }
+            AnimatedVisibility(visible = open) {
+                Column(Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (message in messages) {
+                        if (!message.thinking.isNullOrEmpty() || message.thinkingRedacted) Thinking(message.thinking.orEmpty(), live = false)
+                        for (tool in message.tools) ToolCard(tool)
+                    }
+                }
             }
         }
     }

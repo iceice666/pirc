@@ -98,7 +98,8 @@ private const val NEW = "new"
 fun SchedulesScreen(
     viewModel: SchedulesViewModel,
     onOpenSession: (id: String, name: String) -> Unit,
-    onBack: () -> Unit,
+    /** Null as a home tab: the list has no Back. */
+    onBack: (() -> Unit)?,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
@@ -120,11 +121,11 @@ fun SchedulesScreen(
     BackHandler(enabled = editing != null || open != null) {
         if (editing != null) editing = null else viewModel.close()
     }
-    val back = {
+    val back: () -> Unit = {
         when {
             editing != null -> editing = null
             open != null -> viewModel.close()
-            else -> onBack()
+            else -> onBack?.invoke()
         }
     }
 
@@ -143,7 +144,10 @@ fun SchedulesScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                 },
-                navigationIcon = { IconButton(onClick = back) { Icon(PircIcons.Back, contentDescription = "Back") } },
+                navigationIcon = {
+                    if (editing != null || open != null || onBack != null)
+                        IconButton(onClick = back) { Icon(PircIcons.Back, contentDescription = "Back") }
+                },
             )
         },
         floatingActionButton = {

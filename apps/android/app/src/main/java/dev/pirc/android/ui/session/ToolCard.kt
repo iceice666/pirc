@@ -42,6 +42,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
+import dev.pirc.android.core.WriteBlock
+import dev.pirc.android.core.writeBlock
 import dev.pirc.android.core.FileTarget
 import dev.pirc.android.core.parseFileLink
 import dev.pirc.android.core.timeline.ToolCall
@@ -57,6 +60,12 @@ val LocalFileOpener = staticCompositionLocalOf<((FileTarget) -> Unit)?> { null }
 
 /** Plays a browser recording (`.pirc/recordings/<name>.webm`) of the session. */
 val LocalRecordingOpener = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
+/**
+ * Opens the session a blocked write names, given its name; null when that
+ * session is unknown (or is this one). Provided by the session screen.
+ */
+val LocalWriteBlockOpener = compositionLocalOf<(String) -> (() -> Unit)?> { { null } }
 
 /** The file a call works on (`read`, `write`, `edit`, ...), if its input names one. */
 internal fun toolFile(tool: ToolCall): FileTarget? {
@@ -115,6 +124,8 @@ fun ToolCard(tool: ToolCall, modifier: Modifier = Modifier) {
                     modifier = Modifier.weight(1f),
                 )
             }
+            // A write refused for another session's lease: say who, and link there. No retry.
+            writeBlock(tool)?.let { block -> WriteBlockNotice(block, LocalWriteBlockOpener.current(block.holderName)) }
             // A browser recording stays one tap away, even collapsed.
             val playRecording = LocalRecordingOpener.current
             tool.recording?.let { path ->
@@ -141,7 +152,30 @@ fun ToolCard(tool: ToolCall, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun StatusMark(status: String) {
+private fun WriteBlockNotice(block: WriteBlock, open: (() -> Unit)?) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        color = colors.errorContainer,
+        contentColor = colors.onErrorContainer,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+    ) {
+        Column(Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = if (open == null) 8.dp else 0.dp)) {
+            Text("Write blocked — ${block.holderName} is writing to this workspace", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "${block.path} stays locked until that session's run finishes.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onErrorContainer.copy(alpha = 0.8f),
+            )
+            if (open != null) TextButton(onClick = open, modifier = Modifier.align(Alignment.End)) {
+                Text("Open ${block.holderName}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+@Composable
+internal fun StatusMark(status: String) {
     val colors = MaterialTheme.colorScheme
     Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
         when (status) {
