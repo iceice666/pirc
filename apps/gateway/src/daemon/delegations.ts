@@ -135,6 +135,8 @@ export interface DelegationDeps {
   ttlMs: number;
   /** Browsers reload their lists: a delegated session appeared. */
   directoryChanged(): void;
+  /** It finished, failed or waits for the user: push it (daemon/push.ts). */
+  announce?(delegation: Delegation): void;
   warn(message: string, error?: unknown): void;
 }
 
@@ -442,6 +444,7 @@ export class Delegations {
       case 'waiting':
         if (delegation.status === 'waiting_input') return;
         this.update(id, 'waiting_input');
+        this.announce(id);
         void this.report(id);
         return;
       case 'working':
@@ -478,7 +481,9 @@ export class Delegations {
         "UPDATE delegations SET status=?, result=?, updated_at=? WHERE id=? AND status IN ('running','waiting_input')",
       )
       .run(status, clip(redactSecrets(result), RESULT_MAX_CHARS), now(), id).changes;
-    if (changed) void this.report(id);
+    if (!changed) return;
+    this.announce(id);
+    void this.report(id);
   }
 
   /** Tell the chat that asked; retried when its node comes back. */
@@ -517,6 +522,16 @@ export class Delegations {
   }
 
   // ---------- helpers ----------
+
+  private announce(id: string): void {
+    const delegation = this.row(id);
+    if (!delegation || !this.deps.announce) return;
+    try {
+      this.deps.announce(delegation);
+    } catch (error) {
+      this.deps.warn(`delegation ${id}: could not push`, error);
+    }
+  }
 
   private updateMessage(delegation: Delegation): string {
     const session = delegation.targetSessionId

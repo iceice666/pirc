@@ -7,6 +7,13 @@ import { request } from './http';
 import type { ThinkingLevel } from './types';
 
 export type ScheduleStatus = 'active' | 'paused' | 'done';
+export type NotifyLevel = 'all' | 'problems' | 'none';
+
+export const NOTIFY_LABELS: Record<NotifyLevel, string> = {
+  all: 'Every run',
+  problems: 'Only when it fails, is missed or needs me',
+  none: 'Never',
+};
 export type RunStatus =
   | 'missed'
   | 'skipped'
@@ -47,6 +54,8 @@ export interface Schedule {
   timezone: string;
   model: { provider: string; id: string } | null;
   thinking: ThinkingLevel | null;
+  /** Which runs push a notification. */
+  notify: NotifyLevel;
   status: ScheduleStatus;
   nextRunAt: number | null;
   /** The chat whose assistant proposed it; null when you made it. */
@@ -68,6 +77,7 @@ export interface ScheduleInput {
   timezone?: string;
   model?: { provider: string; id: string } | null;
   thinking?: ThinkingLevel | null;
+  notify?: NotifyLevel;
 }
 
 /** Schedules are personal: never from a browser cache. */

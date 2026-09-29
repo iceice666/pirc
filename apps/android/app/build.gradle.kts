@@ -98,6 +98,8 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.okhttp)
+    // Push notifications through the user's own distributor (ntfy, ...): no Google services.
+    implementation(libs.unifiedpush.connector)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.play.services.code.scanner)

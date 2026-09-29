@@ -67,6 +67,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.pirc.android.SchedulesViewModel
 import dev.pirc.android.core.CRON_PRESETS
+import dev.pirc.android.core.NOTIFY_CHOICES
 import dev.pirc.android.core.ModelRef
 import dev.pirc.android.core.SCHEDULE_THINKING_LEVELS
 import dev.pirc.android.core.Schedule
@@ -369,6 +370,7 @@ private fun ScheduleForm(
     /** `provider/id`, or "" for the default. */
     var model by rememberSaveable { mutableStateOf(schedule?.model?.let { "${it.provider}/${it.id}" }.orEmpty()) }
     var thinking by rememberSaveable { mutableStateOf(schedule?.thinking.orEmpty()) }
+    var notify by rememberSaveable { mutableStateOf(schedule?.notify ?: "all") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf<String?>(null) }
 
@@ -397,6 +399,7 @@ private fun ScheduleForm(
                 else -> schedule?.model
             },
             thinking = thinking.ifEmpty { null },
+            notify = notify,
         )
         error = null
         viewModel.save(schedule?.id, input, onError = { error = it }, onDone = onDone)
@@ -478,6 +481,12 @@ private fun ScheduleForm(
             value = thinking.ifEmpty { "Default" },
             options = listOf("" to "Default") + SCHEDULE_THINKING_LEVELS.map { it to it },
             onChoose = { thinking = it },
+        )
+        Choice(
+            label = "Notifications",
+            value = NOTIFY_CHOICES.firstOrNull { it.first == notify }?.second ?: notify,
+            options = NOTIFY_CHOICES,
+            onChoose = { notify = it },
         )
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {

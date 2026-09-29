@@ -75,8 +75,10 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit, onOpenSch
     var acting by remember { mutableStateOf<Session?>(null) }
     var renaming by remember { mutableStateOf<Session?>(null) }
     var unpairing by remember { mutableStateOf(false) }
+    var notifications by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
 
+    if (notifications) NotificationsDialog(viewModel.api()) { notifications = false }
     if (unpairing) AlertDialog(
         onDismissRequest = { unpairing = false },
         title = { Text("Unpair this phone?") },
@@ -132,6 +134,10 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit, onOpenSch
                                 onOpenSchedules()
                             },
                         )
+                        DropdownMenuItem(text = { Text("Notifications") }, onClick = {
+                            menu = false
+                            notifications = true
+                        })
                         DropdownMenuItem(text = { Text("Unpair this phone") }, onClick = {
                             menu = false
                             unpairing = true

@@ -90,6 +90,15 @@ export interface DaemonConfig extends BrowserAuthConfig {
   exaApiKey?: string | undefined;
   /** Default IANA time zone of schedules agents create (`PIRC_TIMEZONE`, else the system's). */
   timezone: string;
+  /**
+   * The contact push services may use about this gateway's notifications
+   * (`PIRC_VAPID_SUBJECT`, a `mailto:` or `https:` URL; default: the first
+   * allowed origin). Keys: `PIRC_VAPID_PUBLIC_KEY`/`PIRC_VAPID_PRIVATE_KEY`,
+   * else `<stateDir>/vapid.json` (daemon/push.ts).
+   */
+  vapidSubject: string;
+  /** Accept plain-http push endpoints (`PIRC_PUSH_ALLOW_HTTP`, e.g. ntfy on a LAN); default off. */
+  pushAllowHttp: boolean;
 }
 
 /**
@@ -243,6 +252,8 @@ export function loadDaemonConfig(env: NodeJS.ProcessEnv = process.env): DaemonCo
     delegationTtlMs: integer(env.PIRC_DELEGATION_TTL_MS, 3_600_000),
     ...(env.EXA_API_KEY?.trim() ? { exaApiKey: env.EXA_API_KEY.trim() } : {}),
     timezone: timezone(env.PIRC_TIMEZONE),
+    vapidSubject: vapidSubject(env.PIRC_VAPID_SUBJECT, [...allowedOrigins][0]!),
+    pushAllowHttp: bool(env.PIRC_PUSH_ALLOW_HTTP, false),
   };
 }
 
@@ -318,4 +329,14 @@ function timezone(value: string | undefined): string {
     throw new Error(`PIRC_TIMEZONE: unknown time zone ${zone}`);
   }
   return zone;
+}
+
+/** Push services want a way to reach the sender: a `mailto:` or `https:` URL. */
+function vapidSubject(value: string | undefined, origin: string): string {
+  const subject = value?.trim() || origin;
+  if (!/^(mailto:\S+@\S+|https:\/\/\S+)$/.test(subject))
+    throw new Error(
+      `PIRC_VAPID_SUBJECT must be a mailto: or https: URL (the default is the first allowed origin, ${origin})`,
+    );
+  return subject;
 }

@@ -54,6 +54,8 @@ data class Schedule(
     val timezone: String,
     val model: ModelRef? = null,
     val thinking: String? = null,
+    /** Which runs push a notification: all, problems or none. */
+    val notify: String = "all",
     /** active, paused or done. */
     val status: String,
     val nextRunAt: Long? = null,
@@ -79,6 +81,7 @@ data class ScheduleInput(
     val timezone: String,
     val model: ModelRef?,
     val thinking: String?,
+    val notify: String = "all",
 )
 
 @Serializable
@@ -107,6 +110,13 @@ val RUN_LABELS = mapOf(
 )
 
 fun runLabel(status: String) = RUN_LABELS[status] ?: status
+
+/** Which runs of a schedule notify, for the form. */
+val NOTIFY_CHOICES = listOf(
+    "all" to "Every run",
+    "problems" to "Only when it fails, is missed or needs me",
+    "none" to "Never",
+)
 
 /** Common repeats for the form. */
 val CRON_PRESETS = listOf(
@@ -197,6 +207,11 @@ fun Schedule.where(): String = listOfNotNull(
     "offline".takeIf { !workspace.online },
     model?.id,
     thinking?.let { "thinking $it" },
+    when (notify) {
+        "none" -> "no notifications"
+        "problems" -> "notifies on problems"
+        else -> null
+    },
 ).joinToString(" · ")
 
 /** "Next 2026-09-30 09:00 (in 3h) · last completed · proposed by your assistant" */

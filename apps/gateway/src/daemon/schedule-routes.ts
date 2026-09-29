@@ -6,7 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { GatewayDatabase } from '../database.js';
 import { parse } from '../util.js';
-import { PROMPT_MAX_CHARS, THINKING_LEVELS, type Schedules } from './schedules.js';
+import { NOTIFY_LEVELS, PROMPT_MAX_CHARS, THINKING_LEVELS, type Schedules } from './schedules.js';
 
 const idParams = z.object({ id: z.string().min(1).max(40) });
 const runParams = idParams.extend({ runId: z.string().min(1).max(40) });
@@ -22,6 +22,7 @@ const fields = {
   timezone: z.string().max(100).optional(),
   model: model.nullable().optional(),
   thinking: z.enum(THINKING_LEVELS).nullable().optional(),
+  notify: z.enum(NOTIFY_LEVELS).optional(),
 };
 const createBody = z
   .object({

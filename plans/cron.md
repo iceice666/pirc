@@ -1,6 +1,6 @@
 # Scheduled agent runs (cron)
 
-Status (2026-09-29): phases 1 (gateway core, agent tool, `/cron`), 2 (web) and 3 (Android) implemented and tested. Phases 4 (push) and 5 (docs) not started.
+Status (2026-09-29): phases 1–5 implemented and tested.
 
 ## As built (phase 1)
 
@@ -51,14 +51,47 @@ Status (2026-09-29): phases 1 (gateway core, agent tool, `/cron`), 2 (web) and 3
 - `core/Schedules.kt` holds the models and the helpers ported from the web's `schedules.ts`, and `PircApi` has the schedule calls. `PiMessages.kt` now labels `scheduled-run` ("Scheduled task"), plus the delegation messages the web already labelled.
 - Tests: `core/SchedulesTest.kt` (words, time zones, request bodies, labels) and `SchedulesViewModelTest.kt`. Checked on the emulator against a real gateway and node: pairing, the list and the badge, missed → allow → run, Open session, and a new one-shot through the pickers.
 
+## As built (phase 4, push)
+
+- Scope, from the user: scheduled runs, **and** any session waiting for its user, finished/failed delegations, and memory proposals. Each schedule has `notify`: `all` (default), `problems` (failed, missed, waiting) or `none`. The web, Android, the agent tool and the proposals all carry it.
+- `daemon/push.ts` (`Push`), migration 12 (`push_subscriptions`, `schedules.notify`):
+  - One subscription model for browsers (`kind: web`) and phones (`kind: unifiedpush`). The UnifiedPush 3 connector gives the app a Web Push endpoint with keys, so the gateway encrypts both the same way (RFC 8291) with the `web-push` package.
+  - Requests are sent with `fetch`: a 10 s timeout, no redirects, and `TTL` 24 h. A `Topic` derived from the tag replaces a queued message about the same thing.
+  - A 404 or 410 from the push service deletes the subscription, and so do 20 failures in a row. A subscription made with a device token goes when the token does.
+  - Endpoints must be https, unless `PIRC_PUSH_ALLOW_HTTP`.
+  - VAPID keys come from `PIRC_VAPID_PUBLIC_KEY`/`PIRC_VAPID_PRIVATE_KEY`, or are generated once into `<stateDir>/vapid.json` (0600). The subject is `PIRC_VAPID_SUBJECT`, defaulting to the first allowed origin.
+  - The payload is `{ title, body, tag, target, at }`. The target is a session, the schedules (optionally one), or the memory. There is never agent output.
+  - Tags merge duplicates: the notifications for a run's session and for its waiting run share `session:<id>`.
+- Routes:
+  - `GET /api/push` (public key, and the places that get notifications)
+  - `POST` and `DELETE /api/push/subscriptions`
+  - `POST /api/push/test`
+- Web:
+  - Settings → General → Notifications turns push on or off for this browser, lists every place (with Remove), and sends a test.
+  - `public/sw.js` handles `push` and `notificationclick`. It skips a notification about the session a focused window shows.
+  - The address now carries `?session=<id>`. `?open=schedules[&schedule=]` and `?open=memory` open Settings. A click in an open window arrives as an `OPEN_TARGET` message.
+- Android:
+  - More → Notifications: the POST_NOTIFICATIONS permission, then `tryUseCurrentOrDefaultDistributor` and `register(vapid = gateway key)`.
+  - `PircPushService` sends the endpoint to the gateway and shows decrypted messages, one notification per tag. The session on screen is skipped.
+  - Tapping a notification opens the session, the schedule, or the sessions list (Android has no memory screen). Unpairing unregisters.
+- Tests:
+  - `test/push.test.ts`: it decrypts what the gateway sends, following RFC 8291.
+  - A notify-level test in `schedules.integration.test.ts`.
+  - Web: `push.test.ts`. Android: `PushTest.kt`.
+  - The service worker was checked in Chromium through CDP `ServiceWorker.deliverPushMessage`: the session on screen was skipped, same-tag messages merged, and the target was carried.
+
+## As built (phase 5, docs)
+
+- README: "Schedules and notifications", and the `schedule`/`/cron` tool entry.
+- `nix/module.nix`: `services.pirc.timeZone` (default `config.time.timeZone` → `PIRC_TIMEZONE`), and the VAPID variables in the `environmentFile` description. `nodeModulesHash` was updated for `web-push`.
+
 ## Fixed along the way
 
 - A crashed agent loop (e.g. no model configured) used to end the node's run as `succeeded`, so a scheduled run (or a delegation) read "completed (no final answer)". The agent now emits `agent_error` before its notify, and the node fails the run with that message. Clients ignore the new event type.
 
-### Phase 1 follow-ups
+### Follow-ups
 
-- Push notifications (phase 4). The hook is `ScheduleDeps.changed(user)`, which today only feeds the events WS.
-- README / `nix/module.nix`: document `PIRC_TIMEZONE` and schedules (phase 5).
+- iOS Safari only pushes to an installed web app (Add to Home Screen), and this is untested on a real iPhone.
 - Deployment: the node's deliver body changed (`scheduled-run`, `model`, `thinking`), so deploy the gateway and nodes together.
 
 ## Decisions from the user

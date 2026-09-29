@@ -17,6 +17,7 @@
   import Modal from './Modal.svelte';
   import BackendSettings from '../BackendSettings.svelte';
   import MemorySettings from '../MemorySettings.svelte';
+  import NotificationSettings from '../NotificationSettings.svelte';
   import PairedDevices from '../PairedDevices.svelte';
   import ScheduleSettings from '../ScheduleSettings.svelte';
 
@@ -96,6 +97,8 @@
           </label>
           <p>Settled sessions are hidden from the sidebar unless this is on.</p>
         </section>
+
+        <NotificationSettings disabled={app.usingDemo} />
 
         <section class="settings-section">
           <h3>Layout</h3>

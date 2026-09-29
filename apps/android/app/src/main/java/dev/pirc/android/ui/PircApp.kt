@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import dev.pirc.android.core.LastSession
+import dev.pirc.android.core.PushTarget
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
@@ -100,7 +101,25 @@ fun PircApp(viewModel: AppViewModel) {
             LaunchedEffect(nav) {
                 if (restored) return@LaunchedEffect
                 restored = true
-                viewModel.takeRestore()?.let { nav.navigate(SessionRoute(it.id, it.name)) }
+                // A notification wins over the session left open last time.
+                if (viewModel.pendingTarget.value != null) viewModel.takeRestore()
+                else viewModel.takeRestore()?.let { nav.navigate(SessionRoute(it.id, it.name)) }
+            }
+            val pendingTarget by viewModel.pendingTarget.collectAsStateWithLifecycle()
+            LaunchedEffect(pendingTarget) {
+                when (val target = viewModel.takeTarget()) {
+                    is PushTarget.OpenSession -> {
+                        val name = viewModel.sessions.value.sessions.firstOrNull { it.id == target.sessionId }?.name ?: "Session"
+                        nav.navigate(SessionRoute(target.sessionId, name)) { launchSingleTop = true }
+                    }
+                    is PushTarget.OpenSchedules -> {
+                        viewModel.focusSchedule = target.scheduleId
+                        nav.navigate(SchedulesRoute) { launchSingleTop = true }
+                    }
+                    // The phone has no memory screen: the sessions list, where the web link is.
+                    PushTarget.OpenMemory -> nav.popBackStack(SessionsRoute, inclusive = false)
+                    null -> Unit
+                }
             }
             NavHost(navController = nav, startDestination = SessionsRoute) {
                 composable<SessionsRoute> {
@@ -114,6 +133,11 @@ fun PircApp(viewModel: AppViewModel) {
                     val api = viewModel.api() ?: return@composable
                     val schedules = viewModel<SchedulesViewModel>(key = "schedules|${api.pairing.baseUrl}") {
                         SchedulesViewModel(api) { viewModel.handle(it) }
+                    }
+                    // A notification about one schedule opens it.
+                    LaunchedEffect(viewModel.focusSchedule) {
+                        viewModel.focusSchedule?.let { schedules.open(it) }
+                        viewModel.focusSchedule = null
                     }
                     SchedulesScreen(
                         schedules,

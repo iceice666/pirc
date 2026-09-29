@@ -161,6 +161,17 @@ const migrations = [
   );
   CREATE INDEX schedule_proposals_session ON schedule_proposals(session_id, status);
   `,
+  // Push notifications (daemon/push.ts), and which runs of a schedule push.
+  `
+  CREATE TABLE push_subscriptions (
+    id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL, auth TEXT NOT NULL, kind TEXT NOT NULL, name TEXT,
+    device_id TEXT, created_at INTEGER NOT NULL, last_success_at INTEGER,
+    failures INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX push_subscriptions_owner ON push_subscriptions(owner_user);
+  ALTER TABLE schedules ADD COLUMN notify TEXT NOT NULL DEFAULT 'all';
+  `,
 ];
 
 const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');

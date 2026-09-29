@@ -88,7 +88,7 @@ class SchedulesTest {
         assertEquals("POST" to "/api/schedules", create.method to create.url.encodedPath)
         assertEquals(
             PircJson.parseToJsonElement(
-                """{"workspaceId":"work:test","title":"CI","prompt":"Check CI.","timezone":"Asia/Taipei","cron":"0 9 * * 1-5","model":{"provider":"gw","id":"model-a"},"thinking":null}""",
+                """{"workspaceId":"work:test","title":"CI","prompt":"Check CI.","timezone":"Asia/Taipei","cron":"0 9 * * 1-5","model":{"provider":"gw","id":"model-a"},"thinking":null,"notify":"all"}""",
             ),
             PircJson.parseToJsonElement(create.body!!.utf8()),
         )

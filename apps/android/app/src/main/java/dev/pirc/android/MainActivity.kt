@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import dev.pirc.android.core.PushTarget
 import dev.pirc.android.ui.PircApp
 import dev.pirc.android.ui.theme.PircTheme
 
@@ -29,6 +30,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleLink(intent: Intent?) {
+        // A tapped notification: open what it is about.
+        PushTarget.from(intent)?.let {
+            viewModel.openTarget(it)
+            return
+        }
         val data = intent?.data ?: return
         if (intent.action == Intent.ACTION_VIEW && data.scheme == "pirc") viewModel.offerLink(data.toString())
     }

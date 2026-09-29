@@ -44,6 +44,9 @@ export type RunStatus =
 type ProposalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
 
 export const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+/** Which runs push a notification: every outcome, only the ones needing the user, or none. */
+export const NOTIFY_LEVELS = ['all', 'problems', 'none'] as const;
+export type NotifyLevel = (typeof NOTIFY_LEVELS)[number];
 
 /** What a schedule does and when; everything the user approves. */
 export interface ScheduleSpec {
@@ -58,6 +61,7 @@ export interface ScheduleSpec {
   timezone: string;
   model: { provider: string; id: string } | null;
   thinking: string | null;
+  notify: NotifyLevel;
 }
 
 export interface Schedule extends ScheduleSpec {
@@ -97,6 +101,7 @@ export interface ScheduleInput {
   timezone?: string | undefined;
   model?: { provider: string; id: string } | null | undefined;
   thinking?: string | null | undefined;
+  notify?: NotifyLevel | undefined;
 }
 
 export const PROMPT_MAX_CHARS = 20_000;
@@ -122,6 +127,7 @@ const scheduleOf = (row: any): Schedule => ({
   timezone: row.timezone,
   model: row.model_json ? JSON.parse(row.model_json) : null,
   thinking: row.thinking ?? null,
+  notify: row.notify ?? 'all',
   status: row.status,
   nextRunAt: row.next_run_at ?? null,
   createdBySession: row.created_by_session ?? null,
@@ -201,8 +207,10 @@ export interface ScheduleDeps {
   defaultTimezone: string;
   graceMs?: number;
   directoryChanged(): void;
-  /** The user's schedules or runs changed: clients reload (and, later, push). */
+  /** The user's schedules or runs changed: clients reload. */
   changed(user: string): void;
+  /** A run finished, failed, was missed or waits for the user: push it (daemon/push.ts). */
+  announce?(schedule: Schedule, run: ScheduleRun): void;
   warn(message: string, error?: unknown): void;
 }
 
@@ -327,6 +335,7 @@ export class Schedules {
         : {}),
       ...(schedule.model ? { model: `${schedule.model.provider}/${schedule.model.id}` } : {}),
       ...(schedule.thinking ? { thinking: schedule.thinking } : {}),
+      ...(schedule.notify !== 'all' ? { notify: schedule.notify } : {}),
       prompt: clip(schedule.prompt, 300),
       ...(last
         ? {
@@ -422,7 +431,10 @@ export class Schedules {
       oneLine(text(input.title) || base?.title || prompt.split('\n', 1)[0]!),
       TITLE_MAX_CHARS,
     );
-    return { workspaceId, title, prompt, cron, runAt, timezone, model, thinking };
+    const notify = input.notify ?? base?.notify ?? 'all';
+    if (!(NOTIFY_LEVELS as readonly string[]).includes(notify))
+      throw invalid(`notify is one of ${NOTIFY_LEVELS.join(', ')}`);
+    return { workspaceId, title, prompt, cron, runAt, timezone, model, thinking, notify };
   }
 
   private parseAt(at: string, timezone: string): number {
@@ -505,7 +517,7 @@ export class Schedules {
     const at = now();
     this.deps.db.raw
       .prepare(
-        "INSERT INTO schedules (id,owner_user,workspace_id,title,prompt,cron,run_at,timezone,model_json,thinking,status,next_run_at,created_by_session,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,'active',?,?,?,?)",
+        "INSERT INTO schedules (id,owner_user,workspace_id,title,prompt,cron,run_at,timezone,model_json,thinking,notify,status,next_run_at,created_by_session,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,'active',?,?,?,?)",
       )
       .run(
         id,
@@ -518,6 +530,7 @@ export class Schedules {
         spec.timezone,
         spec.model ? JSON.stringify(spec.model) : null,
         spec.thinking,
+        spec.notify,
         nextFire(spec, at),
         createdBySession,
         at,
@@ -532,7 +545,7 @@ export class Schedules {
     const status: ScheduleStatus = schedule.status === 'done' ? 'active' : schedule.status;
     this.deps.db.raw
       .prepare(
-        'UPDATE schedules SET workspace_id=?,title=?,prompt=?,cron=?,run_at=?,timezone=?,model_json=?,thinking=?,status=?,next_run_at=?,updated_at=? WHERE id=?',
+        'UPDATE schedules SET workspace_id=?,title=?,prompt=?,cron=?,run_at=?,timezone=?,model_json=?,thinking=?,notify=?,status=?,next_run_at=?,updated_at=? WHERE id=?',
       )
       .run(
         spec.workspaceId,
@@ -543,6 +556,7 @@ export class Schedules {
         spec.timezone,
         spec.model ? JSON.stringify(spec.model) : null,
         spec.thinking,
+        spec.notify,
         status,
         nextFire(spec, now()),
         now(),
@@ -720,6 +734,9 @@ export class Schedules {
         ? [
             `Model: ${spec.model ? `${spec.model.provider}/${spec.model.id}` : 'default'}${spec.thinking ? `, thinking ${spec.thinking}` : ''}`,
           ]
+        : []),
+      ...(spec.notify !== 'all'
+        ? [`Notifications: ${spec.notify === 'none' ? 'none' : 'only when it needs you'}`]
         : []),
       '',
       spec.prompt,
@@ -979,6 +996,21 @@ export class Schedules {
   private setRunStatus(run: ScheduleRun, status: RunStatus): void {
     this.deps.db.raw.prepare('UPDATE schedule_runs SET status=? WHERE id=?').run(status, run.id);
     this.deps.changed(run.ownerUser);
+    this.announce(run.id);
+  }
+
+  /** Push what the user asked to hear about (the schedule's `notify`). */
+  private announce(runId: string): void {
+    const run = this.runRow(runId);
+    const schedule = run && this.row(run.scheduleId);
+    if (!run || !schedule || !this.deps.announce || schedule.notify === 'none') return;
+    const problem = ['failed', 'waiting_input', 'missed'].includes(run.status);
+    if (!problem && !(run.status === 'completed' && schedule.notify === 'all')) return;
+    try {
+      this.deps.announce(schedule, run);
+    } catch (error) {
+      this.deps.warn(`scheduled run ${run.id}: could not push`, error);
+    }
   }
 
   private finish(id: string, status: 'completed' | 'failed', result: string): void {
@@ -988,7 +1020,10 @@ export class Schedules {
         `UPDATE schedule_runs SET status=?, result=?, finished_at=? WHERE id=? AND status IN ${OPEN_RUNS}`,
       )
       .run(status, clip(redactSecrets(result), RESULT_MAX_CHARS), now(), id).changes;
-    if (changed && run) this.deps.changed(run.ownerUser);
+    if (changed && run) {
+      this.deps.changed(run.ownerUser);
+      this.announce(id);
+    }
   }
 
   private insertRun(
@@ -1020,6 +1055,7 @@ export class Schedules {
         `DELETE FROM schedule_runs WHERE schedule_id=? AND status NOT IN ('running','waiting_input','missed') AND id NOT IN (SELECT id FROM schedule_runs WHERE schedule_id=? ORDER BY created_at DESC, rowid DESC LIMIT ${RUNS_KEPT})`,
       )
       .run(schedule.id, schedule.id);
+    if (status === 'missed' || status === 'failed') this.announce(id);
     return this.runRow(id)!;
   }
 

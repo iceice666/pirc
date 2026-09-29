@@ -66,6 +66,14 @@
   let panelTab: PanelTab = $state('files');
   let settingsOpen = $state(false);
   let settingsTab: SettingsTab = $state('general');
+  // A notification or a `?open=` link asked for the schedules or the memory.
+  $effect(() => {
+    const target = app.requestedTarget;
+    if (!target) return;
+    settingsTab = 'schedules' in target ? 'schedules' : 'memory';
+    settingsOpen = true;
+    app.requestedTarget = undefined;
+  });
   let newSessionOpen = $state(false);
   let newProjectOpen = $state(false);
   let newProjectNodeId = $state('');
@@ -255,6 +263,14 @@
     const removePwa = registerPwa((registration) => (updateRegistration = registration));
     const removeViewport = trackViewportHeight();
     void app.bootstrap();
+    // A notification clicked while this window is open (public/sw.js).
+    const onWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OPEN_TARGET') {
+        sidebarOpen = false;
+        void app.openTarget(event.data.target ?? undefined);
+      }
+    };
+    navigator.serviceWorker?.addEventListener('message', onWorkerMessage);
     // A file link in the conversation previews the file in the side panel.
     const removeFileLinks = onFilePreviewRequest(() => (detailsOpen = true));
     // Code blocks are common; fetch the highlighter once the first paint is done.
@@ -302,6 +318,7 @@
       window.removeEventListener('online', onOnline);
       app.dispose();
       removePwa();
+      navigator.serviceWorker?.removeEventListener('message', onWorkerMessage);
       removeViewport();
       removeFileLinks();
     };

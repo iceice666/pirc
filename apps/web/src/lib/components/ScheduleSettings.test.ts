@@ -62,6 +62,7 @@ function schedule(overrides: Partial<Schedule> = {}): Schedule {
     timezone: 'Asia/Taipei',
     model: null,
     thinking: null,
+    notify: 'all',
     status: 'active',
     nextRunAt: Date.now() + 3 * 3_600_000,
     createdBySession: null,
@@ -160,6 +161,7 @@ describe('ScheduleSettings', () => {
     await click('Weekdays at 09:00');
     await input('Model', JSON.stringify(['gw', 'model-a']));
     await input('Thinking', 'high');
+    await input('Notifications', 'problems');
     target.querySelector('form')!.requestSubmit();
     await flush();
     const created = calls.find((call) => call.method === 'POST')!;
@@ -171,6 +173,7 @@ describe('ScheduleSettings', () => {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       model: { provider: 'gw', id: 'model-a' },
       thinking: 'high',
+      notify: 'problems',
       cron: '0 9 * * 1-5',
     });
     // The form closes and the list reloads.

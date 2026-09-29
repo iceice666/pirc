@@ -7,6 +7,7 @@ import { api, connectEvents, type EventConnection } from './api';
 import type { NewWorkspace } from './chats';
 import { memoryApi } from './memory';
 import { schedulesApi } from './schedules';
+import { targetFromUrl, type PushTarget } from './push';
 import { syncControl } from './control';
 import { errorMessage } from './errors';
 import { GOAL_WIDGET, parseGoalWidget } from './goal';
@@ -71,6 +72,13 @@ class AppState {
   scheduleAttention = $state(0);
   /** Bumped whenever the gateway says your schedules changed; open schedule views reload. */
   scheduleRevision = $state(0);
+  /**
+   * A place outside the sessions to show, asked for by a notification or a
+   * `?open=` link (App opens Settings on it, then clears it).
+   */
+  requestedTarget = $state<Exclude<PushTarget, { sessionId: string }> | undefined>();
+  /** The schedule a notification was about; the Schedules page opens it once. */
+  scheduleFocus = $state<string | undefined>();
   sessions = $state.raw<SessionSummary[]>([]);
   models = $state.raw<ModelOption[]>([]);
   activeSessionId = $state<string>();
@@ -178,6 +186,12 @@ class AppState {
         api.nodes(),
       ]);
       this.activeSessionId = this.sessions[0]?.id;
+      // A notification or a shared link names what to open.
+      const linked = targetFromUrl(new URL(location.href));
+      if (linked && 'sessionId' in linked) {
+        if (this.sessions.some((session) => session.id === linked.sessionId))
+          this.activeSessionId = linked.sessionId;
+      } else if (linked) this.#request(linked);
       pruneDrafts(this.sessions.map((session) => session.id));
       void this.refreshMemory();
       void this.refreshSchedules();
@@ -231,6 +245,25 @@ class AppState {
     }
   }
 
+  /** Show what a notification points at. */
+  async openTarget(target: PushTarget | undefined) {
+    if (!target) return;
+    if ('sessionId' in target) {
+      // A session a scheduled run just started may be new to this list.
+      if (!this.sessions.some((session) => session.id === target.sessionId))
+        await this.refreshSessions();
+      if (this.sessions.some((session) => session.id === target.sessionId))
+        await this.openSession(target.sessionId);
+      return;
+    }
+    this.#request(target);
+  }
+
+  #request(target: Exclude<PushTarget, { sessionId: string }>) {
+    this.requestedTarget = target;
+    if ('schedules' in target && target.scheduleId) this.scheduleFocus = target.scheduleId;
+  }
+
   /** How many scheduled runs wait for you (the badge on Settings). */
   async refreshSchedules() {
     if (this.demo) return;
@@ -267,6 +300,10 @@ class AppState {
     this.flushDraft();
     const seq = ++this.#openSeq;
     this.activeSessionId = id;
+    // The address names the open session: a reload or a shared link comes back
+    // to it, and the service worker skips notifications about what is on screen.
+    if (!this.demo && typeof history !== 'undefined')
+      history.replaceState(history.state, '', `?session=${encodeURIComponent(id)}`);
     this.#events?.close();
     this.#events = undefined;
     this.sessionState = undefined;

@@ -14,7 +14,8 @@ import { resolveDirectoryWorkspace, type Delegations } from './delegations.js';
 import type { MemoryStore } from './memory.js';
 import type { MemoryRecords } from './memory-records.js';
 import type { NodeRegistry } from './nodes.js';
-import { THINKING_LEVELS, type Schedule, type Schedules } from './schedules.js';
+import type { Push } from './push.js';
+import { NOTIFY_LEVELS, THINKING_LEVELS, type Schedule, type Schedules } from './schedules.js';
 import { webSearchArgs, type WebSearch } from './web-search.js';
 
 export interface AgentOpServices {
@@ -30,6 +31,8 @@ export interface AgentOpServices {
   webSearch: WebSearch;
   /** Scheduled agent runs (daemon/schedules.ts). */
   schedules: Schedules;
+  /** Push notifications (daemon/push.ts); absent in some tests. */
+  push?: Push;
 }
 export interface AgentOpContext {
   services: AgentOpServices;
@@ -96,6 +99,7 @@ const scheduleFields = {
   /** `provider/model-id`; null for the default. */
   model: z.string().min(3).max(300).nullable().optional(),
   thinking: z.enum(THINKING_LEVELS).nullable().optional(),
+  notify: z.enum(NOTIFY_LEVELS).optional(),
 };
 const modelRef = (value: string | null | undefined) => {
   if (value === undefined || value === null) return value;
@@ -386,7 +390,15 @@ const ops: Record<string, AgentOp> = {
         sessionId: session.id,
         entryIds: args.entryIds,
       });
-      if (!duplicate) services.memoryChanged(user);
+      if (!duplicate) {
+        services.memoryChanged(user);
+        void services.push?.notify(user, {
+          title: 'Your assistant wants to remember something',
+          body: 'Approve or reject it in Settings → Memory.',
+          tag: 'memory',
+          target: { memory: true },
+        });
+      }
       return { proposalId: proposal.id, duplicate };
     },
   },

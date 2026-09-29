@@ -1,6 +1,9 @@
 package dev.pirc.android
 
 import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.pirc.android.core.ApiException
@@ -13,6 +16,8 @@ import dev.pirc.android.core.LocalStore
 import dev.pirc.android.core.Pairing
 import dev.pirc.android.core.PairingLink
 import dev.pirc.android.core.PircApi
+import dev.pirc.android.core.PushTarget
+import dev.pirc.android.push.PushRegistration
 import dev.pirc.android.core.NodeSummary
 import dev.pirc.android.core.Session
 import dev.pirc.android.core.Workspace
@@ -88,6 +93,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _scheduleAttention = MutableStateFlow(0)
     val scheduleAttention: StateFlow<Int> = _scheduleAttention.asStateFlow()
 
+    /** What a tapped notification asks to open; PircApp navigates, then clears it. */
+    private val _pendingTarget = MutableStateFlow<PushTarget?>(null)
+    val pendingTarget: StateFlow<PushTarget?> = _pendingTarget.asStateFlow()
+
+    fun openTarget(target: PushTarget) {
+        _pendingTarget.value = target
+    }
+
+    fun takeTarget(): PushTarget? = _pendingTarget.value.also { _pendingTarget.value = null }
+
+    /** The schedule a notification was about, for the Schedules screen to open. */
+    var focusSchedule by mutableStateOf<String?>(null)
+
     private var refreshJob: Job? = null
     private var watching: Job? = null
 
@@ -98,6 +116,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         Connectivity.start(application)
+        PushRegistration.load(application)
         // The sessions screen refreshes itself when it appears.
         viewModelScope.launch {
             val stored = withContext(Dispatchers.IO) { store.load() }
@@ -304,6 +323,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun unpair(reason: String? = null) {
+        // Stop notifications for this gateway; with a dead token only the distributor side can go.
+        val api = cachedApi
+        val context = getApplication<Application>()
+        viewModelScope.launch { PushRegistration.disable(context, api.takeIf { reason == null }) }
         refreshJob?.cancel()
         unwatchSessions()
         store.clear()

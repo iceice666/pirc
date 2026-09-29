@@ -1,3 +1,4 @@
+import { createECDH, randomBytes } from 'node:crypto';
 import { afterEach, expect, it } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import { formatTime, nextFire } from '../src/daemon/schedules.js';
@@ -386,3 +387,93 @@ it('lets proposals lapse', async () => {
   );
   expect(services.schedules.list(USER)).toEqual([]);
 });
+
+it('pushes the runs each schedule asks for, to the places the user subscribed', async () => {
+  const { app, services } = await start();
+  const received: string[] = [];
+  const server = Bun.serve({
+    port: 0,
+    async fetch(request) {
+      received.push(new URL(request.url).pathname);
+      return new Response(null, { status: 201 });
+    },
+  });
+  cleanup.push(() => server.stop(true));
+  const ecdh = createECDH('prime256v1');
+  ecdh.generateKeys();
+  const keys = {
+    p256dh: ecdh.getPublicKey('base64url'),
+    auth: randomBytes(16).toString('base64url'),
+  };
+
+  const info = (await api(app, 'GET', '/api/push')).json();
+  expect(info.publicKey).toMatch(/^[A-Za-z0-9_-]{80,}$/);
+  expect(info.subscriptions).toEqual([]);
+  const subscribed = await api(app, 'POST', '/api/push/subscriptions', {
+    endpoint: `http://127.0.0.1:${server.port}/browser`,
+    keys,
+    kind: 'web',
+    name: 'Test browser',
+  });
+  expect(subscribed.statusCode).toBe(201);
+  expect((await api(app, 'GET', '/api/push')).json().subscriptions).toEqual([
+    expect.objectContaining({
+      kind: 'web',
+      name: 'Test browser',
+      host: `127.0.0.1:${server.port}`,
+    }),
+  ]);
+  expect((await api(app, 'POST', '/api/push/test', {})).json() as unknown).toEqual({
+    delivered: 1,
+  });
+
+  const minute = (new Date().getUTCMinutes() + 30) % 60;
+  const create = async (prompt: string, notify: string) =>
+    (
+      await api(app, 'POST', '/api/schedules', {
+        workspaceId: 'work:test',
+        prompt,
+        cron: `${minute} * * * *`,
+        timezone: 'UTC',
+        notify,
+      })
+    ).json().schedule.id as string;
+  const fire = async (id: string, status: string) => {
+    services.db.raw.prepare('UPDATE schedules SET next_run_at=? WHERE id=?').run(Date.now(), id);
+    services.schedules.tick();
+    await waitFor(async () => (await runsOf(app, id))[0]?.status, status);
+  };
+  const pushes = async (count: number) => {
+    await waitFor(() => received.length, count);
+    await Bun.sleep(100);
+    expect(received).toHaveLength(count);
+  };
+
+  const all = await create('Report.', 'all');
+  const quiet = await create('Report quietly.', 'problems');
+  const silent = await create('Please crash the loop.', 'none');
+  expect(services.schedules.get(USER, quiet).notify).toBe('problems');
+  await pushes(1); // the test notification
+
+  await fire(all, 'completed');
+  await pushes(2);
+  await fire(quiet, 'completed');
+  await pushes(2); // a success is not a problem
+  await fire(silent, 'failed');
+  await pushes(2);
+  // A problem pushes even when successes do not.
+  await api(app, 'PATCH', `/api/schedules/${silent}`, { notify: 'problems' });
+  await fire(silent, 'failed');
+  await pushes(3);
+
+  expect(
+    (
+      await api(app, 'DELETE', '/api/push/subscriptions', {
+        endpoint: `http://127.0.0.1:${server.port}/browser`,
+      })
+    ).statusCode,
+  ).toBe(204);
+  await fire(all, 'completed');
+  await Bun.sleep(200);
+  expect(received).toHaveLength(3);
+}, 20_000);

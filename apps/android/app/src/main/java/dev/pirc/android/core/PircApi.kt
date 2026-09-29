@@ -259,6 +259,35 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
         }
     }
 
+    // ---- push notifications (plans/cron.md, phase 4) ----
+
+    open suspend fun pushInfo(): PushInfo = get("/api/push")
+
+    /** This phone's UnifiedPush endpoint and Web Push keys; it goes with the device token. */
+    open suspend fun subscribePush(endpoint: String, p256dh: String, auth: String, name: String): PushPlace {
+        val reply = send("POST", "/api/push/subscriptions", buildJsonObject {
+            put("endpoint", endpoint)
+            put("keys", buildJsonObject {
+                put("p256dh", p256dh)
+                put("auth", auth)
+            })
+            put("kind", "unifiedpush")
+            put("name", name)
+        })
+        return readingReply { PircJson.decodeFromJsonElement(PushSubscribed.serializer(), reply ?: error("empty reply")).subscription }
+    }
+
+    open suspend fun unsubscribePush(endpoint: String? = null, id: String? = null) {
+        send("DELETE", "/api/push/subscriptions", buildJsonObject {
+            endpoint?.let { put("endpoint", it) }
+            id?.let { put("id", it) }
+        })
+    }
+
+    /** A test notification to every place; how many took it. */
+    open suspend fun testPush(): Int =
+        readingReply { PircJson.decodeFromJsonElement(PushTested.serializer(), send("POST", "/api/push/test", buildJsonObject {}) ?: error("empty reply")).delivered }
+
     // ---- schedules (plans/cron.md) ----
 
     /** Every model the gateway offers, for a schedule's own choice. */
@@ -302,6 +331,7 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
             put("id", input.model.id)
         }) else put("model", JsonNull)
         if (input.thinking != null) put("thinking", input.thinking) else put("thinking", JsonNull)
+        put("notify", input.notify)
     }
 
     private fun decodeSchedule(reply: JsonElement?) = readingReply {

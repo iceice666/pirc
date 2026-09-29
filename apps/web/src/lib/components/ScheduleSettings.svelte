@@ -10,6 +10,7 @@
   import { ApiError } from '../http';
   import {
     CRON_PRESETS,
+    NOTIFY_LABELS,
     RUN_LABELS,
     deviceTimezone,
     describeWhen,
@@ -18,6 +19,7 @@
     timezones,
     until,
     wallInput,
+    type NotifyLevel,
     type Schedule,
     type ScheduleInput,
     type ScheduleRun,
@@ -47,6 +49,7 @@
     /** `modelKey` of the chosen model; empty for the default. */
     model: string;
     thinking: ThinkingLevel | '';
+    notify: NotifyLevel;
   }
 
   let schedules: Schedule[] = $state([]);
@@ -88,6 +91,11 @@
       schedule.workspace.online ? '' : 'offline',
       schedule.model?.id,
       schedule.thinking ? `thinking ${schedule.thinking}` : '',
+      schedule.notify === 'none'
+        ? 'no notifications'
+        : schedule.notify === 'problems'
+          ? 'notifies on problems'
+          : '',
     ]
       .filter(Boolean)
       .join(' · ');
@@ -116,11 +124,18 @@
       timezone: deviceTimezone(),
       model: '',
       thinking: '',
+      notify: 'all',
     };
   }
 
   function show(list: Schedule[]) {
     schedules = list;
+    // A notification was about this one: open its runs.
+    const focus = app.scheduleFocus;
+    if (focus && list.some((item) => item.id === focus)) {
+      app.scheduleFocus = undefined;
+      expanded = focus;
+    }
     app.scheduleAttention = list.reduce((sum, item) => sum + item.attention, 0);
     confirming = undefined;
     if (expanded && !list.some((item) => item.id === expanded)) expanded = undefined;
@@ -204,6 +219,7 @@
       timezone: schedule.timezone,
       model: schedule.model ? modelKey(schedule.model) : '',
       thinking: schedule.thinking ?? '',
+      notify: schedule.notify ?? 'all',
     };
     formError = '';
     editing = schedule.id;
@@ -227,6 +243,7 @@
       timezone: form.timezone.trim(),
       model,
       thinking: form.thinking || null,
+      notify: form.notify,
       ...(form.mode === 'repeat' ? { cron: form.cron.trim() } : { at: form.at }),
     };
     busy = 'save';
@@ -260,6 +277,13 @@
     () => app.scheduleRevision,
     () => {
       if (!disabled) void load();
+    },
+  );
+  // A notification about one schedule, while this is already open.
+  watch(
+    () => app.scheduleFocus,
+    (focus) => {
+      if (focus && !disabled) void load();
     },
   );
 </script>
@@ -528,6 +552,13 @@
         </select></label
       >
     </div>
+    <label
+      ><span>Notifications</span><select bind:value={form.notify}>
+        {#each Object.entries(NOTIFY_LABELS) as [level, label] (level)}
+          <option value={level}>{label}</option>
+        {/each}
+      </select></label
+    >
     {#if formError}<p class="schedule-error" role="alert">{formError}</p>{/if}
     <div class="form-actions">
       <button class="button ghost small" type="button" onclick={() => (editing = undefined)}

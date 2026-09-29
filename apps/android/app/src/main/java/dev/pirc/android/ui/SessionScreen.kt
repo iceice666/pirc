@@ -45,7 +45,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
+import dev.pirc.android.push.VisibleSession
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.pirc.android.Connection
 import dev.pirc.android.SessionViewModel
@@ -110,6 +112,11 @@ fun SessionScreen(
     LifecycleStartEffect(viewModel) {
         viewModel.start()
         onStopOrDispose { viewModel.stop() }
+    }
+    // On screen: notifications about this session would only repeat it.
+    LifecycleResumeEffect(viewModel) {
+        VisibleSession.id = viewModel.sessionId
+        onPauseOrDispose { if (VisibleSession.id == viewModel.sessionId) VisibleSession.id = null }
     }
     // A rename from another device arrives as an event: keep the list in step.
     LaunchedEffect(viewModel) {

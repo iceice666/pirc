@@ -28,6 +28,8 @@ import { Delegations } from './delegations.js';
 import { MemoryStore } from './memory.js';
 import { MemoryRecords } from './memory-records.js';
 import { registerMemoryRoutes } from './memory-routes.js';
+import { registerPushRoutes } from './push-routes.js';
+import { loadVapidKeys, Push, watchInteractions } from './push.js';
 import { registerScheduleRoutes } from './schedule-routes.js';
 import { Schedules } from './schedules.js';
 import { NodeRegistry, validNodeToken } from './nodes.js';
@@ -129,6 +131,8 @@ export interface DaemonServices {
   records: MemoryRecords;
   /** Scheduled agent runs (plans/cron.md). */
   schedules: Schedules;
+  /** Push notifications to browsers and phones. */
+  push: Push;
   /**
    * Re-read the gateway baseline and publish its secret-free catalog.
    * Subsequent inference calls use current credentials, including live agents.
@@ -205,12 +209,34 @@ export async function buildDaemonApp(
   const memoryChanged = (user: string) => {
     for (const listener of memoryListeners.get(user) ?? []) listener();
   };
+  const push = new Push({
+    db,
+    vapid: loadVapidKeys(config.stateDir),
+    subject: config.vapidSubject,
+    allowInsecureEndpoints: config.pushAllowHttp,
+    warn: (message, error) => app.log.warn({ error }, message),
+  });
+  const stopWatchingInteractions = watchInteractions({
+    db,
+    push,
+    subscribeAll: (listener) => events.subscribeAll(listener),
+  });
   const delegations = new Delegations({
     db,
     events,
     nodes,
     ttlMs: config.delegationTtlMs,
     directoryChanged,
+    announce: (delegation) => {
+      // Waiting: the session's own push ("... is waiting for you") says it already.
+      if (delegation.status === 'waiting_input') return;
+      void push.notify(delegation.ownerUser, {
+        title: `Delegation ${delegation.status === 'completed' ? 'finished' : 'failed'}: ${delegation.title}`,
+        body: 'Your assistant will tell you what came of it.',
+        tag: `delegation:${delegation.id}`,
+        target: { sessionId: delegation.targetSessionId ?? delegation.assistantSessionId },
+      });
+    },
     warn: (message, error) => app.log.warn({ error }, message),
   });
   /** Like memory changes: per user, opted into with `schedules=1`. */
@@ -229,6 +255,29 @@ export async function buildDaemonApp(
     defaultTimezone,
     directoryChanged,
     changed: schedulesChanged,
+    announce: (schedule, run) => {
+      const what: Record<string, string> = {
+        completed: 'finished',
+        failed: 'failed',
+        missed: 'was missed',
+        waiting_input: 'is waiting for you',
+      };
+      void push.notify(schedule.ownerUser, {
+        title: `${schedule.title} ${what[run.status] ?? run.status}`,
+        body:
+          run.status === 'missed'
+            ? 'Allow it to run it now, or dismiss it.'
+            : run.status === 'waiting_input'
+              ? 'The scheduled run needs your answer to go on.'
+              : 'Scheduled run: open it to read the result.',
+        // One notification per run session: its "waiting" push is the same one.
+        tag: run.sessionId ? `session:${run.sessionId}` : `run:${run.id}`,
+        target:
+          run.sessionId && run.status !== 'missed'
+            ? { sessionId: run.sessionId }
+            : { schedules: true, scheduleId: schedule.id },
+      });
+    },
     warn: (message, error) => app.log.warn({ error }, message),
   });
   const services = {
@@ -242,6 +291,7 @@ export async function buildDaemonApp(
     delegations,
     records,
     schedules,
+    push,
     reloadModels,
   };
 
@@ -270,6 +320,7 @@ export async function buildDaemonApp(
         nodes,
         webSearch,
         schedules,
+        push,
       },
       nodeId,
       request,
@@ -609,6 +660,7 @@ export async function buildDaemonApp(
   registerDeviceRoutes(app, devices);
   registerMemoryRoutes(app, { db, memory, memoryChanged });
   registerScheduleRoutes(app, { db, schedules, defaultTimezone });
+  registerPushRoutes(app, push);
 
   /** Every node's agents use the gateway's providers, so one list serves all sessions. */
   app.get('/api/models', async (request) => {
@@ -894,6 +946,7 @@ export async function buildDaemonApp(
     inference?.cancelAll();
     delegations.close();
     schedules.close();
+    stopWatchingInteractions();
     devices.close();
     await backends.close();
     nodes.close();

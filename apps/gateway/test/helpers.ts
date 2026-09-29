@@ -80,6 +80,8 @@ export function daemonConfig(overrides: Partial<DaemonConfig> = {}): DaemonConfi
     memoryBudgets: { user: 2000, note: 8000 },
     delegationTtlMs: 3_600_000,
     timezone: 'UTC',
+    vapidSubject: 'mailto:test@example.com',
+    pushAllowHttp: true,
     ...overrides,
   };
 }

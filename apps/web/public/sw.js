@@ -92,3 +92,70 @@ self.addEventListener('fetch', (event) => {
     }),
   );
 });
+
+/** The page a notification opens (see targetFromUrl in src/lib/push.ts). */
+function targetUrl(target) {
+  if (target?.sessionId) return `/?session=${encodeURIComponent(target.sessionId)}`;
+  if (target?.schedules)
+    return target.scheduleId
+      ? `/?open=schedules&schedule=${encodeURIComponent(target.scheduleId)}`
+      : '/?open=schedules';
+  if (target?.memory) return '/?open=memory';
+  return '/';
+}
+
+/**
+ * A push from the gateway (daemon/push.ts). Nothing is shown when the user
+ * is looking at the very session it is about.
+ */
+self.addEventListener('push', (event) => {
+  let message;
+  try {
+    message = event.data?.json();
+  } catch {
+    return;
+  }
+  if (!message?.title) return;
+  event.waitUntil(
+    (async () => {
+      const sessionId = message.target?.sessionId;
+      if (sessionId) {
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        const watching = windows.some(
+          (client) =>
+            client.focused &&
+            client.visibilityState === 'visible' &&
+            new URL(client.url).searchParams.get('session') === sessionId,
+        );
+        if (watching) return;
+      }
+      await self.registration.showNotification(message.title, {
+        body: message.body ?? '',
+        tag: message.tag,
+        renotify: true,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        timestamp: message.at,
+        data: { target: message.target ?? null },
+      });
+    })(),
+  );
+});
+
+/** Open what the notification is about: in an open window if there is one. */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = event.notification.data?.target ?? null;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const client = windows.find((item) => new URL(item.url).origin === self.location.origin);
+      if (client) {
+        await client.focus();
+        client.postMessage({ type: 'OPEN_TARGET', target });
+        return;
+      }
+      await self.clients.openWindow(targetUrl(target));
+    })(),
+  );
+});

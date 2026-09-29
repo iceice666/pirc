@@ -21,6 +21,7 @@ interface Brief {
   nextRun?: string;
   model?: string;
   thinking?: string;
+  notify?: string;
   prompt: string;
   lastRun?: { id: string; status: string; due: string; result?: string };
 }
@@ -51,7 +52,7 @@ export function formatSchedules(schedules: Brief[], timezone: string): string {
     `Schedules (default time zone ${timezone}):`,
     ...schedules.map((item) =>
       [
-        `- ${item.id} “${item.title}” [${item.status}] in ${item.workspace}: ${item.when}${item.nextRun ? `; next ${item.nextRun}` : ''}${item.model ? `; model ${item.model}` : ''}${item.thinking ? `; thinking ${item.thinking}` : ''}`,
+        `- ${item.id} “${item.title}” [${item.status}] in ${item.workspace}: ${item.when}${item.nextRun ? `; next ${item.nextRun}` : ''}${item.model ? `; model ${item.model}` : ''}${item.thinking ? `; thinking ${item.thinking}` : ''}${item.notify ? `; notifications: ${item.notify}` : ''}`,
         `  prompt: ${item.prompt.replace(/\s+/g, ' ')}`,
         ...(item.lastRun
           ? [
@@ -95,6 +96,12 @@ Times are read in timezone (IANA, e.g. "Asia/Taipei"); it defaults to the gatewa
           type: 'string',
           enum: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
         },
+        notify: {
+          type: 'string',
+          enum: ['all', 'problems', 'none'],
+          description:
+            'Push notifications: every run (all, the default), only runs that fail, are missed or wait for the user (problems), or none. Pick problems for frequent schedules.',
+        },
       },
       required: ['action'],
       additionalProperties: false,
@@ -111,6 +118,7 @@ Times are read in timezone (IANA, e.g. "Asia/Taipei"); it defaults to the gatewa
         ...field('workspace'),
         ...field('model'),
         ...field('thinking'),
+        ...field('notify'),
         ...(typeof args.prompt === 'string' && args.prompt.trim()
           ? { prompt: args.prompt.trim() }
           : {}),
