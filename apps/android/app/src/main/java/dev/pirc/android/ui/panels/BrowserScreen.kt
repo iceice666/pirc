@@ -168,8 +168,10 @@ fun BrowserScreen(
                     view?.active == true -> "Agent"
                     else -> "No browser open"
                 }
-                AssistChip(onClick = {}, label = { Text(status, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.weight(1f, fill = false))
-                Box(Modifier.weight(1f))
+                // The chip gets all the free width; it only ellipsizes when the button needs the room.
+                Box(Modifier.weight(1f)) {
+                    AssistChip(onClick = {}, label = { Text(status, maxLines = 1, overflow = TextOverflow.Ellipsis) })
+                }
                 if (userMode) Button(enabled = held, onClick = { viewModel.returnControl() }) { Text("Return control") }
                 else if (view?.active == true) OutlinedButton(enabled = held, onClick = { viewModel.takeOver() }) { Text("Take over") }
             }

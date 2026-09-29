@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -367,7 +368,7 @@ private fun AttachmentThumb(attachment: Attachment, onRemove: () -> Unit) {
             verticalArrangement = Arrangement.Center,
         ) {
             Icon(PircIcons.File, contentDescription = null, modifier = Modifier.size(22.dp))
-            Text(attachment.name, style = MaterialTheme.typography.labelSmall, maxLines = 2, modifier = Modifier.padding(top = 2.dp))
+            Text(attachment.name, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.MiddleEllipsis, modifier = Modifier.padding(top = 2.dp))
         }
         if (attachment.uploading) CircularProgressIndicator(Modifier.align(Alignment.Center).size(22.dp), strokeWidth = 2.dp)
         // A small mark, but a 40dp target (most of the thumbnail's corner).

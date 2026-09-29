@@ -545,7 +545,8 @@ private fun Choice(label: String, value: String, options: List<Pair<String, Stri
         Text(label, style = MaterialTheme.typography.labelLarge)
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { open = true }) {
-                Text(value, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // Weighted so a long choice ellipsizes instead of pushing the chevron out.
+                Text(value, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 Icon(PircIcons.ChevronDown, contentDescription = null, modifier = Modifier.padding(start = 4.dp))
             }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {

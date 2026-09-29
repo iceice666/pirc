@@ -84,8 +84,24 @@ fun GitPane(
                 item {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(git.branch ?: "detached HEAD", style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace))
-                            git.upstream?.let { Text("→ $it", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            // Long branch names ellipsize; the ahead/behind chips keep their width.
+                            Text(
+                                git.branch ?: "detached HEAD",
+                                style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            git.upstream?.let {
+                                Text(
+                                    "→ $it",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                )
+                            }
                             if (git.ahead > 0) Chip("↑${git.ahead}")
                             if (git.behind > 0) Chip("↓${git.behind}")
                         }

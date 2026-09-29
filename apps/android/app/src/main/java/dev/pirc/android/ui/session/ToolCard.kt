@@ -114,7 +114,7 @@ fun ToolCard(tool: ToolCall, modifier: Modifier = Modifier) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 StatusMark(tool.status)
-                Text(tool.title ?: tool.name, style = MaterialTheme.typography.labelLarge)
+                Text(tool.title ?: tool.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     toolSummary(tool),
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
@@ -144,7 +144,9 @@ fun ToolCard(tool: ToolCall, modifier: Modifier = Modifier) {
                         Text("No details yet.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                     val opener = LocalFileOpener.current
                     val file = toolFile(tool)
-                    if (opener != null && file != null) TextButton(onClick = { opener(file) }) { Text("Open ${file.path.substringAfterLast('/')}") }
+                    if (opener != null && file != null) TextButton(onClick = { opener(file) }) {
+                        Text("Open ${file.path.substringAfterLast('/')}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
         }
