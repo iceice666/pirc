@@ -25,6 +25,7 @@ import type {
   NodeSummary,
   PendingInteraction,
   QueueItem,
+  SessionOrigin,
   SessionCommandInput,
   SessionSnapshot,
   SessionSummary,
@@ -61,7 +62,27 @@ function sessionSummary(raw: any): SessionSummary {
     unreadCount: 0,
     pinned: raw.pinnedAt != null,
     settled: raw.settledAt != null,
+    ...(raw.writeLease === true ? { writeLease: true } : {}),
+    ...(sessionOrigin(raw.origin) ? { origin: sessionOrigin(raw.origin) } : {}),
   };
+}
+
+function sessionOrigin(raw: any): SessionOrigin | undefined {
+  if (raw?.kind === 'schedule' && typeof raw.scheduleId === 'string')
+    return {
+      kind: 'schedule',
+      scheduleId: raw.scheduleId,
+      title: String(raw.title ?? ''),
+      dueAt: Number(raw.dueAt) || 0,
+    };
+  if (raw?.kind === 'delegation' && typeof raw.fromSessionId === 'string')
+    return {
+      kind: 'delegation',
+      delegationId: String(raw.delegationId ?? ''),
+      title: String(raw.title ?? ''),
+      fromSessionId: raw.fromSessionId,
+    };
+  return undefined;
 }
 
 function interaction(raw: any): PendingInteraction {
@@ -572,6 +593,8 @@ export function connectEvents(options: {
   onMemory?: () => void;
   /** Your schedules or their runs changed (`schedules=1`). */
   onSchedules?: () => void;
+  /** A run started or ended, or a write lease changed hands, in any of your sessions (`sessions=1`). */
+  onSessions?: () => void;
 }): EventConnection {
   let socket: WebSocket | undefined;
   let closed = false;
@@ -587,6 +610,7 @@ export function connectEvents(options: {
     if (options.onDirectory) query.set('directory', '1');
     if (options.onMemory) query.set('memory', '1');
     if (options.onSchedules) query.set('schedules', '1');
+    if (options.onSessions) query.set('sessions', '1');
     // Handlers act only for the current socket: a replaced socket's late
     // error/close must not close or reschedule its successor.
     const ws = new WebSocket(`${protocol}//${location.host}/api/events?${query}`);
@@ -610,6 +634,10 @@ export function connectEvents(options: {
         }
         if (raw?.type === 'schedules_changed') {
           options.onSchedules?.();
+          return;
+        }
+        if (raw?.type === 'sessions_changed') {
+          options.onSessions?.();
           return;
         }
         const envelope = normalizeEvent(raw);

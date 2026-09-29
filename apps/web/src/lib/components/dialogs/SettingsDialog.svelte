@@ -2,7 +2,6 @@
   const SETTINGS_TABS = [
     { id: 'general', label: 'General' },
     { id: 'memory', label: 'Memory' },
-    { id: 'schedules', label: 'Schedules' },
     { id: 'models', label: 'Models' },
     { id: 'devices', label: 'Devices' },
     { id: 'about', label: 'About' },
@@ -19,7 +18,6 @@
   import MemorySettings from '../MemorySettings.svelte';
   import NotificationSettings from '../NotificationSettings.svelte';
   import PairedDevices from '../PairedDevices.svelte';
-  import ScheduleSettings from '../ScheduleSettings.svelte';
 
   interface Props {
     open: boolean;
@@ -73,9 +71,6 @@
           >{tab.label}{#if tab.id === 'memory' && app.memoryPending}<span
               class="tab-count"
               aria-label="{app.memoryPending} waiting">{app.memoryPending}</span
-            >{/if}{#if tab.id === 'schedules' && app.scheduleAttention}<span
-              class="tab-count"
-              aria-label="{app.scheduleAttention} waiting">{app.scheduleAttention}</span
             >{/if}</button
         >
       {/each}
@@ -92,10 +87,10 @@
         <section class="settings-section">
           <h3>Sidebar</h3>
           <label class="settings-toggle">
-            <span>Show settled sessions</span>
+            <span>Show done sessions</span>
             <input type="checkbox" bind:checked={showSettled} />
           </label>
-          <p>Settled sessions are hidden from the sidebar unless this is on.</p>
+          <p>Settled (done) sessions are hidden from Work's Recent list unless this is on.</p>
         </section>
 
         <NotificationSettings disabled={app.usingDemo} />
@@ -116,21 +111,6 @@
         hidden={settingsTab !== 'memory'}
       >
         <MemorySettings
-          disabled={app.usingDemo}
-          onopenchat={(sessionId) => {
-            open = false;
-            onopenchat?.(sessionId);
-          }}
-        />
-      </div>
-
-      <div
-        role="tabpanel"
-        id="settings-panel-schedules"
-        aria-labelledby="settings-tab-schedules"
-        hidden={settingsTab !== 'schedules'}
-      >
-        <ScheduleSettings
           disabled={app.usingDemo}
           onopenchat={(sessionId) => {
             open = false;

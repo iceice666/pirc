@@ -58,7 +58,15 @@ export interface SessionSummary {
   settled?: boolean;
   preview?: string;
   pendingInteractionCount?: number;
+  /** Holds the write lease on its workspace right now (only one session at a time may write). */
+  writeLease?: boolean;
+  /** A scheduled run or a delegated task started it. */
+  origin?: SessionOrigin;
 }
+
+export type SessionOrigin =
+  | { kind: 'schedule'; scheduleId: string; title: string; dueAt: number }
+  | { kind: 'delegation'; delegationId: string; title: string; fromSessionId: string };
 
 export interface RunState {
   id?: string;

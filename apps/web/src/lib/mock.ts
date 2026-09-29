@@ -1,5 +1,5 @@
 import type { PanelState } from './panel-api';
-import type { ModelOption, SessionSnapshot, SessionSummary, Workspace } from './types';
+import type { ModelOption, NodeSummary, SessionSnapshot, SessionSummary, Workspace } from './types';
 
 /** Background work shown by the top-bar jobs menu in the offline demo. */
 export const demoPanelState: PanelState = {
@@ -46,6 +46,25 @@ export const demoWorkspaces: Workspace[] = [
     canonicalPath: '~/dotfiles',
     defaults: { modelId: 'claude-sonnet', thinkingLevel: 'medium' },
   },
+  {
+    id: 'home:chats',
+    hostId: 'home',
+    displayName: 'Chats',
+    kind: 'chat',
+    defaults: {},
+  },
+  {
+    id: 'home:notes',
+    hostId: 'home',
+    displayName: 'Home server notes',
+    kind: 'chat',
+    defaults: {},
+  },
+];
+
+export const demoNodes: NodeSummary[] = [
+  { id: 'homolab', connectedAt: Date.now(), lastSeenAt: Date.now(), workspaces: [] },
+  { id: 'home', connectedAt: Date.now(), lastSeenAt: Date.now(), workspaces: [] },
 ];
 
 export const demoSessions: SessionSummary[] = [
@@ -79,6 +98,53 @@ export const demoSessions: SessionSummary[] = [
     runnerStatus: 'stopped',
     unreadCount: 0,
     preview: 'Drafted the service configuration.',
+  },
+  {
+    id: 'session-pwa',
+    workspaceId: 'ws-pirc',
+    name: 'Fix PWA cache headers',
+    lastActivityAt: new Date(Date.now() - 60_000).toISOString(),
+    runStatus: 'running',
+    runnerStatus: 'ready',
+    unreadCount: 0,
+    writeLease: true,
+    origin: {
+      kind: 'delegation',
+      delegationId: 'dlg-1',
+      title: 'Cache only hashed assets',
+      fromSessionId: 'chat-auth',
+    },
+  },
+  ...[1, 2, 3].map((day) => ({
+    id: `session-digest-${day}`,
+    workspaceId: 'ws-dotfiles',
+    name: `Nightly flake update #${day}`,
+    lastActivityAt: new Date(Date.now() - day * 86_400_000 - 3_600_000).toISOString(),
+    runStatus: 'succeeded' as const,
+    runnerStatus: 'stopped' as const,
+    unreadCount: 0,
+    origin: {
+      kind: 'schedule' as const,
+      scheduleId: 'sch-flake',
+      title: 'Nightly flake update',
+      dueAt: Date.now() - day * 86_400_000,
+    },
+  })),
+  {
+    id: 'chat-auth',
+    workspaceId: 'home:chats',
+    name: 'Explain Authelia forward-auth',
+    lastActivityAt: new Date(Date.now() - 7_200_000).toISOString(),
+    runnerStatus: 'stopped',
+    unreadCount: 0,
+  },
+  {
+    id: 'chat-backup',
+    workspaceId: 'home:notes',
+    name: 'Backup rotation policy',
+    lastActivityAt: new Date(Date.now() - 5 * 86_400_000).toISOString(),
+    runnerStatus: 'stopped',
+    unreadCount: 0,
   },
 ];
 
@@ -212,6 +278,74 @@ export const demoSnapshot: SessionSnapshot = {
           status: 'failed',
           input: { path: 'apps/web/src/lib/missing.ts' },
           output: 'ENOENT: no such file or directory',
+        },
+      ],
+    },
+    {
+      id: 'msg-explore-1',
+      role: 'assistant',
+      content: '',
+      createdAt: new Date(Date.now() - 200_000).toISOString(),
+      tools: [
+        {
+          id: 'tool-grep-sw',
+          name: 'grep',
+          status: 'succeeded',
+          input: { pattern: 'request.destination', path: 'apps/web/public' },
+          output: 'apps/web/public/sw.js:18',
+          startedAt: new Date(Date.now() - 200_000).toISOString(),
+          endedAt: new Date(Date.now() - 199_600).toISOString(),
+        },
+      ],
+    },
+    {
+      id: 'msg-explore-2',
+      role: 'assistant',
+      content: '',
+      createdAt: new Date(Date.now() - 199_000).toISOString(),
+      tools: [
+        {
+          id: 'tool-read-sw',
+          name: 'read',
+          status: 'succeeded',
+          input: { path: 'apps/web/public/sw.js' },
+          output: '// Only hashed Vite assets below /assets/ are cached.',
+          startedAt: new Date(Date.now() - 199_000).toISOString(),
+          endedAt: new Date(Date.now() - 198_800).toISOString(),
+        },
+        {
+          id: 'tool-read-pwa',
+          name: 'read',
+          status: 'succeeded',
+          input: { path: 'apps/web/src/lib/pwa.ts' },
+          output: 'export function registerPwa() {}',
+          startedAt: new Date(Date.now() - 198_700).toISOString(),
+          endedAt: new Date(Date.now() - 196_000).toISOString(),
+        },
+      ],
+    },
+    {
+      id: 'msg-switch',
+      role: 'assistant',
+      content:
+        'Confirmed: `sw.js` matches on `request.destination`. Switching to a strict `/assets/` prefix check.',
+      createdAt: new Date(Date.now() - 160_000).toISOString(),
+    },
+    {
+      id: 'msg-blocked',
+      role: 'assistant',
+      content: '',
+      createdAt: new Date(Date.now() - 150_000).toISOString(),
+      tools: [
+        {
+          id: 'tool-edit-blocked',
+          name: 'edit',
+          status: 'failed',
+          input: { path: 'apps/web/public/sw.js', edits: [] },
+          output:
+            'Error: /home/me/code/pirc is being written by session "Fix PWA cache headers" (pi_1234); wait until its run finishes',
+          startedAt: new Date(Date.now() - 150_000).toISOString(),
+          endedAt: new Date(Date.now() - 149_900).toISOString(),
         },
       ],
     },

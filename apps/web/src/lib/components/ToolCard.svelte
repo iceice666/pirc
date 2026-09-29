@@ -9,6 +9,8 @@
     FileText,
     FolderTree,
     LoaderCircle,
+    Lock,
+    SquareArrowOutUpRight,
     Search,
     Terminal,
     Wrench,
@@ -18,6 +20,7 @@
   import { panelApi } from '../panel-api';
   import { elapsed } from '../time';
   import type { ToolCall } from '../types';
+  import { blockingSession, writeBlock } from '../work';
 
   interface Props {
     tool: ToolCall;
@@ -108,6 +111,9 @@
                 : Wrench,
   );
   let summary = $derived(describe(tool.name, args));
+  /** Refused because another session holds the workspace's write lease. */
+  const blocked = $derived(writeBlock(tool));
+  const holder = $derived(blocked ? blockingSession(app.sessions, blocked.holderName) : undefined);
   const recordingSession = $derived(app.usingDemo ? '' : (app.sessionState?.session.id ?? ''));
   let fileLanguage = $derived(languageForPath(args.path));
   let duration = $derived(elapsed(tool.startedAt, tool.endedAt));
@@ -174,6 +180,24 @@
     </span>
     <ChevronDown class={open ? 'rotated' : ''} size={16} aria-hidden="true" />
   </button>
+  {#if blocked}
+    <div class="write-blocked" role="note">
+      <Lock size={15} aria-hidden="true" />
+      <p>
+        <strong>Write blocked.</strong>
+        <span
+          >“{blocked.holderName}” is writing to <code>{blocked.path}</code> right now. The agent was
+          told to wait until that run finishes.</span
+        >
+      </p>
+      {#if holder && holder.id !== app.activeSessionId}
+        <button type="button" onclick={() => app.openSession(holder.id)}
+          >{#if holder.writeLease}<span class="holder-dot"></span>{/if}{holder.name}
+          <SquareArrowOutUpRight size={13} /></button
+        >
+      {/if}
+    </div>
+  {/if}
   {#if tool.recording && recordingSession}
     <!-- A browser recording (browser_record), always visible so it can be reviewed. -->
     <div class="tool-recording">
@@ -251,6 +275,73 @@
 </div>
 
 <style>
+  .write-blocked {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 8px 8px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    background: var(--warning-soft);
+    font-size: 13px;
+  }
+  .write-blocked > :global(svg) {
+    flex: none;
+    color: var(--warning);
+  }
+  .write-blocked p {
+    min-width: 0;
+    flex: 1 1 220px;
+    margin: 0;
+    line-height: 1.45;
+  }
+  .write-blocked strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .write-blocked code {
+    font-family: var(--mono);
+    font-size: 12px;
+    word-break: break-all;
+  }
+  .write-blocked button {
+    flex: none;
+    max-width: 45%;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 10px;
+    overflow: hidden;
+    border: 1px solid var(--line-dark);
+    border-radius: 999px;
+    color: var(--ink);
+    background: var(--bg-layer);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .write-blocked button:hover {
+    background: var(--bg-hover);
+  }
+  .holder-dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .write-blocked {
+    flex-wrap: wrap;
+  }
+  @media (max-width: 650px) {
+    .write-blocked button {
+      max-width: 100%;
+      margin-left: 25px;
+    }
+  }
   .tool-recording {
     padding: 0 10px 10px;
   }

@@ -5,8 +5,8 @@
  */
 import { api, connectEvents, type EventConnection } from './api';
 import type { NewWorkspace } from './chats';
-import { memoryApi } from './memory';
-import { schedulesApi } from './schedules';
+import { memoryApi, type MemoryProposal } from './memory';
+import { schedulesApi, type Schedule, type ScheduleRun } from './schedules';
 import { targetFromUrl, type PushTarget } from './push';
 import { syncControl } from './control';
 import { errorMessage } from './errors';
@@ -14,7 +14,16 @@ import { GOAL_WIDGET, parseGoalWidget } from './goal';
 import { PanelStateResource } from './panel-state.svelte';
 import { fromSnapshot, reduceEvent } from './state';
 import { uuid } from './id';
-import { getClientId, loadDraft, pruneDrafts, removeDraft, saveDraft } from './storage';
+import {
+  getClientId,
+  loadDraft,
+  loadLayout,
+  pruneDrafts,
+  removeDraft,
+  saveDraft,
+  saveLayout,
+} from './storage';
+import { needsInput } from './work';
 import { parseTodoWidget, TODO_WIDGET } from './todo';
 import type {
   Attachment,
@@ -33,6 +42,17 @@ import type {
 import { modelKey } from './types';
 
 export type Upload = Attachment & { preview?: string; uploading?: boolean };
+
+/** The sidebar's two lists: the assistant's chats, or the agents' work. */
+export type SidebarMode = 'chat' | 'work';
+/** What the main column shows. */
+export type MainView = 'session' | 'schedules';
+
+/** Something waiting for you, shown under "Needs you". */
+export type InboxItem =
+  | { kind: 'session'; id: string; session: SessionSummary }
+  | { kind: 'missed'; id: string; schedule: Schedule; run: ScheduleRun }
+  | { kind: 'memory'; id: string; proposal: MemoryProposal };
 
 /** Side-panel refresh signals: a `panel_changed` event, or the end of a run. */
 export type PanelSignal = { type: 'changed'; sections: string[] } | { type: 'run-finished' };
@@ -73,13 +93,22 @@ class AppState {
   /** Bumped whenever the gateway says your schedules changed; open schedule views reload. */
   scheduleRevision = $state(0);
   /**
-   * A place outside the sessions to show, asked for by a notification or a
-   * `?open=` link (App opens Settings on it, then clears it).
+   * A place in Settings to show (the memory), asked for by a notification or
+   * a `?open=` link (App opens Settings on it, then clears it).
    */
   requestedTarget = $state<Exclude<PushTarget, { sessionId: string }> | undefined>();
   /** The schedule a notification was about; the Schedules page opens it once. */
   scheduleFocus = $state<string | undefined>();
   sessions = $state.raw<SessionSummary[]>([]);
+  /** Your schedules (the Schedules entry shows the next run). */
+  schedules = $state.raw<Schedule[]>([]);
+  /** Missed scheduled runs waiting for you to allow or dismiss them. */
+  missedRuns = $state.raw<Array<{ schedule: Schedule; run: ScheduleRun }>>([]);
+  /** USER memory changes the assistant proposed, waiting for your approval. */
+  memoryProposals = $state.raw<MemoryProposal[]>([]);
+  /** Chat or Work; remembered. */
+  mode = $state<SidebarMode>(loadLayout('workMode', false) ? 'work' : 'chat');
+  view = $state<MainView>('session');
   models = $state.raw<ModelOption[]>([]);
   activeSessionId = $state<string>();
   connection = $state<ConnectionState>(navigator.onLine ? 'reconnecting' : 'offline');
@@ -163,6 +192,41 @@ class AppState {
   /** Commands need a live connection and the control lease. */
   canCommand = $derived(this.hasControl && this.connection === 'connected');
 
+  /** Everything waiting for you: questions, missed runs, memory proposals. */
+  inbox = $derived<InboxItem[]>([
+    ...this.sessions
+      .filter(needsInput)
+      .map((session) => ({ kind: 'session' as const, id: `session:${session.id}`, session })),
+    ...this.missedRuns.map(({ schedule, run }) => ({
+      kind: 'missed' as const,
+      id: `run:${run.id}`,
+      schedule,
+      run,
+    })),
+    ...this.memoryProposals.map((proposal) => ({
+      kind: 'memory' as const,
+      id: `memory:${proposal.id}`,
+      proposal,
+    })),
+  ]);
+  /** The soonest run of an active schedule. */
+  nextSchedule = $derived(
+    this.schedules
+      .filter((schedule) => schedule.status === 'active' && schedule.nextRunAt)
+      .sort((a, b) => a.nextRunAt! - b.nextRunAt!)[0],
+  );
+
+  setMode(mode: SidebarMode) {
+    this.mode = mode;
+    saveLayout('workMode', mode === 'work');
+  }
+
+  /** Show the schedules in the main column, optionally opening one. */
+  showSchedules(scheduleId?: string) {
+    if (scheduleId) this.scheduleFocus = scheduleId;
+    this.view = 'schedules';
+  }
+
   /** Listen for side-panel refresh signals. Returns the unsubscribe function. */
   onPanel(listener: (signal: PanelSignal) => void): () => void {
     this.#panelListeners.add(listener);
@@ -201,6 +265,7 @@ class AppState {
         this.demo = demo;
         this.connection = navigator.onLine ? 'connected' : 'offline';
         this.workspaces = demo.demoWorkspaces;
+        this.nodes = demo.demoNodes;
         this.sessions = demo.demoSessions;
         this.models = demo.demoModels;
         this.activeSessionId = demo.demoSnapshot.session.id;
@@ -235,14 +300,58 @@ class AppState {
     }
   }
 
-  /** How many USER proposals wait for you (the badge on Settings). */
+  /** USER proposals waiting for you ("Needs you"). */
   async refreshMemory() {
     if (this.demo) return;
     try {
-      this.memoryPending = (await memoryApi.view()).proposals.length;
+      const { proposals } = await memoryApi.view();
+      this.memoryProposals = proposals.filter((proposal) => proposal.status === 'pending');
+      this.memoryPending = this.memoryProposals.length;
     } catch {
-      /* keep the last count */
+      /* keep the last list */
     }
+  }
+
+  #sessionsTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Runs start and end in bursts: one reload per burst. */
+  #sessionsChanged() {
+    this.#sessionsTimer ??= setTimeout(() => {
+      this.#sessionsTimer = undefined;
+      void this.refreshSessions();
+    }, 250);
+  }
+
+  /** Answer a memory proposal from "Needs you". */
+  async decideProposal(proposal: MemoryProposal, approve: boolean) {
+    if (this.demo) return;
+    try {
+      const view = approve
+        ? await memoryApi.approve(proposal.id, proposal.target?.revision)
+        : await memoryApi.reject(proposal.id);
+      this.memoryProposals = view.proposals.filter((item) => item.status === 'pending');
+      this.memoryPending = this.memoryProposals.length;
+      this.memoryRevision++;
+    } catch (error) {
+      this.pageError = errorMessage(error, 'The memory change could not be answered.');
+      void this.refreshMemory();
+    }
+  }
+
+  /** Allow (run now) or dismiss a missed scheduled run. */
+  async decideMissed(scheduleId: string, runId: string, allow: boolean) {
+    if (this.demo) return;
+    try {
+      if (allow) await schedulesApi.run(scheduleId, runId);
+      else await schedulesApi.dismiss(scheduleId, runId);
+      this.missedRuns = this.missedRuns.filter((item) => item.run.id !== runId);
+    } catch (error) {
+      this.pageError = errorMessage(
+        error,
+        allow ? 'The run could not be started.' : 'The run could not be dismissed.',
+      );
+    }
+    this.scheduleRevision++;
+    void this.refreshSchedules();
   }
 
   /** Show what a notification points at. */
@@ -260,18 +369,33 @@ class AppState {
   }
 
   #request(target: Exclude<PushTarget, { sessionId: string }>) {
-    this.requestedTarget = target;
-    if ('schedules' in target && target.scheduleId) this.scheduleFocus = target.scheduleId;
+    // Schedules have their own page; memory still lives in Settings.
+    if ('schedules' in target) this.showSchedules(target.scheduleId);
+    else this.requestedTarget = target;
   }
 
-  /** How many scheduled runs wait for you (the badge on Settings). */
+  /** Your schedules, and their missed runs ("Needs you"). */
   async refreshSchedules() {
     if (this.demo) return;
     try {
       const { schedules } = await schedulesApi.list();
+      this.schedules = schedules;
       this.scheduleAttention = schedules.reduce((sum, item) => sum + item.attention, 0);
+      // Runs waiting for an answer show as their session; missed ones have no session.
+      const details = await Promise.all(
+        schedules
+          .filter((schedule) => schedule.attention > 0)
+          .map((schedule) => schedulesApi.get(schedule.id).catch(() => undefined)),
+      );
+      this.missedRuns = details.flatMap((detail) =>
+        detail
+          ? detail.runs
+              .filter((run) => run.status === 'missed')
+              .map((run) => ({ schedule: detail.schedule, run }))
+          : [],
+      );
     } catch {
-      /* keep the last count */
+      /* keep the last lists */
     }
   }
 
@@ -291,12 +415,15 @@ class AppState {
     this.#events?.reconnectNow();
     void this.refreshControl();
     void this.refreshNodes();
+    void this.refreshSessions();
     void this.refreshMemory();
+    void this.refreshSchedules();
     // A short switch away is covered by the stream's cursor replay.
     if (hiddenFor >= RESUME_SNAPSHOT_AFTER) void this.refreshSnapshot();
   }
 
   async openSession(id: string) {
+    this.view = 'session';
     this.flushDraft();
     const seq = ++this.#openSeq;
     this.activeSessionId = id;
@@ -355,6 +482,10 @@ class AppState {
             if (seq !== this.#openSeq) return;
             this.scheduleRevision++;
             void this.refreshSchedules();
+          },
+          onSessions: () => {
+            if (seq !== this.#openSeq) return;
+            this.#sessionsChanged();
           },
           onEvent: (event) => {
             const current = this.sessionState;

@@ -38,6 +38,10 @@ beforeEach(() => {
   ];
   app.activeSessionId = 'a';
   app.memoryPending = 0;
+  app.memoryProposals = [];
+  app.missedRuns = [];
+  app.schedules = [];
+  app.mode = 'chat';
   target = document.createElement('div');
   document.body.append(target);
 });
@@ -62,19 +66,70 @@ const names = () =>
   );
 
 describe('Sidebar', () => {
-  it('lists pinned sessions first and hides settled ones unless enabled', () => {
-    render();
+  it('lists pinned sessions first and hides done ones behind a toggle', () => {
+    const props = render();
     expect(names()).toEqual(['Beta', 'Alpha']);
-    expect(target.querySelector('.settled-toggle')).toBeNull();
-  });
-
-  it('shows settled sessions behind a toggle when enabled', () => {
-    render({ showSettled: true });
-    const toggle = target.querySelector<HTMLButtonElement>('.settled-toggle')!;
-    expect(toggle.textContent).toContain('Settled · 1');
+    const toggle = target.querySelector<HTMLButtonElement>('.heading-toggle')!;
+    expect(toggle.textContent).toContain('Show done · 1');
     toggle.click();
     flushSync();
+    expect(props.showSettled).toBe(true);
     expect(names()).toEqual(['Beta', 'Alpha', 'Gamma']);
+  });
+
+  it('groups work by state: needs you, running, then recent', () => {
+    app.sessions = [
+      session('a', 'Alpha'),
+      session('r', 'Runner', { runStatus: 'running', writeLease: true }),
+      session('w', 'Waiter', { runStatus: 'waiting_input' }),
+    ];
+    render();
+    const section = (label: string) =>
+      Array.from(
+        target.querySelectorAll(
+          `[aria-label="${label}"] .session-name, [aria-label="${label}"] .inbox-text strong`,
+        ),
+      ).map((item) => item.textContent);
+    expect(section('Needs you')).toEqual(['Waiter']);
+    expect(section('Running')).toEqual(['Runner']);
+    expect(section('Recent')).toEqual(['Alpha']);
+    // Only the session holding the write lease shows the lock.
+    expect(target.querySelectorAll('[aria-label="Holds the write lease"]')).toHaveLength(1);
+    target.querySelector<HTMLButtonElement>('.inbox-item .pill-button')!.click();
+    expect(handlers.onselect).toHaveBeenCalledWith('w');
+  });
+
+  it('folds the runs of one schedule into a row that expands', () => {
+    const origin = { kind: 'schedule' as const, scheduleId: 's1', title: 'Digest', dueAt: 0 };
+    app.sessions = [
+      session('x', 'Digest #2', { origin }),
+      session('a', 'Alpha'),
+      session('y', 'Digest #1', { origin }),
+    ];
+    app.activeSessionId = 'a';
+    render();
+    expect(names()).toEqual(['Digest', 'Alpha']);
+    expect(target.querySelector('.fold-card')!.textContent).toContain('2 runs');
+    target.querySelector<HTMLButtonElement>('.fold-card')!.click();
+    flushSync();
+    expect(names()).toEqual(['Digest', 'Digest #2', 'Digest #1', 'Alpha']);
+  });
+
+  it('answers missed runs and memory proposals under "Needs you"', () => {
+    const decideMissed = vi.spyOn(app, 'decideMissed').mockResolvedValue();
+    const decideProposal = vi.spyOn(app, 'decideProposal').mockResolvedValue();
+    const schedule = { id: 's1', title: 'Backup', timezone: 'UTC' } as never;
+    app.missedRuns = [{ schedule, run: { id: 'run1', dueAt: 0 } as never }];
+    const proposal = { id: 'p1', action: 'add', content: 'Likes tea', target: null } as never;
+    app.memoryProposals = [proposal];
+    render();
+    const buttons = (kind: string) =>
+      Array.from(target.querySelectorAll<HTMLButtonElement>(`[data-kind="${kind}"] .pill-button`));
+    expect(buttons('missed').map((b) => b.textContent)).toEqual(['Allow & run', 'Dismiss']);
+    buttons('missed')[0]!.click();
+    expect(decideMissed).toHaveBeenCalledWith('s1', 'run1', true);
+    buttons('memory')[1]!.click();
+    expect(decideProposal).toHaveBeenCalledWith(proposal, false);
   });
 
   it('filters by the search query', () => {
@@ -140,14 +195,14 @@ describe('Sidebar', () => {
     expect(document.activeElement).toBe(menu);
   });
 
-  it('shows on Settings how many memory changes wait for approval', () => {
-    render();
-    const settings = target.querySelector<HTMLButtonElement>('.settings-entry')!;
-    expect(settings.querySelector('.pending-count')).toBeNull();
-    app.memoryPending = 2;
+  it('opens the schedules page and settings from the footer', () => {
+    const onschedules = vi.fn();
+    const reactive = reactiveProps({ open: false, showSettled: false, ...handlers, onschedules });
+    component = mount(Sidebar, { target, props: reactive });
     flushSync();
-    expect(settings.querySelector('.pending-count')!.textContent).toContain('2');
-    settings.click();
+    target.querySelector<HTMLButtonElement>('.schedules-entry')!.click();
+    expect(onschedules).toHaveBeenCalled();
+    target.querySelector<HTMLButtonElement>('.settings-entry:not(.schedules-entry)')!.click();
     expect(handlers.onsettings).toHaveBeenCalled();
   });
 
@@ -182,15 +237,18 @@ describe('Sidebar', () => {
     expect(text('[aria-label="Chats"]')).toContain('Top chat');
     expect(text('[aria-label="Projects"]')).toContain('Trip');
     expect(text('[aria-label="Projects"]')).toContain('Planning');
-    // Chat workspaces never appear among the directory workspaces.
-    const workspaces = text('nav.workspace-list');
-    expect(workspaces).toContain('Project');
-    expect(workspaces).toContain('Alpha');
-    expect(workspaces).not.toContain('Trip');
-    expect(workspaces).not.toContain('Top chat');
+    // Chat mode shows no work sessions.
+    expect(names()).not.toContain('Alpha');
     target.querySelector<HTMLButtonElement>('[aria-label="New project"]')!.click();
     expect(handlers.onaddproject).toHaveBeenCalledWith('home');
     target.querySelector<HTMLButtonElement>('[aria-label="New chat in Trip"]')!.click();
     expect(handlers.onnew).toHaveBeenLastCalledWith('home:trip');
+    // Work lists the directory workspaces' sessions, never chats.
+    Array.from(target.querySelectorAll<HTMLButtonElement>('.mode-switch button'))
+      .find((button) => button.textContent?.includes('Work'))!
+      .click();
+    flushSync();
+    expect(app.mode).toBe('work');
+    expect(names()).toEqual(['Alpha']);
   });
 });

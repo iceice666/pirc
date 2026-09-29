@@ -14,13 +14,16 @@
   } from '@lucide/svelte';
   import type { ConversationMessage } from '../types';
   import Markdown from './Markdown.svelte';
+  import RunCard from './RunCard.svelte';
   import ToolCard from './ToolCard.svelte';
 
   interface Props {
     message: ConversationMessage;
+    /** Already inside a run card: list the tools without another card around them. */
+    grouped?: boolean;
   }
 
-  let { message }: Props = $props();
+  let { message, grouped = false }: Props = $props();
 
   let thinkingOpen = $state(false);
   let systemOpen = $state(false);
@@ -73,6 +76,20 @@
     !!message.content || !!message.isPartial || !!message.errorMessage || !!message.images?.length,
   );
 </script>
+
+{#snippet toolStack(tools: NonNullable<ConversationMessage['tools']>)}
+  {#if tools.length > 1 && !grouped}
+    <RunCard {tools}>
+      <div class="tool-stack">
+        {#each tools as tool (tool.id)}<ToolCard {tool} />{/each}
+      </div>
+    </RunCard>
+  {:else}
+    <div class="tool-stack">
+      {#each tools as tool (tool.id)}<ToolCard {tool} />{/each}
+    </div>
+  {/if}
+{/snippet}
 
 {#if message.role === 'system'}
   <aside
@@ -225,9 +242,7 @@
         </div>
       {/if}
       {#if message.tools?.length}
-        <div class="tool-stack">
-          {#each message.tools as tool (tool.id)}<ToolCard {tool} />{/each}
-        </div>
+        {@render toolStack(message.tools)}
       {/if}
       {#if !message.isPartial && message.content}
         <div class="message-actions">

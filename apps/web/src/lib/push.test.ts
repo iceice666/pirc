@@ -116,12 +116,20 @@ describe('where a notification leads', () => {
     expect(at('')).toBeUndefined();
   });
 
-  it('asks the app to show schedules and focus the one it was about', async () => {
+  it('shows the schedules page, focused on the one it was about', async () => {
     app.demo = undefined;
     await app.openTarget({ schedules: true, scheduleId: 's9' });
-    expect(app.requestedTarget).toEqual({ schedules: true, scheduleId: 's9' });
+    expect(app.view).toBe('schedules');
+    expect(app.requestedTarget).toBeUndefined();
     expect(app.scheduleFocus).toBe('s9');
-    app.requestedTarget = undefined;
+    app.view = 'session';
     app.scheduleFocus = undefined;
+  });
+
+  it('opens the memory in Settings', async () => {
+    app.demo = undefined;
+    await app.openTarget({ memory: true });
+    expect(app.requestedTarget).toEqual({ memory: true });
+    app.requestedTarget = undefined;
   });
 });

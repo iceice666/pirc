@@ -2,7 +2,9 @@
   import {
     ArrowDown,
     CircleAlert,
+    Clock,
     CloudOff,
+    Forward,
     Download,
     PanelLeftOpen,
     PanelRightClose,
@@ -21,7 +23,12 @@
   import InteractionCard from './lib/components/InteractionCard.svelte';
   import JobsMenu from './lib/components/JobsMenu.svelte';
   import Message from './lib/components/Message.svelte';
+  import MobileTabs from './lib/components/MobileTabs.svelte';
+  import RunCard from './lib/components/RunCard.svelte';
+  import SchedulesPage from './lib/components/SchedulesPage.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
+  import { isChatWorkspace, topLevelChats } from './lib/chats';
+  import { timelineItems } from './lib/work';
   import NewProjectDialog from './lib/components/dialogs/NewProjectDialog.svelte';
   import NewSessionDialog from './lib/components/dialogs/NewSessionDialog.svelte';
   import NewWorkspaceDialog from './lib/components/dialogs/NewWorkspaceDialog.svelte';
@@ -37,8 +44,13 @@
   import { trackViewportHeight } from './lib/viewport';
   import { watch } from './lib/watch.svelte';
 
-  /** Mobile overlay state of the left sidebar. */
-  let sidebarOpen = $state(false);
+  /**
+   * Phone: the session list (a full page above the bottom tabs) is showing.
+   * The phone starts on the list, unless a link names a session to open.
+   */
+  let sidebarOpen = $state(
+    window.innerWidth <= 650 && !new URLSearchParams(location.search).has('session'),
+  );
   /** Desktop: left sidebar collapsed out of the grid. */
   let sidebarCollapsed = $state(loadLayout('sidebarCollapsed', false));
   /**
@@ -66,14 +78,49 @@
   let panelTab: PanelTab = $state('files');
   let settingsOpen = $state(false);
   let settingsTab: SettingsTab = $state('general');
-  // A notification or a `?open=` link asked for the schedules or the memory.
+  // A notification or a `?open=` link asked for the memory (schedules have their own page).
   $effect(() => {
     const target = app.requestedTarget;
     if (!target) return;
-    settingsTab = 'schedules' in target ? 'schedules' : 'memory';
+    settingsTab = 'memory';
     settingsOpen = true;
     app.requestedTarget = undefined;
   });
+  // The schedules page replaces the phone's list.
+  $effect(() => {
+    if (app.view === 'schedules') sidebarOpen = false;
+  });
+  const hasChats = $derived(!!topLevelChats(app.workspaces));
+  /** The open session is one of the assistant's chats: no engineering chrome. */
+  const chatSession = $derived(isChatWorkspace(app.activeWorkspace));
+  const origin = $derived(
+    app.sessions.find((item) => item.id === sessionState?.session.id)?.origin,
+  );
+  const mobileTab = $derived(
+    settingsOpen
+      ? 'settings'
+      : sidebarOpen
+        ? hasChats
+          ? app.mode
+          : 'work'
+        : app.view === 'schedules'
+          ? 'schedules'
+          : hasChats
+            ? app.mode
+            : 'work',
+  );
+  function pickTab(tab: 'chat' | 'work' | 'schedules' | 'settings') {
+    if (tab === 'settings') {
+      settingsTab = 'general';
+      settingsOpen = true;
+    } else if (tab === 'schedules') {
+      app.showSchedules();
+      sidebarOpen = false;
+    } else {
+      app.setMode(tab);
+      sidebarOpen = true;
+    }
+  }
   let newSessionOpen = $state(false);
   let newProjectOpen = $state(false);
   let newProjectNodeId = $state('');
@@ -139,6 +186,8 @@
       ? sessionState.messages.slice(Math.min(app.hiddenMessages, sessionState.messages.length))
       : [],
   );
+  /** Consecutive tool-only turns fold into one run card. */
+  let visibleItems = $derived(timelineItems(visibleMessages));
 
   async function showEarlier() {
     if (!app.hiddenMessages || revealingEarlier) return;
@@ -292,7 +341,13 @@
       clearInterval(nodeRefresh);
       const visible = document.visibilityState === 'visible';
       leaseHeartbeat = setInterval(() => void app.refreshControl(), visible ? 10_000 : 15_000);
-      nodeRefresh = visible ? setInterval(() => void app.refreshNodes(), 60_000) : undefined;
+      // Sessions changes are pushed only while a session is open: poll as a fallback.
+      nodeRefresh = visible
+        ? setInterval(() => {
+            void app.refreshNodes();
+            void app.refreshSessions();
+          }, 60_000)
+        : undefined;
     };
     schedule();
     // Background tabs and suspended mobile pages skip heartbeats; catch up at once.
@@ -384,13 +439,18 @@
     onaddworkspace={showNewWorkspace}
     onaddproject={showNewProject}
     onclose={() => (sidebarOpen = false)}
-    {showSettled}
+    bind:showSettled
     onsettings={() => {
-      // What waits for you (memory proposals, scheduled runs) is why the badge is showing.
-      if (app.memoryPending) settingsTab = 'memory';
-      else if (app.scheduleAttention) settingsTab = 'schedules';
+      settingsTab = 'general';
       settingsOpen = true;
+    }}
+    onschedules={() => {
+      app.showSchedules();
       sidebarOpen = false;
+    }}
+    onmemory={() => {
+      settingsTab = 'memory';
+      settingsOpen = true;
     }}
   />
 
@@ -400,7 +460,13 @@
     class="workspace"
     inert={sidebarOpen && viewportWidth <= 650}
   >
-    {#if app.loading}
+    {#if app.view === 'schedules'}
+      <SchedulesPage
+        {sidebarCollapsed}
+        onexpand={() => (sidebarCollapsed = false)}
+        onopenchat={openSession}
+      />
+    {:else if app.loading}
       <div class="loading-state">
         <span class="large-mark"><Sparkles size={24} /></span>
         <p>Connecting to your sessions…</p>
@@ -424,9 +490,27 @@
             >
           </div>
           <h1>{sessionState.session.name}</h1>
+          {#if origin?.kind === 'schedule'}
+            <button
+              class="origin-chip"
+              type="button"
+              title="Open the schedule"
+              onclick={() => app.showSchedules(origin.scheduleId)}
+              ><Clock size={13} /><span>Scheduled · {origin.title}</span></button
+            >
+          {:else if origin?.kind === 'delegation'}
+            <button
+              class="origin-chip"
+              type="button"
+              title="Open the chat that delegated it"
+              disabled={!app.sessions.some((item) => item.id === origin.fromSessionId)}
+              onclick={() => openSession(origin.fromSessionId)}
+              ><Forward size={13} /><span>Delegated · {origin.title}</span></button
+            >
+          {/if}
         </div>
         <div class="topbar-actions">
-          <JobsMenu />
+          {#if !chatSession}<JobsMenu />{/if}
           <span
             class:offline={connection === 'offline'}
             class:reconnecting={connection === 'reconnecting'}
@@ -440,7 +524,7 @@
             <button class="button takeover" type="button" onclick={() => app.takeControl()}
               ><ShieldCheck size={15} /> Take control</button
             >
-          {:else}
+          {:else if !chatSession}
             <span class="control-pill"><ShieldCheck size={14} /> In control</span>
           {/if}
           <button
@@ -489,7 +573,16 @@
                   Show earlier messages ({app.hiddenMessages} more)
                 </button>
               {/if}
-              {#each visibleMessages as message (message.id)}<Message {message} />{/each}
+              {#each visibleItems as item (item.kind === 'run' ? item.id : item.message.id)}
+                {#if item.kind === 'run'}
+                  <RunCard tools={item.messages.flatMap((message) => message.tools ?? [])}>
+                    {#each item.messages as message (message.id)}<Message
+                        {message}
+                        grouped
+                      />{/each}
+                  </RunCard>
+                {:else}<Message message={item.message} />{/if}
+              {/each}
               {#each app.pendingInteractions as interaction (interaction.id)}
                 <InteractionCard
                   {interaction}
@@ -571,6 +664,9 @@
   oncreated={(workspaceId) => showNewSession(workspaceId)}
 />
 <NewSessionDialog bind:open={newSessionOpen} />
+{#if sidebarOpen || app.view === 'schedules'}
+  <MobileTabs current={mobileTab} chats={hasChats} onpick={pickTab} />
+{/if}
 
 {#if updateRegistration}
   <div class="update-toast" role="status">
@@ -663,6 +759,31 @@
     text-overflow: ellipsis;
     font-size: 15px;
     font-weight: 600;
+  }
+  .origin-chip {
+    min-width: 0;
+    max-width: 280px;
+    align-self: center;
+    order: 3;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 9px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--text-2);
+    background: var(--bg-subtle);
+    font-size: 12px;
+  }
+  .origin-chip span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .origin-chip:hover:not(:disabled) {
+    color: var(--ink);
+    background: var(--bg-hover);
   }
   .topbar-actions {
     display: flex;
@@ -964,6 +1085,10 @@
     }
     .title-block h1 {
       font-size: 15px;
+    }
+    .origin-chip {
+      max-width: 40%;
+      padding: 0 7px;
     }
     .topbar-actions {
       gap: 2px;

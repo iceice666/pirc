@@ -2,26 +2,38 @@
   import {
     Archive,
     ArchiveRestore,
+    Brain,
+    CalendarClock,
+    Check,
     ChevronDown,
+    ChevronLeft,
+    ChevronsUpDown,
+    Clock,
     Command,
     Ellipsis,
-    Menu,
+    Folder,
+    Forward,
+    Layers,
+    Lock,
     PanelLeftClose,
     Pencil,
     Pin,
     PinOff,
     Plus,
     Search,
+    Server,
     Settings,
     SquarePen,
     X,
   } from '@lucide/svelte';
   import { tick } from 'svelte';
-  import { app } from '../app.svelte';
+  import { app, type InboxItem } from '../app.svelte';
   import { chatNodeIds, isChatWorkspace, topLevelChats } from '../chats';
+  import { formatWall, until } from '../schedules';
   import { shortAgo } from '../time';
   import type { SessionSummary, Workspace } from '../types';
   import { watch } from '../watch.svelte';
+  import { needsInput, workGroups, type RecentRow } from '../work';
 
   interface Props {
     open?: boolean;
@@ -35,7 +47,11 @@
     onaddproject: (nodeId: string) => void;
     onclose: () => void;
     onsettings: () => void;
-    /** Settled sessions are hidden entirely unless enabled in settings. */
+    /** Show the schedules page. */
+    onschedules?: () => void;
+    /** Review memory changes in Settings. */
+    onmemory?: () => void;
+    /** Settled (done) work sessions are listed too. */
     showSettled?: boolean;
   }
 
@@ -49,7 +65,9 @@
     onaddproject,
     onclose,
     onsettings,
-    showSettled = false,
+    onschedules,
+    onmemory,
+    showSettled = $bindable(false),
   }: Props = $props();
 
   const nodes = $derived(app.nodes);
@@ -64,60 +82,110 @@
   const onpin = (id: string, pinned: boolean) => app.updateSession(id, { pinned });
   const onsettle = (id: string, settled: boolean) => app.updateSession(id, { settled });
 
-  let query = $state('');
-  let collapsedGroups = $state(new Set<string>());
-  let selectedNodeId = $state('');
-  $effect.pre(() => {
-    if (selectedNodeId && !nodes.some((node) => node.id === selectedNodeId)) selectedNodeId = '';
-  });
-  /** Chats come first, like the ChatGPT and Claude web apps; directory workspaces follow by device. */
+  /** Chats: the assistant's chats and projects, like the ChatGPT and Claude web apps. */
   const chats = $derived(topLevelChats(app.workspaces));
   const projects = $derived(
     app.workspaces.filter((workspace) => isChatWorkspace(workspace) && workspace !== chats),
   );
-  let shownWorkspaces = $derived(
-    app.workspaces.filter(
-      (workspace) =>
-        !isChatWorkspace(workspace) && (!selectedNodeId || workspace.hostId === selectedNodeId),
-    ),
-  );
+  const workspaceById = $derived(new Map(app.workspaces.map((item) => [item.id, item])));
+  /** Without a chat node there are no chats: only Work. */
+  const mode = $derived(chats ? app.mode : 'work');
+
+  let query = $state('');
+  let collapsedGroups = $state(new Set<string>());
+  let openFolds = $state(new Set<string>());
+  let renamingId: string | undefined = $state();
+  let renameValue = $state('');
+  let renameInput: HTMLInputElement | undefined = $state();
 
   let visibleSessions = $derived(
     sessions.filter((session) => session.name.toLowerCase().includes(query.toLowerCase())),
   );
 
-  /** Workspaces whose settled sessions are shown; searching shows them all. */
-  let openSettled = $state(new Set<string>());
-  let renamingId: string | undefined = $state();
-  let renameValue = $state('');
-  let renameInput: HTMLInputElement | undefined = $state();
-
-  /**
-   * Sessions per workspace, pinned first, then by activity (the order the
-   * gateway already returns). One pass over all sessions, not one per workspace.
-   */
-  let groups = $derived.by(() => {
-    const map = new Map<string, { open: SessionSummary[]; settled: SessionSummary[] }>();
-    const pinned = new Map<string, SessionSummary[]>();
+  // ── Chat mode ──
+  /** Chats per chat workspace, pinned first, then by activity; settled ones are left out. */
+  let chatGroups = $derived.by(() => {
+    const map = new Map<string, SessionSummary[]>();
     for (const session of visibleSessions) {
-      let group = map.get(session.workspaceId);
-      if (!group) map.set(session.workspaceId, (group = { open: [], settled: [] }));
-      if (session.settled) group.settled.push(session);
-      else if (session.pinned) {
-        const list = pinned.get(session.workspaceId) ?? [];
-        list.push(session);
-        pinned.set(session.workspaceId, list);
-      } else group.open.push(session);
+      if (session.settled && !query) continue;
+      const list = map.get(session.workspaceId) ?? [];
+      list.push(session);
+      map.set(session.workspaceId, list);
     }
-    for (const [workspaceId, list] of pinned) map.get(workspaceId)!.open.unshift(...list);
+    for (const [id, list] of map)
+      map.set(id, [...list.filter((s) => s.pinned), ...list.filter((s) => !s.pinned)]);
     return map;
   });
-  const EMPTY_GROUP = { open: [], settled: [] };
 
-  function toggleSettled(id: string) {
-    const next = new Set(openSettled);
+  // ── Work mode ──
+  /** '' (all), `node:<id>`, or a workspace id. */
+  let filter = $state('');
+  let filterOpen = $state(false);
+  $effect.pre(() => {
+    if (
+      filter &&
+      !(filter.startsWith('node:')
+        ? app.workspaces.some((w) => `node:${w.hostId}` === filter)
+        : workspaceById.has(filter))
+    )
+      filter = '';
+  });
+  const directoryWorkspaces = $derived(app.workspaces.filter((w) => !isChatWorkspace(w)));
+  /** Hosts with directory workspaces, online first. */
+  const hosts = $derived.by(() => {
+    const ids = [...new Set(directoryWorkspaces.map((w) => w.hostId))];
+    const online = (id: string) => nodes.some((node) => node.id === id);
+    return ids
+      .sort((a, b) => Number(online(b)) - Number(online(a)) || a.localeCompare(b))
+      .map((id) => ({
+        id,
+        online: online(id),
+        workspaces: directoryWorkspaces.filter((w) => w.hostId === id),
+      }));
+  });
+  const inFilter = (session: SessionSummary) => {
+    const workspace = workspaceById.get(session.workspaceId);
+    if (!workspace || isChatWorkspace(workspace)) return false;
+    if (!filter) return true;
+    return filter.startsWith('node:')
+      ? `node:${workspace.hostId}` === filter
+      : workspace.id === filter;
+  };
+  let work = $derived(workGroups(visibleSessions, inFilter, showSettled || !!query));
+  const inbox = $derived(
+    query
+      ? app.inbox.filter(
+          (item) =>
+            item.kind !== 'session' ||
+            item.session.name.toLowerCase().includes(query.toLowerCase()),
+        )
+      : app.inbox,
+  );
+  const openCount = (hostId: string, workspaceId?: string) =>
+    sessions.filter((session) => {
+      const workspace = workspaceById.get(session.workspaceId);
+      return (
+        workspace?.hostId === hostId &&
+        (!workspaceId || workspace.id === workspaceId) &&
+        (session.runStatus === 'running' || needsInput(session))
+      );
+    }).length;
+  const filterLabel = $derived(
+    !filter
+      ? 'All workspaces'
+      : filter.startsWith('node:')
+        ? filter.slice(5)
+        : (workspaceById.get(filter)?.displayName ?? 'Workspace'),
+  );
+  /** New session: straight into the chosen workspace, else a dialog to pick one. */
+  const filteredWorkspace = $derived(
+    filter && !filter.startsWith('node:') ? workspaceById.get(filter) : undefined,
+  );
+
+  function toggleIn(set: Set<string>, id: string) {
+    const next = new Set(set);
     next.has(id) ? next.delete(id) : next.add(id);
-    openSettled = next;
+    return next;
   }
 
   async function startRename(session: SessionSummary) {
@@ -146,7 +214,7 @@
   let aside: HTMLElement | undefined = $state();
   let closeButton: HTMLButtonElement | undefined = $state();
   let menuButton: HTMLButtonElement | undefined = $state();
-  // The phone drawer takes focus while open and hands it back when it closes.
+  // The phone list takes focus while open and hands it back when it closes.
   watch(
     () => open,
     async (isOpen) => {
@@ -155,15 +223,16 @@
         closeButton?.focus();
       } else {
         revealedId = undefined;
+        filterOpen = false;
         if (aside?.contains(document.activeElement)) menuButton?.focus();
       }
     },
   );
 
-  function toggleWorkspace(id: string) {
-    const next = new Set(collapsedGroups);
-    next.has(id) ? next.delete(id) : next.add(id);
-    collapsedGroups = next;
+  function nextRunText() {
+    const next = app.nextSchedule;
+    if (!next?.nextRunAt) return '';
+    return `${next.title} · ${until(next.nextRunAt)}`;
   }
 </script>
 
@@ -178,6 +247,7 @@
   class:open
   class:collapsed
   class="sidebar"
+  data-mode={mode}
   aria-label="Sessions"
   inert={collapsed && !open}
 >
@@ -201,6 +271,26 @@
     >
   </div>
   {#if chats}
+    <div class="mode-switch" role="group" aria-label="Sidebar mode">
+      <button
+        type="button"
+        class:chosen={mode === 'chat'}
+        aria-pressed={mode === 'chat'}
+        onclick={() => app.setMode('chat')}>Chat</button
+      >
+      <button
+        type="button"
+        class:chosen={mode === 'work'}
+        aria-pressed={mode === 'work'}
+        onclick={() => app.setMode('work')}
+        >Work{#if app.inbox.length && mode !== 'work'}<span
+            class="attention-dot"
+            title="{app.inbox.length} waiting for you"
+          ></span>{/if}</button
+      >
+    </div>
+  {/if}
+  {#if mode === 'chat' && chats}
     <button
       class="new-session"
       type="button"
@@ -208,93 +298,195 @@
       disabled={!app.workspaceOnline(chats)}><SquarePen size={16} /> New chat</button
     >
   {:else}
-    <button class="new-session" type="button" onclick={() => onnew()}
+    <button
+      class="new-session"
+      type="button"
+      onclick={() => (filteredWorkspace ? onnew(filteredWorkspace.id) : onnew())}
       ><SquarePen size={16} /> New session</button
     >
   {/if}
   <label class="search">
     <Search size={16} />
     <span class="sr-only">Search sessions</span>
-    <input bind:value={query} placeholder="Search sessions" />
+    <input bind:value={query} placeholder={mode === 'chat' ? 'Search chats' : 'Search sessions'} />
   </label>
 
   <div class="sidebar-scroll">
-    {#if chats}
-      <section class="chat-section" aria-label="Chats">
-        <div class="workspace-tools">
-          <strong>Chats</strong>
-          {#if !app.workspaceOnline(chats)}<small>offline</small>{/if}
-        </div>
-        <div class="workspace-list">{@render sessionList(chats.id)}</div>
-      </section>
-      <section class="chat-section" aria-label="Projects">
-        <div class="workspace-tools">
+    {#if mode === 'chat' && chats}
+      <section class="list-section" aria-label="Projects">
+        <div class="section-heading">
           <strong>Projects</strong>
           <button
+            class="heading-action"
             type="button"
             onclick={() => onaddproject(chats.hostId)}
             disabled={!app.workspaceOnline(chats)}
-            aria-label="New project"><Plus size={16} /> New</button
+            aria-label="New project"><Plus size={15} /></button
           >
         </div>
         <div class="workspace-list">
           {#each projects as project (project.id)}
-            {@render workspaceGroup(project)}
+            {@render projectGroup(project)}
+          {:else}
+            <p class="empty-note">Group related chats into a project.</p>
           {/each}
         </div>
       </section>
+      <section class="list-section" aria-label="Chats">
+        <div class="section-heading">
+          <strong>Chats</strong>
+          {#if !app.workspaceOnline(chats)}<small>offline</small>{/if}
+        </div>
+        <div class="session-list">
+          {#each chatGroups.get(chats.id) ?? [] as session (session.id)}
+            {@render sessionRow(session, false)}
+          {/each}
+        </div>
+      </section>
+    {:else}
+      {#if inbox.length}
+        <section class="list-section" aria-label="Needs you">
+          <div class="section-heading attention">
+            <strong>Needs you</strong><span class="count-badge">{inbox.length}</span>
+          </div>
+          <div class="inbox-list">
+            {#each inbox as item (item.id)}{@render inboxRow(item)}{/each}
+          </div>
+        </section>
+      {/if}
+      {#if work.running.length}
+        <section class="list-section" aria-label="Running">
+          <div class="section-heading">
+            <strong>Running</strong><small>{work.running.length}</small>
+          </div>
+          <div class="session-list">
+            {#each work.running as session (session.id)}{@render sessionRow(session, true)}{/each}
+          </div>
+        </section>
+      {/if}
+      <section class="list-section" aria-label="Recent">
+        <div class="section-heading">
+          <strong>Recent</strong>
+          {#if work.settled || showSettled}
+            <button
+              class="heading-toggle"
+              type="button"
+              aria-pressed={showSettled}
+              onclick={() => (showSettled = !showSettled)}
+              >{showSettled ? 'Hide done' : `Show done · ${work.settled}`}</button
+            >
+          {/if}
+        </div>
+        <nav class="session-list">
+          {#each work.recent as row (row.kind === 'session' ? row.session.id : `fold:${row.scheduleId}`)}
+            {#if row.kind === 'session'}{@render sessionRow(
+                row.session,
+                true,
+              )}{:else}{@render foldRow(row)}{/if}
+          {:else}
+            <p class="empty-note">
+              {query ? 'Nothing matches.' : 'Sessions you start in a workspace show here.'}
+            </p>
+          {/each}
+        </nav>
+      </section>
     {/if}
-    <div class="device-switcher" role="group" aria-label="Select device">
-      <strong>Devices</strong>
-      <div class="device-options">
-        <button
-          type="button"
-          class:chosen={!selectedNodeId}
-          aria-pressed={!selectedNodeId}
-          onclick={() => (selectedNodeId = '')}>All</button
-        >
-        {#each nodes as node (node.id)}
-          <button
-            type="button"
-            class:chosen={selectedNodeId === node.id}
-            aria-pressed={selectedNodeId === node.id}
-            onclick={() => (selectedNodeId = node.id)}>{node.id}</button
-          >
-        {/each}
-      </div>
-    </div>
-    <div class="workspace-tools">
-      <strong>Workspaces</strong>
-      <button
-        type="button"
-        onclick={() => onaddworkspace(selectedNodeId || deviceNodes[0]!.id)}
-        disabled={!deviceNodes.length}
-        aria-label="Add workspace"><Plus size={16} /> Add</button
-      >
-    </div>
-    <nav class="workspace-list">
-      {#each shownWorkspaces as workspace (workspace.id)}
-        {@render workspaceGroup(workspace)}
-      {/each}
-    </nav>
   </div>
 
+  {#if mode === 'work'}
+    <div class="work-filter">
+      {#if filterOpen}
+        <div class="filter-popover" role="dialog" aria-label="Show sessions from">
+          <span class="popover-title">Show sessions from</span>
+          <button
+            type="button"
+            class="filter-option"
+            aria-pressed={!filter}
+            onclick={() => ((filter = ''), (filterOpen = false))}
+          >
+            <Layers size={15} /><span>All workspaces</span>
+            {#if !filter}<Check size={15} />{/if}
+          </button>
+          {#each hosts as host (host.id)}
+            <button
+              type="button"
+              class="filter-host"
+              aria-pressed={filter === `node:${host.id}`}
+              onclick={() => ((filter = `node:${host.id}`), (filterOpen = false))}
+            >
+              <span class="host-dot" class:online={host.online}></span>
+              <strong>{host.id}</strong><small>· {host.online ? 'online' : 'offline'}</small>
+              {#if filter === `node:${host.id}`}<Check size={14} />{/if}
+            </button>
+            {#each host.workspaces as workspace (workspace.id)}
+              {@const busy = openCount(host.id, workspace.id)}
+              <button
+                type="button"
+                class="filter-option"
+                aria-pressed={filter === workspace.id}
+                onclick={() => ((filter = workspace.id), (filterOpen = false))}
+              >
+                <Folder size={15} /><span>{workspace.displayName}</span>
+                {#if sessions.some((s) => s.writeLease && s.workspaceId === workspace.id)}<span
+                    class="lease-mark"
+                    title="A session holds the write lease"><Lock size={12} /> writing</span
+                  >{/if}
+                {#if busy}<small>{busy} active</small>{/if}
+                {#if filter === workspace.id}<Check size={15} />{/if}
+              </button>
+            {/each}
+          {/each}
+          <div class="popover-actions">
+            <button
+              type="button"
+              onclick={() => {
+                filterOpen = false;
+                onaddworkspace(
+                  filter.startsWith('node:')
+                    ? filter.slice(5)
+                    : (filteredWorkspace?.hostId ?? deviceNodes[0]?.id ?? ''),
+                );
+              }}
+              disabled={!deviceNodes.length}><Plus size={15} /> Add workspace</button
+            >
+          </div>
+        </div>
+      {/if}
+      <button
+        class="filter-button"
+        type="button"
+        aria-expanded={filterOpen}
+        onclick={() => (filterOpen = !filterOpen)}
+      >
+        <Server size={15} />
+        <span class="filter-label">{filterLabel}</span>
+        <span class="filter-hosts">
+          {#each hosts.slice(0, 3) as host (host.id)}<span
+              ><span class="host-dot" class:online={host.online}></span>{host.id}</span
+            >{/each}
+        </span>
+        <ChevronsUpDown size={14} />
+      </button>
+    </div>
+  {/if}
+
   <div class="sidebar-footer">
+    {#if mode === 'work'}
+      <button
+        class="settings-entry schedules-entry"
+        class:current={app.view === 'schedules'}
+        type="button"
+        onclick={onschedules}
+      >
+        <CalendarClock size={17} />
+        <span class="entry-text"
+          ><span>Schedules</span>{#if nextRunText()}<small>Next: {nextRunText()}</small>{/if}</span
+        >
+      </button>
+    {/if}
     <button class="settings-entry" type="button" onclick={onsettings}>
       <Settings size={17} />
       <span>Settings</span>
-      {#if app.memoryPending}
-        <span class="pending-count" title="Memory changes waiting for your approval"
-          >{app.memoryPending}<span class="sr-only">
-            memory changes waiting for approval</span
-          ></span
-        >
-      {/if}
-      {#if app.scheduleAttention}
-        <span class="pending-count" title="Scheduled runs waiting for you"
-          >{app.scheduleAttention}<span class="sr-only"> scheduled runs waiting for you</span></span
-        >
-      {/if}
     </button>
   </div>
 </aside>
@@ -303,76 +495,140 @@
   bind:this={menuButton}
   class="mobile-menu icon-button"
   type="button"
-  aria-label="Open navigation"
-  onclick={() => (open = true)}><Menu size={21} /></button
+  aria-label="Back to the list"
+  title="Back"
+  onclick={() => (open = true)}><ChevronLeft size={22} /></button
 >
 
-{#snippet sessionList(workspaceId: string)}
-  {@const group = groups.get(workspaceId) ?? EMPTY_GROUP}
-  <div class="session-list">
-    {#each group.open as session (session.id)}
-      {@render sessionRow(session)}
-    {/each}
-    {#if showSettled && group.settled.length}
-      <button
-        class="settled-toggle"
-        type="button"
-        aria-expanded={!!query || openSettled.has(workspaceId)}
-        onclick={() => toggleSettled(workspaceId)}
-      >
-        <span class:collapsed={!query && !openSettled.has(workspaceId)} class="chevron">
-          <ChevronDown size={13} />
-        </span>
-        Settled · {group.settled.length}
-      </button>
-      {#if query || openSettled.has(workspaceId)}
-        {#each group.settled as session (session.id)}
-          {@render sessionRow(session)}
-        {/each}
-      {/if}
-    {/if}
-  </div>
-{/snippet}
-
-{#snippet workspaceGroup(workspace: Workspace)}
-  {@const chat = isChatWorkspace(workspace)}
+{#snippet projectGroup(workspace: Workspace)}
+  {@const list = chatGroups.get(workspace.id) ?? []}
   <section class="workspace-group">
     <div class="workspace-heading">
       <button
         type="button"
-        onclick={() => toggleWorkspace(workspace.id)}
+        onclick={() => (collapsedGroups = toggleIn(collapsedGroups, workspace.id))}
         aria-expanded={!collapsedGroups.has(workspace.id)}
       >
-        <span class:collapsed={collapsedGroups.has(workspace.id)} class="chevron">
-          <ChevronDown size={15} />
-        </span>
+        <Folder size={15} />
         <strong>{workspace.displayName}</strong>
-        {#if chat}
-          {#if !app.workspaceOnline(workspace)}<small>· offline</small>{/if}
-        {:else}
-          <small
-            >· {workspace.hostId}{nodes.some((node) => node.id === workspace.hostId)
-              ? ' · online'
-              : workspace.id.includes(':')
-                ? ' · offline'
-                : ''}</small
-          >
-        {/if}
+        {#if !app.workspaceOnline(workspace)}<small>· offline</small>{/if}
+        <small class="group-count">{list.length}</small>
       </button>
       <button
         class="mini-action"
         type="button"
-        aria-label="New {chat ? 'chat' : 'session'} in {workspace.displayName}"
+        aria-label="New chat in {workspace.displayName}"
         onclick={() => onnew(workspace.id)}><Plus size={15} /></button
       >
     </div>
     {#if !collapsedGroups.has(workspace.id)}
-      {@render sessionList(workspace.id)}
+      <div class="session-list nested">
+        {#each list as session (session.id)}{@render sessionRow(session, false)}{/each}
+      </div>
     {/if}
   </section>
 {/snippet}
 
-{#snippet sessionRow(session: SessionSummary)}
+{#snippet inboxRow(item: InboxItem)}
+  <div class="inbox-item" data-kind={item.kind}>
+    {#if item.kind === 'session'}
+      {@const session = item.session}
+      <button class="inbox-main" type="button" onclick={() => onselect(session.id)}>
+        <span class="status-dot waiting"></span>
+        <span class="inbox-text">
+          <strong>{session.name}</strong>
+          <small
+            >{session.origin
+              ? `${session.origin.kind === 'schedule' ? 'Scheduled' : 'Delegated'} · ${session.origin.title}`
+              : (workspaceById.get(session.workspaceId)?.displayName ?? '')} · waiting for you</small
+          >
+        </span>
+      </button>
+      <div class="inbox-actions">
+        <button type="button" class="pill-button" onclick={() => onselect(session.id)}>Reply</button
+        >
+      </div>
+    {:else if item.kind === 'missed'}
+      <div class="inbox-main">
+        <span class="inbox-icon"><Clock size={14} /></span>
+        <span class="inbox-text">
+          <strong>{item.schedule.title}</strong>
+          <small>Missed · {formatWall(item.run.dueAt, item.schedule.timezone)}</small>
+        </span>
+      </div>
+      <div class="inbox-actions">
+        <button
+          type="button"
+          class="pill-button primary"
+          onclick={() => app.decideMissed(item.schedule.id, item.run.id, true)}
+          >Allow &amp; run</button
+        >
+        <button
+          type="button"
+          class="pill-button"
+          onclick={() => app.decideMissed(item.schedule.id, item.run.id, false)}>Dismiss</button
+        >
+      </div>
+    {:else}
+      {@const proposal = item.proposal}
+      <button class="inbox-main" type="button" onclick={onmemory}>
+        <span class="inbox-icon"><Brain size={14} /></span>
+        <span class="inbox-text">
+          <strong
+            >{proposal.action === 'add'
+              ? 'Remember'
+              : proposal.action === 'remove'
+                ? 'Forget'
+                : 'Update memory'}</strong
+          >
+          <small title={proposal.content ?? proposal.target?.content ?? ''}
+            >{proposal.content ?? proposal.target?.content ?? ''}</small
+          >
+        </span>
+      </button>
+      <div class="inbox-actions">
+        <button
+          type="button"
+          class="pill-button primary"
+          onclick={() => app.decideProposal(proposal, true)}>Approve</button
+        >
+        <button
+          type="button"
+          class="pill-button"
+          onclick={() => app.decideProposal(proposal, false)}>Reject</button
+        >
+      </div>
+    {/if}
+  </div>
+{/snippet}
+
+{#snippet foldRow(row: Extract<RecentRow, { kind: 'schedule' }>)}
+  {@const expanded =
+    openFolds.has(row.scheduleId) || row.sessions.some((s) => s.id === activeSessionId)}
+  <div class="fold">
+    <button
+      class="session-card fold-card"
+      type="button"
+      aria-expanded={expanded}
+      onclick={() => (openFolds = toggleIn(openFolds, row.scheduleId))}
+    >
+      <span class="origin-icon" title="Scheduled"><Clock size={13} /></span>
+      <span class="session-name">{row.title}</span>
+      <span class="session-meta">
+        <small>{row.sessions.length} runs</small>
+        <span class:collapsed={!expanded} class="chevron"><ChevronDown size={13} /></span>
+      </span>
+    </button>
+    {#if expanded}
+      <div class="session-list nested">
+        {#each row.sessions as session (session.id)}{@render sessionRow(session, false)}{/each}
+      </div>
+    {/if}
+  </div>
+{/snippet}
+
+{#snippet sessionRow(session: SessionSummary, showWorkspace: boolean)}
+  {@const workspace = workspaceById.get(session.workspaceId)}
   <div
     class="session-item"
     class:active={session.id === activeSessionId}
@@ -415,7 +671,7 @@
       >
         <span
           class:waiting={session.runStatus === 'waiting_input'}
-          class:running={session.runStatus === 'running'}
+          class:running={session.runStatus === 'running' || session.runStatus === 'queued'}
           class="status-dot"
           title={session.runStatus === 'waiting_input'
             ? 'Needs input'
@@ -423,9 +679,26 @@
               ? 'Working'
               : (session.runStatus ?? session.runnerStatus)}
         ></span>
+        {#if session.origin?.kind === 'schedule'}<span
+            class="origin-icon"
+            title="Scheduled: {session.origin.title}"><Clock size={13} /></span
+          >{:else if session.origin?.kind === 'delegation'}<span
+            class="origin-icon"
+            title="Delegated: {session.origin.title}"><Forward size={13} /></span
+          >{/if}
         <span class="session-name">{session.name}</span>
         <span class="session-meta">
+          {#if session.writeLease}<span
+              class="lease-lock"
+              role="img"
+              aria-label="Holds the write lease"
+              title="Holds the {workspace?.displayName ?? 'workspace'} write lease"
+              ><Lock size={12} /></span
+            >{/if}
           {#if session.pinned}<span class="pin-mark" title="Pinned"><Pin size={12} /></span>{/if}
+          {#if showWorkspace && !filter && workspace}<span class="workspace-chip"
+              >{workspace.displayName}</span
+            >{/if}
           {#if session.unreadCount}<span class="unread">{session.unreadCount}</span>{:else}<small
               >{shortAgo(session.lastActivityAt)}</small
             >{/if}
@@ -497,6 +770,7 @@
   }
   .brand-row {
     height: 56px;
+    flex: none;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -525,8 +799,47 @@
   .mobile-menu {
     display: none;
   }
+  /* Chat / Work */
+  .mode-switch {
+    flex: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    margin: 0 12px 10px;
+    padding: 3px;
+    border-radius: var(--radius-md);
+    background: var(--bg-hover);
+  }
+  .mode-switch button {
+    position: relative;
+    height: 30px;
+    border: 0;
+    border-radius: calc(var(--radius-md) - 2px);
+    color: var(--muted);
+    background: transparent;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .mode-switch button:hover:not(.chosen) {
+    color: var(--ink);
+  }
+  .mode-switch button.chosen {
+    color: var(--ink);
+    background: var(--bg-layer);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+  }
+  .attention-dot {
+    position: absolute;
+    top: 8px;
+    margin-left: 4px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--warning);
+  }
   .new-session {
-    margin: 4px 12px 8px;
+    flex: none;
+    margin: 0 12px 8px;
     height: 40px;
     display: flex;
     align-items: center;
@@ -545,6 +858,7 @@
     filter: brightness(0.97);
   }
   .search {
+    flex: none;
     height: 36px;
     margin: 0 12px 12px;
     display: flex;
@@ -570,70 +884,89 @@
   .search input::placeholder {
     color: var(--muted);
   }
-  .device-switcher,
-  .workspace-tools {
-    margin: 0 16px 10px;
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 500;
-  }
-  .device-options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 6px;
-  }
-  .device-options button,
-  .workspace-tools button {
-    height: 26px;
-    padding: 0 10px;
-    border: 0;
-    border-radius: 999px;
-    color: var(--text-2);
-    background: var(--bg-hover);
-    font-size: 12px;
-  }
-  .device-options button:hover,
-  .workspace-tools button:hover:not(:disabled) {
-    background: var(--bg-hover-strong);
-  }
-  .device-options button.chosen {
-    color: var(--bg);
-    background: var(--ink);
-  }
-  .workspace-tools {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 4px;
-  }
-  .workspace-tools button {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    padding: 0 8px;
-    background: transparent;
-  }
-  /* Chats, projects and workspaces scroll together, like one chat list. */
+  /* Chats, projects and the work lists scroll together. */
   .sidebar-scroll {
     flex: 1;
     min-height: 0;
     overflow: auto;
-  }
-  .workspace-list {
-    padding: 0 8px 16px;
-  }
-  .chat-section .workspace-list {
     padding-bottom: 12px;
   }
-  .workspace-group + .workspace-group {
-    margin-top: 8px;
+  .list-section {
+    padding: 0 8px;
   }
-  .workspace-heading {
-    height: 32px;
+  .list-section + .list-section {
+    margin-top: 14px;
+  }
+  .section-heading {
+    height: 26px;
     display: flex;
     align-items: center;
-    padding: 0 4px 0 8px;
+    gap: 6px;
+    padding: 0 8px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .section-heading strong {
+    font-weight: 600;
+  }
+  .section-heading small {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .section-heading.attention {
+    color: var(--warning);
+  }
+  .count-badge {
+    margin-left: auto;
+    min-width: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    color: var(--bg);
+    background: var(--warning);
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+    letter-spacing: 0;
+  }
+  .heading-action,
+  .heading-toggle {
+    margin-left: auto;
+    display: grid;
+    place-items: center;
+    height: 22px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 6px;
+    color: var(--muted);
+    background: transparent;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .heading-action:hover:not(:disabled),
+  .heading-toggle:hover {
+    color: var(--ink);
+    background: var(--bg-hover);
+  }
+  .empty-note {
+    margin: 2px 10px 6px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .workspace-list {
+    display: grid;
+    gap: 2px;
+  }
+  .workspace-heading {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    padding: 0 4px 0 10px;
     border-radius: var(--radius-sm);
   }
   .workspace-heading:hover {
@@ -644,9 +977,10 @@
     flex: 1;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     padding: 0;
     border: 0;
+    color: var(--text-2);
     background: transparent;
     text-align: left;
   }
@@ -654,18 +988,18 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    color: var(--text-2);
-    font-size: 13px;
+    color: var(--ink);
+    font-size: 14px;
     font-weight: 500;
   }
   .workspace-heading small {
-    overflow: hidden;
     flex: none;
-    max-width: 45%;
     color: var(--muted);
     font-size: 11px;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+  }
+  .workspace-heading .group-count {
+    margin-left: auto;
+    padding-right: 4px;
   }
   .chevron {
     display: grid;
@@ -700,18 +1034,32 @@
     gap: 1px;
     margin-top: 1px;
   }
+  .session-list.nested {
+    padding-left: 12px;
+  }
   .session-card {
     width: 100%;
     height: 36px;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 10px 0 28px;
+    padding: 0 10px 0 22px;
     border: 0;
     border-radius: var(--radius-sm);
     color: var(--ink);
     background: transparent;
     text-align: left;
+  }
+  .fold-card:hover {
+    background: var(--bg-hover);
+  }
+  .origin-icon {
+    flex: none;
+    display: grid;
+    color: var(--muted);
+  }
+  .fold-card .origin-icon {
+    margin-left: -14px;
   }
   .session-item {
     position: relative;
@@ -739,6 +1087,21 @@
   .pin-mark {
     display: grid;
     color: var(--faint);
+  }
+  .lease-lock {
+    display: grid;
+    color: var(--warning);
+  }
+  .workspace-chip {
+    max-width: 72px;
+    overflow: hidden;
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--muted);
+    background: var(--bg-hover);
+    font-size: 10.5px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   /* Row actions: pin, settle, rename. Shown on hover or keyboard focus; the
   name makes room so it is never covered. */
@@ -847,26 +1210,6 @@
   .session-rename input:focus {
     border-color: var(--accent);
   }
-  .settled-toggle {
-    height: 28px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 0 10px 0 24px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    color: var(--muted);
-    background: transparent;
-    font-size: 12px;
-    text-align: left;
-  }
-  .settled-toggle:hover {
-    color: var(--text-2);
-    background: var(--bg-hover);
-  }
-  .settled-toggle .chevron {
-    color: inherit;
-  }
   .session-name {
     flex: 1;
     min-width: 0;
@@ -908,34 +1251,255 @@
     font-size: 11px;
     font-weight: 600;
   }
-  .pending-count {
-    margin-left: auto;
-    min-width: 18px;
-    padding: 0 6px;
-    border-radius: 999px;
-    color: var(--bg);
-    background: var(--accent);
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 18px;
-    text-align: center;
+  /* ── Needs you ── */
+  .inbox-list {
+    display: grid;
+    gap: 4px;
   }
-  .sidebar-footer {
-    min-height: calc(56px + env(safe-area-inset-bottom));
+  .inbox-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 6px 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--bg-layer);
+  }
+  .inbox-item[data-kind='missed'],
+  .inbox-item[data-kind='memory'] {
+    flex-wrap: wrap;
+  }
+  .inbox-main {
+    min-width: 0;
+    flex: 1;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 8px env(safe-area-inset-bottom);
-    border-top: 1px solid var(--line);
+    padding: 0;
+    border: 0;
+    color: var(--ink);
+    background: transparent;
+    text-align: left;
   }
-  .settings-entry {
-    flex: 1;
+  .inbox-main .status-dot {
+    margin-left: 0;
+  }
+  .inbox-icon {
+    flex: none;
+    display: grid;
+    color: var(--warning);
+  }
+  .inbox-text {
     min-width: 0;
+    display: grid;
+  }
+  .inbox-text strong,
+  .inbox-text small {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .inbox-text strong {
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .inbox-text small {
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .inbox-actions {
+    flex: none;
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+  }
+  .pill-button {
+    height: 26px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--text-2);
+    background: var(--bg-hover);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .pill-button:hover {
+    color: var(--ink);
+    background: var(--bg-hover-strong);
+  }
+  .pill-button.primary {
+    color: var(--on-accent);
+    background: var(--accent);
+  }
+  .pill-button.primary:hover {
+    background: var(--accent-hover);
+  }
+  /* ── Workspace filter ── */
+  .work-filter {
+    position: relative;
+    flex: none;
+    padding: 6px 8px 0;
+  }
+  .filter-button {
+    width: 100%;
     height: 36px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    background: var(--bg-layer);
+    font-size: 13px;
+    text-align: left;
+  }
+  .filter-button:hover {
+    background: var(--bg-hover);
+  }
+  .filter-label {
+    min-width: 0;
+    flex: none;
+    max-width: 50%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .filter-hosts {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .filter-hosts > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .host-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--faint);
+  }
+  .host-dot.online {
+    background: var(--success);
+  }
+  .filter-popover {
+    position: absolute;
+    z-index: 5;
+    right: 8px;
+    bottom: calc(100% + 4px);
+    left: 8px;
+    max-height: min(60vh, 420px);
+    overflow: auto;
+    display: grid;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--bg-layer);
+    box-shadow: var(--shadow-pop);
+  }
+  .popover-title {
+    padding: 6px 8px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .filter-option,
+  .filter-host {
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    background: transparent;
+    font-size: 13px;
+    text-align: left;
+  }
+  .filter-option:hover,
+  .filter-host:hover {
+    background: var(--bg-hover);
+  }
+  .filter-option > span:first-of-type {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .filter-option small,
+  .filter-host small {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .filter-host {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .filter-host strong {
+    font-weight: 600;
+  }
+  .filter-host :global(svg) {
+    margin-left: auto;
+  }
+  .lease-mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--warning);
+    font-size: 11px;
+  }
+  .popover-actions {
+    display: flex;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+  .popover-actions button {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    background: transparent;
+    font-size: 13px;
+  }
+  .popover-actions button:hover:not(:disabled) {
+    background: var(--bg-hover);
+  }
+  /* ── Footer ── */
+  .sidebar-footer {
+    flex: none;
+    display: grid;
+    gap: 2px;
+    padding: 6px 8px calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    margin-top: 6px;
+  }
+  .settings-entry {
+    min-width: 0;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 10px;
     border: 0;
     border-radius: var(--radius-sm);
     color: var(--text-2);
@@ -943,49 +1507,50 @@
     font-size: 14px;
     text-align: left;
   }
-  .settings-entry:hover {
+  .settings-entry:hover,
+  .settings-entry.current {
     color: var(--ink);
     background: var(--bg-hover);
+  }
+  .entry-text {
+    min-width: 0;
+    display: grid;
+  }
+  .entry-text small {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11.5px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   .sidebar-scrim {
     display: none;
   }
   @media (max-width: 650px) {
-    /* Closed, the drawer is hidden (out of the focus order), not just moved off screen. */
+    /* The phone shows the list as a full page above the bottom tabs; closed, it
+    is hidden (out of the focus order), not just moved off screen. */
     .sidebar {
       position: fixed;
-      inset: 0 auto 0 0;
-      width: min(86vw, 300px);
+      inset: 0 0 calc(56px + env(safe-area-inset-bottom)) 0;
+      width: 100%;
+      height: auto;
       visibility: hidden;
+      border-right: 0;
+      background: var(--bg);
       transform: translateX(-102%);
-      box-shadow: var(--shadow-pop);
       transition:
         transform 0.22s var(--ease),
         visibility 0.22s;
     }
-    .sidebar-collapse {
+    .sidebar-collapse,
+    .mode-switch,
+    .mobile-close,
+    .sidebar-footer {
       display: none;
     }
     .sidebar.open {
       visibility: visible;
       transform: translateX(0);
-    }
-    .sidebar-scrim {
-      position: fixed;
-      z-index: 29;
-      inset: 0;
-      display: block;
-      width: 100%;
-      height: 100%;
-      padding: 0;
-      border: 0;
-      background: rgb(0 0 0 / 35%);
-    }
-    .mobile-close {
-      display: grid;
-      width: 40px;
-      height: 40px;
-      margin-right: -8px;
     }
     .brand-row {
       padding: 0 12px 0 16px;
@@ -998,7 +1563,7 @@
       height: 44px;
     }
     .workspace-heading {
-      height: 40px;
+      height: 42px;
     }
     .mini-action,
     .session-actions button {
@@ -1009,6 +1574,10 @@
     .session-item:focus-within .session-card {
       padding-right: 112px;
     }
+    .pill-button {
+      height: 32px;
+      padding: 0 12px;
+    }
     .mobile-menu {
       position: fixed;
       z-index: 20;
@@ -1017,6 +1586,9 @@
       display: grid;
       width: 40px;
       height: 40px;
+    }
+    .work-filter {
+      padding-bottom: 6px;
     }
   }
 </style>
