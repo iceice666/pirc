@@ -1,5 +1,6 @@
 import type { Feature } from '../feature.js';
 import { askQuestionFeature } from './ask-question.js';
+import { assistantFeature } from './assistant/index.js';
 import { backgroundFeature } from './background/index.js';
 import { teamFeature } from './team/index.js';
 import { codeFeature } from './code.js';
@@ -17,6 +18,8 @@ export function builtinFeatures(): Feature[] {
     codeFeature(),
     compactFeature(),
     memoryFeature(),
+    // Chat sessions only: the user's memory, held by the gateway.
+    assistantFeature(),
     backgroundFeature(),
     teamFeature(),
     // Last: its settle hook starts the next round after the others had their turn.

@@ -114,7 +114,12 @@ it('lets the web create chat projects and tells chat sessions they are the assis
   expect(pathless.statusCode).toBe(400);
 
   const chat = await promptSession(app, services.events, headers, 'test:chats');
-  expect(await chat.ask('gateway assistant.context {}')).toBe('gateway:ok {"enabled":true}');
+  const context = await chat.ask('gateway assistant.context {}');
+  expect(JSON.parse(context.slice('gateway:ok '.length))).toMatchObject({
+    enabled: true,
+    user: [],
+    notes: [],
+  });
   const directory = await promptSession(app, services.events, headers, 'test:test');
   expect(await directory.ask('gateway assistant.context {}')).toBe('gateway:ok {"enabled":false}');
 });

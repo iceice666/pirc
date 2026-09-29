@@ -23,6 +23,8 @@ import { parse, payloadHash } from '../util.js';
 import { authHook, validateRequest } from './auth.js';
 import { DeviceTokens, registerDeviceRoutes } from './devices.js';
 import { runAgentOp } from './agent-ops.js';
+import { MemoryStore } from './memory.js';
+import { registerMemoryRoutes } from './memory-routes.js';
 import { NodeRegistry, validNodeToken } from './nodes.js';
 import { BackendService } from '../backends/service.js';
 import { registerBackendRoutes } from '../backends/routes.js';
@@ -101,6 +103,8 @@ export interface DaemonServices {
   models: ModelStore;
   backends: BackendService;
   devices: DeviceTokens;
+  /** The assistant's memory, per user (plans/assistant.md). */
+  memory: MemoryStore;
   /**
    * Re-read the gateway baseline and publish its secret-free catalog.
    * Subsequent inference calls use current credentials, including live agents.
@@ -147,7 +151,8 @@ export async function buildDaemonApp(
     idleMs: config.deviceTokenIdleMs,
     maxAgeMs: config.deviceTokenMaxAgeMs,
   });
-  const services = { db, events, nodes, models, backends, devices, reloadModels };
+  const memory = new MemoryStore(db.raw, config.memoryBudgets);
+  const services = { db, events, nodes, models, backends, devices, memory, reloadModels };
   /** Close a device's WebSocket once its token is revoked or expires. */
   const trackDevice = (
     request: FastifyRequest,
@@ -170,6 +175,11 @@ export async function buildDaemonApp(
   const directoryChanged = () => {
     for (const listener of directoryListeners) listener();
   };
+  /** Like directory changes, but per user and opted into with `memory=1`. */
+  const memoryListeners = new Map<string, Set<() => void>>();
+  const memoryChanged = (user: string) => {
+    for (const listener of memoryListeners.get(user) ?? []) listener();
+  };
 
   // ---- node link ------------------------------------------------------------
 
@@ -183,7 +193,7 @@ export async function buildDaemonApp(
   };
   nodes.resolveSession = (nodeId, remoteId) => db.resolveRemoteSession(nodeId, remoteId);
   nodes.onAgentRequest = async (nodeId, request) =>
-    runAgentOp(db, config.allowedUsers, nodeId, request);
+    runAgentOp({ db, allowedUsers: config.allowedUsers, memory, memoryChanged }, nodeId, request);
   nodes.onEvent = (nodeId, sessionId, event) => {
     try {
       const session = db.getSession(sessionId);
@@ -495,6 +505,7 @@ export async function buildDaemonApp(
 
   registerBackendRoutes(app, backends);
   registerDeviceRoutes(app, devices);
+  registerMemoryRoutes(app, { db, memory, memoryChanged });
 
   /** Every node's agents use the gateway's providers, so one list serves all sessions. */
   app.get('/api/models', async (request) => {
@@ -539,6 +550,7 @@ export async function buildDaemonApp(
           sessionId: z.string().min(1),
           cursor: z.string().optional(),
           directory: z.literal('1').optional(),
+          memory: z.literal('1').optional(),
         }),
         request.query,
       );
@@ -569,10 +581,20 @@ export async function buildDaemonApp(
       const unsubscribe = events.subscribe(session.id, send);
       const onDirectory = () => send({ type: 'directory_changed' });
       if (query.directory) directoryListeners.add(onDirectory);
+      const user = request.identity!.user;
+      const onMemory = () => send({ type: 'memory_changed' });
+      if (query.memory) {
+        let listeners = memoryListeners.get(user);
+        if (!listeners) memoryListeners.set(user, (listeners = new Set()));
+        listeners.add(onMemory);
+      }
       const untrack = trackDevice(request, socket);
       const done = () => {
         unsubscribe();
         directoryListeners.delete(onDirectory);
+        const listeners = memoryListeners.get(user);
+        listeners?.delete(onMemory);
+        if (listeners?.size === 0) memoryListeners.delete(user);
         untrack();
       };
       socket.once('close', done);

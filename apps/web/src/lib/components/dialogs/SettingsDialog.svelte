@@ -1,27 +1,41 @@
+<script lang="ts" module>
+  const SETTINGS_TABS = [
+    { id: 'general', label: 'General' },
+    { id: 'memory', label: 'Memory' },
+    { id: 'models', label: 'Models' },
+    { id: 'devices', label: 'Devices' },
+    { id: 'about', label: 'About' },
+  ] as const;
+  export type SettingsTab = (typeof SETTINGS_TABS)[number]['id'];
+</script>
+
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { rovingFocus } from '../../a11y';
   import { app } from '../../app.svelte';
   import Modal from './Modal.svelte';
   import BackendSettings from '../BackendSettings.svelte';
+  import MemorySettings from '../MemorySettings.svelte';
   import PairedDevices from '../PairedDevices.svelte';
 
   interface Props {
     open: boolean;
+    /** The category shown; the opener may pick one (e.g. Memory, when proposals wait). */
+    tab?: SettingsTab;
     /** Sidebar shows settled sessions. */
     showSettled: boolean;
     onresetlayout: () => void;
+    /** Open a chat that memory refers to (the dialog closes). */
+    onopenchat?: (sessionId: string) => void;
   }
 
-  let { open = $bindable(), showSettled = $bindable(), onresetlayout }: Props = $props();
-
-  const SETTINGS_TABS = [
-    { id: 'general', label: 'General' },
-    { id: 'models', label: 'Models' },
-    { id: 'devices', label: 'Devices' },
-    { id: 'about', label: 'About' },
-  ] as const;
-  let settingsTab: (typeof SETTINGS_TABS)[number]['id'] = $state('general');
+  let {
+    open = $bindable(),
+    tab: settingsTab = $bindable('general'),
+    showSettled = $bindable(),
+    onresetlayout,
+    onopenchat,
+  }: Props = $props();
 </script>
 
 <Modal bind:open labelledby="settings-title" class="settings">
@@ -52,7 +66,11 @@
           aria-selected={settingsTab === tab.id}
           tabindex={settingsTab === tab.id ? 0 : -1}
           class:chosen={settingsTab === tab.id}
-          onclick={() => (settingsTab = tab.id)}>{tab.label}</button
+          onclick={() => (settingsTab = tab.id)}
+          >{tab.label}{#if tab.id === 'memory' && app.memoryPending}<span
+              class="tab-count"
+              aria-label="{app.memoryPending} waiting">{app.memoryPending}</span
+            >{/if}</button
         >
       {/each}
     </div>
@@ -81,6 +99,21 @@
             <button class="button ghost" type="button" onclick={onresetlayout}>Reset</button>
           </div>
         </section>
+      </div>
+
+      <div
+        role="tabpanel"
+        id="settings-panel-memory"
+        aria-labelledby="settings-tab-memory"
+        hidden={settingsTab !== 'memory'}
+      >
+        <MemorySettings
+          disabled={app.usingDemo}
+          onopenchat={(sessionId) => {
+            open = false;
+            onopenchat?.(sessionId);
+          }}
+        />
       </div>
 
       <div
@@ -188,6 +221,15 @@
   .settings-nav button.chosen {
     color: var(--ink);
     background: var(--bg-subtle);
+    font-weight: 600;
+  }
+  .tab-count {
+    margin-left: 6px;
+    padding: 0 6px;
+    border-radius: 999px;
+    color: var(--bg);
+    background: var(--accent);
+    font-size: 11px;
     font-weight: 600;
   }
   .settings-panels {

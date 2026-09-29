@@ -140,5 +140,27 @@ it('routes directory changes without moving the cursor', () => {
 it('does not ask for directory changes without a handler', () => {
   const connection = connect();
   expect(new URL(FakeSocket.all[0]!.url).searchParams.has('directory')).toBe(false);
+  expect(new URL(FakeSocket.all[0]!.url).searchParams.has('memory')).toBe(false);
+  connection.close();
+});
+
+it('routes memory changes, when asked for, without resetting the session', () => {
+  const events: unknown[] = [];
+  let memory = 0;
+  const connection = connectEvents({
+    sessionId: 's1',
+    cursor: '2:5',
+    onEvent: (event) => events.push(event),
+    onState: () => undefined,
+    onMemory: () => memory++,
+  });
+  const socket = FakeSocket.all[0]!;
+  expect(new URL(socket.url).searchParams.get('memory')).toBe('1');
+  socket.dispatchEvent(
+    new MessageEvent('message', { data: JSON.stringify({ type: 'memory_changed' }) }),
+  );
+  expect(memory).toBe(1);
+  // Not a session event: no reset, no cursor change.
+  expect(events).toHaveLength(0);
   connection.close();
 });

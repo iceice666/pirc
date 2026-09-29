@@ -281,8 +281,11 @@ class PiRunner {
           `${JSON.stringify({ type: 'gateway_response', id: message.id, ...response })}\n`,
         );
     };
-    const fail = (status: number, code: string, text: string) =>
-      reply({ ok: false, error: { status, code, message: text } });
+    const fail = (status: number, code: string, text: string, details?: unknown) =>
+      reply({
+        ok: false,
+        error: { status, code, message: text, ...(details === undefined ? {} : { details }) },
+      });
     const op = message.op;
     if (typeof op !== 'string' || op.length > AGENT_OP_MAX_LENGTH || !AGENT_OP_PATTERN.test(op))
       return fail(400, 'invalid_input', 'A gateway operation is named like area.action');
@@ -299,7 +302,7 @@ class PiRunner {
         this.gatewayRequests--;
         const answer = (body ?? {}) as {
           result?: unknown;
-          error?: { code?: unknown; message?: unknown };
+          error?: { code?: unknown; message?: unknown; details?: unknown };
         };
         if (status >= 200 && status < 300)
           return reply({ ok: true, result: answer.result ?? null });
@@ -309,6 +312,7 @@ class PiRunner {
           typeof answer.error?.message === 'string'
             ? answer.error.message
             : `The gateway answered ${status}`,
+          answer.error?.details,
         );
       });
   }

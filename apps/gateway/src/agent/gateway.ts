@@ -14,6 +14,8 @@ export class GatewayError extends Error {
     readonly code: string,
     message: string,
     readonly status?: number,
+    /** Structured data from the gateway, such as the current version after a conflict. */
+    readonly details?: unknown,
   ) {
     super(message);
     this.name = 'GatewayError';
@@ -66,6 +68,7 @@ export class NodeGateway {
         typeof error.code === 'string' ? error.code : 'internal_error',
         typeof error.message === 'string' ? error.message : 'The gateway request failed',
         typeof error.status === 'number' ? error.status : undefined,
+        error.details,
       ),
     );
   }

@@ -14,7 +14,14 @@ export type ErrorCode =
   | 'node_error'
   | 'stale_interaction'
   | 'version_incompatible'
-  | 'payload_too_large';
+  | 'payload_too_large'
+  | 'too_many_requests'
+  /** Assistant memory (daemon/memory.ts): the USER or MEMORY budget has no room. */
+  | 'memory_full'
+  /** Assistant memory: the user asked to forget this content. */
+  | 'forgotten'
+  /** Assistant memory: the user already rejected this exact proposal. */
+  | 'rejected_before';
 
 export class ApiError extends Error {
   constructor(

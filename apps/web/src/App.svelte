@@ -25,7 +25,7 @@
   import NewProjectDialog from './lib/components/dialogs/NewProjectDialog.svelte';
   import NewSessionDialog from './lib/components/dialogs/NewSessionDialog.svelte';
   import NewWorkspaceDialog from './lib/components/dialogs/NewWorkspaceDialog.svelte';
-  import SettingsDialog from './lib/components/dialogs/SettingsDialog.svelte';
+  import SettingsDialog, { type SettingsTab } from './lib/components/dialogs/SettingsDialog.svelte';
   import SidePanel from './lib/components/panel/SidePanel.svelte';
   import type { PanelTab } from './lib/panel-api';
   import { onFilePreviewRequest } from './lib/file-links';
@@ -65,6 +65,7 @@
   let viewportWidth = $state(window.innerWidth);
   let panelTab: PanelTab = $state('files');
   let settingsOpen = $state(false);
+  let settingsTab: SettingsTab = $state('general');
   let newSessionOpen = $state(false);
   let newProjectOpen = $state(false);
   let newProjectNodeId = $state('');
@@ -368,6 +369,8 @@
     onclose={() => (sidebarOpen = false)}
     {showSettled}
     onsettings={() => {
+      // Proposals waiting for approval are why the badge is showing.
+      if (app.memoryPending) settingsTab = 'memory';
       settingsOpen = true;
       sidebarOpen = false;
     }}
@@ -532,7 +535,13 @@
   </main>
 </div>
 
-<SettingsDialog bind:open={settingsOpen} bind:showSettled onresetlayout={resetLayout} />
+<SettingsDialog
+  bind:open={settingsOpen}
+  bind:tab={settingsTab}
+  bind:showSettled
+  onresetlayout={resetLayout}
+  onopenchat={openSession}
+/>
 <NewWorkspaceDialog
   bind:open={newWorkspaceOpen}
   nodeId={newWorkspaceNodeId}

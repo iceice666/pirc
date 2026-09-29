@@ -68,6 +68,12 @@ export interface DaemonConfig extends BrowserAuthConfig {
   deviceTokenMaxAgeMs: number;
   /** Providers and default model pushed to every node (PIRC_MODELS_FILE). */
   modelsFile: string;
+  /**
+   * Characters of the assistant's memory per user: USER entries
+   * (PIRC_MEMORY_USER_CHARS, default 2000) and MEMORY notes
+   * (PIRC_MEMORY_NOTE_CHARS, default 8000). See plans/assistant.md.
+   */
+  memoryBudgets: { user: number; note: number };
 }
 
 /**
@@ -204,6 +210,10 @@ export function loadDaemonConfig(env: NodeJS.ProcessEnv = process.env): DaemonCo
     deviceTokenIdleMs,
     deviceTokenMaxAgeMs,
     modelsFile: path.resolve(defaultModelsFile(env)),
+    memoryBudgets: {
+      user: integer(env.PIRC_MEMORY_USER_CHARS, 2000),
+      note: integer(env.PIRC_MEMORY_NOTE_CHARS, 8000),
+    },
   };
 }
 

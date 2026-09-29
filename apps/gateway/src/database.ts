@@ -80,6 +80,32 @@ const migrations = [
   `
   ALTER TABLE workspaces ADD COLUMN kind TEXT NOT NULL DEFAULT 'directory';
   `,
+  // The assistant's memory (daemon/memory.ts).
+  `
+  CREATE TABLE memory_entries (
+    id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, kind TEXT NOT NULL, content TEXT NOT NULL,
+    status TEXT NOT NULL, revision INTEGER NOT NULL, origins_json TEXT NOT NULL,
+    sources_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX memory_entries_owner ON memory_entries(owner_user, kind, status);
+  CREATE TABLE memory_log (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT, owner_user TEXT NOT NULL, entry_id TEXT NOT NULL,
+    revision INTEGER NOT NULL, op TEXT NOT NULL, content TEXT, origins_json TEXT NOT NULL,
+    sources_json TEXT NOT NULL, actor TEXT NOT NULL, at INTEGER NOT NULL
+  );
+  CREATE INDEX memory_log_entry ON memory_log(entry_id, revision);
+  CREATE TABLE memory_proposals (
+    id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, action TEXT NOT NULL, target_id TEXT,
+    target_revision INTEGER, content TEXT, content_hash TEXT, quote TEXT NOT NULL,
+    sources_json TEXT NOT NULL, session_id TEXT NOT NULL, status TEXT NOT NULL,
+    created_at INTEGER NOT NULL, decided_at INTEGER
+  );
+  CREATE INDEX memory_proposals_owner ON memory_proposals(owner_user, status);
+  CREATE TABLE memory_tombstones (
+    owner_user TEXT NOT NULL, content_hash TEXT NOT NULL, forgotten_at INTEGER NOT NULL,
+    PRIMARY KEY (owner_user, content_hash)
+  );
+  `,
 ];
 
 const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');

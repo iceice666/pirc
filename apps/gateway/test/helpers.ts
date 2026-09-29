@@ -64,6 +64,7 @@ export function daemonConfig(overrides: Partial<DaemonConfig> = {}): DaemonConfi
     deviceTokenMaxAgeMs: 30 * 86_400_000,
     // Absent file: no providers unless a test writes one.
     modelsFile: path.join(tmpdir(), 'pirc-test-no-models.json'),
+    memoryBudgets: { user: 2000, note: 8000 },
     ...overrides,
   };
 }

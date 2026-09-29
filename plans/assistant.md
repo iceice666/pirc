@@ -1,6 +1,6 @@
 # Personal assistant: global memory and delegation
 
-Status: proposed 2026-09-28. Milestones 0 (workspace memory fixes), 1 (gateway channel) and 2 (chat workspaces) are implemented; the rest is not. Decisions taken with the user:
+Status: proposed 2026-09-28. Milestones 0 (workspace memory fixes), 1 (gateway channel), 2 (chat workspaces) and 3 (USER/MEMORY) are implemented; the rest is not. Decisions taken with the user:
 
 - Global memory lives on the gateway from the start (no node-local interim store).
 - Only USER (profile) changes need the user's approval. The assistant writes MEMORY notes directly; the user can review, revert and forget them.
@@ -31,7 +31,7 @@ Honcho and Hindsight are not adopted:
 
 **v1**: workspace-memory fixes; a gateway channel for agents; chat workspaces (top-level chats and projects) as the assistant's home; USER/MEMORY on the gateway with a web review page; delegation with confirmation; cross-workspace records and search.
 
-**Later**: background consolidation ("dreaming"), skills, USER in coding sessions, Android memory and approval screens, repo identity by normalized `origin` remote, taint tracking for network tool output, vector search.
+**Later**: background consolidation ("dreaming"), skills, USER in coding sessions, Android memory and approval screens, approving proposals inline in the chat, repo identity by normalized `origin` remote, taint tracking for network tool output, vector search.
 
 **Non-goals**: external memory services; automatic promotion of workspace memory into USER/MEMORY; multi-user isolation beyond the daemon's owner checks (the deployment is single-user).
 
@@ -53,7 +53,7 @@ Scopes are kept apart:
 
 ## Trust rules
 
-1. **Origin is computed by code, never by the model.** Sources are session entry ids. The agent process resolves them to roles (`user`, `assistant`, `toolResult:<tool>`, `custom:<type>`) and stores that set.
+1. **Origin is computed by code, never by the model.** Origins are the roles of the messages behind a memory (`user`, `assistant`, `tool:<name>`, `custom:<type>`), computed by the agent process from the session; sources are the ids of those messages. The model only supplies the user's words (`quote`), which code must find in the user's own messages.
 2. **USER changes need a human source.** At least one source must be a human `user` message (not a custom or delegated message). The proposal carries the exact quote and waits for approval.
 3. **Replayed content is data.** Recalled memory, snapshots, delegation results and team events never count as sources for USER, and the observer does not learn from `recall` output.
 4. **Delegated tasks enter the target session as custom messages** (`role: 'custom'`, via `agent.deliver`, `agent/agent.ts:515`). Auto-mode's `recentUserRequests` reads only `role: 'user'` (`agent/auto-mode/classifier.ts:108-125`), so it never takes the assistant's words for the human's request. The UI shows them as coming from the assistant.
@@ -108,43 +108,47 @@ A workspace gets a `kind`: `directory` (today's workspaces, a real directory) or
 
 ## Assistant context and snapshot
 
-- **Session start.** A fresh session calls `assistant.context`.
-  - Sessions outside chat workspaces get `{enabled: false}` and no assistant tools.
-  - Chat sessions get USER, MEMORY and the workspace list. The rendered text is frozen into a session entry, like `om.workspace.snapshot`, for prompt-cache stability; later changes reach new sessions only.
-  - If the gateway is unreachable, the session gets a notice, never an empty memory presented as "nothing known".
-- **Budgets** are in characters, not the `len/4` token estimate, because profile text may be Chinese. Defaults: USER 2,000, MEMORY 8,000, both configurable. A write over budget fails and asks the assistant to consolidate (Hermes behaviour).
+- **Session start.** Before a chat's first run, the agent calls `assistant.context` (10 s timeout). Sessions outside chat workspaces never call it and get no memory tools; the daemon answers `{enabled: false}` for them anyway.
+  - Chat sessions get USER, MEMORY, usage against the budgets and the number of proposals waiting. The rendered `## Memory` section is frozen into the session entry `assistant.snapshot`, together with the revision of every entry it showed, for prompt-cache stability; later changes reach new chats only.
+  - If the gateway is unreachable, that run gets a notice instead ("do not assume you know nothing"), never an empty memory, and the next run tries again.
+  - The workspace list moves to milestone 4, where delegation needs it.
+- **Budgets** are in characters, not the `len/4` token estimate, because profile text may be Chinese: `PIRC_MEMORY_USER_CHARS` (default 2,000) and `PIRC_MEMORY_NOTE_CHARS` (default 8,000) on the gateway. One entry holds at most 1,000 characters. A write over budget fails with `memory_full` and asks the assistant to make room (Hermes behaviour).
 
 ## Global memory store (gateway SQLite)
 
+Implemented in `daemon/memory.ts`, with the migration in `database.ts`.
+
 ```sql
-memory_entries(id TEXT PRIMARY KEY, owner_user TEXT NOT NULL,
-  kind TEXT NOT NULL,                    -- 'user' | 'note'
-  content TEXT NOT NULL, origin_json TEXT NOT NULL, sources_json TEXT NOT NULL,
-  status TEXT NOT NULL,                  -- 'active' | 'forgotten'
-  revision INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)
-memory_log(seq INTEGER PRIMARY KEY, owner_user TEXT NOT NULL, entry_id TEXT NOT NULL,
-  op TEXT NOT NULL, before_json TEXT, after_json TEXT,
-  actor TEXT NOT NULL,                   -- 'user:<name>' | 'session:<id>'
+memory_entries(id TEXT PRIMARY KEY,            -- u… (USER) or n… (MEMORY) + 8 hex
+  owner_user TEXT NOT NULL, kind TEXT NOT NULL, -- 'user' | 'note'
+  content TEXT NOT NULL,                       -- '' once forgotten
+  status TEXT NOT NULL,                        -- 'active' | 'removed' | 'forgotten'
+  revision INTEGER NOT NULL, origins_json TEXT NOT NULL, sources_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)
+memory_log(seq INTEGER PRIMARY KEY AUTOINCREMENT, owner_user TEXT NOT NULL,
+  entry_id TEXT NOT NULL, revision INTEGER NOT NULL,
+  op TEXT NOT NULL,                            -- add | replace | remove | restore | forget
+  content TEXT,                                -- the text after the change; NULL for remove and forget
+  origins_json TEXT NOT NULL, sources_json TEXT NOT NULL,
+  actor TEXT NOT NULL,                         -- 'user:<name>' | 'session:<gateway session id>'
   at INTEGER NOT NULL)
 memory_proposals(id TEXT PRIMARY KEY, owner_user TEXT NOT NULL,
-  action TEXT NOT NULL,                  -- 'add' | 'replace' | 'remove'
-  target_id TEXT, content TEXT, quote TEXT NOT NULL, sources_json TEXT NOT NULL,
-  session_id TEXT NOT NULL,
-  status TEXT NOT NULL,                  -- 'pending' | 'approved' | 'rejected' | 'expired'
+  action TEXT NOT NULL,                        -- 'add' | 'replace' | 'remove'
+  target_id TEXT, target_revision INTEGER, content TEXT, content_hash TEXT,
+  quote TEXT NOT NULL, sources_json TEXT NOT NULL, session_id TEXT NOT NULL,
+  status TEXT NOT NULL,                        -- 'pending' | 'approved' | 'rejected'
   created_at INTEGER NOT NULL, decided_at INTEGER)
+memory_tombstones(owner_user TEXT NOT NULL, content_hash TEXT NOT NULL,
+  forgotten_at INTEGER NOT NULL, PRIMARY KEY (owner_user, content_hash))
 ```
 
-- **Tools** (assistant sessions only):
-  - `memory_note({action: 'add' | 'replace' | 'remove', id?, content?, sourceEntryIds})` applies at once, with a revision check.
-  - `memory_propose_user({action, id?, content?, sourceEntryIds})` queues a proposal and returns `pending`; it never blocks the turn.
-- **Forget** deletes the content from the entry and its log rows. It keeps a content hash as a tombstone that rejects identical re-adds. Paraphrases are not caught. The UI says so, along with what forget does not delete: node transcripts and workspace memory.
-- **Web Settings → Memory** shows:
-  - USER entries;
-  - pending proposals with the quote and a link to the source session, to approve or reject;
-  - MEMORY notes with origin, sources and history, to revert or forget;
-  - usage against the budgets.
-
-  Routes live under `/api/memory*` and are open to device tokens as well, so Android can approve later.
+- **Tools** (chat sessions only, `agent/features/assistant/`). The model never sees session entry ids, so the tools take the user's words instead of `sourceEntryIds`: the agent looks for `quote` in the messages the human typed (`role: 'user'`, ignoring case, width, spacing and surrounding quote marks) and sends the id of the message that holds it.
+  - `memory_note({action: 'add' | 'replace' | 'remove', id?, content?, quote?})` applies at once. Its origins are `assistant`, every tool result and custom message since the user's last message (`tool:read`, `custom:agent-team`, …), and `user` when a quote was found. The agent sends the revision it last saw (from the snapshot or its own writes, restored from the session file after a restart). A replace or remove against any other revision is a `conflict` that returns the current text, so a note another chat changed is never overwritten unseen.
+  - `memory_propose_user({action, id?, content?, quote})` needs a quote found in the user's messages and queues a proposal; it never blocks the turn. The same proposal again returns the pending one, one the user rejected is refused (`rejected_before`), at most 20 wait at once, and one that could not fit in the budget is refused at once.
+- **Approval, restore, forget.** Approving applies a proposal with origin `user` and the quote and proposal id as sources, checking the revision of the target the user was shown. The user can restore removed entries and earlier versions directly. **Forget** erases the entry's content, every logged version and the proposals that carry them, and keeps hashes of all its versions as tombstones that refuse the same text (ignoring case and spacing). Paraphrases are not caught. The UI says so, along with what forget does not delete: node transcripts and workspace memory.
+- **Web Settings → Memory** (`MemorySettings.svelte`) shows the proposals waiting, with the quote and a link to the source chat, to approve or reject; USER entries and MEMORY notes with origin, source chat and history; removed entries; and usage against the budgets. Restore and a two-click Forget act on each entry. The Settings button shows how many proposals wait and then opens on Memory.
+- **Routes**: `GET /api/memory`, `GET /api/memory/entries/:id/history`, and `POST` to `/api/memory/proposals/:id/approve` or `reject` and `/api/memory/entries/:id/forget` or `restore`, each answering with the whole view. They are open to device tokens as well, so Android can approve later.
+- **Live updates.** Event sockets opened with `memory=1` get `memory_changed` whenever that user's memory changes. The web asks for it; Android does not yet.
 
 ## Delegation
 
@@ -189,8 +193,8 @@ delegations(id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, assistant_session_id 
 0. **Workspace memory fixes** and the doc update.
 1. **Gateway channel**: protocol v5, op allowlist (`assistant.context`), environment scrubbing. Tests: round trip, foreign-session rejection, unknown ops, offline node.
 2. **Chat workspaces**: workspace `kind`, the chat node and its top-level `chats`, projects from the web, hidden per-session directories, the assistant base prompt, `assistant.context` enabled for chat sessions, web New chat / New project and the chat-first sidebar.
-3. **USER/MEMORY**: schema, snapshot, tools, approval flow, web Memory page.
-4. **Delegation**: tool, daemon-owned confirmation, the `deliver` RPC and daemon → agent pushes, dispatch and follow-up, result delivery, status tool. An end-to-end test with two nodes.
+3. **USER/MEMORY**: schema, snapshot, tools, approval flow, web Memory page and pending badge.
+4. **Delegation**: the workspace list in `assistant.context`, tool, daemon-owned confirmation, the `deliver` RPC and daemon → agent pushes, dispatch and follow-up, result delivery, status tool. An end-to-end test with two nodes.
 5. **Records and search**: mirroring, FTS, search tool, cross-node recall.
 6. **Later**: consolidation, skills, USER in coding sessions, Android screens.
 

@@ -5,6 +5,7 @@
  */
 import { api, connectEvents, type EventConnection } from './api';
 import type { NewWorkspace } from './chats';
+import { memoryApi } from './memory';
 import { syncControl } from './control';
 import { errorMessage } from './errors';
 import { GOAL_WIDGET, parseGoalWidget } from './goal';
@@ -61,6 +62,10 @@ const SHOWN_ELSEWHERE = new Set(['background-task', 'agent-team']);
 class AppState {
   workspaces = $state.raw<Workspace[]>([]);
   nodes = $state.raw<NodeSummary[]>([]);
+  /** USER changes the assistant proposed that wait for your approval. */
+  memoryPending = $state(0);
+  /** Bumped whenever the gateway says your memory changed; open memory views reload. */
+  memoryRevision = $state(0);
   sessions = $state.raw<SessionSummary[]>([]);
   models = $state.raw<ModelOption[]>([]);
   activeSessionId = $state<string>();
@@ -169,6 +174,7 @@ class AppState {
       ]);
       this.activeSessionId = this.sessions[0]?.id;
       pruneDrafts(this.sessions.map((session) => session.id));
+      void this.refreshMemory();
     } catch (error) {
       if (import.meta.env.DEV) {
         const demo = await import('./mock');
@@ -199,6 +205,16 @@ class AppState {
     }
   }
 
+  /** How many USER proposals wait for you (the badge on Settings). */
+  async refreshMemory() {
+    if (this.demo) return;
+    try {
+      this.memoryPending = (await memoryApi.view()).proposals.length;
+    } catch {
+      /* keep the last count */
+    }
+  }
+
   /** Start again if the first start could not reach the gateway. Returns whether it did. */
   retryBootstrap(): boolean {
     if (!this.#bootstrapFailed || this.loading) return false;
@@ -215,6 +231,7 @@ class AppState {
     this.#events?.reconnectNow();
     void this.refreshControl();
     void this.refreshNodes();
+    void this.refreshMemory();
     // A short switch away is covered by the stream's cursor replay.
     if (hiddenFor >= RESUME_SNAPSHOT_AFTER) void this.refreshSnapshot();
   }
@@ -262,6 +279,11 @@ class AppState {
           },
           onDirectory: () => {
             if (seq === this.#openSeq) void this.refreshNodes();
+          },
+          onMemory: () => {
+            if (seq !== this.#openSeq) return;
+            this.memoryRevision++;
+            void this.refreshMemory();
           },
           onEvent: (event) => {
             const current = this.sessionState;

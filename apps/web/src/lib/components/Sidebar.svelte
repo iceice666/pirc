@@ -278,6 +278,13 @@
     <button class="settings-entry" type="button" onclick={onsettings}>
       <Settings size={17} />
       <span>Settings</span>
+      {#if app.memoryPending}
+        <span class="pending-count" title="Memory changes waiting for your approval"
+          >{app.memoryPending}<span class="sr-only">
+            memory changes waiting for approval</span
+          ></span
+        >
+      {/if}
     </button>
   </div>
 </aside>
@@ -890,6 +897,18 @@
     background: var(--accent);
     font-size: 11px;
     font-weight: 600;
+  }
+  .pending-count {
+    margin-left: auto;
+    min-width: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    color: var(--bg);
+    background: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    text-align: center;
   }
   .sidebar-footer {
     min-height: calc(56px + env(safe-area-inset-bottom));

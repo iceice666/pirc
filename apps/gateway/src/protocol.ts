@@ -63,9 +63,15 @@ export interface AgentAnswer {
   status: number;
   body: unknown;
 }
-export const agentError = (status: number, code: string, message: string): AgentAnswer => ({
+export const agentError = (
+  status: number,
+  code: string,
+  message: string,
+  /** Structured data the agent can act on (for example the current version after a conflict). */
+  details?: unknown,
+): AgentAnswer => ({
   status,
-  body: { error: { code, message } },
+  body: { error: { code, message, ...(details === undefined ? {} : { details }) } },
 });
 
 /**

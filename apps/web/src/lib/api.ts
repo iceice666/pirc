@@ -562,6 +562,8 @@ export function connectEvents(options: {
    * session's sequence, so they never move the cursor.
    */
   onDirectory?: () => void;
+  /** Your assistant memory changed (`memory=1`), for example a new proposal to approve. */
+  onMemory?: () => void;
 }): EventConnection {
   let socket: WebSocket | undefined;
   let closed = false;
@@ -575,6 +577,7 @@ export function connectEvents(options: {
     const query = new URLSearchParams({ sessionId: options.sessionId });
     if (cursor) query.set('cursor', cursor);
     if (options.onDirectory) query.set('directory', '1');
+    if (options.onMemory) query.set('memory', '1');
     // Handlers act only for the current socket: a replaced socket's late
     // error/close must not close or reschedule its successor.
     const ws = new WebSocket(`${protocol}//${location.host}/api/events?${query}`);
@@ -590,6 +593,10 @@ export function connectEvents(options: {
         const raw = JSON.parse(String(message.data));
         if (raw?.type === 'directory_changed') {
           options.onDirectory?.();
+          return;
+        }
+        if (raw?.type === 'memory_changed') {
+          options.onMemory?.();
           return;
         }
         const envelope = normalizeEvent(raw);

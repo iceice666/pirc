@@ -37,6 +37,7 @@ beforeEach(() => {
     session('c', 'Gamma', { settled: true }),
   ];
   app.activeSessionId = 'a';
+  app.memoryPending = 0;
   target = document.createElement('div');
   document.body.append(target);
 });
@@ -137,6 +138,17 @@ describe('Sidebar', () => {
     props.open = false;
     flushSync();
     expect(document.activeElement).toBe(menu);
+  });
+
+  it('shows on Settings how many memory changes wait for approval', () => {
+    render();
+    const settings = target.querySelector<HTMLButtonElement>('.settings-entry')!;
+    expect(settings.querySelector('.pending-count')).toBeNull();
+    app.memoryPending = 2;
+    flushSync();
+    expect(settings.querySelector('.pending-count')!.textContent).toContain('2');
+    settings.click();
+    expect(handlers.onsettings).toHaveBeenCalled();
   });
 
   it('starts new sessions from a dialog when no node hosts chats', () => {
