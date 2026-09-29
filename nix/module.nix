@@ -75,6 +75,9 @@ let
     PIRC_ALLOWED_HOSTS = csv cfg.allowedHosts;
     PIRC_MODELS_FILE = "/etc/pirc/models.json";
   }
+  // lib.optionalAttrs (cfg.timeZone != null) {
+    PIRC_TIMEZONE = cfg.timeZone;
+  }
   // cfg.environment;
 
   nodeEnvironment = {
@@ -328,9 +331,12 @@ in
       example = "/run/secrets/pirc-env";
       description = ''
         Optional systemd EnvironmentFile for provider credentials, for
-        `EXA_API_KEY` (agents' web_search), and for `PIRC_NODE_TOKENS`
-        (JSON `{nodeId: token}`) when remote nodes connect to this gateway.
-        Do not store secrets in the Nix store.
+        `EXA_API_KEY` (agents' web_search), for `PIRC_NODE_TOKENS`
+        (JSON `{nodeId: token}`) when remote nodes connect to this gateway,
+        and optionally for `PIRC_VAPID_PUBLIC_KEY`/`PIRC_VAPID_PRIVATE_KEY`
+        (push notifications; without them the gateway makes a key pair once
+        and keeps it in its state directory). Do not store secrets in the Nix
+        store.
       '';
     };
 
@@ -338,6 +344,18 @@ in
       type = types.attrsOf types.str;
       default = { };
       description = "Additional non-secret PIRC environment variables.";
+    };
+
+    timeZone = mkOption {
+      type = types.nullOr types.str;
+      default = config.time.timeZone;
+      defaultText = literalExpression "config.time.timeZone";
+      example = "Asia/Taipei";
+      description = ''
+        IANA time zone for schedules an agent creates without naming one
+        (`PIRC_TIMEZONE`). The web and Android apps default to the device's
+        zone. Null: the system's.
+      '';
     };
 
     listenAddress = mkOption {
