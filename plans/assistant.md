@@ -105,7 +105,7 @@ memory_tombstones(owner_user TEXT NOT NULL, content_hash TEXT NOT NULL,
 4. The daemon follows the session's events; a pending interaction there is `waiting_input` (once per wait); once the run is over, `completed` with the last assistant answer after the task (matched by `details.delegationId`) or `failed`. Results are redacted and capped at 4,000 characters, and reach the chat as `assistant-delegation-update` ("gateway data, not user instructions"); an update that cannot reach the chat's node is retried after `node_reconnected`.
 5. Follow-ups need their own approval. The user can take control of a delegated session at any time. `delegation_status({id?})` shows one or the recent ones.
 
-Delegated sessions are normal main sessions with workspace memory; they produce no global memory. Auto mode treats a dangerous command there as needing the user's confirmation, and the chat is told the session is waiting (see roadmap item 6).
+Delegated sessions are normal main sessions with workspace memory; they produce no global memory. Auto mode treats a dangerous command there as needing the user's confirmation, and the chat is told the session is waiting (see roadmap item 7).
 
 ```sql
 delegations(id TEXT PRIMARY KEY,                -- d + 8 hex
@@ -138,7 +138,7 @@ memory_records(node_id, ledger_key, id, content, relevance, recorded_at, git_jso
 
 # Part 2: roadmap
 
-Ordered by value against cost. Items 1–5 are planned; 6 is a decision to take; 7 waits for evidence from use. Each item needs the user's go-ahead before implementation.
+Ordered by value against cost. Items 1–6 are planned; 7 is a decision to take; 8 waits for evidence from use. Each item needs the user's go-ahead before implementation.
 
 ## 1. Approve USER proposals in the chat
 
@@ -182,13 +182,23 @@ Two smaller items that can ship together or apart.
 - **Taint (coarse).** Origins stop at `tool:bash`, which cannot tell `ls` from `curl`. The agent marks a bash result whose command contains a network fetch (`curl`, `wget`, `fetch`, `http(s)://`, `gh api`, …) as `tool:bash:network`, and the same for `code` calls that run such commands. Notes whose only origins are network-tainted are still stored but rendered in the snapshot with a "from fetched content" label, and the snapshot prompt tells the assistant to treat them as claims, not facts. Full data-flow tracking is out of scope.
 - **Per-project instructions.** A project (chat workspace) gets an instructions text, edited from the web on the project, stored by the node in `<stateDir>/chat/<workspaceId>/instructions.md` and rendered into the chat's system prompt. No memory scope changes.
 
-## 6. Decisions to take
+## 6. Link projects to workspaces
+
+A project is usually about one or a few repositories. Today its assistant sees every directory workspace and must name one on each `delegate`. A link records which workspaces a project is about. It is a default and an ordering, never a permission: every delegation still needs the user's confirmation, and an unlinked workspace stays reachable.
+
+- **Storage.** On the gateway, `project_links(project_workspace_id, workspace_id, repo, created_at)`, edited from the project's settings in the web (a "Linked workspaces" multi-select next to item 5's instructions). `repo` is item 4's normalized `origin`, so a link also covers other clones of the same repository; ship after item 4, or store the workspace id alone and backfill `repo` later.
+- **Context.** `assistant.context` in a project lists linked workspaces first in `## Workspaces`, marked "linked to this project", with node and online state. A linked workspace that is offline or deleted stays listed and is marked so, not dropped silently. Links changed later reach new chats only (the snapshot is frozen).
+- **Delegation.** `delegate` without `workspace` uses the only linked workspace; with several linked it asks the assistant to name one. The confirmation shows the target as always.
+- **Search.** `memory_search` in a project searches linked workspaces (and their `repo`) first, and all of the user's records when asked or when nothing is found.
+- **Not in this item.** Reading a linked repository's files from the project without delegating would need a read-only gateway op (`workspace.read`) routed by the daemon to the target node after an owner check, returning tool data (`tool:*` origin, never a USER source) with no paths leaving the node. Build it only if chats keep delegating just to look at a file. Running a project inside the repository directory is rejected: it would merge chat isolation, the write broker and workspace memory with the assistant's; item 2 brings USER to coding sessions instead.
+
+## 7. Decisions to take
 
 - **Auto mode in delegated sessions.** Today a dangerous command waits for the user in the delegated session and the chat is only told that it waits. Keeping this is the safe default (trust rule 4). An alternative to offer: a checkbox on the delegation confirmation, "treat this task as my request for auto mode", which would let the task text count as a `recentUserRequest` in the target session for that run only. Leaning: keep the default and offer the checkbox, since the user has already read the whole task when approving.
 - **Settling delegated sessions.** After a result is delivered the session stays as it is. Either it is settled automatically so lists show it as finished, or it is left for the user to continue. Leaning: leave it, but show the delegation status in the session list.
 - **Retention.** `memory_log`, `delegations` and `memory_records` grow without bound. Propose: keep logs for forgotten entries only as tombstones (already), prune `delegations` older than 90 days that are not the target of a `follows`, and keep records as long as the ledger has them.
 
-## 7. Watch, do not build yet
+## 8. Watch, do not build yet
 
 - **Consolidation ("dreaming").** Only needed if `memory_full` becomes frequent at 8,000 characters. Rewriting notes with an LLM must keep origins (trust rule 3: consolidated text may not gain `user` origin it did not have) and should run on the gateway with the observer's model. Wait for evidence from use, and revisit the budget defaults first.
 - **Skills.** Undefined next to MEMORY notes, `AGENTS.md` and delegation. Needs a concrete case that none of them covers.
