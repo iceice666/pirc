@@ -216,13 +216,15 @@ describe('background_task tool', () => {
   it('stops background tasks when the agent shuts down', async () => {
     const agent = await startAgent();
     agents.push(agent);
-    await agent.send({ type: 'prompt', message: '/bg start sleep 60' });
+    // A duration no other process on this machine uses, so pgrep finds only this task.
+    const sleep = `sleep 60.${process.pid}`;
+    await agent.send({ type: 'prompt', message: `/bg start ${sleep}` });
     const listed = await agent.waitFor(
       (e) => e.type === 'message_end' && e.message.customType === 'background-task-command',
     );
     const pidMatch = /^(\w+)/.exec(listed.message.content)!;
     expect(pidMatch).toBeTruthy();
-    const pgrep = () => Bun.spawnSync(['pgrep', '-f', 'sleep 60']).stdout.toString().trim();
+    const pgrep = () => Bun.spawnSync(['pgrep', '-f', sleep]).stdout.toString().trim();
     expect(pgrep()).not.toBe('');
     await agent.close();
     agents.splice(0);
