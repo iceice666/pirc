@@ -219,10 +219,19 @@
     flex-wrap: wrap;
     gap: 6px;
   }
+  /* Four across when the panel is wide enough for "Compactions", else two by two. */
+  .tab-body {
+    container-type: inline-size;
+  }
   .stat-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
+  }
+  @container (max-width: 380px) {
+    .stat-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
   .stat-grid > div {
     display: grid;

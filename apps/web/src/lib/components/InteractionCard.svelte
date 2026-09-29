@@ -280,6 +280,7 @@
   }
   .interaction-card footer {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
     margin-top: 16px;
@@ -290,10 +291,13 @@
     gap: 5px;
     color: var(--muted);
     font-size: 12px;
+    white-space: nowrap;
   }
   .interaction-actions {
     margin-left: auto;
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 6px;
   }
   @media (max-width: 650px) {

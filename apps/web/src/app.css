@@ -226,6 +226,10 @@ select:disabled {
   background: var(--bg-hover);
   font-size: 14px;
   font-weight: 500;
+  /* A fixed-height pill cannot wrap: keep the label on one line and let the
+     text beside the button give way instead (e.g. "Turn on" on a phone). */
+  flex-shrink: 0;
+  white-space: nowrap;
   transition:
     background var(--ease) 0.15s,
     filter var(--ease) 0.15s;

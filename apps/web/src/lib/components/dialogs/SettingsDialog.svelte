@@ -248,9 +248,10 @@
       grid-template-rows: auto minmax(0, 1fr);
       gap: 12px;
     }
+    /* Wrap rather than scroll: a scrolled-off tab (About) has no visible cue. */
     .settings-nav {
       flex-direction: row;
-      overflow-x: auto;
+      flex-wrap: wrap;
     }
     .settings-nav button {
       flex: none;
