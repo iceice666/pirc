@@ -327,9 +327,10 @@ in
       default = null;
       example = "/run/secrets/pirc-env";
       description = ''
-        Optional systemd EnvironmentFile for provider credentials, and for
-        `PIRC_NODE_TOKENS` (JSON `{nodeId: token}`) when remote nodes connect
-        to this gateway. Do not store secrets in the Nix store.
+        Optional systemd EnvironmentFile for provider credentials, for
+        `EXA_API_KEY` (agents' web_search), and for `PIRC_NODE_TOKENS`
+        (JSON `{nodeId: token}`) when remote nodes connect to this gateway.
+        Do not store secrets in the Nix store.
       '';
     };
 

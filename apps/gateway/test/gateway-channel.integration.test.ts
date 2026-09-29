@@ -52,6 +52,25 @@ it('carries an agent request to the gateway and back through its node', async ()
   });
 });
 
+it('offers web search to any session and refuses it without a gateway key', async () => {
+  const cluster = await startCluster();
+  clusters.push(cluster);
+  const { app, services } = cluster;
+  await waitFor(() => services.db.listWorkspaces().some((w) => w.id === 'test:test'), true);
+  const { ask } = await promptSession(app, services.events, headers, 'test:test');
+  expect(errorOf(await ask('gateway web.search {"query":"bun"}'))).toMatchObject({
+    status: 503,
+    message: expect.stringContaining('EXA_API_KEY'),
+  });
+  expect(
+    errorOf(
+      await ask(
+        'gateway web.search {"query":"bun","includeDomains":["a.com"],"excludeDomains":["b.com"]}',
+      ),
+    ),
+  ).toMatchObject({ status: 400, code: 'invalid_input' });
+});
+
 it('answers offline without a gateway link and keeps the node secrets from its agent', async () => {
   const saved = { token: process.env.PIRC_NODE_TOKEN, secret: process.env.PIRC_TEST_SECRET };
   process.env.PIRC_NODE_TOKEN = 'n'.repeat(32);

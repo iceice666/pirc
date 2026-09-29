@@ -11,6 +11,7 @@ import { memoryFeature } from './memory/index.js';
 import { skillsFeature } from './skills.js';
 import { titleFeature } from './title.js';
 import { todoFeature } from './todo/index.js';
+import { webSearchFeature } from './web-search.js';
 
 export function builtinFeatures(): Feature[] {
   return [
@@ -25,6 +26,8 @@ export function builtinFeatures(): Feature[] {
     skillsFeature(),
     // Node agents with a browser only (PIRC_BROWSER=1).
     browserFeature(),
+    // Node agents with a gateway only; the gateway holds the search key.
+    webSearchFeature(),
     backgroundFeature(),
     teamFeature(),
     // Last: its settle hook starts the next round after the others had their turn.

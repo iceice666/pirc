@@ -14,6 +14,7 @@ import type { Delegations } from './delegations.js';
 import type { MemoryStore } from './memory.js';
 import type { MemoryRecords } from './memory-records.js';
 import type { NodeRegistry } from './nodes.js';
+import { webSearchArgs, type WebSearch } from './web-search.js';
 
 export interface AgentOpServices {
   db: GatewayDatabase;
@@ -24,6 +25,8 @@ export interface AgentOpServices {
   delegations: Delegations;
   records: MemoryRecords;
   nodes: NodeRegistry;
+  /** Search the web with the gateway's key (daemon/web-search.ts). */
+  webSearch: WebSearch;
 }
 export interface AgentOpContext {
   services: AgentOpServices;
@@ -49,6 +52,11 @@ const entryId = z.string().min(1).max(40);
 const entryIds = z.array(z.string().min(1).max(200)).max(20);
 
 const ops: Record<string, AgentOp> = {
+  /** Any session may search the web; the key stays on the gateway. */
+  'web.search': {
+    args: webSearchArgs,
+    run: ({ services }, args) => services.webSearch.search(args),
+  },
   /**
    * What an assistant session starts with: every session in a chat workspace
    * is one, and gets the user's USER entries and MEMORY notes, and the

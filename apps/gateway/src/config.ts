@@ -86,6 +86,8 @@ export interface DaemonConfig extends BrowserAuthConfig {
   memoryBudgets: { user: number; note: number };
   /** How long a delegation waits for the user's approval (PIRC_DELEGATION_TTL_MS, default 1 h). */
   delegationTtlMs: number;
+  /** Exa key for agents' web_search (EXA_API_KEY); without it web search is off. */
+  exaApiKey?: string | undefined;
 }
 
 /**
@@ -237,6 +239,7 @@ export function loadDaemonConfig(env: NodeJS.ProcessEnv = process.env): DaemonCo
       note: integer(env.PIRC_MEMORY_NOTE_CHARS, 8000),
     },
     delegationTtlMs: integer(env.PIRC_DELEGATION_TTL_MS, 3_600_000),
+    ...(env.EXA_API_KEY?.trim() ? { exaApiKey: env.EXA_API_KEY.trim() } : {}),
   };
 }
 

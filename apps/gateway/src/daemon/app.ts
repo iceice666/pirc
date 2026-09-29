@@ -32,6 +32,7 @@ import { NodeRegistry, validNodeToken } from './nodes.js';
 import { BackendService } from '../backends/service.js';
 import { registerBackendRoutes } from '../backends/routes.js';
 import { GatewayInference } from '../backends/inference.js';
+import { WebSearch } from './web-search.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
 /** Live browser frames are skipped while this much is queued to the client. */
@@ -172,6 +173,7 @@ export async function buildDaemonApp(
   });
   const memory = new MemoryStore(db.raw, config.memoryBudgets);
   const records = new MemoryRecords(db);
+  const webSearch = new WebSearch(config.exaApiKey);
   /** Close a device's WebSocket once its token is revoked or expires. */
   const trackDevice = (
     request: FastifyRequest,
@@ -235,7 +237,16 @@ export async function buildDaemonApp(
   nodes.onMirror = (nodeId, frame) => records.ingest(nodeId, frame);
   nodes.onAgentRequest = async (nodeId, request) =>
     runAgentOp(
-      { db, allowedUsers: config.allowedUsers, memory, memoryChanged, delegations, records, nodes },
+      {
+        db,
+        allowedUsers: config.allowedUsers,
+        memory,
+        memoryChanged,
+        delegations,
+        records,
+        nodes,
+        webSearch,
+      },
       nodeId,
       request,
     );
