@@ -84,6 +84,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
+    /** Scheduled runs waiting for you, shown on the list's menu. */
+    private val _scheduleAttention = MutableStateFlow(0)
+    val scheduleAttention: StateFlow<Int> = _scheduleAttention.asStateFlow()
+
     private var refreshJob: Job? = null
     private var watching: Job? = null
 
@@ -183,6 +187,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     listed(sessions.await(), workspaces.await(), nodes.await())
                 }
                 local.pruneDrafts(_sessions.value.sessions.map { it.id })
+                // Optional: an older gateway has no schedules, and the list must not fail for them.
+                try {
+                    _scheduleAttention.value = api.schedules().sumOf { it.attention }
+                } catch (error: IOException) {
+                    if (error is ApiException && error.unauthorized) throw error
+                }
             } catch (error: IOException) {
                 handle(error)
                 // The last list stays; the error says it may be out of date.
@@ -305,6 +315,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _pairing.value = null
         _loaded.value = true
         _sessions.value = SessionsState()
+        _scheduleAttention.value = 0
         _notice.value = reason
     }
 

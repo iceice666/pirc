@@ -1,6 +1,6 @@
 # Scheduled agent runs (cron)
 
-Status (2026-09-29): phases 1 (gateway core, agent tool, `/cron`) and 2 (web) implemented and tested, uncommitted. Phases 3–5 not started.
+Status (2026-09-29): phases 1 (gateway core, agent tool, `/cron`), 2 (web) and 3 (Android) implemented and tested. Phases 4 (push) and 5 (docs) not started.
 
 ## As built (phase 1)
 
@@ -41,9 +41,22 @@ Status (2026-09-29): phases 1 (gateway core, agent tool, `/cron`) and 2 (web) im
 - Chat: a `scheduled-run` message is labelled "Scheduled task", with the schedule's title (`pi-messages.ts`).
 - Tests: `lib/schedules.test.ts`, `lib/components/ScheduleSettings.test.ts`, plus additions to `events.test.ts` and `pi-messages.test.ts`. Checked by eye at desktop and phone widths, against a mocked API.
 
+## As built (phase 3, Android)
+
+- The Sessions list's **More** menu has "Schedules". When runs wait for you, the menu shows it as "More (n)" and "Schedules · n waiting"; `AppViewModel` reads the count on each list refresh.
+- `SchedulesRoute` is one screen (`ui/SchedulesScreen.kt`, `SchedulesViewModel`) with three states: the list, one schedule, and the form. Back steps out of the form, then out of the detail.
+  - The detail has Run now, Pause/Resume, Edit and Delete (Delete asks first), the prompt, and the runs. Missed runs can be allowed or dismissed, and a run with a session has "Open session", which opens the chat.
+  - The form offers node workspaces, and Repeat (cron plus presets) or Once, set with Material date and time pickers in the chosen zone. The time zone defaults to the phone's. Model and thinking are optional.
+- The phone gets no event stream outside a session, so the screen polls every 15 s while shown, and reloads 2 s after each action.
+- `core/Schedules.kt` holds the models and the helpers ported from the web's `schedules.ts`, and `PircApi` has the schedule calls. `PiMessages.kt` now labels `scheduled-run` ("Scheduled task"), plus the delegation messages the web already labelled.
+- Tests: `core/SchedulesTest.kt` (words, time zones, request bodies, labels) and `SchedulesViewModelTest.kt`. Checked on the emulator against a real gateway and node: pairing, the list and the badge, missed → allow → run, Open session, and a new one-shot through the pickers.
+
+## Fixed along the way
+
+- A crashed agent loop (e.g. no model configured) used to end the node's run as `succeeded`, so a scheduled run (or a delegation) read "completed (no final answer)". The agent now emits `agent_error` before its notify, and the node fails the run with that message. Clients ignore the new event type.
+
 ### Phase 1 follow-ups
 
-- Android: render the `scheduled-run` custom message, and add the Schedules screen (phase 3).
 - Push notifications (phase 4). The hook is `ScheduleDeps.changed(user)`, which today only feeds the events WS.
 - README / `nix/module.nix`: document `PIRC_TIMEZONE` and schedules (phase 5).
 - Deployment: the node's deliver body changed (`scheduled-run`, `model`, `thinking`), so deploy the gateway and nodes together.

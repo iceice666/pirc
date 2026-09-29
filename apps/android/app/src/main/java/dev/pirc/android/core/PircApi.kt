@@ -10,6 +10,7 @@ import dev.pirc.android.core.timeline.get
 import dev.pirc.android.core.timeline.number
 import dev.pirc.android.core.timeline.text
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -256,6 +257,59 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
                 upload["kind"].text ?: "image",
             )
         }
+    }
+
+    // ---- schedules (plans/cron.md) ----
+
+    /** Every model the gateway offers, for a schedule's own choice. */
+    open suspend fun allModels(): List<ModelOption> = get<ModelsResponse>("/api/models").models.map { it.option() }
+
+    open suspend fun schedules(): List<Schedule> = get<SchedulesResponse>("/api/schedules").schedules
+
+    open suspend fun schedule(id: String): ScheduleDetail = get("/api/schedules/${id.urlSegment()}")
+
+    /** The user's own schedules need no approval (only an agent's do). */
+    open suspend fun createSchedule(input: ScheduleInput): Schedule =
+        decodeSchedule(send("POST", "/api/schedules", scheduleBody(input)))
+
+    open suspend fun updateSchedule(id: String, input: ScheduleInput): Schedule =
+        decodeSchedule(send("PATCH", "/api/schedules/${id.urlSegment()}", scheduleBody(input)))
+
+    /** Pause (`paused`) or resume (`active`); fire times while paused are not made up. */
+    open suspend fun setScheduleStatus(id: String, status: String): Schedule =
+        decodeSchedule(send("PATCH", "/api/schedules/${id.urlSegment()}", buildJsonObject { put("status", status) }))
+
+    open suspend fun deleteSchedule(id: String) {
+        send("DELETE", "/api/schedules/${id.urlSegment()}")
+    }
+
+    /** Run it now, or allow the missed run [runId]. */
+    open suspend fun runSchedule(id: String, runId: String? = null): ScheduleRun =
+        decodeRun(send("POST", "/api/schedules/${id.urlSegment()}/run", buildJsonObject { runId?.let { put("runId", it) } }))
+
+    open suspend fun dismissRun(id: String, runId: String): ScheduleRun =
+        decodeRun(send("POST", "/api/schedules/${id.urlSegment()}/runs/${runId.urlSegment()}/dismiss", buildJsonObject {}))
+
+    private fun scheduleBody(input: ScheduleInput) = buildJsonObject {
+        put("workspaceId", input.workspaceId)
+        put("title", input.title)
+        put("prompt", input.prompt)
+        put("timezone", input.timezone)
+        input.cron?.let { put("cron", it) }
+        input.at?.let { put("at", it) }
+        if (input.model != null) put("model", buildJsonObject {
+            put("provider", input.model.provider)
+            put("id", input.model.id)
+        }) else put("model", JsonNull)
+        if (input.thinking != null) put("thinking", input.thinking) else put("thinking", JsonNull)
+    }
+
+    private fun decodeSchedule(reply: JsonElement?) = readingReply {
+        PircJson.decodeFromJsonElement(ScheduleResponse.serializer(), reply ?: error("empty reply")).schedule
+    }
+
+    private fun decodeRun(reply: JsonElement?) = readingReply {
+        PircJson.decodeFromJsonElement(RunResponse.serializer(), reply ?: error("empty reply")).run
     }
 
     private fun session(sessionId: String) = "/api/sessions/${sessionId.urlSegment()}"

@@ -235,10 +235,16 @@ internal fun piMessage(raw: JsonElement?, id: String = piMessageId(raw), now: ()
             val team = type == "agent-team"
             val background = type == "background-task-finished" || type == "background-task-output"
             val skill = type == "skill"
+            // Pushed by the gateway: a task the assistant delegated, news of one, or a scheduled run.
+            val delegated = type == "assistant-delegation"
+            val delegationUpdate = type == "assistant-delegation-update"
+            val scheduled = type == "scheduled-run"
             val event = raw["details"]["event"]
             val summary = when {
                 team -> listOf(short(event["from"]), short(event["kind"])).filter { it.isNotEmpty() }.joinToString(" · ")
                 background -> short(JsonPrimitive(text(raw["content"]).split('\n').first()))
+                delegated || scheduled -> short(raw["details"]["title"])
+                delegationUpdate -> listOf(short(raw["details"]["delegationId"]), short(raw["details"]["status"])).filter { it.isNotEmpty() }.joinToString(" · ")
                 skill -> short(raw["details"]["name"])
                 else -> ""
             }
@@ -246,7 +252,15 @@ internal fun piMessage(raw: JsonElement?, id: String = piMessageId(raw), now: ()
                 id = id,
                 role = "system",
                 systemKind = if (team) "team" else if (background) "background" else "custom",
-                label = if (team) "Agent team" else if (background) "Background task" else if (skill) "Skill" else type ?: "Extension",
+                label = when {
+                    team -> "Agent team"
+                    background -> "Background task"
+                    delegated -> "Task from your assistant"
+                    delegationUpdate -> "Delegation update"
+                    scheduled -> "Scheduled task"
+                    skill -> "Skill"
+                    else -> type ?: "Extension"
+                },
                 meta = summary.ifEmpty { null },
                 content = text(raw["content"]),
                 createdAt = createdAt,

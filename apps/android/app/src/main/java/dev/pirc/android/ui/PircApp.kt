@@ -31,6 +31,7 @@ import dev.pirc.android.SessionViewModel
 import dev.pirc.android.core.FileTarget
 import dev.pirc.android.PanelTab
 import dev.pirc.android.PanelsViewModel
+import dev.pirc.android.SchedulesViewModel
 import dev.pirc.android.TerminalViewModel
 import dev.pirc.android.BrowserViewModel
 import dev.pirc.android.ui.panels.BrowserScreen
@@ -48,6 +49,9 @@ data object SessionsRoute
 
 @Serializable
 data class SessionRoute(val id: String, val name: String)
+
+@Serializable
+data object SchedulesRoute
 
 /** [tab]: a [PanelTab] name, or "" for the tab shown last. */
 @Serializable
@@ -100,7 +104,22 @@ fun PircApp(viewModel: AppViewModel) {
             }
             NavHost(navController = nav, startDestination = SessionsRoute) {
                 composable<SessionsRoute> {
-                    SessionsScreen(viewModel, onOpen = { nav.navigate(SessionRoute(it.id, it.name)) })
+                    SessionsScreen(
+                        viewModel,
+                        onOpen = { nav.navigate(SessionRoute(it.id, it.name)) },
+                        onOpenSchedules = { nav.navigate(SchedulesRoute) },
+                    )
+                }
+                composable<SchedulesRoute> {
+                    val api = viewModel.api() ?: return@composable
+                    val schedules = viewModel<SchedulesViewModel>(key = "schedules|${api.pairing.baseUrl}") {
+                        SchedulesViewModel(api) { viewModel.handle(it) }
+                    }
+                    SchedulesScreen(
+                        schedules,
+                        onOpenSession = { id, name -> nav.navigate(SessionRoute(id, name)) },
+                        onBack = { nav.popBackStack() },
+                    )
                 }
                 composable<SessionRoute> { entry ->
                     val route = entry.toRoute<SessionRoute>()

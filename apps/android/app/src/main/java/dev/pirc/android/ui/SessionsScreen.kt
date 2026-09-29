@@ -61,8 +61,9 @@ import dev.pirc.android.core.WorkspaceGroup
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
+fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit, onOpenSchedules: () -> Unit) {
     val state by viewModel.sessions.collectAsStateWithLifecycle()
+    val scheduleAttention by viewModel.scheduleAttention.collectAsStateWithLifecycle()
     val pairing by viewModel.pairing.collectAsStateWithLifecycle()
     val online by Connectivity.online.collectAsStateWithLifecycle()
     val scroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
@@ -121,8 +122,16 @@ fun SessionsScreen(viewModel: AppViewModel, onOpen: (Session) -> Unit) {
                     }
                 },
                 actions = {
-                    TextButton(onClick = { menu = true }) { Text("More") }
+                    // Scheduled runs waiting for you (missed ones, ones waiting for an answer).
+                    TextButton(onClick = { menu = true }) { Text(if (scheduleAttention > 0) "More ($scheduleAttention)" else "More") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(if (scheduleAttention > 0) "Schedules · $scheduleAttention waiting" else "Schedules") },
+                            onClick = {
+                                menu = false
+                                onOpenSchedules()
+                            },
+                        )
                         DropdownMenuItem(text = { Text("Unpair this phone") }, onClick = {
                             menu = false
                             unpairing = true
