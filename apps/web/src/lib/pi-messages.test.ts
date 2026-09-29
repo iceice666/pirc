@@ -115,6 +115,20 @@ describe('Pi history conversion', () => {
     expect(update).toMatchObject({ label: 'Delegation update', meta: 'd1 · completed' });
   });
 
+  it('labels a loaded skill with its name', () => {
+    const [skill] = piHistory([
+      {
+        role: 'custom',
+        customType: 'skill',
+        content: '<skill name="pdf">…</skill>',
+        display: true,
+        details: { name: 'pdf', file: '/skills/pdf/SKILL.md' },
+        timestamp: 1,
+      },
+    ]);
+    expect(skill).toMatchObject({ systemKind: 'custom', label: 'Skill', meta: 'pdf' });
+  });
+
   it('marks failed assistant turns', () => {
     const [message] = piHistory([
       {

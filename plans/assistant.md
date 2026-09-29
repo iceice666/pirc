@@ -56,6 +56,10 @@ A workspace has a `kind`: `directory` or `chat` (`workspaces.kind`). A node star
 - **Every session in a chat workspace is an assistant session** with the owner's USER and MEMORY. The base prompt is an assistant's, all tools stay (auto mode gates `bash` as everywhere), workspace memory is off and the gateway's MEMORY replaces it, session OM stays.
 - **Web** (`lib/chats.ts`): **New chat** starts a session in `chats`; **New project** creates a chat workspace; the sidebar lists chats and projects first, then directory workspaces by node; chat sessions hide Git and Terminal, and Files shows the chat's own directory.
 
+## Skills
+
+Agent Skills (`SKILL.md` directories) from the node's `$PIRC_CONFIG_DIR/skills/` reach every session on that node, chats included; `<workspace>/.pirc/skills/` adds project ones. Only name, description and path are in the system prompt; the model reads a skill on demand, or the user loads one with `/skill:<name>`. First cases: `moodle-cli` (its npm package ships a `SKILL.md`) and PDF text extraction, forms and OCR on the chat node. Skills are node-local configuration, not memory: the observer sees a loaded skill as `[Skill loaded: name]`, never its text, and the file tools cannot write skill directories. Skills are not synced from the gateway; a skill a chat needs must be installed on the chat node (`services.pirc.skills` plus the programs in `extraPackages`).
+
 ## Assistant context and snapshot
 
 Before a chat's first run the agent calls `assistant.context` (10 s timeout). Chat sessions get USER, MEMORY, usage against the budgets, the number of proposals waiting and the directory workspaces with their node and online state. The rendered `## Memory` and `## Workspaces` sections are frozen into the session entry `assistant.snapshot` with the revision of every entry shown, for prompt-cache stability; later changes reach new chats only. An unreachable gateway yields a notice ("do not assume you know nothing"), never an empty memory, and the next run tries again. Other sessions get `{enabled: false}` and no memory tools.
@@ -201,7 +205,6 @@ A project is usually about one or a few repositories. Today its assistant sees e
 ## 8. Watch, do not build yet
 
 - **Consolidation ("dreaming").** Only needed if `memory_full` becomes frequent at 8,000 characters. Rewriting notes with an LLM must keep origins (trust rule 3: consolidated text may not gain `user` origin it did not have) and should run on the gateway with the observer's model. Wait for evidence from use, and revisit the budget defaults first.
-- **Skills.** Undefined next to MEMORY notes, `AGENTS.md` and delegation. Needs a concrete case that none of them covers.
 - **Moving chats between projects, project-only memory, shared project files.** Not painful with a handful of chats; project-only memory would add a scope column to `memory_entries` and a second snapshot section.
 - **Vector search.** `LIKE` search over a few thousand notes is fine, and FTS5 trigram would not fix short CJK queries. Revisit only when searches miss.
 - **A second chat node.** Assumed single; the memory is on the gateway, so a second node would mostly need its own `chats` workspace and a rule for which one New chat uses.

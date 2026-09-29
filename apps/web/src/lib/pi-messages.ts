@@ -191,6 +191,8 @@ export function piMessage(
       // Pushed by the gateway: a task the assistant delegated, or news of one.
       const delegated = raw.customType === 'assistant-delegation';
       const delegationUpdate = raw.customType === 'assistant-delegation-update';
+      // A skill loaded with /skill:<name>; its content is the skill's instructions.
+      const skill = raw.customType === 'skill';
       const short = (value: unknown) =>
         typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, 100) : '';
       const event = raw.details?.event;
@@ -204,7 +206,9 @@ export function piMessage(
               ? [short(raw.details?.delegationId), short(raw.details?.status)]
                   .filter(Boolean)
                   .join(' · ')
-              : '';
+              : skill
+                ? short(raw.details?.name)
+                : '';
       return {
         id,
         role: 'system',
@@ -217,7 +221,9 @@ export function piMessage(
               ? 'Task from your assistant'
               : delegationUpdate
                 ? 'Delegation update'
-                : (raw.customType ?? 'Extension'),
+                : skill
+                  ? 'Skill'
+                  : (raw.customType ?? 'Extension'),
         ...(summary ? { meta: summary } : {}),
         content: text(raw.content),
         createdAt,

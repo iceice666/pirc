@@ -59,6 +59,9 @@ export function renderMessage(message: Message, style: 'observer' | 'recall' = '
         ? `[Tool result: ${message.toolName} @ ${at}]: ${textOf(message.content)}`
         : `[Tool result for ${message.toolName} @ ${at}]: ${message.toolName === 'recall' ? RECALL_OMITTED : textOf(message.content)}`;
     case 'custom':
+      // A loaded skill is installed instructions, not something the user said.
+      if (message.customType === 'skill' && style === 'observer')
+        return `[Skill loaded @ ${at}: ${(message.details as { name?: string } | undefined)?.name ?? 'unknown'}]`;
       return style === 'recall'
         ? `[Custom message (${message.customType}) @ ${at}]: ${textOf(message.content)}`
         : `[Custom (${message.customType}) @ ${at}]: ${textOf(message.content)}`;

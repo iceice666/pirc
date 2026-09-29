@@ -224,17 +224,19 @@ internal fun piMessage(raw: JsonElement?, id: String = piMessageId(raw), now: ()
             val type = raw["customType"].text
             val team = type == "agent-team"
             val background = type == "background-task-finished" || type == "background-task-output"
+            val skill = type == "skill"
             val event = raw["details"]["event"]
             val summary = when {
                 team -> listOf(short(event["from"]), short(event["kind"])).filter { it.isNotEmpty() }.joinToString(" · ")
                 background -> short(JsonPrimitive(text(raw["content"]).split('\n').first()))
+                skill -> short(raw["details"]["name"])
                 else -> ""
             }
             Message(
                 id = id,
                 role = "system",
                 systemKind = if (team) "team" else if (background) "background" else "custom",
-                label = if (team) "Agent team" else if (background) "Background task" else type ?: "Extension",
+                label = if (team) "Agent team" else if (background) "Background task" else if (skill) "Skill" else type ?: "Extension",
                 meta = summary.ifEmpty { null },
                 content = text(raw["content"]),
                 createdAt = createdAt,

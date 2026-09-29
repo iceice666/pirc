@@ -159,6 +159,16 @@ let
     + lib.optionalString (cfg.agentPrompt != null) ''
       cp ${pkgs.writeText "AGENTS.md" cfg.agentPrompt} $out/AGENTS.md
     ''
+    + lib.optionalString (cfg.skills != { }) (
+      ''
+        mkdir -p $out/skills
+      ''
+      + lib.concatStrings (
+        lib.mapAttrsToList (name: dir: ''
+          ln -s ${lib.escapeShellArg "${dir}"} $out/skills/${lib.escapeShellArg name}
+        '') cfg.skills
+      )
+    )
   );
 
   gatewayUpstream = "http://${cfg.listenAddress}:${toString cfg.port}";
@@ -255,6 +265,23 @@ in
       type = types.nullOr types.lines;
       default = null;
       description = "Optional global AGENTS.md appended to the built-in agent's system prompt.";
+    };
+
+    skills = mkOption {
+      type = types.attrsOf types.path;
+      default = { };
+      example = literalExpression ''
+        {
+          pdf = ./skills/pdf;
+          moodle-cli = "''${moodle-cli}/lib/node_modules/moodle-cli";
+        }
+      '';
+      description = ''
+        Agent Skills for the local node, linked into PIRC_CONFIG_DIR/skills:
+        each value is a directory holding a SKILL.md. The agent lists their
+        names and descriptions and reads a skill when a task needs it; the
+        programs a skill runs belong in extraPackages.
+      '';
     };
 
     extraPackages = mkOption {

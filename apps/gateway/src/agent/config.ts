@@ -13,6 +13,7 @@ import {
 } from '../models.js';
 import type { WorkspaceKind } from '../types.js';
 import type { SessionEntry } from './session-store.js';
+import { skillReadPaths, skillRoots } from './skills.js';
 
 export {
   defaultConfigDir,
@@ -137,10 +138,13 @@ export function loadAgentConfig(
   const project = projectSchema.parse(readJson(path.join(projectDir, 'config.json')));
   const resolvePaths = (items: string[], base: string) =>
     items.map((item) => path.resolve(base, expandHome(item)));
+  // Skills are read by the file tools but are configuration, like .pirc/.
+  const skillPaths = skillReadPaths(skillRoots(configDir, workspace));
   const allowedPaths = [
     workspace,
     ...resolvePaths(global.allowedPaths, configDir),
     ...resolvePaths(project.allowedPaths, workspace),
+    ...skillPaths,
   ];
   const hooks = Object.fromEntries(
     Object.entries(global.hooks).map(([key, list]) => [
@@ -163,7 +167,7 @@ export function loadAgentConfig(
     providers: models.providers,
     ...(defaultModel ? { defaultModel } : {}),
     allowedPaths: [...new Set(allowedPaths)],
-    protectedPaths: [projectDir],
+    protectedPaths: [projectDir, ...skillPaths],
     env: { ...global.env, ...project.env },
     hooks,
     limits: global.limits,
