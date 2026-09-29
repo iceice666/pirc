@@ -119,6 +119,23 @@ const migrations = [
   CREATE INDEX delegations_assistant ON delegations(assistant_session_id, status);
   CREATE INDEX delegations_target ON delegations(target_session_id, status);
   `,
+  // Workspace memory mirrored from the nodes (daemon/memory-records.ts).
+  `
+  CREATE TABLE memory_mirrors (
+    node_id TEXT NOT NULL, ledger_key TEXT NOT NULL, watermark INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL, PRIMARY KEY (node_id, ledger_key)
+  );
+  CREATE TABLE memory_records (
+    node_id TEXT NOT NULL, ledger_key TEXT NOT NULL, id TEXT NOT NULL,
+    content TEXT NOT NULL, relevance TEXT NOT NULL, recorded_at TEXT NOT NULL,
+    git_json TEXT, source_ids_json TEXT NOT NULL, origins_json TEXT,
+    node_session_id TEXT, session_id TEXT, workspace_id TEXT, owner_user TEXT,
+    status TEXT NOT NULL,
+    PRIMARY KEY (node_id, ledger_key, id)
+  );
+  CREATE INDEX memory_records_owner ON memory_records(owner_user, status);
+  CREATE INDEX memory_records_id ON memory_records(id);
+  `,
 ];
 
 const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');

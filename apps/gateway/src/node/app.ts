@@ -21,6 +21,8 @@ import { applySessionName, publicSession } from '../session-name.js';
 import type { CommandPayload, Snapshot } from '../types.js';
 import { id, parse, payloadHash } from '../util.js';
 import { loadAgentConfig, sessionSettings } from '../agent/config.js';
+import { recall } from '../agent/features/memory/index.js';
+import { WorkspaceLedger, recallFromWorkspace } from '../agent/features/memory/workspace.js';
 import { historyOf } from '../agent/session-store.js';
 import { offlineGateway, type AgentGateway } from './agent-gateway.js';
 import { BranchCache } from './branch-cache.js';
@@ -81,6 +83,12 @@ const commandBody = z.object({
   generation: z.number().int().positive(),
   payload: commandPayload,
 });
+const workspaceRecallBody = z
+  .object({
+    ledgerKey: z.string().regex(/^[0-9a-f]{16}$/),
+    id: z.string().regex(/^[a-f0-9]{12}$/),
+  })
+  .strict();
 /** What the gateway may push into a session (see the deliver route). */
 const deliverBody = z
   .object({
@@ -299,6 +307,28 @@ export async function buildNodeApp(
     const body = parse(deliverBody, request.body);
     await runners.deliver(session.id, body);
     return reply.status(202).send({ delivered: true });
+  });
+
+  /**
+   * The gateway recalls a workspace-memory note the assistant found by search
+   * (plans/assistant.md). Only the owner of the session that wrote it may read
+   * that session; a forgotten note answers without its content.
+   */
+  app.post('/api/workspace-memory/recall', async (request) => {
+    const { ledgerKey, id } = parse(workspaceRecallBody, request.body);
+    const fold = new WorkspaceLedger(config.workspaceMemoryDir, ledgerKey, '').fold();
+    const item = fold.items.get(id);
+    const owner = item
+      ? (
+          db.raw
+            .prepare('SELECT owner_user FROM sessions WHERE private_session_path=?')
+            .get(item.sessionDir) as { owner_user: string | null } | undefined
+        )?.owner_user
+      : undefined;
+    const result =
+      item && owner !== request.identity!.user ? undefined : recallFromWorkspace(fold, id, recall);
+    if (!result) throw new ApiError(404, 'not_found', `No workspace memory note ${id}`);
+    return result;
   });
 
   app.post('/api/sessions/:id/commands', async (request, reply) => {

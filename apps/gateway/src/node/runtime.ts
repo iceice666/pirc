@@ -20,6 +20,7 @@ import {
 } from '../protocol.js';
 import { DaemonAgentGateway } from './agent-gateway.js';
 import { buildNodeApp } from './app.js';
+import { MemoryMirror } from './memory-mirror.js';
 import { startNodeInference } from './inference.js';
 import {
   inferenceEventFrames,
@@ -33,7 +34,17 @@ const HEARTBEAT_MS = 15_000;
 
 const daemonMessage = z.discriminatedUnion('type', [
   ...inferenceEventFrames,
-  z.object({ type: z.literal('registered'), nodeId: z.string(), models: modelsSchema }),
+  z.object({
+    type: z.literal('registered'),
+    nodeId: z.string(),
+    models: modelsSchema,
+    mirrors: z.record(z.number().int().nonnegative()).optional(),
+  }),
+  z.object({
+    type: z.literal('memory_mirror_ack'),
+    ledgerKey: z.string().regex(/^[0-9a-f]{16}$/),
+    watermark: z.number().int().nonnegative(),
+  }),
   z.object({ type: z.literal('models'), models: modelsSchema }),
   z.object({ type: z.literal('heartbeat_ack') }),
   z.object({
@@ -68,6 +79,7 @@ const daemonMessage = z.discriminatedUnion('type', [
 export async function startNode(config: NodeConfig): Promise<{ close: () => Promise<void> }> {
   const gateway = new DaemonAgentGateway();
   const { app, services } = await buildNodeApp(config, { gateway });
+  const mirror = new MemoryMirror(config.workspaceMemoryDir, services.db, config.memoryMirrorMs);
   try {
     const legacy = legacyModelKeys();
     if (legacy.length)
@@ -93,7 +105,10 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
   const send = (message: NodeToDaemon) => {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
   };
-  /** Agent requests go out only on a registered link; false tells the gateway to answer offline. */
+  /**
+   * Frames that need a registered link (agent requests, mirrored memory);
+   * false when there is none, so the caller can try again later.
+   */
   const sendAgentFrame = (message: NodeToDaemon): boolean => {
     if (!registered || socket?.readyState !== WebSocket.OPEN) return false;
     const frame = JSON.stringify(message);
@@ -220,6 +235,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       if (message.type === 'registered') {
         registered = true;
         gateway.connect(sendAgentFrame);
+        mirror.connect(sendAgentFrame, message.mirrors ?? {});
         services.models.set({ ...message.models, inference: inference.config });
         app.log.info(
           { daemon: config.daemonUrl, providers: Object.keys(message.models.providers) },
@@ -265,6 +281,9 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
         case 'agent_response':
           gateway.receive(message);
           return;
+        case 'memory_mirror_ack':
+          mirror.receive(message);
+          return;
       }
     });
     connection.on('error', (error) => app.log.warn({ error }, 'node transport failure'));
@@ -272,6 +291,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       if (socket !== connection) return;
       registered = false;
       gateway.disconnect();
+      mirror.disconnect();
       inference.disconnect();
       closeTerminals();
       if (heartbeat) clearInterval(heartbeat);
@@ -292,6 +312,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       unsubscribeEvents();
       closeTerminals();
       gateway.disconnect();
+      mirror.disconnect();
       await inference.close();
       socket?.terminate();
       await app.close();

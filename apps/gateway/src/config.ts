@@ -99,6 +99,14 @@ export interface NodeConfig {
   workspaces: ConfigWorkspace[];
   /** Hosts the assistant's chat workspaces (PIRC_CHAT, default off; see plans/assistant.md). */
   chat: boolean;
+  /**
+   * Where this node's agents keep workspace memory, one ledger per repository
+   * (PIRC_WORKSPACE_MEMORY_DIR, default `<stateDir>/workspace-memory`). The
+   * node mirrors it to the gateway for the assistant's search.
+   */
+  workspaceMemoryDir: string;
+  /** How often the node looks for new workspace memory to mirror (PIRC_MEMORY_MIRROR_MS, default 30 s). */
+  memoryMirrorMs: number;
   eventBufferSize: number;
   rpcMaxLineBytes: number;
   uploadMaxBytes: number;
@@ -258,6 +266,10 @@ export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig
     ...defaultAgentCommand(env),
     workspaces,
     chat,
+    workspaceMemoryDir: path.resolve(
+      env.PIRC_WORKSPACE_MEMORY_DIR ?? path.join(dirs.stateDir, 'workspace-memory'),
+    ),
+    memoryMirrorMs: integer(env.PIRC_MEMORY_MIRROR_MS, 30_000),
     eventBufferSize: integer(env.PIRC_EVENT_BUFFER_SIZE, 1000),
     rpcMaxLineBytes: integer(env.PIRC_RPC_MAX_LINE_BYTES, 1_048_576),
     uploadMaxBytes: uploadLimit(env),

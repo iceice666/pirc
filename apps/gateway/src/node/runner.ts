@@ -71,8 +71,7 @@ class PiRunner {
         PIRC_GATEWAY: '1',
         // `chat` makes the agent a personal assistant (see node/chat.ts).
         PIRC_WORKSPACE_KIND: workspace.kind,
-        PIRC_WORKSPACE_MEMORY_DIR:
-          process.env.PIRC_WORKSPACE_MEMORY_DIR ?? path.join(config.stateDir, 'workspace-memory'),
+        PIRC_WORKSPACE_MEMORY_DIR: config.workspaceMemoryDir,
       },
     });
     // Public catalog + node-local inference transport; no provider credentials.

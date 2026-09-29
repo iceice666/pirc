@@ -25,6 +25,7 @@ import { DeviceTokens, registerDeviceRoutes } from './devices.js';
 import { runAgentOp } from './agent-ops.js';
 import { Delegations } from './delegations.js';
 import { MemoryStore } from './memory.js';
+import { MemoryRecords } from './memory-records.js';
 import { registerMemoryRoutes } from './memory-routes.js';
 import { NodeRegistry, validNodeToken } from './nodes.js';
 import { BackendService } from '../backends/service.js';
@@ -108,6 +109,8 @@ export interface DaemonServices {
   memory: MemoryStore;
   /** Tasks the assistant hands to other workspaces (plans/assistant.md). */
   delegations: Delegations;
+  /** Workspace memory mirrored from the nodes, for the assistant's search. */
+  records: MemoryRecords;
   /**
    * Re-read the gateway baseline and publish its secret-free catalog.
    * Subsequent inference calls use current credentials, including live agents.
@@ -155,6 +158,7 @@ export async function buildDaemonApp(
     maxAgeMs: config.deviceTokenMaxAgeMs,
   });
   const memory = new MemoryStore(db.raw, config.memoryBudgets);
+  const records = new MemoryRecords(db);
   /** Close a device's WebSocket once its token is revoked or expires. */
   const trackDevice = (
     request: FastifyRequest,
@@ -199,6 +203,7 @@ export async function buildDaemonApp(
     devices,
     memory,
     delegations,
+    records,
     reloadModels,
   };
 
@@ -213,9 +218,11 @@ export async function buildDaemonApp(
     }
   };
   nodes.resolveSession = (nodeId, remoteId) => db.resolveRemoteSession(nodeId, remoteId);
+  nodes.mirrorWatermarks = (nodeId) => records.watermarks(nodeId);
+  nodes.onMirror = (nodeId, frame) => records.ingest(nodeId, frame);
   nodes.onAgentRequest = async (nodeId, request) =>
     runAgentOp(
-      { db, allowedUsers: config.allowedUsers, memory, memoryChanged, delegations },
+      { db, allowedUsers: config.allowedUsers, memory, memoryChanged, delegations, records, nodes },
       nodeId,
       request,
     );

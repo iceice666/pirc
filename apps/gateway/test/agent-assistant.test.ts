@@ -358,7 +358,7 @@ describe('assistant memory in chats', () => {
       });
     });
     expect(chat.system()).toContain(
-      "## Workspaces\n\nThe user's repositories you can hand tasks to with delegate. Online status is as of this chat's start.\n[work:test] Test on work\n[lab:x] X on lab (offline)",
+      "## Workspaces\n\nThe user's repositories you can hand tasks to with delegate. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with memory_search, and open a note's sources with recall.\n[work:test] Test on work\n[lab:x] X on lab (offline)",
     );
     const results = Object.fromEntries(
       chat.agent.events
@@ -374,6 +374,65 @@ describe('assistant memory in chats', () => {
     expect(results.s1![1]).toBe(
       'd12345678 · completed · “Fix build” → Test on work (session “Fix build”)\nBuild fixed.',
     );
+  });
+
+  it('searches workspace memory and recalls what it finds through the gateway', async () => {
+    const chat = await start();
+    chat.agent.llm.push(
+      { tool: { id: 'q1', name: 'memory_search', args: { query: 'staging', limit: 3 } } },
+      { tool: { id: 'r1', name: 'recall', args: { id: 'abcdefabcdef' } } },
+      { tool: { id: 'r2', name: 'recall', args: { id: '000000000000' } } },
+      { text: 'Found it.' },
+    );
+    await chat.prompt('what did we decide about deploys?', async () => {
+      chat.ok(await chat.next('assistant.context'), memory());
+      const search = await chat.next('memory.search');
+      expect(search.args).toEqual({ query: 'staging', limit: 3 });
+      chat.ok(search, {
+        hits: [
+          {
+            id: 'abcdefabcdef',
+            kind: 'workspace',
+            workspace: 'pirc on m5pro',
+            date: '2026-09-27 10:05',
+            status: 'active',
+            git: 'main@abcdef1',
+            content: 'Deploys go through staging first.',
+          },
+          {
+            id: 'd12345678',
+            kind: 'delegation',
+            workspace: 'pirc on m5pro',
+            date: '2026-09-28 09:00',
+            status: 'completed',
+            content: 'Fix deploy: done',
+          },
+        ],
+      });
+      const recalled = await chat.next('recall.remote');
+      expect(recalled.args).toEqual({ id: 'abcdefabcdef' });
+      chat.ok(recalled, { text: 'pirc on m5pro:\nDeploy through staging first.', status: 'ok' });
+      chat.fail(await chat.next('recall.remote'), {
+        status: 404,
+        code: 'not_found',
+        message: 'No workspace memory note 000000000000',
+      });
+    });
+    const results = Object.fromEntries(
+      chat.agent.events
+        .filter((event) => event.type === 'tool_execution_end')
+        .map((event) => [event.toolCallId, [event.isError, event.result.content[0].text]]),
+    );
+    expect(results.q1).toEqual([
+      false,
+      '[abcdefabcdef] pirc on m5pro · 2026-09-27 10:05 · main@abcdef1\nDeploys go through staging first.\n\n[d12345678] delegation to pirc on m5pro · 2026-09-28 09:00 · completed\nFix deploy: done',
+    ]);
+    expect(results.r1).toEqual([false, 'pirc on m5pro:\nDeploy through staging first.']);
+    // Found nowhere: the local answer stands.
+    expect(results.r2).toEqual([
+      true,
+      'No observation or reflection with id 000000000000 was found on the current branch.',
+    ]);
   });
 
   it("runs on messages the gateway pushes, keeping them apart from the user's", async () => {

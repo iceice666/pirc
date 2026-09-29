@@ -8,7 +8,7 @@ import type { ModelsConfig } from './models.js';
 import type { InferenceEvent, InferenceRequest } from './inference-wire.js';
 import type { WorkspaceKind } from './types.js';
 
-export const NODE_PROTOCOL_VERSION = 5;
+export const NODE_PROTOCOL_VERSION = 6;
 
 /** One WebSocket frame on the node link. Uploads (base64) must fit, see MAX_UPLOAD_BYTES. */
 export const NODE_FRAME_MAX_BYTES = 16_777_216;
@@ -59,6 +59,30 @@ export const AGENT_REQUEST_MAX_BYTES = 65_536;
 /** How long a node waits for the daemon's answer before answering `gateway_timeout` itself. */
 export const AGENT_REQUEST_TIMEOUT_MS = 30_000;
 
+/**
+ * Workspace memory mirrored to the gateway for the assistant's search
+ * (`memory_mirror`). The node sends each ledger's complete lines from the
+ * byte offset the gateway acknowledged; no filesystem path leaves the node.
+ */
+export interface MirroredItem {
+  id: string;
+  content: string;
+  relevance: string;
+  /** Local time the item was recorded ("YYYY-MM-DD HH:MM"). */
+  timestamp: string;
+  /** The node session that recorded it. */
+  sessionId?: string;
+  git?: { head: string; branch?: string; dirty: boolean };
+  sourceMemoryIds: string[];
+  origins?: string[];
+}
+export type MirroredLine =
+  | { type: 'recorded'; items: MirroredItem[] }
+  | { type: 'retired'; ids: string[]; reason: 'superseded' | 'forgotten' }
+  | { type: 'cleared' };
+/** Raw ledger bytes per `memory_mirror` frame. */
+export const MIRROR_CHUNK_BYTES = 262_144;
+
 export interface AgentAnswer {
   status: number;
   body: unknown;
@@ -80,7 +104,14 @@ export const agentError = (
  */
 export type DaemonToNode =
   | (InferenceEvent & { requestId: string })
-  | { type: 'registered'; nodeId: string; models: ModelsConfig }
+  | {
+      type: 'registered';
+      nodeId: string;
+      models: ModelsConfig;
+      /** Byte offset of each workspace-memory ledger the gateway already holds, by ledger key. */
+      mirrors?: Record<string, number>;
+    }
+  | { type: 'memory_mirror_ack'; ledgerKey: string; watermark: number }
   | { type: 'models'; models: ModelsConfig }
   | { type: 'heartbeat_ack' }
   | { type: 'request'; requestId: string; data: NodeHttpRequest }
@@ -104,5 +135,15 @@ export type NodeToDaemon =
   | { type: 'response'; requestId: string; data: NodeHttpResponse }
   | { type: 'event'; sessionId: string; event: Record<string, unknown> }
   | { type: 'agent_request'; requestId: string; sessionId: string; op: string; args?: unknown }
+  | {
+      type: 'memory_mirror';
+      ledgerKey: string;
+      /** Where `lines` start and end in the ledger file. */
+      offset: number;
+      end: number;
+      /** The file shrank (replaced or truncated): start over from `offset` 0. */
+      reset?: boolean;
+      lines: MirroredLine[];
+    }
   | { type: 'terminal_frame'; streamId: string; frame: unknown }
   | { type: 'terminal_closed'; streamId: string; code: number; reason: string };

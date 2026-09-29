@@ -44,6 +44,7 @@ import {
 import { DROPPER_SYSTEM, OBSERVER_SYSTEM, REFLECTOR_SYSTEM } from './prompts.js';
 import { renderMessage, serializeChunk } from './serialize.js';
 import { RateLimitTracker, pickModel, runWorker, type WorkerModel } from './worker.js';
+import { GatewayError, processGateway } from '../../gateway.js';
 import { teamChildMode } from '../team/channel.js';
 import {
   WORKSPACE_PROMOTER_SYSTEM,
@@ -523,7 +524,7 @@ export function memoryFeature(): Feature {
   const recallTool = (agent: Agent): Tool => ({
     name: 'recall',
     ptc: true,
-    description: `Recover exact evidence and source context behind a compacted observational-memory observation or reflection id on the current branch, or a workspace-memory id from an earlier session. Use when compressed memory is important and original source context is needed before acting.\n\n${RECALL_GUIDELINES.map((line) => `- ${line}`).join('\n')}`,
+    description: `Recover exact evidence and source context behind a compacted observational-memory observation or reflection id on the current branch, or a workspace-memory id from an earlier session (in chats, also one found with memory_search). Use when compressed memory is important and original source context is needed before acting.\n\n${RECALL_GUIDELINES.map((line) => `- ${line}`).join('\n')}`,
     parameters: {
       type: 'object',
       properties: {
@@ -543,6 +544,20 @@ export function memoryFeature(): Feature {
       let result = recall(agent.store.branch(), id);
       if (result.status === 'not_found' && workspaceOn(agent))
         result = recallFromWorkspace(workspaceLedger(agent).fold(), id, recall) ?? result;
+      // A chat recalls notes it found with memory_search through the gateway,
+      // which asks the node that holds them (plans/assistant.md).
+      const gateway = agent.config.workspaceKind === 'chat' ? processGateway() : undefined;
+      if (result.status === 'not_found' && gateway)
+        try {
+          result = (await gateway.request('recall.remote', { id }, ctx.signal)) as typeof result;
+        } catch (error) {
+          if (!(error instanceof GatewayError)) throw error;
+          if (error.code !== 'not_found')
+            result = {
+              text: `Workspace memory could not be read through the gateway: ${error.message}`,
+              status: 'source_unavailable',
+            };
+        }
       return {
         content: [{ type: 'text', text: result.text }],
         details: { status: result.status, id: args.id },

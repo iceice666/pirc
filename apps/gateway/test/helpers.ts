@@ -35,6 +35,9 @@ export function testConfig(overrides: Partial<NodeConfig> = {}): NodeConfig {
     agentArgs: [path.resolve('test/fixtures/fake-pi.mjs')],
     workspaces: [{ id: 'test', path: workspace, displayName: 'Test', defaults: {} }],
     chat: false,
+    // Never the host's own workspace memory (tests may run inside a pirc session).
+    workspaceMemoryDir: path.join(dirs.stateDir, 'workspace-memory'),
+    memoryMirrorMs: 30_000,
     eventBufferSize: 20,
     rpcMaxLineBytes: 1024 * 1024,
     uploadMaxBytes: 1024 * 1024,
@@ -85,7 +88,8 @@ export interface Cluster {
   services: DaemonServices;
   /** ws:// base URL of the listening daemon. */
   url: string;
-  nodes: Array<{ close: () => Promise<void> }>;
+  /** Each node with the config it runs with (its state directory, database…). */
+  nodes: Array<{ close: () => Promise<void>; config: NodeConfig }>;
   close(): Promise<void>;
 }
 
@@ -105,11 +109,11 @@ export async function startCluster(
   );
   await app.listen({ host: '127.0.0.1', port: 0 });
   const url = `ws://127.0.0.1:${(app.server.address() as { port: number }).port}`;
-  const started: Array<{ close: () => Promise<void> }> = [];
-  for (const node of nodes)
-    started.push(
-      await startNode(testConfig({ ...node, nodeToken: tokens.get(node.nodeId)!, daemonUrl: url })),
-    );
+  const started: Cluster['nodes'] = [];
+  for (const node of nodes) {
+    const config = testConfig({ ...node, nodeToken: tokens.get(node.nodeId)!, daemonUrl: url });
+    started.push({ ...(await startNode(config)), config });
+  }
   await waitFor(() => services.nodes.list().length, nodes.length);
   return {
     app,

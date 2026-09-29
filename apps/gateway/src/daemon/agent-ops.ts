@@ -12,6 +12,8 @@ import type { Workspace } from '../types.js';
 import { agentError, type AgentAnswer } from '../protocol.js';
 import type { Delegations } from './delegations.js';
 import type { MemoryStore } from './memory.js';
+import type { MemoryRecords } from './memory-records.js';
+import type { NodeRegistry } from './nodes.js';
 
 export interface AgentOpServices {
   db: GatewayDatabase;
@@ -20,6 +22,8 @@ export interface AgentOpServices {
   /** Tell the user's open clients that their memory changed. */
   memoryChanged(user: string): void;
   delegations: Delegations;
+  records: MemoryRecords;
+  nodes: NodeRegistry;
 }
 export interface AgentOpContext {
   services: AgentOpServices;
@@ -79,6 +83,67 @@ const ops: Record<string, AgentOp> = {
       requireChat(context);
       const { delegations } = context.services;
       return delegations.brief(delegations.create(context.user, context.session, args));
+    },
+  },
+  /**
+   * Search what coding sessions noted in the user's repositories (workspace
+   * memory from every node) and what delegations reported.
+   */
+  'memory.search': {
+    args: z
+      .object({
+        query: z.string().min(1).max(500),
+        workspace: z.string().min(1).max(300).optional(),
+        limit: z.number().int().min(1).max(20).optional(),
+      })
+      .strict(),
+    run: (context, args) => {
+      requireChat(context);
+      return {
+        hits: context.services.records.search(context.user, args.query, {
+          ...(args.workspace ? { workspace: args.workspace } : {}),
+          ...(args.limit ? { limit: args.limit } : {}),
+        }),
+      };
+    },
+  },
+  /**
+   * Recall a workspace-memory note found by search: its node reads the
+   * session that wrote it. With the node offline, the gateway's copy.
+   */
+  'recall.remote': {
+    args: z.object({ id: z.string().regex(/^[a-f0-9]{12}$/) }).strict(),
+    run: async (context, args) => {
+      requireChat(context);
+      const { records, nodes } = context.services;
+      const found = records.find(context.user, args.id);
+      if (!found.length)
+        throw new ApiError(404, 'not_found', `No workspace memory note ${args.id}`);
+      const parts: string[] = [];
+      for (const record of found) {
+        const online = !!nodes.get(record.nodeId);
+        if (online) {
+          try {
+            const response = await nodes.request(record.nodeId, {
+              method: 'POST',
+              url: '/api/workspace-memory/recall',
+              user: context.user,
+              payload: { ledgerKey: record.ledgerKey, id: args.id },
+            });
+            const text = (response.body as { text?: unknown } | null)?.text;
+            if (response.status < 400 && typeof text === 'string') {
+              parts.push(`${record.workspace}:\n${text}`);
+              continue;
+            }
+          } catch {
+            /* fall back to the gateway's copy */
+          }
+        }
+        parts.push(
+          `Workspace memory (${record.workspace}), as the gateway last saw it:\n[${args.id}] ${record.date}${record.status === 'active' ? '' : ` [${record.status}]`} ${record.content}\n${online ? `${record.nodeId} could not read its source now.` : `${record.nodeId} is offline, so the session that wrote it cannot be read now.`}`,
+        );
+      }
+      return { text: parts.join('\n\n'), status: 'ok' };
     },
   },
   /** One delegation with its full result, or the user's recent ones. */

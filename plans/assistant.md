@@ -1,6 +1,6 @@
 # Personal assistant: global memory and delegation
 
-Status: proposed 2026-09-28. Milestones 0 (workspace memory fixes), 1 (gateway channel), 2 (chat workspaces), 3 (USER/MEMORY) and 4 (delegation) are implemented; the rest is not. Decisions taken with the user:
+Status: proposed 2026-09-28. Milestones 0 (workspace memory fixes), 1 (gateway channel), 2 (chat workspaces), 3 (USER/MEMORY), 4 (delegation) and 5 (records and search) are implemented; later work is listed below. Decisions taken with the user:
 
 - Global memory lives on the gateway from the start (no node-local interim store).
 - Only USER (profile) changes need the user's approval. The assistant writes MEMORY notes directly; the user can review, revert and forget them.
@@ -189,11 +189,25 @@ delegations(id TEXT PRIMARY KEY,                -- d + 8 hex
 
 ## Cross-workspace records and search
 
-- **Mirroring.** Nodes mirror workspace-ledger lines to the daemon as `memory_mirror {ledgerKey, root, offset, lines}`, on append and after a reconnect, tracking a byte watermark per file. At registration a node reports which of its workspaces map to which ledger key (worktrees share one).
-- **Storage.** The daemon keeps the lines in `memory_records(node_id TEXT, ledger_key TEXT, id TEXT, kind TEXT, content TEXT, meta_json TEXT, owner_user TEXT, status TEXT, recorded_at INTEGER, PRIMARY KEY (node_id, ledger_key, id))`, plus an FTS5 table with `tokenize='trigram'`. Delegation results are records too.
-- **Ownership.** The owner is resolved through the item's source session: first the node's session table, then `resolveRemoteSession`. Records whose owner cannot be resolved are not searchable.
-- **Search.** `memory_search({query, workspaceId?, limit?})` uses FTS for terms of three or more characters and `LIKE` for shorter ones: trigram `MATCH` misses two-character Chinese words such as 部署 (checked on Bun 1.4.2). Results carry the workspace label, date, git state and id.
-- **Remote recall.** `recall(id)` of a record from another node is relayed to the owning node, which runs the existing read-only recall. If that node is offline, the answer is the stored record plus `source node offline`.
+Implemented in `node/memory-mirror.ts` and `daemon/memory-records.ts` (node protocol 6).
+
+- **Mirroring.** Each node reads the workspace-memory ledgers in its `workspaceMemoryDir` (`PIRC_WORKSPACE_MEMORY_DIR`, default `<stateDir>/workspace-memory`, which its agents also use) every `PIRC_MEMORY_MIRROR_MS` (default 30 s). The gateway sends the byte offset it holds for each ledger when the node registers (`registered.mirrors`). The node sends the complete lines after it as `memory_mirror {ledgerKey, offset, end, reset?, lines}`, at most 256 KiB at a time, and the next frame after `memory_mirror_ack {ledgerKey, watermark}`; an unacknowledged frame is sent again after 60 s. A ledger that shrank starts over (`reset`).
+- **No paths leave the node.** A mirrored item names the node session that wrote it instead of its session directory, and its git state drops the worktree. The README promises that the gateway never learns real workspace paths.
+- **Storage.** The gateway applies the lines like `foldWorkspace`: first record wins; `superseded` marks an item; `forgotten` erases it and keeps its id so it is never recorded again; `cleared` drops everything but forgotten ids. A chunk must start exactly at the stored offset, otherwise it is ignored and the acknowledgement says where to resume. Lines and items are validated one by one and bad ones are skipped, so bad data never closes a node's link.
+- **Ownership and workspace** come from the session that wrote an item: its node session maps (`resolveRemoteSession`) to the gateway's session, its owner and its workspace. Items whose session the gateway does not know have no owner and are never found.
+- **Search.** `memory_search({query, workspace?, limit?})` (op `memory.search`, chats only) finds the user's notes, current and superseded, and delegations holding any of the query's words (`LIKE`, up to 8 words), ranked by how many words they hold, then current before superseded, then newest. A workspace narrows the search to the ledgers its sessions wrote, which includes a repository's worktrees. Results carry the id, workspace label, date, git state and status. There is no FTS5 index: the corpus is small (a few thousand notes), and a trigram index would miss two-character Chinese words such as 部署 anyway.
+- **Remote recall.** In a chat, `recall(id)` of an id it does not hold asks the gateway (`recall.remote`). The gateway asks the node that holds the note (`POST /api/workspace-memory/recall`, called only by the gateway), and the node runs the read-only workspace recall if the requesting user owns the session that wrote it. With the node offline, the answer is the gateway's copy, saying that the node is offline.
+
+```sql
+memory_mirrors(node_id TEXT NOT NULL, ledger_key TEXT NOT NULL, watermark INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL, PRIMARY KEY (node_id, ledger_key))
+memory_records(node_id TEXT NOT NULL, ledger_key TEXT NOT NULL, id TEXT NOT NULL,
+  content TEXT NOT NULL,                       -- '' once forgotten
+  relevance TEXT NOT NULL, recorded_at TEXT NOT NULL, git_json TEXT, source_ids_json TEXT NOT NULL,
+  origins_json TEXT, node_session_id TEXT, session_id TEXT, workspace_id TEXT, owner_user TEXT,
+  status TEXT NOT NULL,                        -- 'active' | 'superseded' | 'forgotten'
+  PRIMARY KEY (node_id, ledger_key, id))
+```
 
 ## Milestones
 
@@ -202,7 +216,7 @@ delegations(id TEXT PRIMARY KEY,                -- d + 8 hex
 2. **Chat workspaces**: workspace `kind`, the chat node and its top-level `chats`, projects from the web, hidden per-session directories, the assistant base prompt, `assistant.context` enabled for chat sessions, web New chat / New project and the chat-first sidebar.
 3. **USER/MEMORY**: schema, snapshot, tools, approval flow, web Memory page and pending badge.
 4. **Delegation**: the workspace list in `assistant.context`, tools, daemon-owned confirmation, the `deliver` RPC and daemon → agent pushes, dispatch and follow-up, result delivery, status tool. An end-to-end test with two nodes and real agents.
-5. **Records and search**: mirroring, FTS, search tool, cross-node recall.
+5. **Records and search**: mirroring (node protocol 6), search tool, cross-node recall.
 6. **Later**: consolidation, skills, USER in coding sessions, Android screens.
 
 ## Open questions
@@ -214,3 +228,4 @@ delegations(id TEXT PRIMARY KEY,                -- d + 8 hex
 - Should an approved task count as the user's request for auto mode in the delegated session? Today dangerous commands there wait for the user.
 - Should notes sourced only from tool output (e.g. pages fetched with `bash`) be kept out of the snapshot?
 - How long should `memory_log`, `delegations` and mirrored records be retained?
+- Would an index (FTS5) be worth it once the notes number far more than a few thousand?

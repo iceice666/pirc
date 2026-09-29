@@ -98,6 +98,30 @@ const rowOf = (row: any): Delegation => ({
   updatedAt: row.updated_at,
 });
 
+/** A directory workspace by id, or by a name only one of them has. */
+export function resolveDirectoryWorkspace(db: GatewayDatabase, ref: string): Workspace {
+  const all = db
+    .listWorkspaces()
+    .filter((workspace) => workspace.kind === 'directory' && workspace.id.includes(':'));
+  const exact = all.find((workspace) => workspace.id === ref);
+  if (exact) return exact;
+  const named = all.filter(
+    (workspace) => workspace.displayName.toLowerCase() === ref.toLowerCase(),
+  );
+  if (named.length === 1) return named[0]!;
+  if (named.length)
+    throw new ApiError(
+      409,
+      'conflict',
+      `Several workspaces are called ${ref}; use one of these ids: ${named.map((w) => w.id).join(', ')}`,
+    );
+  throw new ApiError(
+    404,
+    'not_found',
+    `No workspace ${ref}. Workspaces: ${all.map((w) => `${w.displayName} (${w.id})`).join(', ') || 'none'}`,
+  );
+}
+
 const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim();
 const clip = (text: string, max: number) =>
   text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
@@ -260,7 +284,7 @@ export class Delegations {
           'invalid_input',
           'Name a workspace, or an earlier delegation to follow up',
         );
-      workspace = this.resolve(input.workspace.trim());
+      workspace = resolveDirectoryWorkspace(this.deps.db, input.workspace.trim());
     }
     if (!this.online(workspace))
       throw new ApiError(
@@ -619,30 +643,6 @@ export class Delegations {
     } catch {
       /* the chat is gone */
     }
-  }
-
-  /** A workspace by id, or by a name only one directory workspace has. */
-  private resolve(ref: string): Workspace {
-    const all = this.deps.db
-      .listWorkspaces()
-      .filter((workspace) => workspace.kind === 'directory' && workspace.id.includes(':'));
-    const exact = all.find((workspace) => workspace.id === ref);
-    if (exact) return exact;
-    const named = all.filter(
-      (workspace) => workspace.displayName.toLowerCase() === ref.toLowerCase(),
-    );
-    if (named.length === 1) return named[0]!;
-    if (named.length)
-      throw new ApiError(
-        409,
-        'conflict',
-        `Several workspaces are called ${ref}; use one of these ids: ${named.map((w) => w.id).join(', ')}`,
-      );
-    throw new ApiError(
-      404,
-      'not_found',
-      `No workspace ${ref}. Workspaces: ${all.map((w) => `${w.displayName} (${w.id})`).join(', ') || 'none'}`,
-    );
   }
 
   private online(workspace: Workspace): boolean {

@@ -68,6 +68,15 @@ const nodeMessage = z.discriminatedUnion('type', [
     event: z.record(z.unknown()),
   }),
   z.object({
+    type: z.literal('memory_mirror'),
+    ledgerKey: z.string().regex(/^[0-9a-f]{16}$/),
+    offset: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative(),
+    reset: z.boolean().optional(),
+    // Lines are checked one by one when stored: bad data is skipped, never fatal to the link.
+    lines: z.array(z.unknown()).max(10_000),
+  }),
+  z.object({
     type: z.literal('agent_request'),
     requestId: z.string().min(1).max(100),
     sessionId: z.string().min(1).max(200),
@@ -150,6 +159,19 @@ export class NodeRegistry {
     request: { sessionId: string; op: string; args: unknown },
   ) => Promise<AgentAnswer>;
   private readonly agentRequests = new Map<string, number>();
+  /** Byte offsets of a node's mirrored workspace-memory ledgers, sent when it registers. */
+  mirrorWatermarks?: (nodeId: string) => Record<string, number>;
+  /** Stores a mirrored chunk and returns the ledger's watermark (see protocol.ts). */
+  onMirror?: (
+    nodeId: string,
+    frame: {
+      ledgerKey: string;
+      offset: number;
+      end: number;
+      reset?: boolean | undefined;
+      lines: unknown[];
+    },
+  ) => number;
 
   constructor(private readonly models: ModelStore) {}
 
@@ -293,6 +315,7 @@ export class NodeRegistry {
           type: 'registered',
           nodeId,
           models: publicModels(this.models.current),
+          mirrors: this.mirrorWatermarks?.(nodeId) ?? {},
         });
         return;
       }
@@ -331,6 +354,16 @@ export class NodeRegistry {
         case 'agent_request':
           this.answerAgent(nodeId, socket, current);
           return;
+        case 'memory_mirror': {
+          let watermark = current.offset;
+          try {
+            watermark = this.onMirror?.(nodeId, current) ?? current.end;
+          } catch {
+            /* nothing stored; the node sends it again after the acknowledgement */
+          }
+          this.send(socket, { type: 'memory_mirror_ack', ledgerKey: current.ledgerKey, watermark });
+          return;
+        }
         case 'terminal_frame': {
           const stream = this.streams.get(current.streamId);
           if (stream?.nodeId === nodeId) stream.handlers.onFrame(current.frame);

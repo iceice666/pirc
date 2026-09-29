@@ -23,6 +23,7 @@ export const NOTE_TOOL = 'memory_note';
 export const PROPOSE_TOOL = 'memory_propose_user';
 export const DELEGATE_TOOL = 'delegate';
 export const DELEGATIONS_TOOL = 'delegation_status';
+export const SEARCH_TOOL = 'memory_search';
 const MEMORY_TOOLS = new Set([NOTE_TOOL, PROPOSE_TOOL]);
 /** A chat waits this long for its memory before starting without it (and trying again next run). */
 const CONTEXT_TIMEOUT_MS = 10_000;
@@ -101,7 +102,7 @@ export function renderWorkspaces(workspaces: WorkspaceBrief[] = []): string {
   return [
     '## Workspaces',
     '',
-    `The user's repositories you can hand tasks to with ${DELEGATE_TOOL}. Online status is as of this chat's start.`,
+    `The user's repositories you can hand tasks to with ${DELEGATE_TOOL}. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with ${SEARCH_TOOL}, and open a note's sources with recall.`,
     ...workspaces.map(
       (workspace) =>
         `[${workspace.id}] ${workspace.name} on ${workspace.node}${workspace.online === false ? ' (offline)' : ''}`,
@@ -461,6 +462,65 @@ The other agent sees nothing of this chat: write the task so it stands on its ow
     },
   });
 
+  const searchTool = (gateway: NodeGateway): Tool => ({
+    name: SEARCH_TOOL,
+    description: `Search what the user's coding sessions noted in their repositories (workspace memory, from every machine) and what your delegations reported. Each word matches anywhere, in any language; notes holding more of the words come first. Notes may be stale: each shows when it was written and the git state then, and superseded ones are marked. Open a note's sources with recall (12-hex ids); see a delegation with ${DELEGATIONS_TOOL}.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Words to look for, separated by spaces.' },
+        workspace: {
+          type: 'string',
+          description: 'Only this workspace: its id, or its name if no other workspace has it.',
+        },
+        limit: { type: 'number', description: 'At most this many results (1 to 20, default 8).' },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+    async execute(args, ctx) {
+      const query = typeof args.query === 'string' ? args.query.trim() : '';
+      if (!query) return text('query is required', undefined, true);
+      const workspace = typeof args.workspace === 'string' ? args.workspace.trim() : '';
+      const limit =
+        typeof args.limit === 'number' && Number.isFinite(args.limit)
+          ? Math.min(20, Math.max(1, Math.floor(args.limit)))
+          : undefined;
+      try {
+        const result = (await gateway.request(
+          'memory.search',
+          { query, ...(workspace ? { workspace } : {}), ...(limit ? { limit } : {}) },
+          ctx.signal,
+        )) as {
+          hits: Array<{
+            id: string;
+            kind: string;
+            workspace: string;
+            date: string;
+            status: string;
+            git?: string;
+            content: string;
+          }>;
+        };
+        if (!result.hits.length) return text(`Nothing found for ${JSON.stringify(query)}.`);
+        return text(
+          result.hits
+            .map((hit) => {
+              const where =
+                hit.kind === 'delegation' ? `delegation to ${hit.workspace}` : hit.workspace;
+              const state =
+                hit.kind === 'delegation' || hit.status !== 'active' ? ` · ${hit.status}` : '';
+              return `[${hit.id}] ${where} · ${hit.date}${hit.git ? ` · ${hit.git}` : ''}${state}\n${hit.content}`;
+            })
+            .join('\n\n'),
+          { hits: result.hits.map((hit) => hit.id) },
+        );
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  });
+
   const delegationsTool = (gateway: NodeGateway): Tool => ({
     name: DELEGATIONS_TOOL,
     description:
@@ -506,6 +566,7 @@ The other agent sees nothing of this chat: write the task so it stands on its ow
             proposeTool(agent, gateway),
             delegateTool(gateway),
             delegationsTool(gateway),
+            searchTool(gateway),
           ]
         : [];
     },
