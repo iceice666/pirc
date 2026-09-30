@@ -16,6 +16,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { ApiError } from '../errors.js';
+import { withoutSecrets } from './secrets.js';
 
 const GIT_TIMEOUT_MS = 15_000;
 const DIFF_LIMIT = 1_048_576;
@@ -48,7 +49,9 @@ async function git(cwd: string, args: string[], limit = DIFF_LIMIT): Promise<Git
       stdout: 'pipe',
       stderr: 'pipe',
       env: {
-        ...process.env,
+        // The repository is agent-writable: whatever its config makes git run
+        // must not see the node token.
+        ...withoutSecrets(process.env),
         GIT_OPTIONAL_LOCKS: '0',
         GIT_TERMINAL_PROMPT: '0',
         GIT_PAGER: 'cat',

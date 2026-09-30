@@ -18,6 +18,7 @@ import path from 'node:path';
 import type { BrowserContext, Page } from 'playwright-core';
 import { ApiError } from '../errors.js';
 import { pageMarkdown, passwordValues } from './browser-extract.js';
+import { withoutSecrets } from './secrets.js';
 
 export interface BrowserSettings {
   /** Agent browser tools and the Browser panel (PIRC_BROWSER, default on when a browser is found). */
@@ -165,6 +166,8 @@ async function defaultLaunch(profileDir: string, settings: BrowserSettings) {
     viewport: settings.viewport,
     // The node account's own browser: keep downloads inside the profile.
     acceptDownloads: false,
+    // Pages run untrusted code; the browser needs none of the node's secrets.
+    env: withoutSecrets(process.env),
   });
 }
 
@@ -926,7 +929,7 @@ export class BrowserManager {
         '-y',
         file,
       ],
-      { stdio: ['pipe', 'pipe', 'pipe'] },
+      { stdio: ['pipe', 'pipe', 'pipe'], env: withoutSecrets(process.env) },
     );
     let stderr = '';
     proc.stderr.on('data', (chunk: Buffer) => (stderr = (stderr + chunk.toString()).slice(-2000)));

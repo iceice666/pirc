@@ -117,12 +117,17 @@ describe('agent environment', () => {
         PIRC_NODE_TOKEN: 'a',
         PIRC_NODE_TOKENS: '{}',
         PIRC_OAUTH_SECRET_KEY: 'b',
+        PIRC_CLIPROXYAPI_KEY: 'provider key in a shared environment file',
+        PIRC_VAPID_PRIVATE_KEY: 'c',
+        EXA_API_KEY: 'd',
         PIRC_NODE_ID: 'n',
+        PIRC_WORKSPACE_KIND: 'directory',
         HOME: '/home/u',
         GITHUB_TOKEN: 'user tools may need their own tokens',
       }),
     ).toEqual({
       PIRC_NODE_ID: 'n',
+      PIRC_WORKSPACE_KIND: 'directory',
       HOME: '/home/u',
       GITHUB_TOKEN: 'user tools may need their own tokens',
     });
