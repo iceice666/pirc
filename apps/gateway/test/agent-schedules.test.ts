@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { formatSchedules } from '../src/agent/features/schedules.js';
+import { formatRunResult, formatSchedules } from '../src/agent/features/schedules.js';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
 
 const agents: AgentProcess[] = [];
@@ -164,6 +164,28 @@ describe('schedule', () => {
         '  prompt: Check the CI dashboard.',
         '  last run r1 (2026-09-29 09:00 (Asia/Taipei)): completed — All green.',
       ].join('\n'),
+    );
+    const long = { ...brief, lastRun: { ...brief.lastRun, resultChars: 5000 } };
+    expect(formatSchedules([long], 'UTC')).toContain(
+      'All green. [5000 characters; read it with action result id=r1]',
+    );
+  });
+
+  it('formats a run result and how to read on', () => {
+    const run = { id: 'r1', schedule: 's1', status: 'completed', resultOffset: 0 };
+    expect(formatRunResult({ ...run, result: 'ok', resultChars: 2 })).toBe(
+      'Run r1 of s1 [completed]:\nok',
+    );
+    expect(formatRunResult({ ...run, result: '', resultChars: 0 })).toBe(
+      'Run r1 of s1 [completed]: no result.',
+    );
+    expect(formatRunResult({ ...run, result: 'abc', resultChars: 9, nextOffset: 3 })).toBe(
+      'Run r1 of s1 [completed]:\nabc\n[Result characters 0–3 of 9; continue with action result id=r1 offset=3]',
+    );
+    expect(
+      formatRunResult({ ...run, result: 'ghi', resultOffset: 6, resultChars: 9, session: 'CI' }),
+    ).toBe(
+      'Run r1 of s1 [completed] (session “CI”):\nghi\n[Result characters 6–9 of 9; end of result]',
     );
   });
 });

@@ -106,7 +106,12 @@ export interface ScheduleInput {
 
 export const PROMPT_MAX_CHARS = 20_000;
 const TITLE_MAX_CHARS = 80;
-const RESULT_MAX_CHARS = 4000;
+/** Stored in full up to this sanity cap; readers page through it. */
+const RESULT_MAX_CHARS = 200_000;
+/** How much of each run's result the run list (UI) carries. */
+const RESULT_VIEW_CHARS = 4000;
+/** One `schedule` result read. */
+export const RESULT_CHUNK_CHARS = 12_000;
 const PENDING_MAX = 10;
 const SCHEDULES_MAX = 100;
 const RUNS_KEPT = 50;
@@ -318,7 +323,39 @@ export class Schedules {
   }
 
   runView(run: ScheduleRun) {
-    return { ...run, session: run.sessionId ? this.sessionName(run.sessionId) : null };
+    const long = run.result !== null && run.result.length > RESULT_VIEW_CHARS;
+    return {
+      ...run,
+      ...(long
+        ? { result: clip(run.result!, RESULT_VIEW_CHARS), resultChars: run.result!.length }
+        : {}),
+      session: run.sessionId ? this.sessionName(run.sessionId) : null,
+    };
+  }
+
+  /** The user's run `id`, owner-checked. */
+  getRun(user: string, id: string): ScheduleRun {
+    const run = this.runRow(id);
+    if (!run || run.ownerUser !== user) throw new ApiError(404, 'not_found', `No run ${id}`);
+    return run;
+  }
+
+  /** A run's result from `offset`, in chunks, with `nextOffset` until the end. */
+  runResult(run: ScheduleRun, offset = 0) {
+    const result = run.result ?? '';
+    if (offset > result.length)
+      throw new ApiError(400, 'invalid_input', `offset exceeds result length ${result.length}`);
+    const end = Math.min(result.length, offset + RESULT_CHUNK_CHARS);
+    return {
+      id: run.id,
+      schedule: run.scheduleId,
+      status: run.status,
+      ...(run.sessionId ? { session: this.sessionName(run.sessionId) } : {}),
+      result: result.slice(offset, end),
+      resultOffset: offset,
+      resultChars: result.length,
+      ...(end < result.length ? { nextOffset: end } : {}),
+    };
   }
 
   /** What an agent sees of a schedule. */
@@ -344,6 +381,9 @@ export class Schedules {
               status: last.status,
               due: formatTime(last.dueAt, schedule.timezone),
               ...(last.result ? { result: clip(last.result, 300) } : {}),
+              ...(last.result && last.result.length > 300
+                ? { resultChars: last.result.length }
+                : {}),
             },
           }
         : {}),

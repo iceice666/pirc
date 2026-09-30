@@ -375,6 +375,60 @@ it('lets agents propose schedules the user approves, within their scope', async 
   expect(reply(await coding.ask(`gateway schedule.pause {"id":"${id}"}`)).ok).toBe(true);
 }, 30_000);
 
+it('keeps a long run result whole and lets agents page through it', async () => {
+  const { app, services } = await start();
+  const created = await api(app, 'POST', '/api/schedules', {
+    workspaceId: 'work:test',
+    title: 'Report',
+    prompt: 'Write a report.',
+    at: soon(1500),
+    timezone: 'UTC',
+  });
+  const schedule = created.json().schedule;
+  await waitFor(async () => (await runsOf(app, schedule.id))[0]?.status, 'completed', 8000);
+  const [{ id }] = await runsOf(app, schedule.id);
+
+  // A longer answer than the run list or one chunk holds: every part is distinct.
+  const long = Array.from({ length: 3000 }, (_, i) => `line ${String(i).padStart(4, '0')}\n`).join(
+    '',
+  );
+  services.db.raw.prepare("UPDATE schedule_runs SET status='running' WHERE id=?").run(id);
+  (services.schedules as any).finish(id, 'completed', long);
+  expect(services.schedules.getRun(USER, id).result).toBe(long);
+
+  // The run list stays small and says how long the whole is.
+  const [listed] = await runsOf(app, schedule.id);
+  expect(listed.result.length).toBeLessThanOrEqual(4000);
+  expect(listed.resultChars).toBe(30_000);
+
+  const chat = await promptSession(app, services.events, headers, 'home:chats');
+  const result = async (args: object) =>
+    reply(await chat.ask(`gateway schedule.result ${JSON.stringify(args)}`)).body;
+  const [brief] = reply(await chat.ask('gateway schedule.list {}')).body.schedules;
+  expect(brief.lastRun).toMatchObject({ id, resultChars: 30_000 });
+  let text = '';
+  let offset: number | undefined = 0;
+  const chunks: any[] = [];
+  while (offset !== undefined) {
+    const chunk: any = await result({ id, offset });
+    chunks.push(chunk);
+    text += chunk.result;
+    offset = chunk.nextOffset;
+  }
+  expect(text).toBe(long);
+  expect(chunks.map((c) => [c.resultOffset, c.nextOffset])).toEqual([
+    [0, 12_000],
+    [12_000, 24_000],
+    [24_000, undefined],
+  ]);
+  expect((await result({ id, offset: 30_001 })).code).toBe('invalid_input');
+  // Only sessions that may manage the schedule read its runs.
+  const lab = await promptSession(app, services.events, headers, 'lab:test');
+  expect(reply(await lab.ask(`gateway schedule.result {"id":"${id}"}`)).body).toMatchObject({
+    status: 404,
+  });
+}, 30_000);
+
 it('lets proposals lapse', async () => {
   const { app, services } = await start({ delegationTtlMs: 300 });
   const chat = await promptSession(app, services.events, headers, 'home:chats');

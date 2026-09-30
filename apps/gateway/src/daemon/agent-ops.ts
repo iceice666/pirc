@@ -253,6 +253,22 @@ const ops: Record<string, AgentOp> = {
       };
     },
   },
+  /** A run's final message, in chunks, for runs of schedules this session may manage. */
+  'schedule.result': {
+    args: z
+      .object({ id: z.string().min(1).max(40), offset: z.number().int().min(0).optional() })
+      .strict(),
+    run: (context, args) => {
+      const { schedules } = context.services;
+      const run = schedules.getRun(context.user, args.id);
+      try {
+        scopedSchedule(context, run.scheduleId);
+      } catch {
+        throw new ApiError(404, 'not_found', `No run ${args.id} in this workspace`);
+      }
+      return schedules.runResult(run, args.offset ?? 0);
+    },
+  },
   /** Propose a new schedule; it exists once the user approves it in the chat. */
   'schedule.create': {
     args: z

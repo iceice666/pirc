@@ -102,7 +102,7 @@ Status (2026-09-29): phases 1–5 implemented and tested.
 - **Managed from**: an agent tool, the web UI, Android, and a slash command (`/cron`).
 - **Agent authorization**: when the agent creates or edits a schedule, the user confirms it in the chat, the same way as a delegation. Pausing, resuming and deleting need no confirmation. Schedules made from the UI or the slash command are the user's own actions, so they are not confirmed again.
 - **Scope of the agent tool**: assistant (chat) sessions may target any workspace in the delegation list. Every other session can only target its own workspace.
-- **Notifications**: the schedule list shows the status and result of each run, **and** a push notification is sent (PWA and Android).
+- **Notifications**: the schedule list shows the status and result of each run, **and** a push notification is sent (PWA and Android). The list clips each result to 4,000 characters; the whole result is kept, and agents read it with `schedule` action `result` in 12,000-character chunks from `offset`.
 - **Time syntax**: a 5-field cron expression plus an IANA time zone, or a one-shot time.
 - **Missed runs** (gateway down or node offline at fire time): they are **not** run automatically. The run is recorded as `missed`, and the user has to allow it (the "Run now" action) before it runs.
 

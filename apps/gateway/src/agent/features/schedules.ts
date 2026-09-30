@@ -23,7 +23,19 @@ interface Brief {
   thinking?: string;
   notify?: string;
   prompt: string;
-  lastRun?: { id: string; status: string; due: string; result?: string };
+  lastRun?: { id: string; status: string; due: string; result?: string; resultChars?: number };
+}
+
+/** A run's result chunk (daemon/schedules.ts `runResult`). */
+interface RunResult {
+  id: string;
+  schedule: string;
+  status: string;
+  session?: string;
+  result: string;
+  resultOffset: number;
+  resultChars: number;
+  nextOffset?: number;
 }
 
 function enabled(agent: Agent): boolean {
@@ -56,12 +68,26 @@ export function formatSchedules(schedules: Brief[], timezone: string): string {
         `  prompt: ${item.prompt.replace(/\s+/g, ' ')}`,
         ...(item.lastRun
           ? [
-              `  last run ${item.lastRun.id} (${item.lastRun.due}): ${item.lastRun.status}${item.lastRun.result ? ` — ${item.lastRun.result.replace(/\s+/g, ' ')}` : ''}`,
+              `  last run ${item.lastRun.id} (${item.lastRun.due}): ${item.lastRun.status}${item.lastRun.result ? ` — ${item.lastRun.result.replace(/\s+/g, ' ')}` : ''}${item.lastRun.resultChars ? ` [${item.lastRun.resultChars} characters; read it with action result id=${item.lastRun.id}]` : ''}`,
             ]
           : []),
       ].join('\n'),
     ),
   ].join('\n');
+}
+
+/** A run's result chunk, with where it stands and how to read on. */
+export function formatRunResult(run: RunResult): string {
+  const end = run.nextOffset ?? run.resultChars;
+  const head = `Run ${run.id} of ${run.schedule} [${run.status}]${run.session ? ` (session “${run.session}”)` : ''}`;
+  if (!run.resultChars) return `${head}: no result.`;
+  const whole = run.resultOffset === 0 && run.nextOffset === undefined;
+  const footer = whole
+    ? ''
+    : run.nextOffset === undefined
+      ? `\n[Result characters ${run.resultOffset}–${end} of ${run.resultChars}; end of result]`
+      : `\n[Result characters ${run.resultOffset}–${end} of ${run.resultChars}; continue with action result id=${run.id} offset=${end}]`;
+  return `${head}:\n${run.result}${footer}`;
 }
 
 const str = (description: string) => ({ type: 'string', description });
@@ -76,13 +102,24 @@ Actions:
 - create: propose a schedule. It exists only once the user approves it in this chat. Give cron (5 fields: minute hour day-of-month month day-of-week, e.g. "0 9 * * 1-5") for a repeating one, or at (e.g. "2026-10-01T09:00") for a single run.
 - update: propose a change to one (id plus the fields to change); the user approves it too.
 - pause / resume / delete: take effect at once (id).
+- result: a run's final message (id of the run, like r1a2b3c4d), in 12000-character chunks; call again with offset set to the reported next offset until none is given.
 
 Times are read in timezone (IANA, e.g. "Asia/Taipei"); it defaults to the gateway's. Today is ${new Date().toISOString().slice(0, 10)}.`,
     parameters: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: ['list', 'create', 'update', 'pause', 'resume', 'delete'] },
-        id: str('The schedule (like s1a2b3c4d) for update, pause, resume and delete'),
+        action: {
+          type: 'string',
+          enum: ['list', 'create', 'update', 'pause', 'resume', 'delete', 'result'],
+        },
+        id: str(
+          'The schedule (like s1a2b3c4d) for update, pause, resume and delete; the run (like r1a2b3c4d) for result',
+        ),
+        offset: {
+          type: 'integer',
+          minimum: 0,
+          description: 'With result: first result character to return (default 0)',
+        },
         prompt: str('What the scheduled agent should do, standing on its own'),
         title: str('A short title; it names each run session'),
         cron: str('Repeat: 5-field cron expression'),
@@ -172,9 +209,19 @@ Times are read in timezone (IANA, e.g. "Asia/Taipei"); it defaults to the gatewa
               { id },
             );
           }
+          case 'result': {
+            if (!id) return text('id is required', undefined, true);
+            const offset = Number.isInteger(args.offset) && args.offset > 0 ? args.offset : 0;
+            const run = (await gateway.request(
+              'schedule.result',
+              { id, ...(offset ? { offset } : {}) },
+              ctx.signal,
+            )) as RunResult;
+            return text(formatRunResult(run), { id: run.id, nextOffset: run.nextOffset ?? null });
+          }
           default:
             return text(
-              'action is one of list, create, update, pause, resume, delete',
+              'action is one of list, create, update, pause, resume, delete, result',
               undefined,
               true,
             );
