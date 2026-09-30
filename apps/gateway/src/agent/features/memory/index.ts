@@ -524,7 +524,10 @@ export function memoryFeature(): Feature {
   const recallTool = (agent: Agent): Tool => ({
     name: 'recall',
     ptc: true,
-    description: `Recover exact evidence and source context behind a compacted observational-memory observation or reflection id on the current branch, or a workspace-memory id from an earlier session (in chats, also one found with memory_search). Use when compressed memory is important and original source context is needed before acting.\n\n${RECALL_GUIDELINES.map((line) => `- ${line}`).join('\n')}`,
+    // A getter: the chat's capability policy can change between runs.
+    get description() {
+      return `Recover exact evidence and source context behind a compacted observational-memory observation or reflection id on the current branch, or a workspace-memory id from an earlier session${agent.capabilities.memory_search && agent.capabilities.remote_recall ? ' (in chats, also one found with memory_search)' : ''}. Use when compressed memory is important and original source context is needed before acting.\n\n${RECALL_GUIDELINES.map((line) => `- ${line}`).join('\n')}`;
+    },
     parameters: {
       type: 'object',
       properties: {
@@ -547,7 +550,7 @@ export function memoryFeature(): Feature {
       // A chat recalls notes it found with memory_search through the gateway,
       // which asks the node that holds them (plans/assistant.md).
       const gateway = agent.config.workspaceKind === 'chat' ? processGateway() : undefined;
-      if (result.status === 'not_found' && gateway)
+      if (result.status === 'not_found' && gateway && agent.capabilities.remote_recall)
         try {
           result = (await gateway.request('recall.remote', { id }, ctx.signal)) as typeof result;
         } catch (error) {

@@ -234,6 +234,7 @@ export function teamFeature(): Feature {
         : {}),
       env: { ...process.env, ...agent.config.env },
       models: agent.config.models,
+      capabilities: () => agent.capabilities,
       acquireWrite: (path, signal) => agent.acquireWrite(path, signal),
       askUser: (question, signal, from) =>
         askQuestions(

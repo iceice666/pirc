@@ -1,6 +1,7 @@
 <script lang="ts" module>
   const SETTINGS_TABS = [
     { id: 'general', label: 'General' },
+    { id: 'projects', label: 'Projects' },
     { id: 'memory', label: 'Memory' },
     { id: 'models', label: 'Models' },
     { id: 'devices', label: 'Devices' },
@@ -16,6 +17,7 @@
   import Modal from './Modal.svelte';
   import BackendSettings from '../BackendSettings.svelte';
   import MemorySettings from '../MemorySettings.svelte';
+  import ProjectSettings from '../ProjectSettings.svelte';
   import NotificationSettings from '../NotificationSettings.svelte';
   import PairedDevices from '../PairedDevices.svelte';
 
@@ -102,6 +104,17 @@
             <button class="button ghost" type="button" onclick={onresetlayout}>Reset</button>
           </div>
         </section>
+      </div>
+
+      <div
+        role="tabpanel"
+        id="settings-panel-projects"
+        aria-labelledby="settings-tab-projects"
+        hidden={settingsTab !== 'projects'}
+      >
+        {#if settingsTab === 'projects'}
+          <ProjectSettings disabled={app.usingDemo} />
+        {/if}
       </div>
 
       <div

@@ -11,7 +11,7 @@ import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { DaemonConfig } from '../config.js';
-import { GatewayDatabase, type SessionRow } from '../database.js';
+import { GatewayDatabase, workspaceCapabilitiesSchema, type SessionRow } from '../database.js';
 import { ApiError } from '../errors.js';
 import { EventHub } from '../events.js';
 import { registerErrorHandler, registerImageParsers } from '../http.js';
@@ -470,6 +470,20 @@ export async function buildDaemonApp(
       .filter((workspace) => workspace.id.includes(':'))
       .map((workspace) => ({ ...workspace, canonicalPath: undefined })),
   }));
+  app.get('/api/workspaces/:workspaceId/capabilities', async (request) => {
+    const { workspaceId } = parse(z.object({ workspaceId: z.string().min(1) }), request.params);
+    return { capabilities: db.getWorkspaceCapabilities(workspaceId) };
+  });
+  app.patch('/api/workspaces/:workspaceId/capabilities', async (request) => {
+    const { workspaceId } = parse(z.object({ workspaceId: z.string().min(1) }), request.params);
+    const body = parse(
+      z.object({ capabilities: workspaceCapabilitiesSchema.partial() }).strict(),
+      request.body,
+    );
+    const capabilities = db.patchWorkspaceCapabilities(workspaceId, body.capabilities);
+    directoryChanged();
+    return { capabilities };
+  });
   app.post('/api/workspaces', async (request, reply) => {
     const body = parse(createWorkspaceBody, request.body);
     if (!nodes.get(body.nodeId)) throw new ApiError(503, 'node_offline', 'Node is offline');

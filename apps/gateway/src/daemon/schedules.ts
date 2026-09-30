@@ -504,6 +504,8 @@ export class Schedules {
     if (count >= SCHEDULES_MAX)
       throw new ApiError(429, 'too_many_requests', `At most ${SCHEDULES_MAX} schedules`);
     const spec = this.resolve(user, input, undefined, { resolveWorkspace, redact: false });
+    // A chat project with schedules disabled runs none, whoever creates them.
+    this.deps.db.requireWorkspaceCapability(spec.workspaceId, 'schedules');
     return this.insert(user, spec, createdBySession);
   }
 
@@ -515,6 +517,7 @@ export class Schedules {
   ): Schedule {
     const schedule = this.get(user, id);
     const spec = this.resolve(user, input, schedule, { resolveWorkspace, redact: false });
+    this.deps.db.requireWorkspaceCapability(spec.workspaceId, 'schedules');
     return this.apply(schedule, spec);
   }
 
@@ -528,6 +531,7 @@ export class Schedules {
   resume(user: string, id: string): Schedule {
     const schedule = this.get(user, id);
     if (schedule.status === 'active') return schedule;
+    this.requireCapability(schedule);
     const next = nextFire(schedule, now());
     if (next === null)
       throw new ApiError(
@@ -696,6 +700,7 @@ export class Schedules {
       this.closeProposal(proposal, 'rejected');
       return { interactionId, status: 'answered' };
     }
+    this.deps.db.requireSessionCapability(sessionId, 'schedules');
     let schedule: Schedule;
     try {
       if (proposal.scheduleId) {
@@ -916,12 +921,30 @@ export class Schedules {
     return this.runRow(runId)!;
   }
 
+  private requireCapability(schedule: Schedule): void {
+    this.deps.db.requireWorkspaceCapability(schedule.workspaceId, 'schedules');
+    if (schedule.createdBySession)
+      this.deps.db.requireSessionCapability(schedule.createdBySession, 'schedules');
+  }
+
   private start(
     schedule: Schedule,
     dueAt: number,
     existingRunId: string | undefined,
     manual: boolean,
   ): ScheduleRun {
+    try {
+      this.requireCapability(schedule);
+    } catch (error) {
+      if (manual) throw error;
+      const run = this.insertRun(schedule, dueAt, 'failed', {
+        result: (error as Error).message,
+        finishedAt: now(),
+      });
+      this.setStatus(schedule, 'paused', schedule.nextRunAt);
+      this.deps.changed(schedule.ownerUser);
+      return run;
+    }
     const open = this.deps.db.raw
       .prepare(
         `SELECT id FROM schedule_runs WHERE schedule_id=? AND status IN ${OPEN_RUNS} LIMIT 1`,
@@ -963,10 +986,12 @@ export class Schedules {
 
   private async dispatch(schedule: Schedule, run: ScheduleRun, workspace: Workspace) {
     try {
+      this.requireCapability(schedule);
       const session = await startSession(this.deps, workspace, schedule.ownerUser, schedule.title);
       this.deps.db.raw
         .prepare('UPDATE schedule_runs SET session_id=? WHERE id=?')
         .run(session.id, run.id);
+      this.requireCapability(schedule);
       await deliver(this.deps.nodes, session, schedule.ownerUser, {
         customType: 'scheduled-run',
         content: runMessage(schedule, run),

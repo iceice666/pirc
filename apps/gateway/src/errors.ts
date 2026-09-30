@@ -22,6 +22,8 @@ export type ErrorCode =
   | 'forgotten'
   /** Assistant memory: the user already rejected this exact proposal. */
   | 'rejected_before'
+  /** A chat project's capability policy (database.ts) disables this operation. */
+  | 'capability_disabled'
   /** Browser tools (node/browser.ts): Playwright failed, e.g. a stale ref or a timeout. */
   | 'browser_error'
   /** Browser tools: the user controls the browser (takeover or handoff). */

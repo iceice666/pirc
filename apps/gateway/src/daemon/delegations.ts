@@ -263,6 +263,7 @@ export class Delegations {
       follows?: string | undefined;
     },
   ): Delegation {
+    this.deps.db.requireSessionCapability(assistant.id, 'delegation');
     const task = redactSecrets(input.task).trim();
     if (!task) throw new ApiError(400, 'invalid_input', 'task is required');
     if (task.length > TASK_MAX_CHARS)
@@ -353,6 +354,7 @@ export class Delegations {
     if (delegation.ownerUser !== user)
       throw new ApiError(403, 'forbidden', 'Delegation belongs to another user');
     const approved = (answer as { confirmed?: unknown } | undefined)?.confirmed === true;
+    if (approved) this.deps.db.requireSessionCapability(sessionId, 'delegation');
     const changed = this.deps.db.raw
       .prepare(
         "UPDATE delegations SET status=?, updated_at=? WHERE id=? AND status='pending_approval' AND expires_at>?",
@@ -387,6 +389,7 @@ export class Delegations {
     if (!delegation || delegation.status !== 'running') return;
     try {
       const { db } = this.deps;
+      db.requireSessionCapability(delegation.assistantSessionId, 'delegation');
       const workspace = db.getWorkspace(delegation.workspaceId);
       const nodeId = workspace.hostId;
       if (!this.online(workspace)) throw new Error(`${nodeId} is offline`);
@@ -404,6 +407,7 @@ export class Delegations {
           'UPDATE delegations SET target_session_id=?, dispatched_at=?, updated_at=? WHERE id=?',
         )
         .run(target.id, now(), now(), delegation.id);
+      db.requireSessionCapability(delegation.assistantSessionId, 'delegation');
       await deliver(this.deps.nodes, target, delegation.ownerUser, {
         customType: 'assistant-delegation',
         content: taskMessage(delegation),

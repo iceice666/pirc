@@ -349,6 +349,7 @@ export interface TeamOptions {
   env?: Record<string, string | undefined>;
   /** Providers handed to each child on its first stdin line (see models.ts). */
   models: ModelsConfig;
+  capabilities?: () => import('../../capabilities.js').Capabilities;
   /** Children write under the parent session's lease (see write-lease.ts). */
   acquireWrite?(path: string, signal?: AbortSignal): Promise<void>;
 }
@@ -625,7 +626,11 @@ export class Team {
         },
         (event) => this.event(member, event),
       );
-      member.rpc.write({ type: 'configure', models: this.options.models });
+      member.rpc.write({
+        type: 'configure',
+        models: this.options.models,
+        capabilities: this.options.capabilities?.(),
+      });
       member.pid = member.rpc.proc.pid;
       const state = await member.rpc.request('get_state');
       if (this.closing || !live(member)) throw new Error('Agent stopped during startup');

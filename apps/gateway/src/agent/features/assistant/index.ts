@@ -8,6 +8,7 @@
  * decides where a memory came from.
  */
 import type { Agent } from '../../agent.js';
+import { capabilities, type Capabilities } from '../../capabilities.js';
 import type { Feature } from '../../feature.js';
 import { GatewayError, processGateway, type NodeGateway } from '../../gateway.js';
 import type { Message } from '../../messages.js';
@@ -41,6 +42,7 @@ interface WorkspaceBrief {
   online?: boolean;
 }
 interface MemoryContext {
+  capabilities?: Capabilities;
   enabled?: boolean;
   user?: Brief[];
   notes?: Brief[];
@@ -107,6 +109,23 @@ export function renderMemory(context: MemoryContext): string {
         )
       : ['(none yet)']),
   ].join('\n');
+}
+
+/**
+ * The frozen memory section as shown under the chat's current capability
+ * policy. The snapshot is kept as written (the policy can change later), so
+ * guidance for disabled tools is taken out each time it is shown.
+ */
+export function presentSection(section: string, capabilities: Capabilities): string {
+  if (!capabilities.delegation) return section.replace(/\n*## Workspaces\n[\s\S]*$/, '');
+  if (!capabilities.memory_search)
+    return section.replace(
+      / Their coding sessions keep notes there \(workspace memory\)[^\n]*/,
+      '',
+    );
+  if (!capabilities.remote_recall)
+    return section.replace(/, and open a note's sources with recall\./, '.');
+  return section;
 }
 
 /** The user's repositories the assistant can hand tasks to, as of the chat's start. */
@@ -215,12 +234,6 @@ export function assistantFeature(): Feature {
 
   /** The memory section of this chat's system prompt, frozen once loaded. */
   async function memorySection(agent: Agent, gateway: NodeGateway): Promise<string> {
-    if (frozen !== undefined) return frozen;
-    const existing = agent.store
-      .branch()
-      .findLast((entry) => entry.type === 'custom' && entry.customType === ASSISTANT_SNAPSHOT);
-    if (existing?.type === 'custom')
-      return (frozen = String((existing.data as { text?: unknown })?.text ?? ''));
     let context: MemoryContext;
     try {
       context = ((await gateway.request(
@@ -229,9 +242,16 @@ export function assistantFeature(): Feature {
         AbortSignal.timeout(CONTEXT_TIMEOUT_MS),
       )) ?? {}) as MemoryContext;
     } catch {
-      // Not frozen: the next run tries again.
-      return UNAVAILABLE;
+      // Preserve the last known policy when offline; the gateway still enforces every operation.
+      return frozen ?? UNAVAILABLE;
     }
+    agent.capabilities = capabilities(context.capabilities);
+    if (frozen !== undefined) return frozen;
+    const existing = agent.store
+      .branch()
+      .findLast((entry) => entry.type === 'custom' && entry.customType === ASSISTANT_SNAPSHOT);
+    if (existing?.type === 'custom')
+      return (frozen = String((existing.data as { text?: unknown })?.text ?? ''));
     const shown = context.enabled ? [...(context.user ?? []), ...(context.notes ?? [])] : [];
     for (const entry of shown) revisions.set(entry.id, entry.revision);
     const section = context.enabled
@@ -475,9 +495,18 @@ The other agent sees nothing of this chat: write the task so it stands on its ow
     },
   });
 
-  const searchTool = (gateway: NodeGateway): Tool => ({
+  const searchTool = (agent: Agent, gateway: NodeGateway): Tool => ({
     name: SEARCH_TOOL,
-    description: `Search what the user's coding sessions noted in their repositories (workspace memory, from every machine) and what your delegations reported. Each word matches anywhere, in any language; notes holding more of the words come first. Notes may be stale: each shows when it was written and the git state then, and superseded ones are marked. Open a note's sources with recall (12-hex ids); see a delegation with ${DELEGATIONS_TOOL}.`,
+    // A getter: only mention tools this chat's capability policy allows.
+    get description() {
+      return [
+        `Search what the user's coding sessions noted in their repositories (workspace memory, from every machine) and what your delegations reported. Each word matches anywhere, in any language; notes holding more of the words come first. Notes may be stale: each shows when it was written and the git state then, and superseded ones are marked.`,
+        agent.capabilities.remote_recall ? "Open a note's sources with recall (12-hex ids)." : '',
+        agent.capabilities.delegation ? `See a delegation with ${DELEGATIONS_TOOL}.` : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+    },
     parameters: {
       type: 'object',
       properties: {
@@ -585,7 +614,7 @@ The other agent sees nothing of this chat: write the task so it stands on its ow
             proposeTool(agent, gateway),
             delegateTool(gateway),
             delegationsTool(gateway),
-            searchTool(gateway),
+            searchTool(agent, gateway),
           ]
         : [];
     },
@@ -595,7 +624,7 @@ The other agent sees nothing of this chat: write the task so it stands on its ow
     async beforeAgentStart(agent) {
       const gateway = gatewayOf(agent);
       if (!gateway) return;
-      const section = await memorySection(agent, gateway);
+      const section = presentSection(await memorySection(agent, gateway), agent.capabilities);
       return section ? { systemPrompt: section } : undefined;
     },
   };

@@ -1,4 +1,29 @@
 import { Database } from 'bun:sqlite';
+import { z } from 'zod';
+
+export const workspaceCapabilitiesSchema = z
+  .object({
+    version: z.literal(1),
+    delegation: z.boolean(),
+    memory_search: z.boolean(),
+    remote_recall: z.boolean(),
+    schedules: z.boolean(),
+    web_search: z.boolean(),
+  })
+  .strict();
+export type WorkspaceCapabilities = z.infer<typeof workspaceCapabilitiesSchema>;
+export type WorkspaceCapability = Exclude<keyof WorkspaceCapabilities, 'version'>;
+export type WorkspaceCapabilitiesPatch = {
+  [K in keyof WorkspaceCapabilities]?: WorkspaceCapabilities[K] | undefined;
+};
+const defaultCapabilities: WorkspaceCapabilities = {
+  version: 1,
+  delegation: true,
+  memory_search: true,
+  remote_recall: true,
+  schedules: true,
+  web_search: true,
+};
 import type { ConfigWorkspace } from './config.js';
 import { ApiError } from './errors.js';
 import type {
@@ -173,6 +198,9 @@ const migrations = [
   CREATE INDEX push_subscriptions_owner ON push_subscriptions(owner_user);
   ALTER TABLE schedules ADD COLUMN notify TEXT NOT NULL DEFAULT 'all';
   `,
+  `CREATE TABLE workspace_capabilities (
+    workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id), policy_json TEXT NOT NULL
+  );`,
 ];
 
 const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');
@@ -361,6 +389,52 @@ export class GatewayDatabase {
       defaults: safeJson(row.defaults_json, {}),
       kind: workspaceKind(row.kind),
     };
+  }
+
+  /** Gateway-owned policy: node workspace sync must never overwrite it. */
+  getWorkspaceCapabilities(workspaceId: string): WorkspaceCapabilities {
+    this.getWorkspace(workspaceId);
+    const row = this.raw
+      .prepare('SELECT policy_json FROM workspace_capabilities WHERE workspace_id=?')
+      .get(workspaceId) as { policy_json: string } | null;
+    return row
+      ? workspaceCapabilitiesSchema.parse(JSON.parse(row.policy_json))
+      : { ...defaultCapabilities };
+  }
+
+  patchWorkspaceCapabilities(
+    workspaceId: string,
+    patch: WorkspaceCapabilitiesPatch,
+  ): WorkspaceCapabilities {
+    if (this.getWorkspace(workspaceId).kind !== 'chat')
+      throw new ApiError(
+        400,
+        'invalid_input',
+        'Capabilities can only be changed for chat workspaces',
+      );
+    const parsed = workspaceCapabilitiesSchema.partial().parse(patch);
+    const policy = { ...this.getWorkspaceCapabilities(workspaceId) };
+    for (const [key, value] of Object.entries(parsed))
+      if (value !== undefined) Object.assign(policy, { [key]: value });
+    this.raw
+      .prepare(
+        'INSERT INTO workspace_capabilities (workspace_id,policy_json) VALUES (?,?) ON CONFLICT(workspace_id) DO UPDATE SET policy_json=excluded.policy_json',
+      )
+      .run(workspaceId, JSON.stringify(policy));
+    return policy;
+  }
+
+  requireWorkspaceCapability(workspaceId: string, capability: WorkspaceCapability): void {
+    if (!this.getWorkspaceCapabilities(workspaceId)[capability])
+      throw new ApiError(
+        403,
+        'capability_disabled',
+        `Capability ${capability} is disabled for this chat workspace. Ask the user to enable it in workspace settings.`,
+      );
+  }
+
+  requireSessionCapability(sessionId: string, capability: WorkspaceCapability): void {
+    this.requireWorkspaceCapability(this.getSession(sessionId).workspaceId, capability);
   }
 
   /** New sessions get a placeholder name that the agent's generated title replaces. */

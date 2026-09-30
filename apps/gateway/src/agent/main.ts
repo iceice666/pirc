@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util';
 import { Agent } from './agent.js';
+import { capabilities, type Capabilities } from './capabilities.js';
 import { loadAgentConfig } from './config.js';
 import { modelsSchema, type ModelsConfig } from '../models.js';
 import { builtinFeatures } from './features/index.js';
@@ -18,7 +19,9 @@ import { nodeWriteBroker, processWriteLease } from './write-lease.js';
  * public model catalog and local inference transport supplied by the node.
  * Provider credentials remain on the gateway.
  */
-async function readConfigure(lines: AsyncIterator<string>): Promise<ModelsConfig> {
+async function readConfigure(
+  lines: AsyncIterator<string>,
+): Promise<{ models: ModelsConfig; capabilities: Capabilities }> {
   for (;;) {
     const next = await lines.next();
     if (next.done) throw new Error('stdin closed before the configure message');
@@ -29,10 +32,17 @@ async function readConfigure(lines: AsyncIterator<string>): Promise<ModelsConfig
     } catch {
       throw new Error('The first stdin line must be a JSON configure message');
     }
-    const record = message as { type?: unknown; models?: unknown } | null;
+    const record = message as {
+      type?: unknown;
+      models?: unknown;
+      capabilities?: unknown;
+    } | null;
     if (record?.type !== 'configure')
       throw new Error('The first stdin line must be {"type":"configure","models":…}');
-    return modelsSchema.parse(record.models ?? {});
+    return {
+      models: modelsSchema.parse(record.models ?? {}),
+      capabilities: capabilities(record.capabilities),
+    };
   }
 }
 
@@ -70,10 +80,12 @@ export async function runAgent(argv: string[]): Promise<void> {
   const write = (value: unknown) => process.stdout.write(`${JSON.stringify(value)}\n`);
   const ui = new RpcUi(write);
   const lines = stdinLines();
-  const config = loadAgentConfig(cwd, await readConfigure(lines));
+  const configured = await readConfigure(lines);
+  const config = loadAgentConfig(cwd, configured.models);
   const store = new SessionStore(sessionDir, cwd);
   const agent = new Agent({
     config,
+    capabilities: configured.capabilities,
     store,
     emit: write,
     ui,

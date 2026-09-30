@@ -132,10 +132,12 @@ const ops: Record<string, AgentOp> = {
       workspace.kind === 'chat'
         ? {
             enabled: true,
+            capabilities: services.db.getWorkspaceCapabilities(workspace.id),
             ...services.memory.context(user),
             workspaces: services.delegations.workspaces(),
           }
-        : { enabled: false },
+        : // Directory workspaces have no policy: every capability stays allowed.
+          { enabled: false },
   },
   /**
    * The assistant hands a task to a new session in a workspace, or more
@@ -445,6 +447,18 @@ export async function runAgentOp(
   if (!args.success) return agentError(400, 'invalid_input', `Invalid arguments for ${request.op}`);
   try {
     const workspace = db.getWorkspace(session.workspaceId);
+    const capability = request.op.startsWith('delegation.')
+      ? 'delegation'
+      : request.op.startsWith('schedule.')
+        ? 'schedules'
+        : request.op === 'memory.search'
+          ? 'memory_search'
+          : request.op === 'recall.remote'
+            ? 'remote_recall'
+            : request.op === 'web.search'
+              ? 'web_search'
+              : null;
+    if (capability) db.requireWorkspaceCapability(workspace.id, capability);
     const result = await op.run({ services, nodeId, session, workspace, user }, args.data);
     return { status: 200, body: { result: result ?? null } };
   } catch (error) {

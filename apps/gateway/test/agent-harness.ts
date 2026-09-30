@@ -107,6 +107,7 @@ export async function startAgent(
     sessionDir?: string;
     llm?: FakeLlm;
     env?: Record<string, string>;
+    capabilities?: Record<string, unknown>;
   } = {},
 ): Promise<AgentProcess> {
   const root = mkdtempSync(path.join(tmpdir(), 'pirc-agent-'));
@@ -169,7 +170,11 @@ export async function startAgent(
     proc.stdin.write(`${JSON.stringify(value)}\n`);
     proc.stdin.flush();
   };
-  raw({ type: 'configure', models: testModels(llm.url, options.config) });
+  raw({
+    type: 'configure',
+    models: testModels(llm.url, options.config),
+    capabilities: options.capabilities,
+  });
   const waitFor = (test: (e: Record<string, any>) => boolean, timeoutMs = 8000) => {
     const found = events.find(test);
     if (found) return Promise.resolve(found);

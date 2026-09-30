@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { capabilities, capabilityForTool, type Capabilities } from './capabilities.js';
 import type { AgentConfig, ModelConfig, ProviderConfig, ThinkingLevel } from './config.js';
 import { sessionSettings, thinkingLevels } from './config.js';
 import { listModels } from '../models.js';
@@ -55,6 +56,7 @@ export interface AgentOptions {
   toolEnv?: Record<string, string>;
   /** When set, only these tools are exposed (e.g. a restricted subagent kind). */
   allowedTools?: string[];
+  capabilities?: Capabilities;
   /** Write-permission broker transport (see write-lease.ts); default grants everything. */
   acquireWrite?: AcquireWrite;
 }
@@ -125,6 +127,7 @@ function interruptedNote(message: AssistantMessage): QueueItem {
 }
 
 export class Agent {
+  capabilities: Capabilities;
   readonly config: AgentConfig;
   readonly store: SessionStore;
   readonly guard: PathGuard;
@@ -243,6 +246,7 @@ export class Agent {
   nameSource: 'user' | 'auto' | null = null;
 
   constructor(options: AgentOptions) {
+    this.capabilities = capabilities(options.capabilities);
     this.config = options.config;
     this.store = options.store;
     this.emitRaw = options.emit;
@@ -315,11 +319,12 @@ export class Agent {
   }
 
   get toolList(): Tool[] {
-    return [...this.tools.values()];
+    return [...this.tools.values()].filter((tool) => this.getTool(tool.name));
   }
 
   getTool(name: string): Tool | undefined {
-    return this.tools.get(name);
+    const capability = capabilityForTool(name);
+    return capability && !this.capabilities[capability] ? undefined : this.tools.get(name);
   }
 
   resolveModel(ref = this.modelRef): ResolvedModel {
@@ -1056,7 +1061,18 @@ export class Agent {
     toolCallId: string = randomUUID(),
     onUpdate?: (result: ToolResult) => void,
   ): Promise<ToolResult> {
-    const tool = this.tools.get(name);
+    const tool = this.getTool(name);
+    const capability = capabilityForTool(name);
+    if (!tool && capability && this.tools.has(name))
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `The ${capability} capability is disabled for this project; ${name} is unavailable. Ask the user to enable it in the project settings if needed.`,
+          },
+        ],
+        isError: true,
+      };
     if (!tool) return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
     if ('__invalid_json' in rawArgs)
       return {

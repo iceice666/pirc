@@ -6,6 +6,7 @@
  * without the model. Only a node's main agent has a gateway (gateway.ts).
  */
 import type { Agent } from '../agent.js';
+import { capabilities } from '../capabilities.js';
 import type { Feature } from '../feature.js';
 import { GatewayError, processGateway, type NodeGateway } from '../gateway.js';
 import { text, type Tool, type ToolResult } from '../tools/types.js';
@@ -240,6 +241,14 @@ Ask the agent to create or change a schedule; you approve it in the chat.`;
 async function cronCommand(agent: Agent, gateway: NodeGateway, args: string): Promise<void> {
   const [verb = 'list', id = ''] = args.trim().split(/\s+/).filter(Boolean);
   try {
+    if (agent.config.workspaceKind === 'chat') {
+      const context = (await gateway.request('assistant.context', {})) as {
+        capabilities?: unknown;
+      };
+      agent.capabilities = capabilities(context.capabilities);
+    }
+    if (!agent.capabilities.schedules)
+      return agent.ui.notify('The schedules capability is disabled for this workspace.', 'error');
     if (verb === 'list') {
       const result = (await gateway.request('schedule.list', {})) as {
         schedules: Brief[];

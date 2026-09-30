@@ -124,9 +124,9 @@ describe('assistant memory in chats', () => {
     expect(tools).toContain('memory_note');
     expect(tools).toContain('memory_propose_user');
 
-    await chat.prompt('more');
+    await chat.prompt('more', async () => chat.ok(await chat.next('assistant.context'), memory()));
     expect(chat.system()).toBe(first);
-    expect(chat.agent.events.filter((event) => event.type === 'gateway_request')).toHaveLength(1);
+    expect(chat.agent.events.filter((event) => event.type === 'gateway_request')).toHaveLength(2);
   });
 
   it('says so when memory cannot be loaded, and tries again on the next run', async () => {
@@ -295,14 +295,15 @@ describe('assistant memory in chats', () => {
     );
     let replace: Record<string, any> = {};
     await second.prompt('fix it', async () => {
+      second.ok(await second.next('assistant.context'), memory());
       replace = await second.next('memory.note');
       second.ok(replace, { id: 'n55555555', revision: 2, unchanged: false, usage });
     });
     expect(replace.args.baseRevision).toBe(1);
-    // The frozen memory came back from the session file, without asking the gateway again.
+    // Memory remains frozen, but current gateway capability policy is refreshed.
     expect(
       second.agent.events.filter((event) => event.type === 'gateway_request').map((e) => e.op),
-    ).toEqual(['memory.note']);
+    ).toEqual(['assistant.context', 'memory.note']);
   });
 
   it('lists the workspaces it can delegate to and delegates through the gateway', async () => {
