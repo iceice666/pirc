@@ -1,0 +1,51 @@
+# Upgrades
+
+## What has to move together
+
+| Change touches                                            | Who must be upgraded                                                                                                                                                                              |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PROTOCOL_VERSION` in `apps/gateway/src/protocol.ts` | **The gateway and every node, in one window.** A mismatched node is closed with code `4426` and logs `daemon rejected this node protocol version`; its sessions are offline until it is upgraded. |
+| `src/node/`, `src/agent/`                                 | Every node. Run state, snapshots and the agent itself are computed on nodes; upgrading only the gateway changes nothing there.                                                                    |
+| `src/daemon/`, `src/backends/`                            | The gateway only.                                                                                                                                                                                 |
+| `apps/web/`                                               | The static bundle only. Browsers pick it up on reload; a waiting service worker shows an update prompt.                                                                                           |
+| `apps/android/`                                           | The phone. The API is versioned by behaviour, not a header; keep the app and gateway from the same era.                                                                                           |
+| `bun.lock`                                                | `nodeModulesHash` in `nix/package.nix` ([NixOS](./nixos.md#updating-nodemoduleshash)).                                                                                                            |
+
+The gateway's SQLite schema migrates forward automatically at start (`PRAGMA user_version`); nodes do the same for their own database. There are no down-migrations: restoring an older binary over a newer database is not supported (see rollback).
+
+## Order
+
+1. Build and validate: `bun run check` (format, typecheck, tests, build) on the release commit; `nix build` if you deploy the package.
+2. Upgrade the gateway host (gateway, web bundle, its local node). With the NixOS module that is one `nixos-rebuild switch`; the services restart, `models.json` reloads.
+3. Upgrade every remote node and restart it (`launchctl kickstart -k …`, `systemctl restart pirc-node`, …).
+4. Check `GET /api/nodes` shows every node online and each node's log has no `4426`.
+5. Open one session per node kind and run a trivial prompt.
+
+While the gateway restarts, nodes reconnect on their own (they retry the link); open runs continue on their nodes, and the gateway increments the event epoch so clients refetch snapshots. While a node restarts, its running agents are given `PIRC_SHUTDOWN_GRACE_MS` and then killed: those runs become `interrupted` and need a new prompt to continue.
+
+## Changes that need no restart
+
+| Change                                                  | How it is applied                                                                                     |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `models.json` (file providers, default model)           | `kill -HUP <gateway pid>` / `systemctl reload pirc`. Invalid file → logged, previous stays in force.  |
+| Web-managed backends, logins, logouts                   | Immediately; in-flight requests are cancelled, running sessions use the new settings next request.    |
+| Provider key referenced by `apiKeyFile`/`apiKeyCommand` | `SIGHUP` (references are resolved when the file is loaded). `apiKeyEnv` needs a restart.              |
+| Workspaces added from the web                           | Immediately, persisted on the node.                                                                   |
+| Chat project capabilities and instructions              | Capabilities immediately (re-checked at each run); instructions for new chats only.                   |
+| Agent config (`config.json`, `AGENTS.md`, skills)       | Next agent start (a new session, or a session whose agent was restarted). Running agents keep theirs. |
+| `PIRC_ALLOWED_USERS` and every other env var            | Restart of that process.                                                                              |
+
+## Rollback
+
+- **Binary**: keep the previous binary (Nix generations do this; for hand-copied builds keep `pirc.prev`). Roll the gateway and the nodes back together if the protocol version changed.
+- **Database**: a rolled-back binary may refuse or misread a database migrated by the newer one. Restore the state directory from the backup taken before the upgrade ([Backup and recovery](./backup-and-recovery.md)); sessions created in between are lost from the index (their transcripts stay on the node's disk).
+- **Web bundle**: redeploy the previous `dist`; ask browsers to reload (or clear the service worker at `/sw.js` in DevTools if a stale shell persists).
+
+## Release procedure for a Nix-based fleet
+
+```sh
+cd pirc && bun run check && git push origin main            # 1. release commit
+cd ../infra && nix flake update pirc && git commit -am 'bump pirc' # 2. pin
+# 3. switch the gateway host, then each node host (deploy-rs, nixos-rebuild, darwin-rebuild, …)
+# 4. nodes without Nix: copy the compiled binary (docs/deploy/macos-node.md)
+```

@@ -216,11 +216,11 @@ nix develop
 nix build
 ```
 
-The NixOS module runs the gateway (`pirc.service`) and, by default, a local node (`pirc-node.service`) under an unprivileged service account, and can generate an nginx virtual host wired to an Authelia-compatible `auth_request` endpoint. The agent configuration (`services.pirc.agentConfig`), secret management, TLS certificate ownership, workspace permissions, and host names remain explicit inputs rather than unsafe defaults.
+The NixOS module runs the gateway (`pirc.service`, as `pirc-gateway`) and, by default, a local node (`pirc-node.service`, as `pirc`) under two unprivileged service accounts, and can generate an nginx virtual host wired to an Authelia-compatible `auth_request` endpoint. The model providers (`services.pirc.models`), agent configuration (`services.pirc.agentConfig`), secret management, TLS certificate ownership, workspace permissions, and host names remain explicit inputs rather than unsafe defaults.
 
-## Known deployment boundary
+## Deployment
 
-The reusable Nix foundation is present, but applying it to a target host, TLS/proxy authorization, backup/restore drills, and physical-phone lock-screen acceptance still require an explicitly authorized M4 deployment.
+Step-by-step deployment guides (topology, gateway and node configuration, reverse proxy, NixOS module, macOS launchd nodes, secrets, upgrades, backups and troubleshooting) are in [`docs/deploy/`](./docs/deploy/README.md). Applying them to a host, proxy authorization, and backup/restore drills remain the operator's responsibility: nothing in the repository ships a trust-all default.
 
 ## Acknowledgements
 

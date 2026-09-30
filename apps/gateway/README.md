@@ -25,6 +25,8 @@ The workspace registry is an execution allowlist. Agents run inside an OS sandbo
 
 ## Setup
 
+Development setup follows; production deployment (service managers, reverse proxy, NixOS, macOS nodes, upgrades, backups) is in [`docs/deploy/`](../../docs/deploy/README.md).
+
 ```sh
 cd apps/gateway
 cp .env.example .env # inject with your service manager; .env is not automatically loaded
