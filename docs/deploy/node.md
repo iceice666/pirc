@@ -1,6 +1,6 @@
-# Node configuration
+# Chat and coding node configuration
 
-`pirc node` reads its configuration from environment variables (`apps/gateway/src/config.ts`, `loadNodeConfig`) plus a per-node agent config directory. Run one node per machine that has workspaces, as an unprivileged account that owns exactly the repositories, credentials and tools the agents should reach. Never run a node as root.
+`pirc-node` and `pirc-chat` read their configuration from environment variables (`apps/gateway/src/config.ts`, `loadNodeConfig`) plus a per-node agent config directory. Run one node per machine that has workspaces, as an unprivileged account that owns exactly the repositories, credentials and tools the agents should reach. Never run a node as root.
 
 Sandbox and browser settings have their own page: [Sandbox and browser](./sandbox-and-browser.md).
 
@@ -39,13 +39,13 @@ Workspaces are an execution allowlist: sessions only ever run in a listed direct
 
 ## The chat node
 
-| Variable    | Default | Meaning                                                                                                    |
-| ----------- | ------- | ---------------------------------------------------------------------------------------------------------- |
-| `PIRC_CHAT` | `false` | Make this the chat node. `PIRC_WORKSPACES` must then be empty (start-up fails otherwise). Run exactly one. |
+Run `pirc-chat` for assistant chats/projects, or `pirc-node` for coding workspaces. Both use the same node/agent implementation; their role is fixed by the executable, not an environment switch. `pirc-chat` requires an empty `PIRC_WORKSPACES` and refuses web-added directory workspaces. Run at most one chat node, on an always-on host. On NixOS, `services.pirc.chat = true` selects `pirc-chat` for the local runner.
 
 The chat node keeps every chat workspace under `$STATE/chat/<workspaceId>/` (the top-level `chats`, and each project), including each project's `instructions.md`. See [`docs/chat-projects.md`](../chat-projects.md).
 
 ## Agent process
+
+Both node executables support the internal `agent` and `ptc-worker` commands and re-execute themselves for those workers. These are not separately deployed executables. Keep the gateway and both node roles on the same release/protocol version ([Upgrades](./upgrades.md)).
 
 | Variable                                          | Default           | Meaning                                                                            |
 | ------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------- |

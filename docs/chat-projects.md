@@ -1,6 +1,6 @@
 # Chat projects: capabilities and instructions
 
-A chat project is a chat workspace on the chat node (`PIRC_CHAT=1`): the top-level **Chats** workspace, or one you created with **New project** in the web app (see [`apps/gateway/README.md`](../apps/gateway/README.md)). Each chat project has two settings of its own, both under **Settings → Projects** in the web app:
+A chat project is a chat workspace on the chat node (`pirc-chat`): the top-level **Chats** workspace, or one you created with **New project** in the web app (see [`apps/gateway/README.md`](../apps/gateway/README.md)). Each chat project has two settings of its own, both under **Settings → Projects** in the web app:
 
 - **Capabilities** turn off assistant features for every chat in the project. The gateway enforces them.
 - **Instructions** are text that every new chat in the project gets in its system prompt. The node stores them.

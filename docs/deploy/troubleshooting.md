@@ -9,9 +9,9 @@ Symptoms first, then the cause and the command that confirms it. Log locations: 
 | `PIRC_TRUSTED_PROXIES / PIRC_ALLOWED_* must explicitly name at least one …` | A required allowlist is empty. There is no permissive default; set it ([Gateway](./gateway.md)).                        |
 | `The gateway requires PIRC_NODE_TOKENS to accept at least one node`         | `PIRC_NODE_TOKENS` is missing or `{}`. On NixOS this means the local node is disabled and no remote node is configured. |
 | `Node tokens must be unique` / a token shorter than 32 characters           | Regenerate with `openssl rand -base64 36`.                                                                              |
-| `PIRC_WORKSPACES belongs to `pirc node`…`                                   | Node variables in the gateway's environment. Split the two environments.                                                |
+| Gateway rejects `PIRC_WORKSPACES`                                           | Node variables in the gateway's environment. Split the gateway and node environments.                                   |
 | `Node transport requires wss:// off loopback`                               | `PIRC_DAEMON_URL` is `ws://` to a remote host. Use `wss://` through the proxy.                                          |
-| `PIRC_WORKSPACES must be empty on the chat node`                            | `PIRC_CHAT=1` with workspaces. Move the repositories to another node.                                                   |
+| `PIRC_WORKSPACES must be empty on the chat node`                            | `pirc-chat` with workspaces. Move the repositories to another node.                                                     |
 | `PIRC_DEVICE_TOKEN_IDLE_DAYS cannot exceed PIRC_DEVICE_TOKEN_MAX_DAYS`      | Fix the two values.                                                                                                     |
 | `PIRC_TIMEZONE: unknown time zone` / `PIRC_VAPID_SUBJECT must be …`         | Use an IANA zone; a `mailto:` or `https:` subject.                                                                      |
 | The gateway exits on an invalid `models.json`                               | The file is validated at start (unknown keys, bad `api`, unresolvable key reference). Fix it; a later reload only logs. |

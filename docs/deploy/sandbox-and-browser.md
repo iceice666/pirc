@@ -4,13 +4,13 @@ Both are node-side concerns: the node starts every agent inside an OS sandbox wh
 
 ## The agent sandbox (srt)
 
-Each `pirc agent` process runs under [srt](https://github.com/anthropic-experimental/sandbox-runtime) (Anthropic's sandbox-runtime): Seatbelt on macOS, bubblewrap plus a seccomp filter on Linux, with a filtering network proxy on both. Everything the agent starts (tools, `bash`, `code` scripts, hooks, teammates, subagents) is inside. Side-panel terminals are **not**.
+Each `pirc-node agent` or `pirc-chat agent` process runs under [srt](https://github.com/anthropic-experimental/sandbox-runtime) (Anthropic's sandbox-runtime): Seatbelt on macOS, bubblewrap plus a seccomp filter on Linux, with a filtering network proxy on both. Everything the agent starts (tools, `bash`, `code` scripts, hooks, teammates, subagents) is inside. Side-panel terminals are **not**.
 
 ### Installing srt
 
 | Platform            | How                                                                                                                                                                                                                                                            |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Nix package / NixOS | Nothing to do: `nix/sandbox-runtime.nix` builds srt (pinned to npm `0.0.78`, because nixpkgs trails upstream) and the `pirc` wrapper sets `PIRC_SANDBOX_SRT` to it.                                                                                            |
+| Nix package / NixOS | Nothing to do: `nix/sandbox-runtime.nix` builds srt (pinned to npm `0.0.78`, because nixpkgs trails upstream) and the `pirc-chat`/`pirc-node` wrappers set `PIRC_SANDBOX_SRT` to it.                                                                           |
 | Other Linux         | `npm install -g @anthropic-ai/sandbox-runtime` (an npm package: it needs Node.js), plus `bubblewrap`, `socat` and `ripgrep` from the distribution. Needs unprivileged user namespaces (Ubuntu 24.04: `sysctl kernel.apparmor_restrict_unprivileged_userns=0`). |
 | macOS without Nix   | `npm install -g @anthropic-ai/sandbox-runtime` (needs Node.js) plus `ripgrep`. Seatbelt (`sandbox-exec`) is built into macOS.                                                                                                                                  |
 

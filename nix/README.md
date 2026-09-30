@@ -2,8 +2,9 @@
 
 The flake exposes:
 
-- `packages.<system>.pirc`: a single Bun-compiled executable (`bin/pirc` with `gateway`, `node`, and `agent` subcommands) plus the static Web bundle (`share/pirc/web`). `bin/pirc` is a wrapper that points the node at two things it runs beside the binary: [srt](./sandbox-runtime.nix), the agent sandbox pinned here because nixpkgs trails upstream (`PIRC_SANDBOX_SRT`), and an on-disk playwright-core (`PIRC_PLAYWRIGHT_CORE`), which reads its own files by computed paths that `bun --compile` cannot bundle. No Bun or `node_modules` is needed at runtime; srt brings its own Node.js.
-- `overlays.default`: adds `pkgs.pirc`, built against the consumer's nixpkgs.
+- `packages.<system>.pirc-gateway`: independently compiled `bin/pirc-gateway` plus the static Web bundle (`share/pirc/web`), with no srt or playwright-core runtime. This is also `packages.<system>.default`.
+- `packages.<system>.pirc-chat` and `packages.<system>.pirc-node`: independently compiled fixed-role executables, with no Web UI. Their wrappers point at [srt](./sandbox-runtime.nix) (`PIRC_SANDBOX_SRT`) and on-disk playwright-core (`PIRC_PLAYWRIGHT_CORE`), whose computed file paths cannot be bundled by `bun --compile`. They share the node/agent implementation. No separate Bun installation is needed; srt brings its own Node.js.
+- `overlays.default`: adds `pkgs.pirc-gateway`, `pkgs.pirc-chat` and `pkgs.pirc-node`, built against the consumer's nixpkgs. There is no legacy `pkgs.pirc` alias.
 - `nixosModules.pirc`: unprivileged systemd services for the gateway and a local node, and an optional nginx/forward-auth virtual host.
 - `devShells.<system>.default`: Bun (plus Node 22 for the web app's vitest/svelte-check).
 
@@ -14,14 +15,17 @@ nix develop
 bun install
 bun run check
 
-nix build
-./result/bin/pirc gateway # browser API and routing (see apps/gateway/.env.example)
-./result/bin/pirc node    # agents for this machine (PIRC_NODE_ID, PIRC_NODE_TOKEN, PIRC_DAEMON_URL)
+nix build .#pirc-gateway -o result-gateway
+nix build .#pirc-chat -o result-chat
+nix build .#pirc-node -o result-node
+./result-gateway/bin/pirc-gateway # browser API and routing (apps/gateway/.env.example)
+./result-chat/bin/pirc-chat       # assistant chats/projects (separate node environment)
+./result-node/bin/pirc-node       # coding agents (PIRC_NODE_ID, PIRC_NODE_TOKEN, PIRC_DAEMON_URL)
 ```
 
-A node starts one `pirc agent` subprocess per session by re-executing its own binary; the two talk JSONL RPC over stdin/stdout.
+A chat/coding node starts one agent subprocess per session by re-executing its own executable with the internal `agent` command; the two talk JSONL RPC over stdin/stdout. Its internal `ptc-worker` command runs code scripts. The gateway alone has the internal `oauth-worker` command. Keep all roles on the same release/protocol version. The executable split does not provide privacy isolation; accounts, filesystem permissions and the agent sandbox still matter.
 
-Dependencies are fetched in a fixed-output derivation (`pirc.nodeModules`) that covers every OS/CPU, so one `nodeModulesHash` works for all systems. After changing `bun.lock`, set `nodeModulesHash` to `lib.fakeHash`, run `nix build .#pirc.nodeModules`, and copy the reported hash into [`package.nix`](./package.nix).
+Dependencies are fetched in a fixed-output derivation (`pirc-gateway.nodeModules`) that covers every OS/CPU, so one `nodeModulesHash` works for all systems. After changing `bun.lock`, set `nodeModulesHash` to `lib.fakeHash`, run `nix build .#pirc-gateway.nodeModules`, and copy the reported hash into [`package.nix`](./package.nix).
 
 ## NixOS module
 
@@ -55,16 +59,16 @@ Minimal service-only example:
 }
 ```
 
-This creates two system users and two services:
+`gatewayPackage`, `chatPackage` and `nodePackage` select the three packages; the old `package` option is removed. `services.pirc.chat = true` selects `pirc-chat` for the local runner, otherwise it runs `pirc-node`. This is declarative executable selection, not an environment role switch. With a local runner enabled, the module creates two system users and two services:
 
-- `pirc.service`, the gateway, running as `pirc-gateway` (`services.pirc.gatewayUser`), listening on loopback by default with state in `/var/lib/pirc/daemon`;
-- `pirc-node.service`, the local node (`services.pirc.localNode`, on by default), which connects to the gateway over loopback, keeps sessions in `/var/lib/pirc/node`, and runs the agent subprocesses and shells for `services.pirc.workspaces`.
+- `pirc.service`, running `pirc-gateway` as `pirc-gateway` (`services.pirc.gatewayUser`), listening on loopback by default with state in `/var/lib/pirc/daemon`;
+- `pirc-node.service`, the local chat/coding node (`services.pirc.localNode`, on by default), which connects to the gateway over loopback, keeps sessions in `/var/lib/pirc/node`, and runs the agent subprocesses and shells for `services.pirc.workspaces`.
 
 The node runs as `pirc` (`services.pirc.user`). The gateway has an account of its own so nothing the node runs can read the gateway's state: provider logins, web-managed keys, push keys and the node token. This covers agents, their shells and side-panel terminals.
 
 - **Token**: the two services share a token that the gateway's start creates (as root) in `/var/lib/pirc/daemon/local-node-token`. The node gets it as a systemd credential (`LoadCredential`). It never enters the Nix store. A token that older versions kept in `/var/lib/pirc/local-node-token` is moved there.
 - **Environment files**: `environmentFile` is the gateway's only. Give the node its own with `localNode.environmentFile`, for tokens the agents' tools need.
-- **Upgrading**: older versions ran both services as `pirc`. Make files named by `apiKeyFile` readable by `pirc-gateway` (for sops-nix, set the secret's `owner`). The daemon state directory is handed over automatically.
+- **Upgrading**: replace `services.pirc.package` overrides with role-specific `gatewayPackage`/`chatPackage`/`nodePackage`, and update custom services to the role executable without a `gateway`/`node` argument. Older versions ran both services as `pirc`. Make files named by `apiKeyFile` readable by `pirc-gateway` (for sops-nix, set the secret's `owner`). The daemon state directory is handed over automatically.
 
 Only the node service gets write access to workspace paths and the tools in `extraPackages`. Ensure the account has the exact filesystem, Git, SSH, and provider access needed by the selected workspaces—no more.
 
@@ -72,7 +76,7 @@ The node ID defaults to `networking.hostName` (`services.pirc.localNode.id`; the
 
 ### Remote nodes
 
-Other machines can run `pirc node` against this gateway. Put their secrets in `environmentFile` as `PIRC_NODE_TOKENS={"m5pro":"…"}` (the local node's token is merged in), and set `nginx.exposeNodeEndpoint = true` so `/node/connect` is proxied over TLS without forward auth. Set `localNode.enable = false` for a routing-only gateway with no local workspaces.
+Other machines can run `pirc-node` (or `pirc-chat` for the sole chat node) against this gateway. Put their secrets in `environmentFile` as `PIRC_NODE_TOKENS={"m5pro":"…"}` (the local node's token is merged in), and set `nginx.exposeNodeEndpoint = true` so `/node/connect` is proxied over TLS without forward auth. Set `localNode.enable = false` for a routing-only gateway with no local workspaces.
 
 ### Agent configuration
 

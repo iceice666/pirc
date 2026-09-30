@@ -1,15 +1,18 @@
-# pirc gateway and node
+# pirc gateway, chat and coding nodes
 
-A TypeScript/Fastify service on Bun, together with the built-in coding agent (`src/agent/`). One binary plays two roles:
+A TypeScript/Fastify service on Bun, together with the built-in coding agent (`src/agent/`). Three independently compiled executables select fixed roles:
 
-- **`pirc gateway`** (`src/daemon/`) is the only thing browsers talk to. It authenticates them, indexes sessions and control leases in SQLite, buffers each session's events, and routes every session request to the node that owns it. It never runs agents, shells, or workspace inspection itself, and never learns real workspace paths.
-- **`pirc node`** (`src/node/`) runs on each machine that has workspaces. It connects _out_ to the gateway over one WebSocket and owns everything local: the `pirc agent` subprocesses (JSONL RPC on stdin/stdout), side-panel shells and Git/file inspection, uploads, and the session JSONL files and SQLite metadata. It does not listen on any port.
+- **`pirc-gateway`** (`src/daemon/`) is the only thing browsers talk to. It authenticates them, indexes sessions and control leases in SQLite, buffers each session's events, and routes every session request to the node that owns it. It never runs agents, shells, or workspace inspection itself, and never learns real workspace paths.
+- **`pirc-node`** (`src/node/`) runs on each machine that has workspaces. It connects _out_ to the gateway over one WebSocket and owns everything local: the `pirc-node agent` subprocesses (JSONL RPC on stdin/stdout), side-panel shells and Git/file inspection, uploads, and the session JSONL files and SQLite metadata. It does not listen on any port.
+- **`pirc-chat`** uses the same node/agent implementation but hosts only assistant chats and projects, not repository workspaces. It connects outbound to the gateway just like a coding node.
 
-A single-machine setup runs both on the same host; the node then reaches the gateway at `ws://127.0.0.1:<port>`.
+A single-machine setup runs the gateway and a coding node (plus an optional chat node) on the same host; the node then reaches the gateway at `ws://127.0.0.1:<port>`.
 
 `src/protocol.ts` describes the gateway↔node link. Both sides announce `NODE_PROTOCOL_VERSION`; on a mismatch the gateway closes the link with code 4426, so upgrade the gateway and nodes together.
 
 An agent reaches the gateway only through its node (`gateway_request` on the agent's stdout, `agent_request` on the link). The node names the session, so an agent can only act as its own session, and the gateway runs only the allowlisted operations in `src/daemon/agent-ops.ts`, for sessions of that node whose owner is still in `PIRC_ALLOWED_USERS`. Every request gets one answer: the gateway's, `gateway_offline`, or `gateway_timeout` after 30 s.
+
+The Nix gateway package carries the Web UI, not srt/playwright-core; the chat/node packages carry srt/playwright-core, not the Web UI. The split does not provide privacy isolation between processes sharing an OS account. See [migration guidance](../../docs/deploy/upgrades.md#migrating-from-the-single-executable).
 
 ## Security model
 
@@ -31,10 +34,11 @@ Development setup follows; production deployment (service managers, reverse prox
 cd apps/gateway
 cp .env.example .env # inject with your service manager; .env is not automatically loaded
 bun install
-bun run build   # dist/pirc single binary
+bun run build   # dist/pirc-gateway, dist/pirc-chat, dist/pirc-node
 bun test
-bun run start       # or: dist/pirc gateway
-bun run start:node  # or: dist/pirc node (separate environment, see .env.example)
+bun run start       # or: dist/pirc-gateway
+bun run start:chat  # or: dist/pirc-chat (separate environment and state)
+bun run start:node  # or: dist/pirc-node (separate environment, see .env.example)
 ```
 
 ### Gateway
@@ -77,7 +81,7 @@ On Traefik v2 the matcher is `HeadersRegexp`. The NixOS module does the equivale
 
 Set `PIRC_NODE_ID`, its matching `PIRC_NODE_TOKEN`, `PIRC_DAEMON_URL`, `PIRC_ALLOWED_USERS`, the machine's own `PIRC_STATE_DIR`, optionally `PIRC_WORKSPACES`, and the node-local agent config (`PIRC_CONFIG_DIR`, default `~/.config/.pirc`; limits, features, hooks, and the system prompt, but no providers).
 
-`PIRC_CHAT=1` (NixOS: `services.pirc.chat`) makes a node the chat node, which hosts the assistant's chats: a top-level workspace `chats` for uncategorized chats, plus projects created with the web's **New project** button. Chat workspaces have no path to pick; the node keeps them under `$PIRC_STATE_DIR/chat/`, with one directory per chat as the agent's working directory. Their agents get a personal-assistant prompt and no workspace memory. The chat node hosts chat workspaces only: `PIRC_WORKSPACES` must be empty there (start-up fails otherwise) and the web cannot add directory workspaces to it, so keep repositories on other nodes. Run one chat node, on an always-on machine. Each chat project has its own capability switches and instructions under **Settings → Projects**; see [`docs/chat-projects.md`](../../docs/chat-projects.md).
+Run `pirc-chat` (NixOS: `services.pirc.chat = true` selects this executable for the local runner) for the chat node, which hosts the assistant's chats: a top-level workspace `chats` for uncategorized chats, plus projects created with the web's **New project** button. Chat workspaces have no path to pick; the node keeps them under `$PIRC_STATE_DIR/chat/`, with one directory per chat as the agent's working directory. Their agents get a personal-assistant prompt and no workspace memory. The chat node hosts chat workspaces only: `PIRC_WORKSPACES` must be empty there (start-up fails otherwise) and the web cannot add directory workspaces to it, so keep repositories on other nodes. Run one chat node, on an always-on machine. Each chat project has its own capability switches and instructions under **Settings → Projects**; see [`docs/chat-projects.md`](../../docs/chat-projects.md).
 
 The assistant's memory lives on the gateway, per user (SQLite, `src/daemon/memory.ts`). **USER** entries say who you are and what you want; they change only when you approve what the assistant proposes, which must quote your own words from the chat. **MEMORY** notes are the assistant's own, written directly. Every chat starts with both in its system prompt. Review, approve, restore and forget them in the web app under **Settings → Memory**, which device tokens can reach too. Budgets are in characters: `PIRC_MEMORY_USER_CHARS` (default 2000) and `PIRC_MEMORY_NOTE_CHARS` (default 8000). Forgetting erases an entry, its history and the proposals that carried it, and refuses the same text afterwards; the chats it came from stay on the chat node.
 
@@ -86,7 +90,7 @@ The assistant can also delegate: hand a task to a new session in one of your dir
 The assistant can also search what coding sessions noted in every repository (workspace memory). Each node mirrors the ledgers in `PIRC_WORKSPACE_MEMORY_DIR` (default `$PIRC_STATE_DIR/workspace-memory`, which its agents use too) to the gateway every `PIRC_MEMORY_MIRROR_MS` (default 30 s), without paths: an item names the session that wrote it, and only that session's owner can find it. Recalling a note asks its node, which reads the session that wrote it; with the node offline, the answer is the gateway's copy.
 A node gets the model catalog from the gateway when it registers and sends every model request back over the link, so its agents cannot call a model while it is disconnected (they report `Gateway inference is unavailable`). Provider keys never reach nodes; a leaked node token still allows using the gateway's models. The link must use `wss://` unless the gateway is on loopback; only local development should set `PIRC_ALLOW_INSECURE_NODE_TRANSPORT=true`.
 
-The node runs its own binary with the `agent` subcommand for each session. To use a different agent executable, set `PIRC_AGENT_COMMAND` (and optionally `PIRC_AGENT_ARGS` as a JSON array). `PIRC_TERMINALS=false` disables side-panel shells; the shell comes from `PIRC_TERMINAL_SHELL` or `$SHELL`.
+Each chat/coding node runs its own executable with the internal `agent` subcommand for each session; agents use its internal `ptc-worker` command for code scripts. The gateway alone supports the internal `oauth-worker` command. To use a different agent executable, set `PIRC_AGENT_COMMAND` (and optionally `PIRC_AGENT_ARGS` as a JSON array). `PIRC_TERMINALS=false` disables side-panel shells; the shell comes from `PIRC_TERMINAL_SHELL` or `$SHELL`.
 
 ### Workspaces
 

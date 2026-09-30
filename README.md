@@ -1,11 +1,12 @@
 # pirc
 
-A private, forward-authenticated web client for persistent coding-agent sessions. It ships as one executable: gateway, node, and its own built-in agent.
+A private, forward-authenticated web client for persistent coding-agent sessions. It ships as three independently compiled executables: `pirc-gateway`, `pirc-chat`, and `pirc-node`.
 
 It consists of:
 
 - a **gateway** that browsers talk to: authentication, the session index, and routing;
-- one or more **nodes**, one per machine with workspaces, which connect out to the gateway and run one built-in agent subprocess per session (over a JSONL RPC on stdin/stdout), plus side-panel shells;
+- a **chat node** (`pirc-chat`) for assistant chats and projects;
+- one or more **coding nodes** (`pirc-node`), one per machine with workspaces, which connect out to the gateway and run one built-in agent subprocess per session (over a JSONL RPC on stdin/stdout), plus side-panel shells;
 - a responsive Svelte PWA;
 - a native Android client in progress ([`apps/android`](./apps/android/README.md)), which pairs through device tokens.
 
@@ -31,14 +32,14 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 - There is no trust-all or unauthenticated production default.
 - Nodes authenticate to the gateway with per-node secrets and connect outbound only; they listen on no port.
 - Phones running the native app authenticate with device tokens paired from the web **Settings → Devices**. A device token still needs the trusted proxy and an allowed `Host`, cannot manage devices or model backends, and dies after 7 days without use, 30 days after pairing, or on revocation. Otherwise, it acts as you, including shells on your nodes; revoke a lost phone at once. The proxy must pass these requests past forward auth and strip the identity header (see [`apps/gateway/README.md`](./apps/gateway/README.md#device-tokens)).
-- Workspaces are allowlisted. Each agent runs in an OS sandbox when the node has srt (sandbox-runtime; the Nix package ships it); see "Agent sandbox" below. Without one, the agent and its tools keep the operating-system permissions of the node's account, and every session says so.
+- Workspaces are allowlisted. Each agent runs in an OS sandbox when the node has srt (sandbox-runtime; the Nix chat/node packages ship it); see "Agent sandbox" below. Without one, the agent and its tools keep the operating-system permissions of the node's account, and every session says so.
 - The web side panel can browse workspace files, show Git changes and history, and open interactive shells in the workspace. Shells run as the node's account, just like the agent's tools, and require holding session control; set `PIRC_TERMINALS=false` on the node to disable them.
 - The agent's browser (see [Browser](#browser)) loads pages with the node account's network access and keeps each workspace's logins in a persistent profile. Taking it over from the side panel requires holding session control; set `PIRC_BROWSER=false` on the node to disable it.
 - Keep the gateway on loopback or a private interface reachable only by the trusted proxy. Do not expose it through Tailscale Funnel or the public Internet.
 
 ## Requirements
 
-- [Bun](https://bun.sh) 1.2 or newer (development/build only; the compiled `pirc` binary needs no runtime)
+- [Bun](https://bun.sh) 1.2 or newer (development/build only; the compiled executables embed their runtime)
 - A model backend, configured on the gateway: a subscription login (Claude Pro/Max, GitHub Copilot, ChatGPT/Codex) or an API-key/custom endpoint from the web **Settings**, and/or `models.json` (see [Agent](#agent))
 - A trusted forward-auth reverse proxy
 
@@ -48,24 +49,29 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 bun install
 cp apps/gateway/.env.example apps/gateway/.env
 # Fill every security allowlist. Do not copy development values to production.
-# The gateway and node take separate environments; see the file's two sections.
+# Gateway, chat and coding nodes take separate environments; see the example.
 bun run dev        # gateway
-bun run dev:node   # node, with PIRC_DAEMON_URL=ws://127.0.0.1:8787
+bun run dev:chat   # optional chat node, with its own node ID/token/state directory
+bun run dev:node   # coding node, with PIRC_DAEMON_URL=ws://127.0.0.1:8787
 bun run dev:web
 ```
 
 The node's first workspace can point to this repository. See [`apps/gateway/README.md`](./apps/gateway/README.md) for configuration and API details, and [`apps/web/README.md`](./apps/web/README.md) for the client.
 
-## Single binary
+## Role-specific executables
 
 ```sh
-bun run build            # produces apps/gateway/dist/pirc
-./apps/gateway/dist/pirc gateway   # browser API and routing
-./apps/gateway/dist/pirc node      # agents and shells for this machine
-./apps/gateway/dist/pirc agent --session-dir DIR   # one agent session over JSONL RPC (started by the node)
+bun run build            # web bundle plus all three independent executables
+./apps/gateway/dist/pirc-gateway  # browser API and routing
+./apps/gateway/dist/pirc-chat     # assistant chats and projects
+./apps/gateway/dist/pirc-node     # coding agents and shells for this machine
 ```
 
-The binary embeds the Bun runtime, SQLite, and the agent, and does not depend on Node.js or `node_modules`.
+To compile only one role, run `bun run build:gateway`, `bun run build:chat` or `bun run build:node` from `apps/gateway/` (from the repository root, prefix with `bun run --filter @pirc/gateway`). Build the Web UI separately with `bun run --filter @pirc/web build` when needed.
+
+Each executable embeds Bun and SQLite. Chat and coding nodes share the same node/agent implementation, but their executable fixes the role; no environment variable switches between them. Both support the internal `agent` and `ptc-worker` commands; only the gateway supports `oauth-worker`. These worker commands are started by the runtime, not separate services.
+
+The Nix gateway package includes the static Web UI but no sandbox/browser runtime. The chat/node packages include srt and on-disk playwright-core but no Web UI; browser execution still needs Chromium/Chrome and optional ffmpeg. The compiled executables need no separate Bun installation. Keep all three roles on the same release/protocol version. The executable split is a packaging boundary, **not privacy isolation**: host accounts, filesystem permissions and the agent sandbox remain the security boundaries. See [migration guidance](./docs/deploy/upgrades.md#migrating-from-the-single-executable).
 
 ## Agent
 
@@ -139,7 +145,7 @@ Built-in tools and features:
 - Compaction with prompt-cache warming, and observational memory with `recall`.
 - `background_task`: shell jobs with process-group cleanup and one coalesced wakeup per batch of completions. `tty: true` runs a job on a pseudo-terminal so `write` can send it input. `notify_on` (a regular expression, set on start or later with `monitor`) wakes the agent with matching output lines, for dev servers, watchers, or log tails.
 - `subagent`: a one-shot delegate with a fresh context. It runs one task and returns only its final report, then exits. It runs in the foreground (the tool call waits) or with `background: true` (the report is delivered once when it finishes). Subagents get no team tools and cannot spawn further agents.
-- Agent teams: `agent_spawn` starts persistent collaborators that message each other (`agent_send`/`ask`/`reply`/`wait`), share notes (`board_*`), and coordinate on a shared task board (`task_create`/`list`/`get`/`update`). The board has claims, owners, dependencies, and revision checks, and tasks are released when their owner stops. A teammate reports its last answer to the parent once each time it goes idle. Children are `pirc agent --headless` subprocesses.
+- Agent teams: `agent_spawn` starts persistent collaborators that message each other (`agent_send`/`ask`/`reply`/`wait`), share notes (`board_*`), and coordinate on a shared task board (`task_create`/`list`/`get`/`update`). The board has claims, owners, dependencies, and revision checks, and tasks are released when their owner stops. A teammate reports its last answer to the parent once each time it goes idle. Children are `pirc-chat agent --headless` or `pirc-node agent --headless` subprocesses, matching their node's executable.
 - Team completion: after a clean model turn, the parent stays in the same run while workers are active, displaying “Waiting for team” without polling the LLM. Idle persistent teammates do not block completion; parent-directed questions return control to the model. `limits.completionWaitMs` (default 60,000; maximum 86,400,000) bounds each wait: timeout adds an explicit pending-work notice and lets the model report partial progress, without stopping workers. Already-streamed text is not buffered or retracted. Pending team reports enter context together at tool boundaries (bounded batches); a direct `agent_inbox` result suppresses duplicate notifications only for fully returned event IDs. Long reports are read in full with `agent_inbox` `event_id` plus `offset`, 12,000 characters at a time, following `next_offset`. Truncated previews and inbox reads hidden inside `code` do not count as full reads. Stop suspends automatic team wakeups and retains late reports for the next user turn; it does not stop workers (`agent_stop` or `/team stop` does). There is no automatic team recovery after a process restart.
 - Kind presets in `features.agentTeam.kinds` (for subagents and teammates) can set `model`, `thinking`, and a `tools` allowlist, for example `{ "explorer": { "tools": ["read", "ls", "find", "grep"] } }`. Teammates always keep their coordination tools. `features.agentTeam.limit` (default 4) caps live teammates and `subagentLimit` (default 4) caps running subagents.
 - Session titles: sessions cannot be named when created; each one is named by the model from the first user message that describes work (greetings are skipped). It is a side request with no tools and no thinking, and it retries on later messages if it fails. A name you set by renaming always wins. Configure it in `features.sessionTitle`: `enabled` (default `true`), `model` (`{ "provider", "id" }`; defaults to the session's model, so a small, fast model saves cost), `prompt` (replaces the default system prompt), and `maxAttempts` (default `3`).
@@ -213,7 +219,9 @@ A reusable flake, package, development shell, and NixOS module are available in 
 
 ```sh
 nix develop
-nix build
+nix build .#pirc-gateway
+nix build .#pirc-chat
+nix build .#pirc-node
 ```
 
 The NixOS module runs the gateway (`pirc.service`, as `pirc-gateway`) and, by default, a local node (`pirc-node.service`, as `pirc`) under two unprivileged service accounts, and can generate an nginx virtual host wired to an Authelia-compatible `auth_request` endpoint. The model providers (`services.pirc.models`), agent configuration (`services.pirc.agentConfig`), secret management, TLS certificate ownership, workspace permissions, and host names remain explicit inputs rather than unsafe defaults.

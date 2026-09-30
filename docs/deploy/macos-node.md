@@ -8,7 +8,7 @@ Because the node runs as your own account, everything its agents can reach outsi
 
 Choose one:
 
-- **Nix (nix-darwin / Home Manager)**: use `pkgs.pirc` from the flake's overlay. The wrapper already points at srt and playwright-core; Chromium and ffmpeg come from `PIRC_BROWSER_EXECUTABLE`/`PIRC_FFMPEG` or `PATH`.
+- **Nix (nix-darwin / Home Manager)**: use `pkgs.pirc-node` from the flake's overlay. The wrapper already points at srt and playwright-core; Chromium and ffmpeg come from `PIRC_BROWSER_EXECUTABLE`/`PIRC_FFMPEG` or `PATH`.
 - **Compiled binary without Nix**: build on any Mac with the **official** Bun (a Nix-built Bun links `/nix/store` libraries and the result does not run elsewhere):
 
   ```sh
@@ -16,18 +16,18 @@ Choose one:
   cd apps/gateway
   bun build --compile --minify --target=bun-darwin-arm64 \
     --compile-executable-path=/tmp/bunoff/bun-darwin-aarch64/bun \
-    --external chromium-bidi src/cli.ts --outfile /tmp/bunoff/pirc
-  otool -L /tmp/bunoff/pirc | grep -c /nix/store   # must print 0
-  /tmp/bunoff/pirc version
+    --external chromium-bidi src/entry/node.ts --outfile /tmp/bunoff/pirc-node
+  otool -L /tmp/bunoff/pirc-node | grep -c /nix/store   # must print 0
+  /tmp/bunoff/pirc-node version
   ```
 
-  Copy it to `~/.local/pirc-node/bin/pirc`. This build has no bundled playwright-core: set `PIRC_PLAYWRIGHT_CORE` to a `node_modules/playwright-core` of the same version as `apps/gateway/package.json`, or accept that the browser is unavailable. Install srt (`npm install -g @anthropic-ai/sandbox-runtime`) and `ripgrep` for the sandbox.
+  Copy it to `~/.local/pirc-node/bin/pirc-node`. This build has no bundled playwright-core: set `PIRC_PLAYWRIGHT_CORE` to a `node_modules/playwright-core` of the same version as `apps/gateway/package.json`, or accept that the browser is unavailable. Install srt (`npm install -g @anthropic-ai/sandbox-runtime`) and `ripgrep` for the sandbox.
 
 ## 2. Layout
 
 ```
 ~/.local/pirc-node/
-├── bin/pirc          (compiled build only)
+├── bin/pirc-node     (compiled build only)
 ├── agent.env         PIRC_* for the node, mode 0600
 ├── state/            PIRC_STATE_DIR
 ├── agent.log         stdout
@@ -44,7 +44,6 @@ PIRC_DAEMON_URL=wss://pirc.example.ts.net
 PIRC_ALLOWED_USERS=alice@example.com
 PIRC_STATE_DIR=/Users/alice/.local/pirc-node/state
 PIRC_WORKSPACES=[]                     # add workspaces from the web; they must be under the home
-PIRC_CHAT=false
 ```
 
 Because `agent.env` sits outside `PIRC_STATE_DIR`, the sandbox does not hide it by itself. In `~/.config/.pirc/config.json`:
@@ -67,7 +66,7 @@ Because `agent.env` sits outside `PIRC_STATE_DIR`, the sandbox does not hide it 
   <array>
     <string>/bin/sh</string>
     <string>-c</string>
-    <string>set -a; . "$HOME/.local/pirc-node/agent.env"; set +a; exec "$HOME/.local/pirc-node/bin/pirc" node</string>
+    <string>set -a; . "$HOME/.local/pirc-node/agent.env"; set +a; exec "$HOME/.local/pirc-node/bin/pirc-node"</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -89,18 +88,18 @@ Because `agent.env` sits outside `PIRC_STATE_DIR`, the sandbox does not hide it 
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.pirc.node-agent.plist
 launchctl kickstart -k gui/$(id -u)/dev.pirc.node-agent     # restart after replacing the binary
 launchctl bootout gui/$(id -u)/dev.pirc.node-agent          # stop
-pgrep -fl "pirc node"
+pgrep -fl "pirc-node"
 tail -f ~/.local/pirc-node/agent.log ~/.local/pirc-node/agent.err
 ```
 
 ## 4. Replacing the binary (compiled build)
 
 ```sh
-scp /tmp/bunoff/pirc mac:.local/pirc-node/bin/pirc.new
-ssh mac 'chmod 755 ~/.local/pirc-node/bin/pirc.new \
-  && mv ~/.local/pirc-node/bin/pirc.new ~/.local/pirc-node/bin/pirc \
+scp /tmp/bunoff/pirc-node mac:.local/pirc-node/bin/pirc-node.new
+ssh mac 'chmod 755 ~/.local/pirc-node/bin/pirc-node.new \
+  && mv ~/.local/pirc-node/bin/pirc-node.new ~/.local/pirc-node/bin/pirc-node \
   && launchctl kickstart -k gui/$(id -u)/dev.pirc.node-agent \
-  && sleep 4 && pgrep -fl "pirc node"'
+  && sleep 4 && pgrep -fl "pirc-node"'
 ```
 
 Replace with `mv` (atomic) rather than overwriting in place: a running process keeps the old inode.

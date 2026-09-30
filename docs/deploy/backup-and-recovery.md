@@ -4,7 +4,7 @@
 
 Two kinds of state exist, and they are not interchangeable.
 
-### Gateway (`$PIRC_STATE_DIR` of `pirc gateway`)
+### Gateway (`$PIRC_STATE_DIR` of `pirc-gateway`)
 
 | Path                                | Holds                                                                                                                                                                                                                                                           | Loss means                                                                                                                               |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -13,7 +13,7 @@ Two kinds of state exist, and they are not interchangeable.
 | `vapid.json`                        | Push signing key                                                                                                                                                                                                                                                | Every device must re-enable notifications.                                                                                               |
 | `local-node-token` (NixOS)          | The local node's secret                                                                                                                                                                                                                                         | Regenerated on next start; nothing else to do.                                                                                           |
 
-### Node (`$PIRC_STATE_DIR` of each `pirc node`)
+### Node (`$PIRC_STATE_DIR` of each `pirc-node` or `pirc-chat`)
 
 | Path                          | Holds                                                                                     | Loss means                                                                                                |
 | ----------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |

@@ -1,6 +1,6 @@
 # Gateway configuration
 
-`pirc gateway` reads its configuration from environment variables only (`apps/gateway/src/config.ts`, `loadDaemonConfig`). There is no config file besides `models.json`. `.env` files are **not** loaded automatically; inject the environment through your service manager (systemd `EnvironmentFile`, launchd `EnvironmentVariables`, OpenRC `export`).
+`pirc-gateway` reads its configuration from environment variables only (`apps/gateway/src/config.ts`, `loadDaemonConfig`). There is no config file besides `models.json`. `.env` files are **not** loaded automatically; inject the environment through your service manager (systemd `EnvironmentFile`, launchd `EnvironmentVariables`, OpenRC `export`).
 
 The gateway refuses to start when a required value is missing or when it sees a node-only variable (`PIRC_WORKSPACES`, `PIRC_NODE_ID`).
 
