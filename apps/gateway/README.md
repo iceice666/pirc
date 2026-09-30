@@ -41,6 +41,10 @@ bun run start:node  # or: dist/pirc node (separate environment, see .env.example
 
 Set `PIRC_HOST`/`PIRC_PORT`, `PIRC_STATE_DIR`, the browser checks (`PIRC_TRUSTED_PROXIES`, `PIRC_IDENTITY_HEADER`, `PIRC_ALLOWED_USERS`, `PIRC_ALLOWED_ORIGINS`, `PIRC_ALLOWED_HOSTS`), and `PIRC_NODE_TOKENS`: a JSON object mapping each node ID to a **different random secret of at least 32 characters**. Model backends are configured here: in the web **Settings** (API-key/custom endpoints and subscription logins) and in `models.json` (`PIRC_MODELS_FILE`, default `$PIRC_CONFIG_DIR/models.json`); `SIGHUP` reloads the file. The gateway runs all inference, so endpoints must be reachable from it (see the root README's Agent section). Node settings such as `PIRC_WORKSPACES` or `PIRC_NODE_ID` are refused at startup.
 
+### OpenCode Go
+
+For [OpenCode Go](https://opencode.ai/docs/go/#where-can-i-use-it), use `https://opencode.ai/zen/go/v1` as the base URL and select the API required by your model (Chat Completions, Responses, or Anthropic Messages). Requests to `opencode.ai/zen/go` automatically include a stable per-conversation `x-opencode-session` and `User-Agent: pirc/0.1.0` across all transports. For a custom proxy URL, enable **OpenCode Go compatibility** in the backend editor, or set `"opencodeGo": true` on the provider in `models.json`. Your proxy must preserve these headers. No manual session header or API key replacement is needed.
+
 ### Device tokens
 
 A browser with forward auth pairs a phone in **Settings → Devices → Phones**. The gateway generates `pirc_dev_` plus 32 random bytes in base64url, shows it once as a `pirc://pair?url=<origin>&token=<token>` QR code and link, and stores only its SHA-256 hash. The app sends `Authorization: Bearer pirc_dev_…`.

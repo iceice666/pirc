@@ -1,4 +1,5 @@
 import type { AssistantMessage, ToolCall } from '../messages.js';
+import { opencodeGoHeaders } from './opencode-go.js';
 import { emptyUsage } from '../messages.js';
 import { httpError, parseToolArguments, sse, type StreamFn, type StreamRequest } from './types.js';
 
@@ -149,6 +150,7 @@ export const streamAnthropic: StreamFn = async (request, onDelta) => {
       accept: 'text/event-stream',
       'anthropic-version': '2023-06-01',
       ...request.provider.headers,
+      ...opencodeGoHeaders(request),
     };
     if (request.apiKey) headers['x-api-key'] = request.apiKey;
     const response = await fetch(url, {

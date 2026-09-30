@@ -54,6 +54,8 @@ export const modelSchema = z.object({
 const providerBase = z.object({
   api: apiSchema,
   piProvider: z.string().optional(),
+  /** Send OpenCode Go conversation routing headers, including through custom proxies. */
+  opencodeGo: z.boolean().optional(),
   baseUrl: z.string().url(),
   headers: z.record(z.string()).default({}),
   compat: z.record(z.unknown()).default({}),

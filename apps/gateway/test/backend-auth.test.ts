@@ -119,6 +119,25 @@ const callbackRunner =
 const CALLBACK = 'http://localhost:1455/auth/callback?code=the-code&state=abc';
 
 describe('BackendService', () => {
+  test('persists and edits OpenCode Go compatibility without replacing saved credentials', async () => {
+    const { backends, stateDir } = service();
+    const input = {
+      api: 'openai-completions',
+      baseUrl: 'https://proxy.example/v1',
+      models: [{ id: 'glm' }],
+      opencodeGo: true,
+    };
+    backends.saveProvider('go', { ...input, apiKey: SECRET }, true);
+    expect(backends.snapshot().providers.find((p) => p.id === 'go')?.opencodeGo).toBe(true);
+    await backends.close();
+    const reopened = service({ dir: stateDir }).backends;
+    expect((await reopened.resolve('go', 'glm')).provider.opencodeGo).toBe(true);
+    reopened.saveProvider('go', { ...input, opencodeGo: false });
+    const resolved = await reopened.resolve('go', 'glm');
+    expect(resolved.provider.opencodeGo).toBe(false);
+    expect(resolved.apiKey).toBe(SECRET);
+  });
+
   test('lists every registry login without leaking file credentials or endpoints', () => {
     const { backends } = service();
     const snapshot = backends.snapshot();

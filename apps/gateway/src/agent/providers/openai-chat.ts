@@ -1,4 +1,5 @@
 import type { AssistantMessage, Message, ToolCall } from '../messages.js';
+import { opencodeGoHeaders } from './opencode-go.js';
 import { emptyUsage, textOf } from '../messages.js';
 import { httpError, parseToolArguments, sse, type StreamFn, type StreamRequest } from './types.js';
 
@@ -159,6 +160,7 @@ export const streamOpenAIChat: StreamFn = async (request, onDelta) => {
       'content-type': 'application/json',
       accept: 'text/event-stream',
       ...request.provider.headers,
+      ...opencodeGoHeaders(request),
     };
     if (request.apiKey) headers.authorization = `Bearer ${request.apiKey}`;
     if (flags.sendSessionAffinityHeaders) headers.session_id = request.sessionId;

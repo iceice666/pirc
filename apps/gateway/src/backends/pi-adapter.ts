@@ -12,6 +12,7 @@ import type {
 import type { AssistantDelta, AssistantMessage, Message, Usage } from '../agent/messages.js';
 import { emptyUsage } from '../agent/messages.js';
 import type { StreamFn, StreamRequest } from '../agent/providers/types.js';
+import { opencodeGoHeaders } from '../agent/providers/opencode-go.js';
 
 /** Injectable so mapping tests need neither global SDK mocks nor network access. */
 export type PiDispatcher = (
@@ -194,6 +195,8 @@ function streamOptions(
     apiKey: request.apiKey?.trim() || NO_KEY,
     signal: request.signal,
     sessionId: request.sessionId,
+    // Apply at the shared transport boundary for all APIs, not just Chat Completions.
+    headers: opencodeGoHeaders(request),
     transport: 'sse',
     maxTokens,
     maxRetries: 0,

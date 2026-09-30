@@ -71,6 +71,7 @@ export const customProviderSchema = z
   .object({
     api: z.enum(['openai-chat', 'anthropic-messages', 'openai-completions', 'openai-responses']),
     baseUrl: endpoint,
+    opencodeGo: z.boolean().optional(),
     apiKey: z.string().max(32_768).optional(),
     models: z.array(uiModel).min(1).max(200),
   })
@@ -277,6 +278,7 @@ export class BackendService {
             : ('ui' as const),
         readOnly: own(this.baseline.providers, id),
         api: provider.api,
+        opencodeGo: provider.opencodeGo ?? false,
         ...(own(this.state.providers, id) && !own(this.baseline.providers, id)
           ? { baseUrl: provider.baseUrl }
           : {}),

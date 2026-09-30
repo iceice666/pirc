@@ -88,6 +88,32 @@ function capture() {
 }
 
 describe('gateway Pi adapter', () => {
+  test.each(['anthropic-messages', 'openai-completions', 'openai-responses'] as const)(
+    'OpenCode Go sends stable conversation headers for %s, including custom proxies',
+    async (api) => {
+      const mock = capture();
+      const req = request();
+      req.provider.api = api;
+      req.provider.baseUrl = 'https://opencode.ai/zen/go/v1';
+      await mock.stream(req, () => {});
+      expect(mock.get().options.headers).toEqual({
+        'x-opencode-session': 'session',
+        'user-agent': 'pirc/0.1.0',
+      });
+      await mock.stream(req, () => {});
+      expect(mock.get().options.headers?.['x-opencode-session']).toBe('session');
+      req.sessionId = 'other-session';
+      await mock.stream(req, () => {});
+      expect(mock.get().options.headers?.['x-opencode-session']).toBe('other-session');
+      req.model.baseUrl = 'https://proxy.example/v1';
+      await mock.stream(req, () => {});
+      expect(mock.get().options.headers).toEqual({});
+      req.provider.opencodeGo = true;
+      await mock.stream(req, () => {});
+      expect(mock.get().options.headers?.['x-opencode-session']).toBe('other-session');
+    },
+  );
+
   test.each([
     'anthropic-messages',
     'openai-completions',
