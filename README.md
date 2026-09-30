@@ -18,7 +18,7 @@ The gateway never runs agents or tools; it only runs model requests on their beh
 pirc is a **single-user, self-hosted tool for a trusted private network**, such as your own VPN or LAN. The operator, gateway, paired nodes, and their operating-system accounts belong to one trust domain. One user may have multiple nodes, devices, and concurrent sessions.
 
 - Model backend settings and credentials are deployment-wide settings for that operator. pirc is not a multi-tenant service: user allowlists and session ownership do not establish isolation between mutually untrusted users, and there is no separate administrator/user role model.
-- Compromised gateway or node hosts, malicious processes running as the same OS account, and hostile node operators are outside the protection boundary. Agents, tools, and subprocesses are **not sandboxes**; storing credentials on the gateway alone does not isolate them from processes that can access the same files or environment.
+- Compromised gateway or node hosts, malicious processes running as the same OS account, and hostile node operators are outside the protection boundary. Agents run in an OS sandbox where the node has srt, but it limits what they read, write and reach; it does not make a hostile node or account safe. Storing credentials on the gateway alone does not isolate them from processes that can access the same files or environment (the NixOS module runs the gateway as its own account for that reason).
 - Repository content, web pages, model output, provider errors, and browser input remain untrusted data. A trusted network does not make that content authorization to run commands or change settings.
 - The security goals are to prevent unintended exposure and unauthorized access, cross-site requests, and accidental credential disclosure. Authentication, request validation, secret-safe handling, and resource/lifecycle limits still matter on a private network. Multi-user deployment or public exposure requires a new threat-model review.
 
@@ -31,7 +31,7 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 - There is no trust-all or unauthenticated production default.
 - Nodes authenticate to the gateway with per-node secrets and connect outbound only; they listen on no port.
 - Phones running the native app authenticate with device tokens paired from the web **Settings → Devices**. A device token still needs the trusted proxy and an allowed `Host`, cannot manage devices or model backends, and dies after 7 days without use, 30 days after pairing, or on revocation. Otherwise, it acts as you, including shells on your nodes; revoke a lost phone at once. The proxy must pass these requests past forward auth and strip the identity header (see [`apps/gateway/README.md`](./apps/gateway/README.md#device-tokens)).
-- Workspaces are allowlisted, but this is **not a sandbox**. The agent and its tools retain the operating-system permissions of the node's account.
+- Workspaces are allowlisted. Each agent runs in an OS sandbox when the node has srt (sandbox-runtime; the Nix package ships it); see "Agent sandbox" below. Without one, the agent and its tools keep the operating-system permissions of the node's account, and every session says so.
 - The web side panel can browse workspace files, show Git changes and history, and open interactive shells in the workspace. Shells run as the node's account, just like the agent's tools, and require holding session control; set `PIRC_TERMINALS=false` on the node to disable them.
 - The agent's browser (see [Browser](#browser)) loads pages with the node account's network access and keeps each workspace's logins in a persistent profile. Taking it over from the side panel requires holding session control; set `PIRC_BROWSER=false` on the node to disable it.
 - Keep the gateway on loopback or a private interface reachable only by the trusted proxy. Do not expose it through Tailscale Funnel or the public Internet.
@@ -77,8 +77,53 @@ The built-in agent (`apps/gateway/src/agent/`) is configured in three layers:
 
   Endpoints must be reachable from the gateway (a model server that only listens on a node's `localhost` is not). Nodes have no provider settings of their own; `providers` and `defaultModel` in a node's `config.json` are ignored with a warning.
 
-- **Node**: `~/.config/.pirc/config.json` on each node (override the directory with `PIRC_CONFIG_DIR`) holds limits, features, hooks, `env`, and `allowedPaths`. The global system prompt goes in `AGENTS.md` in the same directory.
-- **Project**: `<workspace>/.pirc/config.json` can only add `allowedPaths`, `env`, `hooks`, and a `defaultModel` (which must name one of the gateway's models). `<workspace>/.pirc/AGENTS.md` is appended to the system prompt. The agent's file tools cannot write to `.pirc/`.
+- **Node**: `~/.config/.pirc/config.json` on each node (override the directory with `PIRC_CONFIG_DIR`) holds limits, features, hooks, `env`, `allowedPaths` and `sandbox`. The global system prompt goes in `AGENTS.md` in the same directory.
+- **Project**: `<workspace>/.pirc/config.json` can only add `allowedPaths`, `env`, `hooks`, and a `defaultModel` (which must name one of the gateway's models). Its `allowedPaths` do not widen the sandbox. `<workspace>/.pirc/AGENTS.md` is appended to the system prompt. The agent cannot write to `.pirc/`.
+
+### Agent sandbox
+
+A node starts every agent inside [srt](https://github.com/anthropic-experimental/sandbox-runtime) (Seatbelt on macOS, bubblewrap with a seccomp filter on Linux). The agent's tools, shells, `code` scripts, hooks, teammates and subagents all run inside it. The file tools apply the same rules, so they refuse what the sandbox would:
+
+- **Reads** work anywhere except credential stores (`~/.ssh`, `~/.gnupg`, cloud and git credentials, keychains, browser profiles) and the node's own state (other sessions, uploads, its database, browser profiles, its credentials).
+- **Writes** go only to the workspace (or a chat's own directory), the node's `allowedPaths`, the session's temporary directory, `/tmp` and build caches. `.pirc/`, git hooks, `.git/config` and shell startup files stay read-only.
+- **Network** goes through a filtering proxy. Only common code hosts and package registries are allowed, plus hosts you add. When a task needs another host, the agent calls `sandbox_allow_domains` and the node asks you. An approved host stays allowed for the rest of the session.
+- **Outside the sandbox**: for what the sandbox blocks (a nix build, git over SSH, changing the system), the agent calls `unsandboxed_bash`. The node asks you first, then runs the command with the node account's permissions, but without the node's own secrets.
+
+The node itself asks for both approvals, not the agent: nothing the agent says counts as your answer.
+
+Set it in the node's `config.json` (never a project's):
+
+```json
+{
+  "sandbox": {
+    "enabled": true,
+    "network": {
+      "defaultDomains": true,
+      "allowedDomains": ["api.example.com", "*.internal.example.org", "127.0.0.1:8080"],
+      "deniedDomains": [],
+      "allowLocalBinding": true,
+      "allowUnixSockets": []
+    },
+    "filesystem": {
+      "denyRead": ["~/.local/pirc-node"],
+      "allowRead": [],
+      "allowWrite": [],
+      "denyWrite": [],
+      "allowGitConfig": false
+    }
+  }
+}
+```
+
+Notes on these settings:
+
+- If the `sandbox` settings are invalid, the defaults stay in force and the session shows a warning.
+- Put the directory holding the node's own env file (with `PIRC_NODE_TOKEN`) in `denyRead` when it sits outside `PIRC_STATE_DIR`.
+- `PIRC_SANDBOX_SRT` names the srt binary; by default the node looks for `srt` on PATH, and the Nix package sets it. `PIRC_SANDBOX=off` or `"enabled": false` turns the sandbox off.
+- When srt is missing or cannot sandbox on the host, agents run unconfined and every session opens with a warning. For example, Linux may refuse unprivileged user namespaces (Ubuntu 24.04 needs `kernel.apparmor_restrict_unprivileged_userns=0`).
+
+The sandbox does not cover `web_fetch`, the `browser_*` tools or `web_search`: the node's browser and the gateway run those, so they remain a way to send data out, like anything sent to the model.
+
 - **Skills**: [Agent Skills](https://agentskills.io) — directories holding a `SKILL.md` (YAML front matter with `name` and `description`, then instructions, plus any scripts or references it points to) — loaded from, lowest precedence first: `~/.agents/skills/` (a personal skill directory shared across agent harnesses such as OpenClaw and Hermes; every session on the node), `$PIRC_CONFIG_DIR/skills/` (every session on the node, chats included), and `<workspace>/.pirc/skills/` (that project). A later source wins on a name clash. Only each skill's name, description and path go in the system prompt; the model reads the skill when a task matches. `/skill:<name> [request]` loads one explicitly and `/skill` lists them. Skill directories, including symlinked ones, are readable but not writable by the file tools; a skill added after a session's agent started is listed at once, but if it is a symlink (or the directory did not exist yet) its files become readable only in a new session. Invalid skills are skipped with a warning. `features.skills.enabled: false` turns skills off.
 
 Hooks (`sessionStart`, `beforePrompt`, `beforeTool`, `afterTool`, `agentSettled`) are shell commands that receive JSON on stdin. A `beforeTool` hook can reject a tool call (exit 2) or rewrite its arguments.

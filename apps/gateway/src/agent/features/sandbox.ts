@@ -1,0 +1,145 @@
+/**
+ * Tools for an agent inside its node's OS sandbox (plans/sandbox.md):
+ * `sandbox_allow_domains` asks for more network access, `unsandboxed_bash`
+ * runs one command outside the sandbox. The node asks the human for both;
+ * nothing here can grant anything by itself. Only a node's main agent has
+ * them (see sandbox-channel.ts).
+ */
+import type { Agent } from '../agent.js';
+import type { Feature } from '../feature.js';
+import { processSandboxChannel, SandboxRequestError } from '../sandbox-channel.js';
+import { truncateOutput } from '../sandbox.js';
+import { text, type Tool } from '../tools/types.js';
+
+const SANDBOX_PROMPT = `## Sandbox
+
+Your shell commands (bash, background_task, code) run in an OS sandbox on this node:
+- Reads work anywhere except credential stores (~/.ssh, cloud and git credentials, keychains, browser profiles) and pirc's own state.
+- Writes work only in the workspace, temporary directories and build caches. Git hooks and .git/config are read-only.
+- Network reaches only allowlisted hosts (common code hosts and package registries). A blocked host fails with "CONNECT tunnel failed, response 403" or a proxy error.
+
+When the sandbox blocks something the task needs:
+- A host: call \`sandbox_allow_domains\` with the host and why. The user approves it for this session.
+- Anything else (a nix build, git over SSH, changing the system): call \`unsandboxed_bash\`, which runs one command outside the sandbox after the user approves it. Use it only for what the sandbox blocks, never to get around a refusal.`;
+
+const unavailable = () =>
+  new SandboxRequestError('unavailable', 'This agent is not running inside a node sandbox');
+
+function tools(): Tool[] {
+  return [
+    {
+      name: 'sandbox_allow_domains',
+      description:
+        "Ask the user to let this session's sandbox reach more hosts (e.g. a registry or API a build needs). Blocks until they answer. Allowed hosts stay allowed for the rest of the session.",
+      parameters: {
+        type: 'object',
+        properties: {
+          domains: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              'Hosts, e.g. ["api.example.com", "*.example.org"]; add ":port" to limit a port',
+          },
+          reason: { type: 'string', description: 'Why the task needs them, shown to the user' },
+        },
+        required: ['domains', 'reason'],
+        additionalProperties: false,
+      },
+      async execute(args, ctx) {
+        const channel = processSandboxChannel();
+        if (!channel) throw unavailable();
+        const result = await channel.request(
+          'network',
+          { domains: args.domains, reason: args.reason },
+          ctx.signal,
+        );
+        if (result.unrestricted)
+          return text('This agent is not sandboxed; its network is not restricted.');
+        const granted: string[] = result.granted ?? [];
+        if (!granted.length)
+          return text(
+            `The user did not allow ${(result.denied ?? args.domains).join(', ')}. Do not try to reach them another way.`,
+            result,
+            true,
+          );
+        return text(`Allowed for this session: ${granted.join(', ')}.`, result);
+      },
+    },
+    {
+      name: 'unsandboxed_bash',
+      description:
+        "Run one bash command outside the OS sandbox, with the node account's full access, after the user approves it. Only for what the sandbox blocks (nix builds, git over SSH, system changes); use bash for everything else.",
+      parameters: {
+        type: 'object',
+        properties: {
+          command: { type: 'string' },
+          reason: {
+            type: 'string',
+            description: 'What the sandbox blocks and why the task needs it, shown to the user',
+          },
+          cwd: {
+            type: 'string',
+            description: 'Directory inside the workspace (default: its root)',
+          },
+          timeout: { type: 'number', description: 'Timeout in seconds (default 120)' },
+        },
+        required: ['command', 'reason'],
+        additionalProperties: false,
+      },
+      async execute(args, ctx) {
+        const channel = processSandboxChannel();
+        if (!channel) throw unavailable();
+        // It may write anywhere; hold the workspace's write lease like bash does.
+        await ctx.acquireWrite(ctx.cwd);
+        let result: Record<string, any>;
+        try {
+          result = await channel.request(
+            'exec',
+            {
+              command: args.command,
+              reason: args.reason,
+              ...(typeof args.cwd === 'string' ? { cwd: args.cwd } : {}),
+              ...(typeof args.timeout === 'number' ? { timeoutMs: args.timeout * 1000 } : {}),
+            },
+            ctx.signal,
+          );
+        } catch (error) {
+          if (error instanceof SandboxRequestError && error.code === 'denied')
+            return text(
+              'The user did not approve running this outside the sandbox. Do not try to get around it; ask them how to proceed.',
+              { denied: true },
+              true,
+            );
+          throw error;
+        }
+        const output = truncateOutput(
+          String(result.output ?? ''),
+          ctx.config.limits.toolOutputBytes,
+        );
+        const status = result.timedOut
+          ? '[timed out]'
+          : result.aborted
+            ? '[aborted]'
+            : `[exit ${result.exitCode}]`;
+        const body = `${output.text}${output.text.endsWith('\n') || !output.text ? '' : '\n'}${status} (outside the sandbox)`;
+        return text(
+          body,
+          { exitCode: result.exitCode, truncated: output.truncated || result.truncated === true },
+          result.exitCode !== 0,
+        );
+      },
+    },
+  ];
+}
+
+export function sandboxFeature(): Feature {
+  const list = tools();
+  const active = (agent: Agent) => agent.config.sandboxed && Boolean(processSandboxChannel());
+  return {
+    name: 'sandbox',
+    tools: (agent) => (active(agent) ? list : []),
+    async beforeAgentStart(agent) {
+      return active(agent) ? { systemPrompt: SANDBOX_PROMPT } : undefined;
+    },
+  };
+}

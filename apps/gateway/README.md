@@ -21,7 +21,7 @@ Nodes authenticate to `/node/connect` with a per-node secret (`PIRC_NODE_TOKENS`
 
 Model credentials (API keys, subscription OAuth tokens) stay on the gateway, which runs every model request. A node forwards its agents' requests over its link and receives only streamed results and a secret-free model catalog. Agents reach the node through a Unix socket in the node's state directory (mode 0600, random per-start token), not a TCP port. Backend settings and logins are in `$PIRC_STATE_DIR/backends/settings.json` (0600); this is file-permission protection for a single-user deployment, not isolation from processes running as the same account.
 
-The workspace registry is an execution allowlist, not a sandbox. The agent, its tools, and side-panel shells keep the Unix permissions of the node's account. Do not run a node as root or expose the gateway directly to an untrusted network.
+The workspace registry is an execution allowlist. Agents run inside an OS sandbox when the node has srt (see "Agent sandbox" in the top-level README); side-panel shells, which you drive yourself, keep the Unix permissions of the node's account. Do not run a node as root or expose the gateway directly to an untrusted network.
 
 ## Setup
 

@@ -122,16 +122,21 @@ describe('skillReadPaths', () => {
     symlinkSync(path.join(store, 'refs'), path.join(skills, 'commit', 'refs'));
     symlinkSync(path.join(store, 'missing'), path.join(skills, 'commit', 'dangling'));
 
-    const guard = new PathGuard(root, [], []);
-    const allowed = new PathGuard(root, skillReadPaths([skills]), []);
+    // Skills are configuration: readable, and protected wherever their links lead.
+    const targets = skillReadPaths([skills]);
+    const guard = new PathGuard(
+      root,
+      { denyRead: [], allowRead: [], allowWrite: [root], denyWrite: [] },
+      targets,
+    );
     for (const file of ['SKILL.md', 'agents/openai.yaml', 'refs/guide.md']) {
       const target = path.join(skills, 'commit', file);
-      expect(() => allowed.resolve(target, 'read')).not.toThrow();
-      expect(() => guard.resolve(target, 'read')).toThrow(/outside/);
+      expect(() => guard.resolve(target, 'read')).not.toThrow();
+      expect(() => guard.resolve(target, 'write')).toThrow(/protected/);
     }
-    // Unrelated store paths stay out of reach.
-    writeFileSync(path.join(store, 'other.md'), 'secret');
-    expect(() => allowed.resolve(path.join(store, 'other.md'), 'read')).toThrow(/outside/);
+    // Unrelated store paths are not skill configuration.
+    writeFileSync(path.join(store, 'other.md'), 'notes');
+    expect(() => guard.resolve(path.join(store, 'other.md'), 'write')).not.toThrow();
   });
 });
 

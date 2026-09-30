@@ -139,6 +139,13 @@ export interface NodeConfig {
   terminalShell?: string;
   /** Agent browser tools and the Browser panel (plans/browser.md, node/browser.ts). */
   browser: BrowserSettings;
+  /**
+   * The OS sandbox agents run in (plans/sandbox.md, node/sandbox.ts):
+   * `PIRC_SANDBOX=off` disables it; `PIRC_SANDBOX_SRT` names the srt binary
+   * (else `srt` on PATH). Without a working srt, agents run unconfined with a
+   * warning.
+   */
+  sandbox: { enabled: boolean; srt?: string | undefined };
   leaseTtlMs: number;
   interactionTtlMs: number;
   shutdownGraceMs: number;
@@ -316,6 +323,10 @@ export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig
       ),
       idleMs: integer(env.PIRC_BROWSER_IDLE_MS, 30 * 60_000),
       viewport: viewport(env.PIRC_BROWSER_VIEWPORT),
+    },
+    sandbox: {
+      enabled: env.PIRC_SANDBOX !== 'off',
+      srt: env.PIRC_SANDBOX_SRT || Bun.which('srt') || undefined,
     },
     leaseTtlMs: integer(env.PIRC_LEASE_TTL_MS, 30_000),
     interactionTtlMs: integer(env.PIRC_INTERACTION_TTL_MS, 3_600_000),

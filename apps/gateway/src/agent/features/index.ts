@@ -13,6 +13,7 @@ import { titleFeature } from './title.js';
 import { schedulesFeature } from './schedules.js';
 import { todoFeature } from './todo/index.js';
 import { webSearchFeature } from './web-search.js';
+import { sandboxFeature } from './sandbox.js';
 
 export function builtinFeatures(): Feature[] {
   return [
@@ -31,6 +32,8 @@ export function builtinFeatures(): Feature[] {
     webSearchFeature(),
     // Node agents with a gateway only; the gateway runs the schedules.
     schedulesFeature(),
+    // Node agents inside the node's OS sandbox only (PIRC_SANDBOX=srt).
+    sandboxFeature(),
     backgroundFeature(),
     teamFeature(),
     // Last: its settle hook starts the next round after the others had their turn.

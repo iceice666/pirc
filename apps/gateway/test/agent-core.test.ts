@@ -174,30 +174,79 @@ describe('pirc agent (OpenAI chat)', () => {
     expect(sizes.agent_end).toBeLessThan(100);
   });
 
-  it('confines file tools to the workspace and allowed paths, and protects .pirc', async () => {
+  it('reads anywhere but credential stores, writes only to allowed paths, and protects .pirc', async () => {
     const outside = path.join(tmpdir(), `pirc-outside-${Date.now()}`);
     mkdirSync(outside);
-    writeFileSync(path.join(outside, 'secret.txt'), 'nope');
+    writeFileSync(path.join(outside, 'notes.txt'), 'readable');
     const allowed = path.join(tmpdir(), `pirc-allowed-${Date.now()}`);
     mkdirSync(allowed);
-    writeFileSync(path.join(allowed, 'ok.txt'), 'fine');
     const agent = await start({ config: { allowedPaths: [allowed] } });
+    // The harness gives the agent a HOME of its own.
+    const ssh = path.join(path.dirname(agent.workspace), 'home', '.ssh');
+    mkdirSync(ssh, { recursive: true });
+    writeFileSync(path.join(ssh, 'id_ed25519'), 'key');
     symlinkSync(outside, path.join(agent.workspace, 'escape'));
     agent.llm.push(
-      { tool: { id: 'a', name: 'read', args: { path: path.join(outside, 'secret.txt') } } },
-      { tool: { id: 'b', name: 'read', args: { path: 'escape/secret.txt' } } },
-      { tool: { id: 'c', name: 'read', args: { path: path.join(allowed, 'ok.txt') } } },
-      { tool: { id: 'd', name: 'write', args: { path: '.pirc/config.json', content: '{}' } } },
+      { tool: { id: 'a', name: 'read', args: { path: path.join(outside, 'notes.txt') } } },
+      { tool: { id: 'b', name: 'write', args: { path: 'escape/new.txt', content: 'x' } } },
+      {
+        tool: {
+          id: 'c',
+          name: 'write',
+          args: { path: path.join(allowed, 'ok.txt'), content: 'y' },
+        },
+      },
+      { tool: { id: 'd', name: 'read', args: { path: path.join(ssh, 'id_ed25519') } } },
+      { tool: { id: 'e', name: 'write', args: { path: '.pirc/config.json', content: '{}' } } },
       { text: 'done' },
     );
     await agent.send({ type: 'prompt', message: 'go' });
     await settledAfter(agent, 0);
     const results = agent.events.filter((event) => event.type === 'tool_execution_end');
-    expect(results.map((r) => r.isError)).toEqual([true, true, false, true]);
-    expect(results[0]!.result.content[0].text).toContain('outside the workspace');
-    expect(results[1]!.result.content[0].text).toContain('outside the workspace');
-    expect(results[3]!.result.content[0].text).toContain('protected');
+    expect(results.map((r) => r.isError)).toEqual([false, true, false, true, true]);
+    expect(results[0]!.result.content[0].text).toContain('readable');
+    expect(results[1]!.result.content[0].text).toContain('outside the writable paths');
+    expect(existsSync(path.join(outside, 'new.txt'))).toBe(false);
+    expect(readFileSync(path.join(allowed, 'ok.txt'), 'utf8')).toBe('y');
+    expect(results[3]!.result.content[0].text).toContain('is private');
+    expect(results[4]!.result.content[0].text).toContain('protected');
     expect(existsSync(path.join(agent.workspace, '.pirc/config.json'))).toBe(false);
+  });
+
+  it('applies the node sandbox policy it is given', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'pirc-policy-'));
+    const state = path.join(root, 'state');
+    const session = path.join(state, 'sessions', 'mine');
+    mkdirSync(session, { recursive: true });
+    writeFileSync(path.join(state, 'node.sqlite'), 'db');
+    writeFileSync(path.join(session, 'log.jsonl'), 'mine');
+    const workspace = path.join(root, 'ws');
+    mkdirSync(workspace);
+    const policy = {
+      denyRead: [state],
+      allowRead: [session],
+      allowWrite: [workspace, session],
+      denyWrite: [path.join(workspace, '.pirc')],
+    };
+    const agent = await start({
+      workspace,
+      env: { PIRC_SANDBOX: 'srt', PIRC_SANDBOX_POLICY: JSON.stringify(policy) },
+      // Under srt the node's policy decides; the agent's own allowedPaths do not widen it.
+      config: { allowedPaths: [root] },
+    });
+    agent.llm.push(
+      { tool: { id: 'a', name: 'read', args: { path: path.join(state, 'node.sqlite') } } },
+      { tool: { id: 'b', name: 'read', args: { path: path.join(session, 'log.jsonl') } } },
+      { tool: { id: 'c', name: 'write', args: { path: path.join(root, 'x.txt'), content: 'x' } } },
+      { tool: { id: 'd', name: 'write', args: { path: 'ok.txt', content: 'ok' } } },
+      { text: 'done' },
+    );
+    await agent.send({ type: 'prompt', message: 'go' });
+    await settledAfter(agent, 0);
+    const results = agent.events.filter((event) => event.type === 'tool_execution_end');
+    expect(results.map((r) => r.isError)).toEqual([true, false, true, false]);
+    expect(results[0]!.result.content[0].text).toContain('is private');
+    expect(results[2]!.result.content[0].text).toContain('outside the writable paths');
   });
 
   it('edits files and reports a diff; bash honours timeout', async () => {

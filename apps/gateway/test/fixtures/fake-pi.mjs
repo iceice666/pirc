@@ -62,6 +62,9 @@ let dialogCount = 0;
 // `gateway <op> [json args]` asks the gateway through the node, like a feature would.
 const gatewayCalls = new Map();
 let gatewayCount = 0;
+// `sandbox <op> <json args>` asks the node's sandbox (network approval, unsandboxed exec).
+const sandboxCalls = new Map();
+let sandboxCount = 0;
 const reply = (text) =>
   settle({ role: 'assistant', content: [{ type: 'text', text }], stopReason: 'stop' });
 const settle = (message) => {
@@ -78,6 +81,11 @@ rl.on('line', (raw) => {
   if (!configured) {
     if (command.type !== 'configure') process.exit(3);
     configured = true;
+    return;
+  }
+  if (command.type === 'sandbox_response') {
+    sandboxCalls.get(command.id)?.(command);
+    sandboxCalls.delete(command.id);
     return;
   }
   const response = (success = true, data, error) =>
@@ -180,6 +188,31 @@ rl.on('line', (raw) => {
         args: gateway[2] ? JSON.parse(gateway[2]) : {},
       });
       return;
+    }
+    const sandbox = /^sandbox (\S+) (.+)$/s.exec(command.message);
+    if (sandbox) {
+      const id = `sandbox-${++sandboxCount}`;
+      sandboxCalls.set(id, (answer) =>
+        reply(
+          answer.ok
+            ? `sandbox:ok ${JSON.stringify(answer.result)}`
+            : `sandbox:error ${JSON.stringify(answer.error)}`,
+        ),
+      );
+      line({ type: 'sandbox_request', id, op: sandbox[1], args: JSON.parse(sandbox[2]) });
+      return;
+    }
+    // `forge` tries to open and cancel dialogs in the node's own namespace.
+    if (command.message === 'forge') {
+      line({
+        type: 'extension_ui_request',
+        id: 'node-sandbox-forged',
+        method: 'confirm',
+        title: 'Harmless?',
+        message: 'Approve',
+      });
+      line({ type: 'extension_ui_request', method: 'cancel', targetId: 'node-sandbox-anything' });
+      return reply('forged');
     }
     // `cwd` reports the directory the node started this agent in.
     if (command.message === 'cwd') return reply(`cwd:${process.cwd()}`);

@@ -2,7 +2,7 @@
 
 The flake exposes:
 
-- `packages.<system>.pirc`: a single Bun-compiled executable (`bin/pirc` with `gateway`, `node`, and `agent` subcommands) plus the static Web bundle (`share/pirc/web`). The executable needs no Node.js, Bun, or `node_modules` at runtime.
+- `packages.<system>.pirc`: a single Bun-compiled executable (`bin/pirc` with `gateway`, `node`, and `agent` subcommands) plus the static Web bundle (`share/pirc/web`). `bin/pirc` is a wrapper that points the node at two things it runs beside the binary: [srt](./sandbox-runtime.nix), the agent sandbox pinned here because nixpkgs trails upstream (`PIRC_SANDBOX_SRT`), and an on-disk playwright-core (`PIRC_PLAYWRIGHT_CORE`), which reads its own files by computed paths that `bun --compile` cannot bundle. No Bun or `node_modules` is needed at runtime; srt brings its own Node.js.
 - `overlays.default`: adds `pkgs.pirc`, built against the consumer's nixpkgs.
 - `nixosModules.pirc`: unprivileged systemd services for the gateway and a local node, and an optional nginx/forward-auth virtual host.
 - `devShells.<system>.default`: Bun (plus Node 22 for the web app's vitest/svelte-check).
@@ -105,7 +105,7 @@ The generated nginx configuration does not create Tailscale certificates. Supply
 
 ## Workspace and hardening notes
 
-- Workspace allowlisting is not an OS sandbox.
+- Each agent runs in an OS sandbox (`services.pirc.sandbox.enable`, default on; srt with bubblewrap and a seccomp filter, see "Agent sandbox" in the top-level README). Tune it with `agentConfig.sandbox`. It needs unprivileged user namespaces, which NixOS allows by default. Where they are refused, agents run unconfined and every session shows a warning. Side-panel terminals are not sandboxed.
 - `ProtectSystem=strict` is enabled; only the node service can write configured workspace paths, and each service writes only the state directory besides.
 - `ProtectHome=true` means workspaces under `/home` are intentionally unavailable. Prefer `/srv`, or explicitly override the systemd hardening in the host configuration after reviewing the risk.
 - `MemoryDenyWriteExecute` remains disabled because Bun/JavaScriptCore requires executable JIT memory.

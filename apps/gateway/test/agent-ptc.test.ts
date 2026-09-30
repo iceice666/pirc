@@ -53,10 +53,10 @@ describe('code mode (PTC)', () => {
     const agent = await start();
     const end = await runCode(
       agent,
-      `return await tools.read({ path: ${JSON.stringify(path.join(outside, 'x'))} });`,
+      `return await tools.write({ path: ${JSON.stringify(path.join(outside, 'x'))}, content: 'y' });`,
     );
     expect(end.isError).toBe(true);
-    expect(end.result.content[0].text).toContain('outside the workspace');
+    expect(end.result.content[0].text).toContain('outside the writable paths');
     const raw = await runCode(
       agent,
       `const r = await tools.call('write', { path: '.pirc/config.json', content: '{}' }); return r.isError;`,

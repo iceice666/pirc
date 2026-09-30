@@ -3,6 +3,9 @@
   stdenvNoCC,
   bun,
   makeBinaryWrapper,
+  callPackage,
+  # The OS sandbox nodes wrap agents in (plans/sandbox.md).
+  srt ? callPackage ./sandbox-runtime.nix { },
   nodeModulesHash ? "sha256-KEDQyYbgzyMVWiBv2Kl0tIprDlAOGyMhxjS10/Dz/Vo=",
 }:
 
@@ -99,7 +102,8 @@ stdenvNoCC.mkDerivation {
     mkdir -p $out/lib/pirc
     cp -rL "$playwright" $out/lib/pirc/playwright-core
     makeBinaryWrapper $out/libexec/pirc/pirc $out/bin/pirc \
-      --set-default PIRC_PLAYWRIGHT_CORE $out/lib/pirc/playwright-core
+      --set-default PIRC_PLAYWRIGHT_CORE $out/lib/pirc/playwright-core \
+      --set-default PIRC_SANDBOX_SRT ${lib.getExe srt}
     mkdir -p $out/share/pirc/web
     cp -r apps/web/dist/. $out/share/pirc/web/
     runHook postInstall
@@ -110,7 +114,7 @@ stdenvNoCC.mkDerivation {
     $out/bin/pirc version
   '';
 
-  passthru = { inherit nodeModules; };
+  passthru = { inherit nodeModules srt; };
 
   meta = {
     description = "Private forward-authenticated web client with a built-in coding agent";

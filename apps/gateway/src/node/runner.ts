@@ -1,5 +1,7 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import type { Readable, Writable } from 'node:stream';
 import path from 'node:path';
 import type { NodeConfig } from '../config.js';
 import { configureLine, type ModelStore } from '../models.js';
@@ -11,6 +13,8 @@ import { applySessionName } from '../session-name.js';
 import type { AgentGateway } from './agent-gateway.js';
 import type { BrowserManager } from './browser.js';
 import { sessionRoot } from './chat.js';
+import { DOMAIN_PATTERN, isInside, realResolve } from '../sandbox-policy.js';
+import { NodeSandbox, srtSettings, type PreparedSandbox } from './sandbox.js';
 import { withoutSecrets } from './secrets.js';
 import type { WriteBroker } from './write-broker.js';
 import { emptyReducedState, reducePiEvent, type ReducedSessionState } from './reducer.js';
@@ -28,12 +32,113 @@ const dialogMethods = new Set(['select', 'confirm', 'input', 'editor']);
 const MAX_GATEWAY_REQUESTS = 8;
 /** Browser requests one session may have in flight (handoff waits count). */
 const MAX_BROWSER_REQUESTS = 4;
+/** Sandbox requests (approvals, unsandboxed commands) one session may have in flight. */
+const MAX_SANDBOX_REQUESTS = 4;
+/** Output kept from an unsandboxed command (head and tail). */
+const HOST_EXEC_OUTPUT_BYTES = 1_000_000;
+/**
+ * Interactions the node asks itself (sandbox approvals) carry rpc ids with
+ * this prefix. Answers to them never reach the agent, and the agent can
+ * neither open nor cancel one: its word is not the human's.
+ */
+const NODE_DIALOG_PREFIX = 'node-sandbox-';
+
+type AgentChild = ChildProcess & { stdin: Writable; stdout: Readable; stderr: Readable };
+
+/**
+ * Run an approved command outside the sandbox: bash in its own process
+ * group, the node's environment without its secrets, output capped.
+ */
+function runOnHost(
+  command: string,
+  cwd: string,
+  timeoutMs: number,
+  signal: AbortSignal,
+): Promise<{
+  output: string;
+  exitCode: number | null;
+  timedOut: boolean;
+  aborted: boolean;
+  truncated: boolean;
+}> {
+  return new Promise((resolve) => {
+    const child = spawn('/bin/bash', ['-c', command], {
+      cwd,
+      env: withoutSecrets(process.env),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true,
+    });
+    let head = '';
+    let tail = '';
+    let total = 0;
+    const half = HOST_EXEC_OUTPUT_BYTES / 2;
+    const collect = (chunk: Buffer) => {
+      const text = chunk.toString('utf8');
+      total += chunk.byteLength;
+      if (head.length < half) {
+        const room = half - head.length;
+        head += text.slice(0, room);
+        tail = (tail + text.slice(room)).slice(-half);
+      } else tail = (tail + text).slice(-half);
+    };
+    child.stdout.on('data', collect);
+    child.stderr.on('data', collect);
+    let timedOut = false;
+    let aborted = false;
+    const stop = () => {
+      try {
+        process.kill(-child.pid!, 'SIGTERM');
+      } catch {
+        /* gone */
+      }
+      setTimeout(() => {
+        try {
+          process.kill(-child.pid!, 'SIGKILL');
+        } catch {
+          /* gone */
+        }
+      }, 1000).unref();
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      stop();
+    }, timeoutMs);
+    const onAbort = () => {
+      aborted = true;
+      stop();
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    const finish = (exitCode: number | null) => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+      const truncated = total > Buffer.byteLength(head + tail);
+      resolve({
+        output: truncated ? `${head}\n\n[… output truncated …]\n\n${tail}` : head + tail,
+        exitCode: timedOut || aborted ? null : exitCode,
+        timedOut,
+        aborted,
+        truncated,
+      });
+    };
+    child.once('error', (error) => {
+      head += `${error.message}\n`;
+      finish(null);
+    });
+    child.once('close', (code) => finish(code));
+  });
+}
 
 class PiRunner {
   readonly state: ReducedSessionState = emptyReducedState();
   readonly epoch: number;
-  private readonly child: ChildProcessWithoutNullStreams;
+  private readonly child: AgentChild;
+  /** srt's control channel (network allowlist updates), when sandboxed. */
+  private readonly control: Writable | undefined;
   private readonly pending = new Map<string, PendingRequest>();
+  private readonly nodeDialogs = new Map<string, (confirmed: boolean) => void>();
+  private readonly sandboxRequests = new Map<string, AbortController>();
+  /** Domains the human allowed for this session, beyond the policy. */
+  private readonly approvedDomains = new Set<string>();
   private closed = false;
   private currentRunId: string | null = null;
   /** Error from the latest assistant turn; a later successful turn clears it. */
@@ -50,6 +155,7 @@ class PiRunner {
     private readonly writes: WriteBroker,
     private readonly gateway: AgentGateway,
     private readonly browser: BrowserManager | undefined,
+    private readonly sandbox: PreparedSandbox,
     private readonly onExit: (runner: PiRunner) => void,
   ) {
     this.epoch = db.incrementEpoch(session.id);
@@ -63,9 +169,13 @@ class PiRunner {
       session.privateSessionPath,
     ];
     if (session.piSessionId) args.push('--continue');
-    this.child = spawn(config.agentCommand, args, {
+    const sandboxed = sandbox.status.active;
+    this.child = spawn(sandbox.command, [...sandbox.args, ...args.slice(config.agentArgs.length)], {
       cwd: sessionRoot(workspace, session.id),
-      stdio: ['pipe', 'pipe', 'pipe'],
+      // fd 3: srt's control channel.
+      stdio: sandboxed ? ['pipe', 'pipe', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'],
+      // Its own process group, so stopping srt also stops what it sandboxes.
+      detached: sandboxed,
       env: {
         // The node token must not reach the agent: its tools and shells run whatever the model asks.
         ...withoutSecrets(process.env),
@@ -79,8 +189,14 @@ class PiRunner {
         PIRC_WORKSPACE_MEMORY_DIR: config.workspaceMemoryDir,
         // This node answers browser_request (node/browser.ts).
         PIRC_BROWSER: browser?.enabled ? '1' : '0',
+        // This node answers sandbox_request; the file tools mirror the policy.
+        PIRC_SANDBOX: sandboxed ? 'srt' : 'off',
+        PIRC_SANDBOX_POLICY: JSON.stringify(sandbox.policy.paths),
+        ...sandbox.env,
       },
-    });
+    }) as AgentChild;
+    this.control = sandboxed ? ((this.child.stdio[3] as Writable | null) ?? undefined) : undefined;
+    this.control?.on('error', () => undefined);
     // Public catalog + node-local inference transport; no provider credentials.
     this.child.stdin.write(configureLine(models.current));
     const parser = new JsonlParser(config.rpcMaxLineBytes, (value) => this.handleValue(value));
@@ -106,7 +222,23 @@ class PiRunner {
     this.child.once('error', (error) => this.fail(error));
     this.child.once('exit', (code, signal) => this.exit(code, signal));
     db.setRunnerState(session.id, 'ready');
-    this.events.publish(session.id, this.epoch, 'runner_ready', {});
+    this.events.publish(session.id, this.epoch, 'runner_ready', {
+      sandbox: sandbox.status.active
+        ? { active: true }
+        : { active: false, reason: sandbox.status.reason },
+    });
+    // In the timeline, and in the snapshot for clients that connect later.
+    for (const warning of sandbox.warnings) {
+      const notice = {
+        type: 'extension_ui_request',
+        id: `${NODE_DIALOG_PREFIX}notice-${randomUUID()}`,
+        method: 'notify',
+        message: warning,
+        notifyType: 'warning',
+      };
+      reducePiEvent(this.state, notice);
+      this.events.publish(session.id, this.epoch, 'notification', notice);
+    }
     // A user-chosen name stops the agent from generating one. Written before any
     // prompt, so the agent sees it first.
     const current = db.getSession(session.id);
@@ -136,6 +268,12 @@ class PiRunner {
       }
     }
     if (message.type === 'extension_ui_request') {
+      // Only the node opens or cancels its own dialogs.
+      if (
+        (typeof message.id === 'string' && message.id.startsWith(NODE_DIALOG_PREFIX)) ||
+        (typeof message.targetId === 'string' && message.targetId.startsWith(NODE_DIALOG_PREFIX))
+      )
+        return;
       if (dialogMethods.has(message.method) && typeof message.id === 'string') {
         const timeout =
           typeof message.timeout === 'number' && message.timeout > 0
@@ -181,6 +319,14 @@ class PiRunner {
     }
     if (message.type === 'browser_cancel') {
       if (typeof message.id === 'string') this.browserRequests.get(message.id)?.abort();
+      return;
+    }
+    if (message.type === 'sandbox_request') {
+      this.handleSandbox(message);
+      return;
+    }
+    if (message.type === 'sandbox_cancel') {
+      if (typeof message.id === 'string') this.sandboxRequests.get(message.id)?.abort();
       return;
     }
     if (message.type === 'session_name_changed') {
@@ -241,6 +387,12 @@ class PiRunner {
   }
 
   async answer(rpcId: string, answer: Record<string, unknown>): Promise<void> {
+    const dialog = this.nodeDialogs.get(rpcId);
+    if (dialog) {
+      dialog(answer.confirmed === true);
+      if (this.currentRunId) this.db.updateRun(this.currentRunId, 'running');
+      return;
+    }
     if (this.closed || !this.child.stdin.writable)
       throw new ApiError(503, 'runner_unavailable', 'Runner is not available');
     await new Promise<void>((resolve, reject) =>
@@ -383,14 +535,183 @@ class PiRunner {
       .finally(() => this.browserRequests.delete(message.id));
   }
 
+  /**
+   * Ask the human, from the node itself: the agent is sandboxed and may be
+   * steered by what it reads, so its own dialogs cannot grant anything.
+   */
+  private confirmFromNode(title: string, message: string, signal: AbortSignal): Promise<boolean> {
+    const rpcId = `${NODE_DIALOG_PREFIX}${randomUUID()}`;
+    const interaction = this.db.createInteraction(
+      this.session.id,
+      this.epoch,
+      rpcId,
+      'confirm',
+      { type: 'extension_ui_request', id: rpcId, method: 'confirm', title, message },
+      now() + this.config.interactionTtlMs,
+    );
+    this.events.publish(this.session.id, this.epoch, 'interaction_created', interaction);
+    if (this.currentRunId) this.db.updateRun(this.currentRunId, 'waiting_input');
+    return new Promise((resolve) => {
+      const finish = (confirmed: boolean) => {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', withdraw);
+        this.nodeDialogs.delete(rpcId);
+        resolve(confirmed);
+      };
+      // Unanswered in time, cancelled by the agent, or the runner stopped.
+      const withdraw = () => {
+        const cancelled = this.db.cancelInteractionByRpcId(this.session.id, this.epoch, rpcId);
+        if (cancelled) {
+          this.events.publish(this.session.id, this.epoch, 'interaction_answered', {
+            interactionId: cancelled,
+            cancelled: true,
+          });
+          if (this.currentRunId) this.db.updateRun(this.currentRunId, 'running');
+        }
+        finish(false);
+      };
+      const timer = setTimeout(withdraw, this.config.interactionTtlMs);
+      signal.addEventListener('abort', withdraw, { once: true });
+      this.nodeDialogs.set(rpcId, finish);
+    });
+  }
+
+  /**
+   * The agent's `sandbox_request`: `network` (allow more domains for this
+   * session) or `exec` (run one command outside the sandbox). Both need the
+   * human's yes, asked by the node.
+   */
+  private handleSandbox(message: Record<string, any>): void {
+    if (typeof message.id !== 'string' || !message.id || message.id.length > 100) return;
+    const requestId = message.id;
+    const reply = (response: Record<string, unknown>) => {
+      if (!this.closed && this.child.stdin.writable)
+        this.child.stdin.write(
+          `${JSON.stringify({ type: 'sandbox_response', id: requestId, ...response })}\n`,
+        );
+    };
+    const fail = (code: string, text: string) =>
+      reply({ ok: false, error: { code, message: text } });
+    const args = message.args && typeof message.args === 'object' ? message.args : {};
+    if (Buffer.byteLength(JSON.stringify(args)) > AGENT_REQUEST_MAX_BYTES)
+      return fail('payload_too_large', 'Sandbox request arguments are too large');
+    if (this.sandboxRequests.size >= MAX_SANDBOX_REQUESTS)
+      return fail('too_many_requests', 'Too many sandbox requests are in flight');
+    const reason =
+      typeof args.reason === 'string' && args.reason.trim()
+        ? args.reason.trim().slice(0, 500)
+        : '(no reason given)';
+    const controller = new AbortController();
+    const start = (work: () => Promise<void>) => {
+      this.sandboxRequests.set(requestId, controller);
+      void work()
+        .catch((error: unknown) =>
+          fail('sandbox_error', error instanceof Error ? error.message : String(error)),
+        )
+        .finally(() => this.sandboxRequests.delete(requestId));
+    };
+
+    if (message.op === 'network') {
+      const domains = Array.isArray(args.domains)
+        ? [...new Set(args.domains.map((item: unknown) => String(item).trim().toLowerCase()))]
+        : [];
+      if (!domains.length || domains.length > 10)
+        return fail('invalid_input', 'Name one to ten domains');
+      const bad = domains.find((domain) => !DOMAIN_PATTERN.test(domain as string));
+      if (bad) return fail('invalid_input', `Not a domain: ${bad}`);
+      if (!this.sandbox.status.active || !this.control)
+        return reply({ ok: true, result: { granted: domains, unrestricted: true } });
+      const allowed = new Set([
+        ...this.sandbox.policy.network.allowedDomains,
+        ...this.approvedDomains,
+      ]);
+      const missing = (domains as string[]).filter((domain) => !allowed.has(domain));
+      if (!missing.length) return reply({ ok: true, result: { granted: domains } });
+      return start(async () => {
+        const confirmed = await this.confirmFromNode(
+          'Allow network access?',
+          [
+            `The agent asks to reach ${missing.join(', ')} from its sandbox.`,
+            `Reason: ${reason}`,
+            'Approving allows these hosts for the rest of this session.',
+          ].join('\n\n'),
+          controller.signal,
+        );
+        if (!confirmed) return reply({ ok: true, result: { granted: [], denied: missing } });
+        for (const domain of missing) this.approvedDomains.add(domain);
+        this.control!.write(
+          `${JSON.stringify(srtSettings(this.sandbox.policy, this.approvedDomains))}\n`,
+        );
+        reply({ ok: true, result: { granted: domains } });
+      });
+    }
+
+    if (message.op === 'exec') {
+      if (!this.sandbox.status.active)
+        return fail('not_sandboxed', 'This agent is not sandboxed; run the command with bash');
+      const command = typeof args.command === 'string' ? args.command : '';
+      if (!command.trim() || command.length > 20_000)
+        return fail(
+          'invalid_input',
+          'command must be a non-empty string (at most 20000 characters)',
+        );
+      const workspace = this.db.getWorkspace(this.session.workspaceId);
+      const root = realResolve(sessionRoot(workspace, this.session.id));
+      const cwd = realResolve(
+        path.resolve(root, typeof args.cwd === 'string' && args.cwd ? args.cwd : '.'),
+      );
+      let isDir = false;
+      try {
+        isDir = statSync(cwd).isDirectory();
+      } catch {
+        /* reported below */
+      }
+      if (!isInside(cwd, root) || !isDir)
+        return fail('invalid_input', `cwd must be a directory inside ${root}`);
+      const timeoutMs = Math.min(
+        Math.max(typeof args.timeoutMs === 'number' ? args.timeoutMs : 120_000, 1000),
+        3_600_000,
+      );
+      return start(async () => {
+        const confirmed = await this.confirmFromNode(
+          'Run a command outside the sandbox?',
+          [
+            `$ ${command}`,
+            `in ${cwd}`,
+            `Reason: ${reason}`,
+            "It runs with this node account's full access (without the node's own secrets).",
+          ].join('\n\n'),
+          controller.signal,
+        );
+        if (!confirmed)
+          return fail('denied', 'The user did not approve running this outside the sandbox');
+        reply({ ok: true, result: await runOnHost(command, cwd, timeoutMs, controller.signal) });
+      });
+    }
+    fail('invalid_input', 'Unknown sandbox operation');
+  }
+
   setRun(runId: string): void {
     this.currentRunId = runId;
+  }
+
+  /** Signal the agent (and, when sandboxed, srt with everything under it). */
+  private kill(signal: NodeJS.Signals): void {
+    if (this.sandbox.status.active && this.child.pid) {
+      try {
+        process.kill(-this.child.pid, signal);
+        return;
+      } catch {
+        /* group gone; fall through */
+      }
+    }
+    this.child.kill(signal);
   }
 
   private fail(error: Error): void {
     if (!this.closed) {
       this.events.publish(this.session.id, this.epoch, 'runner_error', { message: error.message });
-      this.child.kill('SIGKILL');
+      this.kill('SIGKILL');
     }
   }
 
@@ -406,6 +727,10 @@ class PiRunner {
     this.pending.clear();
     for (const controller of this.browserRequests.values()) controller.abort();
     this.browserRequests.clear();
+    for (const controller of this.sandboxRequests.values()) controller.abort();
+    this.sandboxRequests.clear();
+    for (const dialog of [...this.nodeDialogs.values()]) dialog(false);
+    this.sandbox.cleanup();
     this.db.markDispatchedUnknown(this.session.id, error.message);
     if (this.currentRunId) this.db.updateRun(this.currentRunId, 'interrupted', error.message);
     this.db.setRunnerState(this.session.id, 'failed');
@@ -425,11 +750,11 @@ class PiRunner {
     } catch {
       /* force termination below */
     }
-    this.child.kill('SIGTERM');
+    this.kill('SIGTERM');
     await new Promise<void>((resolve) => {
       if (this.closed) return resolve();
       const killTimer = setTimeout(() => {
-        if (!this.closed) this.child.kill('SIGKILL');
+        if (!this.closed) this.kill('SIGKILL');
       }, graceMs);
       const fallbackTimer = setTimeout(resolve, graceMs * 2);
       fallbackTimer.unref();
@@ -444,6 +769,8 @@ class PiRunner {
 
 export class RunnerManager {
   private readonly runners = new Map<string, PiRunner>();
+  /** Runners being prepared (the sandbox probe is async); one start per session. */
+  private readonly starting = new Map<string, Promise<PiRunner>>();
   constructor(
     private readonly config: NodeConfig,
     private readonly db: GatewayDatabase,
@@ -452,18 +779,36 @@ export class RunnerManager {
     private readonly models: ModelStore,
     private readonly gateway: AgentGateway,
     private readonly browser?: BrowserManager,
+    private readonly sandbox: NodeSandbox = new NodeSandbox(config),
   ) {}
 
   /**
    * Runners start without a limit; sessions that only read never contend.
    * Writers are serialized per path by the {@link WriteBroker}.
    */
-  private async ensure(sessionId: string): Promise<PiRunner> {
+  private ensure(sessionId: string): Promise<PiRunner> {
     const existing = this.runners.get(sessionId);
-    if (existing?.alive) return existing;
+    if (existing?.alive) return Promise.resolve(existing);
+    let starting = this.starting.get(sessionId);
+    if (!starting) {
+      starting = this.start(sessionId).finally(() => this.starting.delete(sessionId));
+      this.starting.set(sessionId, starting);
+    }
+    return starting;
+  }
+
+  private async start(sessionId: string): Promise<PiRunner> {
     const session = this.db.getSession(sessionId);
     this.db.setRunnerState(sessionId, 'starting');
+    let prepared: PreparedSandbox | undefined;
     try {
+      const workspace = this.db.getWorkspace(session.workspaceId);
+      prepared = await this.sandbox.prepare({
+        sessionId,
+        workspaceRoot: sessionRoot(workspace, sessionId),
+        sessionDir: session.privateSessionPath,
+        inferenceSocket: this.models.current.inference?.socketPath,
+      });
       const runner = new PiRunner(
         session,
         this.config,
@@ -473,6 +818,7 @@ export class RunnerManager {
         this.writes,
         this.gateway,
         this.browser,
+        prepared,
         (exited) => {
           if (this.runners.get(sessionId) === exited) this.runners.delete(sessionId);
           this.writes.release(sessionId);
@@ -481,6 +827,7 @@ export class RunnerManager {
       this.runners.set(sessionId, runner);
       return runner;
     } catch (error) {
+      prepared?.cleanup();
       this.writes.release(sessionId);
       this.db.setRunnerState(sessionId, 'failed');
       throw error;

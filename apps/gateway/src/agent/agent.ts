@@ -254,7 +254,7 @@ export class Agent {
     this.writeLease = options.acquireWrite ?? (async () => undefined);
     this.guard = new PathGuard(
       options.config.workspace,
-      options.config.allowedPaths,
+      options.config.pathPolicy,
       options.config.protectedPaths,
     );
     this.hooks = new HookRunner(

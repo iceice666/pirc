@@ -1,6 +1,7 @@
 import { parentChannel } from './features/team/channel.js';
 import { nodeGateway } from './gateway.js';
 import { nodeBrowser } from './browser-channel.js';
+import { nodeSandboxChannel } from './sandbox-channel.js';
 import { nodeWriteBroker } from './write-lease.js';
 import { randomUUID } from 'node:crypto';
 import type { Agent } from './agent.js';
@@ -283,6 +284,7 @@ export async function serveRpc(
     if (command.type === 'write_lease_response') return nodeWriteBroker().respond(command);
     if (command.type === 'gateway_response') return nodeGateway().respond(command);
     if (command.type === 'browser_response') return nodeBrowser().respond(command);
+    if (command.type === 'sandbox_response') return nodeSandboxChannel().respond(command);
     void handleCommand(agent, command, extra).then(
       (data) =>
         write({

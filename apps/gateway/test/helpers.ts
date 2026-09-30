@@ -52,6 +52,8 @@ export function testConfig(overrides: Partial<NodeConfig> = {}): NodeConfig {
       idleMs: 60_000,
       viewport: { width: 800, height: 600 },
     },
+    // Tests that exercise srt opt in with their own settings.
+    sandbox: { enabled: false },
     leaseTtlMs: 5000,
     interactionTtlMs: 5000,
     shutdownGraceMs: 100,

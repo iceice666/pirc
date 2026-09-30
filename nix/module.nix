@@ -97,6 +97,9 @@ let
     PIRC_CHAT = lib.boolToString cfg.chat;
     PIRC_BROWSER = lib.boolToString cfg.browser.enable;
   }
+  // lib.optionalAttrs (!cfg.sandbox.enable) {
+    PIRC_SANDBOX = "off";
+  }
   // lib.optionalAttrs cfg.browser.enable {
     PIRC_BROWSER_EXECUTABLE = lib.getExe cfg.browser.package;
     PIRC_FFMPEG = lib.getExe' cfg.browser.ffmpeg "ffmpeg";
@@ -224,6 +227,20 @@ in
         Account (and group) the gateway runs as, apart from the node's
         `user`, so agents cannot read the gateway's keys and logins. Files
         named by apiKeyFile must be readable by it.
+      '';
+    };
+
+    sandbox.enable = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Run each of the local node's agents in an OS sandbox (srt:
+        bubblewrap, a seccomp filter and a filtering network proxy; see
+        plans/sandbox.md). Reads are open except credentials and pirc's
+        state, writes stay in the workspace, network reaches allowlisted
+        hosts, and the agent asks the user for anything else. Tune it with
+        agentConfig.sandbox. Off, or where the kernel refuses unprivileged
+        user namespaces, agents run unconfined and every session says so.
       '';
     };
 

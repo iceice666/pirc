@@ -10,6 +10,7 @@ import { SessionStore } from './session-store.js';
 import { builtinTools } from './tools/index.js';
 import { nodeGateway } from './gateway.js';
 import { nodeBrowser } from './browser-channel.js';
+import { nodeSandboxChannel } from './sandbox-channel.js';
 import { nodeWriteBroker, processWriteLease } from './write-lease.js';
 
 /**
@@ -95,6 +96,7 @@ export async function runAgent(argv: string[]): Promise<void> {
     nodeWriteBroker().closeAll();
     nodeGateway().closeAll();
     nodeBrowser().closeAll();
+    nodeSandboxChannel().closeAll();
     await agent.shutdown();
     process.exit(0);
   };

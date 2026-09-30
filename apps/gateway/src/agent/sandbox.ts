@@ -1,55 +1,52 @@
-import { existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { expandHome } from './config.js';
+import {
+  isInside,
+  readAllowed,
+  realResolve,
+  writeAllowed,
+  type PathPolicy,
+} from '../sandbox-policy.js';
 
-/** Resolve a path the way the kernel will, following symlinks of the longest existing prefix. */
-export function realResolve(target: string): string {
-  let current = path.resolve(target);
-  const tail: string[] = [];
-  while (!existsSync(current)) {
-    const parent = path.dirname(current);
-    if (parent === current) break;
-    tail.unshift(path.basename(current));
-    current = parent;
-  }
-  let real: string;
-  try {
-    real = realpathSync(current);
-  } catch {
-    real = current;
-  }
-  return path.join(real, ...tail);
-}
-
-const inside = (child: string, parent: string) =>
-  child === parent || child.startsWith(parent.endsWith(path.sep) ? parent : parent + path.sep);
+export { realResolve } from '../sandbox-policy.js';
 
 /**
- * Enforces the workspace boundary for file tools and PTC file APIs.
- * Not a security sandbox for shell commands — bash still runs with the
- * agent account's permissions.
+ * The file tools' view of the sandbox policy (sandbox-policy.ts): reads are
+ * open except denied regions (credential stores, pirc's state), writes only
+ * inside allowed roots and never into protected ones. Under a sandboxing
+ * node the policy is the node's, so the tools refuse exactly what srt would;
+ * the OS sandbox, not this, is what holds shell commands to it.
  */
 export class PathGuard {
-  private readonly roots: string[];
+  private readonly policy: PathPolicy;
   private readonly protectedRoots: string[];
 
   constructor(
     readonly cwd: string,
-    allowed: string[],
+    policy: PathPolicy,
     protectedPaths: string[] = [],
   ) {
-    this.roots = allowed.map((item) => realResolve(item));
-    this.protectedRoots = protectedPaths.map((item) => realResolve(item));
+    const resolve = (items: string[]) => items.map((item) => realResolve(item));
+    this.policy = {
+      denyRead: resolve(policy.denyRead),
+      allowRead: resolve(policy.allowRead),
+      allowWrite: resolve(policy.allowWrite),
+      denyWrite: resolve(policy.denyWrite),
+    };
+    this.protectedRoots = resolve(protectedPaths);
   }
 
+  /** Roots the file tools may write under. */
   get allowedRoots(): readonly string[] {
-    return this.roots;
+    return this.policy.allowWrite;
   }
 
-  /** The allowed root containing `absolute` (innermost match), or undefined. */
+  /** The writable root containing `absolute` (innermost match), or undefined. */
   rootOf(absolute: string): string | undefined {
     const real = realResolve(absolute);
-    return this.roots.filter((root) => inside(real, root)).sort((a, b) => b.length - a.length)[0];
+    return this.policy.allowWrite
+      .filter((root) => isInside(real, root))
+      .sort((a, b) => b.length - a.length)[0];
   }
 
   resolve(input: string, mode: 'read' | 'write'): string {
@@ -57,11 +54,17 @@ export class PathGuard {
     const cleaned = input.startsWith('@') ? input.slice(1) : input;
     const absolute = path.resolve(this.cwd, expandHome(cleaned));
     const real = realResolve(absolute);
-    if (!this.roots.some((root) => inside(real, root)))
+    const shown = real === absolute ? input : `${input} (${real})`;
+    if (mode === 'read') {
+      if (!readAllowed(this.policy, real))
+        throw new Error(`Path ${shown} is private (credentials or pirc state) and cannot be read`);
+      return absolute;
+    }
+    if (!writeAllowed(this.policy, real))
       throw new Error(
-        `Path ${input} is outside the workspace and allowed paths (${this.roots.join(', ')})`,
+        `Path ${shown} is outside the writable paths (${this.policy.allowWrite.join(', ')})`,
       );
-    if (mode === 'write' && this.protectedRoots.some((root) => inside(real, root)))
+    if (this.protectedRoots.some((root) => isInside(real, root)))
       throw new Error(`Path ${input} is protected agent configuration and cannot be modified`);
     return absolute;
   }

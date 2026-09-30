@@ -14,6 +14,7 @@ import {
 import type { WorkspaceKind } from '../types.js';
 import type { SessionEntry } from './session-store.js';
 import { skillReadPaths, skillRoots } from './skills.js';
+import { defaultPathPolicy, type PathPolicy } from '../sandbox-policy.js';
 
 export {
   defaultConfigDir,
@@ -61,6 +62,12 @@ const globalSchema = z.object({
   hooks: hooksSchema,
   limits: limitsSchema,
   features: z.record(z.unknown()).default({}),
+  /**
+   * The OS sandbox (sandbox-policy.ts sandboxConfigSchema). The node reads and
+   * validates it when it starts the agent, and warns about mistakes there
+   * (node/sandbox.ts); the agent itself only applies what the node sends.
+   */
+  sandbox: z.unknown().optional(),
 });
 
 /** Project config may only extend paths/env/hooks and choose a default model. */
@@ -88,6 +95,10 @@ export interface AgentConfig {
   allowedPaths: string[];
   /** Paths the agent may read but never write (its own project config). */
   protectedPaths: string[];
+  /** What the file tools may read and write (the node's sandbox policy when it has one). */
+  pathPolicy: PathPolicy;
+  /** The node runs this agent inside its OS sandbox (PIRC_SANDBOX=srt). */
+  sandboxed: boolean;
   env: Record<string, string>;
   hooks: HooksConfig;
   limits: z.infer<typeof limitsSchema>;
@@ -112,12 +123,12 @@ function readText(file: string): string {
 
 const basePrompt = `You are pirc, a coding agent operating inside a user's workspace through tools.
 Work carefully: read before editing, keep changes minimal and verified, and report blockers honestly.
-File tools are limited to the workspace and explicitly allowed paths.`;
+File tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.`;
 
 /** For chats (plans/assistant.md): the working directory is the chat's own, not a project. */
 const chatPrompt = `You are pirc, the user's personal assistant, chatting with them on one of their machines.
 Answer directly; use tools when they help, and report what you did and any blockers honestly.
-This chat has its own private working directory; file tools are limited to it and explicitly allowed paths.`;
+This chat has its own private working directory; file tools write only to it and explicitly allowed paths, and read anywhere except credential stores and pirc's private state.`;
 
 /** Keys of the node's config.json that moved to the gateway and are now ignored. */
 export function legacyModelKeys(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -153,6 +164,19 @@ export function loadAgentConfig(
     ]),
   ) as HooksConfig;
   const workspaceKind: WorkspaceKind = env.PIRC_WORKSPACE_KIND === 'chat' ? 'chat' : 'directory';
+  const writable = [...new Set(allowedPaths)];
+  const sandboxed = env.PIRC_SANDBOX === 'srt';
+  const nodePolicy = parsePathPolicy(env.PIRC_SANDBOX_POLICY);
+  // The node's read rules always; its write rules only when srt enforces
+  // them (unsandboxed, the configured allowedPaths still apply).
+  const pathPolicy: PathPolicy = nodePolicy
+    ? {
+        denyRead: nodePolicy.denyRead,
+        allowRead: nodePolicy.allowRead,
+        allowWrite: sandboxed ? nodePolicy.allowWrite : writable,
+        denyWrite: sandboxed ? nodePolicy.denyWrite : [],
+      }
+    : defaultPathPolicy(writable);
   const prompts = [
     workspaceKind === 'chat' ? chatPrompt : basePrompt,
     readText(path.join(configDir, 'AGENTS.md')),
@@ -166,8 +190,10 @@ export function loadAgentConfig(
     models,
     providers: models.providers,
     ...(defaultModel ? { defaultModel } : {}),
-    allowedPaths: [...new Set(allowedPaths)],
+    allowedPaths: writable,
     protectedPaths: [projectDir, ...skillPaths],
+    pathPolicy,
+    sandboxed,
     env: { ...global.env, ...project.env },
     hooks,
     limits: global.limits,
@@ -175,6 +201,22 @@ export function loadAgentConfig(
     systemPrompt: prompts.join('\n\n'),
     workspaceKind,
   };
+}
+
+const pathPolicySchema = z.object({
+  denyRead: z.array(z.string()),
+  allowRead: z.array(z.string()),
+  allowWrite: z.array(z.string()),
+  denyWrite: z.array(z.string()),
+});
+
+function parsePathPolicy(value: string | undefined): PathPolicy | undefined {
+  if (!value) return undefined;
+  try {
+    return pathPolicySchema.parse(JSON.parse(value));
+  } catch {
+    throw new Error('PIRC_SANDBOX_POLICY is not a valid path policy');
+  }
 }
 
 /**
