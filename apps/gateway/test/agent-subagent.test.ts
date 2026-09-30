@@ -154,6 +154,65 @@ describe('subagent tool', () => {
     expect(notices).toHaveLength(1);
   }, 30_000);
 
+  it('lets the parent read a truncated report in full through agent_inbox', async () => {
+    // Memory workers would answer to the same fake model; keep the script to the parent.
+    const agent = await startAgent({
+      config: { features: { observationalMemory: { enabled: false } } },
+    });
+    agents.push(agent);
+    // 45,000 characters, every line distinct, past the 40,000-character tool result.
+    const report = Array.from(
+      { length: 5000 },
+      (_, i) => `row ${String(i).padStart(4, '0')}\n`,
+    ).join('');
+    const total = report.trim().length; // the stored report is trimmed
+    expect(total).toBe(44_999);
+    const lastTool = (body: any) => {
+      const last = body.messages.at(-1);
+      return last.role === 'tool' ? String(last.content) : '';
+    };
+    let eventId = '';
+    const parent: Array<(body: any) => Reply> = [
+      () => ({ tool: { id: 'p1', name: 'subagent', args: { task: 'write it', name: 'writer' } } }),
+      (body) => {
+        eventId = /agent_inbox with event_id=(\S+) offset=40000/.exec(lastTool(body))![1]!;
+        return { tool: { id: 'p2', name: 'agent_inbox', args: {} } };
+      },
+      () => ({
+        tool: { id: 'p3', name: 'agent_inbox', args: { event_id: eventId, offset: 40_000 } },
+      }),
+      () => ({ text: 'read it all' }),
+    ];
+    agent.llm.route = (body) =>
+      isSubagent(body) ? { text: report } : (parent.shift()?.(body) ?? { text: 'extra' });
+    const from = agent.events.length;
+    await agent.send({ type: 'prompt', message: 'delegate' });
+    await settledAfter(agent, from);
+
+    const [end] = toolEnd(agent, 'subagent');
+    const shown = end!.result.content[0].text as string;
+    expect(shown).toContain('row 4443');
+    expect(shown).not.toContain('row 4445');
+    expect(shown).toContain('[Result truncated at 40000 of 44999 characters');
+
+    const [page, rest] = toolEnd(agent, 'agent_inbox').map((e) =>
+      JSON.parse(e.result.content[0].text),
+    );
+    const entry = page.items.find((item: any) => item.id === eventId);
+    expect(entry).toMatchObject({ truncated: true, total_chars: total, next_offset: 12_000 });
+    expect(rest.event).toMatchObject({
+      id: eventId,
+      from: 'writer',
+      to: 'parent',
+      offset: 40_000,
+      total_chars: total,
+      next_offset: null,
+    });
+    expect(
+      shown.split('\n[Result truncated')[0]!.split(':\n').slice(1).join(':\n') + rest.event.body,
+    ).toBe(report.trim());
+  }, 30_000);
+
   it('reports a failed subagent as an error result', async () => {
     const agent = await startAgent();
     agents.push(agent);

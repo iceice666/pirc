@@ -79,8 +79,16 @@ const DEFINITIONS: Array<[string, string, Json]> = [
   ],
   [
     'agent_inbox',
-    'Read sent/received team history, paginated, at most 40KB. Use next as after. Fully returned events suppress duplicate queued parent notifications once this tool result enters context. Truncated entries are previews; read the archive for full content. Does not wake agents.',
-    object(paging),
+    'Read sent/received team history, paginated, at most 40KB. Use next as after. Fully returned events suppress duplicate queued parent notifications once this tool result enters context. Truncated entries are previews: pass event_id (and offset, starting from next_offset) to read one event body in 12000-character chunks until next_offset is null. Does not wake agents.',
+    object({
+      ...paging,
+      event_id: { type: 'string', description: 'Read this one event instead of a page' },
+      offset: {
+        type: 'integer',
+        minimum: 0,
+        description: 'With event_id: first body character to return (default 0)',
+      },
+    }),
   ],
   [
     'board_post',
@@ -310,12 +318,15 @@ export function teamFeature(): Feature {
       const report = outcome as SubagentOutcome;
       const body = report.status === 'done' ? (report.result ?? '') : (report.error ?? '');
       const clipped = body.length > MAX_FOREGROUND_RESULT;
-      const header = `Subagent ${report.name} ${report.status}${report.event_id ? ` (agent_inbox event ${report.event_id})` : ''}`;
+      const header = `Subagent ${report.name} ${report.status}${report.event_id ? ` (agent_inbox event_id=${report.event_id})` : ''}`;
+      const more = report.event_id
+        ? `agent_inbox with event_id=${report.event_id} offset=${MAX_FOREGROUND_RESULT}`
+        : 'agent_inbox';
       return {
         content: [
           {
             type: 'text',
-            text: `${header}:\n${clipped ? `${body.slice(0, MAX_FOREGROUND_RESULT)}\n[Result truncated; full text via agent_inbox]` : body}`,
+            text: `${header}:\n${clipped ? `${body.slice(0, MAX_FOREGROUND_RESULT)}\n[Result truncated at ${MAX_FOREGROUND_RESULT} of ${body.length} characters; continue with ${more}]` : body}`,
           },
         ],
         details: { name: report.name, status: report.status, event_id: report.event_id },
@@ -422,6 +433,16 @@ export function teamFeature(): Feature {
           if (part.type !== 'text') continue;
           try {
             const page = JSON.parse(part.text);
+            // A single-event read counts only when the whole body came back at once.
+            const event = page.event;
+            if (
+              event &&
+              event.offset === 0 &&
+              event.next_offset === null &&
+              event.to === 'parent' &&
+              typeof event.id === 'string'
+            )
+              acknowledge(agent, [event.id]);
             if (Array.isArray(page.items))
               acknowledge(
                 agent,

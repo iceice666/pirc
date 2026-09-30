@@ -22,6 +22,8 @@ const KIND_NAME = /^[a-z][a-z0-9_-]{0,39}$/;
 const TOOL_NAME = /^[a-z][a-z0-9_]{0,63}$/;
 const RESULT_NOTICE_LIMIT = 2000;
 const SUBAGENT_NOTICE_LIMIT = 4000;
+/** Characters of one event body returned per agent_inbox page entry or event_id read. */
+export const INBOX_CHUNK_CHARS = 12000;
 const TASK_LIMIT = 200;
 export interface KindPreset {
   model?: string;
@@ -133,7 +135,7 @@ function compactResult(entry: Json, limit = RESULT_NOTICE_LIMIT): Json {
   const clipped = normalized.length > limit;
   return {
     ...entry,
-    body: `${normalized.slice(0, limit)}${clipped ? '\n[Preview truncated]' : ''}\nFull result: agent_inbox event ${entry.id}`,
+    body: `${normalized.slice(0, limit)}${clipped ? '\n[Preview truncated]' : ''}\nFull result: agent_inbox with event_id=${entry.id}`,
     ...(clipped ? { truncated: true } : {}),
   };
 }
@@ -1227,11 +1229,11 @@ export class Team {
           this.records.filter((r) => r.kind === 'post' && (!args.topic || r.topic === args.topic)),
           args,
         );
-      case 'agent_inbox':
-        return this.page(
-          this.records.filter((r) => r.to === who || r.from === who),
-          args,
-        );
+      case 'agent_inbox': {
+        const visible = this.records.filter((r) => r.to === who || r.from === who);
+        if (args.event_id !== undefined) return this.readEvent(visible, args);
+        return this.page(visible, args);
+      }
       case 'task_create':
         return this.createTask(who, args);
       case 'task_list':
@@ -1249,6 +1251,27 @@ export class Team {
     }
   }
 
+  /** One event, body sliced from `offset`, so long results can be read in full. */
+  private readEvent(records: Json[], args: Json): Json {
+    const id = text(args.event_id, 'event_id', 80);
+    const record = records.find((r) => r.id === id);
+    if (!record) throw new Error('Event not found or not visible to you');
+    const body = typeof record.body === 'string' ? record.body : String(record.body ?? '');
+    const offset = Math.max(0, Math.floor(Number(args.offset) || 0));
+    if (offset > body.length) throw new Error(`offset exceeds body length ${body.length}`);
+    const end = Math.min(body.length, offset + INBOX_CHUNK_CHARS);
+    const { body: _body, ...meta } = record;
+    return {
+      event: {
+        ...meta,
+        body: body.slice(offset, end),
+        offset,
+        total_chars: body.length,
+        next_offset: end < body.length ? end : null,
+      },
+    };
+  }
+
   private page(records: Json[], args: Json): Json {
     const index = args.after ? records.findIndex((r) => r.id === args.after) : -1;
     if (args.after && index < 0) throw new Error('Cursor not found in this query');
@@ -1257,7 +1280,15 @@ export class Team {
     let size = 0;
     for (const r of records.slice(index + 1, index + 1 + limit)) {
       let entry =
-        r.body?.length > 12000 ? { ...r, body: r.body.slice(0, 12000), truncated: true } : r;
+        r.body?.length > INBOX_CHUNK_CHARS
+          ? {
+              ...r,
+              body: r.body.slice(0, INBOX_CHUNK_CHARS),
+              truncated: true,
+              total_chars: r.body.length,
+              next_offset: INBOX_CHUNK_CHARS,
+            }
+          : r;
       if (Buffer.byteLength(JSON.stringify(entry)) > 39000)
         entry = {
           id: r.id,
@@ -1269,7 +1300,7 @@ export class Team {
           status: r.status,
           origin: r.origin,
           truncated: true,
-          body: 'Oversized entry; read full event in archive.',
+          body: `Oversized entry; read it with agent_inbox event_id=${r.id} offset=0.`,
         };
       const bytes = Buffer.byteLength(JSON.stringify(entry));
       if (size + bytes > 40000 && items.length) break;
