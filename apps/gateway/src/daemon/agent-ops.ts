@@ -220,13 +220,20 @@ const ops: Record<string, AgentOp> = {
   },
   /** One delegation with its full result, or the user's recent ones. */
   'delegation.status': {
-    args: z.object({ id: z.string().min(1).max(40).optional() }).strict(),
+    args: z
+      .object({
+        id: z.string().min(1).max(40).optional(),
+        offset: z.number().int().min(0).optional(),
+      })
+      .strict(),
     run: (context, args) => {
       requireChat(context);
       const { delegations } = context.services;
+      if (args.offset !== undefined && !args.id)
+        throw new ApiError(400, 'invalid_input', 'offset needs an id');
       return {
         delegations: args.id
-          ? [delegations.brief(delegations.get(context.user, args.id), true)]
+          ? [delegations.brief(delegations.get(context.user, args.id), true, args.offset ?? 0)]
           : delegations.list(context.user).map((delegation) => delegations.brief(delegation)),
       };
     },

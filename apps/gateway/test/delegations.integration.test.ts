@@ -207,6 +207,57 @@ it('asks the user, runs the task in a new session and reports back, then follows
   ).toMatchObject({ status: 403 });
 }, 30_000);
 
+it('keeps a long result whole and lets the chat page through it', async () => {
+  const { app, services } = await start();
+  const chat = await promptSession(app, services.events, headers, 'home:chats');
+  const id = reply(
+    await chat.ask('gateway delegation.create {"workspace":"work:test","task":"Write a report."}'),
+  ).body.id as string;
+  await answer(app, chat.sessionId, chat.generation, id, true);
+  await waitFor(() => services.delegations.get(USER, id).status, 'completed');
+  await heard(app, chat.sessionId, 1);
+
+  // A later answer, longer than one chunk or the update message: every part is distinct.
+  const long = Array.from({ length: 3000 }, (_, i) => `line ${String(i).padStart(4, '0')}\n`).join(
+    '',
+  );
+  expect(long.length).toBe(30_000);
+  services.db.raw
+    .prepare("UPDATE delegations SET status='running', notified_status=NULL WHERE id=?")
+    .run(id);
+  (services.delegations as any).finish(id, 'completed', long);
+  expect(services.delegations.get(USER, id).result).toBe(long);
+
+  // The chat's update carries the start and says how to read on.
+  const update = await heard(app, chat.sessionId, 2);
+  expect(update.content).toContain('line 0000');
+  expect(update.content).not.toContain('line 0500');
+  expect(update.content).toContain(`delegation_status id=${id} offset=4000`);
+
+  const status = async (args: object) =>
+    reply(await chat.ask(`gateway delegation.status ${JSON.stringify(args)}`)).body;
+  let text = '';
+  let offset: number | undefined = 0;
+  const chunks: any[] = [];
+  while (offset !== undefined) {
+    const brief: any = (await status({ id, offset })).delegations[0];
+    chunks.push(brief);
+    text += brief.result;
+    offset = brief.nextOffset;
+  }
+  expect(text).toBe(long);
+  expect(chunks.map((c) => [c.resultOffset, c.nextOffset, c.resultChars])).toEqual([
+    [0, 12_000, 30_000],
+    [12_000, 24_000, 30_000],
+    [24_000, undefined, 30_000],
+  ]);
+  // The list stays short.
+  const [listed] = (await status({})).delegations;
+  expect(listed.result.length).toBeLessThanOrEqual(600);
+  expect((await status({ offset: 5 })).code).toBe('invalid_input');
+  expect((await status({ id, offset: 30_001 })).code).toBe('invalid_input');
+}, 30_000);
+
 it('reports refusals and sessions that wait for the user, and refuses offline workspaces', async () => {
   const { app, services, nodes } = await start();
   const chat = await promptSession(app, services.events, headers, 'home:chats');

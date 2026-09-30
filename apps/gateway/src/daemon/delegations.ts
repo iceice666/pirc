@@ -60,7 +60,12 @@ export interface Delegation {
 
 export const TASK_MAX_CHARS = 20_000;
 const TITLE_MAX_CHARS = 80;
-const RESULT_MAX_CHARS = 4000;
+/** Stored in full up to this sanity cap; readers page through it. */
+const RESULT_MAX_CHARS = 200_000;
+/** How much of the result the chat's update message carries. */
+const RESULT_NOTICE_CHARS = 4000;
+/** One `delegation_status` read of a result. */
+export const RESULT_CHUNK_CHARS = 12_000;
 const PENDING_MAX = 10;
 /** The chat hears about these; the user already sees an approval happen. */
 const NOTIFIED = new Set<DelegationStatus>([
@@ -190,8 +195,15 @@ export class Delegations {
     return this.rows('owner_user=?', user).reverse().slice(0, limit);
   }
 
-  /** What the assistant sees of a delegation. */
-  brief(delegation: Delegation, full = false) {
+  /**
+   * What the assistant sees of a delegation. `full` returns the result from
+   * `offset` in chunks, with `nextOffset` until the end.
+   */
+  brief(delegation: Delegation, full = false, offset = 0) {
+    const result = delegation.result;
+    if (full && result !== null && offset > result.length)
+      throw new ApiError(400, 'invalid_input', `offset exceeds result length ${result.length}`);
+    const end = result === null ? 0 : Math.min(result.length, offset + RESULT_CHUNK_CHARS);
     return {
       id: delegation.id,
       title: delegation.title,
@@ -201,8 +213,16 @@ export class Delegations {
       ...(delegation.targetSessionId
         ? { session: this.sessionName(delegation.targetSessionId) }
         : {}),
-      ...(delegation.result
-        ? { result: full ? delegation.result : clip(delegation.result, 600) }
+      ...(result
+        ? full
+          ? {
+              result: result.slice(offset, end),
+              ...(offset || end < result.length
+                ? { resultOffset: offset, resultChars: result.length }
+                : {}),
+              ...(end < result.length ? { nextOffset: end } : {}),
+            }
+          : { result: clip(result, 600) }
         : {}),
       createdAt: delegation.createdAt,
     };
@@ -545,7 +565,12 @@ export class Delegations {
         workspace: this.label(delegation.workspaceId),
         ...(session ? { session } : {}),
         status: delegation.status,
-        ...(delegation.result ? { result: delegation.result } : {}),
+        ...(delegation.result ? { result: delegation.result.slice(0, RESULT_NOTICE_CHARS) } : {}),
+        ...(delegation.result && delegation.result.length > RESULT_NOTICE_CHARS
+          ? {
+              resultTruncated: `${RESULT_NOTICE_CHARS} of ${delegation.result.length} characters shown; read the rest with delegation_status id=${delegation.id} offset=${RESULT_NOTICE_CHARS}`,
+            }
+          : {}),
       }),
       NEXT_STEP[delegation.status] ?? '',
     ]

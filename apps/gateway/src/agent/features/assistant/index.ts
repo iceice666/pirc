@@ -57,9 +57,22 @@ interface DelegationBrief {
   status: string;
   session?: string;
   result?: string;
+  resultOffset?: number;
+  resultChars?: number;
+  nextOffset?: number;
 }
 
 const number = (value: number) => value.toLocaleString('en-US');
+
+/** Where a chunked delegation result stands, and how to read on. */
+function resultFooter(delegation: DelegationBrief): string {
+  if (delegation.resultChars === undefined) return '';
+  const start = delegation.resultOffset ?? 0;
+  const end = delegation.nextOffset ?? delegation.resultChars;
+  return delegation.nextOffset === undefined
+    ? `\n[Result characters ${start}–${end} of ${delegation.resultChars}; end of result]`
+    : `\n[Result characters ${start}–${end} of ${delegation.resultChars}; continue with delegation_status id=${delegation.id} offset=${end}]`;
+}
 
 export function renderMemory(context: MemoryContext): string {
   const user = context.user ?? [];
@@ -524,20 +537,26 @@ The other agent sees nothing of this chat: write the task so it stands on its ow
   const delegationsTool = (gateway: NodeGateway): Tool => ({
     name: DELEGATIONS_TOOL,
     description:
-      'Check on delegations: one with its full result, by id, or the recent ones with their status.',
+      'Check on delegations: one with its full result, by id, or the recent ones with their status. A long result comes in 12000-character chunks: call again with offset set to the reported next offset until none is given.',
     parameters: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'A delegation id, like d1a2b3c4d.' },
+        offset: {
+          type: 'integer',
+          minimum: 0,
+          description: 'With id: first result character to return (default 0)',
+        },
       },
       additionalProperties: false,
     },
     async execute(args, ctx) {
       const id = typeof args.id === 'string' ? args.id.trim() : '';
+      const offset = Number.isInteger(args.offset) && args.offset > 0 ? args.offset : 0;
       try {
         const result = (await gateway.request(
           'delegation.status',
-          id ? { id } : {},
+          id ? { id, ...(offset ? { offset } : {}) } : {},
           ctx.signal,
         )) as { delegations: DelegationBrief[] };
         if (!result.delegations.length) return text('No delegations yet.');
@@ -545,7 +564,7 @@ The other agent sees nothing of this chat: write the task so it stands on its ow
           result.delegations
             .map(
               (delegation) =>
-                `${delegation.id} · ${delegation.status} · “${delegation.title}” → ${delegation.workspace}${delegation.session ? ` (session “${delegation.session}”)` : ''}${delegation.result ? `\n${delegation.result}` : ''}`,
+                `${delegation.id} · ${delegation.status} · “${delegation.title}” → ${delegation.workspace}${delegation.session ? ` (session “${delegation.session}”)` : ''}${delegation.result ? `\n${delegation.result}` : ''}${resultFooter(delegation)}`,
             )
             .join('\n\n'),
           { delegations: result.delegations.map((delegation) => delegation.id) },
