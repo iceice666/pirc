@@ -261,6 +261,7 @@ export interface BackendProvider {
   readOnly: boolean;
   api: string;
   baseUrl?: string;
+  opencodeGo?: boolean;
   hasApiKey: boolean;
   models: BackendModel[];
 }
@@ -284,6 +285,7 @@ export interface BackendSettingsSnapshot {
 export interface BackendProviderInput {
   api: string;
   baseUrl: string;
+  opencodeGo?: boolean;
   apiKey?: string;
   models: BackendModel[];
 }

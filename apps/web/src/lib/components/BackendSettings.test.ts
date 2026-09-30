@@ -313,9 +313,15 @@ describe('BackendSettings', () => {
     await input('Backend ID', 'local');
     await input('Base URL', 'http://localhost:11434/v1');
     await input('Model ID', 'model-one');
+    const go = Array.from(target.querySelectorAll('label'))
+      .find((label) => label.textContent?.includes('OpenCode Go compatibility'))!
+      .querySelector<HTMLInputElement>('input')!;
+    go.click();
+    await tick();
     await click('Save backend');
     expect(calls.find((call) => call.method === 'POST')?.body).toMatchObject({
       id: 'local',
+      opencodeGo: true,
       apiKey: '',
       baseUrl: 'http://localhost:11434/v1',
       models: [{ id: 'model-one' }],
@@ -324,6 +330,7 @@ describe('BackendSettings', () => {
     settings.providers.push({
       id: 'custom',
       name: 'Custom',
+      opencodeGo: true,
       source: 'ui',
       readOnly: false,
       api: 'openai-responses',
@@ -338,6 +345,7 @@ describe('BackendSettings', () => {
     await click('Save backend');
     const update = calls.find((call) => call.method === 'PUT' && call.url.endsWith('/custom'))!;
     expect(update.body.apiKey).toBeUndefined();
+    expect(update.body.opencodeGo).toBe(true);
     expect(update.body.models).toEqual([expect.objectContaining({ id: 'one', name: 'Renamed' })]);
     // Gateway-derived metadata is never sent back as editable input.
     expect(update.body.models[0]).not.toHaveProperty('canonicalProvider');

@@ -23,6 +23,7 @@
   let providerId = $state(initial?.id ?? '');
   let providerApi = $state(initial?.api ?? 'openai-completions');
   let baseUrl = $state(initial?.baseUrl ?? '');
+  let opencodeGo = $state(initial?.opencodeGo ?? false);
   let apiKey = $state('');
   let clearKey = $state(false);
   // Only editable fields: gateway-derived metadata is never sent back.
@@ -52,6 +53,7 @@
     const input = {
       api: providerApi,
       baseUrl: baseUrl.trim(),
+      opencodeGo,
       ...(clearKey ? { apiKey: '' } : apiKey ? { apiKey } : !editingId ? { apiKey: '' } : {}),
       models: modelRows.map((model) => ({ ...model, id: model.id.trim() })),
     };
@@ -111,6 +113,12 @@
         >Remove the saved API key</span
       ></label
     >{/if}
+  <label class="backend-checkbox"
+    ><input type="checkbox" bind:checked={opencodeGo} disabled={locked} /><span
+      >OpenCode Go compatibility (session routing + pirc User-Agent; automatic for
+      opencode.ai/zen/go)</span
+    ></label
+  >
   {#each modelRows as model, index}
     <fieldset disabled={locked}>
       <legend>Model {index + 1}</legend>
