@@ -5,7 +5,9 @@
   makeBinaryWrapper,
   callPackage,
   # The OS sandbox nodes wrap agents in (plans/sandbox.md).
-  srt ? callPackage ./sandbox-runtime.nix { },
+  # Not named `srt`: callPackage would inject nixpkgs' unrelated `srt`
+  # (a video streaming library) instead of this default.
+  sandboxRuntime ? callPackage ./sandbox-runtime.nix { },
   nodeModulesHash ? "sha256-KEDQyYbgzyMVWiBv2Kl0tIprDlAOGyMhxjS10/Dz/Vo=",
 }:
 
@@ -103,7 +105,7 @@ stdenvNoCC.mkDerivation {
     cp -rL "$playwright" $out/lib/pirc/playwright-core
     makeBinaryWrapper $out/libexec/pirc/pirc $out/bin/pirc \
       --set-default PIRC_PLAYWRIGHT_CORE $out/lib/pirc/playwright-core \
-      --set-default PIRC_SANDBOX_SRT ${lib.getExe srt}
+      --set-default PIRC_SANDBOX_SRT ${lib.getExe sandboxRuntime}
     mkdir -p $out/share/pirc/web
     cp -r apps/web/dist/. $out/share/pirc/web/
     runHook postInstall
@@ -114,7 +116,7 @@ stdenvNoCC.mkDerivation {
     $out/bin/pirc version
   '';
 
-  passthru = { inherit nodeModules srt; };
+  passthru = { inherit nodeModules sandboxRuntime; };
 
   meta = {
     description = "Private forward-authenticated web client with a built-in coding agent";
