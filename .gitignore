@@ -15,6 +15,9 @@ data/
 playwright-report/
 test-results/
 
+# Git worktrees for parallel branches
+.worktrees/
+
 # Local deployment notes (host-specific)
 DEPLOY.md
 

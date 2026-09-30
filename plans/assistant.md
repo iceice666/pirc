@@ -184,7 +184,7 @@ Records identify a workspace by gateway workspace id, so two clones of one repos
 Two smaller items that can ship together or apart.
 
 - **Taint (coarse).** Origins stop at `tool:bash`, which cannot tell `ls` from `curl`. The agent marks a bash result whose command contains a network fetch (`curl`, `wget`, `fetch`, `http(s)://`, `gh api`, …) as `tool:bash:network`, and the same for `code` calls that run such commands. Notes whose only origins are network-tainted are still stored but rendered in the snapshot with a "from fetched content" label, and the snapshot prompt tells the assistant to treat them as claims, not facts. Full data-flow tracking is out of scope.
-- **Per-project instructions.** A project (chat workspace) gets an instructions text, edited from the web on the project, stored by the node in `<stateDir>/chat/<workspaceId>/instructions.md` and rendered into the chat's system prompt. No memory scope changes.
+- **Per-project instructions.** A project (chat workspace) gets an instructions text, edited from the web on the project, stored by the node in `<stateDir>/chat/<workspaceId>/instructions.md` and rendered into the chat's system prompt. No memory scope changes. Implemented; see `plans/project-isolation.md` (“Per-project instructions”).
 
 ## 6. Link projects to workspaces
 

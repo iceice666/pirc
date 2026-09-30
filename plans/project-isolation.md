@@ -1,0 +1,179 @@
+# Chat project isolation: capability policy and future data isolation
+
+Status: Phase C implementation in this change; **B, D and E below are proposals, not shipped privacy guarantees**. Baseline: `9572bbcb15be8bd12097976ddf43d6c2cf20202c`. Source references in B/D/E refer to that baseline (implementation may shift line numbers).
+
+A project is a `kind='chat'` workspace; gateway identity is the node-qualified workspace ID, not its display name. Capabilities do not make a project private by themselves. In particular, disabling `memory_search` or `remote_recall` does **not** disable the global USER/MEMORY context or its writes. Global USER/MEMORY is the default and the preferred mode; project-only memory (B) would be an opt-in, and until it exists every project uses global memory.
+
+**Priority (maintainer, second revision):** C (done) → per-project instructions (done, see “Per-project instructions” below) → B as an opt-in → D. E items can ship independently.
+
+## C — Capability policy (Phase 1)
+
+### Contract and authority
+
+Named capabilities: `delegation`, `memory_search`, `remote_recall`, `schedules`, `web_search`. Version 1 defaults every capability to allowed. The gateway owns a separate per-workspace policy table, rather than node-synchronized `defaults_json`: node registration/upserts must never replace an owner's policy. Missing rows preserve existing behavior; no backfill of old projects is required. Unknown capability keys and unsupported versions are rejected by the editing API. New capabilities require deliberate schema, operation mapping, UI and tests; they are not arbitrary tool names.
+
+Owner-authenticated `GET/PATCH /api/workspaces/:workspaceId/capabilities` returns `{capabilities:{version:1,...booleanFlags}}`. PATCH merges specified flags, and only chat projects are editable. The authenticated `assistant.context` response carries the effective versioned policy for agent presentation. Agent state is a cache, never authorization: gateway operations always derive the source project from the authenticated session, not model-supplied workspace IDs. Target-workspace arguments cannot escape a source project's denial.
+
+Gateway enforcement covers `delegation.*`, `memory.search`, `recall.remote`, `schedule.*`, `web.search`. Approval and delayed dispatch must re-read current source policy, so approval acquired before a policy change is not a permanent grant. Rejections identify the capability (`capability_disabled`) instead of silently returning no results. An already dispatched external task cannot be retracted by revocation; cancellation and data erasure are separate concerns.
+
+Agent filtering removes capability tools, removes corresponding prompt guidance, blocks `/cron`, and blocks remote recall while retaining local recall. Child policy is inherited from its parent and intersects the existing kind tool allowlist; a child's kind cannot widen the parent policy. Capabilities are refreshed before chat runs and slash operations; model schemas already in an in-flight inference are not retrospectively rewritten. Gateway denial still applies immediately at the next operation/dispatch boundary.
+
+### Implementation map (this change)
+
+| Layer           | Where                                                                                                                                                                                                                                                                                                                             | What                                                                                                                                                                                                                                                                                                                                      |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Storage         | `apps/gateway/src/database.ts` (migration `workspace_capabilities`, `getWorkspaceCapabilities`/`patchWorkspaceCapabilities`/`requireWorkspaceCapability`/`requireSessionCapability`)                                                                                                                                              | One row per chat project with a policy set; no row = version 1 all allowed. Node workspace sync (`syncRemoteWorkspaces`) never touches it.                                                                                                                                                                                                |
+| API             | `apps/gateway/src/daemon/app.ts` `GET/PATCH /api/workspaces/:workspaceId/capabilities`                                                                                                                                                                                                                                            | Behind the gateway's normal authentication; PATCH only for chat workspaces, strict schema (unknown key, wrong type or version ≠ 1 → 400).                                                                                                                                                                                                 |
+| Gateway ops     | `apps/gateway/src/daemon/agent-ops.ts` `runAgentOp`                                                                                                                                                                                                                                                                               | Op → capability map applied after session/workspace validation, before any op runs: 403 `capability_disabled`. `assistant.context` returns the effective policy.                                                                                                                                                                          |
+| Pending/delayed | `apps/gateway/src/daemon/delegations.ts` (`create`, approval in `answer`, `dispatch` before and after starting the target session); `apps/gateway/src/daemon/schedules.ts` (proposal approval, `create`/`update`/`resume`, `start`, `dispatch`)                                                                                   | Approval of an older proposal fails; a timed run of an existing schedule records a failed run and pauses the schedule; a manual/missed run throws. Rejecting a pending proposal stays possible. A schedule whose target is a disabled chat project, or that a disabled project's session created, cannot run.                             |
+| Agent           | `apps/gateway/src/agent/capabilities.ts`, `agent.ts` (`getTool`/`toolList`/`invokeTool`), `features/assistant/index.ts` (`presentSection`, per-run `assistant.context` refresh, dynamic `memory_search` description), `features/memory/index.ts` (remote recall fallback, dynamic description), `features/schedules.ts` (`/cron`) | Tools hidden and a stale call gets a clear capability error; frozen snapshot guidance filtered on every run; `/cron` refreshes the policy from the gateway in chats before acting.                                                                                                                                                        |
+| Children        | `features/team/index.ts`, `team.ts` (`configure.capabilities`), `main.ts`                                                                                                                                                                                                                                                         | A child is configured with the parent's current policy; `getTool` applies it on top of the kind's `allowedTools`, so the effective set is the intersection. Today team children have no gateway (`processGateway()` is undefined for them), so gateway capabilities are unreachable to them anyway; the propagation guards future relays. |
+| Node            | `apps/gateway/src/node/runner.ts` `forwardGateway`                                                                                                                                                                                                                                                                                | Checked: the only agent→gateway path; it names the session itself, so the gateway check applies. The node's `/api/workspace-memory/recall` is called only by the gateway's `recall.remote` (gated there). No node RPC triggers delegation, schedules, memory search or web search on its own.                                             |
+
+Hot change: the gateway enforces immediately on the next operation or dispatch step. The agent picks up a change at its next run (or `/cron`); a model call already in flight keeps its tool schemas until then, and any call it makes is refused by the gateway. If the gateway cannot be reached, the agent keeps its last known policy; nothing can use a gateway capability in that case anyway.
+
+### Explicit limits
+
+- This is **not a sandbox**. Bash/PTC/browser, file tools, hooks and user programs may read files or access the network subject to their separate sandbox/configuration. `web_search=false` disables the gateway search service, not HTTP access in general.
+- `delegation` means the cross-workspace gateway delegation feature, not ordinary same-workspace team coordination. Team creation does not grant its children a denied capability.
+- Phase 1 has no `browser` or `uploads` capability, project-only memory, retention control or hard-delete feature. Do not label this switch set “private project”.
+- Existing transcripts, frozen context, exported files, provider requests, completed delegations and already running schedules remain. Re-enabling a capability is not a guarantee that previously blocked work is safe; review pending work first.
+- Android editing/display is deferred. Gateway enforcement also applies to requests originating from Android.
+
+## Per-project instructions (implemented in this change, listed separately from C)
+
+Follows `plans/assistant.md` §5. A chat project has an instructions text that the user edits from the web. It never touches memory scopes.
+
+| Where                                                                                                                                               | What                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/gateway/src/node/chat.ts` (`projectInstructionsPath`, `readProjectInstructions`, `writeProjectInstructions`, `INSTRUCTIONS_MAX_CHARS = 8000`) | Stored by the node at `<stateDir>/chat/<localWorkspaceId>/instructions.md` (the chat workspace's directory, 0600, atomic write through a temp file and a rename). Empty text removes the file. Over the limit → 413.                                                                                                                                                         |
+| `apps/gateway/src/node/app.ts` `GET/PATCH /api/workspaces/:id/instructions`                                                                         | Node routes, chat workspaces only (anything else → 400).                                                                                                                                                                                                                                                                                                                     |
+| `apps/gateway/src/daemon/app.ts` `GET/PATCH /api/workspaces/:workspaceId/instructions`                                                              | The gateway authenticates the user and relays to the owning node (offline → 503). It stores nothing. There is **no agent op** for instructions, so an agent cannot reach them through the gateway.                                                                                                                                                                           |
+| `apps/gateway/src/node/runner.ts`                                                                                                                   | When a chat starts, the runner (outside the sandbox) reads the file and sends the text on the agent's `configure` line (`models.ts` `ConfigureMessage.instructions`). It also sets `PIRC_PROJECT_INSTRUCTIONS=<path>` and passes the path to the sandbox as `protectedPaths`.                                                                                                |
+| `apps/gateway/src/agent/features/project-instructions.ts`                                                                                           | On the first run the text is frozen into the session as a custom entry, `project.instructions`. From then on only the frozen text is used, so an edit reaches new chats only (the same rule as the USER/MEMORY snapshot and the links in §6). A chat that already had messages before this feature existed freezes as empty. Team children receive the parent's frozen text. |
+| `apps/gateway/src/agent/features/index.ts`                                                                                                          | **Prompt position:** after the chat prompt and AGENTS.md, before USER/MEMORY. The text is standing instruction written by the user, so it belongs with the other instructions rather than among remembered facts. Because it is frozen, the prompt prefix before the memory section stays stable for provider caching.                                                       |
+| `apps/web/src/lib/components/ProjectInstructions.svelte`                                                                                            | Settings → Projects, under capabilities for the selected project. Shows a character counter against the node's `maxChars`, blocks saving over the limit, and states that the assistant cannot edit the instructions and that edits reach new chats only.                                                                                                                     |
+
+**Write protection (verified):**
+
+- The file is outside every chat session's working directory (`sessions/<sessionId>`), so the file tools cannot write it unless the user adds it to `allowedPaths`.
+- It is also in the file tools' `protectedPaths` (`agent/config.ts`, via `PIRC_PROJECT_INSTRUCTIONS`), which refuses writes even inside a writable root. `test/agent-project-instructions.test.ts` checks that `write` and `edit` both fail.
+- Under srt, the node's state directory is `denyRead`, and the path is in `denyWrite` (`sandbox-policy.ts`, `protectedPaths`) even if the user's config allows writing the state directory. `test/sandbox-policy.test.ts` covers this.
+
+**Limit:** an **unsandboxed** agent's bash, PTC or hooks run as the node account and can still write any file that account can write, including this one. This is the same boundary as all other pirc state (`plans/sandbox.md`). The guarantee holds for bash only when srt is active.
+
+**Android:** it needs no change. The instructions are rendered on the node, and `project.instructions` is a custom (non-message) entry that session history (`historyOf`) does not return, the same as `assistant.snapshot`. Editing from Android is deferred.
+
+## B — Project-only USER/MEMORY, opt-in (design only)
+
+**Default and preferred:** every project uses the global USER/MEMORY, exactly as today. Project-only memory is an explicit, per-project opt-in (off by default, off for every existing project, no data migration on upgrade). The rules below apply **only after** a project opts in. Priority: after per-project instructions, which cover most “this project behaves differently” needs without splitting memory.
+
+### Verified change points
+
+| Baseline location                                                                                                                   | Required change                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/gateway/src/database.ts:86-109`                                                                                               | Add scope to all four assistant-memory tables, including tombstone primary key and scoped indexes.                                                  |
+| `apps/gateway/src/daemon/memory.ts:151-235`                                                                                         | Scope entries, ID lookup, usage, history, proposals and context.                                                                                    |
+| `apps/gateway/src/daemon/memory.ts:244-502`                                                                                         | Scope note writes, proposal creation/approval, revision checks, restore and forget; propagate through private dedup/capacity/tombstone helpers too. |
+| `apps/gateway/src/daemon/memory-routes.ts:19-94`                                                                                    | Separate global/project owner views and scope all ID actions; a URL ID alone is never authority.                                                    |
+| `apps/gateway/src/daemon/agent-ops.ts` (`assistant.context`, `memory.note`, `memory.proposeUser`, `memory.search`, `recall.remote`) | Derive scope from authenticated session → workspace in one central helper. Never accept scope from an agent argument.                               |
+| `apps/gateway/src/agent/features/assistant/index.ts:194-248`                                                                        | Version and scope-bind frozen `ASSISTANT_SNAPSHOT`; prevent reuse across mode/scope generations.                                                    |
+| `apps/gateway/src/daemon/memory-records.ts:194-202,224-284`                                                                         | Restrict mirrored-memory search, delegation search and remote recall too; these are separate from the four assistant-memory tables.                 |
+| `apps/gateway/src/node/runtime.ts:148-164`, `apps/gateway/src/daemon/nodes.ts:369-382`                                              | Review event/mirror transport. Project-only logical access does not imply node-only storage.                                                        |
+
+### Scope and invariants
+
+Use stable scope identifiers (`global` or gateway workspace identity), with owner always part of the access key. Gateway workspace metadata selects `global` (default) `| project-only` (opt-in), plus a monotonically increasing memory generation. Only in the opted-in project-only mode: **replace**, never merge, the global context: context, read, write, pending proposals and usage are all project-scoped. Global and other project endpoints must not enumerate or retrieve project entries, even by known entry/proposal ID. Search/recall must also restrict source sessions and mirrored records. A memory ID/content hash is not an access token.
+
+Every MemoryStore entry point takes a trusted `{owner,scope}` value. SQL predicates include both; IDs, deduplication, revision conflicts, logs, approvals, history, restoration and tombstones cannot cross scope. Tombstone uniqueness becomes `(owner_user, scope_id, content_hash)`. Per-scope quotas govern context and active entries, alongside owner-wide/global disk and abuse limits. Quota errors must not reveal other scopes' content.
+
+A proposal binds immutable scope and source project generation at creation; approval checks both current authority and target scope/revision transactionally. A proposal created before a mode switch must not silently write into the new scope. Global settings must not aggregate project proposals or project memory into global context.
+
+### Migration and compatibility
+
+1. Add `scope_id NOT NULL DEFAULT 'global'` to entries/log/proposals; rebuild tombstones with the composite key. Add `(owner_user,scope_id,...)` indexes. Backfill existing data as global, preserving IDs/revisions and old global behavior.
+2. Introduce scoped store APIs and negative ID-access tests before exposing the mode switch. No transitional unscoped overloads in authenticated paths.
+3. Version assistant snapshots with scope/generation, update mirrors and remote recall filtering, then expose the opt-in switch (off by default) in the project's settings, next to capabilities and instructions.
+4. Enforce per-scope capacity and total quotas; audit concurrency (approval vs switch), source authorization and backups.
+
+Do not automatically move global memories into a project or promote project memories to global on disabling the mode. Explicit user-reviewed export/import is a separate operation. Decide whether disabling keeps an inaccessible project scope for later re-enable or requires deletion/export first.
+
+### Frozen snapshots and non-retroactivity
+
+`ASSISTANT_SNAPSHOT` is persisted in `session.jsonl`; replacing future gateway context does not erase previous prompts, model context, OM summaries, outputs or provider-side copies. **This feature is not retroactive.** Recommended switch rule: increment generation, block continuing existing sessions under the new mode, and require a fresh session with a newly fetched scoped snapshot. Keep old sessions visibly labeled with their original mode and read-only until an explicit archival/deletion policy is chosen. Do not fork/import their history into the new isolated session automatically. An alternative allowing continuation would offer weaker guarantees and must say so, not silently reuse frozen global content.
+
+This isolates access between projects, not data from the gateway operator, node operator, inference provider, filesystem access or backups. The current gateway receives events and memory mirrors; preventing transport to it is a different architecture.
+
+### Maintainer decisions
+
+- Require fresh sessions on every scope-generation change (recommended), versus a clearly weaker continuation model?
+- May an owner explicitly copy memory between scopes, and what audit/review is mandatory?
+- On mode disable, retain a dormant scope or require a deletion/export decision?
+
+## D — Hard-delete project (design only)
+
+### Inventory and required ownership
+
+| Baseline location                                                                                                               | Data to inventory/delete or redesign                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `apps/gateway/src/database.ts:17-52`                                                                                            | Workspace, sessions, runs, command payloads, interactions, leases, uploads.                                       |
+| `apps/gateway/src/database.ts:86-165`                                                                                           | Scoped USER/MEMORY and histories/proposals/tombstones; delegations, mirrors/records, schedules/runs/proposals.    |
+| `apps/gateway/src/node/app.ts:426-470`, `apps/gateway/src/database.ts:889-896`                                                  | Upload bytes and rows. Currently owner-only: add explicit workspace/session provenance before promising deletion. |
+| `apps/gateway/src/agent/session-store.ts:40,134`                                                                                | Session directories and `session.jsonl`: prompts, snapshots, OM ledgers, tool results and child session trees.    |
+| `apps/gateway/src/node/runtime.ts:148-164`, `apps/gateway/src/daemon/nodes.ts:301-382`                                          | Buffered events/activity, registration and memory-mirror replay paths.                                            |
+| `apps/gateway/src/daemon/memory-records.ts:97-185`                                                                              | Mirror watermarks, ledger records, late-arriving records with unresolved source IDs.                              |
+| `apps/gateway/src/daemon/delegations.ts`, `apps/gateway/src/daemon/schedules.ts`, `apps/gateway/src/daemon/session-dispatch.ts` | Queued/running jobs, target sessions, cached results, reporting/retry timers.                                     |
+| `apps/gateway/src/database.ts:215`, `apps/gateway/src/daemon/push.ts`                                                           | SQLite/WAL copies and notification payloads; provider/log/backup handling needs a separate retention inventory.   |
+
+Also inventory the project's `instructions.md` (node chat directory; removed with that directory), node session metadata/event databases, terminal buffers/recordings, browser profiles/downloads/screenshots/videos, worktrees/artifacts, agent/team archives, workspace-memory ledgers, inference caches and application logs. Some are shared or user-controlled and cannot safely be removed recursively on guessed provenance. Logs, backups, browser state and external provider retention are **unverified**, not covered merely because a session row was deleted.
+
+Uploads require a trusted association table `(upload_id,workspace_id,session_id,node_id)` at upload creation and every reuse. Define shared-reference semantics (delete only after all authorized references are gone, or disallow cross-project sharing for restricted projects). Legacy uploads with unknown provenance cannot be truthfully attributed; retain as explicitly unresolved or require an owner cleanup decision. Never delete all owner uploads to approximate one project's deletion.
+
+### Durable deletion protocol
+
+1. Create persisted `project_deletion_jobs` and `project_deletion_nodes` in a transaction; mark project `deleting`, record immutable project UUID/generation and all nodes ever holding its data. Maintain a minimal non-content retired-identity tombstone after completion.
+2. Central gateway guards refuse **all new reads and writes** (including context, history, inference, uploads, approvals, schedule dispatch, delegation result reporting and memory mirror ingestion) for that identity. Stop new jobs and request cancellation of active runs. In-flight responses are gated before persistence/delivery as well.
+3. Send idempotent `delete_project(jobId,projectId,generation)` via authenticated node RPC. Node persists a fence before removing anything, cancels child processes and jobs, removes exclusively owned files/rows and flushes buffers. Node ack includes inventory version and cleanup result, not just receipt of a request.
+4. Nodes offline or returning incomplete cleanup remain **pending**, with durable per-node retries on reconnect. Restarts resume the same job. UI must never report complete while a required node is pending. Decommissioned/lost nodes require an explicit separate “cannot verify deletion” terminal state, not success.
+5. After all cleanup acks, remove gateway owned rows/bytes in bounded transactions and checkpoint according to policy. Retain only minimal job/identity fence metadata needed to prevent resurrection; mark complete with the precise guarantee and excluded systems shown to the user.
+
+Registration, session/activity sync, replayed commands, memory mirrors (including records whose source is not yet known), restored node backups and old RPC acknowledgments must all consult the durable fence. Do not recreate a deleted project from a node's workspace announcement. Display-name reuse gets a new identity; local ID reuse must not defeat the gateway tombstone. Node deletion acks are generation-bound, authenticated and safe to repeat. A disconnected old process may still write locally; completion requires that node to attest the fence and cleanup after cancellation.
+
+### SQLite and physical erasure
+
+`secure_delete=ON` overwrites deleted SQLite cell payloads but is not cryptographic erasure, and does not remove previous WAL frames/backups/filesystem snapshots. `wal_checkpoint(TRUNCATE)` requires cooperating readers and may be busy; retry/report incomplete maintenance separately. `VACUUM` is expensive, needs temporary disk space and can leave storage-layer copies; schedule maintenance rather than do it synchronously for each row. Neither guarantees SSD wear-leveling erasure. Stronger physical guarantees require encryption with project-specific revocable keys and a verified key/backup lifecycle; metadata and previously exported plaintext remain exceptions.
+
+### Restricted-project profile and how C helps
+
+A future **restricted project** must be created with delegation, schedules, uploads and browser disabled **before its first session**, plus the project-only memory opt-in (B) and dedicated attributable storage. Phase 1 does not yet provide uploads/browser gates, so it cannot implement this profile. Enforce these restrictions at gateway and node entry points, not just tool visibility. Keep a monotonic provenance flag showing whether the restrictions have ever been relaxed; turning them off later does not recover the stronger guarantee. For a truly closed data-flow profile, arbitrary bash/PTC networking/filesystem export and hooks must also be denied/sandboxed separately from C.
+
+C reduces derivative data only for the actual mediated services it disables. A project that never had gateway delegation/schedules cannot have generated their target sessions/jobs through those services. With future uploads/browser controls, dedicated storage and provenance, the deletion inventory becomes finite and auditable. For a general project, completed delegation work in other workspaces may have entered source files, commits, memory, third-party systems and user conversations. It cannot be reliably traced or erased automatically; disclose these residuals and offer targeted follow-up, not a false universal hard-delete claim.
+
+### Migration, compatibility and sequence
+
+1. Inventory ownership and add immutable project identities plus upload/artifact associations; mark legacy ambiguous provenance.
+2. Add read/write lifecycle fences and replay protection across gateway/node versions. Older nodes lacking delete/fence support must block deletion completion.
+3. Add durable jobs, idempotent node cleanup and retry/ack protocol, then gateway cleanup and UI pending/error states. Test crashes at every transition and node reconnection/restored backups.
+4. Add restricted creation profile only after B and missing capability/storage controls; add physical-storage maintenance separately.
+
+Maintainer decisions: shared artifact ownership; old-node upgrade requirements; lost-node policy; whether metadata tombstones may persist; retention/backup/provider guarantee wording; restricted-profile sandbox strength. Literal removal of every byte everywhere cannot be promised by this application alone.
+
+## E — Independent follow-ups (not implemented in this change)
+
+All three are deferred to keep this security-sensitive change focused. They require separate tests and review, not an assumption that C supplies physical privacy.
+
+### E1 secure_delete
+
+Change `apps/gateway/src/database.ts:211-228` to run `PRAGMA secure_delete = ON` on every SQLite connection, including relevant node databases if they share this constructor. No schema migration; query the pragma in a test and document write-amplification/latency. Compatible logical behavior, potentially more I/O. Does not sanitize historical WAL, backups or files; D still needs its protocol. Ship separately after measuring representative writes.
+
+### E2 OM config validation and docs
+
+`apps/gateway/src/agent/features/memory/index.ts:65-112` validates the whole object. Any invalid field currently resets the **whole config** to defaults without a warning; fallback array entries are not independently dropped. `docs/architecture-observational-memory.md:26` incorrectly describes invalid fallback entries as dropped and default as unset: actual default is `[]`, and an invalid entry invalidates the full OM config. In the follow-up correct this table and explicitly document the whole-object fallback.
+
+Add a single clearly visible warning at config load, with invalid field paths and concise reasons, not raw config values (which may contain sensitive data). Avoid warning once per token/worker by validating/caching at startup. Consider `.strict()` on top-level/model/workspace schemas only with staged compatibility: unknown keys are currently stripped, so immediate strictness would turn harmless legacy keys into whole-config resets and could enable defaults the user intended to disable. Recommended sequence: warn on unknown keys, then introduce opt-in strict validation or a versioned schema. Tests: malformed fallback entry, invalid disabled/workspace fields, unknown keys and rate-limited notifications. No DB migration; explicit release note for any stricter behavior.
+
+### E3 missing OM model policy
+
+`apps/gateway/src/agent/features/memory/worker.ts:42-79` warns and uses the session model if a configured preferred model cannot resolve. Add `missingModelPolicy: 'fallback' | 'error'` (default `fallback`), validated in `memorySchema`, and pass it to `pickModel`. In `error` mode throw a clear configuration error **before** selecting session/fallback models or sending inference. Ensure `choose()` (`index.ts:231-255`) reports a persistent visible failure and does not misleadingly label it rate limiting. Decide whether strictness covers unresolved fallback models too (recommended: validate every explicitly configured choice on startup). Retain rate-limit fallback behavior for valid models. No migration; omitted option preserves behavior. Tests must prove no inference is made on an unresolved preferred model in strict mode and old fallback behavior is unchanged.
+
+Suggested order: E2 diagnostics/documentation, E3 opt-in strictness, E1 measured storage change. None supplies retrospective erasure or prevents gateway data transport.
