@@ -27,6 +27,12 @@ export interface BrowserSettings {
   executable?: string | undefined;
   /** ffmpeg for recordings (PIRC_FFMPEG, default `ffmpeg`). */
   ffmpeg: string;
+  /**
+   * An on-disk playwright-core package directory (PIRC_PLAYWRIGHT_CORE). It
+   * reads its own files by computed paths, which `bun build --compile` cannot
+   * bundle, so packaged builds ship it next to the binary.
+   */
+  playwrightCore?: string | undefined;
   /** One profile directory per workspace lives here. */
   profilesDir: string;
   /** Close a session's tabs after this long without activity or viewers. */
@@ -159,7 +165,11 @@ export function findBrowserExecutable(
 }
 
 async function defaultLaunch(profileDir: string, settings: BrowserSettings) {
-  const { chromium } = await import('playwright-core');
+  const { chromium } = (
+    settings.playwrightCore
+      ? await import(path.join(settings.playwrightCore, 'index.js'))
+      : await import('playwright-core')
+  ) as typeof import('playwright-core');
   return chromium.launchPersistentContext(profileDir, {
     ...(settings.executable ? { executablePath: settings.executable } : {}),
     headless: true,

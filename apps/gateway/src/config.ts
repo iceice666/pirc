@@ -308,6 +308,9 @@ export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig
       enabled: bool(env.PIRC_BROWSER, true),
       executable: findBrowserExecutable(env.PIRC_BROWSER_EXECUTABLE),
       ffmpeg: env.PIRC_FFMPEG || 'ffmpeg',
+      ...(env.PIRC_PLAYWRIGHT_CORE
+        ? { playwrightCore: path.resolve(env.PIRC_PLAYWRIGHT_CORE) }
+        : {}),
       profilesDir: path.resolve(
         env.PIRC_BROWSER_PROFILES_DIR ?? path.join(dirs.stateDir, 'browser'),
       ),

@@ -2,6 +2,7 @@
   lib,
   stdenvNoCC,
   bun,
+  makeBinaryWrapper,
   nodeModulesHash ? "sha256-KEDQyYbgzyMVWiBv2Kl0tIprDlAOGyMhxjS10/Dz/Vo=",
 }:
 
@@ -58,7 +59,10 @@ in
 stdenvNoCC.mkDerivation {
   pname = "pirc";
   inherit version src;
-  nativeBuildInputs = [ bun ];
+  nativeBuildInputs = [
+    bun
+    makeBinaryWrapper
+  ];
 
   configurePhase = ''
     runHook preConfigure
@@ -87,7 +91,15 @@ stdenvNoCC.mkDerivation {
 
   installPhase = ''
     runHook preInstall
-    install -Dm755 apps/gateway/dist/pirc $out/bin/pirc
+    install -Dm755 apps/gateway/dist/pirc $out/libexec/pirc/pirc
+    # playwright-core reads its own files (package.json, browsers.json, wasm)
+    # by computed paths, which bun --compile cannot bundle: ship it on disk.
+    playwright=$(echo node_modules/.bun/playwright-core@*/node_modules/playwright-core)
+    [ -f "$playwright/index.js" ]
+    mkdir -p $out/lib/pirc
+    cp -rL "$playwright" $out/lib/pirc/playwright-core
+    makeBinaryWrapper $out/libexec/pirc/pirc $out/bin/pirc \
+      --set-default PIRC_PLAYWRIGHT_CORE $out/lib/pirc/playwright-core
     mkdir -p $out/share/pirc/web
     cp -r apps/web/dist/. $out/share/pirc/web/
     runHook postInstall
