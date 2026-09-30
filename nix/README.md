@@ -35,7 +35,7 @@ Minimal service-only example:
     enable = true;
     models = {
       providers.main = {
-        api = "openai-chat"; # or "anthropic-messages"
+        api = "openai-completions"; # or "anthropic-messages", "openai-responses"
         baseUrl = "https://api.example.com/v1";
         apiKeyFile = "/run/secrets/pirc-api-key";
         models = [ { id = "model-id"; reasoning = true; contextWindow = 200000; } ];
@@ -116,7 +116,9 @@ The generated nginx configuration does not create Tailscale certificates. Supply
 ## Before deployment
 
 1. Replace the example user, hostname, origins, certificate paths, and workspace paths.
-2. Configure `agentConfig` with your provider(s) and default model.
-3. Provide provider credentials using an out-of-store secret.
+2. Configure `services.pirc.models` with your provider(s) and default model, or plan to add backends from the web **Settings** after the first start.
+3. Provide provider credentials using an out-of-store secret readable by `pirc-gateway`.
 4. Evaluate the target host and inspect the generated nginx/systemd configuration.
 5. Test forged identity headers, disallowed Origins/Hosts, service restart, and backup/restore before treating the deployment as production-ready.
+
+The step-by-step guide, including remote nodes, macOS nodes and upgrades, is in [`docs/deploy/`](../docs/deploy/README.md).

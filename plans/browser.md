@@ -1,6 +1,6 @@
 # Browser tools (Playwright): web_fetch, interaction, live view, takeover, recording
 
-Status (2026-09-29): phases 1–6 implemented and tested (uncommitted). The design below is as built, apart from the corrections in "As built". Open follow-ups are at the end.
+Status (2026-09-29): phases 1–6 implemented and tested (committed in 22699b8). The design below is as built, apart from the corrections in "As built". Open follow-ups are at the end.
 
 ## As built
 

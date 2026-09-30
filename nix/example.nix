@@ -15,7 +15,7 @@
             # out of the store: reference them with apiKeyFile/apiKeyEnv/apiKeyCommand.
             models = {
               providers.openai = {
-                api = "openai-chat";
+                api = "openai-completions";
                 baseUrl = "https://api.openai.com/v1";
                 apiKeyFile = "/run/secrets/openai-key";
                 models = [

@@ -1,39 +1,39 @@
 # pirc web client
 
-Standalone Svelte 5 + TypeScript + Vite client for the pirc gateway. This package intentionally uses no SvelteKit server runtime.
+Standalone Svelte 5 + TypeScript + Vite client for the pirc gateway. This package intentionally uses no SvelteKit server runtime; the build is a static bundle (`dist/`) that any web server can serve (see [`docs/deploy/reverse-proxy.md`](../../docs/deploy/reverse-proxy.md)).
 
 ## Commands
 
 From the repository root:
 
 ```sh
-npm install
-npm run dev:web
-npm run typecheck --workspace @pirc/web
-npm test --workspace @pirc/web
-npm run build --workspace @pirc/web
+bun install
+bun run dev:web
+bun run --filter @pirc/web typecheck
+bun run --filter @pirc/web test
+bun run --filter @pirc/web build
 ```
 
-Vite proxies `/api` and WebSocket upgrades to `http://localhost:8787` in development.
+Vite proxies `/api` and WebSocket upgrades to `http://localhost:8787` in development (`vite.config.ts`).
 
 ## Runtime behavior
 
 - Fetch requests include forward-auth cookies with `credentials: include`.
-- Session snapshots are reduced with sequenced WebSocket events; reset or epoch mismatch requests a fresh snapshot.
+- Session snapshots are reduced with sequenced WebSocket events; reset or epoch mismatch requests a fresh snapshot. The reduction is shared with the Android client through the golden cases in [`fixtures/timeline`](../../fixtures/timeline/README.md).
 - Drafts are stored per session in local storage. Offline drafts are **never** automatically submitted after reconnecting.
 - Only hashed Vite assets below `/assets/` are cached by the hand-written service worker. HTML, API responses, conversations, uploads, and credentials are never cached.
 - A waiting service worker shows an update prompt and does not force a page reload.
-- If the API is unavailable in development, the interface loads local preview data so the full layout remains reviewable.
+- If the API is unavailable in development, the interface loads local preview data (`src/lib/mock.ts`) so the full layout remains reviewable.
 
-## API shape assumptions
+## API contract
 
-All provisional gateway types live in `src/lib/types.ts` so the contract can be aligned without changing the UI components.
+The gateway API is documented in [`apps/gateway/README.md`](../gateway/README.md#api); the client's types live in `src/lib/types.ts` and the calls in `src/lib/api.ts`. Points that differ from what a generic client might assume:
 
-- List endpoints return arrays directly (`Workspace[]`, `SessionSummary[]`, `ModelOption[]`) rather than `{ items }` envelopes.
-- `POST /api/sessions` accepts `{ workspaceId, name?, modelId?, thinkingLevel? }`.
-- Commands accept `{ commandId, kind, controlGeneration, content?, modelId?, thinkingLevel?, attachmentIds? }`.
-- `POST /control` accepts `{ clientId, action: "take" }`; `DELETE /control` accepts `{ generation }`.
-- Interaction answers accept `{ action, value?, controlGeneration }`.
-- Image upload uses multipart field `file` and returns an opaque attachment record.
+- List endpoints return envelopes (`{ sessions }`, `{ workspaces }`, `{ models }`), not bare arrays.
+- `POST /api/sessions` takes only `{ workspaceId }`; the agent titles the session from the first message. `PATCH /api/sessions/:id` renames, pins or settles it.
+- Commands carry a client-generated `commandId` plus `{ clientId, generation }` from a live control lease.
+- The control lease is `POST /api/sessions/:id/control/{acquire,heartbeat,release}`.
+- Interaction answers are `POST /api/sessions/:id/interactions/:interactionId/answer` with `{ clientId, generation, answer }`.
+- Uploads are raw request bodies (`POST /api/sessions/:id/uploads?filename=…`, the file's content type as `content-type`), not multipart.
 - WebSocket messages are `EventEnvelope` JSON objects with a cursor, numeric sequence, runner epoch, and typed event payload.
-- JSON errors use `{ code, message, requestId? }`.
+- JSON errors use `{ error: { code, message, details? } }`.

@@ -1,6 +1,6 @@
 # UI redesign (turn 2: 2a–2d)
 
-Status (2026-09-29): built on gateway, web and Android (see "As built" at the end). Not committed yet.
+Status (2026-09-29): built on gateway, web and Android (see "As built" at the end); committed in 4ce2c40, 4a3e46f and ea76001.
 
 Source: the design zip `遠端助手UI設計改進.zip` (`pirc Redesign.dc.html`, options 2a–2d).
 Screenshots of 2a–2d are in `.pirc/tmp/ui/`.
