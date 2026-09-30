@@ -309,6 +309,7 @@ export async function buildNodeApp(
       agent,
       watermark: events.watermark(sessionId, session.runnerEpoch),
       partialOutputLost: session.partialOutputLost,
+      sandbox: active?.alive ? active.sandboxStatus : null,
     };
     return snapshot;
   });

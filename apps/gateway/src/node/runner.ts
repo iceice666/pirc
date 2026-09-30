@@ -256,6 +256,12 @@ class PiRunner {
     return !this.closed;
   }
 
+  /** For the snapshot: sandboxed, or why not. */
+  get sandboxStatus(): { active: boolean; reason?: string } {
+    const status = this.sandbox.status;
+    return status.active ? { active: true } : { active: false, reason: status.reason };
+  }
+
   private handleValue(value: unknown): void {
     if (!value || typeof value !== 'object') throw new Error('RPC emitted a non-object JSON value');
     const message = value as Record<string, any>;

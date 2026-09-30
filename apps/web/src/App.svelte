@@ -13,6 +13,7 @@
     Radio,
     RefreshCw,
     ShieldCheck,
+    ShieldOff,
     Sparkles,
     X,
   } from '@lucide/svelte';
@@ -508,6 +509,16 @@
               ><Forward size={13} /><span>Delegated · {origin.title}</span></button
             >
           {/if}
+          {#if sessionState.sandbox && !sessionState.sandbox.active}
+            <!-- Stays while this agent runs: the timeline warning scrolls away. -->
+            <span
+              class="origin-chip unsandboxed"
+              role="status"
+              title={sessionState.sandbox.reason
+                ? `Not sandboxed: ${sessionState.sandbox.reason}`
+                : 'Not sandboxed'}><ShieldOff size={13} /><span>Not sandboxed</span></span
+            >
+          {/if}
         </div>
         <div class="topbar-actions">
           {#if !chatSession}<JobsMenu />{/if}
@@ -784,6 +795,12 @@
   .origin-chip:hover:not(:disabled) {
     color: var(--ink);
     background: var(--bg-hover);
+  }
+  .origin-chip.unsandboxed,
+  .origin-chip.unsandboxed:hover {
+    border-color: var(--warning);
+    color: var(--warning);
+    background: var(--warning-soft);
   }
   .topbar-actions {
     display: flex;

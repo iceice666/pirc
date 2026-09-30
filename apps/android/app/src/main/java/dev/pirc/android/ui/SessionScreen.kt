@@ -53,6 +53,7 @@ import dev.pirc.android.Connection
 import dev.pirc.android.SessionViewModel
 import dev.pirc.android.core.timeline.Message
 import dev.pirc.android.core.timeline.QueueItem
+import dev.pirc.android.core.timeline.SandboxStatus
 import dev.pirc.android.core.timeline.SessionState
 import dev.pirc.android.ui.session.Composer
 import dev.pirc.android.PanelTab
@@ -63,6 +64,7 @@ import dev.pirc.android.core.blockingSession
 import dev.pirc.android.core.timelineItems
 import dev.pirc.android.ui.session.LocalWriteBlockOpener
 import dev.pirc.android.ui.session.RunCard
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.DropdownMenu
@@ -199,6 +201,7 @@ fun SessionScreen(
                 },
             )
             origin?.let { OriginChip(it, onOpenSchedule, onOpenSession, sessions) }
+            state?.sandbox?.takeIf { !it.active }?.let { UnsandboxedChip(it) }
         } },
         bottomBar = {
             // The larger of keyboard and navigation bar, not both stacked.
@@ -255,6 +258,30 @@ private fun OriginChip(origin: SessionOrigin, onOpenSchedule: (String) -> Unit, 
         label = { Text(listOf(label, origin.title).filter { it.isNotEmpty() }.joinToString(" · "), maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
         modifier = Modifier.padding(horizontal = 16.dp),
+    )
+}
+
+/** Stays while the agent runs outside the sandbox (the timeline warning scrolls away); tap for why. */
+@Composable
+private fun UnsandboxedChip(sandbox: SandboxStatus) {
+    var open by remember { mutableStateOf(false) }
+    AssistChip(
+        onClick = { open = true },
+        label = { Text("Not sandboxed", maxLines = 1) },
+        leadingIcon = { Icon(PircIcons.ShieldOff, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
+        colors = AssistChipDefaults.assistChipColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            labelColor = MaterialTheme.colorScheme.onErrorContainer,
+            leadingIconContentColor = MaterialTheme.colorScheme.onErrorContainer,
+        ),
+        border = null,
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
+    if (open) AlertDialog(
+        onDismissRequest = { open = false },
+        title = { Text("Not sandboxed") },
+        text = { Text((sandbox.reason?.let { "$it.\n\n" } ?: "") + "This agent's commands run with the node account's full access.") },
+        confirmButton = { TextButton(onClick = { open = false }) { Text("OK") } },
     )
 }
 

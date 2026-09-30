@@ -91,6 +91,11 @@ export interface Snapshot {
   notifications: unknown[];
   watermark: EventCursor;
   partialOutputLost: boolean;
+  /**
+   * Whether the running agent is inside the node's OS sandbox (plans/sandbox.md);
+   * null with no runner. Clients show a lasting badge when it is not.
+   */
+  sandbox?: { active: boolean; reason?: string } | null;
 }
 
 export interface AuthIdentity {

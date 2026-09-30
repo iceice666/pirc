@@ -144,6 +144,24 @@ describe('App transcript', () => {
   });
 });
 
+describe('App header', () => {
+  it('keeps a badge up while the agent runs unsandboxed', async () => {
+    await start(2);
+    expect(target.querySelector('.unsandboxed')).toBeNull();
+    app.sessionState = {
+      ...app.sessionState!,
+      sandbox: { active: false, reason: 'srt is not installed' },
+    };
+    flushSync();
+    const badge = target.querySelector<HTMLElement>('.unsandboxed')!;
+    expect(badge.textContent).toContain('Not sandboxed');
+    expect(badge.title).toContain('srt is not installed');
+    app.sessionState = { ...app.sessionState!, sandbox: { active: true } };
+    flushSync();
+    expect(target.querySelector('.unsandboxed')).toBeNull();
+  });
+});
+
 describe('App side panel on a narrow screen', () => {
   it('ignores a remembered open panel and overlays it with a scrim when opened', async () => {
     localStorage.setItem('relay.layout.detailsOpen', 'true');

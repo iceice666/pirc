@@ -120,7 +120,7 @@ Notes on these settings:
 - If the `sandbox` settings are invalid, the defaults stay in force and the session shows a warning.
 - Put the directory holding the node's own env file (with `PIRC_NODE_TOKEN`) in `denyRead` when it sits outside `PIRC_STATE_DIR`.
 - `PIRC_SANDBOX_SRT` names the srt binary; by default the node looks for `srt` on PATH, and the Nix package sets it. `PIRC_SANDBOX=off` or `"enabled": false` turns the sandbox off.
-- When srt is missing or cannot sandbox on the host, agents run unconfined and every session opens with a warning. For example, Linux may refuse unprivileged user namespaces (Ubuntu 24.04 needs `kernel.apparmor_restrict_unprivileged_userns=0`).
+- When srt is missing or cannot sandbox on the host, agents run unconfined. Every session opens with a warning, and its header keeps a "Not sandboxed" badge while the agent runs. For example, Linux may refuse unprivileged user namespaces (Ubuntu 24.04 needs `kernel.apparmor_restrict_unprivileged_userns=0`).
 
 The sandbox does not cover `web_fetch`, the `browser_*` tools or `web_search`: the node's browser and the gateway run those, so they remain a way to send data out, like anything sent to the model.
 

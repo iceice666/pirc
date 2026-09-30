@@ -4,6 +4,8 @@ import dev.pirc.android.core.PircJson
 import dev.pirc.android.core.Session
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 
 /*
  * Gateway snapshots and `/api/events` messages as client state; a port of the
@@ -219,6 +221,9 @@ fun snapshotState(raw: JsonElement, now: () -> Long = System::currentTimeMillis)
         thinkingLevel = agent["thinkingLevel"].string?.takeIf { it in THINKING_LEVELS },
         widgets = (raw["widgets"] as? JsonObject).orEmpty().mapValues { (_, lines) -> lines.array.orEmpty().map { it.text ?: "null" } },
         statuses = (raw["statuses"] as? JsonObject).orEmpty().mapValues { (_, text) -> text.text ?: "null" },
+        sandbox = raw["sandbox"].takeIf { it.truthy }?.let { sandbox ->
+            (sandbox["active"] as? JsonPrimitive)?.booleanOrNull?.let { SandboxStatus(it, sandbox["reason"].string) }
+        },
     )
 }
 

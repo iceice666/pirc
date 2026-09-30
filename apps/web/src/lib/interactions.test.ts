@@ -10,6 +10,20 @@ const raw = (request: Record<string, unknown>) => ({
   watermark: { epoch: 0, sequence: 0 },
 });
 
+describe('sandbox status', () => {
+  it('comes from the snapshot, and is absent without a runner', () => {
+    const base = raw({ title: 'x' });
+    expect(
+      snapshotFromRaw({ ...base, sandbox: { active: false, reason: 'srt is not installed' } }, null)
+        .sandbox,
+    ).toEqual({ active: false, reason: 'srt is not installed' });
+    expect(snapshotFromRaw({ ...base, sandbox: { active: true } }, null).sandbox).toEqual({
+      active: true,
+    });
+    expect(snapshotFromRaw({ ...base, sandbox: null }, null)).not.toHaveProperty('sandbox');
+  });
+});
+
 describe('confirmations', () => {
   it("keep the labels a confirmation asks for, such as a delegation's", () => {
     const [confirmation] = snapshotFromRaw(

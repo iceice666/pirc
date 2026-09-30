@@ -115,10 +115,11 @@ it('runs agents unconfined with a visible warning when there is no sandbox', asy
   );
   expect(warning?.payload.notifyType).toBe('warning');
   expect(warning?.payload.message).toContain('srt');
-  // Still there for a client that connects later.
-  expect(
-    (await s.snapshot()).notifications.some((item: any) => /not sandboxed/.test(item.message)),
-  ).toBe(true);
+  // Still there for a client that connects later, and as a lasting status.
+  const later = await s.snapshot();
+  expect(later.notifications.some((item: any) => /not sandboxed/.test(item.message))).toBe(true);
+  expect(later.sandbox.active).toBe(false);
+  expect(later.sandbox.reason).toContain('srt');
   // The file tools still get the node's read rules.
   const policy = JSON.parse(
     (await s.reply('env PIRC_SANDBOX_POLICY', 'env:')).replace('env:PIRC_SANDBOX_POLICY=', ''),
@@ -139,6 +140,7 @@ it('starts agents under srt with a per-session policy', async () => {
     { sandbox: { network: { allowedDomains: ['api.internal.test'] } } },
   );
   expect(await s.reply('env PIRC_SANDBOX', 'env:')).toBe('env:PIRC_SANDBOX=srt');
+  expect((await s.snapshot()).sandbox).toEqual({ active: true });
   const settings = readFileSync(s.log, 'utf8')
     .split('\n')
     .filter((line) => line.startsWith('settings '))

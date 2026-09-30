@@ -169,6 +169,14 @@ export function snapshotFromRaw(raw: any, lease: unknown): SessionSnapshot {
     runnerEpoch: String(raw.watermark?.epoch ?? raw.session.runnerEpoch ?? 0),
     widgets: raw.widgets ?? {},
     statuses: raw.statuses ?? {},
+    ...(typeof raw.sandbox?.active === 'boolean'
+      ? {
+          sandbox: {
+            active: raw.sandbox.active,
+            ...(typeof raw.sandbox.reason === 'string' ? { reason: raw.sandbox.reason } : {}),
+          },
+        }
+      : {}),
     ...(raw.agent?.model?.id ? { selectedModelId: raw.agent.model.id } : {}),
     ...(raw.agent?.model?.provider ? { selectedModelProvider: raw.agent.model.provider } : {}),
     ...(thinkingLevels.includes(raw.agent?.thinkingLevel)

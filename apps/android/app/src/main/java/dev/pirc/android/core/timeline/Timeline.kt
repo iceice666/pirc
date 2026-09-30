@@ -112,6 +112,11 @@ data class SessionState(
     val thinkingLevel: String? = null,
     val widgets: Map<String, List<String>> = emptyMap(),
     val statuses: Map<String, String> = emptyMap(),
+    /** The running agent's OS sandbox; null with no runner. */
+    val sandbox: SandboxStatus? = null,
     /** The events can no longer be applied (epoch changed, reset): fetch a new snapshot. */
     val needsSnapshot: Boolean = false,
 )
+
+/** Whether an agent runs inside its node's OS sandbox, and why not (plans/sandbox.md). */
+data class SandboxStatus(val active: Boolean, val reason: String? = null)

@@ -225,6 +225,8 @@ export interface SessionSnapshot {
   /** Extension panels (e.g. the todo list), keyed by extension. */
   widgets?: Record<string, string[]>;
   statuses?: Record<string, string>;
+  /** The running agent's OS sandbox; absent with no runner. */
+  sandbox?: { active: boolean; reason?: string };
 }
 
 /** Stable selection key: model IDs are only unique within one backend. */
