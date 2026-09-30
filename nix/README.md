@@ -55,12 +55,18 @@ Minimal service-only example:
 }
 ```
 
-This creates a dedicated `pirc` system user and two services:
+This creates two system users and two services:
 
-- `pirc.service`, the gateway, listening on loopback by default with state in `/var/lib/pirc/daemon`;
+- `pirc.service`, the gateway, running as `pirc-gateway` (`services.pirc.gatewayUser`), listening on loopback by default with state in `/var/lib/pirc/daemon`;
 - `pirc-node.service`, the local node (`services.pirc.localNode`, on by default), which connects to the gateway over loopback, keeps sessions in `/var/lib/pirc/node`, and runs the agent subprocesses and shells for `services.pirc.workspaces`.
 
-They share a token generated on first start in `/var/lib/pirc/local-node-token`; it never enters the Nix store. Only the node service gets write access to workspace paths and the tools in `extraPackages`. Ensure the account has the exact filesystem, Git, SSH, and provider access needed by the selected workspaces—no more.
+The node runs as `pirc` (`services.pirc.user`). The gateway has an account of its own so nothing the node runs can read the gateway's state: provider logins, web-managed keys, push keys and the node token. This covers agents, their shells and side-panel terminals.
+
+- **Token**: the two services share a token that the gateway's start creates (as root) in `/var/lib/pirc/daemon/local-node-token`. The node gets it as a systemd credential (`LoadCredential`). It never enters the Nix store. A token that older versions kept in `/var/lib/pirc/local-node-token` is moved there.
+- **Environment files**: `environmentFile` is the gateway's only. Give the node its own with `localNode.environmentFile`, for tokens the agents' tools need.
+- **Upgrading**: older versions ran both services as `pirc`. Make files named by `apiKeyFile` readable by `pirc-gateway` (for sops-nix, set the secret's `owner`). The daemon state directory is handed over automatically.
+
+Only the node service gets write access to workspace paths and the tools in `extraPackages`. Ensure the account has the exact filesystem, Git, SSH, and provider access needed by the selected workspaces—no more.
 
 The node ID defaults to `networking.hostName` (`services.pirc.localNode.id`; the old `hostId` option is renamed). Its workspaces appear in the web client as `<id>:<workspace>`.
 

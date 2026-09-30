@@ -60,9 +60,15 @@ let
 
   # The gateway only routes; the local node (`pirc node`) runs agents and
   # shells. They share a token generated on first start, never in the store.
-  tokenFile = "${cfg.stateDirectory}/local-node-token";
+  # The gateway runs as its own account, so nothing the node runs (agents,
+  # their shells, side-panel terminals) can read the gateway's state: its
+  # keys, OAuth logins, push keys and this token. The node gets the token as
+  # a systemd credential.
+  gatewayUser = cfg.gatewayUser;
   daemonState = "${cfg.stateDirectory}/daemon";
   nodeState = "${cfg.stateDirectory}/node";
+  tokenFile = "${daemonState}/local-node-token";
+  legacyTokenFile = "${cfg.stateDirectory}/local-node-token";
 
   gatewayEnvironment = {
     PIRC_HOST = cfg.listenAddress;
@@ -97,12 +103,22 @@ let
   }
   // cfg.environment;
 
+  # Runs as root (the "+" in ExecStartPre): creates the token, or moves one
+  # from where older versions kept it, readable by the gateway alone.
   ensureToken = pkgs.writeShellScript "pirc-local-node-token" ''
     set -eu
+    PATH=${lib.makeBinPath [ pkgs.coreutils ]}
+    install -d -m 0700 -o ${gatewayUser} -g ${gatewayUser} ${daemonState}
     if [ ! -s ${tokenFile} ]; then
-      umask 077
-      ${pkgs.coreutils}/bin/head -c 48 /dev/urandom | ${pkgs.coreutils}/bin/base64 -w0 | ${pkgs.coreutils}/bin/tr -d '/+=' > ${tokenFile}
+      if [ -s ${legacyTokenFile} ]; then
+        mv ${legacyTokenFile} ${tokenFile}
+      else
+        (umask 077; head -c 48 /dev/urandom | base64 -w0 | tr -d '/+=' > ${tokenFile})
+      fi
     fi
+    rm -f ${legacyTokenFile}
+    chown ${gatewayUser}:${gatewayUser} ${tokenFile}
+    chmod 0600 ${tokenFile}
   '';
 
   # Remote nodes may be added through PIRC_NODE_TOKENS in environmentFile;
@@ -125,7 +141,7 @@ let
 
   nodeStart = pkgs.writeShellScript "pirc-node" ''
     set -eu
-    PIRC_NODE_TOKEN=$(cat ${tokenFile})
+    PIRC_NODE_TOKEN=$(cat "$CREDENTIALS_DIRECTORY/node-token")
     export PIRC_NODE_TOKEN
     exec ${cfg.package}/bin/pirc node
   '';
@@ -143,12 +159,9 @@ let
     LockPersonality = true;
     # Bun/JavaScriptCore needs executable JIT memory.
     MemoryDenyWriteExecute = false;
-    User = cfg.user;
-    Group = cfg.group;
     UMask = "0077";
     Restart = "on-failure";
     RestartSec = 3;
-    EnvironmentFile = optional (cfg.environmentFile != null) cfg.environmentFile;
   };
 
   # File-managed providers live on the gateway, which resolves their keys and
@@ -204,6 +217,16 @@ in
   options.services.pirc = {
     enable = mkEnableOption "pirc gateway, built-in agent and web UI";
 
+    gatewayUser = mkOption {
+      type = types.str;
+      default = "pirc-gateway";
+      description = ''
+        Account (and group) the gateway runs as, apart from the node's
+        `user`, so agents cannot read the gateway's keys and logins. Files
+        named by apiKeyFile must be readable by it.
+      '';
+    };
+
     localNode = {
       enable = mkOption {
         type = types.bool;
@@ -219,6 +242,16 @@ in
         default = config.networking.hostName;
         defaultText = literalExpression "config.networking.hostName";
         description = "Node ID of the local node; workspaces appear as `<id>:<workspace>`.";
+      };
+      environmentFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        example = "/run/secrets/pirc-node-env";
+        description = ''
+          Optional systemd EnvironmentFile for the local node only, e.g.
+          tokens the agents' own tools need (GITHUB_TOKEN). The gateway's
+          environmentFile is not given to the node.
+        '';
       };
     };
 
@@ -304,7 +337,7 @@ in
     user = mkOption {
       type = types.str;
       default = "pirc";
-      description = "Unprivileged account used by the gateway and agent subprocesses.";
+      description = "Unprivileged account of the local node: its agents, their tools and terminals.";
     };
 
     group = mkOption {
@@ -330,8 +363,8 @@ in
       default = null;
       example = "/run/secrets/pirc-env";
       description = ''
-        Optional systemd EnvironmentFile for provider credentials, for
-        `EXA_API_KEY` (agents' web_search), for `PIRC_NODE_TOKENS`
+        Optional systemd EnvironmentFile of the gateway (not the node) for
+        provider credentials, for `EXA_API_KEY` (agents' web_search), for `PIRC_NODE_TOKENS`
         (JSON `{nodeId: token}`) when remote nodes connect to this gateway,
         and optionally for `PIRC_VAPID_PUBLIC_KEY`/`PIRC_VAPID_PRIVATE_KEY`
         (push notifications; without them the gateway makes a key pair once
@@ -536,9 +569,33 @@ in
         home = cfg.stateDirectory;
         createHome = true;
       };
+      users.groups.${gatewayUser} = { };
+      users.users.${gatewayUser} = {
+        isSystemUser = true;
+        group = gatewayUser;
+        home = daemonState;
+      };
 
       systemd.tmpfiles.settings.pirc = {
+        # Traversable, not listable: each service keeps its own directory.
         ${cfg.stateDirectory}.d = {
+          user = cfg.user;
+          group = cfg.group;
+          mode = "0711";
+        };
+        # Z: also hands over a daemon directory older versions created as the node's user.
+        ${daemonState} = {
+          d = {
+            user = gatewayUser;
+            group = gatewayUser;
+            mode = "0700";
+          };
+          Z = {
+            user = gatewayUser;
+            group = gatewayUser;
+          };
+        };
+        ${nodeState}.d = {
           user = cfg.user;
           group = cfg.group;
           mode = "0700";
@@ -557,11 +614,14 @@ in
         reloadTriggers = [ modelsFile ];
         serviceConfig = hardening // {
           Type = "simple";
-          WorkingDirectory = cfg.stateDirectory;
-          ExecStartPre = optional cfg.localNode.enable ensureToken;
+          User = gatewayUser;
+          Group = gatewayUser;
+          WorkingDirectory = daemonState;
+          EnvironmentFile = optional (cfg.environmentFile != null) cfg.environmentFile;
+          ExecStartPre = optional cfg.localNode.enable "+${ensureToken}";
           ExecStart = gatewayStart;
           ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
-          ReadWritePaths = [ cfg.stateDirectory ];
+          ReadWritePaths = [ daemonState ];
         };
       };
     }
@@ -576,8 +636,14 @@ in
         environment = nodeEnvironment;
         serviceConfig = hardening // {
           Type = "simple";
-          WorkingDirectory = cfg.stateDirectory;
+          User = cfg.user;
+          Group = cfg.group;
+          WorkingDirectory = nodeState;
+          EnvironmentFile = optional (cfg.localNode.environmentFile != null) cfg.localNode.environmentFile;
+          LoadCredential = [ "node-token:${tokenFile}" ];
           ExecStart = nodeStart;
+          # The state directory is also the account's HOME (build caches); the
+          # gateway's part of it belongs to another account.
           ReadWritePaths = [ cfg.stateDirectory ] ++ map (workspace: workspace.path) workspaceList;
         };
       };
