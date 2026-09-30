@@ -76,6 +76,7 @@ Status (2026-09-30): option C built and tested on macOS; not yet run on a real N
     - `code` (IPC) and a PTY work;
     - `unsandboxed_bash` runs after approval.
   - `agent-core` covers PathGuard with and without a node policy.
+- **Teammates and subagents** share the parent's sandbox and have the same two tools. A child's request goes over the team channel (`team_call` `sandbox_request`) to its parent, which relays it to the node, or up to its own parent (`relaySandboxRequest`). The reason is prefixed `[asked by <name>]`, so the human sees who asks. Error codes such as `denied` travel as values, because the team channel only carries messages. Covered by `agent-subagent.test.ts`.
 - **Lasting badge**: the snapshot carries `sandbox: {active, reason} | null` (null with no runner). Web shows a "Not sandboxed" chip in the session title block, with the reason as its tooltip. Android shows the same chip under the top bar; tapping it shows the reason. `runner_ready` already makes both clients fetch a new snapshot.
 - **Checked by hand**: on macOS, srt's `allowUnixSockets` is required, and enough, for Bun `fetch({unix})`, which is how the agent reaches the inference socket.
 
@@ -88,7 +89,6 @@ Status (2026-09-30): option C built and tested on macOS; not yet run on a real N
 - **Linux sockets**: Unix sockets are allowed wholesale there (`allowAllUnixSockets`), because seccomp cannot filter by path and the agent needs the inference socket. The read rules hide the sockets in denied directories, but any other socket the account can reach is open.
 - **Workspace memory**: the dir is writable as a whole, so a session could append to another repository's ledger.
 - **Approvals**: they last only for the session. There is no "always allow for this workspace" yet.
-- **Teammates and subagents**: they share the parent's sandbox but have no channel, so they cannot ask for domains or an unsandboxed command.
 - **launchd nodes** (m5pro, m3air): their env file lives outside `PIRC_STATE_DIR`. Until `sandbox.filesystem.denyRead` includes `~/.local/pirc-node`, an agent there can still read `agent.env`. m3air's hand-copied binary has no srt next to it.
 
 ## Why

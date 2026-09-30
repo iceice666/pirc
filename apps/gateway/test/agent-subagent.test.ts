@@ -115,6 +115,69 @@ describe('subagent tool', () => {
     expect(texts(childRequest.body)).toContain('another session is writing');
   }, 30_000);
 
+  it('asks for sandbox approvals through the parent, named in the reason', async () => {
+    const agent = await startAgent({ env: { PIRC_SANDBOX: 'srt' } });
+    agents.push(agent);
+    const child: Reply[] = [
+      {
+        tool: {
+          id: 'c1',
+          name: 'sandbox_allow_domains',
+          args: { domains: ['api.example.com'], reason: 'fetch the schema' },
+        },
+      },
+      {
+        tool: {
+          id: 'c2',
+          name: 'unsandboxed_bash',
+          args: { command: 'nix build', reason: 'needs the nix daemon' },
+        },
+      },
+      { text: 'asked' },
+    ];
+    const parent: Reply[] = [
+      { tool: { id: 'p1', name: 'subagent', args: { task: 'build it', name: 'scout' } } },
+      { text: 'parent done' },
+    ];
+    agent.llm.route = (body) =>
+      (isSubagent(body) ? child.shift() : parent.shift()) ?? { text: 'extra' };
+    const from = agent.events.length;
+    await agent.send({ type: 'prompt', message: 'delegate' });
+    // The child's requests reach the node as the parent's own.
+    const network = await agent.waitFor((event) => event.type === 'sandbox_request', 15_000);
+    expect(network.op).toBe('network');
+    expect(network.args.reason).toBe('[asked by scout] fetch the schema');
+    agent.raw({
+      type: 'sandbox_response',
+      id: network.id,
+      ok: true,
+      result: { granted: ['api.example.com'] },
+    });
+    const exec = await agent.waitFor(
+      (event) => event.type === 'sandbox_request' && event.op === 'exec',
+      15_000,
+    );
+    expect(exec.args).toMatchObject({
+      command: 'nix build',
+      reason: '[asked by scout] needs the nix daemon',
+    });
+    agent.raw({
+      type: 'sandbox_response',
+      id: exec.id,
+      ok: false,
+      error: { code: 'denied', message: 'The user did not approve' },
+    });
+    await settledAfter(agent, from);
+    const childRequests = agent.llm.requests.filter((r) => isSubagent(r.body));
+    expect(toolNames(childRequests[0]!.body)).toEqual(
+      expect.arrayContaining(['sandbox_allow_domains', 'unsandboxed_bash']),
+    );
+    const seen = texts(childRequests.at(-1)!.body);
+    expect(seen).toContain('Allowed for this session: api.example.com.');
+    // The code survives the relay: a refusal, not a crash.
+    expect(seen).toContain('The user did not approve running this outside the sandbox');
+  }, 30_000);
+
   it('delivers a background subagent result once when it finishes', async () => {
     const agent = await startAgent();
     agents.push(agent);

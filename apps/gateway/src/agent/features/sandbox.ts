@@ -2,8 +2,8 @@
  * Tools for an agent inside its node's OS sandbox (plans/sandbox.md):
  * `sandbox_allow_domains` asks for more network access, `unsandboxed_bash`
  * runs one command outside the sandbox. The node asks the human for both;
- * nothing here can grant anything by itself. Only a node's main agent has
- * them (see sandbox-channel.ts).
+ * nothing here can grant anything by itself. Teammates and subagents have
+ * them too: their requests go through their parent (see sandbox-channel.ts).
  */
 import type { Agent } from '../agent.js';
 import type { Feature } from '../feature.js';

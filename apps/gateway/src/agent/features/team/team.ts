@@ -13,6 +13,7 @@ import { join, resolve } from 'node:path';
 import type { Subprocess } from 'bun';
 import { thinkingLevels } from '../../config.js';
 import type { ModelsConfig } from '../../../models.js';
+import { relaySandboxRequest } from '../../sandbox-channel.js';
 import { killGroup } from '../../tools/bash.js';
 import type { Question, QuestionResult } from '../ask-question.js';
 
@@ -1192,6 +1193,9 @@ export class Team {
       await this.options.acquireWrite?.(text(args.path, 'path', 4096), signal);
       return { granted: true };
     }
+    // Children share this agent's sandbox; the human answers for them too.
+    if (operation === 'sandbox_request' && who !== 'parent')
+      return relaySandboxRequest(who, args, signal);
     if (who !== 'parent' && this.agents.get(who)?.mode === 'subagent')
       throw new Error('Subagents cannot use team tools');
     switch (operation) {

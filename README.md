@@ -89,7 +89,7 @@ A node starts every agent inside [srt](https://github.com/anthropic-experimental
 - **Network** goes through a filtering proxy. Only common code hosts and package registries are allowed, plus hosts you add. When a task needs another host, the agent calls `sandbox_allow_domains` and the node asks you. An approved host stays allowed for the rest of the session.
 - **Outside the sandbox**: for what the sandbox blocks (a nix build, git over SSH, changing the system), the agent calls `unsandboxed_bash`. The node asks you first, then runs the command with the node account's permissions, but without the node's own secrets.
 
-The node itself asks for both approvals, not the agent: nothing the agent says counts as your answer.
+The node itself asks for both approvals, not the agent: nothing the agent says counts as your answer. Teammates and subagents share the sandbox; their requests go through the agent that started them and name who is asking.
 
 Set it in the node's `config.json` (never a project's):
 

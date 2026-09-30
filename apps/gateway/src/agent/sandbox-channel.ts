@@ -4,10 +4,23 @@
  * as `sandbox_request` and is answered on stdin by `sandbox_response`
  * (routed here by serveRpc); an aborted tool sends `sandbox_cancel`. The
  * node asks the human itself before it grants anything. Only a node's main
- * agent talks to the node: team members and subagents have no channel.
+ * agent talks to the node: team members and subagents share its sandbox and
+ * forward their requests to it over the team channel (`sandbox_request`),
+ * which names them to the human.
  */
 import { randomUUID } from 'node:crypto';
-import { teamChildName } from './features/team/channel.js';
+import { parentChannel, teamChildName } from './features/team/channel.js';
+
+export type SandboxOp = 'network' | 'exec';
+
+/** Whatever carries this process's sandbox requests to the node. */
+export interface SandboxRequester {
+  request(
+    op: SandboxOp,
+    args: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<Record<string, any>>;
+}
 
 export class SandboxRequestError extends Error {
   constructor(
@@ -21,13 +34,13 @@ export class SandboxRequestError extends Error {
 
 type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void };
 
-export class NodeSandboxChannel {
+export class NodeSandboxChannel implements SandboxRequester {
   private readonly pending = new Map<string, Pending>();
   constructor(private readonly write: (value: unknown) => void) {}
 
   /** No lost-reply timer: approvals wait for the human, and the node answers every request. */
   request(
-    op: 'network' | 'exec',
+    op: SandboxOp,
     args: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<Record<string, any>> {
@@ -79,7 +92,61 @@ export function nodeSandboxChannel(): NodeSandboxChannel {
   return instance;
 }
 
-/** This process's channel to a sandboxing node, or undefined (see module comment). */
-export function processSandboxChannel(): NodeSandboxChannel | undefined {
-  return process.env.PIRC_SANDBOX === 'srt' && !teamChildName() ? nodeSandboxChannel() : undefined;
+/** What a parent answers a child's `sandbox_request` with. Errors are values: the team channel carries only messages. */
+export interface RelayedAnswer {
+  result?: Record<string, any>;
+  error?: { code: string; message: string };
+}
+
+/** A team child's requests go to its parent, which forwards them (relaySandboxRequest). */
+const viaParent: SandboxRequester = {
+  async request(op, args, signal) {
+    const answer = (await parentChannel().call(
+      'sandbox_request',
+      { op, args },
+      signal,
+    )) as RelayedAnswer;
+    if (answer?.error) throw new SandboxRequestError(answer.error.code, answer.error.message);
+    return answer?.result ?? {};
+  },
+};
+
+/** This process's way to a sandboxing node, or undefined (see module comment). */
+export function processSandboxChannel(): SandboxRequester | undefined {
+  if (process.env.PIRC_SANDBOX !== 'srt') return undefined;
+  return teamChildName() ? viaParent : nodeSandboxChannel();
+}
+
+/**
+ * The parent's side of a child's `sandbox_request`: pass it on (to the node,
+ * or up to this agent's own parent) with the child named in the reason.
+ */
+export async function relaySandboxRequest(
+  child: string,
+  message: { op?: unknown; args?: unknown },
+  signal?: AbortSignal,
+): Promise<RelayedAnswer> {
+  const channel = processSandboxChannel();
+  if (!channel)
+    return {
+      error: { code: 'unavailable', message: 'This team is not running inside a node sandbox' },
+    };
+  if (message.op !== 'network' && message.op !== 'exec')
+    return { error: { code: 'invalid_input', message: 'Unknown sandbox operation' } };
+  const args: Record<string, unknown> =
+    message.args && typeof message.args === 'object'
+      ? { ...(message.args as Record<string, unknown>) }
+      : {};
+  const reason =
+    typeof args.reason === 'string' && args.reason.trim()
+      ? args.reason.trim()
+      : '(no reason given)';
+  args.reason = `[asked by ${child}] ${reason}`;
+  try {
+    return { result: await channel.request(message.op, args, signal) };
+  } catch (error) {
+    if (error instanceof SandboxRequestError)
+      return { error: { code: error.code, message: error.message } };
+    throw error;
+  }
 }
