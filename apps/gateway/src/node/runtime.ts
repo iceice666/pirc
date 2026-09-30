@@ -1,5 +1,5 @@
 /**
- * `pirc node`: owns agent processes, terminals, session files, metadata and
+ * `pirc-node`: owns agent processes, terminals, session files, metadata and
  * the event buffer locally, and serves them to the daemon over one outbound
  * WebSocket. Daemon requests are replayed on the local router with
  * `app.inject`; terminal streams are multiplexed on the same connection.

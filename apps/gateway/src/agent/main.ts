@@ -49,7 +49,7 @@ async function readConfigure(
 }
 
 /**
- * `pirc agent --session-dir DIR` — one session, JSONL RPC on stdin/stdout.
+ * `pirc-node agent --session-dir DIR` — one session, JSONL RPC on stdin/stdout.
  * The legacy flags `--mode rpc` and `--continue` are accepted and ignored
  * (sessions always resume from their directory).
  */

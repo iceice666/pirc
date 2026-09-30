@@ -1,5 +1,5 @@
 /**
- * `pirc gateway`: the central daemon. It authenticates browsers (forward
+ * `pirc-gateway`: the central daemon. It authenticates browsers (forward
  * auth), indexes sessions and mirrors control leases, buffers each
  * session's events, and routes every session request to the node that owns
  * it. It never runs agents, terminals or workspace inspection itself.

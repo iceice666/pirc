@@ -58,7 +58,7 @@ let
       ;
   }) cfg.workspaces;
 
-  # The gateway only routes; the local node (`pirc node`) runs agents and
+  # The gateway only routes; the local chat/node binary runs agents and
   # shells. They share a token generated on first start, never in the store.
   # The gateway runs as its own account, so nothing the node runs (agents,
   # their shells, side-panel terminals) can read the gateway's state: its
@@ -94,7 +94,6 @@ let
     PIRC_WORKSPACES = json workspaceList;
     PIRC_CONFIG_DIR = "${agentConfigDir}";
     PIRC_TERMINALS = lib.boolToString cfg.terminals;
-    PIRC_CHAT = lib.boolToString cfg.chat;
     PIRC_BROWSER = lib.boolToString cfg.browser.enable;
   }
   // lib.optionalAttrs (!cfg.sandbox.enable) {
@@ -136,17 +135,17 @@ let
         PIRC_NODE_TOKENS=$(printf '%s' "$remote" \
           | ${pkgs.jq}/bin/jq -c --arg id ${lib.escapeShellArg cfg.localNode.id} --arg token "$token" '. + {($id): $token}')
         export PIRC_NODE_TOKENS
-        exec ${cfg.package}/bin/pirc gateway
+        exec ${lib.getExe cfg.gatewayPackage}
       ''
     else
-      "exec ${cfg.package}/bin/pirc gateway"
+      "exec ${lib.getExe cfg.gatewayPackage}"
   );
 
   nodeStart = pkgs.writeShellScript "pirc-node" ''
     set -eu
     PIRC_NODE_TOKEN=$(cat "$CREDENTIALS_DIRECTORY/node-token")
     export PIRC_NODE_TOKEN
-    exec ${cfg.package}/bin/pirc node
+    exec ${lib.getExe (if cfg.chat then cfg.chatPackage else cfg.nodePackage)}
   '';
 
   hardening = {
@@ -199,16 +198,30 @@ let
 in
 {
   imports = [
-    (mkRemovedOptionModule [
-      "services"
-      "pirc"
-      "piPackage"
-    ] "pirc now runs its built-in agent (`pirc agent`); configure it with services.pirc.agentConfig.")
-    (mkRemovedOptionModule [
-      "services"
-      "pirc"
-      "piArgs"
-    ] "pirc now runs its built-in agent (`pirc agent`); configure it with services.pirc.agentConfig.")
+    (mkRemovedOptionModule
+      [
+        "services"
+        "pirc"
+        "package"
+      ]
+      "pirc is now three independent packages; set services.pirc.gatewayPackage, chatPackage and nodePackage as needed."
+    )
+    (mkRemovedOptionModule
+      [
+        "services"
+        "pirc"
+        "piPackage"
+      ]
+      "pirc now runs its built-in agent on pirc-chat/pirc-node; configure it with services.pirc.agentConfig."
+    )
+    (mkRemovedOptionModule
+      [
+        "services"
+        "pirc"
+        "piArgs"
+      ]
+      "pirc now runs its built-in agent on pirc-chat/pirc-node; configure it with services.pirc.agentConfig."
+    )
     (mkRenamedOptionModule [ "services" "pirc" "hostId" ] [ "services" "pirc" "localNode" "id" ])
     (mkRemovedOptionModule [
       "services"
@@ -249,7 +262,8 @@ in
         type = types.bool;
         default = true;
         description = ''
-          Run a `pirc node` on this host (service `pirc-node`) so its
+          Run `pirc-node` (or `pirc-chat` when chat is enabled) on this host
+          as service `pirc-node` so its
           workspaces can host sessions. The gateway itself never runs agents;
           disable this for a routing-only gateway that serves remote nodes.
         '';
@@ -272,11 +286,25 @@ in
       };
     };
 
-    package = mkOption {
+    gatewayPackage = mkOption {
       type = types.package;
-      default = pkgs.callPackage ./package.nix { };
-      defaultText = literalExpression "pkgs.callPackage ./nix/package.nix { }";
-      description = "pirc package to run.";
+      default = pkgs.pirc-gateway or (pkgs.callPackage ./package.nix { role = "gateway"; });
+      defaultText = literalExpression "pkgs.pirc-gateway";
+      description = "Independent pirc-gateway package, including the web UI.";
+    };
+
+    chatPackage = mkOption {
+      type = types.package;
+      default = pkgs.pirc-chat or (pkgs.callPackage ./package.nix { role = "chat"; });
+      defaultText = literalExpression "pkgs.pirc-chat";
+      description = "Independent pirc-chat package used when services.pirc.chat is enabled.";
+    };
+
+    nodePackage = mkOption {
+      type = types.package;
+      default = pkgs.pirc-node or (pkgs.callPackage ./package.nix { role = "node"; });
+      defaultText = literalExpression "pkgs.pirc-node";
+      description = "Independent pirc-node package used for the local coding node.";
     };
 
     models = mkOption {
@@ -477,7 +505,7 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Make the local node the chat node (PIRC_CHAT): it hosts the
+        Run pirc-chat instead of pirc-node for the local service: it hosts the
         assistant's chats, a top-level "Chats" plus projects created from
         the web, in directories it manages under its state directory. Keep a
         single chat node on an always-on machine.
@@ -532,7 +560,7 @@ in
         type = types.bool;
         default = false;
         description = ''
-          Proxy `/node/connect` so remote `pirc node`s can reach this gateway
+          Proxy `/node/connect` so remote `pirc-chat` and `pirc-node` hosts can reach this gateway
           over TLS. It bypasses forward auth: nodes authenticate with their
           PIRC_NODE_TOKENS secret instead.
         '';
@@ -562,7 +590,7 @@ in
         }
         {
           assertion = !cfg.chat || cfg.workspaces == { };
-          message = "services.pirc.chat makes the local node the chat node, which hosts chat workspaces only; move services.pirc.workspaces to another node";
+          message = "services.pirc.chat selects pirc-chat, which hosts chat workspaces only; move services.pirc.workspaces to another node";
         }
         {
           assertion = cfg.localNode.enable || cfg.workspaces == { };
@@ -645,7 +673,7 @@ in
 
     (mkIf cfg.localNode.enable {
       systemd.services.pirc-node = {
-        description = "pirc node (agents and shells for this host)";
+        description = if cfg.chat then "pirc chat host" else "pirc node (agents and shells for this host)";
         wantedBy = [ "multi-user.target" ];
         after = [ "pirc.service" ];
         requires = [ "pirc.service" ];
@@ -672,7 +700,7 @@ in
         inherit (cfg.nginx) forceSSL enableACME;
         sslCertificate = mkIf (cfg.nginx.sslCertificate != null) cfg.nginx.sslCertificate;
         sslCertificateKey = mkIf (cfg.nginx.sslCertificateKey != null) cfg.nginx.sslCertificateKey;
-        root = "${cfg.package}/share/pirc/web";
+        root = "${cfg.gatewayPackage}/share/pirc/web";
 
         locations."= /_pirc_auth" = {
           proxyPass = cfg.nginx.forwardAuthUri;

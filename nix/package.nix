@@ -4,6 +4,7 @@
   bun,
   makeBinaryWrapper,
   callPackage,
+  role ? "gateway",
   # The OS sandbox nodes wrap agents in (plans/sandbox.md).
   # Not named `srt`: callPackage would inject nixpkgs' unrelated `srt`
   # (a video streaming library) instead of this default.
@@ -11,8 +12,16 @@
   nodeModulesHash ? "sha256-KEDQyYbgzyMVWiBv2Kl0tIprDlAOGyMhxjS10/Dz/Vo=",
 }:
 
+assert lib.elem role [
+  "gateway"
+  "chat"
+  "node"
+];
+
 let
   version = "0.1.0";
+  executable = "pirc-${role}";
+  runsAgents = role != "gateway";
 
   src = lib.cleanSourceWith {
     src = ../.;
@@ -21,7 +30,7 @@ let
       let
         name = baseNameOf path;
       in
-      # The Android client builds with Gradle, not into the pirc binary.
+      # The Android client builds with Gradle, not into these binaries.
       toString path != toString ../apps/android
       && !lib.elem name [
         ".git"
@@ -33,7 +42,8 @@ let
       ];
   };
 
-  # Dependencies for every os/cpu, so one hash covers all systems.
+  # Shared build dependencies, not a combined executable: every role compiles
+  # its own entry point below. One fixed-output hash covers every os/cpu.
   nodeModules = stdenvNoCC.mkDerivation {
     pname = "pirc-node-modules";
     inherit version src;
@@ -62,12 +72,9 @@ let
   };
 in
 stdenvNoCC.mkDerivation {
-  pname = "pirc";
+  pname = executable;
   inherit version src;
-  nativeBuildInputs = [
-    bun
-    makeBinaryWrapper
-  ];
+  nativeBuildInputs = [ bun ] ++ lib.optional runsAgents makeBinaryWrapper;
 
   configurePhase = ''
     runHook preConfigure
@@ -86,7 +93,11 @@ stdenvNoCC.mkDerivation {
   buildPhase = ''
     runHook preBuild
     export PATH=$TMPDIR/bin:$PATH
-    bun run build
+    ${lib.optionalString (!runsAgents) "bun run --filter @pirc/web build"}
+    cd apps/gateway
+    bun build --compile --minify --sourcemap --external chromium-bidi \
+      src/entry/${role}.ts --outfile dist/${executable}
+    cd ../..
     runHook postBuild
   '';
 
@@ -96,31 +107,51 @@ stdenvNoCC.mkDerivation {
 
   installPhase = ''
     runHook preInstall
-    install -Dm755 apps/gateway/dist/pirc $out/libexec/pirc/pirc
-    # playwright-core reads its own files (package.json, browsers.json, wasm)
-    # by computed paths, which bun --compile cannot bundle: ship it on disk.
-    playwright=$(echo node_modules/.bun/playwright-core@*/node_modules/playwright-core)
-    [ -f "$playwright/index.js" ]
-    mkdir -p $out/lib/pirc
-    cp -rL "$playwright" $out/lib/pirc/playwright-core
-    makeBinaryWrapper $out/libexec/pirc/pirc $out/bin/pirc \
-      --set-default PIRC_PLAYWRIGHT_CORE $out/lib/pirc/playwright-core \
-      --set-default PIRC_SANDBOX_SRT ${lib.getExe sandboxRuntime}
-    mkdir -p $out/share/pirc/web
-    cp -r apps/web/dist/. $out/share/pirc/web/
+  ''
+  + (
+    if runsAgents then
+      ''
+        install -Dm755 apps/gateway/dist/${executable} $out/libexec/pirc/${executable}
+        # playwright-core reads its own files (package.json, browsers.json,
+        # wasm) by computed paths, which bun --compile cannot bundle.
+        playwright=$(echo node_modules/.bun/playwright-core@*/node_modules/playwright-core)
+        [ -f "$playwright/index.js" ]
+        mkdir -p $out/lib/pirc
+        cp -rL "$playwright" $out/lib/pirc/playwright-core
+        makeBinaryWrapper $out/libexec/pirc/${executable} $out/bin/${executable} \
+          --set-default PIRC_PLAYWRIGHT_CORE $out/lib/pirc/playwright-core \
+          --set-default PIRC_SANDBOX_SRT ${lib.getExe sandboxRuntime}
+      ''
+    else
+      ''
+        install -Dm755 apps/gateway/dist/${executable} $out/bin/${executable}
+        mkdir -p $out/share/pirc/web
+        cp -r apps/web/dist/. $out/share/pirc/web/
+      ''
+  )
+  + ''
     runHook postInstall
   '';
 
   doInstallCheck = true;
   installCheckPhase = ''
-    $out/bin/pirc version
+    $out/bin/${executable} version
   '';
 
-  passthru = { inherit nodeModules sandboxRuntime; };
+  passthru = {
+    inherit nodeModules role;
+  }
+  // lib.optionalAttrs runsAgents { inherit sandboxRuntime; };
 
   meta = {
-    description = "Private forward-authenticated web client with a built-in coding agent";
-    mainProgram = "pirc";
+    description =
+      {
+        gateway = "Private forward-authenticated gateway and web UI";
+        chat = "Managed chat workspace host with a built-in coding agent";
+        node = "Coding workspace host with a built-in coding agent";
+      }
+      .${role};
+    mainProgram = executable;
     platforms = [
       "x86_64-linux"
       "aarch64-linux"

@@ -21,8 +21,6 @@ export interface AgentProcess {
   proc: Subprocess<'pipe', 'pipe', 'pipe'>;
 }
 
-const cli = path.resolve(import.meta.dir, '../src/cli.ts');
-
 /** Providers as the gateway would push them (`providers`/`defaultModel` in `extra` override). */
 export function testModels(llmUrl: string, extra: Record<string, unknown> = {}): ModelsConfig {
   return {
@@ -101,6 +99,9 @@ const testEnv = () =>
 
 export async function startAgent(
   options: {
+    /** Exercise either fixed role entry, or a compiled role binary. */
+    role?: 'chat' | 'node';
+    executable?: string;
     config?: Record<string, unknown>;
     args?: string[];
     workspace?: string;
@@ -122,7 +123,18 @@ export async function startAgent(
   const llm = options.llm ?? startFakeLlm();
   writeAgentConfig(configDir, options.config);
   const proc = Bun.spawn(
-    [process.execPath, cli, 'agent', '--session-dir', sessionDir, ...(options.args ?? [])],
+    [
+      ...(options.executable
+        ? [options.executable]
+        : [
+            process.execPath,
+            path.resolve(import.meta.dir, `../src/entry/${options.role ?? 'node'}.ts`),
+          ]),
+      'agent',
+      '--session-dir',
+      sessionDir,
+      ...(options.args ?? []),
+    ],
     {
       cwd: workspace,
       env: {

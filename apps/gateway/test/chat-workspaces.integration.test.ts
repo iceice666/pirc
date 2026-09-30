@@ -90,14 +90,18 @@ it('refuses chat projects on other nodes and configured workspaces on a chat nod
     PIRC_DAEMON_URL: 'ws://127.0.0.1:1',
     PIRC_ALLOWED_USERS: 'u@example.com',
     PIRC_STATE_DIR: stateDir,
-    PIRC_CHAT: '1',
     PIRC_WORKSPACES: JSON.stringify([{ id: 'chats', path: stateDir }]),
   };
-  expect(() => loadNodeConfig(env)).toThrow('PIRC_WORKSPACES must be empty on the chat node');
+  expect(() => loadNodeConfig(env, 'chat')).toThrow(
+    'PIRC_WORKSPACES must be empty on the chat node',
+  );
   expect(() =>
-    loadNodeConfig({ ...env, PIRC_WORKSPACES: JSON.stringify([{ id: 'repo', path: stateDir }]) }),
+    loadNodeConfig(
+      { ...env, PIRC_WORKSPACES: JSON.stringify([{ id: 'repo', path: stateDir }]) },
+      'chat',
+    ),
   ).toThrow('PIRC_WORKSPACES must be empty on the chat node');
-  expect(loadNodeConfig({ ...env, PIRC_WORKSPACES: '[]' }).chat).toBe(true);
+  expect(loadNodeConfig({ ...env, PIRC_WORKSPACES: '[]' }, 'chat').chat).toBe(true);
 });
 
 it('lets the web create chat projects and tells chat sessions they are the assistant', async () => {

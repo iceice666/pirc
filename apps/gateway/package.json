@@ -7,13 +7,20 @@
     "bun": ">=1.2"
   },
   "scripts": {
-    "dev": "bun --watch src/cli.ts gateway",
-    "dev:node": "bun --watch src/cli.ts node",
+    "dev": "bun --watch src/entry/gateway.ts",
+    "dev:node": "bun --watch src/entry/node.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "bun build --compile --minify --sourcemap --external chromium-bidi src/cli.ts --outfile dist/pirc",
-    "start": "bun src/cli.ts gateway",
-    "start:node": "bun src/cli.ts node",
-    "test": "bun test"
+    "build": "bun run build:gateway && bun run build:chat && bun run build:node",
+    "start": "bun src/entry/gateway.ts",
+    "start:node": "bun src/entry/node.ts",
+    "test": "bun test",
+    "dev:chat": "bun --watch src/entry/chat.ts",
+    "build:gateway": "bun run build:clean-legacy && bun build --compile --minify --sourcemap --external chromium-bidi src/entry/gateway.ts --outfile dist/pirc-gateway",
+    "build:chat": "bun run build:clean-legacy && bun build --compile --minify --sourcemap --external chromium-bidi src/entry/chat.ts --outfile dist/pirc-chat",
+    "build:node": "bun run build:clean-legacy && bun build --compile --minify --sourcemap --external chromium-bidi src/entry/node.ts --outfile dist/pirc-node",
+    "start:chat": "bun src/entry/chat.ts",
+    "build:clean-legacy": "rm -f dist/pirc dist/pirc.map",
+    "test:compiled": "PIRC_TEST_COMPILED_ROLES=1 bun test test/role-executables.test.ts"
   },
   "dependencies": {
     "@fastify/websocket": "^11.0.2",
@@ -32,6 +39,8 @@
     "typescript": "^5.7.3"
   },
   "bin": {
-    "pirc": "src/cli.ts"
+    "pirc-gateway": "src/entry/gateway.ts",
+    "pirc-chat": "src/entry/chat.ts",
+    "pirc-node": "src/entry/node.ts"
   }
 }

@@ -295,7 +295,7 @@ it('keeps daemon and node configuration apart', () => {
   const withTokens = { ...daemonEnv, PIRC_NODE_TOKENS: JSON.stringify({ m5: 'k'.repeat(32) }) };
   expect(loadDaemonConfig(withTokens).nodeTokens.get('m5')).toBe('k'.repeat(32));
   // Node settings on the daemon are a misconfiguration, not silently ignored.
-  expect(() => loadDaemonConfig({ ...withTokens, PIRC_WORKSPACES: '[]' })).toThrow('pirc node');
+  expect(() => loadDaemonConfig({ ...withTokens, PIRC_WORKSPACES: '[]' })).toThrow('pirc-node');
   expect(() => loadDaemonConfig({ ...withTokens, PIRC_UPLOAD_MAX_BYTES: '99999999' })).toThrow(
     'frame limit',
   );

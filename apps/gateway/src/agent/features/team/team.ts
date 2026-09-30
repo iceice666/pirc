@@ -1,6 +1,6 @@
 /**
  * Parent-side team broker (port of Pi's agent-team `Team`). Children are
- * `pirc agent --headless` subprocesses; they reach the broker through
+ * `pirc-node agent --headless` subprocesses; they reach the broker through
  * `team_call` lines on their stdout instead of a localhost HTTP server.
  *
  * Two member modes share the process plumbing: persistent `team` members
@@ -334,7 +334,7 @@ const SUBAGENT_PREAMBLE =
 
 export interface TeamOptions {
   directory: string;
-  /** Command prefix that runs `pirc` (e.g. `[execPath]` or `[bun, cli.ts]`). */
+  /** Command prefix that runs the current role executable (e.g. `[execPath]` or `[bun, entry/node.ts]`). */
   command: string[];
   deliverParent(entry: Json): void;
   askUser(question: Question, signal: AbortSignal, from: string): Promise<QuestionResult>;

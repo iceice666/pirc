@@ -1,5 +1,5 @@
 /**
- * `pirc ptc-worker <script>` — runs model-written code in a child process.
+ * `pirc-node ptc-worker <script>` — runs model-written code in a child process.
  * Tool calls are forwarded to the parent agent over Bun IPC; console output
  * goes to stdout/stderr, which the parent captures and caps.
  */
@@ -8,7 +8,7 @@ type Pending = { resolve: (value: any) => void; reject: (error: Error) => void }
 export async function runPtcWorker(argv: string[]): Promise<void> {
   const file = argv[0];
   if (!file || typeof process.send !== 'function') {
-    console.error('ptc-worker must be started by pirc agent');
+    console.error('ptc-worker must be started by a pirc node/chat agent');
     process.exit(2);
   }
   const send = process.send.bind(process);

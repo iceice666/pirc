@@ -1,8 +1,8 @@
 /**
- * A real `pirc agent` under the real srt (plans/sandbox.md). Runs only where
+ * A real `pirc-node agent` under the real srt (plans/sandbox.md). Runs only where
  * srt works: set PIRC_TEST_SRT to its path, or have `srt` on PATH.
  * PIRC_TEST_AGENT_COMMAND runs a built binary (e.g. the Nix package's
- * `bin/pirc`) as the agent instead of the sources.
+ * `bin/pirc-node`) as the agent instead of the sources.
  */
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import os, { tmpdir } from 'node:os';

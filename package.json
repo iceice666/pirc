@@ -16,7 +16,9 @@
     "test": "bun run --filter \"*\" test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "bun run format:check && bun run typecheck && bun run test && bun run build"
+    "check": "bun run format:check && bun run typecheck && bun run test && bun run build && bun run test:compiled",
+    "dev:chat": "bun run --filter @pirc/gateway dev:chat",
+    "test:compiled": "bun run --filter @pirc/gateway test:compiled"
   },
   "devDependencies": {
     "prettier": "3.6.2",

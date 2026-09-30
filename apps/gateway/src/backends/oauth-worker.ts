@@ -35,7 +35,7 @@ async function runWorker(
   callbacks: OAuthLoginCallbacks,
 ): Promise<OAuthCredentials> {
   if (callbacks.signal?.aborted) throw new Error('OAuth cancelled');
-  const child = Bun.spawn([...selfCommand(), 'oauth-worker'], {
+  const child = Bun.spawn([...selfCommand('gateway'), 'oauth-worker'], {
     stdin: 'pipe',
     stdout: 'pipe',
     stderr: 'ignore',

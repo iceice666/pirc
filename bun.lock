@@ -14,7 +14,9 @@
       "name": "@pirc/gateway",
       "version": "0.1.0",
       "bin": {
-        "pirc": "src/cli.ts",
+        "pirc-gateway": "src/entry/gateway.ts",
+        "pirc-chat": "src/entry/chat.ts",
+        "pirc-node": "src/entry/node.ts",
       },
       "dependencies": {
         "@fastify/websocket": "^11.0.2",

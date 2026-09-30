@@ -162,9 +162,18 @@ export async function buildNodeApp(
   registerImageParsers(app, config.uploadMaxBytes);
   if (config.chat && config.workspaces.length)
     throw new Error(
-      'The chat node (PIRC_CHAT) hosts chat workspaces only; PIRC_WORKSPACES must be empty',
+      'The chat node (pirc-chat) hosts chat workspaces only; PIRC_WORKSPACES must be empty',
     );
   const db = new GatewayDatabase(config.databasePath);
+  // Role is fixed even across restarts: do not silently expose another role's
+  // persisted workspaces when an operator points the wrong executable at state.
+  const expectedKind = config.chat ? 'chat' : 'directory';
+  if (db.listWorkspaces().some((workspace) => workspace.kind !== expectedKind)) {
+    db.close();
+    throw new Error(
+      `State contains workspaces incompatible with pirc-${config.chat ? 'chat' : 'node'}; use the matching executable or a separate state directory`,
+    );
+  }
   db.syncWorkspaces(config.nodeId, config.workspaces);
   if (config.chat) ensureTopLevelChats(config, db);
   const recovery = db.recoverStartup();
@@ -199,7 +208,7 @@ export async function buildNodeApp(
     const body = parse(createWorkspaceBody, request.body);
     if (body.kind === 'chat') {
       if (!config.chat)
-        throw new ApiError(403, 'forbidden', 'This node does not host chats (PIRC_CHAT)');
+        throw new ApiError(403, 'forbidden', 'This node does not host chats (pirc-chat)');
       const workspaceId = id('workspace').replaceAll('-', '_');
       const workspace = db.addWorkspace(
         workspaceId,
@@ -211,7 +220,7 @@ export async function buildNodeApp(
       return reply.status(201).send({ workspace });
     }
     if (config.chat)
-      throw new ApiError(403, 'forbidden', 'The chat node hosts chat workspaces only (PIRC_CHAT)');
+      throw new ApiError(403, 'forbidden', 'The chat node hosts chat workspaces only (pirc-chat)');
     const home = realpathSync(process.env.HOME ?? os.homedir());
     const requested = body.path.startsWith('~/') ? path.join(home, body.path.slice(2)) : body.path;
     if (!path.isAbsolute(requested))

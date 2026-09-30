@@ -2,7 +2,8 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import { defaultModelsFile } from './models.js';
-import { findBrowserExecutable, type BrowserSettings } from './node/browser.js';
+import type { BrowserSettings } from './node/browser.js';
+import { findBrowserExecutable } from './node/browser-executable.js';
 import { selfCommand } from './self.js';
 import { canonicalPath } from './util.js';
 
@@ -58,7 +59,7 @@ export interface BrowserAuthConfig {
 }
 
 /**
- * `pirc gateway`: the central daemon. It serves the browser API, never runs
+ * `pirc-gateway`: the central daemon. It serves the browser API, never runs
  * agents, and routes every session to the node that owns it.
  */
 export interface DaemonConfig extends BrowserAuthConfig {
@@ -102,7 +103,7 @@ export interface DaemonConfig extends BrowserAuthConfig {
 }
 
 /**
- * `pirc node`: runs agents, terminals and workspace inspection locally and
+ * `pirc-node`: runs agents, terminals and workspace inspection locally and
  * connects out to the daemon. It never listens on a port.
  */
 export interface NodeConfig {
@@ -117,10 +118,10 @@ export interface NodeConfig {
   uploadsDir: string;
   /** Executable for per-session agent processes (default: this binary). */
   agentCommand: string;
-  /** Arguments placed before the agent flags (default: `agent`, or `<cli.ts> agent` when unbundled). */
+  /** Arguments placed before the agent flags (default: `agent`, or `<entry/node.ts or entry/chat.ts> agent` when unbundled). */
   agentArgs: string[];
   workspaces: ConfigWorkspace[];
-  /** Hosts the assistant's chat workspaces (PIRC_CHAT, default off; see plans/assistant.md). */
+  /** Hosts the assistant's chat workspaces (fixed by the executable role; see plans/assistant.md). */
   chat: boolean;
   /**
    * Where this node's agents keep workspace memory, one ledger per repository
@@ -169,10 +170,13 @@ export function parseWorkspaces(env: NodeJS.ProcessEnv): ConfigWorkspace[] {
 }
 
 /**
- * The node re-executes itself as `pirc agent`. When running from source
- * (`bun src/cli.ts`) the executable is bun, so the script path is prepended.
+ * The node re-executes itself as `pirc-node agent` or `pirc-chat agent`. When running from source
+ * (`bun src/entry/node.ts` or `bun src/entry/chat.ts`) the executable is bun, so the script path is prepended.
  */
-export function defaultAgentCommand(env: NodeJS.ProcessEnv = process.env): {
+export function defaultAgentCommand(
+  env: NodeJS.ProcessEnv = process.env,
+  role?: 'chat' | 'node',
+): {
   agentCommand: string;
   agentArgs: string[];
 } {
@@ -181,7 +185,7 @@ export function defaultAgentCommand(env: NodeJS.ProcessEnv = process.env): {
       agentCommand: env.PIRC_AGENT_COMMAND,
       agentArgs: env.PIRC_AGENT_ARGS ? (JSON.parse(env.PIRC_AGENT_ARGS) as string[]) : ['agent'],
     };
-  const [agentCommand, ...prefix] = selfCommand();
+  const [agentCommand, ...prefix] = selfCommand(role);
   return { agentCommand: agentCommand!, agentArgs: [...prefix, 'agent'] };
 }
 
@@ -213,7 +217,7 @@ function uploadLimit(env: NodeJS.ProcessEnv): number {
 export function loadDaemonConfig(env: NodeJS.ProcessEnv = process.env): DaemonConfig {
   for (const legacy of ['PIRC_WORKSPACES', 'PIRC_NODE_ID'])
     if (env[legacy])
-      throw new Error(`${legacy} belongs to \`pirc node\`; the gateway never runs agents itself`);
+      throw new Error(`${legacy} belongs to \`pirc-node\`; the gateway never runs agents itself`);
   const nodeTokens = new Map<string, string>();
   const configured = z.record(z.string().min(32)).parse(JSON.parse(env.PIRC_NODE_TOKENS ?? '{}'));
   for (const [nodeId, token] of Object.entries(configured)) {
@@ -264,7 +268,12 @@ export function loadDaemonConfig(env: NodeJS.ProcessEnv = process.env): DaemonCo
   };
 }
 
-export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig {
+export function loadNodeConfig(
+  env: NodeJS.ProcessEnv = process.env,
+  role: 'chat' | 'node' = 'node',
+): NodeConfig {
+  if (env.PIRC_CHAT !== undefined)
+    throw new Error('PIRC_CHAT was removed; run pirc-chat or pirc-node to select the role');
   const nodeId = env.PIRC_NODE_ID;
   const nodeToken = env.PIRC_NODE_TOKEN;
   const daemonUrl = env.PIRC_DAEMON_URL;
@@ -286,11 +295,11 @@ export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig
   const dirs = stateDirs(env);
   const sessionsDir = path.resolve(env.PIRC_SESSIONS_DIR ?? path.join(dirs.stateDir, 'sessions'));
   mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
-  const chat = bool(env.PIRC_CHAT, false);
+  const chat = role === 'chat';
   const workspaces = parseWorkspaces(env);
   if (chat && workspaces.length)
     throw new Error(
-      'PIRC_WORKSPACES must be empty on the chat node (PIRC_CHAT): it hosts chat workspaces only',
+      'PIRC_WORKSPACES must be empty on the chat node (pirc-chat): it hosts chat workspaces only',
     );
   return {
     nodeId,
@@ -299,7 +308,7 @@ export function loadNodeConfig(env: NodeJS.ProcessEnv = process.env): NodeConfig
     allowedUsers: allowedUsers(env),
     ...dirs,
     sessionsDir,
-    ...defaultAgentCommand(env),
+    ...defaultAgentCommand(env, role),
     workspaces,
     chat,
     workspaceMemoryDir: path.resolve(
