@@ -18,6 +18,7 @@
   import BackendSettings from '../BackendSettings.svelte';
   import MemorySettings from '../MemorySettings.svelte';
   import ProjectSettings from '../ProjectSettings.svelte';
+  import ProjectInstructions from '../ProjectInstructions.svelte';
   import NotificationSettings from '../NotificationSettings.svelte';
   import PairedDevices from '../PairedDevices.svelte';
 
@@ -39,6 +40,8 @@
     onresetlayout,
     onopenchat,
   }: Props = $props();
+  /** The chat project picked under Projects: its instructions are edited below its capabilities. */
+  let selectedProject: string | undefined = $state();
 </script>
 
 <Modal bind:open labelledby="settings-title" class="settings">
@@ -113,7 +116,10 @@
         hidden={settingsTab !== 'projects'}
       >
         {#if settingsTab === 'projects'}
-          <ProjectSettings disabled={app.usingDemo} />
+          <ProjectSettings disabled={app.usingDemo} bind:selectedProject />
+          {#if selectedProject}
+            <ProjectInstructions workspaceId={selectedProject} />
+          {/if}
         {/if}
       </div>
 

@@ -26,7 +26,14 @@ import { WorkspaceLedger, recallFromWorkspace } from '../agent/features/memory/w
 import { historyOf } from '../agent/session-store.js';
 import { offlineGateway, type AgentGateway } from './agent-gateway.js';
 import { BranchCache } from './branch-cache.js';
-import { chatWorkspaceDir, ensureTopLevelChats, sessionRoot } from './chat.js';
+import {
+  chatWorkspaceDir,
+  ensureTopLevelChats,
+  INSTRUCTIONS_MAX_CHARS,
+  readProjectInstructions,
+  sessionRoot,
+  writeProjectInstructions,
+} from './chat.js';
 import { WriteBroker } from './write-broker.js';
 import { registerPanelRoutes, type BrowserStreams, type TerminalStreams } from './panel-routes.js';
 import { RunnerManager } from './runner.js';
@@ -227,6 +234,31 @@ export async function buildNodeApp(
       canonical,
     );
     return reply.status(201).send({ workspace });
+  });
+
+  /** A chat project's instructions (node/chat.ts); only the web edits them, through the gateway. */
+  const chatProject = (request: FastifyRequest) => {
+    const { id: workspaceId } = parse(z.object({ id: z.string().min(1) }), request.params);
+    const workspace = db.getWorkspace(workspaceId);
+    if (workspace.kind !== 'chat')
+      throw new ApiError(400, 'invalid_input', 'Only chat projects have instructions');
+    return workspace;
+  };
+  app.get('/api/workspaces/:id/instructions', async (request) => ({
+    instructions: {
+      text: readProjectInstructions(chatProject(request)),
+      maxChars: INSTRUCTIONS_MAX_CHARS,
+    },
+  }));
+  app.patch('/api/workspaces/:id/instructions', async (request) => {
+    const workspace = chatProject(request);
+    const body = parse(z.object({ text: z.string() }).strict(), request.body);
+    return {
+      instructions: {
+        text: writeProjectInstructions(workspace, body.text),
+        maxChars: INSTRUCTIONS_MAX_CHARS,
+      },
+    };
   });
 
   app.post('/api/sessions', async (request, reply) => {

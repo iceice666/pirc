@@ -232,6 +232,8 @@ export class ModelStore {
 export interface ConfigureMessage {
   type: 'configure';
   models: ModelsConfig;
+  /** A chat project's instructions (node/chat.ts), frozen by the agent when a chat starts. */
+  instructions?: string;
 }
-export const configureLine = (models: ModelsConfig): string =>
-  `${JSON.stringify({ type: 'configure', models } satisfies ConfigureMessage)}\n`;
+export const configureLine = (models: ModelsConfig, instructions?: string): string =>
+  `${JSON.stringify({ type: 'configure', models, ...(instructions ? { instructions } : {}) } satisfies ConfigureMessage)}\n`;

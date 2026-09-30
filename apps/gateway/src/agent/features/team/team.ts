@@ -350,6 +350,8 @@ export interface TeamOptions {
   /** Providers handed to each child on its first stdin line (see models.ts). */
   models: ModelsConfig;
   capabilities?: () => import('../../capabilities.js').Capabilities;
+  /** The parent chat's frozen project instructions, so children follow them too. */
+  instructions?: () => string;
   /** Children write under the parent session's lease (see write-lease.ts). */
   acquireWrite?(path: string, signal?: AbortSignal): Promise<void>;
 }
@@ -630,6 +632,7 @@ export class Team {
         type: 'configure',
         models: this.options.models,
         capabilities: this.options.capabilities?.(),
+        ...(this.options.instructions?.() ? { instructions: this.options.instructions() } : {}),
       });
       member.pid = member.rpc.proc.pid;
       const state = await member.rpc.request('get_state');

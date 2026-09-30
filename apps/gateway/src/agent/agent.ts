@@ -57,6 +57,8 @@ export interface AgentOptions {
   /** When set, only these tools are exposed (e.g. a restricted subagent kind). */
   allowedTools?: string[];
   capabilities?: Capabilities;
+  /** A chat project's instructions from the node (features/project-instructions.ts). */
+  projectInstructions?: string;
   /** Write-permission broker transport (see write-lease.ts); default grants everything. */
   acquireWrite?: AcquireWrite;
 }
@@ -128,6 +130,7 @@ function interruptedNote(message: AssistantMessage): QueueItem {
 
 export class Agent {
   capabilities: Capabilities;
+  readonly projectInstructions: string | undefined;
   readonly config: AgentConfig;
   readonly store: SessionStore;
   readonly guard: PathGuard;
@@ -247,6 +250,7 @@ export class Agent {
 
   constructor(options: AgentOptions) {
     this.capabilities = capabilities(options.capabilities);
+    this.projectInstructions = options.projectInstructions;
     this.config = options.config;
     this.store = options.store;
     this.emitRaw = options.emit;

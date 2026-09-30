@@ -484,6 +484,37 @@ export async function buildDaemonApp(
     directoryChanged();
     return { capabilities };
   });
+  /**
+   * A chat project's instructions (plans/assistant.md §5). The node keeps
+   * them (node/chat.ts); the gateway only relays the user's edit and stores
+   * nothing. No agent operation reaches these routes.
+   */
+  const chatProjectOnNode = (request: FastifyRequest) => {
+    const { workspaceId } = parse(z.object({ workspaceId: z.string().min(1) }), request.params);
+    const workspace = db.getWorkspace(workspaceId);
+    if (workspace.kind !== 'chat' || !workspace.id.startsWith(`${workspace.hostId}:`))
+      throw new ApiError(400, 'invalid_input', 'Only chat projects have instructions');
+    if (!nodes.get(workspace.hostId))
+      throw new ApiError(503, 'node_offline', `${workspace.hostId} is offline`);
+    const local = workspace.id.slice(workspace.hostId.length + 1);
+    return {
+      nodeId: workspace.hostId,
+      url: `/api/workspaces/${encodeURIComponent(local)}/instructions`,
+    };
+  };
+  app.get('/api/workspaces/:workspaceId/instructions', async (request, reply) => {
+    const target = chatProjectOnNode(request);
+    return forward(reply, target.nodeId, request, { method: 'GET', url: target.url });
+  });
+  app.patch('/api/workspaces/:workspaceId/instructions', async (request, reply) => {
+    const target = chatProjectOnNode(request);
+    const body = parse(z.object({ text: z.string().max(100_000) }).strict(), request.body);
+    return forward(reply, target.nodeId, request, {
+      method: 'PATCH',
+      url: target.url,
+      payload: { text: body.text },
+    });
+  });
   app.post('/api/workspaces', async (request, reply) => {
     const body = parse(createWorkspaceBody, request.body);
     if (!nodes.get(body.nodeId)) throw new ApiError(503, 'node_offline', 'Node is offline');

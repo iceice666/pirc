@@ -53,6 +53,8 @@ let queue = { steering: [], followUp: [] };
 const agentSettings = { thinkingLevel: 'medium', model: null };
 
 let configured = false;
+// The project instructions the node sent on the configure line.
+let projectInstructions = '';
 // `write <path>` / `hold <path>` prompts ask the node's write broker for a
 // lease, like a file tool would; `hold` keeps the run open until abort.
 const leases = new Map();
@@ -81,6 +83,7 @@ rl.on('line', (raw) => {
   if (!configured) {
     if (command.type !== 'configure') process.exit(3);
     configured = true;
+    projectInstructions = typeof command.instructions === 'string' ? command.instructions : '';
     return;
   }
   if (command.type === 'sandbox_response') {
@@ -216,6 +219,7 @@ rl.on('line', (raw) => {
     }
     // `cwd` reports the directory the node started this agent in.
     if (command.message === 'cwd') return reply(`cwd:${process.cwd()}`);
+    if (command.message === 'instructions') return reply(`instructions:${projectInstructions}`);
     // `env <NAME>` reports what the node put in this agent's environment.
     const env = /^env (\S+)$/.exec(command.message);
     if (env) {

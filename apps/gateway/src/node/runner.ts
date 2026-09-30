@@ -12,7 +12,7 @@ import type { EventHub } from '../events.js';
 import { applySessionName } from '../session-name.js';
 import type { AgentGateway } from './agent-gateway.js';
 import type { BrowserManager } from './browser.js';
-import { sessionRoot } from './chat.js';
+import { projectInstructionsPath, readProjectInstructions, sessionRoot } from './chat.js';
 import { DOMAIN_PATTERN, isInside, realResolve } from '../sandbox-policy.js';
 import { NodeSandbox, srtSettings, type PreparedSandbox } from './sandbox.js';
 import { withoutSecrets } from './secrets.js';
@@ -186,6 +186,10 @@ class PiRunner {
         PIRC_GATEWAY: '1',
         // `chat` makes the agent a personal assistant (see node/chat.ts).
         PIRC_WORKSPACE_KIND: workspace.kind,
+        // Only for protecting it: the agent gets the text on its configure line.
+        ...(workspace.kind === 'chat'
+          ? { PIRC_PROJECT_INSTRUCTIONS: projectInstructionsPath(workspace)! }
+          : {}),
         PIRC_WORKSPACE_MEMORY_DIR: config.workspaceMemoryDir,
         // This node answers browser_request (node/browser.ts).
         PIRC_BROWSER: browser?.enabled ? '1' : '0',
@@ -198,7 +202,7 @@ class PiRunner {
     this.control = sandboxed ? ((this.child.stdio[3] as Writable | null) ?? undefined) : undefined;
     this.control?.on('error', () => undefined);
     // Public catalog + node-local inference transport; no provider credentials.
-    this.child.stdin.write(configureLine(models.current));
+    this.child.stdin.write(configureLine(models.current, readProjectInstructions(workspace)));
     const parser = new JsonlParser(config.rpcMaxLineBytes, (value) => this.handleValue(value));
     this.child.stdout.on('data', (chunk: Buffer) => {
       try {
@@ -814,6 +818,8 @@ export class RunnerManager {
         workspaceRoot: sessionRoot(workspace, sessionId),
         sessionDir: session.privateSessionPath,
         inferenceSocket: this.models.current.inference?.socketPath,
+        // The user's project instructions: never writable from the session.
+        protectedPaths: [projectInstructionsPath(workspace)].filter((item) => item !== undefined),
       });
       const runner = new PiRunner(
         session,

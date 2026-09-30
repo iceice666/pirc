@@ -86,6 +86,26 @@ describe('session policy', () => {
     );
   });
 
+  it("never lets a chat session read or write its project's instructions, even when configured writable", () => {
+    const d = layout();
+    const instructions = path.join(d.state, 'chat', 'chats', 'instructions.md');
+    const { paths } = sessionPolicy({
+      config: sandboxConfigSchema.parse({ filesystem: { allowWrite: [d.state] } }),
+      configDir: path.join(d.root, 'config'),
+      home: d.home,
+      privateDirs: [d.state],
+      workspaceRoot: d.chat,
+      allowedPaths: [],
+      sessionDir: d.session,
+      workspaceMemoryDir: d.memory,
+      tmpDirs: [d.tmp],
+      protectedPaths: [instructions],
+    });
+    expect(readAllowed(paths, instructions)).toBe(false);
+    expect(writeAllowed(paths, instructions)).toBe(false);
+    expect(writeAllowed(paths, path.join(d.chat, 'notes.md'))).toBe(true);
+  });
+
   it('keeps a deny inside an allowed region, and takes configured additions', () => {
     const d = layout();
     const { paths, network, allowGitConfig } = policyFor(d, d.workspace, {

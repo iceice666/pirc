@@ -9,12 +9,19 @@
     type ProjectCapabilities,
   } from '../capabilities';
 
-  let { disabled = false }: { disabled?: boolean } = $props();
+  let {
+    disabled = false,
+    selectedProject = $bindable(),
+  }: { disabled?: boolean; selectedProject?: string | undefined } = $props();
   const workspaces = $derived(app.workspaces.filter(isChatWorkspace));
   let selected = $state('');
   const workspaceId = $derived(
     workspaces.some((workspace) => workspace.id === selected) ? selected : workspaces[0]?.id,
   );
+  // The project picked here, for the other project settings next to this one.
+  $effect(() => {
+    selectedProject = disabled ? undefined : workspaceId;
+  });
   let capabilities: ProjectCapabilities | undefined = $state();
   let loading = $state(false);
   let saving = $state(false);

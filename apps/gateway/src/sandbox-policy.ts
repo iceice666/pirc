@@ -233,6 +233,8 @@ export interface SessionPolicyInput {
   workspaceMemoryDir: string;
   inferenceSocket?: string | undefined;
   tmpDirs?: string[];
+  /** Files pirc keeps next to the session that no agent may write (a project's instructions). */
+  protectedPaths?: string[];
 }
 
 export interface SessionPolicy {
@@ -286,7 +288,11 @@ export function sessionPolicy(input: SessionPolicyInput): SessionPolicy {
     ]),
     // The project's agent config; pirc keeps uploads and recordings there
     // itself, from outside the sandbox.
-    denyWrite: unique([path.join(workspace, '.pirc'), ...configured(filesystem.denyWrite)]),
+    denyWrite: unique([
+      path.join(workspace, '.pirc'),
+      ...(input.protectedPaths ?? []).map((item) => realResolve(item)),
+      ...configured(filesystem.denyWrite),
+    ]),
   };
   return {
     paths,

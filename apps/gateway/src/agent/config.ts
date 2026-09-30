@@ -191,7 +191,14 @@ export function loadAgentConfig(
     providers: models.providers,
     ...(defaultModel ? { defaultModel } : {}),
     allowedPaths: writable,
-    protectedPaths: [projectDir, ...skillPaths],
+    protectedPaths: [
+      projectDir,
+      ...skillPaths,
+      // A chat project's instructions (node/chat.ts): only the user edits them, from the web.
+      ...(workspaceKind === 'chat' && env.PIRC_PROJECT_INSTRUCTIONS
+        ? [path.resolve(env.PIRC_PROJECT_INSTRUCTIONS)]
+        : []),
+    ],
     pathPolicy,
     sandboxed,
     env: { ...global.env, ...project.env },

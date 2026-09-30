@@ -21,7 +21,7 @@ import { nodeWriteBroker, processWriteLease } from './write-lease.js';
  */
 async function readConfigure(
   lines: AsyncIterator<string>,
-): Promise<{ models: ModelsConfig; capabilities: Capabilities }> {
+): Promise<{ models: ModelsConfig; capabilities: Capabilities; instructions?: string }> {
   for (;;) {
     const next = await lines.next();
     if (next.done) throw new Error('stdin closed before the configure message');
@@ -36,12 +36,14 @@ async function readConfigure(
       type?: unknown;
       models?: unknown;
       capabilities?: unknown;
+      instructions?: unknown;
     } | null;
     if (record?.type !== 'configure')
       throw new Error('The first stdin line must be {"type":"configure","models":…}');
     return {
       models: modelsSchema.parse(record.models ?? {}),
       capabilities: capabilities(record.capabilities),
+      ...(typeof record.instructions === 'string' ? { instructions: record.instructions } : {}),
     };
   }
 }
@@ -86,6 +88,7 @@ export async function runAgent(argv: string[]): Promise<void> {
   const agent = new Agent({
     config,
     capabilities: configured.capabilities,
+    ...(configured.instructions ? { projectInstructions: configured.instructions } : {}),
     store,
     emit: write,
     ui,

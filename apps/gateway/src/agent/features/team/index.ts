@@ -1,3 +1,4 @@
+import { frozenInstructions } from '../project-instructions.js';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import type { Agent } from '../../agent.js';
@@ -235,6 +236,7 @@ export function teamFeature(): Feature {
       env: { ...process.env, ...agent.config.env },
       models: agent.config.models,
       capabilities: () => agent.capabilities,
+      instructions: () => (agent.config.workspaceKind === 'chat' ? frozenInstructions(agent) : ''),
       acquireWrite: (path, signal) => agent.acquireWrite(path, signal),
       askUser: (question, signal, from) =>
         askQuestions(

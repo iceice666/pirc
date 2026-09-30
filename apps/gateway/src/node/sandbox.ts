@@ -187,6 +187,7 @@ export class NodeSandbox {
     workspaceRoot: string;
     sessionDir: string;
     inferenceSocket?: string | undefined;
+    protectedPaths?: string[];
   }): Promise<PreparedSandbox> {
     const agentConfig = readAgentConfig(this.env);
     const warnings: string[] = [];
@@ -216,6 +217,7 @@ export class NodeSandbox {
       workspaceMemoryDir: this.config.workspaceMemoryDir,
       inferenceSocket: input.inferenceSocket,
       tmpDirs: [tmp, '/tmp'],
+      protectedPaths: input.protectedPaths ?? [],
     });
     let status: SandboxStatus;
     if (!agentConfig.sandbox.enabled)

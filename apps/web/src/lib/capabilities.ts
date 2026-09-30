@@ -22,3 +22,21 @@ export const capabilitiesApi = {
       body: JSON.stringify({ capabilities }),
     }),
 };
+
+/** A chat project's instructions, kept by its node (plans/assistant.md §5). */
+export interface ProjectInstructions {
+  text: string;
+  maxChars: number;
+}
+type InstructionsResponse = { instructions: ProjectInstructions };
+const instructionsPath = (workspaceId: string) =>
+  `/api/workspaces/${encodeURIComponent(workspaceId)}/instructions`;
+
+export const instructionsApi = {
+  get: (workspaceId: string) => request<InstructionsResponse>(instructionsPath(workspaceId)),
+  update: (workspaceId: string, text: string) =>
+    request<InstructionsResponse>(instructionsPath(workspaceId), {
+      method: 'PATCH',
+      body: JSON.stringify({ text }),
+    }),
+};
