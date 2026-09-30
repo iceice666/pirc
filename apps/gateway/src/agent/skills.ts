@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -115,16 +115,59 @@ export function discoverSkills(roots: string[]): { skills: Skill[]; problems: st
   return { skills: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)), problems };
 }
 
+const LINK_SCAN_DEPTH = 8;
+const LINK_SCAN_ENTRIES = 2000;
+
+/**
+ * Real targets of the symlinks inside a skill directory. Home Manager, for
+ * one, builds a real directory whose files each link to a separate store path
+ * (`SKILL.md -> /nix/store/…-hm_SKILL.md`), so allowing the directory alone
+ * is not enough once the path guard resolves the link.
+ */
+function linkedTargets(dir: string, out: Set<string>): void {
+  const seen = new Set<string>();
+  let budget = LINK_SCAN_ENTRIES;
+  const walk = (current: string, depth: number) => {
+    if (depth > LINK_SCAN_DEPTH || seen.has(current)) return;
+    seen.add(current);
+    let entries: string[];
+    try {
+      entries = readdirSync(current);
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (--budget < 0) return;
+      const full = path.join(current, entry);
+      try {
+        const stat = lstatSync(full);
+        if (stat.isSymbolicLink()) {
+          const real = realpathSync(full);
+          out.add(real);
+          if (statSync(real).isDirectory()) walk(real, depth + 1);
+        } else if (stat.isDirectory()) walk(full, depth + 1);
+      } catch {
+        // Dangling or unreadable link: nothing to allow.
+      }
+    }
+  };
+  walk(dir, 0);
+}
+
 /**
  * Real paths the file tools must be able to read (but never write) for skills
- * to work: each root, and each skill directory a root links to elsewhere.
+ * to work: each root, each skill directory a root links to elsewhere, and
+ * whatever the files inside a skill directory link to.
  */
 export function skillReadPaths(roots: string[]): string[] {
   const out = new Set<string>();
   for (const root of roots) {
     if (!existsSync(root)) continue;
     out.add(root);
-    for (const skill of discoverSkills([root]).skills) out.add(skill.dir);
+    for (const skill of discoverSkills([root]).skills) {
+      out.add(skill.dir);
+      linkedTargets(skill.dir, out);
+    }
   }
   return [...out];
 }

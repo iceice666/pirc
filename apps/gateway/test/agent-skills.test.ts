@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import os, { tmpdir } from 'node:os';
 import path from 'node:path';
-import { discoverSkills, parseSkillFile, skillRoots } from '../src/agent/skills.js';
+import { PathGuard } from '../src/agent/sandbox.js';
+import { discoverSkills, parseSkillFile, skillReadPaths, skillRoots } from '../src/agent/skills.js';
 import { settledAfter, startAgent, writeAgentConfig, type AgentProcess } from './agent-harness.js';
 
 const agents: AgentProcess[] = [];
@@ -95,6 +96,42 @@ describe('skill discovery', () => {
     expect(skills.find((skill) => skill.name === 'pdf')!.description).toBe(
       'Extract text from PDFs, fill forms and OCR scans.',
     );
+  });
+});
+
+describe('skillReadPaths', () => {
+  it('allows the targets of files linked individually into a skill directory', () => {
+    // Home Manager layout: a real skill directory whose files each link to their
+    // own store path, so the path guard resolves reads outside the directory.
+    const root = mkdtempSync(path.join(tmpdir(), 'pirc-skill-links-'));
+    const store = path.join(root, 'store');
+    mkdirSync(path.join(store, 'refs'), { recursive: true });
+    writeFileSync(
+      path.join(store, 'hm_SKILL.md'),
+      '---\nname: commit\ndescription: Commit.\n---\n',
+    );
+    writeFileSync(path.join(store, 'hm_openai.yaml'), 'x: 1');
+    writeFileSync(path.join(store, 'refs', 'guide.md'), 'guide');
+    const skills = path.join(root, 'skills');
+    mkdirSync(path.join(skills, 'commit', 'agents'), { recursive: true });
+    symlinkSync(path.join(store, 'hm_SKILL.md'), path.join(skills, 'commit', 'SKILL.md'));
+    symlinkSync(
+      path.join(store, 'hm_openai.yaml'),
+      path.join(skills, 'commit', 'agents', 'openai.yaml'),
+    );
+    symlinkSync(path.join(store, 'refs'), path.join(skills, 'commit', 'refs'));
+    symlinkSync(path.join(store, 'missing'), path.join(skills, 'commit', 'dangling'));
+
+    const guard = new PathGuard(root, [], []);
+    const allowed = new PathGuard(root, skillReadPaths([skills]), []);
+    for (const file of ['SKILL.md', 'agents/openai.yaml', 'refs/guide.md']) {
+      const target = path.join(skills, 'commit', file);
+      expect(() => allowed.resolve(target, 'read')).not.toThrow();
+      expect(() => guard.resolve(target, 'read')).toThrow(/outside/);
+    }
+    // Unrelated store paths stay out of reach.
+    writeFileSync(path.join(store, 'other.md'), 'secret');
+    expect(() => allowed.resolve(path.join(store, 'other.md'), 'read')).toThrow(/outside/);
   });
 });
 
