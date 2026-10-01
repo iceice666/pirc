@@ -46,6 +46,18 @@ const registration = z.object({
         id: z.string().regex(NODE_ID_PATTERN),
         displayName: z.string().min(1).max(200),
         kind: z.enum(['directory', 'chat']).optional(),
+        roles: z
+          .array(
+            z.object({
+              name: z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/),
+              description: z.string().max(500).optional(),
+              models: z.array(z.string().max(200)).max(20).optional(),
+              thinking: z.string().max(20).optional(),
+              tools: z.array(z.string().max(64)).max(64).optional(),
+            }),
+          )
+          .max(50)
+          .optional(),
       }),
     )
     .max(100),

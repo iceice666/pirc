@@ -15,6 +15,7 @@ import type { WorkspaceKind } from '../types.js';
 import type { SessionEntry } from './session-store.js';
 import { skillReadPaths, skillRoots } from './skills.js';
 import { defaultPathPolicy, type PathPolicy } from '../sandbox-policy.js';
+import { readRoles, roleDirs, type RolePreset } from './roles.js';
 
 export {
   defaultConfigDir,
@@ -103,6 +104,8 @@ export interface AgentConfig {
   hooks: HooksConfig;
   limits: z.infer<typeof limitsSchema>;
   features: Record<string, unknown>;
+  /** Role file directories, lowest precedence first (roles.ts); read when a role is used. */
+  roleDirs?: string[];
   systemPrompt: string;
   /** `chat` when the node runs this agent in a chat workspace (PIRC_WORKSPACE_KIND). */
   workspaceKind: WorkspaceKind;
@@ -194,6 +197,8 @@ export function loadAgentConfig(
     protectedPaths: [
       projectDir,
       ...skillPaths,
+      // The node's role files: only the user writes them.
+      path.join(configDir, 'roles'),
       // A chat project's instructions (node/chat.ts): only the user edits them, from the web.
       ...(workspaceKind === 'chat' && env.PIRC_PROJECT_INSTRUCTIONS
         ? [path.resolve(env.PIRC_PROJECT_INSTRUCTIONS)]
@@ -205,9 +210,24 @@ export function loadAgentConfig(
     hooks,
     limits: global.limits,
     features: global.features,
+    roleDirs: roleDirs(configDir, workspace),
     systemPrompt: prompts.join('\n\n'),
     workspaceKind,
   };
+}
+
+/** The roles this agent's workspace defines (node, then the project); throws when invalid. */
+export function configRoles(config: Pick<AgentConfig, 'roleDirs'>): Record<string, RolePreset> {
+  return readRoles(config.roleDirs ?? []);
+}
+
+/** Set in the node's config.json, which no longer defines roles (roles.ts reads role files). */
+export function legacyRoleConfig(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = readJson(path.join(defaultConfigDir(env), 'config.json')) as {
+    roles?: unknown;
+    features?: { agentTeam?: { kinds?: unknown } };
+  } | null;
+  return !!raw && (raw.roles !== undefined || raw.features?.agentTeam?.kinds !== undefined);
 }
 
 const pathPolicySchema = z.object({

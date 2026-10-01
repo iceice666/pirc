@@ -15,7 +15,7 @@ import type { MemoryStore } from './memory.js';
 import type { MemoryRecords } from './memory-records.js';
 import type { NodeRegistry } from './nodes.js';
 import type { Push } from './push.js';
-import { NOTIFY_LEVELS, THINKING_LEVELS, type Schedule, type Schedules } from './schedules.js';
+import { NOTIFY_LEVELS, type Schedule, type Schedules } from './schedules.js';
 import { webSearchArgs, type WebSearch } from './web-search.js';
 
 export interface AgentOpServices {
@@ -96,17 +96,8 @@ const scheduleFields = {
   cron: z.string().max(200).optional(),
   at: z.string().max(100).optional(),
   timezone: z.string().max(100).optional(),
-  /** `provider/model-id`; null for the default. */
-  model: z.string().min(3).max(300).nullable().optional(),
-  thinking: z.enum(THINKING_LEVELS).nullable().optional(),
+  // No model or thinking level: only the user picks those (schedule settings).
   notify: z.enum(NOTIFY_LEVELS).optional(),
-};
-const modelRef = (value: string | null | undefined) => {
-  if (value === undefined || value === null) return value;
-  const slash = value.indexOf('/');
-  if (slash < 1 || slash === value.length - 1)
-    throw new ApiError(400, 'invalid_input', 'model is provider/model-id');
-  return { provider: value.slice(0, slash), id: value.slice(slash + 1) };
 };
 const scheduleId = z.object({ id: z.string().min(1).max(40) }).strict();
 
@@ -151,21 +142,17 @@ const ops: Record<string, AgentOp> = {
         task: z.string().max(40_000),
         title: z.string().max(300).optional(),
         follows: z.string().min(1).max(40).optional(),
-        /** `provider/model-id` suggested to the user; null for the default. */
-        model: z.string().min(3).max(300).nullable().optional(),
-        thinking: z.enum(THINKING_LEVELS).nullable().optional(),
+        /** The target workspace's role; no model or thinking level: only the user picks those. */
+        role: z
+          .string()
+          .regex(/^[a-z][a-z0-9_-]{0,39}$/)
+          .optional(),
       })
       .strict(),
     run: (context, args) => {
       requireChat(context);
       const { delegations } = context.services;
-      const { model, ...input } = args;
-      return delegations.brief(
-        delegations.create(context.user, context.session, {
-          ...input,
-          ...(model !== undefined ? { model: modelRef(model) } : {}),
-        }),
-      );
+      return delegations.brief(delegations.create(context.user, context.session, args));
     },
   },
   /**
@@ -291,15 +278,11 @@ const ops: Record<string, AgentOp> = {
       .strict(),
     run: (context, args) => {
       refuseFromScheduledRun(context);
-      const { model, workspace, ...input } = args;
+      const { workspace, ...input } = args;
       const { proposalId, spec } = context.services.schedules.propose(
         context.user,
         context.session,
-        {
-          ...input,
-          workspace: workspace ?? context.workspace.id,
-          ...(model !== undefined ? { model: modelRef(model) } : {}),
-        },
+        { ...input, workspace: workspace ?? context.workspace.id },
         scheduleScope(context).resolve,
       );
       return { proposalId, status: 'pending_approval', title: spec.title };
@@ -317,12 +300,12 @@ const ops: Record<string, AgentOp> = {
       .strict(),
     run: (context, args) => {
       refuseFromScheduledRun(context);
-      const { id, model, ...input } = args;
+      const { id, ...input } = args;
       scopedSchedule(context, id);
       const { proposalId, spec } = context.services.schedules.propose(
         context.user,
         context.session,
-        { ...input, ...(model !== undefined ? { model: modelRef(model) } : {}) },
+        input,
         scheduleScope(context).resolve,
         id,
       );

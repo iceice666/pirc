@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, expect, it } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import { defaultAgentCommand } from '../src/config.js';
-import { writeAgentConfig } from './agent-harness.js';
+import { writeAgentConfig, writeRoles } from './agent-harness.js';
 import { startFakeLlm } from './fixtures/fake-llm.js';
 import { headers, promptSession, startCluster, waitFor, type Cluster } from './helpers.js';
 
@@ -86,8 +86,20 @@ it('asks the user, runs the task in a new session and reports back, then follows
   const context = reply(await chat.ask('gateway assistant.context {}')).body;
   expect(context.workspaces).toEqual(
     expect.arrayContaining([
-      { id: 'work:test', name: 'Test', node: 'work', online: true },
-      { id: 'lab:test', name: 'Test', node: 'lab', online: true },
+      {
+        id: 'work:test',
+        name: 'Test',
+        node: 'work',
+        online: true,
+        roles: [expect.objectContaining({ name: 'general' })],
+      },
+      {
+        id: 'lab:test',
+        name: 'Test',
+        node: 'lab',
+        online: true,
+        roles: [expect.objectContaining({ name: 'general' })],
+      },
     ]),
   );
   expect(context.workspaces.some((workspace: any) => workspace.id === 'home:chats')).toBe(false);
@@ -188,6 +200,13 @@ it('asks the user, runs the task in a new session and reports back, then follows
     expect.objectContaining({ id, status: 'completed', session: 'Fix flaky test' }),
   ]);
 
+  // A follow-up keeps its session's role.
+  expect(
+    reply(
+      await chat.ask(`gateway delegation.create {"follows":"${id}","task":"x","role":"general"}`),
+    ).body.message,
+  ).toContain('A follow-up runs in the role its session started in');
+
   // More instructions go to the same session, after another approval.
   const more = reply(
     await chat.ask(`gateway delegation.create {"follows":"${id}","task":"Also update the docs."}`),
@@ -207,7 +226,7 @@ it('asks the user, runs the task in a new session and reports back, then follows
   ).toMatchObject({ status: 403 });
 }, 30_000);
 
-it('runs the task on the model the user picks, over the assistant suggestion', async () => {
+it('runs the task in the role the assistant picks, on the model only the user picks', async () => {
   const { app, services } = await start();
   services.models.set({
     providers: {
@@ -223,25 +242,31 @@ it('runs the task on the model the user picks, over the assistant suggestion', a
   });
   const chat = await promptSession(app, services.events, headers, 'home:chats');
 
+  // The assistant cannot pick a model or thinking level, nor a role the workspace lacks.
+  for (const extra of ['"model":"gw/model-a"', '"thinking":"low"'])
+    expect(
+      reply(
+        await chat.ask(`gateway delegation.create {"workspace":"work:test","task":"x",${extra}}`),
+      ).body,
+    ).toMatchObject({ code: 'invalid_input' });
   expect(
     reply(
       await chat.ask(
-        'gateway delegation.create {"workspace":"work:test","task":"x","model":"gw/nope"}',
+        'gateway delegation.create {"workspace":"work:test","task":"x","role":"nope"}',
       ),
     ).body.message,
-  ).toContain('Unknown model gw/nope');
+  ).toContain('No role nope in Test; roles: general');
 
   const created = reply(
     await chat.ask(
-      'gateway delegation.create {"workspace":"work:test","task":"Refactor it.","model":"gw/model-a","thinking":"low"}',
+      'gateway delegation.create {"workspace":"work:test","task":"Refactor it.","role":"general"}',
     ),
   ).body;
-  expect(created).toMatchObject({ model: 'gw/model-a', thinking: 'low' });
+  expect(created).toMatchObject({ role: 'general' });
+  expect(created.model).toBeUndefined();
   const [confirmation] = (await snapshot(app, chat.sessionId)).interactions;
-  expect(confirmation.request.modelChoice).toEqual({
-    model: { provider: 'gw', id: 'model-a' },
-    thinking: 'low',
-  });
+  expect(confirmation.request.title).toBe('Delegate to Test on work as general?');
+  expect(confirmation.request.modelChoice).toEqual({ model: null, thinking: null });
 
   const pick = (model: unknown, thinking: unknown) =>
     app.inject({
@@ -271,11 +296,9 @@ it('runs the task on the model the user picks, over the assistant suggestion', a
     thinkingLevel: 'high',
   });
 
-  // Picking the default clears the suggestion.
+  // The default stays the default.
   const second = reply(
-    await chat.ask(
-      'gateway delegation.create {"workspace":"lab:test","task":"Again.","model":"gw/model-a"}',
-    ),
+    await chat.ask('gateway delegation.create {"workspace":"lab:test","task":"Again."}'),
   ).body;
   await app.inject({
     method: 'POST',
@@ -402,7 +425,11 @@ it('delegates end to end between real agents', async () => {
   cleanup.push(() => llm.stop());
   const dir = mkdtempSync(path.join(tmpdir(), 'pirc-delegation-e2e-'));
   const configDir = path.join(dir, 'node-config');
+  // A role the assistant picks; the node reports it and the coding agent starts in it.
   writeAgentConfig(configDir);
+  writeRoles(path.join(configDir, 'roles'), {
+    fixer: '---\ndescription: Fixes builds\n---\nFixer role text.\n',
+  });
   const saved = {
     config: process.env.PIRC_CONFIG_DIR,
     workspaceMemory: process.env.PIRC_WORKSPACE_MEMORY_DIR,
@@ -446,7 +473,7 @@ it('delegates end to end between real agents', async () => {
       tool: {
         id: 'd1',
         name: 'delegate',
-        args: { workspace: 'work:test', task: 'Fix the build.', title: 'Fix build' },
+        args: { workspace: 'work:test', task: 'Fix the build.', title: 'Fix build', role: 'fixer' },
       },
     };
   };
@@ -481,6 +508,7 @@ it('delegates end to end between real agents', async () => {
   await waitFor(async () => (await snapshot(app, chatId)).interactions.length, 1, 15_000);
   const [confirmation] = (await snapshot(app, chatId)).interactions;
   expect(confirmation.request.message).toBe('Fix build\n\nFix the build.');
+  expect(confirmation.request.title).toBe('Delegate to Test on work as fixer?');
   await answer(app, chatId, generation, confirmation.id, true);
   await waitFor(() => services.delegations.get(USER, confirmation.id).status, 'completed', 15_000);
   expect(services.delegations.get(USER, confirmation.id).result).toBe('Build fixed.');
@@ -489,6 +517,13 @@ it('delegates end to end between real agents', async () => {
     (request) => !String(request.body.messages[0].content).includes('personal assistant'),
   )!;
   expect(text(coding.body.messages.at(-1))).toContain('Fix the build.');
+  expect(String(coding.body.messages[0].content)).toContain('## Role: fixer\n');
+  expect(String(coding.body.messages[0].content)).toContain('Fixer role text.');
+  // The assistant saw the role among the workspace's roles.
+  const assistant = llm.requests.find((request) =>
+    String(request.body.messages[0].content).includes('personal assistant'),
+  )!;
+  expect(String(assistant.body.messages[0].content)).toContain('- fixer: Fixes builds');
   // The chat ran on the result.
   await waitFor(
     async () => (await snapshot(app, chatId)).history.at(-1)?.content?.[0]?.text,

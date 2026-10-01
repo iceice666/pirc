@@ -120,7 +120,10 @@ rl.on('line', (raw) => {
   if (command.type === 'set_model')
     agentSettings.model = { provider: command.provider, id: command.modelId };
   if (command.type === 'set_thinking_level') agentSettings.thinkingLevel = command.level;
+  // A delegated session's role (the real agent applies it; see Agent.setRole).
+  if (command.type === 'set_role') agentSettings.role = command.role;
   if (
+    command.type === 'set_role' ||
     command.type === 'set_session_name' ||
     command.type === 'set_model' ||
     command.type === 'set_thinking_level'

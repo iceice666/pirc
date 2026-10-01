@@ -213,6 +213,10 @@ export async function handleCommand(
     case 'set_thinking_level':
       agent.setThinking(String(command.level));
       return undefined;
+    case 'set_role':
+      // A delegated session's role, before its task arrives (node/runner.ts deliver).
+      agent.setRole(String(command.role));
+      return undefined;
     case 'set_session_name':
       agent.setName(String(command.name ?? ''));
       return undefined;

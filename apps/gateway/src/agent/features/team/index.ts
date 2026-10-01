@@ -8,6 +8,8 @@ import { selfCommand } from '../../../self.js';
 import { askQuestions, askQuestionSchema } from '../ask-question.js';
 import { parentChannel, teamChildMode, teamChildName } from './channel.js';
 import { Team, userQuestion, type SubagentOutcome } from './team.js';
+import { configRoles } from '../../config.js';
+import { DEFAULT_ROLES, describeRoles, roleBriefs, type RoleBrief } from '../../roles.js';
 
 type Json = Record<string, any>;
 const short = { type: 'string', minLength: 1, maxLength: 12000 };
@@ -155,24 +157,29 @@ const DEFINITIONS: Array<[string, string, Json]> = [
 /** Coordination tools a team member keeps regardless of its kind's tool allowlist. */
 export const TEAM_TOOL_NAMES = DEFINITIONS.map(([name]) => name);
 
-const spawnFields = {
-  kind: {
+/**
+ * The `role` parameter, listing the configured roles so the parent picks one
+ * by the work it needs. Models are never the agent's choice: the role sets them.
+ */
+function roleField(agent: Agent) {
+  let roles: RoleBrief[];
+  try {
+    roles = roleBriefs(configRoles(agent.config));
+  } catch {
+    // Spawning reports the configuration error; keep the schema usable.
+    roles = roleBriefs(DEFAULT_ROLES);
+  }
+  return {
     type: 'string',
-    pattern: '^[a-z][a-z0-9_-]{0,39}$',
-    description:
-      'Agent kind preset (features.agentTeam.kinds; built-in: general). Kinds may fix model, thinking and a tool allowlist.',
-  },
+    enum: roles.map((role) => role.name),
+    description: `Role for the child (default general). Pick the role that fits the work; it sets the model, thinking level, tool allowlist and role instructions:\n${describeRoles(roles)}`,
+  };
+}
+
+const spawnFields = {
   cwd: {
     type: 'string',
     description: 'Existing working directory or worktree; defaults to parent cwd',
-  },
-  model: {
-    type: 'string',
-    description: 'provider/model ID; overrides the selected kind and defaults to parent model',
-  },
-  thinking: {
-    type: 'string',
-    enum: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
   },
 };
 const MAX_FOREGROUND_RESULT = 40_000;
@@ -228,7 +235,7 @@ export function teamFeature(): Feature {
     team = new Team({
       directory: join(dirname(agent.store.file), 'team', randomUUID().slice(0, 8)),
       command: selfCommand(),
-      kinds: options.kinds,
+      roles: () => configRoles(agent.config),
       ...(typeof options.limit === 'number' ? { limit: options.limit } : {}),
       ...(typeof options.subagentLimit === 'number'
         ? { subagentLimit: options.subagentLimit }
@@ -296,7 +303,7 @@ export function teamFeature(): Feature {
   const subagentTool = (agent: Agent): Tool => ({
     name: 'subagent',
     description:
-      'Delegate a self-contained task to a one-shot subagent: a fresh pirc agent with its own context window that cannot see this conversation, message you, or ask the user. Give it everything it needs. It returns only its final report, then exits. Foreground (default) waits and returns the report; aborting stops the subagent. background:true returns at once and delivers the report to you when it finishes (do not poll; keep working or end your turn). The runtime waits for active workers after a clean turn; read and integrate reports before final synthesis, and report failures or pending work honestly. Pick kind for a preset (model, thinking, tool allowlist, e.g. a read-only explorer). Use agent_spawn instead for persistent collaborators that need messages or a task board.',
+      'Delegate a self-contained task to a one-shot subagent: a fresh pirc agent with its own context window that cannot see this conversation, message you, or ask the user. Give it everything it needs. It returns only its final report, then exits. Foreground (default) waits and returns the report; aborting stops the subagent. background:true returns at once and delivers the report to you when it finishes (do not poll; keep working or end your turn). The runtime waits for active workers after a clean turn; read and integrate reports before final synthesis, and report failures or pending work honestly. Pick the role that fits the work: it fixes the model, thinking level, tools and role instructions, which only the user configures. Use agent_spawn instead for persistent collaborators that need messages or a task board.',
     parameters: object(
       {
         task: short,
@@ -306,6 +313,7 @@ export function teamFeature(): Feature {
           description: 'Optional unique name; generated when omitted',
         },
         background: { type: 'boolean', description: 'Run concurrently (default false)' },
+        role: roleField(agent),
         ...spawnFields,
       },
       ['task'],
@@ -355,11 +363,12 @@ export function teamFeature(): Feature {
       {
         name: 'agent_spawn',
         description:
-          'Start a persistent independent pirc agent session (maximum 4 live children by default) for work that needs follow-up messages, questions or a shared task board; for a single delegated task prefer subagent. Returns immediately after task acceptance, not completion; the child reports to you each time it goes idle. Before final synthesis, read and integrate reports and resolve pending questions; idle and timeout do not prove success. The runtime waits for active workers after a clean turn without polling the model. Do not send redundant acknowledgements for already-read events. Select kind for a configured preset (model, thinking, tool allowlist). Explicit model/thinking override the kind; otherwise the parent model/thinking is inherited. Supply necessary context and file ownership. Costs are incurred by each child.',
+          'Start a persistent independent pirc agent session (maximum 4 live children by default) for work that needs follow-up messages, questions or a shared task board; for a single delegated task prefer subagent. Returns immediately after task acceptance, not completion; the child reports to you each time it goes idle. Before final synthesis, read and integrate reports and resolve pending questions; idle and timeout do not prove success. The runtime waits for active workers after a clean turn without polling the model. Do not send redundant acknowledgements for already-read events. Pick the role that fits the work: it fixes the model, thinking level, tools and role instructions, which only the user configures; what the role leaves unset is inherited from the parent. Supply necessary context and file ownership. Costs are incurred by each child.',
         parameters: object(
           {
             name: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,39}$' },
             task: short,
+            role: roleField(agent),
             ...spawnFields,
           },
           ['name', 'task'],

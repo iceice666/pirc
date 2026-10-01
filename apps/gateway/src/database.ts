@@ -206,6 +206,8 @@ const migrations = [
   ALTER TABLE delegations ADD COLUMN model_json TEXT;
   ALTER TABLE delegations ADD COLUMN thinking TEXT;
   `,
+  // The role a delegation's new session starts in (agent/roles.ts).
+  `ALTER TABLE delegations ADD COLUMN role TEXT;`,
 ];
 
 const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');

@@ -39,6 +39,7 @@ import { registerPanelRoutes, type BrowserStreams, type TerminalStreams } from '
 import { RunnerManager } from './runner.js';
 import type { TerminalManager } from './terminals.js';
 import { BrowserManager } from './browser.js';
+import { loadRoles, roleBriefs } from '../agent/roles.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
 const createWorkspaceBody = z.union([
@@ -103,7 +104,12 @@ const deliverBody = z
     customType: z.enum(['assistant-delegation', 'assistant-delegation-update', 'scheduled-run']),
     content: z.string().min(1).max(100_000),
     details: z.record(z.unknown()).optional(),
-    /** Run it on this model (a scheduled run's own choice); the session keeps it. */
+    /** Start the new session in this role (a delegation's); before model and thinking. */
+    role: z
+      .string()
+      .regex(/^[a-z][a-z0-9_-]{0,39}$/)
+      .optional(),
+    /** Run it on this model (the user's choice); the session keeps it. */
     model: z
       .object({ provider: z.string().min(1), id: z.string().min(1) })
       .strict()
@@ -242,7 +248,14 @@ export async function buildNodeApp(
       body.displayName,
       canonical,
     );
-    return reply.status(201).send({ workspace });
+    // Its roles, as registration reports them (node/runtime.ts), for delegations.
+    let roles: ReturnType<typeof roleBriefs> | undefined;
+    try {
+      roles = roleBriefs(loadRoles(canonical));
+    } catch (error) {
+      request.log.warn(`roles of ${canonical}: ${(error as Error).message}`);
+    }
+    return reply.status(201).send({ workspace: { ...workspace, ...(roles ? { roles } : {}) } });
   });
 
   /** A chat project's instructions (node/chat.ts); only the web edits them, through the gateway. */

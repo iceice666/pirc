@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util';
 import { Agent } from './agent.js';
+import type { AgentRole } from './roles.js';
 import { capabilities, type Capabilities } from './capabilities.js';
 import { loadAgentConfig } from './config.js';
 import { modelsSchema, type ModelsConfig } from '../models.js';
@@ -19,9 +20,12 @@ import { nodeWriteBroker, processWriteLease } from './write-lease.js';
  * public model catalog and local inference transport supplied by the node.
  * Provider credentials remain on the gateway.
  */
-async function readConfigure(
-  lines: AsyncIterator<string>,
-): Promise<{ models: ModelsConfig; capabilities: Capabilities; instructions?: string }> {
+async function readConfigure(lines: AsyncIterator<string>): Promise<{
+  models: ModelsConfig;
+  capabilities: Capabilities;
+  instructions?: string;
+  role?: AgentRole;
+}> {
   for (;;) {
     const next = await lines.next();
     if (next.done) throw new Error('stdin closed before the configure message');
@@ -37,6 +41,7 @@ async function readConfigure(
       models?: unknown;
       capabilities?: unknown;
       instructions?: unknown;
+      role?: { name?: unknown; instructions?: unknown; models?: unknown } | null;
     } | null;
     if (record?.type !== 'configure')
       throw new Error('The first stdin line must be {"type":"configure","models":…}');
@@ -44,6 +49,23 @@ async function readConfigure(
       models: modelsSchema.parse(record.models ?? {}),
       capabilities: capabilities(record.capabilities),
       ...(typeof record.instructions === 'string' ? { instructions: record.instructions } : {}),
+      ...(typeof record.role?.name === 'string'
+        ? {
+            role: {
+              name: record.role.name,
+              ...(typeof record.role.instructions === 'string'
+                ? { instructions: record.role.instructions }
+                : {}),
+              ...(Array.isArray(record.role.models)
+                ? {
+                    models: record.role.models.filter(
+                      (item): item is string => typeof item === 'string',
+                    ),
+                  }
+                : {}),
+            },
+          }
+        : {}),
     };
   }
 }
@@ -89,6 +111,7 @@ export async function runAgent(argv: string[]): Promise<void> {
     config,
     capabilities: configured.capabilities,
     ...(configured.instructions ? { projectInstructions: configured.instructions } : {}),
+    ...(configured.role ? { role: configured.role } : {}),
     store,
     emit: write,
     ui,

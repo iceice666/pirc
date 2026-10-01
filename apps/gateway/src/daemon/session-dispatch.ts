@@ -119,7 +119,9 @@ export interface DeliveredMessage {
   customType: string;
   content: string;
   details?: Record<string, unknown>;
-  /** Switch the session to this model (and thinking level) before it runs. */
+  /** Start the (new) session in this role first (agent/roles.ts). */
+  role?: string;
+  /** Switch the session to this model (and thinking level) before it runs; overrides the role's. */
   model?: { provider: string; id: string };
   thinking?: string;
 }

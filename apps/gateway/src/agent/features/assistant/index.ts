@@ -17,6 +17,7 @@ import { text, type Tool, type ToolResult } from '../../tools/types.js';
 import { localStamp } from '../memory/ledger.js';
 import { redactSecrets } from '../memory/redact.js';
 import { messageOrigin } from '../memory/serialize.js';
+import { describeRoles, type RoleBrief } from '../../roles.js';
 
 /** Session entry: the memory frozen into this chat's system prompt, with the revisions it showed. */
 export const ASSISTANT_SNAPSHOT = 'assistant.snapshot';
@@ -40,6 +41,8 @@ interface WorkspaceBrief {
   name: string;
   node: string;
   online?: boolean;
+  /** Roles a delegation can start in there (agent/roles.ts). */
+  roles?: RoleBrief[];
 }
 interface MemoryContext {
   capabilities?: Capabilities;
@@ -57,6 +60,7 @@ interface DelegationBrief {
   title: string;
   workspace: string;
   status: string;
+  role?: string;
   model?: string;
   thinking?: string;
   session?: string;
@@ -137,10 +141,15 @@ export function renderWorkspaces(workspaces: WorkspaceBrief[] = []): string {
     '## Workspaces',
     '',
     `The user's repositories you can hand tasks to with ${DELEGATE_TOOL}. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with ${SEARCH_TOOL}, and open a note's sources with recall.`,
-    ...workspaces.map(
-      (workspace) =>
-        `[${workspace.id}] ${workspace.name} on ${workspace.node}${workspace.online === false ? ' (offline)' : ''}`,
-    ),
+    ...workspaces.map((workspace) => {
+      const line = `[${workspace.id}] ${workspace.name} on ${workspace.node}${workspace.online === false ? ' (offline)' : ''}`;
+      return workspace.roles?.length
+        ? `${line}\n  Roles:\n${describeRoles(workspace.roles)
+            .split('\n')
+            .map((item) => `  ${item}`)
+            .join('\n')}`
+        : line;
+    }),
   ].join('\n');
 }
 
@@ -447,7 +456,7 @@ Propose only what the user said about themselves in this chat, and pass their ex
 
 The other agent sees nothing of this chat: write the task so it stands on its own, with the goal, the facts it needs and what to report back. To send more instructions to the same session, pass the earlier delegation's id as follows instead of a workspace.
 
-Only suggest a model or thinking level when the user asked for one or the task clearly needs it; the user can change both when approving.`,
+Pick the workspace role that fits the work (see its Roles under ## Workspaces); the role sets the model, thinking level, tools and role instructions. You never pick a model: only the user can, when approving. A follow-up keeps its session's role.`,
     parameters: {
       type: 'object',
       properties: {
@@ -463,15 +472,11 @@ Only suggest a model or thinking level when the user asked for one or the task c
           description:
             "An earlier delegation's id (like d1a2b3c4d): send the task to its session instead.",
         },
-        model: {
+        role: {
           type: 'string',
+          pattern: '^[a-z][a-z0-9_-]{0,39}$',
           description:
-            'provider/model-id to suggest running it on; default: the workspace default.',
-        },
-        thinking: {
-          type: 'string',
-          enum: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
-          description: 'Thinking level to suggest; default: the model default.',
+            'A role of the target workspace (see ## Workspaces); default: none (the workspace default). Not with follows.',
         },
       },
       required: ['task'],
@@ -481,12 +486,11 @@ Only suggest a model or thinking level when the user asked for one or the task c
       const field = (key: string) => (typeof args[key] === 'string' ? args[key].trim() : '');
       const task = field('task');
       if (!task) return text('task is required', undefined, true);
-      const [workspace, title, follows, model, thinking] = [
+      const [workspace, title, follows, role] = [
         field('workspace'),
         field('title'),
         field('follows'),
-        field('model'),
-        field('thinking'),
+        field('role'),
       ];
       if (!workspace && !follows)
         return text(
@@ -502,13 +506,12 @@ Only suggest a model or thinking level when the user asked for one or the task c
             task: redactSecrets(task),
             ...(title ? { title } : {}),
             ...(follows ? { follows } : {}),
-            ...(model ? { model } : {}),
-            ...(thinking ? { thinking } : {}),
+            ...(role ? { role } : {}),
           },
           ctx.signal,
         )) as DelegationBrief;
         return text(
-          `Asked the user to approve delegation ${result.id} (“${result.title}”, ${result.workspace}${result.model ? `, suggested model ${result.model}` : ''}${result.thinking ? `, thinking ${result.thinking}` : ''}). They can change the model when approving. Nothing runs until they do; you will get a message when it finishes, fails or needs them.`,
+          `Asked the user to approve delegation ${result.id} (“${result.title}”, ${result.workspace}${result.role ? `, role ${result.role}` : ''}). They can pick the model when approving. Nothing runs until they do; you will get a message when it finishes, fails or needs them.`,
           { delegationId: result.id },
         );
       } catch (error) {

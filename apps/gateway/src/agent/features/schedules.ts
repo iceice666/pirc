@@ -129,11 +129,6 @@ Times are read in timezone (IANA, e.g. "Asia/Taipei"); it defaults to the gatewa
         workspace: str(
           'Where it runs (workspace id or name). Default: this workspace. Only the assistant may pick another one.',
         ),
-        model: str('provider/model-id to run it on; default: the workspace default'),
-        thinking: {
-          type: 'string',
-          enum: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
-        },
         notify: {
           type: 'string',
           enum: ['all', 'problems', 'none'],
@@ -154,8 +149,6 @@ Times are read in timezone (IANA, e.g. "Asia/Taipei"); it defaults to the gatewa
         ...field('at'),
         ...field('timezone'),
         ...field('workspace'),
-        ...field('model'),
-        ...field('thinking'),
         ...field('notify'),
         ...(typeof args.prompt === 'string' && args.prompt.trim()
           ? { prompt: args.prompt.trim() }

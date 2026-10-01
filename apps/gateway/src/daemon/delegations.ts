@@ -16,6 +16,7 @@ import type { ModelStore } from '../models.js';
 import type { GatewayEvent, Workspace } from '../types.js';
 import { now } from '../util.js';
 import type { NodeRegistry } from './nodes.js';
+import type { RoleBrief } from '../agent/roles.js';
 import { THINKING_LEVELS } from './schedules.js';
 import {
   clip,
@@ -46,7 +47,9 @@ export interface Delegation {
   task: string;
   /** The earlier delegation whose session gets this task. */
   follows: string | null;
-  /** Run it on this model (the session keeps it); null for the workspace default. */
+  /** The role its new session starts in (agent/roles.ts); null for none. Picked by the assistant. */
+  role: string | null;
+  /** Run it on this model (the session keeps it); null for the role's or workspace default. Only the user picks it. */
   model: ModelRef | null;
   /** And this thinking level; null for the default. */
   thinking: string | null;
@@ -103,6 +106,7 @@ const rowOf = (row: any): Delegation => ({
   title: row.title,
   task: row.task,
   follows: row.follows ?? null,
+  role: row.role ?? null,
   model: row.model_json ? JSON.parse(row.model_json) : null,
   thinking: row.thinking ?? null,
   status: row.status,
@@ -243,6 +247,7 @@ export class Delegations {
       workspace: this.label(delegation.workspaceId),
       status: delegation.status,
       ...(delegation.follows ? { follows: delegation.follows } : {}),
+      ...(delegation.role ? { role: delegation.role } : {}),
       ...(delegation.model ? { model: modelLabel(delegation.model) } : {}),
       ...(delegation.thinking ? { thinking: delegation.thinking } : {}),
       ...(delegation.targetSessionId
@@ -273,7 +278,16 @@ export class Delegations {
         name: workspace.displayName,
         node: workspace.hostId,
         online: this.online(workspace),
+        ...(this.roles(workspace) ? { roles: this.roles(workspace) } : {}),
       }));
+  }
+
+  /** The roles a workspace's node reported when it connected; undefined when unknown. */
+  private roles(workspace: Workspace): RoleBrief[] | undefined {
+    return this.deps.nodes
+      .get(workspace.hostId)
+      ?.workspaces.find((registered) => `${workspace.hostId}:${registered.id}` === workspace.id)
+      ?.roles;
   }
 
   /** Confirmations waiting in a chat, shaped like a node's interactions. */
@@ -296,9 +310,8 @@ export class Delegations {
       task: string;
       title?: string | undefined;
       follows?: string | undefined;
-      /** The assistant's suggestion; the user can change it when approving. */
-      model?: ModelRef | null | undefined;
-      thinking?: string | null | undefined;
+      /** The role for the new session; models are the user's choice only, when approving. */
+      role?: string | undefined;
     },
   ): Delegation {
     this.deps.db.requireSessionCapability(assistant.id, 'delegation');
@@ -310,8 +323,13 @@ export class Delegations {
         'payload_too_large',
         `A task holds at most ${TASK_MAX_CHARS} characters`,
       );
-    const model = this.checkModel(input.model ?? null);
-    const thinking = this.checkThinking(input.thinking ?? null);
+    const role = input.role?.trim() || null;
+    if (role && input.follows)
+      throw new ApiError(
+        400,
+        'invalid_input',
+        'A follow-up runs in the role its session started in; leave role out',
+      );
     let workspace: Workspace;
     let previous: Delegation | undefined;
     if (input.follows) {
@@ -337,6 +355,16 @@ export class Delegations {
         'node_offline',
         `${workspace.hostId} is offline; delegate when it is back, or pick another workspace`,
       );
+    if (role) {
+      const roles = this.roles(workspace);
+      // Unknown roles (an older node) are checked by the agent when it starts.
+      if (roles && !roles.some((known) => known.name === role))
+        throw new ApiError(
+          400,
+          'invalid_input',
+          `No role ${role} in ${workspace.displayName}; roles: ${roles.map((known) => known.name).join(', ')}`,
+        );
+    }
     const waiting = this.rows("owner_user=? AND status='pending_approval'", user).length;
     if (waiting >= PENDING_MAX)
       throw new ApiError(
@@ -352,7 +380,7 @@ export class Delegations {
     const at = now();
     this.deps.db.raw
       .prepare(
-        "INSERT INTO delegations (id,owner_user,assistant_session_id,workspace_id,title,task,follows,model_json,thinking,status,expires_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'pending_approval',?,?,?)",
+        "INSERT INTO delegations (id,owner_user,assistant_session_id,workspace_id,title,task,follows,role,status,expires_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,'pending_approval',?,?,?)",
       )
       .run(
         id,
@@ -362,8 +390,7 @@ export class Delegations {
         title,
         task,
         previous?.id ?? null,
-        model ? JSON.stringify(model) : null,
-        thinking,
+        role,
         at + this.deps.ttlMs,
         at,
         at,
@@ -473,6 +500,7 @@ export class Delegations {
         customType: 'assistant-delegation',
         content: taskMessage(delegation),
         details: { delegationId: delegation.id, title: delegation.title },
+        ...(delegation.role && !previous ? { role: delegation.role } : {}),
         ...(delegation.model ? { model: delegation.model } : {}),
         ...(delegation.thinking ? { thinking: delegation.thinking } : {}),
       });
@@ -660,7 +688,7 @@ export class Delegations {
         method: 'confirm',
         title: session
           ? `Send more instructions to “${session}” (${where})?`
-          : `Delegate to ${where}?`,
+          : `Delegate to ${where}${delegation.role ? ` as ${delegation.role}` : ''}?`,
         message: `${delegation.title}\n\n${delegation.task}`,
         confirmLabel: 'Delegate',
         cancelLabel: "Don't",

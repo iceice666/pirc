@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from 'bun:test';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { Reply } from './fixtures/fake-llm.js';
-import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
+import { settledAfter, startAgent, writeRoles, type AgentProcess } from './agent-harness.js';
+import { startFakeLlm } from './fixtures/fake-llm.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
@@ -28,12 +32,8 @@ const alive = (pid: number) => {
 describe('subagent tool', () => {
   it('runs a foreground one-shot subagent and returns only its final report', async () => {
     const agent = await startAgent({
-      config: {
-        features: {
-          sessionTitle: { enabled: false },
-          agentTeam: { kinds: { explorer: { tools: ['read', 'grep', 'ls'] } } },
-        },
-      },
+      config: { features: { sessionTitle: { enabled: false } } },
+      roles: { explorer: '---\ntools: [read, grep, ls]\n---\n' },
     });
     agents.push(agent);
     const child: Reply[] = [
@@ -45,7 +45,7 @@ describe('subagent tool', () => {
         tool: {
           id: 'p1',
           name: 'subagent',
-          args: { task: 'look around', kind: 'explorer', name: 'scout' },
+          args: { task: 'look around', role: 'explorer', name: 'scout' },
         },
       },
       { text: 'parent done' },
@@ -297,12 +297,8 @@ describe('subagent tool', () => {
 describe('team kinds and results', () => {
   it('keeps coordination tools for restricted teammates and reports once per idle', async () => {
     const agent = await startAgent({
-      config: {
-        features: {
-          sessionTitle: { enabled: false },
-          agentTeam: { kinds: { reader: { tools: ['read'] } } },
-        },
-      },
+      config: { features: { sessionTitle: { enabled: false } } },
+      roles: { reader: '---\ntools: [read]\n---\n' },
     });
     agents.push(agent);
     const child: Reply[] = [
@@ -314,7 +310,7 @@ describe('team kinds and results', () => {
         tool: {
           id: 'p1',
           name: 'agent_spawn',
-          args: { name: 'reader', task: 'read', kind: 'reader' },
+          args: { name: 'reader', task: 'read', role: 'reader' },
         },
       },
       { text: 'spawned' },
@@ -344,14 +340,97 @@ describe('team kinds and results', () => {
     expect(names).not.toContain('subagent');
   }, 30_000);
 
-  it('rejects invalid kind tool lists', async () => {
+  it('lists roles for the parent and gives the child its role instructions', async () => {
+    // The node's role files, then the workspace's .pirc/roles/ replaces one and adds one.
+    const workspace = mkdtempSync(path.join(tmpdir(), 'pirc-roles-'));
+    writeRoles(path.join(workspace, '.pirc', 'roles'), {
+      reviewer: [
+        '---',
+        'description: Read-only code review',
+        'tools:',
+        '  - read',
+        '  - grep',
+        '---',
+        '',
+        'Report findings as file:line with severity.',
+        '',
+        'Second paragraph.',
+      ].join('\n'),
+      writer: '---\ndescription: Writes docs\n---\n',
+    });
     const agent = await startAgent({
-      config: {
-        features: {
-          sessionTitle: { enabled: false },
-          agentTeam: { kinds: { bad: { tools: ['Not A Tool'] } } },
-        },
-      },
+      workspace,
+      config: { features: { sessionTitle: { enabled: false } } },
+      roles: { reviewer: '---\ndescription: Global reviewer\n---\nGlobal text.\n' },
+    });
+    agents.push(agent);
+    const child: Reply[] = [{ text: 'no findings' }];
+    const parent: Reply[] = [
+      { tool: { id: 'p1', name: 'subagent', args: { task: 'review', role: 'reviewer' } } },
+      { text: 'parent done' },
+    ];
+    agent.llm.route = (body) =>
+      (isSubagent(body) ? child.shift() : parent.shift()) ?? { text: 'extra' };
+    const from = agent.events.length;
+    await agent.send({ type: 'prompt', message: 'delegate' });
+    await settledAfter(agent, from);
+    const [end] = toolEnd(agent, 'subagent');
+    expect(end!.isError).toBeFalsy();
+    const parentRequest = agent.llm.requests.find((r) => !isSubagent(r.body))!;
+    const role = parentRequest.body.tools.find((t: any) => t.function.name === 'subagent').function
+      .parameters.properties;
+    expect(role.model).toBeUndefined();
+    expect(role.thinking).toBeUndefined();
+    expect(role.role.enum).toEqual(['general', 'reviewer', 'writer']);
+    expect(role.role.description).toContain(
+      '- reviewer: Read-only code review [tools: read, grep]',
+    );
+    expect(texts(parentRequest.body)).not.toContain('Report findings as file:line');
+    const childRequest = agent.llm.requests.find((r) => isSubagent(r.body))!;
+    expect(texts(childRequest.body)).toContain('## Role: reviewer');
+    expect(texts(childRequest.body)).toContain(
+      'Report findings as file:line with severity.\n\nSecond paragraph.',
+    );
+    expect(texts(childRequest.body)).not.toContain('Global text.');
+    expect(toolNames(childRequest.body).sort()).toEqual(['grep', 'read']);
+  }, 30_000);
+
+  it('refuses a model or thinking level from the agent', async () => {
+    const agent = await startAgent({ config: { features: { sessionTitle: { enabled: false } } } });
+    agents.push(agent);
+    agent.llm.push(
+      { tool: { id: 'a', name: 'subagent', args: { task: 'x', model: 'fake/other' } } },
+      { text: 'ok' },
+    );
+    const from = agent.events.length;
+    await agent.send({ type: 'prompt', message: 'try' });
+    await settledAfter(agent, from);
+    const [end] = toolEnd(agent, 'subagent');
+    expect(end!.isError).toBe(true);
+    expect(end!.result.content[0].text).toMatch(/set by the role/);
+  });
+
+  it('rejects invalid role files', async () => {
+    const agent = await startAgent({
+      config: { features: { sessionTitle: { enabled: false } } },
+      roles: { bad: '---\nthinking: loud\ncolor: red\n---\nText.\n' },
+    });
+    agents.push(agent);
+    agent.llm.push({ tool: { id: 'a', name: 'subagent', args: { task: 'x' } } }, { text: 'ok' });
+    const from = agent.events.length;
+    await agent.send({ type: 'prompt', message: 'try' });
+    await settledAfter(agent, from);
+    const [end] = toolEnd(agent, 'subagent');
+    expect(end!.isError).toBe(true);
+    expect(end!.result.content[0].text).toMatch(
+      /bad\.md: Unknown front matter for role bad: color/,
+    );
+  });
+
+  it('rejects invalid role tool lists', async () => {
+    const agent = await startAgent({
+      config: { features: { sessionTitle: { enabled: false } } },
+      roles: { bad: '---\ntools: ["Not A Tool"]\n---\n' },
     });
     agents.push(agent);
     agent.llm.push({ tool: { id: 'a', name: 'subagent', args: { task: 'x' } } }, { text: 'ok' });
@@ -401,4 +480,161 @@ describe('team task board', () => {
     const state = await agent.send({ type: 'get_panel_state' });
     expect(state.data.team.tasks.map((t: any) => t.status)).toEqual(['completed', 'pending']);
   });
+});
+
+describe('session roles', () => {
+  it('starts a delegated session in a workspace role, once, and keeps it on restart', async () => {
+    const config = { features: { sessionTitle: { enabled: false } } };
+    const roles = {
+      reviewer: '---\nthinking: high\ntools: read, grep\n---\nReview only; cite file:line.\n',
+    };
+    const agent = await startAgent({ config, roles });
+    agents.push(agent);
+    const unknown = await agent.send({ type: 'set_role', role: 'nope' });
+    expect(unknown.success).toBe(false);
+    expect(unknown.error).toContain('Unknown role: nope; available: general, reviewer');
+    expect((await agent.send({ type: 'set_role', role: 'reviewer' })).success).toBe(true);
+    // Setting the same role again is harmless; another one is not.
+    expect((await agent.send({ type: 'set_role', role: 'reviewer' })).success).toBe(true);
+    expect((await agent.send({ type: 'set_role', role: 'general' })).success).toBe(false);
+    agent.llm.push({ text: 'reviewed' });
+    const from = agent.events.length;
+    await agent.send({ type: 'prompt', message: 'look' });
+    await settledAfter(agent, from);
+    const [request] = agent.llm.requests;
+    expect(texts(request!.body)).toContain('## Role: reviewer');
+    expect(texts(request!.body)).toContain('Review only; cite file:line.');
+    expect(toolNames(request!.body).sort()).toEqual(['grep', 'read']);
+    expect((await agent.send({ type: 'get_state' })).data.thinkingLevel).toBe('high');
+    await agent.close();
+    agents.splice(agents.indexOf(agent), 1);
+
+    // The same session, restarted: still in the role.
+    const again = await startAgent({
+      config,
+      roles,
+      workspace: agent.workspace,
+      sessionDir: agent.sessionDir,
+      args: ['--continue'],
+    });
+    agents.push(again);
+    again.llm.push({ text: 'again' });
+    const next = again.events.length;
+    await again.send({ type: 'prompt', message: 'more' });
+    await settledAfter(again, next);
+    const [resumed] = again.llm.requests;
+    expect(texts(resumed!.body)).toContain('## Role: reviewer');
+    expect(toolNames(resumed!.body).sort()).toEqual(['grep', 'read']);
+  }, 30_000);
+});
+
+describe('role model fallback', () => {
+  const model = (id: string) => ({
+    id,
+    reasoning: false,
+    contextWindow: 100_000,
+    maxTokens: 1000,
+    input: ['text'],
+    compat: {},
+  });
+  const providers = (url: string) => ({
+    fake: {
+      api: 'openai-chat',
+      baseUrl: `${url}/v1`,
+      apiKey: 'fake-key',
+      headers: {},
+      compat: {},
+      models: [model('m-1'), model('m-2')],
+    },
+    other: {
+      api: 'openai-chat',
+      baseUrl: `${url}/v1`,
+      apiKey: 'other-key',
+      headers: {},
+      compat: {},
+      models: [model('m-2')],
+    },
+  });
+
+  it('starts on the first match and moves along the role models when a call fails', async () => {
+    const llm = startFakeLlm();
+    const agent = await startAgent({
+      llm,
+      config: {
+        features: { sessionTitle: { enabled: false } },
+        providers: providers(llm.url),
+        defaultModel: { provider: 'fake', id: 'm-1' },
+      },
+      // No such model, then fake/m-2 and other/m-2, then the rest of fake.
+      roles: { worker: '---\nmodel: [gone/x, "*/m-2", "fake/*"]\n---\n' },
+    });
+    agents.push(agent);
+    try {
+      expect((await agent.send({ type: 'set_role', role: 'worker' })).success).toBe(true);
+      expect((await agent.send({ type: 'get_state' })).data.model).toMatchObject({
+        provider: 'fake',
+        id: 'm-2',
+      });
+      llm.push(
+        { status: 429, body: 'rate limited' },
+        { status: 503, body: 'overloaded' },
+        { text: 'done' },
+      );
+      const from = agent.events.length;
+      await agent.send({ type: 'prompt', message: 'go' });
+      await settledAfter(agent, from);
+      // Each failure moves on at once, without waiting to retry the same model.
+      expect(
+        llm.requests.map((r) => `${r.headers.authorization?.split(' ')[1]}:${r.body.model}`),
+      ).toEqual(['fake-key:m-2', 'other-key:m-2', 'fake-key:m-1']);
+      expect(agent.events.filter((e) => e.type === 'auto_retry_start')).toHaveLength(0);
+      // The session stays on the fallback.
+      expect((await agent.send({ type: 'get_state' })).data.model).toMatchObject({
+        provider: 'fake',
+        id: 'm-1',
+      });
+      llm.push({ text: 'again' });
+      const next = agent.events.length;
+      await agent.send({ type: 'prompt', message: 'more' });
+      await settledAfter(agent, next);
+      expect(llm.requests.at(-1)!.body.model).toBe('m-1');
+    } finally {
+      llm.stop();
+    }
+  }, 30_000);
+
+  it('starts a subagent on the role model, and the child falls back by itself', async () => {
+    const llm = startFakeLlm();
+    const agent = await startAgent({
+      llm,
+      config: {
+        features: { sessionTitle: { enabled: false } },
+        providers: providers(llm.url),
+        defaultModel: { provider: 'fake', id: 'm-1' },
+      },
+      roles: { worker: '---\nmodel: "*/m-2"\n---\n' },
+    });
+    agents.push(agent);
+    try {
+      const child: Reply[] = [{ status: 429, body: 'rate limited' }, { text: 'child done' }];
+      const parent: Reply[] = [
+        { tool: { id: 'p1', name: 'subagent', args: { task: 'work', role: 'worker' } } },
+        { text: 'parent done' },
+      ];
+      llm.route = (body) =>
+        (isSubagent(body) ? child.shift() : parent.shift()) ?? { text: 'extra' };
+      const from = agent.events.length;
+      await agent.send({ type: 'prompt', message: 'delegate' });
+      await settledAfter(agent, from);
+      const [end] = toolEnd(agent, 'subagent');
+      expect(end!.result.content[0].text).toContain('child done');
+      expect(
+        llm.requests
+          .filter((r) => isSubagent(r.body))
+          .map((r) => `${r.headers.authorization?.split(' ')[1]}:${r.body.model}`),
+      ).toEqual(['fake-key:m-2', 'other-key:m-2']);
+    } finally {
+      llm.stop();
+    }
+  }, 30_000);
 });

@@ -62,7 +62,7 @@ Turning a capability off takes effect at the gateway right away. Running chats a
 
 ### Teammates and subagents
 
-A chat's teammates and subagents get the project's policy as it stands when they start. Their tools are the ones allowed by **both** the project policy and their kind's `tools` allowlist (`features.agentTeam.kinds`). A kind cannot give back a capability the project turned off. (Today teammates and subagents have no gateway access at all, so they could not use these features even with the capability on.)
+A chat's teammates and subagents get the project's policy as it stands when they start. Their tools are the ones allowed by **both** the project policy and their role's `tools` allowlist (`roles/<name>.md`). A role cannot give back a capability the project turned off. (Today teammates and subagents have no gateway access at all, so they could not use these features even with the capability on.)
 
 ## Instructions
 

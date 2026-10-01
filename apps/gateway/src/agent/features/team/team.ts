@@ -16,65 +16,21 @@ import type { ModelsConfig } from '../../../models.js';
 import { relaySandboxRequest } from '../../sandbox-channel.js';
 import { killGroup } from '../../tools/bash.js';
 import type { Question, QuestionResult } from '../ask-question.js';
+import {
+  DEFAULT_ROLES,
+  expandModels,
+  roleBriefs,
+  type RoleBrief,
+  type RolePreset,
+} from '../../roles.js';
 
 type Json = Record<string, any>;
 const THINKING = new Set<string>([...thinkingLevels, 'max']);
-const KIND_NAME = /^[a-z][a-z0-9_-]{0,39}$/;
-const TOOL_NAME = /^[a-z][a-z0-9_]{0,63}$/;
 const RESULT_NOTICE_LIMIT = 2000;
 const SUBAGENT_NOTICE_LIMIT = 4000;
 /** Characters of one event body returned per agent_inbox page entry or event_id read. */
 export const INBOX_CHUNK_CHARS = 12000;
 const TASK_LIMIT = 200;
-export interface KindPreset {
-  model?: string;
-  thinking?: string;
-  /** Tool allowlist for children of this kind (team coordination tools are always kept). */
-  tools?: string[];
-}
-export const DEFAULT_KINDS: Record<string, KindPreset> = {
-  general: {},
-};
-
-export function validateToolList(value: unknown, label = 'tools'): string[] {
-  if (!Array.isArray(value) || value.length > 64)
-    throw new Error(`${label} must be an array of at most 64 tool names`);
-  for (const name of value)
-    if (typeof name !== 'string' || !TOOL_NAME.test(name))
-      throw new Error(`Invalid tool name in ${label}: ${String(name).slice(0, 80)}`);
-  return [...new Set(value as string[])];
-}
-
-export function validateKinds(value: unknown): Record<string, KindPreset> {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new Error('Agent kinds must be an object');
-  const result: Record<string, KindPreset> = {};
-  for (const [kind, preset] of Object.entries(value as Json)) {
-    if (!KIND_NAME.test(kind) || ['parent', 'user'].includes(kind))
-      throw new Error(`Invalid agent kind: ${kind}`);
-    if (!preset || typeof preset !== 'object' || Array.isArray(preset))
-      throw new Error(`Invalid agent kind preset: ${kind}`);
-    const unknown = Object.keys(preset).filter(
-      (key) => !['model', 'thinking', 'tools'].includes(key),
-    );
-    if (unknown.length)
-      throw new Error(`Unknown agent kind fields for ${kind}: ${unknown.join(', ')}`);
-    const { model, thinking, tools } = preset as Json;
-    if (
-      model !== undefined &&
-      (typeof model !== 'string' || !model.includes('/') || model.length > 200)
-    )
-      throw new Error(`Invalid model for agent kind: ${kind}`);
-    if (thinking !== undefined && !THINKING.has(thinking))
-      throw new Error(`Invalid thinking level for agent kind: ${kind}`);
-    result[kind] = {
-      ...(model === undefined ? {} : { model }),
-      ...(thinking === undefined ? {} : { thinking }),
-      ...(tools === undefined ? {} : { tools: validateToolList(tools, `tools for ${kind}`) }),
-    };
-  }
-  return result;
-}
 
 export function text(value: unknown, label = 'text', max = 12000): string {
   if (typeof value !== 'string' || !value.trim() || value.length > max)
@@ -300,6 +256,10 @@ interface Member {
   model: string;
   thinking: string;
   tools?: string[];
+  /** The kind's role instructions, sent on the child's configure line. */
+  instructions?: string;
+  /** The role's model patterns, for the child's fallbacks. */
+  roleModels?: string[];
   task: string;
   status: string;
   activity: string;
@@ -341,7 +301,8 @@ export interface TeamOptions {
   onChange?(state: ReturnType<Team['list']>): void;
   /** A broker record was appended (messages, questions, posts, tasks). */
   onRecord?(): void;
-  kinds?: Record<string, KindPreset>;
+  /** The roles children may start in (roles.ts); throws when the configuration is invalid. */
+  roles?: () => Record<string, RolePreset>;
   /** Live persistent teammates (default 4). */
   limit?: number;
   /** Concurrently running one-shot subagents (default 4). */
@@ -358,7 +319,6 @@ export interface TeamOptions {
 
 export class Team {
   readonly directory: string;
-  readonly kinds: Record<string, KindPreset>;
   readonly agents = new Map<string, Member>();
   readonly records: Json[] = [];
   readonly tasks = new Map<string, TeamTask>();
@@ -372,8 +332,19 @@ export class Team {
 
   constructor(private readonly options: TeamOptions) {
     this.directory = options.directory;
-    this.kinds = { ...DEFAULT_KINDS, ...(options.kinds ? validateKinds(options.kinds) : {}) };
     mkdirSync(this.directory, { recursive: true, mode: 0o700 });
+  }
+
+  private roles(): Record<string, RolePreset> {
+    return this.options.roles?.() ?? DEFAULT_ROLES;
+  }
+
+  private roleBriefs(): RoleBrief[] {
+    try {
+      return roleBriefs(this.roles());
+    } catch {
+      return [];
+    }
   }
 
   private get limit() {
@@ -397,12 +368,7 @@ export class Team {
   list() {
     return {
       directory: this.directory,
-      kinds: Object.fromEntries(
-        Object.entries(this.kinds).map(([name, preset]) => [
-          name,
-          preset.tools ? { tools: preset.tools } : {},
-        ]),
-      ),
+      roles: this.roleBriefs(),
       agents: [...this.agents.values()].map(
         ({
           name,
@@ -561,12 +527,25 @@ export class Team {
     const cwd = resolve(defaults.cwd, args.cwd ?? '.');
     if (!statSync(cwd, { throwIfNoEntry: false })?.isDirectory())
       throw new Error('cwd must be a directory');
-    const kind = args.kind ?? 'general';
-    const preset = typeof kind === 'string' ? this.kinds[kind] : undefined;
-    if (!preset) throw new Error(`Unknown agent kind: ${kind}`);
-    const model = args.model ?? preset.model ?? defaults.model;
-    if (!model) throw new Error('Select a parent model or provide provider/model');
-    const thinking = args.thinking ?? preset.thinking ?? defaults.thinking ?? 'off';
+    // Only the user picks models, through roles in configuration.
+    if (args.model !== undefined || args.thinking !== undefined)
+      throw new Error(
+        'model and thinking are set by the role; pick a role instead (only the user configures models)',
+      );
+    const kind = args.role ?? args.kind ?? 'general';
+    const roles = this.roles();
+    const preset = typeof kind === 'string' && Object.hasOwn(roles, kind) ? roles[kind] : undefined;
+    if (!preset)
+      throw new Error(`Unknown role: ${kind}; available: ${Object.keys(roles).join(', ')}`);
+    let model = defaults.model;
+    if (preset.models) {
+      // The first catalog match; the child falls back along the rest itself.
+      const [first] = expandModels(preset.models, this.options.models.providers);
+      if (!first) throw new Error(`No model matches role ${kind}: ${preset.models.join(', ')}`);
+      model = `${first.provider}/${first.id}`;
+    }
+    if (!model) throw new Error('No model: the parent has none and the role sets none');
+    const thinking = preset.thinking ?? defaults.thinking ?? 'off';
     if (!THINKING.has(thinking)) throw new Error('Invalid thinking level');
     const startedAt = new Date().toISOString();
     const member: Member = {
@@ -577,6 +556,8 @@ export class Team {
       model,
       thinking,
       ...(preset.tools ? { tools: preset.tools } : {}),
+      ...(preset.instructions ? { instructions: preset.instructions } : {}),
+      ...(preset.models ? { roleModels: preset.models } : {}),
       task,
       startedAt,
       lastActivity: startedAt,
@@ -633,6 +614,11 @@ export class Team {
         models: this.options.models,
         capabilities: this.options.capabilities?.(),
         ...(this.options.instructions?.() ? { instructions: this.options.instructions() } : {}),
+        role: {
+          name: member.kind,
+          ...(member.instructions ? { instructions: member.instructions } : {}),
+          ...(member.roleModels ? { models: member.roleModels } : {}),
+        },
       });
       member.pid = member.rpc.proc.pid;
       const state = await member.rpc.request('get_state');

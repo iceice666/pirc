@@ -8,7 +8,8 @@ import { WebSocket } from 'ws';
 import { z } from 'zod';
 import type { NodeConfig } from '../config.js';
 import { ApiError } from '../errors.js';
-import { legacyModelKeys } from '../agent/config.js';
+import { legacyModelKeys, legacyRoleConfig } from '../agent/config.js';
+import { loadRoles, roleBriefs } from '../agent/roles.js';
 import { modelsSchema } from '../models.js';
 import {
   NODE_FRAME_MAX_BYTES,
@@ -93,14 +94,32 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
         { keys: legacy },
         'config.json provider settings are ignored: providers come from the gateway (models.json)',
       );
+    if (legacyRoleConfig())
+      app.log.warn(
+        'config.json roles and features.agentTeam.kinds are ignored: define roles as markdown files in roles/<name>.md',
+      );
   } catch {
     /* an invalid config.json is reported when an agent starts */
   }
+  const workspaceRoles = (root: string) => {
+    try {
+      return { roles: roleBriefs(loadRoles(root)) };
+    } catch (error) {
+      app.log.warn(`roles of ${root}: ${(error as Error).message}`);
+      return {};
+    }
+  };
   const registeredWorkspaces = () =>
     services.db
       .listWorkspaces()
       .filter((workspace) => workspace.hostId === config.nodeId)
-      .map(({ id, displayName, kind }) => ({ id, displayName, kind }));
+      .map(({ id, displayName, kind, canonicalPath }) => ({
+        id,
+        displayName,
+        kind,
+        // What a delegation can start in there; left out when the config is broken.
+        ...(kind === 'directory' ? workspaceRoles(canonicalPath) : {}),
+      }));
   let stopped = false;
   let socket: WebSocket | undefined;
   let registered = false;

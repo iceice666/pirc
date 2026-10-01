@@ -9,6 +9,7 @@ import { compactFeature } from './compact.js';
 import { goalFeature } from './goal/index.js';
 import { memoryFeature } from './memory/index.js';
 import { projectInstructionsFeature } from './project-instructions.js';
+import { roleFeature } from './role.js';
 import { skillsFeature } from './skills.js';
 import { titleFeature } from './title.js';
 import { schedulesFeature } from './schedules.js';
@@ -25,6 +26,8 @@ export function builtinFeatures(): Feature[] {
     compactFeature(),
     // Chat sessions only: the project's instructions, before USER/MEMORY.
     projectInstructionsFeature(),
+    // Agents started in a role: the role's instructions.
+    roleFeature(),
     memoryFeature(),
     // Chat sessions only: the user's memory, held by the gateway.
     assistantFeature(),

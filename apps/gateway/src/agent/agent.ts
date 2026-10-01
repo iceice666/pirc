@@ -1,7 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { capabilities, capabilityForTool, type Capabilities } from './capabilities.js';
-import type { AgentConfig, ModelConfig, ProviderConfig, ThinkingLevel } from './config.js';
-import { sessionSettings, thinkingLevels } from './config.js';
+import type {
+  AgentConfig,
+  ModelConfig,
+  ModelRef,
+  ProviderConfig,
+  ThinkingLevel,
+} from './config.js';
+import { configRoles, sessionSettings, thinkingLevels } from './config.js';
+import { expandModels, type AgentRole } from './roles.js';
+
+/** Session entry recording the role a session started in (`Agent.setRole`). */
+const ROLE_ENTRY = 'agent.role';
 import { listModels } from '../models.js';
 import { createRemoteStream, fetchRemoteModels } from './providers/remote.js';
 import {
@@ -59,6 +69,8 @@ export interface AgentOptions {
   capabilities?: Capabilities;
   /** A chat project's instructions from the node (features/project-instructions.ts). */
   projectInstructions?: string;
+  /** A team child's role, from its configure line (features/team). */
+  role?: AgentRole;
   /** Write-permission broker transport (see write-lease.ts); default grants everything. */
   acquireWrite?: AcquireWrite;
 }
@@ -131,6 +143,8 @@ function interruptedNote(message: AssistantMessage): QueueItem {
 export class Agent {
   capabilities: Capabilities;
   readonly projectInstructions: string | undefined;
+  /** The role this agent runs in: a team child's from its parent, else one set for this session. */
+  role: AgentRole | undefined;
   readonly config: AgentConfig;
   readonly store: SessionStore;
   readonly guard: PathGuard;
@@ -251,6 +265,7 @@ export class Agent {
   constructor(options: AgentOptions) {
     this.capabilities = capabilities(options.capabilities);
     this.projectInstructions = options.projectInstructions;
+    this.role = options.role;
     this.config = options.config;
     this.store = options.store;
     this.emitRaw = options.emit;
@@ -276,11 +291,15 @@ export class Agent {
     for (const tool of options.tools) this.tools.set(tool.name, tool);
     for (const feature of this.features)
       for (const tool of feature.tools?.(this) ?? []) this.tools.set(tool.name, tool);
-    if (options.allowedTools) {
-      const allowed = new Set(options.allowedTools);
-      for (const name of [...this.tools.keys()]) if (!allowed.has(name)) this.tools.delete(name);
-    }
+    if (options.allowedTools) this.restrictTools(options.allowedTools);
     this.restoreSettings();
+    // A session started in a role keeps its role (and its tool allowlist) on restart.
+    const recorded = this.recordedRole();
+    if (recorded && !this.role) {
+      const { tools, ...role } = recorded;
+      this.role = role;
+      if (tools) this.restrictTools(tools);
+    }
   }
 
   emit(event: Record<string, unknown>): void {
@@ -376,6 +395,104 @@ export class Agent {
     this.resolveModel({ provider, id });
     this.modelRef = { provider, id };
     this.store.append({ type: 'model_change', provider, modelId: id });
+  }
+
+  private restrictTools(names: string[]): void {
+    const allowed = new Set(names);
+    for (const name of [...this.tools.keys()]) if (!allowed.has(name)) this.tools.delete(name);
+  }
+
+  private recordedRole(): (AgentRole & { tools?: string[] }) | undefined {
+    const entry = this.store
+      .branch()
+      .findLast((item) => item.type === 'custom' && item.customType === ROLE_ENTRY);
+    if (entry?.type !== 'custom') return undefined;
+    const data = entry.data as {
+      name?: unknown;
+      instructions?: unknown;
+      tools?: unknown;
+      models?: unknown;
+    };
+    if (typeof data?.name !== 'string') return undefined;
+    const strings = (value: unknown) =>
+      Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+    return {
+      name: data.name,
+      ...(typeof data.instructions === 'string' ? { instructions: data.instructions } : {}),
+      ...(Array.isArray(data.tools) ? { tools: strings(data.tools) } : {}),
+      ...(Array.isArray(data.models) ? { models: strings(data.models) } : {}),
+    };
+  }
+
+  /**
+   * The model to fall back to when the current one fails: the next catalog
+   * model after it along the role's model patterns. None when the session has
+   * no role models, or runs on a model outside them (the user picked it).
+   * A current model that left the catalog falls back to the first match.
+   */
+  private nextFallback(): ModelRef | undefined {
+    const patterns = this.role?.models;
+    if (!patterns?.length || !this.modelRef) return undefined;
+    const candidates = expandModels(patterns, this.config.providers);
+    const { provider, id } = this.modelRef;
+    const index = candidates.findIndex((item) => item.provider === provider && item.id === id);
+    if (index >= 0) return candidates[index + 1];
+    const known = this.config.providers[provider]?.models.some((model) => model.id === id);
+    return known ? undefined : candidates[0];
+  }
+
+  /** Switch the session to the next fallback model (it stays there); false when there is none. */
+  private fallBack(reason: string): boolean {
+    const next = this.nextFallback();
+    if (!next) return false;
+    const from = this.modelRef ? `${this.modelRef.provider}/${this.modelRef.id}` : 'none';
+    this.setModel(next.provider, next.id);
+    this.ui.notify(
+      `Model ${from} failed (${reason.slice(0, 200)}); switching to ${next.provider}/${next.id}`,
+      'warning',
+    );
+    return true;
+  }
+
+  /**
+   * Start this session in one of the workspace's roles (roles.ts): its model,
+   * thinking level, tool allowlist and instructions. Only before the session
+   * has any messages, and only once; setting the same role again is a no-op.
+   */
+  setRole(name: string): void {
+    const current = this.role ?? this.recordedRole();
+    if (current) {
+      if (current.name === name) return;
+      throw new Error(`This session already runs in role ${current.name}`);
+    }
+    if (this.store.branch().some((entry) => entry.type === 'message'))
+      throw new Error('A role can only be set before the session starts');
+    const roles = configRoles(this.config);
+    const preset = Object.hasOwn(roles, name) ? roles[name] : undefined;
+    if (!preset)
+      throw new Error(`Unknown role: ${name}; available: ${Object.keys(roles).join(', ')}`);
+    if (preset.models) {
+      const [first] = expandModels(preset.models, this.config.providers);
+      if (!first) throw new Error(`No model matches role ${name}: ${preset.models.join(', ')}`);
+      this.setModel(first.provider, first.id);
+    }
+    if (preset.thinking) this.setThinking(preset.thinking === 'max' ? 'xhigh' : preset.thinking);
+    this.store.append({
+      type: 'custom',
+      customType: ROLE_ENTRY,
+      data: {
+        name,
+        ...(preset.instructions ? { instructions: preset.instructions } : {}),
+        ...(preset.tools ? { tools: preset.tools } : {}),
+        ...(preset.models ? { models: preset.models } : {}),
+      },
+    });
+    this.role = {
+      name,
+      ...(preset.instructions ? { instructions: preset.instructions } : {}),
+      ...(preset.models ? { models: preset.models } : {}),
+    };
+    if (preset.tools) this.restrictTools(preset.tools);
   }
 
   setThinking(level: string): void {
@@ -767,8 +884,16 @@ export class Agent {
       beforeEnd?: (message: AssistantMessage) => void;
     } = {},
   ): Promise<AssistantMessage> {
-    const { providerName, provider, model } = this.resolveModel();
-    const streamFn = this.streamFunction(provider);
+    let resolved: ResolvedModel;
+    try {
+      resolved = this.resolveModel();
+    } catch (error) {
+      // The model left the catalog: a role falls back along its models.
+      if (options.retries === false || !this.fallBack((error as Error).message)) throw error;
+      resolved = this.resolveModel();
+    }
+    let { providerName, provider, model } = resolved;
+    let streamFn = this.streamFunction(provider);
     const emit = options.emit !== false;
     for (let attempt = 0; ; attempt++) {
       const timestamp = Date.now();
@@ -822,13 +947,21 @@ export class Agent {
       }
       message.timestamp = timestamp;
       message.completedAt = Date.now();
-      const retry =
+      const retryable =
         message.stopReason === 'error' &&
         options.retries !== false &&
-        attempt < RETRY_DELAYS.length &&
         !signal.aborted &&
         isRetryable(message.errorMessage) &&
         !message.content.some((part) => part.type === 'text' && part.text);
+      // A role with more models moves on at once instead of retrying this one.
+      if (retryable && this.fallBack(message.errorMessage ?? 'error')) {
+        if (emit) this.emit({ type: 'message_end', message });
+        ({ providerName, provider, model } = this.resolveModel());
+        streamFn = this.streamFunction(provider);
+        attempt = -1;
+        continue;
+      }
+      const retry = retryable && attempt < RETRY_DELAYS.length;
       if (!retry) {
         options.beforeEnd?.(message);
         if (emit) this.emit({ type: 'message_end', message });

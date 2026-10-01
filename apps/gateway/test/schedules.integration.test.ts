@@ -277,7 +277,6 @@ it('lets agents propose schedules the user approves, within their scope', async 
         title: 'CI check',
         cron: '0 9 * * 1-5',
         timezone: 'Asia/Taipei',
-        model: 'gw/model-a',
       })}`,
     ),
   ).body;
@@ -291,8 +290,17 @@ it('lets agents propose schedules the user approves, within their scope', async 
   });
   expect(confirmation.request.message).toContain('Where: Test on work');
   expect(confirmation.request.message).toContain('When: cron "0 9 * * 1-5" (Asia/Taipei)');
-  expect(confirmation.request.message).toContain('Model: gw/model-a');
+  expect(confirmation.request.message).not.toContain('Model:');
   expect(confirmation.request.message).toContain('Check the CI dashboard.');
+
+  // Only the user picks a schedule's model.
+  expect(
+    reply(
+      await chat.ask(
+        'gateway schedule.create {"prompt":"x","cron":"0 9 * * *","model":"gw/model-a"}',
+      ),
+    ).body,
+  ).toMatchObject({ code: 'invalid_input' });
 
   // Mistakes come back at once.
   expect(
@@ -305,7 +313,7 @@ it('lets agents propose schedules the user approves, within their scope', async 
   expect(services.schedules.get(USER, id)).toMatchObject({
     workspaceId: 'work:test',
     createdBySession: chat.sessionId,
-    model: { provider: 'gw', id: 'model-a' },
+    model: null,
   });
   expect(
     (await answer(app, chat.sessionId, chat.generation, proposed.proposalId, true)).statusCode,

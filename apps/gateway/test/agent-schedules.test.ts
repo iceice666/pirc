@@ -65,11 +65,11 @@ describe('schedule', () => {
     const create = await agent.waitFor(
       (event) => event.type === 'gateway_request' && event.op === 'schedule.create',
     );
+    // A model from the agent never reaches the gateway: only the user picks it.
     expect(create.args).toEqual({
       prompt: 'Check CI.',
       cron: '0 9 * * 1-5',
       title: 'CI',
-      model: 'gw/a',
     });
     agent.raw({
       type: 'gateway_response',

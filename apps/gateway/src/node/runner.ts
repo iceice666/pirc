@@ -981,13 +981,16 @@ export class RunnerManager {
       customType: string;
       content: string;
       details?: Record<string, unknown> | undefined;
+      role?: string | undefined;
       model?: { provider: string; id: string } | undefined;
       thinking?: string | undefined;
     },
   ): Promise<void> {
     const runner = await this.ensure(sessionId);
-    const { model, thinking, ...message } = delivery;
+    const { role, model, thinking, ...message } = delivery;
+    // The role first: the user's model and thinking level override the role's.
     for (const command of [
+      ...(role ? [{ type: 'set_role', role }] : []),
       ...(model ? [{ type: 'set_model', provider: model.provider, modelId: model.id }] : []),
       ...(thinking ? [{ type: 'set_thinking_level', level: thinking }] : []),
     ]) {

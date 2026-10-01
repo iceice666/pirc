@@ -68,6 +68,13 @@ export function testModels(llmUrl: string, extra: Record<string, unknown> = {}):
   };
 }
 
+/** Role files `<dir>/<name>.md` (agent/roles.ts). */
+export function writeRoles(dir: string, roles: Record<string, string>): void {
+  mkdirSync(dir, { recursive: true });
+  for (const [name, text] of Object.entries(roles))
+    writeFileSync(path.join(dir, `${name}.md`), text);
+}
+
 /** The node-local config.json (everything except providers and the default model). */
 export function writeAgentConfig(configDir: string, extra: Record<string, unknown> = {}): void {
   const { providers: _providers, defaultModel: _default, ...local } = extra;
@@ -110,6 +117,8 @@ export async function startAgent(
     env?: Record<string, string>;
     capabilities?: Record<string, unknown>;
     instructions?: string;
+    /** The node's role files, by role name (`<config>/roles/<name>.md`). */
+    roles?: Record<string, string>;
   } = {},
 ): Promise<AgentProcess> {
   const root = mkdtempSync(path.join(tmpdir(), 'pirc-agent-'));
@@ -122,6 +131,7 @@ export async function startAgent(
   const sessionDir = options.sessionDir ?? path.join(root, 'session');
   const llm = options.llm ?? startFakeLlm();
   writeAgentConfig(configDir, options.config);
+  if (options.roles) writeRoles(path.join(configDir, 'roles'), options.roles);
   const proc = Bun.spawn(
     [
       ...(options.executable

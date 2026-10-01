@@ -70,8 +70,24 @@ Agents and shells started by the node do **not** inherit `PIRC_NODE_TOKEN` or an
 ~/.config/.pirc/
 ├── config.json     limits, features, hooks, env, allowedPaths, sandbox
 ├── AGENTS.md       global system prompt addition (optional)
+├── roles/          roles: <name>.md, front matter + instructions (optional)
 └── skills/         Agent Skills: <name>/SKILL.md (optional)
 ```
+
+A role (`roles/<name>.md`) is what subagents, teammates and delegations start in; agents pick a role, never a model. Every front matter key is optional:
+
+```markdown
+---
+description: Read-only code investigation
+model: [anthropic/claude-haiku-*, '*/gpt-5-mini']
+thinking: low
+tools: [read, ls, find, grep]
+---
+
+Do not edit files. Cite file:line evidence and mark anything unverified.
+```
+
+`model` takes one `provider/model-id` or a list, in order of preference; `*` matches anything within a part (`*/gpt-5`, `openai/*`), and each pattern expands in `models.json` order. The agent starts on the first match and moves to the next one when a call fails (rate limit, overload, 5xx, dropped connection), staying there for the session.
 
 `config.json` (every key optional):
 
@@ -88,11 +104,7 @@ Agents and shells started by the node do **not** inherit `PIRC_NODE_TOKEN` or an
     "observationalMemory": { "model": { "provider": "openai", "id": "gpt-5-mini" } },
     "sessionTitle": { "model": { "provider": "openai", "id": "gpt-5-mini" } },
     "autoMode": { "enabled": true, "useModel": true },
-    "agentTeam": {
-      "limit": 4,
-      "subagentLimit": 4,
-      "kinds": { "explorer": { "tools": ["read", "ls", "find", "grep"] } }
-    },
+    "agentTeam": { "limit": 4, "subagentLimit": 4 },
     "browser": { "enabled": true },
     "webSearch": { "enabled": true },
     "schedules": { "enabled": true },
@@ -116,7 +128,7 @@ Agents and shells started by the node do **not** inherit `PIRC_NODE_TOKEN` or an
 - `allowedPaths` widens the file tools' write roots and the sandbox's writable paths (node config only; a project's `allowedPaths` never widens the sandbox).
 - Skills: `$PIRC_CONFIG_DIR/skills/<name>/SKILL.md` reaches every session on the node; `~/.agents/skills/` of the node account is read too (lowest precedence); `<workspace>/.pirc/skills/` is per project. Programs a skill runs must be on the node's `PATH`.
 
-Workspaces may add `<workspace>/.pirc/config.json` with only `allowedPaths`, `env`, `hooks` and `defaultModel`, plus `<workspace>/.pirc/AGENTS.md`. Agents cannot write `.pirc/`.
+Workspaces may add `<workspace>/.pirc/config.json` with only `allowedPaths`, `env`, `hooks` and `defaultModel`, plus `<workspace>/.pirc/AGENTS.md` and role files in `<workspace>/.pirc/roles/`. Agents cannot write `.pirc/`.
 
 ## Signals and lifecycle
 

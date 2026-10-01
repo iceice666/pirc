@@ -7,6 +7,7 @@
 import type { ModelsConfig } from './models.js';
 import type { InferenceEvent, InferenceRequest } from './inference-wire.js';
 import type { WorkspaceKind } from './types.js';
+import type { RoleBrief } from './agent/roles.js';
 
 export const NODE_PROTOCOL_VERSION = 7;
 
@@ -46,6 +47,8 @@ export interface RegisteredWorkspace {
   displayName: string;
   /** Absent from older nodes: `directory`. */
   kind?: WorkspaceKind | undefined;
+  /** The roles its agents can start in (agent/roles.ts); absent when unknown. */
+  roles?: RoleBrief[] | undefined;
 }
 
 /**
