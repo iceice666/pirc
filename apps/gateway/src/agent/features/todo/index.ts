@@ -1,5 +1,5 @@
 import type { Agent } from '../../agent.js';
-import type { Feature } from '../../feature.js';
+import { offInChat, type Feature } from '../../feature.js';
 import type { CustomMessage } from '../../messages.js';
 import type { Tool } from '../../tools/types.js';
 import {
@@ -180,7 +180,7 @@ export function todoFeature(): Feature {
 
   return {
     name: 'todo',
-    tools: (agent) => [makeTool(agent)],
+    tools: (agent) => (offInChat(agent, 'todo') ? [] : [makeTool(agent)]),
     init: (agent) => restore(agent),
     userInput() {
       reminded = false;

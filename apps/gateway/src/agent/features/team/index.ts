@@ -2,7 +2,7 @@ import { frozenInstructions } from '../project-instructions.js';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import type { Agent } from '../../agent.js';
-import type { Feature } from '../../feature.js';
+import { offInChat, type Feature } from '../../feature.js';
 import type { Tool } from '../../tools/types.js';
 import { selfCommand } from '../../../self.js';
 import { askQuestions, askQuestionSchema } from '../ask-question.js';
@@ -229,6 +229,7 @@ export function teamFeature(): Feature {
   };
 
   const settings = (agent: Agent) => (agent.config.features.agentTeam ?? {}) as Json;
+  const on = (agent: Agent) => settings(agent).enabled !== false && !offInChat(agent, 'agentTeam');
   const manager = (agent: Agent): Team => {
     if (team) return team;
     const options = settings(agent);
@@ -394,7 +395,7 @@ export function teamFeature(): Feature {
   return {
     name: 'agent-team',
     async beforeAgentStart(agent) {
-      if (childName || settings(agent).enabled === false) return;
+      if (childName || !on(agent)) return;
       // startRun has made the parent active, so replay cannot start a nested run.
       if (!suspended) {
         const entries = [...deferred.values()];
@@ -471,7 +472,7 @@ export function teamFeature(): Feature {
         }
       }
     },
-    tools: (agent) => (settings(agent).enabled === false ? [] : tools(agent)),
+    tools: (agent) => (on(agent) ? tools(agent) : []),
     panel() {
       if (!team) return { team: { agents: [], tasks: [] } };
       return {

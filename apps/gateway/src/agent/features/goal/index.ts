@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import type { Agent } from '../../agent.js';
-import type { Feature } from '../../feature.js';
+import { offInChat, type Feature } from '../../feature.js';
 import type { CustomMessage } from '../../messages.js';
 import type { Tool } from '../../tools/types.js';
 import { teamChildMode } from '../team/channel.js';
@@ -98,7 +98,7 @@ export function goalFeature(): Feature {
     const parsed = settingsSchema.safeParse(agent.config.features.goal ?? {});
     return parsed.success ? parsed.data : settingsSchema.parse({});
   };
-  const enabled = (agent: Agent) => !child && settings(agent).enabled;
+  const enabled = (agent: Agent) => !child && settings(agent).enabled && !offInChat(agent, 'goal');
 
   const paint = (agent: Agent) => {
     if (!agent.hasUI || closed) return;

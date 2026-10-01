@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import type { Agent } from '../../agent.js';
-import type { Feature } from '../../feature.js';
+import { offInChat, type Feature } from '../../feature.js';
 import { truncateOutput } from '../../sandbox.js';
 import type { Tool } from '../../tools/types.js';
 import { TaskManager, MATCH_LIMIT, type TaskInfo, type WaitResult } from './manager.js';
@@ -247,7 +247,7 @@ export function backgroundFeature(): Feature {
 
   return {
     name: 'background-task',
-    tools: (agent) => [tool(agent)],
+    tools: (agent) => (offInChat(agent, 'background') ? [] : [tool(agent)]),
     init(agent) {
       agentRef = agent;
       refresh();

@@ -92,7 +92,7 @@ export const bashTool: Tool = {
   name: 'bash',
   ptc: true,
   description:
-    'Run a bash command in the workspace. stdout and stderr are combined. Default timeout 120s (`timeout` in seconds). Use background_task for long-running processes.',
+    'Run a bash command in the workspace. stdout and stderr are combined. Default timeout 120s (`timeout` in seconds).',
   parameters: {
     type: 'object',
     properties: {

@@ -2,6 +2,18 @@ import type { Agent } from './agent.js';
 import type { AssistantMessage, CustomMessage, Message } from './messages.js';
 import type { Tool } from './tools/types.js';
 
+/**
+ * Coding-session features a chat leaves out (plans/assistant.md): their tools
+ * cost context a personal assistant rarely needs, and chats hand real work to
+ * a workspace with `delegate`. `features.<key>.enabled: true` in the node's
+ * config brings one back.
+ */
+export function offInChat(agent: Agent, key: string): boolean {
+  if (agent.config.workspaceKind !== 'chat') return false;
+  const settings = agent.config.features[key] as { enabled?: unknown } | undefined;
+  return settings?.enabled !== true;
+}
+
 export interface CompactionPlan {
   summary: string;
   firstKeptEntryId: string;

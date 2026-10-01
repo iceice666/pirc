@@ -11,9 +11,12 @@ import { processSandboxChannel, SandboxRequestError } from '../sandbox-channel.j
 import { truncateOutput } from '../sandbox.js';
 import { text, type Tool } from '../tools/types.js';
 
-const SANDBOX_PROMPT = `## Sandbox
+/** The tools that run shell commands, as far as this agent has them (chats leave some out). */
+const SHELL_TOOLS = ['bash', 'background_task', 'code'];
 
-Your shell commands (bash, background_task, code) run in an OS sandbox on this node:
+const sandboxPrompt = (shells: string[]) => `## Sandbox
+
+Your shell commands${shells.length ? ` (${shells.join(', ')})` : ''} run in an OS sandbox on this node:
 - Reads work anywhere except credential stores (~/.ssh, cloud and git credentials, keychains, browser profiles) and pirc's own state.
 - Writes work only in the workspace, temporary directories and build caches. Git hooks and .git/config are read-only.
 - Network reaches only allowlisted hosts (common code hosts and package registries). A blocked host fails with "CONNECT tunnel failed, response 403" or a proxy error.
@@ -139,7 +142,9 @@ export function sandboxFeature(): Feature {
     name: 'sandbox',
     tools: (agent) => (active(agent) ? list : []),
     async beforeAgentStart(agent) {
-      return active(agent) ? { systemPrompt: SANDBOX_PROMPT } : undefined;
+      if (!active(agent)) return undefined;
+      const names = new Set(agent.toolList.map((tool) => tool.name));
+      return { systemPrompt: sandboxPrompt(SHELL_TOOLS.filter((name) => names.has(name))) };
     },
   };
 }
