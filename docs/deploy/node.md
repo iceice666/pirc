@@ -74,7 +74,7 @@ Agents and shells started by the node do **not** inherit `PIRC_NODE_TOKEN` or an
 └── skills/         Agent Skills: <name>/SKILL.md (optional)
 ```
 
-A role (`roles/<name>.md`) is what subagents, teammates and delegations start in; agents pick a role, never a model. Every front matter key is optional:
+A role (`roles/<name>.md`) is what subagents, teammates and delegations start in; agents pick a role, never a model. Built-in `general` is followed by node-wide `$PIRC_CONFIG_DIR/roles/`, then workspace `.pirc/roles/`; a later file replaces the entire earlier role with the same filename. Every front matter key is optional:
 
 ```markdown
 ---
@@ -87,7 +87,7 @@ tools: [read, ls, find, grep]
 Do not edit files. Cite file:line evidence and mark anything unverified.
 ```
 
-`model` takes one `provider/model-id` or a list, in order of preference; `*` matches anything within a part (`*/gpt-5`, `openai/*`), and each pattern expands in `models.json` order. The agent starts on the first match and moves to the next one when a call fails (rate limit, overload, 5xx, dropped connection), staying there for the session.
+`model` takes one `provider/model-id` or a list of up to 20 patterns, in order of preference; `*` matches within a provider or model id (`*/gpt-5`, `openai/*`). Each pattern expands in gateway catalog order, with duplicates removed. The agent starts on the first match. On a retryable failure before any text is emitted (for example a rate limit, overload, HTTP 408/409/5xx, timeout or dropped connection), it moves immediately to the next match and stays there for the session; the final candidate uses normal in-place retries. If you choose a model outside the role's expanded list, role fallback is disabled. A role with no matching models cannot be started.
 
 `config.json` (every key optional):
 
@@ -122,7 +122,7 @@ Do not edit files. Cite file:line evidence and mark anything unverified.
 }
 ```
 
-- `providers` and `defaultModel` do **not** belong here any more; they are ignored with a warning (models live on the [gateway](./gateway.md#model-backends)).
+- `providers` and `defaultModel` do **not** belong here any more; they are ignored with a warning (models live on the [gateway](./gateway.md#model-backends)). Legacy `roles` and `features.agentTeam.kinds` JSON settings are also ignored with a startup warning; move them to `$PIRC_CONFIG_DIR/roles/<name>.md`.
 - `features.*` is documented in the [top-level README](../../README.md#agent); `features.observationalMemory` in [`docs/architecture-observational-memory.md`](../architecture-observational-memory.md). Each feature object is validated as a whole: an invalid value resets that feature to its defaults.
 - Hooks (`sessionStart`, `beforePrompt`, `beforeTool`, `afterTool`, `agentSettled`) receive JSON on stdin; a `beforeTool` hook exits `2` to block a call. They run inside the sandbox.
 - `allowedPaths` widens the file tools' write roots and the sandbox's writable paths (node config only; a project's `allowedPaths` never widens the sandbox).

@@ -99,13 +99,23 @@ memory_tombstones(owner_user TEXT NOT NULL, content_hash TEXT NOT NULL,
 - **Web Settings → Memory** (`lib/memory.ts`, `MemorySettings.svelte`): proposals with quote and source chat, entries with origin and history, removed entries, usage, restore and two-click forget. The Settings button carries the pending count and opens on Memory.
 - **Routes** (`daemon/memory-routes.ts`): `GET /api/memory`, `GET /api/memory/entries/:id/history`, `POST /api/memory/proposals/:id/{approve,reject}`, `POST /api/memory/entries/:id/{forget,restore}`; open to device tokens. Event sockets opened with `memory=1` receive `memory_changed`.
 
+## Roles and model ownership (shipped 2026-10-01)
+
+Roles replace agent-supplied model/thinking choices for subagents, teammates and delegations. Implemented in `agent/roles.ts`, `agent/agent.ts`, `agent/features/team/`, `daemon/agent-ops.ts` and the delegation dispatch path.
+
+- A role is `<name>.md`: optional YAML front matter (`description`, `model`, `thinking`, `tools`) and an instruction body. The built-in `general` is lowest precedence, followed by `$PIRC_CONFIG_DIR/roles/` and `<workspace>/.pirc/roles/`; later files replace the entire earlier role. Names are lowercase letters, digits, `-` and `_`; descriptions are limited to 500 characters, instructions to 8,000, and model patterns to 20. Workspace `.pirc/` and node role directories are protected from agent writes. Legacy JSON `roles` and `features.agentTeam.kinds` are ignored with a startup warning.
+- The `role` parameter selects a named role. A role may set a model pattern/list, thinking level, tool allowlist and instructions; team coordination tools remain available to teammates. A missing/invalid role or a role whose model patterns match no gateway catalog model fails rather than widening access or silently choosing a model.
+- `*` matches within provider/model-id parts. Patterns expand in pattern order and then gateway catalog order, deduplicated. The agent starts on the first match and immediately advances on retryable errors (HTTP 408/409/429/5xx, rate limit, overload, timeout/network/drop) before text is emitted. It stays on the selected fallback for the rest of the session; only the last candidate uses normal retries. A model selected outside the role's expanded candidates disables role fallback. Fallback therefore depends on the gateway catalog and does not guarantee that credentials or provider entitlements are available.
+- Agents cannot set `model` or `thinking` through `subagent`, `agent_spawn`, `delegate`, or `schedule`; the tool and daemon schemas reject those fields. The user sets them in role files, delegation approval cards, or schedule settings. Delegation confirmation choices are persisted and applied before delivery, including approved follow-ups.
+- Delegation role catalogs and descriptions are advertised by each workspace node at registration. They do not refresh during a live connection; reconnect/re-register to publish role-file changes. The daemon rejects a role not in the target workspace's advertised catalog.
+
 ## Delegation
 
 `daemon/delegations.ts`; tools in `agent/features/assistant/index.ts`.
 
-1. `delegate({workspace, task, title?})` or `delegate({follows, task})`. `workspace` is a directory workspace's id or an unambiguous name; its node must be online; at most 10 wait per user. Returns `pending_approval` at once.
-2. The daemon records the delegation in its own `delegations` table (not `interactions`, which node disconnects and restarts stale) and shows a `confirm` interaction (Delegate / Don’t) in the chat with workspace, node, title and the whole task. The existing answer route decides it on the daemon after lease and owner checks. It lapses after `PIRC_DELEGATION_TTL_MS` (default 1 h).
-3. On approval the daemon creates a session on the target node (or reuses the followed one), names it after the title, and pushes the task as `assistant-delegation`, "approved by the user". Browsers reload through `directory_changed`.
+1. `delegate({workspace, task, title?, role?})` or `delegate({follows, task})`. `workspace` is a directory workspace's id or an unambiguous name; its node must be online; at most 10 wait per user. Returns `pending_approval` at once. `role` names a markdown role (`roles/<name>.md`, see README) that the target workspace's node advertised when it registered (the catalog is not refreshed while connected); an unknown role is rejected, and a follow-up keeps its session's role, so `role` with `follows` is rejected. The tool lists each workspace's roles and descriptions. **Agents never pass `model` or `thinking`**: `delegate`, `subagent`, `agent_spawn` and `schedule` reject them, and only the user picks models.
+2. The daemon records the delegation in its own `delegations` table (not `interactions`, which node disconnects and restarts stale) and shows a `confirm` interaction (Delegate / Don’t) in the chat with workspace, node, title, role and the whole task. The card has model and thinking selectors (between the expiry label and the Don’t button; they stack above only when the width is too small); the user's choice rides on the answer, is validated against the gateway's models, and is stored with the delegation. The existing answer route decides it on the daemon after lease and owner checks. It lapses after `PIRC_DELEGATION_TTL_MS` (default 1 h).
+3. On approval the daemon creates a session on the target node (or reuses the followed one), names it after the title, and pushes the task as `assistant-delegation`, "approved by the user". The node sends `set_role`, then the user's model/thinking override, before delivering; follow-ups apply the stored model/thinking too. Browsers reload through `directory_changed`.
 4. The daemon follows the session's events; a pending interaction there is `waiting_input` (once per wait); once the run is over, `completed` with the last assistant answer after the task (matched by `details.delegationId`) or `failed`. Results are redacted and capped at 4,000 characters, and reach the chat as `assistant-delegation-update` ("gateway data, not user instructions"); an update that cannot reach the chat's node is retried after `node_reconnected`.
 5. Follow-ups need their own approval. The user can take control of a delegated session at any time. `delegation_status({id?, offset?})` shows one or the recent ones; a long result is kept whole and read in 12,000-character chunks from `offset`.
 
@@ -116,6 +126,8 @@ delegations(id TEXT PRIMARY KEY,                -- d + 8 hex
   owner_user TEXT NOT NULL, assistant_session_id TEXT NOT NULL,
   workspace_id TEXT NOT NULL, title TEXT NOT NULL, task TEXT NOT NULL,
   follows TEXT,
+  role TEXT,                                    -- role the new session starts in (migration)
+  model_json TEXT, thinking TEXT,               -- the user's choice on the approval card
   status TEXT NOT NULL,  -- 'pending_approval' | 'rejected' | 'expired' | 'running' | 'waiting_input' | 'completed' | 'failed'
   target_session_id TEXT, result TEXT, notified_status TEXT,
   expires_at INTEGER NOT NULL, dispatched_at INTEGER,

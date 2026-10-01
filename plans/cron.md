@@ -200,5 +200,5 @@ schedule_runs(
 - Android push: **UnifiedPush** (the user runs their own distributor, e.g. ntfy). No FCM.
 - Web Push: use the **`web-push`** dependency.
 - Time zone: UI-created schedules default to the device's time zone, agent-created ones to the gateway's TZ. Either can be changed.
-- Model: **each schedule can set its own** `model` / `thinking`. Without one, the default applies. This needs a model option on the node's `POST /api/sessions`, or a set_model call before deliver.
+- Model: **each schedule can set its own** `model` / `thinking`. Without one, the default applies. This needs a model option on the node's `POST /api/sessions`, or a set_model call before deliver. (Updated 2026-10-01: the user chooses these in the web or Android schedule form; `/cron` has no model-selection action. The agent's `schedule` tool and `schedule.create/update` reject `model` and `thinking`.)
 - Scope of this round: **phase 1 only** (gateway core, agent tool, `/cron`, tests). Report back when it is done.
