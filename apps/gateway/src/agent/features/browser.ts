@@ -8,6 +8,7 @@ import { BrowserError, processBrowser, type NodeBrowser } from '../browser-chann
 import type { Agent } from '../agent.js';
 import type { Feature } from '../feature.js';
 import type { Tool, ToolContext, ToolResult } from '../tools/types.js';
+import { toolPrompt } from '../prompts/tools.js';
 
 const BROWSER_PROMPT = `## Browser
 
@@ -110,8 +111,7 @@ export function browserFeature(): Feature {
   const tools: Tool[] = [
     {
       name: 'web_fetch',
-      description:
-        "Open a URL in the browser (JavaScript runs, and the workspace profile's logins apply) and return the page as readable markdown (or text/html). Use offset to page through long documents. For interactive work, use browser_snapshot and the other browser_* tools.",
+      description: toolPrompt('web_fetch'),
       ptc: true,
       parameters: {
         type: 'object',
@@ -147,23 +147,18 @@ export function browserFeature(): Feature {
     pageTool(
       'browser_navigate',
       'navigate',
-      'Open a URL in the browser tab and return a snapshot. Use url "back" to go back.',
+      toolPrompt('browser_navigate'),
       { url: { type: 'string', description: 'http(s) URL, or "back"' } },
       ['url'],
     ),
-    pageTool(
-      'browser_snapshot',
-      'snapshot',
-      'Accessibility snapshot of the current page, with element refs for the other browser tools. Password values are masked.',
-      {
-        offset: { type: 'number', description: 'Start at this character (default 0)' },
-        maxChars: { type: 'number', description: 'Characters to return (default 30000)' },
-      },
-    ),
+    pageTool('browser_snapshot', 'snapshot', toolPrompt('browser_snapshot'), {
+      offset: { type: 'number', description: 'Start at this character (default 0)' },
+      maxChars: { type: 'number', description: 'Characters to return (default 30000)' },
+    }),
     pageTool(
       'browser_click',
       'click',
-      'Click an element by ref.',
+      toolPrompt('browser_click'),
       {
         ref: refParam,
         element: elementParam,
@@ -176,7 +171,7 @@ export function browserFeature(): Feature {
     pageTool(
       'browser_type',
       'type',
-      'Fill a text field by ref (replaces its value). Refuses password fields: use browser_handoff for logins.',
+      toolPrompt('browser_type'),
       {
         ref: refParam,
         element: elementParam,
@@ -193,7 +188,7 @@ export function browserFeature(): Feature {
     pageTool(
       'browser_select',
       'select',
-      'Choose options in a <select> by ref.',
+      toolPrompt('browser_select'),
       {
         ref: refParam,
         element: elementParam,
@@ -209,25 +204,19 @@ export function browserFeature(): Feature {
     pageTool(
       'browser_press',
       'press',
-      'Press a key or chord on the focused element, e.g. "Enter", "Escape", "ArrowDown", "Control+A", "PageDown".',
+      toolPrompt('browser_press'),
       { key: { type: 'string' }, snapshot: snapshotParam },
       ['key'],
     ),
-    pageTool(
-      'browser_wait_for',
-      'wait_for',
-      'Wait until text appears (text) or disappears (textGone), or for timeoutMs.',
-      {
-        text: { type: 'string' },
-        textGone: { type: 'string' },
-        timeoutMs: { type: 'number', description: 'Default 10000, max 60000' },
-        snapshot: snapshotParam,
-      },
-    ),
+    pageTool('browser_wait_for', 'wait_for', toolPrompt('browser_wait_for'), {
+      text: { type: 'string' },
+      textGone: { type: 'string' },
+      timeoutMs: { type: 'number', description: 'Default 10000, max 60000' },
+      snapshot: snapshotParam,
+    }),
     {
       name: 'browser_screenshot',
-      description:
-        'Screenshot of the current page (viewport, or fullPage). Prefer browser_snapshot for finding elements; use this to check visual layout.',
+      description: toolPrompt('browser_screenshot'),
       parameters: {
         type: 'object',
         properties: { fullPage: { type: 'boolean' } },
@@ -246,8 +235,7 @@ export function browserFeature(): Feature {
     },
     {
       name: 'browser_tabs',
-      description:
-        "List, open (optionally at url), select or close this session's browser tabs. Popups opened by pages appear here too.",
+      description: toolPrompt('browser_tabs'),
       parameters: {
         type: 'object',
         properties: {
@@ -276,8 +264,7 @@ export function browserFeature(): Feature {
     },
     {
       name: 'browser_handoff',
-      description:
-        'Hand the browser to the human, for logins, CAPTCHAs, 2FA, payment or other sensitive input, or anything you should not do yourself. Blocks until they return control, then returns a fresh snapshot. Cancellation is not approval.',
+      description: toolPrompt('browser_handoff'),
       parameters: {
         type: 'object',
         properties: {
@@ -343,8 +330,7 @@ export function browserFeature(): Feature {
     },
     {
       name: 'browser_record',
-      description:
-        'Start or stop recording the browser tab as a video (for example, to demonstrate front-end work). Stopping saves a .webm under .pirc/recordings/ that the user can play back in the chat.',
+      description: toolPrompt('browser_record'),
       parameters: {
         type: 'object',
         properties: {

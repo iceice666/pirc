@@ -6,6 +6,7 @@ import type { Agent } from '../agent.js';
 import { truncateOutput } from '../sandbox.js';
 import { killGroup } from '../tools/bash.js';
 import { text, type Tool, type ToolResult } from '../tools/types.js';
+import { toolPrompt } from '../prompts/tools.js';
 
 const MAX_TOOL_CALLS = 500;
 
@@ -29,7 +30,7 @@ function describeTools(agent: Agent): string {
 export function codeTool(agent: Agent): Tool {
   return {
     name: 'code',
-    description: `Run a TypeScript async function body in Bun to batch many tool calls, loop, filter or compute without round-trips. \`tools.<name>(args)\` returns the tool's text output (throws on tool error); \`tools.call(name, args)\` returns {content, details, isError}. Available: ${describeTools(agent)}. \`return\` a JSON-serializable value; console.log output is also captured. Runs in the workspace with a timeout (default 120s, \`timeout\` in seconds). Prefer tools over direct fs/process access so workspace limits and hooks apply.`,
+    description: toolPrompt('code', { tools: describeTools(agent) }),
     parameters: {
       type: 'object',
       properties: {

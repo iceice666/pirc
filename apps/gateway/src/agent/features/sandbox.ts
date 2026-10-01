@@ -10,6 +10,7 @@ import type { Feature } from '../feature.js';
 import { processSandboxChannel, SandboxRequestError } from '../sandbox-channel.js';
 import { truncateOutput } from '../sandbox.js';
 import { text, type Tool } from '../tools/types.js';
+import { toolPrompt } from '../prompts/tools.js';
 
 /** The tools that run shell commands, as far as this agent has them (chats leave some out). */
 const SHELL_TOOLS = ['bash', 'background_task', 'code'];
@@ -32,8 +33,7 @@ function tools(): Tool[] {
   return [
     {
       name: 'sandbox_allow_domains',
-      description:
-        "Ask the user to let this session's sandbox reach more hosts (e.g. a registry or API a build needs). Blocks until they answer. Allowed hosts stay allowed for the rest of the session.",
+      description: toolPrompt('sandbox_allow_domains'),
       parameters: {
         type: 'object',
         properties: {
@@ -70,8 +70,7 @@ function tools(): Tool[] {
     },
     {
       name: 'unsandboxed_bash',
-      description:
-        "Run one bash command outside the OS sandbox, with the node account's full access, after the user approves it. Only for what the sandbox blocks (nix builds, git over SSH, system changes); use bash for everything else.",
+      description: toolPrompt('unsandboxed_bash'),
       parameters: {
         type: 'object',
         properties: {

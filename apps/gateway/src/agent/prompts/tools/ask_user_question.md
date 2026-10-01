@@ -1,0 +1,1 @@
+Ask the human 1–4 questions instead of guessing. Supports single/multiple choice and custom text. Write questions, headers and option labels in Traditional Chinese by default unless the user requests another language. Cancellation is not approval; do not infer an answer when unavailable or cancelled.

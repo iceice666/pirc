@@ -5,6 +5,7 @@ import { offInChat, type Feature } from '../../feature.js';
 import { truncateOutput } from '../../sandbox.js';
 import type { Tool } from '../../tools/types.js';
 import { TaskManager, MATCH_LIMIT, type TaskInfo, type WaitResult } from './manager.js';
+import { toolPrompt } from '../../prompts/tools.js';
 
 const HELP = `/bg or /bg list — List tasks
 /bg start <shell command> — Run in the background
@@ -133,8 +134,7 @@ export function backgroundFeature(): Feature {
   const tool = (agent: Agent): Tool => ({
     name: 'background_task',
     ptc: true,
-    description:
-      'Start/list/output/wait/write/monitor/stop background Bash jobs. Start returns immediately. Wait blocks until a job finishes or its wait timeout expires (default 60 seconds); timeout or abort cancels only the wait, not the job. Session-local; aborting does not stop jobs, session shutdown does. Maximum 8 active jobs. Output is a bounded tail (up to 2000 lines/48 KiB); log files cap at 10 MiB. Jobs have no stdin unless started with tty:true, which runs them on a pseudo-terminal (stdout/stderr merged, ANSI codes stripped from output) so write can send input; write takes raw text, so include \\n for Enter (\\u0003 is Ctrl-C, \\u0004 EOF). notify_on (a JavaScript regular expression, on start or via monitor; omit pattern on monitor to clear) wakes you with matching output lines, e.g. "error|listening on" for a dev server or a test watcher; it switches itself off after 200 matches. Not sandboxed; same permissions as Bash. Completions and matches are coalesced into one short wakeup while the agent is idle; inspect task output explicitly with list/output. Use for long-running tests, builds, development servers, watchers or interactive programs. Do not busy-poll; continue other work, use wait when completion is needed. Stop servers explicitly when finished.',
+    description: toolPrompt('background_task'),
     parameters: {
       type: 'object',
       properties: {

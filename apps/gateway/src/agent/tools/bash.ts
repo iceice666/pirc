@@ -1,5 +1,6 @@
 import { truncateOutput } from '../sandbox.js';
 import { optionalNumber, requireString, text, type Tool } from './types.js';
+import { toolPrompt } from '../prompts/tools.js';
 
 /** Kill a detached child's whole process group, then the child itself. */
 export function killGroup(pid: number | undefined, signal: NodeJS.Signals): void {
@@ -91,8 +92,7 @@ export async function runShell(
 export const bashTool: Tool = {
   name: 'bash',
   ptc: true,
-  description:
-    'Run a bash command in the workspace. stdout and stderr are combined. Default timeout 120s (`timeout` in seconds).',
+  description: toolPrompt('bash'),
   parameters: {
     type: 'object',
     properties: {

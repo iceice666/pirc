@@ -1,0 +1,1 @@
+Hand the browser to the human, for logins, CAPTCHAs, 2FA, payment or other sensitive input, or anything you should not do yourself. Blocks until they return control, then returns a fresh snapshot. Cancellation is not approval.

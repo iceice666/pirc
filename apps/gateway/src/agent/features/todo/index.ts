@@ -10,6 +10,7 @@ import {
   type Action,
   type State,
 } from './model.js';
+import { toolPrompt } from '../../prompts/tools.js';
 
 export const TODO_ENTRY = 'local-todo-state-v1';
 const CONTEXT = 'local-todo-context';
@@ -139,8 +140,7 @@ export function todoFeature(): Feature {
   const makeTool = (agent: Agent): Tool => ({
     name: 'todo',
     ptc: true,
-    description:
-      'Session-local task list. Use for multi-step work, not trivial tasks. list returns all; mutations return changed rows and removed IDs. add: text or atomic `items` batch (not both); batch IDs follow array order. update/remove require id. blockedBy references existing or earlier batch IDs; dependencies must finish before starting/completing a task. remove rejects referenced IDs; prune deletes completed tasks; clear deletes all (never clear unfinished tasks without user approval). Update after verified progress.',
+    description: toolPrompt('todo'),
     parameters: {
       type: 'object',
       properties: {

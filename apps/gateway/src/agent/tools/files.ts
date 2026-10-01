@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { truncateOutput } from '../sandbox.js';
 import { optionalNumber, requireString, text, type Tool } from './types.js';
+import { toolPrompt } from '../prompts/tools.js';
 
 const imageTypes: Record<string, string> = {
   '.png': 'image/png',
@@ -14,8 +15,7 @@ const imageTypes: Record<string, string> = {
 export const readTool: Tool = {
   name: 'read',
   ptc: true,
-  description:
-    'Read a file. Text is returned with line numbers (`offset` is 1-based, default limit 2000 lines). Images (png/jpg/gif/webp) are returned as images.',
+  description: toolPrompt('read'),
   parameters: {
     type: 'object',
     properties: {
@@ -59,7 +59,7 @@ export const readTool: Tool = {
 export const writeTool: Tool = {
   name: 'write',
   ptc: true,
-  description: 'Create or overwrite a file with the given content. Parent directories are created.',
+  description: toolPrompt('write'),
   parameters: {
     type: 'object',
     properties: {
@@ -102,8 +102,7 @@ function simpleDiff(before: string, after: string, file: string): string {
 export const editTool: Tool = {
   name: 'edit',
   ptc: true,
-  description:
-    'Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true. Read the file first.',
+  description: toolPrompt('edit'),
   parameters: {
     type: 'object',
     properties: {
@@ -139,7 +138,7 @@ export const editTool: Tool = {
 export const lsTool: Tool = {
   name: 'ls',
   ptc: true,
-  description: 'List a directory (directories end with /).',
+  description: toolPrompt('ls'),
   parameters: {
     type: 'object',
     properties: { path: { type: 'string', description: 'Default: workspace root' } },
@@ -189,8 +188,7 @@ async function* walk(root: string, limit: { left: number }): AsyncGenerator<stri
 export const findTool: Tool = {
   name: 'find',
   ptc: true,
-  description:
-    'Find files by glob pattern (e.g. "**/*.ts"). Skips .git, node_modules, dist, target, result.',
+  description: toolPrompt('find'),
   parameters: {
     type: 'object',
     properties: {
@@ -219,8 +217,7 @@ export const findTool: Tool = {
 export const grepTool: Tool = {
   name: 'grep',
   ptc: true,
-  description:
-    'Search file contents with a JavaScript regular expression. Returns `path:line: text`. Optional `glob` filters files.',
+  description: toolPrompt('grep'),
   parameters: {
     type: 'object',
     properties: {

@@ -10,6 +10,7 @@ import { parentChannel, teamChildMode, teamChildName } from './channel.js';
 import { Team, userQuestion, type SubagentOutcome } from './team.js';
 import { configRoles } from '../../config.js';
 import { DEFAULT_ROLES, describeRoles, roleBriefs, type RoleBrief } from '../../roles.js';
+import { toolPrompt } from '../../prompts/tools.js';
 
 type Json = Record<string, any>;
 const short = { type: 'string', minLength: 1, maxLength: 12000 };
@@ -37,14 +38,10 @@ const object = (properties: Json, required: string[] = []) => ({
 });
 
 const DEFINITIONS: Array<[string, string, Json]> = [
-  [
-    'agent_list',
-    'List team members, process states, session files and archive directory.',
-    object({}),
-  ],
+  ['agent_list', toolPrompt('agent_list'), object({})],
   [
     'agent_wait',
-    'Wait without polling for a worker to become idle. Returns early for questions/blocking, stop, failure or timeout. Timeout in seconds (default 60, max 86400). Abort cancels only the wait, not the worker. Cannot wait on yourself or parent; cycles are rejected. Idle is not proof of task success.',
+    toolPrompt('agent_wait'),
     object(
       {
         agent: { type: 'string', minLength: 1, maxLength: 40 },
@@ -55,7 +52,7 @@ const DEFINITIONS: Array<[string, string, Json]> = [
   ],
   [
     'agent_send',
-    'Send a peer or parent a message. Wakes idle recipients; queues at tool boundaries when busy. Returns acceptance, not task completion.',
+    toolPrompt('agent_send'),
     object({ to: { type: 'string', description: 'Agent name, or parent' }, message: short }, [
       'to',
       'message',
@@ -63,7 +60,7 @@ const DEFINITIONS: Array<[string, string, Json]> = [
   ],
   [
     'agent_ask',
-    'Ask parent (default) or a peer asynchronously; returns question ID immediately. Explicit to:"user" asks the real human with options/custom text: parent waits for the structured answer; children return a tracked ID and receive a later human-origin reply. Cancellation/unavailable never grants authorization. End your turn if waiting on a tracked question; do not poll.',
+    toolPrompt('agent_ask'),
     object(
       {
         to: {
@@ -77,12 +74,12 @@ const DEFINITIONS: Array<[string, string, Json]> = [
   ],
   [
     'agent_reply',
-    'Answer a question addressed to you using its question_id. Wakes the asker.',
+    toolPrompt('agent_reply'),
     object({ question_id: { type: 'string' }, answer: short }, ['question_id', 'answer']),
   ],
   [
     'agent_inbox',
-    'Read sent/received team history, paginated, at most 40KB. Use next as after. Fully returned events suppress duplicate queued parent notifications once this tool result enters context. Truncated entries are previews: pass event_id (and offset, starting from next_offset) to read one event body in 12000-character chunks until next_offset is null. Does not wake agents.',
+    toolPrompt('agent_inbox'),
     object({
       ...paging,
       event_id: { type: 'string', description: 'Read this one event instead of a page' },
@@ -95,7 +92,7 @@ const DEFINITIONS: Array<[string, string, Json]> = [
   ],
   [
     'board_post',
-    'Append a shared team note. Does not notify or wake others; use agent_send for urgent updates.',
+    toolPrompt('board_post'),
     object(
       {
         topic: { type: 'string', minLength: 1, maxLength: 100 },
@@ -105,14 +102,10 @@ const DEFINITIONS: Array<[string, string, Json]> = [
       ['topic', 'body'],
     ),
   ],
-  [
-    'board_read',
-    'Read shared notes, oldest first, paginated at most 40KB. Use next as after with the same topic filter.',
-    object({ topic: { type: 'string' }, ...paging }),
-  ],
+  ['board_read', toolPrompt('board_read'), object({ topic: { type: 'string' }, ...paging })],
   [
     'task_create',
-    'Create a pending, unowned task on the shared team task board. blocked_by lists task IDs that must be completed first. Does not notify anyone.',
+    toolPrompt('task_create'),
     object(
       {
         subject: { type: 'string', minLength: 1, maxLength: 200 },
@@ -124,21 +117,17 @@ const DEFINITIONS: Array<[string, string, Json]> = [
   ],
   [
     'task_list',
-    'List shared tasks with status, owner, revision, blocked_by and readiness (pending, unowned, all dependencies completed). Filter by status, owner ("unowned" for none) or ready.',
+    toolPrompt('task_list'),
     object({
       status: { type: 'string', enum: TASK_STATUSES },
       owner: { type: 'string', maxLength: 40 },
       ready: { type: 'boolean' },
     }),
   ],
-  [
-    'task_get',
-    'Read one shared task, including its current revision, before changing it.',
-    object({ task_id: { type: 'string' } }, ['task_id']),
-  ],
+  ['task_get', toolPrompt('task_get'), object({ task_id: { type: 'string' } }, ['task_id'])],
   [
     'task_update',
-    'Change a shared task. Actions: claim (pending, unblocked, unowned or assigned to you → in_progress, owned by you), release, complete (owner or parent), reopen, edit (subject/description), set_dependencies (blocked_by), assign (parent only; owner = teammate name, empty to unassign; notifies the teammate), delete (parent only). Pass expected_revision from task_get/task_list to avoid overwriting a concurrent change. Tasks owned by a member that stops are released.',
+    toolPrompt('task_update'),
     object(
       {
         task_id: { type: 'string' },
@@ -303,8 +292,7 @@ export function teamFeature(): Feature {
 
   const subagentTool = (agent: Agent): Tool => ({
     name: 'subagent',
-    description:
-      'Delegate a self-contained task to a one-shot subagent: a fresh pirc agent with its own context window that cannot see this conversation, message you, or ask the user. Give it everything it needs. It returns only its final report, then exits. Foreground (default) waits and returns the report; aborting stops the subagent. background:true returns at once and delivers the report to you when it finishes (do not poll; keep working or end your turn). The runtime waits for active workers after a clean turn; read and integrate reports before final synthesis, and report failures or pending work honestly. Pick the role that fits the work: it fixes the model, thinking level, tools and role instructions, which only the user configures. Use agent_spawn instead for persistent collaborators that need messages or a task board.',
+    description: toolPrompt('subagent'),
     parameters: object(
       {
         task: short,
@@ -363,8 +351,7 @@ export function teamFeature(): Feature {
       subagentTool(agent),
       {
         name: 'agent_spawn',
-        description:
-          'Start a persistent independent pirc agent session (maximum 4 live children by default) for work that needs follow-up messages, questions or a shared task board; for a single delegated task prefer subagent. Returns immediately after task acceptance, not completion; the child reports to you each time it goes idle. Before final synthesis, read and integrate reports and resolve pending questions; idle and timeout do not prove success. The runtime waits for active workers after a clean turn without polling the model. Do not send redundant acknowledgements for already-read events. Pick the role that fits the work: it fixes the model, thinking level, tools and role instructions, which only the user configures; what the role leaves unset is inherited from the parent. Supply necessary context and file ownership. Costs are incurred by each child.',
+        description: toolPrompt('agent_spawn'),
         parameters: object(
           {
             name: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,39}$' },
@@ -381,8 +368,7 @@ export function teamFeature(): Feature {
       },
       {
         name: 'agent_stop',
-        description:
-          'Stop a child process and its process group. Session and team history remain on disk.',
+        description: toolPrompt('agent_stop'),
         parameters: object({ agent: { type: 'string' } }, ['agent']),
         async execute(args, ctx) {
           return result(await call(agent, 'agent_stop', args, ctx.signal));

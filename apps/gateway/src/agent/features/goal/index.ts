@@ -18,6 +18,7 @@ import {
   type Goal,
   type GoalAction,
 } from './model.js';
+import { toolPrompt } from '../../prompts/tools.js';
 
 /**
  * Session goals, after DeepSeek Harness / Codex: one persisted completion
@@ -248,8 +249,7 @@ export function goalFeature(): Feature {
   const tools = (agent: Agent): Tool[] => [
     {
       name: 'create_goal',
-      description:
-        'Create one persisted session goal when the current direct user request is a long-running objective that should continue across automatic rounds (you may infer that intent). The agent then keeps working in continuation rounds until the goal is complete, blocked, paused or out of rounds. Not for routine single-turn work. Rejected during continuation rounds and while another goal is active or paused.',
+      description: toolPrompt('create_goal'),
       parameters: {
         type: 'object',
         properties: {
@@ -279,8 +279,7 @@ export function goalFeature(): Feature {
     },
     {
       name: 'get_goal',
-      description:
-        'Read the session goal: id, revision, objective, phase, continuation rounds, round limit, blocked/paused reason, and whether continuation is armed. Call before update_goal.',
+      description: toolPrompt('get_goal'),
       parameters: { type: 'object', properties: {}, additionalProperties: false },
       async execute() {
         return result(describe(goal), goal);
@@ -288,8 +287,7 @@ export function goalFeature(): Feature {
     },
     {
       name: 'update_goal',
-      description:
-        'Update the goal at its exact current revision (from get_goal or the continuation message). edit, pause and resume need a direct user request; resume also rearms a goal restored after a restart. complete and blocked are also allowed during continuation rounds. Mark complete only when the objective is actually achieved. blocked is rejected before the configured minimum round count and needs blocked_reason naming the concrete condition that persisted across those rounds.',
+      description: toolPrompt('update_goal'),
       parameters: {
         type: 'object',
         properties: {

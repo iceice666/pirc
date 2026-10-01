@@ -1,0 +1,1 @@
+Run one bash command outside the OS sandbox, with the node account's full access, after the user approves it. Only for what the sandbox blocks (nix builds, git over SSH, system changes); use bash for everything else.

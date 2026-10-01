@@ -18,6 +18,7 @@ import { localStamp } from '../memory/ledger.js';
 import { redactSecrets } from '../memory/redact.js';
 import { messageOrigin } from '../memory/serialize.js';
 import { describeRoles, type RoleBrief } from '../../roles.js';
+import { toolPrompt } from '../../prompts/tools.js';
 
 /** Session entry: the memory frozen into this chat's system prompt, with the revisions it showed. */
 export const ASSISTANT_SNAPSHOT = 'assistant.snapshot';
@@ -291,11 +292,7 @@ export function assistantFeature(): Feature {
 
   const noteTool = (agent: Agent, gateway: NodeGateway): Tool => ({
     name: NOTE_TOOL,
-    description: `Keep a note for your future chats with this user (MEMORY). New chats start with every note; this one keeps the notes it started with.
-
-Note what will matter later: their machines, projects and ongoing work, decisions and why, lessons learned. One fact per note, as one self-contained line; say so when something is a guess. Replace a note when it changes and remove it when it is wrong or done. Never store secrets.
-
-Who the user is, their preferences and their standing rules belong in USER instead: propose those with ${PROPOSE_TOOL}.`,
+    description: toolPrompt('memory_note'),
     parameters: {
       type: 'object',
       properties: {
@@ -390,9 +387,7 @@ Who the user is, their preferences and their standing rules belong in USER inste
 
   const proposeTool = (agent: Agent, gateway: NodeGateway): Tool => ({
     name: PROPOSE_TOOL,
-    description: `Propose a change to USER: who the user is, their preferences and their standing rules. Every chat sees USER, so it changes only when the user approves in Settings → Memory; until then nothing is saved.
-
-Propose only what the user said about themselves in this chat, and pass their exact words as quote: it is checked against their messages. Keep each entry short, one fact per entry. Afterwards, tell the user what you proposed.`,
+    description: toolPrompt('memory_propose_user'),
     parameters: {
       type: 'object',
       properties: {
@@ -452,11 +447,7 @@ Propose only what the user said about themselves in this chat, and pass their ex
 
   const delegateTool = (gateway: NodeGateway): Tool => ({
     name: DELEGATE_TOOL,
-    description: `Hand a task to an agent working in one of the user's workspaces (see ## Workspaces). The user approves every delegation first, seeing the workspace and your whole task; nothing runs until then. It runs in a new session there, and you get a message when it finishes, fails or needs the user.
-
-The other agent sees nothing of this chat: write the task so it stands on its own, with the goal, the facts it needs and what to report back. To send more instructions to the same session, pass the earlier delegation's id as follows instead of a workspace.
-
-Pick the workspace role that fits the work (see its Roles under ## Workspaces); the role sets the model, thinking level, tools and role instructions. You never pick a model: only the user can, when approving. A follow-up keeps its session's role.`,
+    description: toolPrompt('delegate'),
     parameters: {
       type: 'object',
       properties: {
@@ -524,13 +515,10 @@ Pick the workspace role that fits the work (see its Roles under ## Workspaces); 
     name: SEARCH_TOOL,
     // A getter: only mention tools this chat's capability policy allows.
     get description() {
-      return [
-        `Search what the user's coding sessions noted in their repositories (workspace memory, from every machine) and what your delegations reported. Each word matches anywhere, in any language; notes holding more of the words come first. Notes may be stale: each shows when it was written and the git state then, and superseded ones are marked.`,
-        agent.capabilities.remote_recall ? "Open a note's sources with recall (12-hex ids)." : '',
-        agent.capabilities.delegation ? `See a delegation with ${DELEGATIONS_TOOL}.` : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
+      return toolPrompt('memory_search', {
+        recall: agent.capabilities.remote_recall,
+        delegation: agent.capabilities.delegation,
+      });
     },
     parameters: {
       type: 'object',
@@ -590,8 +578,7 @@ Pick the workspace role that fits the work (see its Roles under ## Workspaces); 
 
   const delegationsTool = (gateway: NodeGateway): Tool => ({
     name: DELEGATIONS_TOOL,
-    description:
-      'Check on delegations: one with its full result, by id, or the recent ones with their status. A long result comes in 12000-character chunks: call again with offset set to the reported next offset until none is given.',
+    description: toolPrompt('delegation_status'),
     parameters: {
       type: 'object',
       properties: {

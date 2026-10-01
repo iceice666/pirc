@@ -1,0 +1,1 @@
+Ask parent (default) or a peer asynchronously; returns question ID immediately. Explicit to:"user" asks the real human with options/custom text: parent waits for the structured answer; children return a tracked ID and receive a later human-origin reply. Cancellation/unavailable never grants authorization. End your turn if waiting on a tracked question; do not poll.

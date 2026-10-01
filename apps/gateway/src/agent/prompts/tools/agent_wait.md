@@ -1,0 +1,1 @@
+Wait without polling for a worker to become idle. Returns early for questions/blocking, stop, failure or timeout. Timeout in seconds (default 60, max 86400). Abort cancels only the wait, not the worker. Cannot wait on yourself or parent; cycles are rejected. Idle is not proof of task success.

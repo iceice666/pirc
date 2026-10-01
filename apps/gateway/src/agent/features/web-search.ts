@@ -9,6 +9,7 @@ import type { Agent } from '../agent.js';
 import type { Feature } from '../feature.js';
 import { GatewayError, processGateway, type NodeGateway } from '../gateway.js';
 import { text, type Tool } from '../tools/types.js';
+import { toolPrompt } from '../prompts/tools.js';
 
 export const WEB_SEARCH_TOOL = 'web_search';
 
@@ -62,7 +63,7 @@ const domains = (description: string) => ({
 function searchTool(gateway: NodeGateway): Tool {
   return {
     name: WEB_SEARCH_TOOL,
-    description: `Search the web. Returns up to 10 results with title, URL, date and relevant excerpts. Write the query in natural language and include the year for recent topics (today is ${new Date().toISOString().slice(0, 10)}). To read a whole page, fetch its URL.`,
+    description: toolPrompt('web_search', { today: new Date().toISOString().slice(0, 10) }),
     ptc: true,
     parameters: {
       type: 'object',

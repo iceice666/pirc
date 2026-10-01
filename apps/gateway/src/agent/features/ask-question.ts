@@ -1,5 +1,6 @@
 import type { Feature } from '../feature.js';
 import type { Tool, UiApi } from '../tools/types.js';
+import { toolPrompt } from '../prompts/tools.js';
 
 export interface Question {
   question: string;
@@ -140,8 +141,7 @@ export function askQuestionFeature(): Feature {
   let lifetime = new AbortController();
   const tool: Tool = {
     name: 'ask_user_question',
-    description:
-      'Ask the human 1–4 questions instead of guessing. Supports single/multiple choice and custom text. Write questions, headers and option labels in Traditional Chinese by default unless the user requests another language. Cancellation is not approval; do not infer an answer when unavailable or cancelled.',
+    description: toolPrompt('ask_user_question'),
     parameters: askQuestionSchema,
     async execute(args, ctx) {
       const questions = validateQuestions(args);

@@ -1,0 +1,1 @@
+Read sent/received team history, paginated, at most 40KB. Use next as after. Fully returned events suppress duplicate queued parent notifications once this tool result enters context. Truncated entries are previews: pass event_id (and offset, starting from next_offset) to read one event body in 12000-character chunks until next_offset is null. Does not wake agents.

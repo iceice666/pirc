@@ -1,0 +1,1 @@
+Open a URL in the browser (JavaScript runs, and the workspace profile's logins apply) and return the page as readable markdown (or text/html). Use offset to page through long documents. For interactive work, use browser_snapshot and the other browser_* tools.

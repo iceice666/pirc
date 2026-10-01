@@ -1,0 +1,1 @@
+Search the web. Returns up to 10 results with title, URL, date and relevant excerpts. Write the query in natural language and include the year for recent topics (today is {{today}}). To read a whole page, fetch its URL.
