@@ -57,6 +57,8 @@ interface DelegationBrief {
   title: string;
   workspace: string;
   status: string;
+  model?: string;
+  thinking?: string;
   session?: string;
   result?: string;
   resultOffset?: number;
@@ -443,7 +445,9 @@ Propose only what the user said about themselves in this chat, and pass their ex
     name: DELEGATE_TOOL,
     description: `Hand a task to an agent working in one of the user's workspaces (see ## Workspaces). The user approves every delegation first, seeing the workspace and your whole task; nothing runs until then. It runs in a new session there, and you get a message when it finishes, fails or needs the user.
 
-The other agent sees nothing of this chat: write the task so it stands on its own, with the goal, the facts it needs and what to report back. To send more instructions to the same session, pass the earlier delegation's id as follows instead of a workspace.`,
+The other agent sees nothing of this chat: write the task so it stands on its own, with the goal, the facts it needs and what to report back. To send more instructions to the same session, pass the earlier delegation's id as follows instead of a workspace.
+
+Only suggest a model or thinking level when the user asked for one or the task clearly needs it; the user can change both when approving.`,
     parameters: {
       type: 'object',
       properties: {
@@ -459,6 +463,16 @@ The other agent sees nothing of this chat: write the task so it stands on its ow
           description:
             "An earlier delegation's id (like d1a2b3c4d): send the task to its session instead.",
         },
+        model: {
+          type: 'string',
+          description:
+            'provider/model-id to suggest running it on; default: the workspace default.',
+        },
+        thinking: {
+          type: 'string',
+          enum: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+          description: 'Thinking level to suggest; default: the model default.',
+        },
       },
       required: ['task'],
       additionalProperties: false,
@@ -467,7 +481,13 @@ The other agent sees nothing of this chat: write the task so it stands on its ow
       const field = (key: string) => (typeof args[key] === 'string' ? args[key].trim() : '');
       const task = field('task');
       if (!task) return text('task is required', undefined, true);
-      const [workspace, title, follows] = [field('workspace'), field('title'), field('follows')];
+      const [workspace, title, follows, model, thinking] = [
+        field('workspace'),
+        field('title'),
+        field('follows'),
+        field('model'),
+        field('thinking'),
+      ];
       if (!workspace && !follows)
         return text(
           'Name a workspace, or pass follows with an earlier delegation id',
@@ -482,11 +502,13 @@ The other agent sees nothing of this chat: write the task so it stands on its ow
             task: redactSecrets(task),
             ...(title ? { title } : {}),
             ...(follows ? { follows } : {}),
+            ...(model ? { model } : {}),
+            ...(thinking ? { thinking } : {}),
           },
           ctx.signal,
         )) as DelegationBrief;
         return text(
-          `Asked the user to approve delegation ${result.id} (“${result.title}”, ${result.workspace}). Nothing runs until they do; you will get a message when it finishes, fails or needs them.`,
+          `Asked the user to approve delegation ${result.id} (“${result.title}”, ${result.workspace}${result.model ? `, suggested model ${result.model}` : ''}${result.thinking ? `, thinking ${result.thinking}` : ''}). They can change the model when approving. Nothing runs until they do; you will get a message when it finishes, fails or needs them.`,
           { delegationId: result.id },
         );
       } catch (error) {

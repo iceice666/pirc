@@ -12,9 +12,11 @@ import { redactSecrets } from '../agent/features/memory/redact.js';
 import type { GatewayDatabase, SessionRow } from '../database.js';
 import { ApiError } from '../errors.js';
 import type { EventHub } from '../events.js';
+import type { ModelStore } from '../models.js';
 import type { GatewayEvent, Workspace } from '../types.js';
 import { now } from '../util.js';
 import type { NodeRegistry } from './nodes.js';
+import { THINKING_LEVELS } from './schedules.js';
 import {
   clip,
   deliver,
@@ -44,6 +46,10 @@ export interface Delegation {
   task: string;
   /** The earlier delegation whose session gets this task. */
   follows: string | null;
+  /** Run it on this model (the session keeps it); null for the workspace default. */
+  model: ModelRef | null;
+  /** And this thinking level; null for the default. */
+  thinking: string | null;
   status: DelegationStatus;
   /** The delegated session (gateway session id), once dispatched. */
   targetSessionId: string | null;
@@ -56,6 +62,11 @@ export interface Delegation {
   dispatchedAt: number | null;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface ModelRef {
+  provider: string;
+  id: string;
 }
 
 export const TASK_MAX_CHARS = 20_000;
@@ -92,6 +103,8 @@ const rowOf = (row: any): Delegation => ({
   title: row.title,
   task: row.task,
   follows: row.follows ?? null,
+  model: row.model_json ? JSON.parse(row.model_json) : null,
+  thinking: row.thinking ?? null,
   status: row.status,
   targetSessionId: row.target_session_id ?? null,
   result: row.result ?? null,
@@ -126,6 +139,24 @@ export function resolveDirectoryWorkspace(db: GatewayDatabase, ref: string): Wor
   );
 }
 
+const modelLabel = (model: ModelRef) => `${model.provider}/${model.id}`;
+
+/** A model the user picked: {provider,id}, `provider/id`, or null/'' for the default. */
+function modelOf(value: unknown): ModelRef | null {
+  if (value === null || value === '') return null;
+  if (typeof value === 'string') {
+    const slash = value.indexOf('/');
+    if (slash > 0 && slash < value.length - 1)
+      return { provider: value.slice(0, slash), id: value.slice(slash + 1) };
+  } else if (
+    typeof value === 'object' &&
+    typeof (value as ModelRef).provider === 'string' &&
+    typeof (value as ModelRef).id === 'string'
+  )
+    return { provider: (value as ModelRef).provider, id: (value as ModelRef).id };
+  throw new ApiError(400, 'invalid_input', 'model is provider/model-id');
+}
+
 const taskMessage = (delegation: Delegation) =>
   `Task from the user's assistant, approved by the user (delegation ${delegation.id}):
 
@@ -137,6 +168,8 @@ export interface DelegationDeps {
   db: GatewayDatabase;
   events: EventHub;
   nodes: NodeRegistry;
+  /** The gateway's models: a delegation's model must be one of them. */
+  models: ModelStore;
   ttlMs: number;
   /** Browsers reload their lists: a delegated session appeared. */
   directoryChanged(): void;
@@ -210,6 +243,8 @@ export class Delegations {
       workspace: this.label(delegation.workspaceId),
       status: delegation.status,
       ...(delegation.follows ? { follows: delegation.follows } : {}),
+      ...(delegation.model ? { model: modelLabel(delegation.model) } : {}),
+      ...(delegation.thinking ? { thinking: delegation.thinking } : {}),
       ...(delegation.targetSessionId
         ? { session: this.sessionName(delegation.targetSessionId) }
         : {}),
@@ -261,6 +296,9 @@ export class Delegations {
       task: string;
       title?: string | undefined;
       follows?: string | undefined;
+      /** The assistant's suggestion; the user can change it when approving. */
+      model?: ModelRef | null | undefined;
+      thinking?: string | null | undefined;
     },
   ): Delegation {
     this.deps.db.requireSessionCapability(assistant.id, 'delegation');
@@ -272,6 +310,8 @@ export class Delegations {
         'payload_too_large',
         `A task holds at most ${TASK_MAX_CHARS} characters`,
       );
+    const model = this.checkModel(input.model ?? null);
+    const thinking = this.checkThinking(input.thinking ?? null);
     let workspace: Workspace;
     let previous: Delegation | undefined;
     if (input.follows) {
@@ -312,7 +352,7 @@ export class Delegations {
     const at = now();
     this.deps.db.raw
       .prepare(
-        "INSERT INTO delegations (id,owner_user,assistant_session_id,workspace_id,title,task,follows,status,expires_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'pending_approval',?,?,?)",
+        "INSERT INTO delegations (id,owner_user,assistant_session_id,workspace_id,title,task,follows,model_json,thinking,status,expires_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'pending_approval',?,?,?)",
       )
       .run(
         id,
@@ -322,6 +362,8 @@ export class Delegations {
         title,
         task,
         previous?.id ?? null,
+        model ? JSON.stringify(model) : null,
+        thinking,
         at + this.deps.ttlMs,
         at,
         at,
@@ -341,7 +383,9 @@ export class Delegations {
   /**
    * The user answered a confirmation in the chat `sessionId`. Returns
    * undefined when `interactionId` is not a delegation of that chat, so the
-   * caller forwards the answer to the node as usual.
+   * caller forwards the answer to the node as usual. An approval may pick
+   * the model and thinking level (`model`: {provider,id}, `provider/id`, or
+   * null for the default), replacing what the assistant suggested.
    */
   answer(
     sessionId: string,
@@ -353,13 +397,30 @@ export class Delegations {
     if (!delegation || delegation.assistantSessionId !== sessionId) return undefined;
     if (delegation.ownerUser !== user)
       throw new ApiError(403, 'forbidden', 'Delegation belongs to another user');
-    const approved = (answer as { confirmed?: unknown } | undefined)?.confirmed === true;
-    if (approved) this.deps.db.requireSessionCapability(sessionId, 'delegation');
+    const reply = (answer ?? {}) as { confirmed?: unknown; model?: unknown; thinking?: unknown };
+    const approved = reply.confirmed === true;
+    let model = delegation.model;
+    let thinking = delegation.thinking;
+    if (approved) {
+      this.deps.db.requireSessionCapability(sessionId, 'delegation');
+      if (reply.model !== undefined) model = this.checkModel(modelOf(reply.model));
+      if (reply.thinking !== undefined)
+        thinking = this.checkThinking(
+          reply.thinking === null || reply.thinking === '' ? null : String(reply.thinking),
+        );
+    }
     const changed = this.deps.db.raw
       .prepare(
-        "UPDATE delegations SET status=?, updated_at=? WHERE id=? AND status='pending_approval' AND expires_at>?",
+        "UPDATE delegations SET status=?, model_json=?, thinking=?, updated_at=? WHERE id=? AND status='pending_approval' AND expires_at>?",
       )
-      .run(approved ? 'running' : 'rejected', now(), delegation.id, now()).changes;
+      .run(
+        approved ? 'running' : 'rejected',
+        model ? JSON.stringify(model) : null,
+        thinking,
+        now(),
+        delegation.id,
+        now(),
+      ).changes;
     if (!changed)
       throw new ApiError(409, 'stale_interaction', 'This delegation can no longer be answered');
     this.publishAnswered(delegation);
@@ -412,6 +473,8 @@ export class Delegations {
         customType: 'assistant-delegation',
         content: taskMessage(delegation),
         details: { delegationId: delegation.id, title: delegation.title },
+        ...(delegation.model ? { model: delegation.model } : {}),
+        ...(delegation.thinking ? { thinking: delegation.thinking } : {}),
       });
     } catch (error) {
       this.finish(delegation.id, 'failed', `Could not start the task: ${(error as Error).message}`);
@@ -601,6 +664,8 @@ export class Delegations {
         message: `${delegation.title}\n\n${delegation.task}`,
         confirmLabel: 'Delegate',
         cancelLabel: "Don't",
+        // Clients that know it offer a model picker; null is the workspace default.
+        modelChoice: { model: delegation.model, thinking: delegation.thinking },
       },
       expiresAt: delegation.expiresAt,
       createdAt: delegation.createdAt,
@@ -616,6 +681,21 @@ export class Delegations {
     } catch {
       /* the chat is gone */
     }
+  }
+
+  private checkModel(model: ModelRef | null): ModelRef | null {
+    if (
+      model &&
+      !this.deps.models.current.providers[model.provider]?.models.some((m) => m.id === model.id)
+    )
+      throw new ApiError(400, 'invalid_input', `Unknown model ${modelLabel(model)}`);
+    return model;
+  }
+
+  private checkThinking(thinking: string | null): string | null {
+    if (thinking !== null && !(THINKING_LEVELS as readonly string[]).includes(thinking))
+      throw new ApiError(400, 'invalid_input', `thinking is one of ${THINKING_LEVELS.join(', ')}`);
+    return thinking;
   }
 
   private online(workspace: Workspace): boolean {

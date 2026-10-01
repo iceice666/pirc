@@ -151,12 +151,21 @@ const ops: Record<string, AgentOp> = {
         task: z.string().max(40_000),
         title: z.string().max(300).optional(),
         follows: z.string().min(1).max(40).optional(),
+        /** `provider/model-id` suggested to the user; null for the default. */
+        model: z.string().min(3).max(300).nullable().optional(),
+        thinking: z.enum(THINKING_LEVELS).nullable().optional(),
       })
       .strict(),
     run: (context, args) => {
       requireChat(context);
       const { delegations } = context.services;
-      return delegations.brief(delegations.create(context.user, context.session, args));
+      const { model, ...input } = args;
+      return delegations.brief(
+        delegations.create(context.user, context.session, {
+          ...input,
+          ...(model !== undefined ? { model: modelRef(model) } : {}),
+        }),
+      );
     },
   },
   /**

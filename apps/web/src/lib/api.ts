@@ -114,6 +114,24 @@ function interaction(raw: any): PendingInteraction {
       kind: 'confirm',
       ...(typeof request.confirmLabel === 'string' ? { confirmLabel: request.confirmLabel } : {}),
       ...(typeof request.cancelLabel === 'string' ? { cancelLabel: request.cancelLabel } : {}),
+      ...(request.modelChoice && typeof request.modelChoice === 'object'
+        ? {
+            modelChoice: {
+              model:
+                typeof request.modelChoice.model?.provider === 'string' &&
+                typeof request.modelChoice.model?.id === 'string'
+                  ? {
+                      provider: request.modelChoice.model.provider,
+                      id: request.modelChoice.model.id,
+                    }
+                  : null,
+              thinking:
+                typeof request.modelChoice.thinking === 'string'
+                  ? request.modelChoice.thinking
+                  : null,
+            },
+          }
+        : {}),
     };
   if (raw.kind === 'editor')
     return { ...base, kind: 'editor', initialValue: request.prefill ?? '' };
@@ -379,7 +397,13 @@ export const api = {
       answer.action === 'cancel'
         ? { cancelled: true }
         : typeof answer.value === 'boolean'
-          ? { confirmed: answer.value }
+          ? {
+              confirmed: answer.value,
+              ...(answer.value && answer.model !== undefined ? { model: answer.model } : {}),
+              ...(answer.value && answer.thinking !== undefined
+                ? { thinking: answer.thinking }
+                : {}),
+            }
           : Array.isArray(answer.value)
             ? { value: answer.value.join(', '), values: answer.value }
             : { value: answer.value };

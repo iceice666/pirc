@@ -168,6 +168,14 @@ export interface ConfirmInteraction extends InteractionBase {
   kind: 'confirm';
   confirmLabel?: string;
   cancelLabel?: string;
+  /**
+   * A delegation: the user picks the model and thinking level it runs on.
+   * Holds the assistant's suggestion; null is the workspace default.
+   */
+  modelChoice?: {
+    model: { provider: string; id: string } | null;
+    thinking: ThinkingLevel | null;
+  };
 }
 
 export interface InputInteraction extends InteractionBase {
@@ -342,7 +350,13 @@ export interface CommandReceipt {
 }
 
 export type InteractionAnswer =
-  | { action: 'answer'; value: string | string[] | boolean }
+  | {
+      action: 'answer';
+      value: string | string[] | boolean;
+      /** With a confirm that offers `modelChoice`: what the user picked (null = default). */
+      model?: { provider: string; id: string } | null;
+      thinking?: ThinkingLevel | null;
+    }
   | { action: 'cancel' };
 
 export interface EventEnvelope<T extends GatewayEvent = GatewayEvent> {

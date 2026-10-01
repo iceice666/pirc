@@ -207,6 +207,90 @@ it('asks the user, runs the task in a new session and reports back, then follows
   ).toMatchObject({ status: 403 });
 }, 30_000);
 
+it('runs the task on the model the user picks, over the assistant suggestion', async () => {
+  const { app, services } = await start();
+  services.models.set({
+    providers: {
+      gw: {
+        api: 'openai-chat',
+        baseUrl: 'http://127.0.0.1:9/v1',
+        models: [
+          { id: 'model-a', contextWindow: 100_000, maxTokens: 1000 },
+          { id: 'model-b', contextWindow: 100_000, maxTokens: 1000 },
+        ],
+      },
+    } as any,
+  });
+  const chat = await promptSession(app, services.events, headers, 'home:chats');
+
+  expect(
+    reply(
+      await chat.ask(
+        'gateway delegation.create {"workspace":"work:test","task":"x","model":"gw/nope"}',
+      ),
+    ).body.message,
+  ).toContain('Unknown model gw/nope');
+
+  const created = reply(
+    await chat.ask(
+      'gateway delegation.create {"workspace":"work:test","task":"Refactor it.","model":"gw/model-a","thinking":"low"}',
+    ),
+  ).body;
+  expect(created).toMatchObject({ model: 'gw/model-a', thinking: 'low' });
+  const [confirmation] = (await snapshot(app, chat.sessionId)).interactions;
+  expect(confirmation.request.modelChoice).toEqual({
+    model: { provider: 'gw', id: 'model-a' },
+    thinking: 'low',
+  });
+
+  const pick = (model: unknown, thinking: unknown) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/sessions/${chat.sessionId}/interactions/${created.id}/answer`,
+      headers,
+      payload: {
+        clientId: 'browser',
+        generation: chat.generation,
+        answer: { confirmed: true, model, thinking },
+      },
+    });
+  // A bad pick leaves it waiting for a good one.
+  expect((await pick({ provider: 'gw', id: 'nope' }, 'high')).statusCode).toBe(400);
+  expect((await pick('gw/model-b', 'loud')).statusCode).toBe(400);
+  expect(services.delegations.get(USER, created.id).status).toBe('pending_approval');
+
+  expect((await pick({ provider: 'gw', id: 'model-b' }, 'high')).statusCode).toBe(200);
+  await waitFor(() => services.delegations.get(USER, created.id).status, 'completed');
+  const delegation = services.delegations.get(USER, created.id);
+  expect([delegation.model, delegation.thinking]).toEqual([
+    { provider: 'gw', id: 'model-b' },
+    'high',
+  ]);
+  expect((await snapshot(app, delegation.targetSessionId!)).agent).toMatchObject({
+    model: { provider: 'gw', id: 'model-b' },
+    thinkingLevel: 'high',
+  });
+
+  // Picking the default clears the suggestion.
+  const second = reply(
+    await chat.ask(
+      'gateway delegation.create {"workspace":"lab:test","task":"Again.","model":"gw/model-a"}',
+    ),
+  ).body;
+  await app.inject({
+    method: 'POST',
+    url: `/api/sessions/${chat.sessionId}/interactions/${second.id}/answer`,
+    headers,
+    payload: {
+      clientId: 'browser',
+      generation: chat.generation,
+      answer: { confirmed: true, model: null, thinking: null },
+    },
+  });
+  await waitFor(() => services.delegations.get(USER, second.id).status, 'completed');
+  expect(services.delegations.get(USER, second.id).model).toBeNull();
+}, 30_000);
+
 it('keeps a long result whole and lets the chat page through it', async () => {
   const { app, services } = await start();
   const chat = await promptSession(app, services.events, headers, 'home:chats');

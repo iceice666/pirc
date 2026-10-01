@@ -226,6 +226,7 @@ export async function buildDaemonApp(
     db,
     events,
     nodes,
+    models,
     ttlMs: config.delegationTtlMs,
     directoryChanged,
     announce: (delegation) => {

@@ -201,6 +201,11 @@ const migrations = [
   `CREATE TABLE workspace_capabilities (
     workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id), policy_json TEXT NOT NULL
   );`,
+  // The model (and thinking level) a delegation runs on.
+  `
+  ALTER TABLE delegations ADD COLUMN model_json TEXT;
+  ALTER TABLE delegations ADD COLUMN thinking TEXT;
+  `,
 ];
 
 const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');

@@ -1,7 +1,16 @@
 <script lang="ts">
   import { ArrowRight, CircleHelp, Clock3, X } from '@lucide/svelte';
   import { rovingFocus } from '../a11y';
-  import type { InteractionAnswer, PendingInteraction } from '../types';
+  import { api } from '../api';
+  import {
+    modelKey,
+    type InteractionAnswer,
+    type ModelOption,
+    type PendingInteraction,
+    type ThinkingLevel,
+  } from '../types';
+
+  const THINKING: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 
   interface Props {
     interaction: PendingInteraction;
@@ -17,6 +26,32 @@
       : '';
   let value = $state(initialValue());
   let selected: string[] = $state([]);
+
+  /** A delegation's model and thinking level: `modelKey`s, '' for the default. */
+  const modelChoice = $derived(
+    interaction.kind === 'confirm' ? interaction.modelChoice : undefined,
+  );
+  let model = $state('');
+  let thinking: ThinkingLevel | '' = $state('');
+  let models: ModelOption[] = $state([]);
+  $effect(() => {
+    const choice = modelChoice;
+    if (!choice) return;
+    model = choice.model ? modelKey(choice.model) : '';
+    thinking = choice.thinking ?? '';
+    let alive = true;
+    api
+      .models()
+      .then((list) => {
+        if (alive) models = list.filter((option) => option.available);
+      })
+      .catch(() => {
+        /* the default and the suggestion still work */
+      });
+    return () => {
+      alive = false;
+    };
+  });
 
   /** The gateway rejects answers after `expiresAt`; stop offering them. */
   let expired = $state(false);
@@ -44,7 +79,17 @@
   }
 
   function submit() {
-    if (interaction.kind === 'confirm') onanswer({ action: 'answer', value: true });
+    if (interaction.kind === 'confirm')
+      onanswer(
+        modelChoice
+          ? {
+              action: 'answer',
+              value: true,
+              model: model ? (([provider, id]) => ({ provider, id }))(JSON.parse(model)) : null,
+              thinking: thinking || null,
+            }
+          : { action: 'answer', value: true },
+      );
     else if (interaction.kind === 'select')
       onanswer({ action: 'answer', value: interaction.multiple ? selected : (selected[0] ?? '') });
     else onanswer({ action: 'answer', value });
@@ -112,7 +157,7 @@
       >
       <textarea class="editor" bind:value rows="8" spellcheck="false" disabled={locked}></textarea>
     </label>
-  {:else}
+  {:else if !modelChoice}
     <p class="confirm-copy">Choose whether the agent should continue with this action.</p>
   {/if}
 
@@ -127,6 +172,24 @@
         })}</span
       >
     {:else}<span></span>{/if}
+    <!-- A delegation's model sits between the expiry and the buttons; it moves above them when the card is narrow. -->
+    {#if modelChoice}
+      <div class="model-choice">
+        <select class="model-select" bind:value={model} disabled={locked} aria-label="Model">
+          <option value="">Default model</option>
+          {#each models as option (modelKey(option))}
+            <option value={modelKey(option)}>{option.displayName} · {option.provider}</option>
+          {/each}
+          {#if model && !models.some((option) => modelKey(option) === model)}
+            <option value={model}>{JSON.parse(model).join(' / ')}</option>
+          {/if}
+        </select>
+        <select bind:value={thinking} disabled={locked} aria-label="Thinking">
+          <option value="">Default thinking</option>
+          {#each THINKING as level (level)}<option value={level}>Thinking: {level}</option>{/each}
+        </select>
+      </div>
+    {/if}
     <div class="interaction-actions">
       <button
         class="button ghost small"
@@ -165,6 +228,10 @@
     border-radius: var(--radius-lg);
     background: var(--bg-layer);
     box-shadow: var(--shadow-soft);
+  }
+  .interaction-card {
+    /* The footer lays out by the card's own width. */
+    container-type: inline-size;
   }
   .interaction-card.expired {
     opacity: 0.65;
@@ -277,6 +344,46 @@
     font-size: 13px;
     line-height: 1.5;
     resize: vertical;
+  }
+  /* A delegation's model and thinking level, in the footer row. */
+  .model-choice {
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+  }
+  .model-choice select {
+    min-width: 0;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--bg-subtle);
+    font-size: 13px;
+    text-overflow: ellipsis;
+  }
+  .model-choice .model-select {
+    flex: 0 1 200px;
+  }
+  .model-choice + .interaction-actions {
+    margin-left: 0;
+  }
+  /* Too narrow for one row: the picker goes above the expiry and buttons. */
+  @container (max-width: 600px) {
+    .model-choice {
+      order: -1;
+      flex-basis: 100%;
+      margin-left: 0;
+    }
+    .model-choice select {
+      flex: 1 1 0;
+    }
+    .model-choice .model-select {
+      flex: 2 1 0;
+    }
+    .model-choice + .interaction-actions {
+      margin-left: auto;
+    }
   }
   .interaction-card footer {
     display: flex;
