@@ -337,12 +337,29 @@ export function listDirectory(root: string, relative: string) {
   };
 }
 
+/** Images the side panel previews, by extension; sent inline as base64. */
+const IMAGE_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml',
+};
+/** Base64 grows this by a third; it must stay well under NODE_FRAME_MAX_BYTES. */
+const IMAGE_LIMIT = 8 * 1_048_576;
+
 export function readWorkspaceFile(root: string, relative: string) {
   root = realRoot(root);
   const file = resolveInside(root, relative);
   const stat = statSync(file);
   if (!stat.isFile()) throw new ApiError(400, 'invalid_input', 'Not a file');
-  const length = Math.min(stat.size, FILE_LIMIT);
+  const mimeType = IMAGE_TYPES[path.extname(file).toLowerCase()];
+  const inlineImage = mimeType !== undefined && stat.size <= IMAGE_LIMIT;
+  const length = inlineImage ? stat.size : Math.min(stat.size, FILE_LIMIT);
   const buffer = Buffer.alloc(length);
   const fd = openSync(file, 'r');
   try {
@@ -357,12 +374,19 @@ export function readWorkspaceFile(root: string, relative: string) {
   }
   const binary = buffer.subarray(0, 8192).includes(0);
   const rel = path.relative(root, file).split(path.sep).join('/');
+  const text = binary ? undefined : buffer.subarray(0, FILE_LIMIT).toString('utf8');
   return {
     path: rel,
     size: stat.size,
     modifiedAt: stat.mtimeMs,
     binary,
     truncated: stat.size > FILE_LIMIT,
-    ...(binary ? {} : { content: buffer.toString('utf8') }),
+    ...(text === undefined ? {} : { content: text }),
+    // Oversized images fall back to the plain file view (`imageTooLarge`).
+    ...(mimeType === undefined
+      ? {}
+      : inlineImage
+        ? { image: { mimeType, dataBase64: buffer.toString('base64') } }
+        : { imageTooLarge: true }),
   };
 }

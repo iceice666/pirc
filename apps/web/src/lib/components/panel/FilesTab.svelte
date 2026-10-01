@@ -77,6 +77,7 @@
     }
     file = result;
     if (!refresh) {
+      imageSize = undefined;
       const count = (result.content ?? '').replace(/\n$/, '').split('\n').length;
       const line = lines.line && Math.min(lines.line, count);
       focus = line
@@ -144,7 +145,15 @@
   let crumbs = $derived(dir ? dir.split('/') : []);
   let language = $derived(file ? languageForPath(file.path) : undefined);
   let isMarkdown = $derived(!!file && /\.(md|markdown|mdx)$/i.test(file.path));
-  let showSource = $derived(!!file && !file.binary && !(isMarkdown && rendered));
+  /** A text file with a rendered view (Markdown, SVG) can toggle to its source. */
+  let hasPreview = $derived(!!file && !file.binary && (isMarkdown || !!file.image));
+  let showImage = $derived(!!file?.image && (rendered || file.binary));
+  let imageSrc = $derived(
+    file?.image ? `data:${file.image.mimeType};base64,${file.image.dataBase64}` : undefined,
+  );
+  /** Natural size of the previewed image, once it has loaded. */
+  let imageSize: { width: number; height: number } | undefined = $state();
+  let showSource = $derived(!!file && !file.binary && !(hasPreview && rendered));
   let lineNumbers = $derived(
     showSource
       ? Array.from(
@@ -216,7 +225,7 @@
             >:{focus.line}{#if focus.endLine > focus.line}-{focus.endLine}{/if}</span
           >{/if}</span
       >
-      {#if isMarkdown && !file.binary}
+      {#if hasPreview}
         <button
           class="icon-button small"
           type="button"
@@ -228,10 +237,27 @@
       {/if}
     </div>
     <p class="file-meta">
-      {size(file.size)} · modified {new Date(file.modifiedAt).toLocaleString()}
+      {size(file.size)}{#if showImage && imageSize}
+        · {imageSize.width} × {imageSize.height}{/if} · modified {new Date(
+        file.modifiedAt,
+      ).toLocaleString()}
     </p>
-    {#if file.binary}
-      <p class="panel-empty">Binary file — not shown.</p>
+    {#if showImage}
+      <div class="image-view">
+        <img
+          src={imageSrc}
+          alt={file.path}
+          onload={(event) => {
+            const img = event.currentTarget as HTMLImageElement;
+            imageSize = { width: img.naturalWidth, height: img.naturalHeight };
+          }}
+          onerror={() => (imageSize = undefined)}
+        />
+      </div>
+    {:else if file.binary}
+      <p class="panel-empty">
+        {file.imageTooLarge ? 'Image too large to preview.' : 'Binary file — not shown.'}
+      </p>
     {:else if isMarkdown && rendered}
       <div class="doc">
         <Markdown
@@ -255,7 +281,9 @@
             ></pre>{:else}<pre><code>{file.content ?? ''}</code></pre>{/if}
       </div>
     {/if}
-    {#if file.truncated}<p class="panel-empty">Showing the first 1 MB.</p>{/if}
+    {#if file.truncated && !showImage && !file.binary}<p class="panel-empty">
+        Showing the first 1 MB.
+      </p>{/if}
   {:else}
     <div class="toolbar">
       <nav class="crumbs" aria-label="Folder">
@@ -383,6 +411,23 @@
   }
   .drill-lines {
     color: var(--faint);
+  }
+  .image-view {
+    display: flex;
+    justify-content: center;
+    overflow: auto;
+    max-height: calc(100dvh - 190px);
+    padding: 12px;
+    border-radius: var(--radius-md);
+    box-shadow: 0 0 0 1px var(--line);
+    /* Checkerboard so transparent pixels are visible. */
+    background: repeating-conic-gradient(var(--bg-hover) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
+  }
+  .image-view img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
   }
   .doc {
     padding: 4px 2px;

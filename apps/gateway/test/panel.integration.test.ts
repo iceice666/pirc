@@ -119,6 +119,25 @@ describe('side panel: workspace inspection', () => {
     expect((await get('/files/content?path=bin.dat')).json()).toMatchObject({
       binary: true,
     });
+    expect((await get('/files/content?path=bin.dat')).json().image).toBeUndefined();
+    const png = Buffer.concat([
+      Buffer.from('\x89PNG\r\n\x1a\n', 'binary'),
+      Buffer.alloc(2_000_000),
+    ]);
+    writeFileSync(path.join(workspace, 'shot.PNG'), png);
+    const image = (await get('/files/content?path=shot.PNG')).json();
+    expect(image).toMatchObject({ binary: true, image: { mimeType: 'image/png' } });
+    expect(Buffer.from(image.image.dataBase64, 'base64').equals(png)).toBe(true);
+    writeFileSync(path.join(workspace, 'icon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    expect((await get('/files/content?path=icon.svg')).json()).toMatchObject({
+      binary: false,
+      content: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+      image: { mimeType: 'image/svg+xml' },
+    });
+    writeFileSync(path.join(workspace, 'huge.jpg'), Buffer.alloc(9 * 1_048_576));
+    const huge = (await get('/files/content?path=huge.jpg')).json();
+    expect(huge).toMatchObject({ imageTooLarge: true, truncated: true });
+    expect(huge.image).toBeUndefined();
 
     expect((await get('/files/content?path=leak')).statusCode).toBe(403);
     expect((await get('/files/content?path=../secret.txt')).statusCode).toBe(403);

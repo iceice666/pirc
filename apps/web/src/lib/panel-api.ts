@@ -63,6 +63,10 @@ export interface FileContent {
   binary: boolean;
   truncated: boolean;
   content?: string;
+  /** The whole file, for images (by extension) up to the node's inline limit. */
+  image?: { mimeType: string; dataBase64: string };
+  /** An image over that limit: not previewed. */
+  imageTooLarge?: boolean;
 }
 export interface Meter {
   value: number;
