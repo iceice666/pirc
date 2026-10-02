@@ -154,16 +154,26 @@ memory_records(node_id, ledger_key, id, content, relevance, recorded_at, git_jso
 
 # Part 2: roadmap
 
-Ordered by value against cost. Items 1–6 are planned; 7 is a decision to take; 8 waits for evidence from use. Each item needs the user's go-ahead before implementation.
+Ordered by value against cost. Item 1 is implemented (awaiting acceptance); items 2–6 are planned; 7 is a decision to take; 8 waits for evidence from use. Each item needs the user's go-ahead before implementation.
 
 ## 1. Approve USER proposals in the chat
 
-Today `memory_propose_user` returns `pending` and the user must open Settings → Memory. The proposal should appear in the chat where it was made, as delegation confirmations do.
+`memory_propose_user` now creates an Approve / Reject card in its originating chat. Settings → Memory remains another place to decide. Implementation is ready for acceptance.
 
 - When a proposal is created from a chat, the daemon publishes a `confirm` interaction (Approve / Reject) in that chat, showing the action, the proposed text, the current text for a replace, and the quote. The answer route applies the existing approve/reject on the daemon after the same lease and owner checks.
 - The proposal stays in `memory_proposals`, which is the source of truth; the interaction is a view of it, so a node disconnect or gateway restart does not cancel a pending proposal (the lesson from delegations). Answering in Settings resolves the chat interaction and vice versa.
 - The assistant is told the result through the next run's context, not through a push: nothing in the proposal flow should start a turn.
 - Web: the confirmation renders multi-line text already; add labels. No new routes.
+
+### Source-chat deletion (user-approved extension)
+
+The web chat list and project page offer **Delete chat**. The same confirmation warns that deleting the chat also forgets the USER and MEMORY entries it originally created and deletes its proposals. Settling a chat still only archives it.
+
+- Creation provenance is stored separately from revision sources and backfilled from the original `add` log. Editing another chat's entry or deduplicating an add does not transfer ownership of its origin.
+- `DELETE /api/sessions/:id` checks ownership, requires an online chat node, fences new work durably, stops the runner and closes its browser/terminals, then erases the private transcript/OM and chat working directory. Directory-workspace deletion is outside this item.
+- The gateway forgets every revision of the source entries, removes their contents and histories, retains content hashes against exact re-adds, and deletes source proposals in the same database transaction as session removal. Other chats' entries are preserved. Pending proposals about forgotten entries are also redacted/resolved.
+- Lost acknowledgements can be retried. Deletion intent survives restarts, blocks session writes and late agent events, and a completed DELETE is idempotent. The chat stays listed for retry until cleanup completes.
+- Existing copies in other chats' frozen snapshots/transcripts, external files, backups, and the owner-wide upload store are not retroactively scrubbed. This follows the existing forget boundary; the dialog discloses copies in other chats. Exact-content tombstones cannot prevent paraphrased re-learning.
 
 ## 2. USER in coding sessions
 

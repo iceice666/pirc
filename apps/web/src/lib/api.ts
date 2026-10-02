@@ -322,6 +322,8 @@ export const api = {
         })
       ).session,
     ),
+  deleteSession: (sessionId: string) =>
+    request<void>(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }),
   /** Rename, pin or settle a session. */
   updateSession: async (sessionId: string, input: SessionUpdateInput) =>
     sessionSummary(
@@ -614,6 +616,11 @@ export function normalizeEvent(raw: any): EventEnvelope {
   const cursor = `${raw.epoch ?? 0}:${raw.sequence ?? 0}`;
   let event: GatewayEvent = { type: 'reset', reason: 'epoch_changed' };
   if (raw.type === 'reset') event = { type: 'reset', reason: raw.reason ?? 'cursor_expired' };
+  else if (raw.type === 'session_deleted') event = { type: 'session_deleted' };
+  else if (raw.type === 'interaction_created' && raw.data?.id?.startsWith('memory:'))
+    event = { type: 'interaction_updated', interaction: interaction(raw.data) };
+  else if (raw.type === 'interaction_answered' && raw.data?.interactionId?.startsWith('memory:'))
+    event = { type: 'interaction_removed', interactionId: raw.data.interactionId };
   else if (raw.type === 'pi_event') event = piEvent(raw.data ?? {}, raw.timestamp);
   else if (raw.type === 'notification')
     event =

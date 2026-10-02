@@ -114,3 +114,35 @@ it("lets the user pick a delegation's model and thinking level before approving"
     thinking: null,
   });
 });
+
+it('shows the memory proposal and exact quote with Approve / Reject, including control locking', () => {
+  target = document.createElement('div');
+  document.body.append(target);
+  const onanswer = vi.fn();
+  component = mount(InteractionCard, {
+    target,
+    props: {
+      interaction: {
+        id: 'memory:p1:0',
+        runnerEpoch: '0',
+        kind: 'confirm',
+        status: 'pending',
+        title: 'Add USER memory?',
+        description:
+          'Proposed memory:\nPrefers tea.\n\nYour words:\n“Please remember I prefer tea”',
+        confirmLabel: 'Approve',
+        cancelLabel: 'Reject',
+      },
+      disabled: true,
+      onanswer,
+    },
+  });
+  flushSync();
+  expect(target.textContent).toContain('Please remember I prefer tea');
+  expect(target.querySelector('.confirm-copy')).toBeNull();
+  const buttons = [...target.querySelectorAll('button')];
+  expect(buttons.map((b) => b.textContent?.trim())).toEqual(['Reject', 'Approve']);
+  expect(buttons.every((b) => b.disabled)).toBe(true);
+  buttons[1]!.click();
+  expect(onanswer).not.toHaveBeenCalled();
+});

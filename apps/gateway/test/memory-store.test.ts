@@ -273,3 +273,63 @@ describe('forgetting and restoring', () => {
     expect(failure(() => store.restore(ME, removed.id))).toBe('memory_full');
   });
 });
+
+describe('deleting the source chat', () => {
+  it('forgets USER and all note revisions by their original creator, preserving other chats and owners', () => {
+    const created = note('Originally here');
+    store.writeNote(
+      ME,
+      { action: 'replace', id: created.id, baseRevision: 1, content: 'Edited elsewhere' },
+      { ...fromChat, sources: { sessionId: 's2' } },
+    );
+    const elsewhere = store.writeNote(
+      ME,
+      { action: 'add', content: 'Originally elsewhere' },
+      { ...fromChat, sources: { sessionId: 's2' } },
+    ).entry;
+    store.writeNote(
+      ME,
+      { action: 'replace', id: elsewhere.id, baseRevision: 1, content: 'Edited here' },
+      fromChat,
+    );
+    // A deduplicated add must not steal another chat's creation provenance.
+    store.writeNote(ME, { action: 'add', content: 'Edited here' }, fromChat);
+    const user = store.approve(ME, propose('Prefers tea').proposal.id).entry;
+    const pending = propose('Prefers coffee').proposal;
+    const other = note('Other owner', OTHER);
+    store.forgetSession(ME, 's1');
+    expect(store.entry(ME, created.id)).toMatchObject({ status: 'forgotten', content: '' });
+    expect(store.entry(ME, user.id)).toMatchObject({ status: 'forgotten', content: '' });
+    expect(store.history(ME, created.id).every((v) => v.content === null)).toBe(true);
+    expect(store.entry(ME, elsewhere.id)).toMatchObject({
+      status: 'active',
+      content: 'Edited here',
+    });
+    expect(store.entry(OTHER, other.id).status).toBe('active');
+    expect(failure(() => store.proposal(ME, pending.id))).toBe('not_found');
+    for (const content of ['Originally here', 'Edited elsewhere'])
+      expect(failure(() => note(content))).toBe('forgotten');
+    expect(failure(() => store.restore(ME, user.id))).toBe('forgotten');
+    store.forgetSession(ME, 's1'); // Safe to retry after a lost acknowledgement.
+  });
+
+  it('backfills creation provenance from the add log, not the latest revision', () => {
+    const first = note('Created in s1');
+    store.writeNote(
+      ME,
+      { action: 'replace', id: first.id, baseRevision: 1, content: 'Updated in s2' },
+      { ...fromChat, sources: { sessionId: 's2' } },
+    );
+    const filename = db.raw.filename;
+    const version = (db.raw.query('PRAGMA user_version').get() as { user_version: number })
+      .user_version;
+    db.raw.exec(
+      `DROP INDEX memory_entries_creator; ALTER TABLE memory_entries DROP COLUMN created_by_session; DROP TABLE session_deletions; PRAGMA user_version=${version - 1}`,
+    );
+    db.close();
+    db = new GatewayDatabase(filename);
+    store = new MemoryStore(db.raw, { user: 60, note: 80 });
+    store.forgetSession(ME, 's1');
+    expect(store.entry(ME, first.id).status).toBe('forgotten');
+  });
+});

@@ -231,6 +231,15 @@ export class TerminalManager {
       }
   }
 
+  /** Deletion waits for shells to exit before removing their working files. */
+  async disposeSession(sessionId: string): Promise<void> {
+    const entries = [...this.terminals.values()].filter(
+      (entry) => entry.info.sessionId === sessionId,
+    );
+    this.closeSession(sessionId);
+    await Promise.all(entries.map((entry) => entry.proc.exited));
+  }
+
   private kill(entry: Entry): void {
     for (const listener of entry.listeners) listener({ type: 'exit', exitCode: null });
     entry.listeners.clear();

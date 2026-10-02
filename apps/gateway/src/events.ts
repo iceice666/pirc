@@ -14,6 +14,10 @@ export class EventHub {
   private readonly global = new Set<EventListener>();
   constructor(private readonly capacity: number) {}
 
+  forget(sessionId: string): void {
+    this.streams.delete(sessionId);
+  }
+
   /** Every event of every session (a node forwards them all to the daemon). */
   subscribeAll(listener: EventListener): () => void {
     this.global.add(listener);

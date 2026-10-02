@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    Trash2,
     Archive,
     ArchiveRestore,
     Brain,
@@ -22,6 +23,7 @@
     SquarePen,
     X,
   } from '@lucide/svelte';
+  import DeleteChatDialog from './dialogs/DeleteChatDialog.svelte';
   import { tick } from 'svelte';
   import { app, type InboxItem } from '../app.svelte';
   import { chatNodeIds, isChatWorkspace, topLevelChats } from '../chats';
@@ -91,6 +93,7 @@
   const mode = $derived(chats ? app.mode : 'work');
 
   let query = $state('');
+  let deletingChat: SessionSummary | undefined = $state();
   let renamingId: string | undefined = $state();
   let renameValue = $state('');
   let renameInput: HTMLInputElement | undefined = $state();
@@ -509,6 +512,7 @@
   {@const workspace = workspaceById.get(session.workspaceId)}
   <div
     class="session-item"
+    style:--action-count={isChatWorkspace(workspace) ? 4 : 3}
     class:active={session.id === activeSessionId}
     class:settled={session.settled}
     class:unread={session.unread}
@@ -606,6 +610,14 @@
               size={14}
             />{/if}</button
         >
+        {#if isChatWorkspace(workspaceById.get(session.workspaceId))}
+          <button
+            type="button"
+            aria-label="Delete {session.name}"
+            title="Delete chat"
+            onclick={() => (deletingChat = session)}><Trash2 size={14} /></button
+          >
+        {/if}
         <button
           type="button"
           aria-label="Rename {session.name}"
@@ -616,6 +628,8 @@
     {/if}
   </div>
 {/snippet}
+
+<DeleteChatDialog bind:session={deletingChat} />
 
 <style>
   /* ───────────── Left sidebar ───────────── */
@@ -986,7 +1000,7 @@
     white-space: nowrap;
     text-overflow: ellipsis;
   }
-  /* Row actions: pin, settle, rename. Shown on hover or keyboard focus; the
+  /* Row actions: pin, settle, delete (chats), rename. Shown on hover or keyboard focus; the
   name makes room so it is never covered. */
   .session-actions {
     position: absolute;
@@ -1020,7 +1034,7 @@
   }
   .session-item:hover .session-card,
   .session-item:focus-within .session-card {
-    padding-right: 88px;
+    padding-right: calc(var(--action-count, 3) * 26px + 10px);
   }
   .session-item:hover .session-meta,
   .session-item:focus-within .session-meta {
@@ -1037,7 +1051,7 @@
     }
     .session-item.active .session-card,
     .session-item.revealed .session-card {
-      padding-right: 88px;
+      padding-right: calc(var(--action-count, 3) * 26px + 10px);
     }
     .session-item.active .session-meta,
     .session-item.revealed .session-meta {
@@ -1069,7 +1083,7 @@
   @media (hover: none) and (max-width: 650px) {
     .session-item.active .session-card,
     .session-item.revealed .session-card {
-      padding-right: 112px;
+      padding-right: calc(var(--action-count, 3) * 34px + 10px);
     }
   }
   .session-rename {
@@ -1328,7 +1342,7 @@
     }
     .session-item:hover .session-card,
     .session-item:focus-within .session-card {
-      padding-right: 112px;
+      padding-right: calc(var(--action-count, 3) * 34px + 10px);
     }
     .pill-button {
       height: 32px;

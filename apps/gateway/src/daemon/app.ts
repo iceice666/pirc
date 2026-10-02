@@ -25,6 +25,7 @@ import { authHook, validateRequest } from './auth.js';
 import { DeviceTokens, registerDeviceRoutes } from './devices.js';
 import { runAgentOp } from './agent-ops.js';
 import { Delegations } from './delegations.js';
+import { MemoryInteractions } from './memory-interactions.js';
 import { MemoryStore } from './memory.js';
 import { MemoryRecords } from './memory-records.js';
 import { registerMemoryRoutes } from './memory-routes.js';
@@ -237,7 +238,9 @@ export async function buildDaemonApp(
   };
   /** Like directory changes, but per user and opted into with `memory=1`. */
   const memoryListeners = new Map<string, Set<() => void>>();
+  const memoryInteractions = new MemoryInteractions(db, memory, events);
   const memoryChanged = (user: string) => {
+    memoryInteractions.changed(user);
     for (const listener of memoryListeners.get(user) ?? []) listener();
   };
   const push = new Push({
@@ -702,6 +705,36 @@ export async function buildDaemonApp(
     return reply.status(201).send({ session: publicSession(session) });
   });
 
+  app.delete('/api/sessions/:id', async (request, reply) => {
+    const { id: sessionId } = parse(sessionParams, request.params);
+    const user = request.identity!.user;
+    const deletion = db.sessionDeletion(sessionId);
+    if (deletion && deletion.owner_user !== user)
+      throw new ApiError(403, 'forbidden', 'Chat belongs to another user');
+    if (deletion?.status === 'deleted') return reply.status(204).send();
+    const session = db.claimSession(sessionId, user, true);
+    if (db.getWorkspace(session.workspaceId).kind !== 'chat')
+      throw new ApiError(400, 'invalid_input', 'Only chats can be deleted');
+    if (!session.nodeId || !session.piSessionId || !nodes.get(session.nodeId))
+      throw new ApiError(503, 'node_offline', 'Connect the chat node before deleting this chat');
+    // Persist intent before the remote call: delayed agent operations cannot add memory.
+    db.beginSessionDeletion(sessionId, user);
+    const response = await relay(session.nodeId, request, {
+      method: 'DELETE',
+      url: nodeUrl({ piSessionId: session.piSessionId }),
+    });
+    if (response.status >= 400) return reply.status(response.status).send(response.body);
+    db.raw.transaction(() => {
+      memory.forgetSession(user, sessionId);
+      db.finishSessionDeletion(sessionId);
+    })();
+    memoryChanged(user);
+    events.publish(sessionId, session.runnerEpoch, 'session_deleted', { sessionId });
+    events.forget(sessionId);
+    sessionsChanged(user);
+    return reply.status(204).send();
+  });
+
   app.patch('/api/sessions/:id', async (request, reply) => {
     const session = claim(request);
     const { name, pinned, settled } = parse(updateSessionBody, request.body);
@@ -741,6 +774,7 @@ export async function buildDaemonApp(
         ...(Array.isArray(remote.interactions) ? remote.interactions : []),
         ...delegations.pendingInteractions(session.id),
         ...schedules.pendingInteractions(session.id),
+        ...memoryInteractions.pendingInteractions(session.id, request.identity!.user),
       ],
       watermark: events.watermark(session.id, session.runnerEpoch),
     };
@@ -843,6 +877,16 @@ export async function buildDaemonApp(
     const body = parse(answerBody, request.body);
     db.validateLease(session.id, body.clientId, body.generation);
     db.validateLeaseUser(session.id, request.identity!.user);
+    const memoryAnswer = memoryInteractions.answer(
+      session.id,
+      interactionId,
+      request.identity!.user,
+      (body as { answer?: unknown }).answer,
+    );
+    if (memoryAnswer) {
+      memoryChanged(request.identity!.user);
+      return memoryAnswer;
+    }
     // A delegation's confirmation is answered here; the node never saw it.
     const delegation = delegations.answer(
       session.id,

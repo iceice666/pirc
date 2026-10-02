@@ -30,6 +30,7 @@ export function reduceEvent(
   switch (event.type) {
     case 'reset':
       return { ...base, needsSnapshot: true };
+    case 'session_deleted': // The app closes the session and returns to its chat list.
     case 'noop':
     case 'panel_changed':
       return base;

@@ -9,7 +9,7 @@ import type { InferenceEvent, InferenceRequest } from './inference-wire.js';
 import type { WorkspaceKind } from './types.js';
 import type { RoleBrief } from './agent/roles.js';
 
-export const NODE_PROTOCOL_VERSION = 8;
+export const NODE_PROTOCOL_VERSION = 9;
 
 /** One WebSocket frame on the node link. Uploads (base64) must fit, see MAX_UPLOAD_BYTES. */
 export const NODE_FRAME_MAX_BYTES = 16_777_216;
@@ -24,7 +24,7 @@ export const NODE_USER_HEADER = 'x-pirc-user';
 
 /** An HTTP request the daemon replays on a node's local router. */
 export interface NodeHttpRequest {
-  method: 'GET' | 'POST' | 'PATCH' | 'PUT';
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   /** Path and query on the node, already rewritten to node-local IDs. */
   url: string;
   /** Authenticated browser user the daemon acts for. */

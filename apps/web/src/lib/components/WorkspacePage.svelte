@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    Trash2,
     Archive,
     ArchiveRestore,
     ChevronDown,
@@ -15,6 +16,7 @@
     Search,
     SquarePen,
   } from '@lucide/svelte';
+  import DeleteChatDialog from './dialogs/DeleteChatDialog.svelte';
   import { tick } from 'svelte';
   import { rovingFocus } from '../a11y';
   import { app } from '../app.svelte';
@@ -96,6 +98,7 @@
   const unread = $derived(all.filter((session) => session.unread).length);
   const leaseHolder = $derived(all.find((session) => session.writeLease));
 
+  let deletingChat: SessionSummary | undefined = $state();
   let renamingId: string | undefined = $state();
   let renameValue = $state('');
   let renameInput: HTMLInputElement | undefined = $state();
@@ -293,6 +296,7 @@
 {#snippet row(session: SessionSummary, nested: boolean)}
   <li
     class="session-row"
+    style:--action-count={isChatWorkspace(workspace) ? 4 : 3}
     class:nested
     class:settled={session.settled}
     class:unread={session.unread}
@@ -372,6 +376,14 @@
               size={14}
             />{/if}</button
         >
+        {#if isChatWorkspace(workspace)}
+          <button
+            type="button"
+            aria-label="Delete {session.name}"
+            title="Delete chat"
+            onclick={() => (deletingChat = session)}><Trash2 size={14} /></button
+          >
+        {/if}
         <button
           type="button"
           aria-label="Rename {session.name}"
@@ -382,6 +394,8 @@
     {/if}
   </li>
 {/snippet}
+
+<DeleteChatDialog bind:session={deletingChat} />
 
 <style>
   .workspace-page {
@@ -544,7 +558,7 @@
   }
   .session-row:hover .row-main,
   .session-row:focus-within .row-main {
-    padding-right: 100px;
+    padding-right: calc(var(--action-count, 3) * 30px + 10px);
   }
   .session-row:hover .row-main small,
   .session-row:focus-within .row-main small {
@@ -737,7 +751,7 @@
       pointer-events: auto;
     }
     .row-main {
-      padding-right: 100px;
+      padding-right: calc(var(--action-count, 3) * 30px + 10px);
     }
     .row-main small {
       display: none;
