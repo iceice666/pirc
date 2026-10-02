@@ -31,9 +31,9 @@ async function session(overrides: Partial<NodeConfig>, agentConfig: Record<strin
   const configDir = mkdtempSync(path.join(tmpdir(), 'pirc-sbx-config-'));
   writeFileSync(path.join(configDir, 'config.json'), JSON.stringify(agentConfig));
   setEnv('PIRC_CONFIG_DIR', configDir);
-  const log = path.join(mkdtempSync(path.join(tmpdir(), 'pirc-sbx-log-')), 'srt.log');
-  setEnv('FAKE_SRT_LOG', log);
   const config = testConfig(overrides);
+  // fixtures/fake-srt.sh writes it next to the settings.
+  const log = path.join(config.stateDir, 'sandbox', 'fake-srt.log');
   const { app, services } = await buildNodeApp(config);
   cleanup.push(() => app.close() as Promise<void>);
   const sessionId = (
@@ -105,38 +105,28 @@ async function session(overrides: Partial<NodeConfig>, agentConfig: Record<strin
   return { config, log, events, prompt, snapshot, lastText, answer, reply };
 }
 
-it('runs agents unconfined with a visible warning when there is no sandbox', async () => {
-  const s = await session({ sandbox: { enabled: true } }); // no srt anywhere
-  expect(await s.reply('env PIRC_SANDBOX', 'env:')).toBe('env:PIRC_SANDBOX=off');
-  const ready = s.events.find((event) => event.type === 'runner_ready');
-  expect(ready?.payload.sandbox.active).toBe(false);
+it('starts no agent when the sandbox is unavailable', async () => {
+  const s = await session({ sandbox: { srt: path.join(tmpdir(), 'pirc-no-such-srt') } });
+  const response = await s.prompt('env PIRC_SANDBOX');
+  expect(response.statusCode).toBe(503);
+  expect(response.json().error.message).toContain('must run in the sandbox');
+  expect(s.events.some((event) => event.type === 'runner_ready')).toBe(false);
+  expect((await s.snapshot()).sandbox).toBeNull();
+});
+
+it('ignores the removed sandbox.enabled switch, with a warning', async () => {
+  const s = await session({ sandbox: { srt: fakeSrt } }, { sandbox: { enabled: false } });
+  expect(await s.reply('env PIRC_SANDBOX', 'env:')).toBe('env:PIRC_SANDBOX=srt');
   const warning = s.events.find(
-    (event) => event.type === 'notification' && /not sandboxed/.test(event.payload.message),
+    (event) => event.type === 'notification' && /sandbox\.enabled/.test(event.payload.message),
   );
   expect(warning?.payload.notifyType).toBe('warning');
-  expect(warning?.payload.message).toContain('srt');
-  // Still there for a client that connects later, and as a lasting status.
-  const later = await s.snapshot();
-  expect(later.notifications.some((item: any) => /not sandboxed/.test(item.message))).toBe(true);
-  expect(later.sandbox.active).toBe(false);
-  expect(later.sandbox.reason).toContain('srt');
-  // The file tools still get the node's read rules.
-  const policy = JSON.parse(
-    (await s.reply('env PIRC_SANDBOX_POLICY', 'env:')).replace('env:PIRC_SANDBOX_POLICY=', ''),
-  );
-  expect(
-    policy.denyRead.some((item: string) => s.config.stateDir.endsWith(path.basename(item))),
-  ).toBe(true);
-  // Nothing to widen or escape.
-  expect(await s.reply('sandbox network {"domains":["api.example.com"]}', 'sandbox:')).toContain(
-    '"unrestricted":true',
-  );
-  expect(await s.reply('sandbox exec {"command":"true"}', 'sandbox:')).toContain('not_sandboxed');
+  expect((await s.snapshot()).sandbox).toEqual({ active: true });
 });
 
 it('starts agents under srt with a per-session policy', async () => {
   const s = await session(
-    { sandbox: { enabled: true, srt: fakeSrt } },
+    { sandbox: { srt: fakeSrt } },
     { sandbox: { network: { allowedDomains: ['api.internal.test'] } } },
   );
   expect(await s.reply('env PIRC_SANDBOX', 'env:')).toBe('env:PIRC_SANDBOX=srt');
@@ -161,11 +151,17 @@ it('starts agents under srt with a per-session policy', async () => {
   expect(settings.filesystem.denyWrite.map(real)).toContain(
     real(path.join(state, 'workspace', '.pirc')),
   );
-  expect(s.events.some((event) => event.type === 'notification')).toBe(false);
+  // No complaint about the settings (Linux keeps test state under /tmp, which
+  // the sandbox may write: the node rightly warns about that there).
+  expect(
+    s.events.some(
+      (event) => event.type === 'notification' && !/pirc's state lies/.test(event.payload.message),
+    ),
+  ).toBe(false);
 });
 
 it('asks the human before widening the network or running outside the sandbox', async () => {
-  const s = await session({ sandbox: { enabled: true, srt: fakeSrt } });
+  const s = await session({ sandbox: { srt: fakeSrt } });
   // Network: approved domains reach srt through the control channel.
   await s.prompt('sandbox network {"domains":["api.example.com"],"reason":"fetch the schema"}');
   const asked = await s.answer(true);
@@ -217,7 +213,7 @@ it('asks the human before widening the network or running outside the sandbox', 
 });
 
 it("ignores the agent's attempts to open or cancel the node's dialogs", async () => {
-  const s = await session({ sandbox: { enabled: true, srt: fakeSrt } });
+  const s = await session({ sandbox: { srt: fakeSrt } });
   expect(await s.reply('forge', 'forged')).toBe('forged');
   expect((await s.snapshot()).interactions).toEqual([]);
 });

@@ -107,9 +107,8 @@ let
     PIRC_CONFIG_DIR = "${agentConfigDir}";
     PIRC_TERMINALS = lib.boolToString cfg.terminals;
     PIRC_BROWSER = lib.boolToString cfg.browser.enable;
-  }
-  // lib.optionalAttrs (!cfg.sandbox.enable) {
-    PIRC_SANDBOX = "off";
+    # The agents' browser must not reach the gateway under its public names either.
+    PIRC_BROWSER_BLOCK_HOSTS = csv (map (h: lib.head (lib.splitString ":" h)) cfg.allowedHosts);
   }
   // lib.optionalAttrs cfg.browser.enable {
     PIRC_BROWSER_EXECUTABLE = lib.getExe cfg.browser.package;
@@ -260,6 +259,15 @@ in
       "pirc"
       "runnerLimit"
     ] "Runners are no longer limited; concurrent writes are serialized by the node's write broker.")
+    (mkRemovedOptionModule
+      [
+        "services"
+        "pirc"
+        "sandbox"
+        "enable"
+      ]
+      "Agents always run in the OS sandbox; a node where it cannot work starts no agents. Tune it with services.pirc.agentConfig.sandbox."
+    )
   ];
 
   options.services.pirc = {
@@ -272,20 +280,6 @@ in
         Account (and group) the gateway runs as, apart from the node's
         `user`, so agents cannot read the gateway's keys and logins. Files
         named by apiKeyFile must be readable by it.
-      '';
-    };
-
-    sandbox.enable = mkOption {
-      type = types.bool;
-      default = true;
-      description = ''
-        Run each of the local node's agents in an OS sandbox (srt:
-        bubblewrap, a seccomp filter and a filtering network proxy; see
-        plans/sandbox.md). Reads are open except credentials and pirc's
-        state, writes stay in the workspace, network reaches allowlisted
-        hosts, and the agent asks the user for anything else. Tune it with
-        agentConfig.sandbox. Off, or where the kernel refuses unprivileged
-        user namespaces, agents run unconfined and every session says so.
       '';
     };
 

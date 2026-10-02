@@ -14,7 +14,7 @@ import type { AgentGateway } from './agent-gateway.js';
 import type { BrowserManager } from './browser.js';
 import { projectInstructionsPath, readProjectInstructions, sessionRoot } from './chat.js';
 import { DOMAIN_PATTERN, isInside, realResolve } from '../sandbox-policy.js';
-import { NodeSandbox, srtSettings, type PreparedSandbox } from './sandbox.js';
+import { NodeSandbox, type PreparedSandbox } from './sandbox.js';
 import { withoutSecrets } from './secrets.js';
 import type { WriteBroker } from './write-broker.js';
 import { emptyReducedState, reducePiEvent, type ReducedSessionState } from './reducer.js';
@@ -169,13 +169,12 @@ class PiRunner {
       session.privateSessionPath,
     ];
     if (session.piSessionId) args.push('--continue');
-    const sandboxed = sandbox.status.active;
     this.child = spawn(sandbox.command, [...sandbox.args, ...args.slice(config.agentArgs.length)], {
       cwd: sessionRoot(workspace, session.id),
       // fd 3: srt's control channel.
-      stdio: sandboxed ? ['pipe', 'pipe', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
       // Its own process group, so stopping srt also stops what it sandboxes.
-      detached: sandboxed,
+      detached: true,
       env: {
         // The node token must not reach the agent: its tools and shells run whatever the model asks.
         ...withoutSecrets(process.env),
@@ -198,12 +197,12 @@ class PiRunner {
         // This node answers browser_request (node/browser.ts).
         PIRC_BROWSER: browser?.enabled ? '1' : '0',
         // This node answers sandbox_request; the file tools mirror the policy.
-        PIRC_SANDBOX: sandboxed ? 'srt' : 'off',
+        PIRC_SANDBOX: 'srt',
         PIRC_SANDBOX_POLICY: JSON.stringify(sandbox.policy.paths),
         ...sandbox.env,
       },
     }) as AgentChild;
-    this.control = sandboxed ? ((this.child.stdio[3] as Writable | null) ?? undefined) : undefined;
+    this.control = (this.child.stdio[3] as Writable | null) ?? undefined;
     this.control?.on('error', () => undefined);
     // Public catalog + node-local inference transport; no provider credentials.
     this.child.stdin.write(configureLine(models.current, readProjectInstructions(workspace)));
@@ -230,11 +229,7 @@ class PiRunner {
     this.child.once('error', (error) => this.fail(error));
     this.child.once('exit', (code, signal) => this.exit(code, signal));
     db.setRunnerState(session.id, 'ready');
-    this.events.publish(session.id, this.epoch, 'runner_ready', {
-      sandbox: sandbox.status.active
-        ? { active: true }
-        : { active: false, reason: sandbox.status.reason },
-    });
+    this.events.publish(session.id, this.epoch, 'runner_ready', { sandbox: { active: true } });
     // In the timeline, and in the snapshot for clients that connect later.
     for (const warning of sandbox.warnings) {
       const notice = {
@@ -264,10 +259,9 @@ class PiRunner {
     return !this.closed;
   }
 
-  /** For the snapshot: sandboxed, or why not. */
+  /** For the snapshot: a runner exists only inside the sandbox. */
   get sandboxStatus(): { active: boolean; reason?: string } {
-    const status = this.sandbox.status;
-    return status.active ? { active: true } : { active: false, reason: status.reason };
+    return { active: true };
   }
 
   private handleValue(value: unknown): void {
@@ -633,8 +627,7 @@ class PiRunner {
         return fail('invalid_input', 'Name one to ten domains');
       const bad = domains.find((domain) => !DOMAIN_PATTERN.test(domain as string));
       if (bad) return fail('invalid_input', `Not a domain: ${bad}`);
-      if (!this.sandbox.status.active || !this.control)
-        return reply({ ok: true, result: { granted: domains, unrestricted: true } });
+      if (!this.control) return fail('sandbox_error', "The sandbox's control channel is closed");
       const allowed = new Set([
         ...this.sandbox.policy.network.allowedDomains,
         ...this.approvedDomains,
@@ -653,16 +646,12 @@ class PiRunner {
         );
         if (!confirmed) return reply({ ok: true, result: { granted: [], denied: missing } });
         for (const domain of missing) this.approvedDomains.add(domain);
-        this.control!.write(
-          `${JSON.stringify(srtSettings(this.sandbox.policy, this.approvedDomains))}\n`,
-        );
+        this.control!.write(`${JSON.stringify(this.sandbox.settings(this.approvedDomains))}\n`);
         reply({ ok: true, result: { granted: domains } });
       });
     }
 
     if (message.op === 'exec') {
-      if (!this.sandbox.status.active)
-        return fail('not_sandboxed', 'This agent is not sandboxed; run the command with bash');
       const command = typeof args.command === 'string' ? args.command : '';
       if (!command.trim() || command.length > 20_000)
         return fail(
@@ -709,9 +698,9 @@ class PiRunner {
     this.currentRunId = runId;
   }
 
-  /** Signal the agent (and, when sandboxed, srt with everything under it). */
+  /** Signal srt with the agent and everything under it. */
   private kill(signal: NodeJS.Signals): void {
-    if (this.sandbox.status.active && this.child.pid) {
+    if (this.child.pid) {
       try {
         process.kill(-this.child.pid, signal);
         return;

@@ -11,7 +11,7 @@
  *   and code hosts, the node's configured domains, and any the human
  *   approves while a session runs.
  */
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
@@ -89,6 +89,40 @@ export const SENSITIVE_HOME_PATHS = [
   'Library/Application Support/Arc',
 ];
 
+/**
+ * Linux: sockets that hand out the host (container engines, the system and
+ * session buses, systemd). srt cannot filter Unix sockets by path there (its
+ * seccomp filter is all or nothing, and agents need the node's inference
+ * socket), so these are hidden from the sandbox instead. `$UID` is the node
+ * account's. A node account in the `docker` group is still a host escape for
+ * anything else that reaches the engine: do not give it that group.
+ */
+export const LINUX_HOST_SOCKETS = [
+  '/var/run/docker.sock',
+  '/run/docker.sock',
+  '/run/docker',
+  '/run/containerd',
+  '/run/podman',
+  '/run/crio',
+  '/var/run/libvirt',
+  '/run/libvirt',
+  '/run/lxd',
+  '/var/snap/lxd/common/lxd',
+  '/run/incus',
+  '/var/lib/incus/unix.socket',
+  '/run/dbus/system_bus_socket',
+  '/var/run/dbus/system_bus_socket',
+  '/run/systemd/private',
+  '/run/systemd/io.systemd.Machine',
+  '/run/systemd/userdb',
+  '/run/user/$UID/docker.sock',
+  '/run/user/$UID/podman',
+  '/run/user/$UID/bus',
+  '/run/user/$UID/systemd',
+  '/run/user/$UID/gnupg',
+  '/run/user/$UID/keyring',
+];
+
 /** Build and package caches under $HOME that sandboxed builds may write. */
 export const CACHE_HOME_PATHS = [
   '.cache',
@@ -114,8 +148,6 @@ const paths = z.array(z.string().min(1)).default([]);
 /** `sandbox` in the node's agent config.json (never the project's). */
 export const sandboxConfigSchema = z
   .object({
-    /** Off runs agents unconfined, with a warning in every session. */
-    enabled: z.boolean().default(true),
     network: z
       .object({
         /** Include DEFAULT_ALLOWED_DOMAINS. */
@@ -235,6 +267,14 @@ export interface SessionPolicyInput {
   tmpDirs?: string[];
   /** Files pirc keeps next to the session that no agent may write (a project's instructions). */
   protectedPaths?: string[];
+  /** Directories inside `privateDirs` the session may read but never write (srt's helpers). */
+  readOnlyDirs?: string[];
+  /** Defaults to the running process's; Linux adds LINUX_HOST_SOCKETS to `denyRead`. */
+  platform?: NodeJS.Platform;
+  /** For LINUX_HOST_SOCKETS' `$UID`; defaults to the running process's. */
+  uid?: number;
+  /** For the agent's ssh-agent socket; defaults to the running process's. */
+  sshAuthSock?: string | undefined;
 }
 
 export interface SessionPolicy {
@@ -246,6 +286,26 @@ export interface SessionPolicy {
     allowUnixSockets: string[];
   };
   allowGitConfig: boolean;
+}
+
+/**
+ * `denyWrite` entries that close `dir` except `keep` (paths inside it): every
+ * entry on the way to a kept path that does not lead to one. srt has no
+ * "deny except", and its `denyWrite` always wins. Entries created after this
+ * runs are not covered, which is why a workspace may not contain the node's
+ * state in the first place (node/app.ts).
+ */
+export function denyWriteAround(dir: string, keep: string[]): string[] {
+  const inner = keep.filter((item) => isInside(item, dir));
+  if (inner.includes(dir)) return [];
+  if (!inner.length) return [dir];
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  return entries.flatMap((name) => denyWriteAround(path.join(dir, name), inner));
 }
 
 /** The sandbox for one session of a node. */
@@ -261,11 +321,38 @@ export function sessionPolicy(input: SessionPolicyInput): SessionPolicy {
     ? realResolve(path.dirname(input.inferenceSocket))
     : undefined;
   const tmpDirs = (input.tmpDirs ?? [os.tmpdir(), '/tmp']).map((item) => realResolve(item));
+  const readOnlyDirs = (input.readOnlyDirs ?? []).map((item) => realResolve(item));
+  const privateDirs = input.privateDirs.map((item) => realResolve(item));
+  const sensitive = existing(
+    SENSITIVE_HOME_PATHS.map((item) => realResolve(path.join(home, item))),
+  );
+  const platform = input.platform ?? process.platform;
+  const uid = String(input.uid ?? process.getuid?.() ?? '');
+  const sshAuthSock = 'sshAuthSock' in input ? input.sshAuthSock : process.env.SSH_AUTH_SOCK;
+  const hostSockets =
+    platform === 'linux'
+      ? existing([
+          ...LINUX_HOST_SOCKETS.map((item) => item.replace('$UID', uid)),
+          ...(sshAuthSock ? [sshAuthSock] : []),
+        ])
+      : [];
   const { filesystem, network } = input.config;
+  const allowWrite = unique([
+    workspace,
+    ...input.allowedPaths.map((item) => realResolve(item)),
+    sessionDir,
+    memoryDir,
+    ...tmpDirs,
+    ...existing(CACHE_HOME_PATHS.map((item) => realResolve(path.join(home, item)))),
+    ...configured(filesystem.allowWrite),
+  ]);
+  // What a session may write inside the node's private dirs: its own state.
+  const ownState = [workspace, sessionDir, memoryDir];
   const paths: PathPolicy = {
     denyRead: unique([
-      ...input.privateDirs.map((item) => realResolve(item)),
-      ...existing(SENSITIVE_HOME_PATHS.map((item) => realResolve(path.join(home, item)))),
+      ...privateDirs,
+      ...sensitive,
+      ...hostSockets,
       ...configured(filesystem.denyRead),
     ]),
     // What the session needs back from inside the private dirs. A chat
@@ -275,22 +362,22 @@ export function sessionPolicy(input: SessionPolicyInput): SessionPolicy {
       sessionDir,
       memoryDir,
       ...(socketDir ? [socketDir] : []),
+      ...readOnlyDirs,
       ...configured(filesystem.allowRead),
     ]),
-    allowWrite: unique([
-      workspace,
-      ...input.allowedPaths.map((item) => realResolve(item)),
-      sessionDir,
-      memoryDir,
-      ...tmpDirs,
-      ...existing(CACHE_HOME_PATHS.map((item) => realResolve(path.join(home, item)))),
-      ...configured(filesystem.allowWrite),
-    ]),
+    allowWrite,
     // The project's agent config; pirc keeps uploads and recordings there
-    // itself, from outside the sandbox.
+    // itself, from outside the sandbox. Credential stores and the node's
+    // private state stay closed even when a writable root contains them
+    // (a workspace holding the state dir, `~` in allowedPaths).
     denyWrite: unique([
       path.join(workspace, '.pirc'),
       ...(input.protectedPaths ?? []).map((item) => realResolve(item)),
+      ...sensitive,
+      ...readOnlyDirs,
+      ...privateDirs
+        .filter((dir) => allowWrite.some((root) => isInside(dir, root)))
+        .flatMap((dir) => denyWriteAround(dir, ownState)),
       ...configured(filesystem.denyWrite),
     ]),
   };

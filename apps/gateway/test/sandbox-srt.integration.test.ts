@@ -1,6 +1,8 @@
 /**
  * A real `pirc-node agent` under the real srt (plans/sandbox.md). Runs only where
- * srt works: set PIRC_TEST_SRT to its path, or have `srt` on PATH.
+ * srt works (not inside another sandbox: macOS sandboxes do not nest): set
+ * PIRC_TEST_SRT to `embedded` for the srt built into pirc (node/srt.ts), or to
+ * the path of an external one.
  * PIRC_TEST_AGENT_COMMAND runs a built binary (e.g. the Nix package's
  * `bin/pirc-node`) as the agent instead of the sources.
  */
@@ -14,7 +16,7 @@ import { testModels, writeAgentConfig } from './agent-harness.js';
 import { startFakeLlm } from './fixtures/fake-llm.js';
 import { nodeHeaders as headers, testConfig, waitFor } from './helpers.js';
 
-const srt = process.env.PIRC_TEST_SRT || Bun.which('srt') || undefined;
+const srt = process.env.PIRC_TEST_SRT || undefined;
 const cleanup: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
@@ -41,7 +43,7 @@ it.skipIf(!srt)(
     const agent = process.env.PIRC_TEST_AGENT_COMMAND
       ? { agentCommand: process.env.PIRC_TEST_AGENT_COMMAND, agentArgs: ['agent'] }
       : defaultAgentCommand({});
-    const config = testConfig({ ...agent, sandbox: { enabled: true, srt } });
+    const config = testConfig({ ...agent, sandbox: srt === 'embedded' ? {} : { srt } });
     writeFileSync(path.join(config.stateDir, 'secret.txt'), 'node secret');
     const { app, services } = await buildNodeApp(config);
     services.models.set(testModels(llm.url));

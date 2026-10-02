@@ -86,7 +86,7 @@ function cliContract(role: ExecutableRole, command: string[]) {
     'chat',
     'node',
     'unknown',
-    ...(role === 'gateway' ? ['agent', 'ptc-worker'] : ['oauth-worker']),
+    ...(role === 'gateway' ? ['agent', 'ptc-worker', 'srt'] : ['oauth-worker']),
   ];
   for (const argument of invalid) {
     it(`rejects ${argument} rather than dispatching another role`, async () => {
@@ -122,6 +122,10 @@ function cliContract(role: ExecutableRole, command: string[]) {
       expect(result.code).toBe(1);
       expect(result.stderr).toContain('--session-dir is required');
       expect(result.stderr).not.toContain('Unknown command:');
+    });
+    it('carries its own srt for the agent sandbox', async () => {
+      const result = await runCli(command, ['srt', '--version']);
+      expect(result).toEqual({ code: 0, stdout: '0.0.78\n', stderr: '' });
     });
     it('accepts the private PTC worker command but requires parent IPC', async () => {
       const result = await runCli(command, ['ptc-worker']);
@@ -276,7 +280,9 @@ describe('role bundle dependency boundaries', () => {
           {
             name: 'record-role-module-graph',
             setup(build) {
-              build.onLoad({ filter: /.*/ }, (args) => {
+              // Not srt's embedded seccomp helpers (`with { type: 'file' }`):
+              // an onLoad hook on those crashes Bun 1.4's bundler.
+              build.onLoad({ filter: /^(?!.*\/vendor\/seccomp\/).*/ }, (args) => {
                 modules.add(args.path.replaceAll('\\', '/'));
                 return undefined;
               });

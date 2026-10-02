@@ -1,9 +1,10 @@
 /**
  * The node side of the agent sandbox (plans/sandbox.md): every agent process
  * runs under srt (Anthropic's sandbox-runtime: Seatbelt on macOS, bubblewrap
- * on Linux) with a per-session policy from sandbox-policy.ts. When srt is
- * missing or cannot sandbox on this host, agents run unconfined and every
- * session shows a warning.
+ * on Linux) with a per-session policy from sandbox-policy.ts. The srt is the
+ * one built into this executable (node/srt.ts) unless PIRC_SANDBOX_SRT names
+ * another. There is no way around it: when srt cannot sandbox on this host,
+ * no agent starts.
  */
 import { spawn } from 'node:child_process';
 import {
@@ -18,17 +19,31 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import type { NodeConfig } from '../config.js';
+import { ApiError } from '../errors.js';
 import { defaultConfigDir, expandHome } from '../models.js';
 import {
+  isInside,
+  realResolve,
   sandboxConfigSchema,
   sessionPolicy,
   type SandboxConfig,
   type SessionPolicy,
 } from '../sandbox-policy.js';
+import { selfCommand } from '../self.js';
+import { embeddedSeccomp } from './srt.js';
 
 export type SandboxStatus =
-  | { active: true; srt: string }
-  | { active: false; reason: string; disabled?: boolean };
+  | {
+      active: true;
+      /** The srt command line: an external binary, or this executable's `srt`. */
+      srt: string[];
+      /** Linux, built-in srt: the seccomp helper it cannot find by itself. */
+      seccompApplyPath?: string | undefined;
+    }
+  | { active: false; reason: string };
+
+/** How long a failed probe stands before the next agent start probes again. */
+const PROBE_RETRY_MS = 30_000;
 
 /** The node's agent config.json, as the agent itself reads it. */
 interface AgentConfigView {
@@ -58,9 +73,19 @@ export function readAgentConfig(env: NodeJS.ProcessEnv = process.env): AgentConf
         .filter((item): item is string => typeof item === 'string')
         .map((item) => path.resolve(configDir, expandHome(item)))
     : [];
-  const parsed = sandboxConfigSchema.safeParse(raw.sandbox);
+  // `enabled` turned the sandbox off before it became mandatory: drop it, and
+  // say so when it asked for that.
+  let sandbox = raw.sandbox;
+  let legacy: string | undefined;
+  if (sandbox && typeof sandbox === 'object' && !Array.isArray(sandbox) && 'enabled' in sandbox) {
+    const { enabled, ...rest } = sandbox as Record<string, unknown>;
+    sandbox = rest;
+    if (enabled === false)
+      legacy = `${file}: "sandbox.enabled" is no longer supported; agents always run sandboxed`;
+  }
+  const parsed = sandboxConfigSchema.safeParse(sandbox);
   return parsed.success
-    ? { configDir, allowedPaths, sandbox: parsed.data }
+    ? { configDir, allowedPaths, sandbox: parsed.data, ...(legacy ? { problem: legacy } : {}) }
     : {
         configDir,
         allowedPaths,
@@ -71,7 +96,11 @@ export function readAgentConfig(env: NodeJS.ProcessEnv = process.env): AgentConf
 }
 
 /** srt settings (its `--settings` / `--control-fd` JSON) for a session policy. */
-export function srtSettings(policy: SessionPolicy, extraDomains: Iterable<string> = []) {
+export function srtSettings(
+  policy: SessionPolicy,
+  extraDomains: Iterable<string> = [],
+  seccompApplyPath?: string,
+) {
   const linux = process.platform === 'linux';
   return {
     network: {
@@ -94,11 +123,16 @@ export function srtSettings(policy: SessionPolicy, extraDomains: Iterable<string
     },
     // background_task tty:true and PTY-driven tools.
     allowPty: true,
+    ...(seccompApplyPath ? { seccomp: { applyPath: seccompApplyPath } } : {}),
   };
 }
 
 /** Run `srt` once to learn whether it can sandbox anything on this host. */
-function probe(srt: string, stateDir: string): Promise<SandboxStatus> {
+function probe(
+  srt: string[],
+  stateDir: string,
+  seccompApplyPath: string | undefined,
+): Promise<SandboxStatus> {
   const dir = path.join(stateDir, 'sandbox');
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const settings = path.join(dir, 'probe.json');
@@ -107,6 +141,7 @@ function probe(srt: string, stateDir: string): Promise<SandboxStatus> {
     JSON.stringify({
       network: { allowedDomains: [], deniedDomains: [] },
       filesystem: { denyRead: [], allowWrite: [], denyWrite: [] },
+      ...(seccompApplyPath ? { seccomp: { applyPath: seccompApplyPath } } : {}),
     }),
     { mode: 0o600 },
   );
@@ -119,9 +154,12 @@ function probe(srt: string, stateDir: string): Promise<SandboxStatus> {
       clearTimeout(timer);
       resolve(status);
     };
-    const child = spawn(srt, ['--settings', settings, '--', '/bin/sh', '-c', 'exit 0'], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const [command, ...prefix] = srt;
+    const child = spawn(
+      command!,
+      [...prefix, '--settings', settings, '--', '/bin/sh', '-c', 'exit 0'],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
       done({ active: false, reason: 'srt did not answer within 30 seconds' });
@@ -133,7 +171,7 @@ function probe(srt: string, stateDir: string): Promise<SandboxStatus> {
     child.once('exit', (code) =>
       done(
         code === 0
-          ? { active: true, srt }
+          ? { active: true, srt, seccompApplyPath }
           : {
               active: false,
               reason: `srt cannot sandbox on this host (exit ${code}): ${output.trim().split('\n').slice(-3).join(' ') || 'no output'}`,
@@ -144,40 +182,55 @@ function probe(srt: string, stateDir: string): Promise<SandboxStatus> {
 }
 
 export interface PreparedSandbox {
-  status: SandboxStatus;
+  status: Extract<SandboxStatus, { active: true }>;
   policy: SessionPolicy;
-  /** srt's settings file for this session, when sandboxed. */
-  settingsFile?: string;
-  /** The command to spawn: srt around the agent, or the agent itself. */
+  /** srt's settings file for this session. */
+  settingsFile: string;
+  /** The command to spawn: srt around the agent. */
   command: string;
   args: string[];
   /** Added to the agent's environment. */
   env: Record<string, string>;
-  /** Human-readable warnings for the session (unconfined, config problems). */
+  /** Human-readable warnings for the session (config problems). */
   warnings: string[];
+  /** The settings with the domains the human approved since, for srt's control fd. */
+  settings(extraDomains: Iterable<string>): ReturnType<typeof srtSettings>;
   cleanup(): void;
 }
 
+/** Where the node keeps the built-in srt's helper binaries; agents may read, never write. */
+export const sandboxBinDir = (stateDir: string) => path.join(stateDir, 'sandbox', 'bin');
+
 export class NodeSandbox {
-  private status?: Promise<SandboxStatus>;
+  private status: Promise<SandboxStatus> | undefined;
+  private failedAt = 0;
 
   constructor(
     private readonly config: NodeConfig,
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {}
 
-  /** Probed once per node process; `PIRC_SANDBOX=off` or `sandbox.enabled: false` skip it. */
+  /**
+   * Whether srt can sandbox on this host. A success holds for the node's
+   * lifetime; a failure is probed again after PROBE_RETRY_MS.
+   */
   check(): Promise<SandboxStatus> {
+    if (this.status && this.failedAt && Date.now() - this.failedAt > PROBE_RETRY_MS)
+      this.status = undefined;
     this.status ??= (async (): Promise<SandboxStatus> => {
-      if (!this.config.sandbox.enabled)
-        return { active: false, disabled: true, reason: 'PIRC_SANDBOX=off on this node' };
-      const srt = this.config.sandbox.srt;
-      if (!srt)
-        return {
-          active: false,
-          reason: 'srt (sandbox-runtime) is not installed on this node; set PIRC_SANDBOX_SRT',
-        };
-      return probe(srt, this.config.stateDir);
+      const external = this.config.sandbox.srt;
+      let status: SandboxStatus;
+      try {
+        status = await probe(
+          external ? [external] : [...selfCommand(), 'srt'],
+          this.config.stateDir,
+          external ? undefined : embeddedSeccomp(sandboxBinDir(this.config.stateDir)),
+        );
+      } catch (error) {
+        status = { active: false, reason: `srt: ${(error as Error).message}` };
+      }
+      this.failedAt = status.active ? 0 : Date.now();
+      return status;
     })();
     return this.status;
   }
@@ -198,19 +251,20 @@ export class NodeSandbox {
     // at 104 bytes.
     const tmp = mkdtempSync(path.join(os.tmpdir(), 'pirc-'));
     if (agentConfig.problem) warnings.push(`Sandbox settings ignored: ${agentConfig.problem}`);
+    const privateDirs = [
+      this.config.stateDir,
+      this.config.sessionsDir,
+      this.config.uploadsDir,
+      path.dirname(this.config.databasePath),
+      this.config.browser.profilesDir,
+      // systemd credentials (the NixOS module hands the node its token there).
+      ...(this.env.CREDENTIALS_DIRECTORY ? [this.env.CREDENTIALS_DIRECTORY] : []),
+    ].map((item) => realResolve(item));
     const policy = sessionPolicy({
       config: agentConfig.sandbox,
       configDir: agentConfig.configDir,
       home: os.homedir(),
-      privateDirs: [
-        this.config.stateDir,
-        this.config.sessionsDir,
-        this.config.uploadsDir,
-        path.dirname(this.config.databasePath),
-        this.config.browser.profilesDir,
-        // systemd credentials (the NixOS module hands the node its token there).
-        ...(this.env.CREDENTIALS_DIRECTORY ? [this.env.CREDENTIALS_DIRECTORY] : []),
-      ],
+      privateDirs,
       workspaceRoot: input.workspaceRoot,
       allowedPaths: agentConfig.allowedPaths,
       sessionDir: input.sessionDir,
@@ -218,37 +272,53 @@ export class NodeSandbox {
       inferenceSocket: input.inferenceSocket,
       tmpDirs: [tmp, '/tmp'],
       protectedPaths: input.protectedPaths ?? [],
+      // The built-in srt's seccomp helper runs inside the sandbox.
+      readOnlyDirs: [sandboxBinDir(this.config.stateDir)],
     });
-    let status: SandboxStatus;
-    if (!agentConfig.sandbox.enabled)
-      status = {
-        active: false,
-        disabled: true,
-        reason: 'sandbox.enabled is false in the agent config',
-      };
-    else status = await this.check();
-    const agent = { command: this.config.agentCommand, args: [...this.config.agentArgs] };
-    if (!status.active) {
+    const exposed = policy.paths.allowWrite.filter((root) =>
+      privateDirs.some((dir) => isInside(dir, realResolve(root)) && dir !== realResolve(root)),
+    );
+    if (exposed.length)
       warnings.push(
-        `This agent is not sandboxed: ${status.reason}. Its shell commands run with the node account's full access.`,
+        `pirc's state lies inside a writable path of this session (${exposed.join(', ')}). What exists now is protected, but anything the node creates there later (other sessions) is not: move PIRC_STATE_DIR out of it.`,
       );
+    const status = await this.check();
+    if (!status.active) {
       rmSync(tmp, { recursive: true, force: true });
-      return { status, policy, ...agent, env: {}, warnings, cleanup: () => undefined };
+      throw new ApiError(
+        503,
+        'runner_unavailable',
+        `Agents on this node must run in the sandbox, and it is unavailable: ${status.reason}`,
+      );
     }
+    const agent = { command: this.config.agentCommand, args: [...this.config.agentArgs] };
     const dir = path.join(this.config.stateDir, 'sandbox');
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     const settingsFile = path.join(dir, `${path.basename(input.sessionId)}.json`);
-    writeFileSync(settingsFile, JSON.stringify(srtSettings(policy)), { mode: 0o600 });
+    const settings = (extraDomains: Iterable<string>) =>
+      srtSettings(policy, extraDomains, status.seccompApplyPath);
+    writeFileSync(settingsFile, JSON.stringify(settings([])), { mode: 0o600 });
     chmodSync(settingsFile, 0o600);
+    const [command, ...prefix] = status.srt;
     return {
       status,
       policy,
       settingsFile,
-      command: status.srt,
+      command: command!,
       // fd 3 carries network allowlist updates (runtime approvals).
-      args: ['--settings', settingsFile, '--control-fd', '3', '--', agent.command, ...agent.args],
+      args: [
+        ...prefix,
+        '--settings',
+        settingsFile,
+        '--control-fd',
+        '3',
+        '--',
+        agent.command,
+        ...agent.args,
+      ],
       env: { CLAUDE_CODE_TMPDIR: tmp },
       warnings,
+      settings,
       cleanup: () => {
         rmSync(settingsFile, { force: true });
         rmSync(tmp, { recursive: true, force: true });

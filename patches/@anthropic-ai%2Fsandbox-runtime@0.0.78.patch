@@ -1,0 +1,22 @@
+diff --git a/dist/cli.js b/dist/cli.js
+index 46cc67785f2fe750641d0c06be08ec59b136bf61..18f4f8a6043f749d65ceb2b51b40825db7c5e04b 100644
+--- a/dist/cli.js
++++ b/dist/cli.js
+@@ -10,7 +10,7 @@ import * as fs from 'fs';
+ import * as net from 'net';
+ import * as path from 'path';
+ import * as os from 'os';
+-import { createRequire } from 'module';
++import manifest from '../package.json' with { type: 'json' };
+ /**
+  * Get default config path
+  */
+@@ -25,7 +25,7 @@ function getDefaultConfigPath() {
+  * pins behaviour to specific releases.
+  */
+ function getPackageVersion() {
+-    const manifest = createRequire(import.meta.url)('../package.json');
++    // pirc: a static import, so bun build --compile can bundle the manifest.
+     return manifest.version;
+ }
+ /**

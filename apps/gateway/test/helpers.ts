@@ -52,8 +52,9 @@ export function testConfig(overrides: Partial<NodeConfig> = {}): NodeConfig {
       idleMs: 60_000,
       viewport: { width: 800, height: 600 },
     },
-    // Tests that exercise srt opt in with their own settings.
-    sandbox: { enabled: false },
+    // Agents always run sandboxed; a stand-in srt runs them unconfined here
+    // (sandbox-srt.integration.test.ts uses the real one).
+    sandbox: { srt: path.join(import.meta.dir, 'fixtures', 'fake-srt.sh') },
     leaseTtlMs: 5000,
     interactionTtlMs: 5000,
     shutdownGraceMs: 100,

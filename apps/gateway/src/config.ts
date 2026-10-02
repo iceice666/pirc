@@ -147,12 +147,12 @@ export interface NodeConfig {
   /** Agent browser tools and the Browser panel (plans/browser.md, node/browser.ts). */
   browser: BrowserSettings;
   /**
-   * The OS sandbox agents run in (plans/sandbox.md, node/sandbox.ts):
-   * `PIRC_SANDBOX=off` disables it; `PIRC_SANDBOX_SRT` names the srt binary
-   * (else `srt` on PATH). Without a working srt, agents run unconfined with a
-   * warning.
+   * The OS sandbox every agent runs in (plans/sandbox.md, node/sandbox.ts).
+   * It cannot be turned off: without a working srt no agent starts.
+   * `PIRC_SANDBOX_SRT` names an external srt binary; without it the node runs
+   * the srt built into its own executable (`pirc-node srt`).
    */
-  sandbox: { enabled: boolean; srt?: string | undefined };
+  sandbox: { srt?: string | undefined };
   leaseTtlMs: number;
   interactionTtlMs: number;
   shutdownGraceMs: number;
@@ -281,6 +281,11 @@ export function loadNodeConfig(
 ): NodeConfig {
   if (env.PIRC_CHAT !== undefined)
     throw new Error('PIRC_CHAT was removed; run pirc-chat or pirc-node to select the role');
+  // The node sets PIRC_SANDBOX=srt for its agents; only the old opt-out is refused.
+  if (env.PIRC_SANDBOX === 'off')
+    throw new Error(
+      'PIRC_SANDBOX=off was removed: agents always run in the sandbox, and a node without a working one starts no agents',
+    );
   const nodeId = env.PIRC_NODE_ID;
   const nodeToken = env.PIRC_NODE_TOKEN;
   const daemonUrl = env.PIRC_DAEMON_URL;
@@ -345,10 +350,7 @@ export function loadNodeConfig(
       gatewayHost: new URL(daemonUrl).hostname,
       blockedHosts: csv(env.PIRC_BROWSER_BLOCK_HOSTS),
     },
-    sandbox: {
-      enabled: env.PIRC_SANDBOX !== 'off',
-      srt: env.PIRC_SANDBOX_SRT || Bun.which('srt') || undefined,
-    },
+    sandbox: env.PIRC_SANDBOX_SRT ? { srt: env.PIRC_SANDBOX_SRT } : {},
     leaseTtlMs: integer(env.PIRC_LEASE_TTL_MS, 30_000),
     interactionTtlMs: integer(env.PIRC_INTERACTION_TTL_MS, 3_600_000),
     shutdownGraceMs: integer(env.PIRC_SHUTDOWN_GRACE_MS, 5_000),

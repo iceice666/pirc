@@ -121,6 +121,63 @@ describe('session policy', () => {
     expect(readAllowed(inHome, path.join(d.home, '.ssh', 'id_ed25519'))).toBe(false);
   });
 
+  it("keeps the node's state and credentials unwritable even inside a writable root", () => {
+    const d = layout();
+    // Development layout: the node's state lives inside the workspace.
+    const workspace = d.root;
+    writeFileSync(path.join(d.state, 'node.sqlite'), '');
+    mkdirSync(path.join(d.state, 'sandbox', 'bin'), { recursive: true });
+    // Only what exists now: the node warns that later entries are open
+    // (node/sandbox.ts) and refuses to register such workspaces (node/app.ts).
+    mkdirSync(path.join(d.state, 'sessions', 'pi_2'), { recursive: true });
+    const { paths } = sessionPolicy({
+      config: sandboxConfigSchema.parse({}),
+      configDir: path.join(d.root, 'config'),
+      home: d.home,
+      privateDirs: [d.state],
+      workspaceRoot: workspace,
+      allowedPaths: [d.home],
+      sessionDir: d.session,
+      workspaceMemoryDir: d.memory,
+      tmpDirs: [d.tmp],
+      readOnlyDirs: [path.join(d.state, 'sandbox', 'bin')],
+    });
+    expect(writeAllowed(paths, path.join(workspace, 'src', 'a.ts'))).toBe(true);
+    expect(writeAllowed(paths, path.join(d.state, 'node.sqlite'))).toBe(false);
+    expect(writeAllowed(paths, path.join(d.state, 'sessions', 'pi_2', 'x.jsonl'))).toBe(false);
+    expect(writeAllowed(paths, path.join(d.session, 'session.jsonl'))).toBe(true);
+    expect(writeAllowed(paths, path.join(d.memory, 'k.jsonl'))).toBe(true);
+    expect(writeAllowed(paths, path.join(d.state, 'sandbox', 'bin', 'apply-seccomp'))).toBe(false);
+    expect(readAllowed(paths, path.join(d.state, 'sandbox', 'bin', 'apply-seccomp'))).toBe(true);
+    expect(readAllowed(paths, path.join(d.state, 'sandbox', 'other.json'))).toBe(false);
+    // `~` in allowedPaths does not open credential stores.
+    expect(writeAllowed(paths, path.join(d.home, '.ssh', 'authorized_keys'))).toBe(false);
+    expect(writeAllowed(paths, path.join(d.home, 'notes.md'))).toBe(true);
+  });
+
+  it('hides host sockets from Linux sandboxes, where Unix sockets cannot be filtered by path', () => {
+    const d = layout();
+    const agentSocket = path.join(d.root, 'ssh-agent.sock');
+    writeFileSync(agentSocket, '');
+    const input = {
+      config: sandboxConfigSchema.parse({}),
+      configDir: path.join(d.root, 'config'),
+      home: d.home,
+      privateDirs: [d.state],
+      workspaceRoot: d.workspace,
+      allowedPaths: [],
+      sessionDir: d.session,
+      workspaceMemoryDir: d.memory,
+      tmpDirs: [d.tmp],
+      sshAuthSock: agentSocket,
+      uid: 1000,
+    };
+    const linux = sessionPolicy({ ...input, platform: 'linux' }).paths;
+    expect(readAllowed(linux, agentSocket)).toBe(false);
+    const mac = sessionPolicy({ ...input, platform: 'darwin' }).paths;
+    expect(readAllowed(mac, agentSocket)).toBe(true);
+  });
+
   it('renders srt settings for the platform', () => {
     const d = layout();
     const settings = srtSettings(policyFor(d), ['extra.example.com']);
@@ -129,6 +186,11 @@ describe('session policy', () => {
     expect(settings.allowPty).toBe(true);
     if (process.platform === 'linux') expect(network.allowAllUnixSockets).toBe(true);
     else expect(network.allowUnixSockets).toEqual([d.socket]);
+    expect('seccomp' in settings).toBe(false);
+    // The built-in srt is told where its seccomp helper is.
+    expect(srtSettings(policyFor(d), [], '/x/apply-seccomp').seccomp).toEqual({
+      applyPath: '/x/apply-seccomp',
+    });
   });
 
   it('accepts hosts, wildcards, ports and IPv4 addresses only', () => {
@@ -160,5 +222,20 @@ describe("the node's reading of the agent config", () => {
     expect(view.sandbox.network.defaultDomains).toBe(true);
     expect(view.sandbox.network.allowedDomains).toEqual([]);
     expect(view.allowedPaths[0]).toMatch(/extra$/);
+  });
+
+  it('drops the removed sandbox.enabled switch and says so when it was off', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'pirc-policy-config-'));
+    writeFileSync(
+      path.join(dir, 'config.json'),
+      JSON.stringify({
+        sandbox: { enabled: false, network: { allowedDomains: ['api.example.com'] } },
+      }),
+    );
+    const view = readAgentConfig({ PIRC_CONFIG_DIR: dir });
+    expect(view.problem).toContain('sandbox.enabled');
+    expect(view.sandbox.network.allowedDomains).toEqual(['api.example.com']);
+    writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ sandbox: { enabled: true } }));
+    expect(readAgentConfig({ PIRC_CONFIG_DIR: dir }).problem).toBeUndefined();
   });
 });

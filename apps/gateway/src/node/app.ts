@@ -45,6 +45,8 @@ import {
 import { WriteBroker } from './write-broker.js';
 import { registerPanelRoutes, type BrowserStreams, type TerminalStreams } from './panel-routes.js';
 import { RunnerManager } from './runner.js';
+import { NodeSandbox } from './sandbox.js';
+import { SENSITIVE_HOME_PATHS, isInside, realResolve } from '../sandbox-policy.js';
 import type { TerminalManager } from './terminals.js';
 import { BrowserManager } from './browser.js';
 import { loadRoles, roleBriefs } from '../agent/roles.js';
@@ -197,6 +199,15 @@ export async function buildNodeApp(
   // Filled by the daemon on registration; agents started before that get no providers.
   const models = new ModelStore();
   const browser = new BrowserManager(config.browser);
+  // Mandatory: say at startup whether agents can start at all.
+  const sandbox = new NodeSandbox(config);
+  void sandbox
+    .check()
+    .then((status) =>
+      status.active
+        ? app.log.info({ srt: status.srt }, 'agent sandbox ready')
+        : app.log.error(`agent sandbox unavailable, no agent can start: ${status.reason}`),
+    );
   const runners = new RunnerManager(
     config,
     db,
@@ -205,6 +216,7 @@ export async function buildNodeApp(
     models,
     options.gateway ?? offlineGateway,
     browser,
+    sandbox,
   );
   const branches = new BranchCache();
   const claim = (request: FastifyRequest, sessionId = parse(sessionParams, request.params).id) =>
@@ -250,6 +262,24 @@ export async function buildNodeApp(
     }
     if (!canonical.startsWith(`${home}${path.sep}`))
       throw new ApiError(403, 'forbidden', 'Workspace must stay within the node home directory');
+    // A workspace is writable from its sessions' sandboxes: it must not hold
+    // (or sit inside) the node's own state or a credential store.
+    const off = [
+      config.stateDir,
+      config.sessionsDir,
+      config.uploadsDir,
+      path.dirname(config.databasePath),
+      config.browser.profilesDir,
+      config.workspaceMemoryDir,
+      ...SENSITIVE_HOME_PATHS.map((item) => path.join(home, item)),
+    ].map((item) => realResolve(item));
+    const clash = off.find((item) => isInside(item, canonical) || isInside(canonical, item));
+    if (clash)
+      throw new ApiError(
+        403,
+        'forbidden',
+        `Workspace must not contain or sit inside ${clash} (pirc's state or a credential store)`,
+      );
     const workspace = db.addWorkspace(
       id('workspace').replaceAll('-', '_'),
       config.nodeId,

@@ -23,6 +23,7 @@
     "test:compiled": "PIRC_TEST_COMPILED_ROLES=1 bun test test/role-executables.test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.78",
     "@fastify/websocket": "^11.0.2",
     "@mariozechner/pi-ai": "0.73.1",
     "croner": "^10.0.1",
