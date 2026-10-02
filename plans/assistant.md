@@ -154,11 +154,11 @@ memory_records(node_id, ledger_key, id, content, relevance, recorded_at, git_jso
 
 # Part 2: roadmap
 
-Ordered by value against cost. Item 1 is implemented (awaiting acceptance); items 2–6 are planned; 7 is a decision to take; 8 waits for evidence from use. Each item needs the user's go-ahead before implementation.
+Ordered by value against cost. Item 1 is implemented and user-accepted (2026-10-03, Asia/Taipei); items 2–6 are planned; 7 is a decision to take; 8 waits for evidence from use. Each item needs the user's go-ahead before implementation.
 
 ## 1. Approve USER proposals in the chat
 
-`memory_propose_user` now creates an Approve / Reject card in its originating chat. Settings → Memory remains another place to decide. Implementation is ready for acceptance.
+`memory_propose_user` now creates an Approve / Reject card in its originating chat. Settings → Memory remains another place to decide. User acceptance passed on 2026-10-03 (Asia/Taipei).
 
 - When a proposal is created from a chat, the daemon publishes a `confirm` interaction (Approve / Reject) in that chat, showing the action, the proposed text, the current text for a replace, and the quote. The answer route applies the existing approve/reject on the daemon after the same lease and owner checks.
 - The proposal stays in `memory_proposals`, which is the source of truth; the interaction is a view of it, so a node disconnect or gateway restart does not cancel a pending proposal (the lesson from delegations). Answering in Settings resolves the chat interaction and vice versa.
