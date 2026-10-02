@@ -9,7 +9,7 @@ import type { InferenceEvent, InferenceRequest } from './inference-wire.js';
 import type { WorkspaceKind } from './types.js';
 import type { RoleBrief } from './agent/roles.js';
 
-export const NODE_PROTOCOL_VERSION = 7;
+export const NODE_PROTOCOL_VERSION = 8;
 
 /** One WebSocket frame on the node link. Uploads (base64) must fit, see MAX_UPLOAD_BYTES. */
 export const NODE_FRAME_MAX_BYTES = 16_777_216;
@@ -24,7 +24,7 @@ export const NODE_USER_HEADER = 'x-pirc-user';
 
 /** An HTTP request the daemon replays on a node's local router. */
 export interface NodeHttpRequest {
-  method: 'GET' | 'POST' | 'PATCH';
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT';
   /** Path and query on the node, already rewritten to node-local IDs. */
   url: string;
   /** Authenticated browser user the daemon acts for. */
@@ -118,6 +118,7 @@ export type DaemonToNode =
     }
   | { type: 'memory_mirror_ack'; ledgerKey: string; watermark: number }
   | { type: 'models'; models: ModelsConfig }
+  | { type: 'registration_error'; status: number; code: string; message: string }
   | { type: 'heartbeat_ack' }
   | { type: 'request'; requestId: string; data: NodeHttpRequest }
   | { type: 'agent_response'; requestId: string; status: number; body?: unknown }
@@ -144,7 +145,7 @@ export interface SessionActivity {
 export type NodeToDaemon =
   | { type: 'model_start'; requestId: string; request: InferenceRequest }
   | { type: 'model_cancel'; requestId: string }
-  | { type: 'register'; protocol: number; workspaces: RegisteredWorkspace[] }
+  | { type: 'register'; protocol: number; role: 'chat' | 'node'; workspaces: RegisteredWorkspace[] }
   | { type: 'heartbeat' }
   | { type: 'response'; requestId: string; data: NodeHttpResponse }
   | { type: 'event'; sessionId: string; event: Record<string, unknown> }

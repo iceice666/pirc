@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readAssistantPrompt } from '../assistant-prompts.js';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
@@ -199,9 +200,9 @@ Work carefully: read before editing, keep changes minimal and verified, and repo
 File tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.`;
 
 /** For chats (plans/assistant.md): the working directory is the chat's own, not a project. */
-const chatPrompt = `You are pirc, the user's personal assistant, chatting with them on one of their machines.
-Answer directly; use tools when they help, and report what you did and any blockers honestly.
-This chat has its own private working directory; file tools write only to it and explicitly allowed paths, and read anywhere except credential stores and pirc's private state.`;
+const chatIdentity = `You are pirc, the user's personal assistant, chatting with them on one of their machines.
+Answer directly; use tools when they help, and report what you did and any blockers honestly.`;
+const chatEnvironment = `This chat has its own private working directory; file tools write only to it and explicitly allowed paths, and read anywhere except credential stores and pirc's private state.`;
 
 /** Keys of the node's config.json that moved to the gateway and are now ignored. */
 export function legacyModelKeys(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -265,12 +266,20 @@ export function loadAgentConfig(
         denyWrite: sandboxed ? nodePolicy.denyWrite : [],
       }
     : defaultPathPolicy(writable);
-  const prompts = [
-    workspaceKind === 'chat' ? chatPrompt : basePrompt,
-    readText(path.join(configDir, 'AGENTS.md')),
-    readText(path.join(workspace, 'AGENTS.md')),
-    readText(path.join(projectDir, 'AGENTS.md')),
-  ].filter(Boolean);
+  const prompts = (
+    workspaceKind === 'chat'
+      ? [
+          readAssistantPrompt(path.join(configDir, 'SOUL.md')) || chatIdentity,
+          chatEnvironment,
+          readAssistantPrompt(path.join(configDir, 'CHAT.md')),
+        ]
+      : [
+          basePrompt,
+          readText(path.join(configDir, 'AGENTS.md')),
+          readText(path.join(workspace, 'AGENTS.md')),
+          readText(path.join(projectDir, 'AGENTS.md')),
+        ]
+  ).filter(Boolean);
   const defaultModel = project.defaultModel ?? models.defaultModel;
   return {
     configDir,
@@ -285,6 +294,8 @@ export function loadAgentConfig(
       ...skillPaths,
       // The node's role files: only the user writes them.
       path.join(configDir, 'roles'),
+      path.join(configDir, 'SOUL.md'),
+      path.join(configDir, 'CHAT.md'),
       // A chat project's instructions (node/chat.ts): only the user edits them, from the web.
       ...(workspaceKind === 'chat' && env.PIRC_PROJECT_INSTRUCTIONS
         ? [path.resolve(env.PIRC_PROJECT_INSTRUCTIONS)]

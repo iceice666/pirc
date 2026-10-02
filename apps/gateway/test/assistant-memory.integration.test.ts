@@ -41,16 +41,16 @@ async function daemonWithNode() {
       socket.send(
         JSON.stringify({
           type: 'register',
+          role: 'chat',
           protocol: NODE_PROTOCOL_VERSION,
-          workspaces: [
-            { id: 'chats', displayName: 'Chats', kind: 'chat' },
-            { id: 'w', displayName: 'W' },
-          ],
+          workspaces: [{ id: 'chats', displayName: 'Chats', kind: 'chat' }],
         }),
       ),
     );
     socket.once('message', () => resolve(socket));
   });
+  // A historical directory session still has no assistant memory.
+  services.db.syncRemoteWorkspaces('a', [{ id: 'w', displayName: 'W' }]);
   const chat = services.db.createSession('a:chats', 'node://a/c1', 'a', 'c1', USER);
   services.db.createSession('a:w', 'node://a/d1', 'a', 'd1', USER);
   services.db.createSession('a:chats', 'node://a/c2', 'a', 'c2', OTHER);

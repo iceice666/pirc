@@ -82,6 +82,7 @@ describe('node registrations', () => {
     a.send(
       JSON.stringify({
         type: 'register',
+        role: 'node',
         protocol: NODE_PROTOCOL_VERSION,
         workspaces: [{ id: 'project', displayName: 'A' }],
       }),
@@ -91,6 +92,7 @@ describe('node registrations', () => {
     b.send(
       JSON.stringify({
         type: 'register',
+        role: 'node',
         protocol: NODE_PROTOCOL_VERSION,
         workspaces: [{ id: 'project', displayName: 'B' }],
       }),
@@ -122,6 +124,7 @@ describe('node registrations', () => {
     replacement.send(
       JSON.stringify({
         type: 'register',
+        role: 'node',
         protocol: NODE_PROTOCOL_VERSION,
         workspaces: [{ id: 'other', displayName: 'Updated' }],
       }),
@@ -147,7 +150,7 @@ describe('node registrations', () => {
     const url = `ws://127.0.0.1:${(app.server.address() as { port: number }).port}/node/connect`;
     const old = await open(url, 'test', 't'.repeat(32));
     const closed = new Promise<number>((resolve) => old.once('close', resolve));
-    old.send(JSON.stringify({ type: 'register', workspaces: [] }));
+    old.send(JSON.stringify({ type: 'register', protocol: 7, workspaces: [] }));
     expect(await closed).toBe(4426);
     expect(
       (await app.inject({ method: 'GET', url: '/api/nodes', headers })).json().nodes,
@@ -179,7 +182,12 @@ describe('node registrations', () => {
     const node = await open(url, 'test', 't'.repeat(32));
     const registered = receive(node);
     node.send(
-      JSON.stringify({ type: 'register', protocol: NODE_PROTOCOL_VERSION, workspaces: [] }),
+      JSON.stringify({
+        type: 'register',
+        role: 'node',
+        protocol: NODE_PROTOCOL_VERSION,
+        workspaces: [],
+      }),
     );
     const reply = await registered;
     expect(reply.type).toBe('registered');

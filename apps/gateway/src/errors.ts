@@ -6,6 +6,8 @@ export type ErrorCode =
   | 'invalid_input'
   | 'not_found'
   | 'conflict'
+  | 'read_only'
+  | 'binding_changed'
   | 'lost_control'
   | 'workspace_busy'
   | 'runner_unavailable'

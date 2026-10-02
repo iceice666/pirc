@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'bun:test';
@@ -104,6 +104,49 @@ describe('session policy', () => {
     expect(readAllowed(paths, instructions)).toBe(false);
     expect(writeAllowed(paths, instructions)).toBe(false);
     expect(writeAllowed(paths, path.join(d.chat, 'notes.md'))).toBe(true);
+  });
+
+  it('protects global prompt configuration inside writable roots, including absent files', () => {
+    const d = layout();
+    const configDir = path.join(d.tmp, 'config');
+    mkdirSync(configDir);
+    const { paths } = sessionPolicy({
+      config: sandboxConfigSchema.parse({}),
+      configDir,
+      home: d.home,
+      privateDirs: [d.state],
+      workspaceRoot: d.workspace,
+      allowedPaths: [d.root],
+      sessionDir: d.session,
+      workspaceMemoryDir: d.memory,
+      tmpDirs: [d.tmp],
+    });
+    for (const name of ['SOUL.md', 'CHAT.md', 'config.json']) {
+      expect(readAllowed(paths, path.join(configDir, name))).toBe(true);
+      expect(writeAllowed(paths, path.join(configDir, name))).toBe(false);
+    }
+    expect(writeAllowed(paths, path.join(d.tmp, 'ordinary.txt'))).toBe(true);
+  });
+
+  it('protects the prospective targets of dangling managed prompt symlinks', () => {
+    const d = layout();
+    const configDir = path.join(d.tmp, 'config');
+    mkdirSync(configDir);
+    for (const name of ['SOUL.md', 'CHAT.md'])
+      symlinkSync(path.join(d.workspace, name), path.join(configDir, name));
+    const { paths } = sessionPolicy({
+      config: sandboxConfigSchema.parse({}),
+      configDir,
+      home: d.home,
+      privateDirs: [d.state],
+      workspaceRoot: d.workspace,
+      allowedPaths: [],
+      sessionDir: d.session,
+      workspaceMemoryDir: d.memory,
+      tmpDirs: [d.tmp],
+    });
+    for (const name of ['SOUL.md', 'CHAT.md'])
+      expect(writeAllowed(paths, path.join(d.workspace, name))).toBe(false);
   });
 
   it('keeps a deny inside an allowed region, and takes configured additions', () => {

@@ -367,6 +367,8 @@ export async function buildDaemonApp(
 
   // ---- node link ------------------------------------------------------------
 
+  nodes.acceptRole = (nodeId, role) =>
+    role === 'chat' ? db.claimAssistantNode(nodeId) : db.assistantNode() !== nodeId;
   nodes.onRegister = (node) => {
     db.syncRemoteWorkspaces(node.id, node.workspaces);
     directoryChanged();
@@ -502,6 +504,53 @@ export async function buildDaemonApp(
 
   app.get('/api/health', async () => ({ ok: true, version: 2, nodes: nodes.list().length }));
   app.get('/api/nodes', async () => ({ nodes: nodes.list() }));
+
+  const assistantNode = () => {
+    const nodeId = db.assistantNode();
+    if (!nodeId || nodes.get(nodeId)?.role !== 'chat')
+      throw new ApiError(503, 'node_offline', 'The chat node is offline or not registered');
+    return nodeId;
+  };
+  app.get('/api/assistant/node', async () => {
+    const nodeId = db.assistantNode();
+    return { nodeId, online: !!nodeId && nodes.get(nodeId)?.role === 'chat' };
+  });
+  app.post('/api/assistant/node/release', async (request) => {
+    const { nodeId } = parse(z.object({ nodeId: z.string().min(1) }).strict(), request.body);
+    if (!db.releaseAssistantNode(nodeId))
+      throw new ApiError(
+        409,
+        'binding_changed',
+        'Chat node binding changed; refresh before releasing',
+      );
+    nodes.disconnect(nodeId);
+    directoryChanged();
+    return { nodeId: null, online: false };
+  });
+  app.get('/api/assistant/prompts', async (request, reply) => {
+    const nodeId = assistantNode();
+    const response = await relay(nodeId, request, { method: 'GET', url: '/api/assistant/prompts' });
+    if (response.status !== 200) return reply.status(response.status).send(response.body);
+    return { ...(response.body as Record<string, unknown>), nodeId };
+  });
+  app.put('/api/assistant/prompts/:name', async (request, reply) => {
+    const { name } = parse(z.object({ name: z.enum(['soul', 'chat']) }), request.params);
+    const { text, nodeId } = parse(
+      z.object({ text: z.string(), nodeId: z.string().min(1) }).strict(),
+      request.body,
+    );
+    if (db.assistantNode() !== nodeId)
+      throw new ApiError(
+        409,
+        'binding_changed',
+        'Chat node binding changed; refresh and review before saving',
+      );
+    return forward(reply, assistantNode(), request, {
+      method: 'PUT',
+      url: '/api/assistant/prompts/' + name,
+      payload: { text },
+    });
+  });
 
   app.get('/api/workspaces', async () => ({
     workspaces: db

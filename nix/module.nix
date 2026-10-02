@@ -213,6 +213,12 @@ let
     + lib.optionalString (cfg.agentPrompt != null) ''
       cp ${pkgs.writeText "AGENTS.md" cfg.agentPrompt} $out/AGENTS.md
     ''
+    + lib.optionalString (cfg.soulPrompt != null) ''
+      cp ${pkgs.writeText "SOUL.md" cfg.soulPrompt} $out/SOUL.md
+    ''
+    + lib.optionalString (cfg.chatPrompt != null) ''
+      cp ${pkgs.writeText "CHAT.md" cfg.chatPrompt} $out/CHAT.md
+    ''
     + lib.optionalString (cfg.skills != { }) (
       ''
         mkdir -p $out/skills
@@ -376,7 +382,19 @@ in
     agentPrompt = mkOption {
       type = types.nullOr types.lines;
       default = null;
-      description = "Optional global AGENTS.md appended to the built-in agent's system prompt.";
+      description = "Optional global AGENTS.md for coding agents only (not chats).";
+    };
+
+    soulPrompt = mkOption {
+      type = types.nullOr types.lines;
+      default = null;
+      description = "Global chat-only SOUL.md persona; replaces the built-in chat identity. Read-only in the web UI.";
+    };
+
+    chatPrompt = mkOption {
+      type = types.nullOr types.lines;
+      default = null;
+      description = "Global chat-only CHAT.md rules. Read-only in the web UI; chats no longer load AGENTS.md.";
     };
 
     skills = mkOption {

@@ -41,6 +41,12 @@ const BROWSER_FRAME_BACKLOG_BYTES = 4 * 1024 * 1024;
 const daemonMessage = z.discriminatedUnion('type', [
   ...inferenceEventFrames,
   z.object({
+    type: z.literal('registration_error'),
+    status: z.number(),
+    code: z.string(),
+    message: z.string(),
+  }),
+  z.object({
     type: z.literal('registered'),
     nodeId: z.string(),
     models: modelsSchema,
@@ -57,7 +63,7 @@ const daemonMessage = z.discriminatedUnion('type', [
     type: z.literal('request'),
     requestId: z.string().min(1).max(100),
     data: z.object({
-      method: z.enum(['GET', 'POST', 'PATCH']),
+      method: z.enum(['GET', 'POST', 'PATCH', 'PUT']),
       url: z.string().startsWith('/api/').max(8192),
       user: z.string().min(1),
       payload: z.unknown().optional(),
@@ -272,6 +278,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       send({
         type: 'register',
         protocol: NODE_PROTOCOL_VERSION,
+        role: config.chat ? 'chat' : 'node',
         workspaces: registeredWorkspaces(),
       });
       heartbeat = setInterval(() => send({ type: 'heartbeat' }), HEARTBEAT_MS);
@@ -287,6 +294,10 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       }
       if (!parsed.success) return;
       const message = parsed.data;
+      if (message.type === 'registration_error') {
+        app.log.error({ status: message.status, code: message.code }, message.message);
+        return;
+      }
       if (message.type === 'registered') {
         registered = true;
         gateway.connect(sendAgentFrame);

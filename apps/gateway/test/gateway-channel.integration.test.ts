@@ -122,6 +122,7 @@ it('answers only for sessions of the asking node whose owner is still allowed', 
         socket.send(
           JSON.stringify({
             type: 'register',
+            role: 'node',
             protocol: NODE_PROTOCOL_VERSION,
             workspaces: [{ id: 'w', displayName: 'W' }],
           }),

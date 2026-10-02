@@ -39,15 +39,15 @@ While the gateway restarts, nodes reconnect on their own (they retry the link); 
 
 ## Changes that need no restart
 
-| Change                                                  | How it is applied                                                                                     |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `models.json` (file providers, default model)           | `kill -HUP <gateway pid>` / `systemctl reload pirc`. Invalid file → logged, previous stays in force.  |
-| Web-managed backends, logins, logouts                   | Immediately; in-flight requests are cancelled, running sessions use the new settings next request.    |
-| Provider key referenced by `apiKeyFile`/`apiKeyCommand` | `SIGHUP` (references are resolved when the file is loaded). `apiKeyEnv` needs a restart.              |
-| Workspaces added from the web                           | Immediately, persisted on the node.                                                                   |
-| Chat project capabilities and instructions              | Capabilities immediately (re-checked at each run); instructions for new chats only.                   |
-| Agent config (`config.json`, `AGENTS.md`, skills)       | Next agent start (a new session, or a session whose agent was restarted). Running agents keep theirs. |
-| `PIRC_ALLOWED_USERS` and every other env var            | Restart of that process.                                                                              |
+| Change                                                                  | How it is applied                                                                                     |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `models.json` (file providers, default model)                           | `kill -HUP <gateway pid>` / `systemctl reload pirc`. Invalid file → logged, previous stays in force.  |
+| Web-managed backends, logins, logouts                                   | Immediately; in-flight requests are cancelled, running sessions use the new settings next request.    |
+| Provider key referenced by `apiKeyFile`/`apiKeyCommand`                 | `SIGHUP` (references are resolved when the file is loaded). `apiKeyEnv` needs a restart.              |
+| Workspaces added from the web                                           | Immediately, persisted on the node.                                                                   |
+| Chat project capabilities and instructions                              | Capabilities immediately (re-checked at each run); instructions for new chats only.                   |
+| Agent config (`config.json`, `AGENTS.md`, `SOUL.md`, `CHAT.md`, skills) | Next agent start (a new session, or a session whose agent was restarted). Running agents keep theirs. |
+| `PIRC_ALLOWED_USERS` and every other env var                            | Restart of that process.                                                                              |
 
 ## Rollback
 
@@ -63,3 +63,7 @@ cd ../infra && nix flake update pirc && git commit -am 'bump pirc' # 2. pin
 # 3. switch the gateway host, then each node host (deploy-rs, nixos-rebuild, darwin-rebuild, …)
 # 4. nodes without Nix: copy the compiled binary (docs/deploy/macos-node.md)
 ```
+
+## Chat prompt migration (node protocol 8)
+
+Upgrade the gateway and all nodes together. Chats no longer load any `AGENTS.md`: move chat-relevant rules into the chat node's `$PIRC_CONFIG_DIR/CHAT.md`, and put persona text in global `SOUL.md`. Coding prompts are unchanged. For Nix use `services.pirc.chatPrompt` and `services.pirc.soulPrompt`; the web editor reports these store-managed files as read-only. The first chat node registration is now persistently bound; replacing that node requires releasing the binding in Settings → Assistant after stopping the old node.

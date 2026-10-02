@@ -54,6 +54,7 @@ type SendFailure = 'too_large' | 'backpressure' | 'failed';
 
 const registration = z.object({
   type: z.literal('register'),
+  role: z.enum(['chat', 'node']),
   protocol: z.number().int().optional(),
   workspaces: z
     .array(
@@ -138,6 +139,7 @@ const nodeMessage = z.discriminatedUnion('type', [
 
 export interface ConnectedNode {
   id: string;
+  role: 'chat' | 'node';
   workspaces: RegisteredWorkspace[];
   connectedAt: number;
   lastSeenAt: number;
@@ -197,6 +199,7 @@ export class NodeRegistry {
   /** The node's sessions with an open run or a write lease now (the node's own session ids). */
   onActivity?: (nodeId: string, sessions: SessionActivity[]) => void;
   onRegister?: (node: ConnectedNode) => void;
+  acceptRole?: (nodeId: string, role: 'chat' | 'node') => boolean;
   resolveSession?: (nodeId: string, remoteSessionId: string) => string | undefined;
   /** Answers an agent's request that its node forwarded (see protocol.ts). */
   onAgentRequest?: (
@@ -341,6 +344,15 @@ export class NodeRegistry {
     return this.connections.get(nodeId)?.node;
   }
 
+  disconnect(nodeId: string): void {
+    const connection = this.connections.get(nodeId);
+    if (!connection) return;
+    this.connections.delete(nodeId);
+    this.failNode(nodeId);
+    this.onDisconnect?.(nodeId);
+    connection.socket.close(4000, 'chat node binding released');
+  }
+
   attach(nodeId: string, socket: WebSocket): void {
     if (this.pending.size >= 100) return socket.close(1013, 'too many pending registrations');
     this.pending.add(socket);
@@ -363,6 +375,14 @@ export class NodeRegistry {
         return socket.close(1007, 'invalid JSON');
       }
       if (!registered) {
+        const envelope = z
+          .object({ type: z.literal('register'), protocol: z.number().int().optional() })
+          .safeParse(message);
+        if (envelope.success && envelope.data.protocol !== NODE_PROTOCOL_VERSION)
+          return socket.close(
+            PROTOCOL_MISMATCH_CLOSE,
+            `node protocol ${envelope.data.protocol ?? 1} != daemon ${NODE_PROTOCOL_VERSION}`,
+          );
         const parsed = registration.safeParse(message);
         if (
           !parsed.success ||
@@ -374,6 +394,22 @@ export class NodeRegistry {
             PROTOCOL_MISMATCH_CLOSE,
             `node protocol ${parsed.data.protocol ?? 1} != daemon ${NODE_PROTOCOL_VERSION}`,
           );
+        if (
+          parsed.data.workspaces.some(
+            (workspace) => (workspace.kind === 'chat') !== (parsed.data.role === 'chat'),
+          )
+        )
+          return socket.close(1008, 'workspace kind does not match node role');
+        if (this.acceptRole && !this.acceptRole(nodeId, parsed.data.role)) {
+          this.send(socket, {
+            type: 'registration_error',
+            status: 409,
+            code: 'chat_node_exists',
+            message:
+              'A different chat node is bound to this gateway. Release it in Settings → Assistant first.',
+          });
+          return socket.close(4409, 'chat_node_exists');
+        }
         registered = true;
         this.pending.delete(socket);
         if (this.connections.has(nodeId)) {
@@ -384,6 +420,7 @@ export class NodeRegistry {
         lastSeenAt = Date.now();
         const node = {
           id: nodeId,
+          role: parsed.data.role,
           workspaces: parsed.data.workspaces,
           connectedAt: lastSeenAt,
           lastSeenAt,

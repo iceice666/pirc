@@ -11,7 +11,7 @@
  *   and code hosts, the node's configured domains, and any the human
  *   approves while a session runs.
  */
-import { existsSync, readdirSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readlinkSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
@@ -308,6 +308,33 @@ export function denyWriteAround(dir: string, keep: string[]): string[] {
   return entries.flatMap((name) => denyWriteAround(path.join(dir, name), inner));
 }
 
+/** Resolve even dangling managed links: their prospective targets must remain protected. */
+function promptWritePaths(file: string, seen = new Set<string>()): string[] {
+  const absolute = path.resolve(file);
+  if (seen.has(absolute) || seen.size >= 40)
+    throw new Error('Cannot safely resolve prompt configuration symlinks');
+  seen.add(absolute);
+  const parts = absolute.split(path.sep).filter(Boolean);
+  let cursor = path.parse(absolute).root;
+  for (let index = 0; index < parts.length; index++) {
+    cursor = path.join(cursor, parts[index]!);
+    try {
+      if (lstatSync(cursor).isSymbolicLink()) {
+        const target = path.resolve(
+          path.dirname(cursor),
+          readlinkSync(cursor),
+          ...parts.slice(index + 1),
+        );
+        return [absolute, ...promptWritePaths(target, seen)];
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') break;
+      throw error;
+    }
+  }
+  return [absolute];
+}
+
 /** The sandbox for one session of a node. */
 export function sessionPolicy(input: SessionPolicyInput): SessionPolicy {
   const home = input.home ?? os.homedir();
@@ -372,6 +399,11 @@ export function sessionPolicy(input: SessionPolicyInput): SessionPolicy {
     // (a workspace holding the state dir, `~` in allowedPaths).
     denyWrite: unique([
       path.join(workspace, '.pirc'),
+      // User-managed global configuration must stay read-only even under an allowed root.
+      realResolve(input.configDir),
+      ...['SOUL.md', 'CHAT.md'].flatMap((name) =>
+        promptWritePaths(path.join(input.configDir, name)),
+      ),
       ...(input.protectedPaths ?? []).map((item) => realResolve(item)),
       ...sensitive,
       ...readOnlyDirs,

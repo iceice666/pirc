@@ -219,6 +219,7 @@ const migrations = [
     workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
     project_hash TEXT NOT NULL, trusted_by TEXT NOT NULL, trusted_at INTEGER NOT NULL
   );`,
+  `CREATE TABLE assistant_node (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), node_id TEXT NOT NULL);`,
 ];
 
 const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');
@@ -272,6 +273,30 @@ export class GatewayDatabase {
         this.raw.exec(`PRAGMA user_version = ${index + 1}`);
       })();
     }
+  }
+
+  assistantNode(): string | null {
+    return (
+      (
+        this.raw.query('SELECT node_id FROM assistant_node WHERE singleton = 1').get() as {
+          node_id: string;
+        } | null
+      )?.node_id ?? null
+    );
+  }
+
+  claimAssistantNode(nodeId: string): boolean {
+    this.raw
+      .query('INSERT OR IGNORE INTO assistant_node(singleton, node_id) VALUES (1, ?)')
+      .run(nodeId);
+    return this.assistantNode() === nodeId;
+  }
+
+  releaseAssistantNode(nodeId: string): boolean {
+    return (
+      this.raw.query('DELETE FROM assistant_node WHERE singleton = 1 AND node_id = ?').run(nodeId)
+        .changes > 0
+    );
   }
 
   close(): void {

@@ -15,7 +15,8 @@ import { GatewayDatabase } from '../database.js';
 import { ApiError } from '../errors.js';
 import { EventHub } from '../events.js';
 import { registerErrorHandler, registerImageParsers } from '../http.js';
-import { ModelStore } from '../models.js';
+import { ModelStore, defaultConfigDir } from '../models.js';
+import { inspectAssistantPrompt, writeAssistantPrompt } from '../assistant-prompts.js';
 import { NODE_USER_HEADER } from '../protocol.js';
 import { applySessionName, publicSession } from '../session-name.js';
 import type { CommandPayload, Snapshot } from '../types.js';
@@ -295,6 +296,19 @@ export async function buildNodeApp(
     }
     return reply.status(201).send({ workspace: { ...workspace, ...(roles ? { roles } : {}) } });
   });
+
+  if (config.chat) {
+    const promptDir = defaultConfigDir();
+    app.get('/api/assistant/prompts', async () => ({
+      soul: inspectAssistantPrompt(promptDir, 'soul'),
+      chat: inspectAssistantPrompt(promptDir, 'chat'),
+    }));
+    app.put('/api/assistant/prompts/:name', async (request) => {
+      const { name } = parse(z.object({ name: z.enum(['soul', 'chat']) }), request.params);
+      const { text } = parse(z.object({ text: z.string() }).strict(), request.body);
+      return { prompt: writeAssistantPrompt(promptDir, name, text) };
+    });
+  }
 
   /** A chat project's instructions (node/chat.ts); only the web edits them, through the gateway. */
   const chatProject = (request: FastifyRequest) => {

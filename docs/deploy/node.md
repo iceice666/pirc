@@ -72,7 +72,9 @@ To give agents a credential on purpose (a `GITHUB_TOKEN` for the agent's own `gh
 ```
 ~/.config/.pirc/
 ├── config.json     limits, features, hooks, env, allowedPaths, sandbox
-├── AGENTS.md       global system prompt addition (optional)
+├── AGENTS.md       global coding rules (optional; not read by chats)
+├── SOUL.md         global chat persona (optional; never read by coding sessions)
+├── CHAT.md         global chat rules (optional; replaces AGENTS.md for chats)
 ├── roles/          roles: <name>.md, front matter + instructions (optional)
 └── skills/         Agent Skills: <name>/SKILL.md (optional)
 ```
@@ -157,3 +159,5 @@ PIRC_WORKSPACES=[]
 ```
 
 Keep the file readable by the node account only (`0600`), and list its directory in `sandbox.filesystem.denyRead` when it sits outside `PIRC_STATE_DIR` ([Sandbox and browser](./sandbox-and-browser.md)).
+
+Chat nodes read global `SOUL.md` (persona) then the fixed environment description and `CHAT.md` (rules), never `AGENTS.md`. Coding nodes never read SOUL/CHAT. Each chat file is capped at 8000 characters. Settings → Assistant edits these same node-local files when writable; symlinks and Nix store files are read-only. Empty Soul falls back to the built-in identity. Changes apply at the next agent start. The gateway persistently binds one chat node ID; stop the old node and release its binding in Settings → Assistant before replacing it.

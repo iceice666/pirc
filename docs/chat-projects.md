@@ -68,7 +68,7 @@ A chat's teammates and subagents get the project's policy as it stands when they
 
 Project instructions are standing instructions you write for one project, for example "Answer in French" or "This project is about planning a kitchen renovation; keep a running budget table". They differ from the other places the assistant gets context:
 
-- **`AGENTS.md`** in the node's config directory (`$PIRC_CONFIG_DIR/AGENTS.md`) applies to every session on the node, chats and repositories alike. Project instructions apply only to that project's chats.
+- **`SOUL.md` / `CHAT.md`** in the chat node's config directory define the global persona and chat rules. Coding sessions use `AGENTS.md` instead and never read these two files. Project instructions apply only to that project's chats.
 - **USER and MEMORY** (Settings → Memory) are the assistant's memory of you. They are shared by all chats, the assistant proposes or writes them, and you review them. The assistant never writes project instructions. They change only when you edit them, and they do not change what is in memory.
 
 ### Editing
@@ -103,7 +103,7 @@ The instructions are **frozen when a chat first runs**, just like USER and MEMOR
 
 ### Where they appear in the prompt
 
-They come after the chat prompt and `AGENTS.md`, and before USER/MEMORY, under the heading `## Project instructions`. The assistant is told to follow them unless you say otherwise in that chat.
+They come after `SOUL.md` (or the built-in identity), the fixed environment description and `CHAT.md`, and before USER/MEMORY, under the heading `## Project instructions`. The assistant is told to follow them unless you say otherwise in that chat.
 
 ### Who can change them
 
@@ -120,3 +120,9 @@ Capabilities are a **policy on assistant features, not a sandbox**. They control
 - Turning a capability off does not remove data that already exists: chat history, delegation results, schedule runs, and memory.
 
 Project instructions are prompt text and do not restrict what the agent can do. For restrictions, use capabilities and the sandbox.
+
+## Global persona and chat rules
+
+Settings → Assistant edits `$PIRC_CONFIG_DIR/SOUL.md` and `CHAT.md` on the chat node, never a gateway copy. Each is limited to 8000 characters. Empty Soul restores the built-in identity; the private-directory environment description always remains. Edits apply at the next agent start, including restarts of existing chats (unlike frozen project instructions). Nix-managed paths and symlinks are read-only; edit `services.pirc.soulPrompt` / `chatPrompt` or the symlink's source instead. All users allowed by both the gateway and chat node can manage these shared files.
+
+The gateway persistently binds the first registered chat node's ID, including across disconnects and restarts. A second ID receives a registration error (`409 chat_node_exists` in a WebSocket frame). To replace it, stop the old chat node, then use **Release chat node binding** and confirm in Settings → Assistant. The next successful chat registration claims the binding; if the old process is still running it may reclaim it. Only the node ID is stored at the gateway, not the prompt files.

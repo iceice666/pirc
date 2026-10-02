@@ -202,7 +202,7 @@ function registry() {
   cleanups.push(() => nodes.close());
   const socket = new FakeSocket();
   nodes.attach('node', socket as unknown as WebSocket);
-  socket.input({ type: 'register', protocol: NODE_PROTOCOL_VERSION, workspaces: [] });
+  socket.input({ type: 'register', role: 'node', protocol: NODE_PROTOCOL_VERSION, workspaces: [] });
   return { nodes, socket };
 }
 describe('gateway inference multiplexing', () => {
