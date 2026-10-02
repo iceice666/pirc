@@ -18,7 +18,7 @@ These pages describe how to run pirc outside a development checkout. Each page c
 
 ## Requirements
 
-- The role executables: `pirc-gateway` and one or more `pirc-node` coding nodes, plus an optional `pirc-chat` assistant node. `bun run build` produces all three in `apps/gateway/dist/`; `nix build .#pirc-gateway`, `.#pirc-chat` or `.#pirc-node` builds the corresponding package. Each embeds Bun and SQLite; chat/node packages also ship [srt](./sandbox-and-browser.md) and playwright-core. Chromium/Chrome and optional ffmpeg are separate browser dependencies. Keep every role on the same release/protocol version; see [migration guidance](./upgrades.md#migrating-from-the-single-executable).
+- The role executables: `pirc-gateway` and one or more `pirc-node` coding nodes, plus an optional `pirc-chat` assistant node. `bun run build` produces all three in `apps/gateway/dist/`; `nix build .#pirc-gateway`, `.#pirc-chat` or `.#pirc-node` builds the corresponding package. Each embeds Bun and SQLite; chat/node executables carry [srt](./sandbox-and-browser.md), and their packages ship playwright-core. Chromium/Chrome and optional ffmpeg are separate browser dependencies. Keep every role on the same release/protocol version; see [migration guidance](./upgrades.md#migrating-from-the-single-executable).
 - The static web bundle (`apps/web/dist`, or the gateway package's `share/pirc/web`) served by a web server: the gateway does **not** serve it.
 - A reverse proxy that performs forward authentication (Authelia or compatible) and terminates TLS.
 - A model backend reachable **from the gateway**: a subscription login made in the web UI, or an API-key endpoint from the web UI or `models.json`.
@@ -34,5 +34,5 @@ Before treating a deployment as done:
 4. No secret is in a world-readable place (Nix store, a committed file, a process listing). See [Secrets](./secrets.md).
 5. A forged identity header from a non-proxy address is refused (`curl` from another host with `x-pirc-user` set → 401/403).
 6. `GET /api/nodes` through the proxy lists every node you expect, online.
-7. A session in each workspace can run a trivial prompt, and the session header does not show "Not sandboxed" unless you accept that.
+7. A session in each workspace can run a trivial prompt (it cannot without a working sandbox; the node log says `agent sandbox ready`).
 8. A backup of both state directories has been restored once on a scratch machine ([Backup and recovery](./backup-and-recovery.md)).

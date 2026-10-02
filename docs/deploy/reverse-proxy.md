@@ -14,6 +14,7 @@ The gateway has no login of its own. It trusts an identity header **only** from 
 Rules that hold for every route:
 
 - Always overwrite the identity header. A client-supplied `x-pirc-user` must never reach the gateway; on the device-token and node routes it must be removed. The gateway refuses a request carrying both a device token and an identity header (fail-closed), but that only protects you if the header is absent when it should be.
+- When the gateway has `PIRC_PROXY_SECRET`, add `x-pirc-proxy-secret: <secret>` to every `/api/` request, browser and device-token alike (see [below](#proxy-shared-secret)).
 - Pass `Host` and `Origin` through unchanged; the gateway compares them exactly against `PIRC_ALLOWED_HOSTS` and `PIRC_ALLOWED_ORIGINS`.
 - Use TLS end to end from the client to the proxy. The proxy → gateway hop is plain HTTP on loopback or a private interface.
 - Do not expose the gateway or the proxy on the public Internet (no Tailscale Funnel). Forward auth is a second factor for a private network, not an Internet-facing login.
@@ -90,6 +91,35 @@ server {
 
 `proxy_set_header x-pirc-user $pirc_user` with an empty variable removes the header, which is what the device-token branch relies on.
 
+## Proxy shared secret
+
+The trusted-proxy check is by peer address only, so on a shared host any local process connecting from `127.0.0.1` looks like the proxy. Set `PIRC_PROXY_SECRET` on the gateway (≥ 32 random characters, e.g. `openssl rand -base64 36`) and have the proxy prove itself with it on every `/api/` request; the gateway then refuses trusted-address requests without the matching `x-pirc-proxy-secret` header. Without it the gateway logs a warning at startup.
+
+nginx: keep the header in a file readable only by root and the nginx account, outside any world-readable config or the Nix store, and include it in `location /api/`:
+
+```nginx
+# /etc/nginx/pirc-proxy-secret.conf (mode 0640, owner root, group nginx)
+proxy_set_header X-Pirc-Proxy-Secret "<secret>";
+```
+
+```nginx
+  location /api/ {
+    # … as above …
+    include /etc/nginx/pirc-proxy-secret.conf;
+  }
+
+  location = /node/connect {
+    # … as above …
+    proxy_set_header X-Pirc-Proxy-Secret "";
+  }
+```
+
+Traefik: add a `headers` middleware with `customRequestHeaders: { X-Pirc-Proxy-Secret: '<secret>' }` to both `pirc-api` and `pirc-device`, defined in a file-provider file that only Traefik can read (not in container labels or a world-readable file).
+
+The [NixOS module](./nixos.md) does this for its nginx virtual host: it generates the secret at first start into the gateway's state directory and writes the nginx snippet to `/run/pirc-nginx` (root and the nginx group only); nothing reaches the Nix store.
+
+Even with the secret, a node on the gateway host should run its agents network-sandboxed: they must not be able to talk to the gateway port at all.
+
 ## Traefik (Authelia forward-auth middleware)
 
 Three routers on the same host, ordered by priority:
@@ -152,6 +182,9 @@ curl -s -o /dev/null -w '%{http_code}\n' $H/api/sessions
 
 # 2. Forged identity header from outside: must NOT be accepted (redirect or 401/403; never 200).
 curl -s -o /dev/null -w '%{http_code}\n' -H 'x-pirc-user: alice@example.com' $H/api/sessions
+
+# 2b. On the gateway host, with PIRC_PROXY_SECRET set: a direct request without the secret is refused (401).
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: pirc.example.ts.net' -H 'x-pirc-user: alice@example.com' http://127.0.0.1:8787/api/sessions
 
 # 3. A fake device token reaches the gateway (JSON error with code "unauthenticated"), not the login page.
 curl -s -H 'Authorization: Bearer pirc_dev_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' $H/api/sessions

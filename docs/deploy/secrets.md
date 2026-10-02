@@ -15,7 +15,7 @@ What secrets a pirc deployment holds, where each one lives, and what must never 
 | Device tokens (`pirc_dev_…`)               | gateway (hash)   | `device_tokens` table, SHA-256 only                                                             | The phone, in its Keystore. Shown once at pairing.                                                                                                                 |
 | Forward-auth session cookies               | proxy / Authelia | outside pirc                                                                                    | The browser.                                                                                                                                                       |
 | Node ↔ agent inference token              | node             | random per start, passed to agents                                                              | Agents (it only lets them use the gateway's models as their own session).                                                                                          |
-| Agent-facing credentials (`GITHUB_TOKEN`…) | node, by choice  | node environment or agent config `env`                                                          | **Agents.** Scope them narrowly; they are inside the sandbox's reach by design.                                                                                    |
+| Agent-facing credentials (`GITHUB_TOKEN`…) | node, by choice  | agent config `env`, or node environment named in `PIRC_AGENT_ENV_ALLOW`                         | **Agents.** Scope them narrowly; they are inside the sandbox's reach by design.                                                                                    |
 
 ## Generating
 
@@ -30,7 +30,7 @@ The gateway rejects tokens shorter than 32 characters and duplicated tokens. The
 - **Never in the Nix store**: not in `services.pirc.models` as a literal `apiKey`, not in `services.pirc.environment`, not in `agentConfig.env`, not in a workspace's `defaults`. Use `environmentFile` (systemd `KEY=value`), `apiKeyFile`, or `apiKeyCommand`.
 - **Never in Git**: `.env`, `DEPLOY.md`-style host notes with tokens, `agent.env`. The repository's `.gitignore` covers `.env*` and `DEPLOY.md`; check yours.
 - **Gateway secrets are the gateway account's**: on NixOS the gateway runs as `pirc-gateway` and the node as `pirc`, so an `apiKeyFile` must be readable by `pirc-gateway` (sops-nix: `owner = "pirc-gateway"`), and the node never receives the gateway's `environmentFile`.
-- **Node secrets stay out of agents' reads**: the sandbox denies `PIRC_STATE_DIR` and the systemd credentials directory by default; if the node's env file lives elsewhere (macOS: `~/.local/pirc-node/agent.env`), add that directory to `sandbox.filesystem.denyRead`. Unsandboxed agents can read whatever the node account can.
+- **Node secrets stay out of agents' reads**: the sandbox denies `PIRC_STATE_DIR` and the systemd credentials directory by default; if the node's env file lives elsewhere (macOS: `~/.local/pirc-node/agent.env`), add that directory to `sandbox.filesystem.denyRead`.
 - **Logs**: the gateway logs classification only for provider errors, never bodies or tokens. Do not raise the log level of a proxy so that it logs `Authorization` headers.
 
 ## Rotation

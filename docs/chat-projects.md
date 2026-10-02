@@ -108,8 +108,8 @@ They come after the chat prompt and `AGENTS.md`, and before USER/MEMORY, under t
 ### Who can change them
 
 - **File tools** (`write`, `edit`, and the same calls from `code`) cannot write the file. It is outside every chat's working directory, and it is on the agent's protected paths, so writes are refused even if you add its directory to `allowedPaths`.
-- **In the [agent sandbox](../README.md#agent-sandbox)**, the node's state directory can be neither read nor written. The instructions file is also on the sandbox's write-deny list, so bash, `code` scripts and hooks cannot change it either, even if your `sandbox.filesystem.allowWrite` includes the state directory.
-- **Without the sandbox**, the agent is **not** kept out. When srt is missing, fails its check, or is turned off (`PIRC_SANDBOX=off`, `"sandbox": {"enabled": false}`, or `services.pirc.sandbox.enable = false` in the NixOS module), `bash`, `code`, `background_task` and hooks run with the node account's full permissions. They can rewrite this file like any other file the node owns. Such sessions show a "Not sandboxed" badge. If it matters to you that only you can change a project's instructions, install srt and leave the sandbox on. See [Agent sandbox](../README.md#agent-sandbox) for requirements, such as bubblewrap and user namespaces on Linux.
+- **In the [agent sandbox](../README.md#agent-sandbox)**, which every agent runs in, the node's state directory can be neither read nor written. The instructions file is also on the sandbox's write-deny list, so bash, `code` scripts and hooks cannot change it either, even if your `sandbox.filesystem.allowWrite` includes the state directory.
+- **Agent processes** never run without the sandbox: a chat node where srt cannot work starts no agents. See [Agent sandbox](../README.md#agent-sandbox) for requirements, such as bubblewrap and user namespaces on Linux.
 
 ## Limits
 

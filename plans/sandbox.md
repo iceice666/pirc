@@ -1,6 +1,6 @@
 # OS sandbox for agent processes
 
-Status (2026-09-30): option C built and tested on macOS; not yet run on a real NixOS node. The investigation below is kept as written; "Decisions" and "As built" come first. Paths are relative to `apps/gateway/src/` unless noted.
+Status (2026-10-02): option C built and tested on macOS; mandatory and fail-closed, with srt built into the node executables; not yet run on a real NixOS node. The investigation below is kept as written; "Decisions" and "As built" come first. Paths are relative to `apps/gateway/src/` unless noted.
 
 ## Decisions (user, 2026-09-30)
 
@@ -8,8 +8,9 @@ Status (2026-09-30): option C built and tested on macOS; not yet run on a real N
 2. **Reads** open by default, with only sensitive paths blocked.
 3. **Network**: a built-in list of common hosts, plus an allowlist, plus approval at run time.
 4. **srt** comes from our own derivation, pinned to the latest release.
-5. **No sandbox** available: run anyway, with a visible warning.
+5. ~~**No sandbox** available: run anyway, with a visible warning.~~ Superseded 2026-10-02 (security audit H1): the sandbox is **mandatory on pirc-node and pirc-chat** (chat agents still have `bash`), with no way to turn it off; without a working sandbox no agent starts.
 6. **Also**: fix the independent issues listed below.
+7. (2026-10-02) **srt is built into** `pirc-node` / `pirc-chat` (`pirc-node srt …`). An external srt named by `PIRC_SANDBOX_SRT` takes precedence; the Nix package keeps pointing it at `nix/sandbox-runtime.nix`. `srt` on `PATH` is no longer looked up.
 
 ## As built
 
@@ -23,11 +24,15 @@ Status (2026-09-30): option C built and tested on macOS; not yet run on a real N
   - `readAllowed` / `writeAllowed` follow srt's precedence rules: the innermost read rule wins, allow wins a tie, and `denyWrite` always wins.
   - Settings come from `sandbox` in the node's agent `config.json`. A project's config is never read for them.
 - **Node** (`node/sandbox.ts`):
-  - `NodeSandbox.check()` probes srt once per node (`srt --settings probe -- /bin/sh -c 'exit 0'`).
+  - `NodeSandbox.check()` probes srt (`srt --settings probe -- /bin/sh -c 'exit 0'`) at node start-up, which logs the result. A success holds; a failure is probed again on the next agent start after 30 s.
+  - **Fail-closed**: when the probe fails, `prepare()` throws `503 runner_unavailable` ("Agents on this node must run in the sandbox …"), so the prompt fails with the reason. `PIRC_SANDBOX=off` makes `loadNodeConfig` throw; `sandbox.enabled` in config.json is dropped with a warning; the NixOS option `services.pirc.sandbox.enable` is a removed option.
+  - **Built-in srt** (`node/srt.ts`): `@anthropic-ai/sandbox-runtime@0.0.78` is a dependency, patched (`patches/`) only so `bun build --compile` can bundle its manifest; `pirc-node srt` imports its CLI. On Linux the static `apply-seccomp` helpers (x64, arm64) are embedded with `with { type: 'file' }`; the node writes the one for its CPU to `<stateDir>/sandbox/bin/` (content-addressed, rewritten when altered), names it in the settings (`seccomp.applyPath`), and the policy makes that dir readable but not writable. bubblewrap, socat and ripgrep still come from the host.
   - `prepare()` writes `<stateDir>/sandbox/<session>.json` and makes a short per-session tmp dir. srt receives that dir as `CLAUDE_CODE_TMPDIR`, which becomes `TMPDIR` inside the sandbox. It is kept short because macOS caps Unix socket paths at 104 bytes and srt puts its mux socket there.
   - `prepare()` returns `srt --settings … --control-fd 3 -- <agent>`.
   - Invalid settings keep the defaults and add a warning.
-  - `PIRC_SANDBOX=off` or `sandbox.enabled: false` turns the sandbox off; `PIRC_SANDBOX_SRT` or `srt` on PATH finds the binary.
+  - `PIRC_SANDBOX_SRT` names an external srt; otherwise the node runs its own executable's `srt`.
+  - **Private state stays unwritable** (audit M10): credential stores and the node's private dirs are in `denyWrite` too. srt has no "deny except", so a private dir inside a writable root is closed entry by entry around the session's own state (`denyWriteAround`); entries the node creates later are not covered, so the node warns about such a layout and refuses to register a workspace that contains or sits inside its state or a credential store.
+  - **Linux host sockets** (audit M11): `allowAllUnixSockets` stays (the inference socket), but `LINUX_HOST_SOCKETS` (Docker, containerd, Podman, libvirt, LXD/Incus, D-Bus, systemd, the user bus, gpg/keyring agents) and `SSH_AUTH_SOCK` are added to `denyRead` where they exist.
 - **Runner** (`node/runner.ts`):
   - **Spawn**: srt is spawned detached (its own process group; kills go to the group). fd 3 is srt's control pipe.
   - **Agent environment**: `PIRC_SANDBOX=srt|off`, and `PIRC_SANDBOX_POLICY` (the path rules).
@@ -36,7 +41,7 @@ Status (2026-09-30): option C built and tested on macOS; not yet run on a real N
   - **Approvals come from the node**: it opens its own confirm interaction (rpc id prefix `node-sandbox-`), and `answer()` resolves it without telling the agent. Dialogs or cancels the agent emits with that prefix are dropped.
   - **Approved network**: pushes the full srt settings (policy plus approved domains) down the control fd. Approvals last for the rest of the session.
   - **Approved exec**: `runOnHost` runs `bash -c` in the workspace (the cwd must stay inside it), in its own process group, with `withoutSecrets(process.env)`. It has a timeout, keeps 1 MB of output (head and tail), and can be aborted.
-  - When not sandboxed, `network` answers `unrestricted` and `exec` answers `not_sandboxed`.
+  - A runner exists only inside the sandbox; the agent keeps its `unrestricted` / `not_sandboxed` answers only for runs outside a node.
 - **Agent**:
   - `agent/sandbox-channel.ts` carries the requests; only the main agent has the channel.
   - `agent/features/sandbox.ts` adds:
@@ -86,10 +91,11 @@ Status (2026-09-30): option C built and tested on macOS; not yet run on a real N
   - bubblewrap under the unit's hardening (`NoNewPrivileges`, `ProtectSystem=strict`, `PrivateDevices`);
   - the tmpfiles hand-over of an existing `/var/lib/pirc/daemon`;
   - `apiKeyFile` ownership after the gateway moves to `pirc-gateway`.
-- **Linux sockets**: Unix sockets are allowed wholesale there (`allowAllUnixSockets`), because seccomp cannot filter by path and the agent needs the inference socket. The read rules hide the sockets in denied directories, but any other socket the account can reach is open.
+- **Linux sockets**: Unix sockets are allowed wholesale there (`allowAllUnixSockets`), because seccomp cannot filter by path and the agent needs the inference socket. Known host sockets are hidden (M11), but any other socket the account can reach is open. Moving inference off a Unix socket (or bind-mounting only it) would close this.
 - **Workspace memory**: the dir is writable as a whole, so a session could append to another repository's ledger.
 - **Approvals**: they last only for the session. There is no "always allow for this workspace" yet.
-- **launchd nodes** (m5pro, m3air): their env file lives outside `PIRC_STATE_DIR`. Until `sandbox.filesystem.denyRead` includes `~/.local/pirc-node`, an agent there can still read `agent.env`. m3air's hand-copied binary has no srt next to it.
+- **launchd nodes** (m5pro, m3air): their env file lives outside `PIRC_STATE_DIR`. Until `sandbox.filesystem.denyRead` includes `~/.local/pirc-node`, an agent there can still read `agent.env`. A hand-copied binary now carries its own srt.
+- **Built-in srt on Linux**: not yet run on a real Linux host (bubblewrap finding the extracted `apply-seccomp` inside the namespace, 未確認).
 
 ## Why
 

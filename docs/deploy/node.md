@@ -47,20 +47,23 @@ The chat node keeps every chat workspace under `$STATE/chat/<workspaceId>/` (the
 
 Both node executables support the internal `agent` and `ptc-worker` commands and re-execute themselves for those workers. These are not separately deployed executables. Keep the gateway and both node roles on the same release/protocol version ([Upgrades](./upgrades.md)).
 
-| Variable                                          | Default           | Meaning                                                                            |
-| ------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------- |
-| `PIRC_AGENT_COMMAND`                              | this binary       | Executable started per session. Only set it to run a different build of the agent. |
-| `PIRC_AGENT_ARGS`                                 | `["agent"]`       | JSON array placed before the agent flags.                                          |
-| `PIRC_CONFIG_DIR`                                 | `~/.config/.pirc` | The agent config directory (below).                                                |
-| `PIRC_TERMINALS`                                  | `true`            | Side-panel shells (run as the node account in the workspace, outside the sandbox). |
-| `PIRC_TERMINAL_SHELL`                             | `$SHELL`          | Shell for those terminals.                                                         |
-| `PIRC_LEASE_TTL_MS`                               | `30000`           | Control-lease heartbeat timeout.                                                   |
-| `PIRC_INTERACTION_TTL_MS`                         | `3600000`         | How long an unanswered question stays pending.                                     |
-| `PIRC_RPC_MAX_LINE_BYTES`                         | `1048576`         | Node ↔ agent JSONL line limit.                                                    |
-| `PIRC_SHUTDOWN_GRACE_MS`                          | `5000`            | Time agents get to exit on `SIGTERM` before being killed.                          |
-| `PIRC_EVENT_BUFFER_SIZE`, `PIRC_UPLOAD_MAX_BYTES` | as gateway        | Keep them equal to the gateway's.                                                  |
+| Variable                                          | Default           | Meaning                                                                                               |
+| ------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------- |
+| `PIRC_AGENT_COMMAND`                              | this binary       | Executable started per session. Only set it to run a different build of the agent.                    |
+| `PIRC_AGENT_ARGS`                                 | `["agent"]`       | JSON array placed before the agent flags.                                                             |
+| `PIRC_CONFIG_DIR`                                 | `~/.config/.pirc` | The agent config directory (below).                                                                   |
+| `PIRC_TERMINALS`                                  | `true`            | Side-panel shells (run as the node account in the workspace, outside the sandbox).                    |
+| `PIRC_TERMINAL_SHELL`                             | `$SHELL`          | Shell for those terminals.                                                                            |
+| `PIRC_AGENT_ENV_ALLOW`                            | —                 | Comma-separated variables of the node's environment passed on to agents anyway (e.g. `GITHUB_TOKEN`). |
+| `PIRC_LEASE_TTL_MS`                               | `30000`           | Control-lease heartbeat timeout.                                                                      |
+| `PIRC_INTERACTION_TTL_MS`                         | `3600000`         | How long an unanswered question stays pending.                                                        |
+| `PIRC_RPC_MAX_LINE_BYTES`                         | `1048576`         | Node ↔ agent JSONL line limit.                                                                       |
+| `PIRC_SHUTDOWN_GRACE_MS`                          | `5000`            | Time agents get to exit on `SIGTERM` before being killed.                                             |
+| `PIRC_EVENT_BUFFER_SIZE`, `PIRC_UPLOAD_MAX_BYTES` | as gateway        | Keep them equal to the gateway's.                                                                     |
 
-Agents and shells started by the node do **not** inherit `PIRC_NODE_TOKEN` or any `PIRC_*TOKEN*`/`*SECRET*`/`*KEY*`/`*PASSWORD*` variable, nor `EXA_API_KEY`. Anything else in the node's environment reaches them; put agent-facing tokens (a `GITHUB_TOKEN` for the agent's own `gh`) there deliberately, or in the config's `env`.
+Everything the node starts (agents and their tools, approved host commands, side-panel terminals and git, Chromium, ffmpeg) gets an **allowlisted** environment (`apps/gateway/src/node/secrets.ts`): `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`/`LC_*`, `TERM`/`COLORTERM`/`TERM_PROGRAM*`, `TZ`, `TMPDIR`, `PWD`, `EDITOR`/`VISUAL`/`PAGER`, `XDG_*`, Nix and CA-certificate variables, `LOCALE_ARCHIVE`, display variables, a few toolchain directories (`CARGO_HOME`, `GOPATH`, `JAVA_HOME`, …) and non-secret `PIRC_*`. Everything else is dropped, including `PIRC_NODE_TOKEN` and every `PIRC_*TOKEN*`/`*SECRET*`/`*KEY*`/`*PASSWORD*`, `EXA_API_KEY`, provider keys (`ANTHROPIC_API_KEY`, …), `AWS_*`, `GH_TOKEN`/`GITHUB_TOKEN`, `SSH_AUTH_SOCK`, `GIT_*` and `*_PROXY` (inside srt the sandbox sets its own proxy). Side-panel terminals additionally keep `SSH_AUTH_SOCK`, since only the human types there; their login shell re-reads the user's profile.
+
+To give agents a credential on purpose (a `GITHUB_TOKEN` for the agent's own `gh`), either put it in the agent config's `env`, or keep it in the node's environment and name it in `PIRC_AGENT_ENV_ALLOW=GITHUB_TOKEN`. pirc's own secrets cannot be passed this way.
 
 ## The agent config directory
 
@@ -103,7 +106,11 @@ Do not edit files. Cite file:line evidence and mark anything unverified.
   "features": {
     "observationalMemory": { "model": { "provider": "openai", "id": "gpt-5-mini" } },
     "sessionTitle": { "model": { "provider": "openai", "id": "gpt-5-mini" } },
-    "autoMode": { "enabled": true, "useModel": true },
+    "autoMode": {
+      "enabled": true,
+      "useModel": true,
+      "deny": ["^just switch\\b", "/nixos-rebuild/i"]
+    },
     "agentTeam": { "limit": 4, "subagentLimit": 4 },
     "browser": { "enabled": true },
     "webSearch": { "enabled": true },
@@ -125,10 +132,11 @@ Do not edit files. Cite file:line evidence and mark anything unverified.
 - `providers` and `defaultModel` do **not** belong here any more; they are ignored with a warning (models live on the [gateway](./gateway.md#model-backends)). Legacy `roles` and `features.agentTeam.kinds` JSON settings are also ignored with a startup warning; move them to `$PIRC_CONFIG_DIR/roles/<name>.md`.
 - `features.*` is documented in the [top-level README](../../README.md#agent); `features.observationalMemory` in [`docs/architecture-observational-memory.md`](../architecture-observational-memory.md). Each feature object is validated as a whole: an invalid value resets that feature to its defaults.
 - Hooks (`sessionStart`, `beforePrompt`, `beforeTool`, `afterTool`, `agentSettled`) receive JSON on stdin; a `beforeTool` hook exits `2` to block a call. They run inside the sandbox.
+- `features.autoMode.deny`: regular expressions (or `/re/flags`) for commands you never want run without asking. A match makes the action dangerous: the agent must ask you, and teammates and subagents are refused. It is checked before anything else, also when auto mode is off, against the raw command, each unquoted command, the package.json scripts, Makefile/justfile recipes and shell scripts a command runs, tty input to background tasks and `code` scripts. An invalid pattern is matched as literal text and the session shows a warning.
 - `allowedPaths` widens the file tools' write roots and the sandbox's writable paths (node config only; a project's `allowedPaths` never widens the sandbox).
 - Skills: `$PIRC_CONFIG_DIR/skills/<name>/SKILL.md` reaches every session on the node; `~/.agents/skills/` of the node account is read too (lowest precedence); `<workspace>/.pirc/skills/` is per project. Programs a skill runs must be on the node's `PATH`.
 
-Workspaces may add `<workspace>/.pirc/config.json` with only `allowedPaths`, `env`, `hooks` and `defaultModel`, plus `<workspace>/.pirc/AGENTS.md` and role files in `<workspace>/.pirc/roles/`. Agents cannot write `.pirc/`.
+Workspaces may add `<workspace>/.pirc/config.json` with only `allowedPaths`, `env`, `hooks` and `defaultModel`, plus `<workspace>/.pirc/AGENTS.md` and role files in `<workspace>/.pirc/roles/` (a workspace role may replace a node role of the same name; role lists say so). A repository's `hooks`, `env` and `allowedPaths` are **ignored until you trust them** in the workspace's Settings page, which shows exactly what they contain; trust is tied to their content, so any later change to them is ignored again until you trust it anew, and sessions say when they were ignored. Teammates and subagents read the project config from the workspace root only, and their working directory must stay inside the workspace or its allowed paths. Agents cannot write any `.pirc/` directory in the workspace.
 
 ## Signals and lifecycle
 

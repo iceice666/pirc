@@ -12,12 +12,12 @@ Three independently compiled executables start their fixed server role with no a
 
 Chat and coding executables share the node/agent implementation. Their internal worker commands are not independently deployed services:
 
-| Command                 | Available on             | Purpose                                                                                |
-| ----------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| `agent`                 | `pirc-chat`, `pirc-node` | Agent loop over JSONL RPC on stdin/stdout, sandboxed by its node when srt is available |
-| `ptc-worker`            | `pirc-chat`, `pirc-node` | Runs the `code` tool's scripts                                                         |
-| `oauth-worker`          | `pirc-gateway`           | Runs one subscription login flow in a time-limited subprocess                          |
-| `version` / `--version` | all three                | Prints the version as an install check                                                 |
+| Command                 | Available on             | Purpose                                                                       |
+| ----------------------- | ------------------------ | ----------------------------------------------------------------------------- |
+| `agent`                 | `pirc-chat`, `pirc-node` | Agent loop over JSONL RPC on stdin/stdout, always sandboxed by its node (srt) |
+| `ptc-worker`            | `pirc-chat`, `pirc-node` | Runs the `code` tool's scripts                                                |
+| `oauth-worker`          | `pirc-gateway`           | Runs one subscription login flow in a time-limited subprocess                 |
+| `version` / `--version` | all three                | Prints the version as an install check                                        |
 
 The Nix gateway package includes the Web UI, but not sandbox/browser runtime. Chat/node packages include srt/playwright-core, but not the Web UI. Keep every role on the same release/protocol version. The executable split is **not privacy isolation**: OS accounts, filesystem permissions and sandboxing define the protection boundaries.
 

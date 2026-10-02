@@ -57,7 +57,7 @@ A full starting point with nginx is [`nix/example.nix`](../../nix/example.nix). 
     agentPrompt = "Prefer small commits.";
     skills.pdf = ./skills/pdf;
     extraPackages = with pkgs; [ git openssh nodejs bun ripgrep ];
-    localNode.environmentFile = config.sops.secrets.pirc-node-env.path;  # e.g. GITHUB_TOKEN for the agents
+    localNode.environmentFile = config.sops.secrets.pirc-node-env.path;  # e.g. GITHUB_TOKEN=… plus PIRC_AGENT_ENV_ALLOW=GITHUB_TOKEN for the agents
 
     nginx = {
       enable = true;
@@ -82,17 +82,18 @@ Evaluation fails with a message when: `allowedUsers`/`allowedOrigins`/`allowedHo
 
 `gatewayPackage`, `chatPackage` and `nodePackage` select the corresponding role packages. The gateway runs `bin/pirc-gateway`; the local runner runs `bin/pirc-chat` when `chat = true`, otherwise `bin/pirc-node`, with no role argument. The service names stay `pirc` and `pirc-node` even when the local runner is the chat node. nginx serves `${gatewayPackage}/share/pirc/web`; only the chat/node packages include the sandbox/browser runtime.
 
-| Item                    | Value                                                                                                                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pirc.service`          | The gateway, user `pirc-gateway` (`gatewayUser`), `WorkingDirectory`/`PIRC_STATE_DIR` = `/var/lib/pirc/daemon`, `EnvironmentFile` = `environmentFile`, `ExecReload` sends `SIGHUP`.                          |
-| `pirc-node.service`     | The local node, user `pirc` (`user`/`group`, `supplementaryGroups`), `PIRC_STATE_DIR` = `/var/lib/pirc/node`, `HOME` = `/var/lib/pirc`, requires `pirc.service`, `PIRC_DAEMON_URL = ws://127.0.0.1:<port>`.  |
-| Local node token        | Created by a root `ExecStartPre` of the gateway at `/var/lib/pirc/daemon/local-node-token` (0600, gateway-owned), merged into `PIRC_NODE_TOKENS`, handed to the node as the systemd credential `node-token`. |
-| `/etc/pirc/models.json` | `services.pirc.models` as JSON; a change triggers a reload, not a restart.                                                                                                                                   |
-| Agent config directory  | A store path with `config.json` (`agentConfig`), `AGENTS.md` (`agentPrompt`) and `skills/` (`skills`), exported as `PIRC_CONFIG_DIR`.                                                                        |
-| State directories       | `/var/lib/pirc` (0711), `/var/lib/pirc/daemon` (0700 gateway), `/var/lib/pirc/node` (0700 node), via tmpfiles.                                                                                               |
-| nginx virtual host      | When `nginx.enable`: static web, `/api/` behind `auth_request`, optional device-token bypass and `/node/connect` (see [Reverse proxy](./reverse-proxy.md)).                                                  |
+| Item                    | Value                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pirc.service`          | The gateway, user `pirc-gateway` (`gatewayUser`), `WorkingDirectory`/`PIRC_STATE_DIR` = `/var/lib/pirc/daemon`, `EnvironmentFile` = `environmentFile`, `ExecReload` sends `SIGHUP`.                                                                                                                                                                                                                    |
+| `pirc-node.service`     | The local node, user `pirc` (`user`/`group`, `supplementaryGroups`), `PIRC_STATE_DIR` = `/var/lib/pirc/node`, `HOME` = `/var/lib/pirc`, requires `pirc.service`, `PIRC_DAEMON_URL = ws://127.0.0.1:<port>`.                                                                                                                                                                                            |
+| Local node token        | Created by a root `ExecStartPre` of the gateway at `/var/lib/pirc/daemon/local-node-token` (0600, gateway-owned), merged into `PIRC_NODE_TOKENS`, handed to the node as the systemd credential `node-token`.                                                                                                                                                                                           |
+| `/etc/pirc/models.json` | `services.pirc.models` as JSON; a change triggers a reload, not a restart.                                                                                                                                                                                                                                                                                                                             |
+| Agent config directory  | A store path with `config.json` (`agentConfig`), `AGENTS.md` (`agentPrompt`) and `skills/` (`skills`), exported as `PIRC_CONFIG_DIR`.                                                                                                                                                                                                                                                                  |
+| State directories       | `/var/lib/pirc` (0711), `/var/lib/pirc/daemon` (0700 gateway), `/var/lib/pirc/node` (0700 node), via tmpfiles.                                                                                                                                                                                                                                                                                         |
+| nginx virtual host      | When `nginx.enable`: static web, `/api/` behind `auth_request`, optional device-token bypass and `/node/connect` (see [Reverse proxy](./reverse-proxy.md)).                                                                                                                                                                                                                                            |
+| Proxy shared secret     | When `nginx.enable` and `nginx.proxySecret` (default): `pirc-proxy-secret.service` (root, oneshot, before `pirc` and `nginx`) creates `/var/lib/pirc/daemon/proxy-secret` once and writes the nginx header snippet to `/run/pirc-nginx` (0750 root:nginx). The gateway gets it as `PIRC_PROXY_SECRET`; local processes connecting to the gateway port can no longer pose as nginx. Never in the store. |
 
-Environment derived from options: `PIRC_TIMEZONE` from `timeZone` (defaults to `time.timeZone`), `PIRC_TERMINALS` from `terminals`, `PIRC_BROWSER*` from `browser.*`, `PIRC_SANDBOX=off` when `sandbox.enable = false`. `environment` adds non-secret variables to **both** services.
+Environment derived from options: `PIRC_TIMEZONE` from `timeZone` (defaults to `time.timeZone`), `PIRC_TERMINALS` from `terminals`, `PIRC_BROWSER*` from `browser.*`. The sandbox has no switch (`sandbox.enable` was removed). `environment` adds non-secret variables to **both** services.
 
 ## Hardening and its consequences
 
@@ -101,7 +102,7 @@ Both units run with `NoNewPrivileges`, `PrivateTmp`, `PrivateDevices`, `ProtectH
 - `ProtectHome=true`: workspaces under `/home` are invisible. Put repositories under `/srv` (or override the hardening in your host config knowingly). Only the node service gets `ReadWritePaths` for the configured workspace paths.
 - Web-added workspaces must be inside the node's home, which is `/var/lib/pirc`; use `services.pirc.workspaces` for anything else.
 - The node account needs the Git/SSH credentials the agents should have, and nothing more. Give it `supplementaryGroups` rather than widening file modes.
-- The sandbox needs unprivileged user namespaces (NixOS default: allowed). Whether bubblewrap works under this unit hardening on a given kernel is something to confirm on the host: a session header without "Not sandboxed" is the check.
+- The sandbox needs unprivileged user namespaces (NixOS default: allowed). Whether bubblewrap works under this unit hardening on a given kernel is something to confirm on the host: the node log says `agent sandbox ready`, and otherwise no agent starts.
 - Tools the agent needs (`nix`, `bun`, compilers) go in `extraPackages`; `PATH` is otherwise minimal. `apiKeyCommand` also runs with this `PATH`, on the gateway.
 
 ## Remote nodes

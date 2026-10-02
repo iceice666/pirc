@@ -3,7 +3,7 @@
 The flake exposes:
 
 - `packages.<system>.pirc-gateway`: independently compiled `bin/pirc-gateway` plus the static Web bundle (`share/pirc/web`), with no srt or playwright-core runtime. This is also `packages.<system>.default`.
-- `packages.<system>.pirc-chat` and `packages.<system>.pirc-node`: independently compiled fixed-role executables, with no Web UI. Their wrappers point at [srt](./sandbox-runtime.nix) (`PIRC_SANDBOX_SRT`) and on-disk playwright-core (`PIRC_PLAYWRIGHT_CORE`), whose computed file paths cannot be bundled by `bun --compile`. They share the node/agent implementation. No separate Bun installation is needed; srt brings its own Node.js.
+- `packages.<system>.pirc-chat` and `packages.<system>.pirc-node`: independently compiled fixed-role executables, with no Web UI. Their wrappers point at [srt](./sandbox-runtime.nix) (`PIRC_SANDBOX_SRT`, preferred over the srt built into the executables because it brings bubblewrap, socat and ripgrep) and on-disk playwright-core (`PIRC_PLAYWRIGHT_CORE`), whose computed file paths cannot be bundled by `bun --compile`. They share the node/agent implementation. No separate Bun installation is needed; srt brings its own Node.js.
 - `overlays.default`: adds `pkgs.pirc-gateway`, `pkgs.pirc-chat` and `pkgs.pirc-node`, built against the consumer's nixpkgs. There is no legacy `pkgs.pirc` alias.
 - `nixosModules.pirc`: unprivileged systemd services for the gateway and a local node, and an optional nginx/forward-auth virtual host.
 - `devShells.<system>.default`: Bun (plus Node 22 for the web app's vitest/svelte-check).
@@ -109,7 +109,7 @@ The generated nginx configuration does not create Tailscale certificates. Supply
 
 ## Workspace and hardening notes
 
-- Each agent runs in an OS sandbox (`services.pirc.sandbox.enable`, default on; srt with bubblewrap and a seccomp filter, see "Agent sandbox" in the top-level README). Tune it with `agentConfig.sandbox`. It needs unprivileged user namespaces, which NixOS allows by default. Where they are refused, agents run unconfined and every session shows a warning. Side-panel terminals are not sandboxed.
+- Each agent runs in an OS sandbox (srt with bubblewrap and a seccomp filter, see "Agent sandbox" in the top-level README); it cannot be turned off, and `services.pirc.sandbox.enable` was removed. Tune it with `agentConfig.sandbox`. It needs unprivileged user namespaces, which NixOS allows by default. Where they are refused, no agent starts. Side-panel terminals are not sandboxed.
 - `ProtectSystem=strict` is enabled; only the node service can write configured workspace paths, and each service writes only the state directory besides.
 - `ProtectHome=true` means workspaces under `/home` are intentionally unavailable. Prefer `/srv`, or explicitly override the systemd hardening in the host configuration after reviewing the risk.
 - `MemoryDenyWriteExecute` remains disabled because Bun/JavaScriptCore requires executable JIT memory.
