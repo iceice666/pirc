@@ -119,12 +119,12 @@ const ops: Record<string, AgentOp> = {
    */
   'assistant.context': {
     args: z.object({}).strict(),
-    run: ({ services, workspace, user }) =>
+    run: ({ services, workspace, user, session }) =>
       workspace.kind === 'chat'
         ? {
             enabled: true,
             capabilities: services.db.getWorkspaceCapabilities(workspace.id),
-            ...services.memory.context(user),
+            ...services.memory.context(user, session.id),
             workspaces: services.delegations.workspaces(),
           }
         : // Directory workspaces have no policy: every capability stays allowed.
@@ -409,12 +409,6 @@ const ops: Record<string, AgentOp> = {
       });
       if (!duplicate) {
         services.memoryChanged(user);
-        void services.push?.notify(user, {
-          title: 'Your assistant wants to remember something',
-          body: 'Approve or reject it in Settings → Memory.',
-          tag: 'memory',
-          target: { memory: true },
-        });
       }
       return { proposalId: proposal.id, duplicate };
     },

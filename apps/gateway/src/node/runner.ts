@@ -790,6 +790,7 @@ export class RunnerManager {
    * Writers are serialized per path by the {@link WriteBroker}.
    */
   private ensure(sessionId: string): Promise<PiRunner> {
+    this.db.requireSessionAvailable(sessionId);
     const existing = this.runners.get(sessionId);
     if (existing?.alive) return Promise.resolve(existing);
     let starting = this.starting.get(sessionId);
@@ -901,6 +902,7 @@ export class RunnerManager {
     user: string,
   ): Promise<Record<string, any>> {
     const runner = await this.ensure(sessionId);
+    this.db.requireSessionAvailable(sessionId);
     let rpc: Record<string, unknown>;
     let runId: string | null = null;
     if (['prompt', 'steer', 'follow_up'].includes(payload.type)) {
@@ -980,6 +982,7 @@ export class RunnerManager {
     },
   ): Promise<void> {
     const runner = await this.ensure(sessionId);
+    this.db.requireSessionAvailable(sessionId);
     const { role, model, thinking, ...message } = delivery;
     // The role first: the user's model and thinking level override the role's.
     for (const command of [
@@ -1018,6 +1021,20 @@ export class RunnerManager {
         'Interaction belongs to an inactive runner epoch',
       );
     await runner.answer(rpcId, answer);
+  }
+
+  async stopSession(sessionId: string): Promise<void> {
+    // A start already probing the sandbox must finish before its files can be removed.
+    await this.starting.get(sessionId)?.catch(() => undefined);
+    const runner = this.runners.get(sessionId);
+    await runner?.stop(this.config.shutdownGraceMs);
+    if (runner?.alive)
+      throw new ApiError(
+        503,
+        'runner_unavailable',
+        'The chat process has not stopped yet; retry deletion',
+      );
+    this.writes.release(sessionId);
   }
 
   async shutdown(): Promise<void> {

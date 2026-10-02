@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { api } from './api';
+import { api, normalizeEvent } from './api';
 import type { SessionCommandInput } from './types';
 
 const input: SessionCommandInput = {
@@ -98,4 +98,41 @@ it('addresses a queued message by its queue and index for send_now', async () =>
   expect(bodies.map((body) => body.payload)).toEqual([
     { type: 'send_now', queue: 'followUp', index: 2, message: 'do this instead' },
   ]);
+});
+
+it('applies chat memory decisions without requiring a node snapshot', () => {
+  const raw = { sessionId: 's1', epoch: 2, sequence: 1 };
+  expect(
+    normalizeEvent({
+      ...raw,
+      type: 'interaction_created',
+      data: {
+        id: 'memory:p1:0',
+        runnerEpoch: 0,
+        kind: 'confirm',
+        status: 'pending',
+        request: {
+          title: 'Add USER memory?',
+          message: 'Proposed memory:\nLikes tea.\n\nYour words:\nI like tea',
+          confirmLabel: 'Approve',
+          cancelLabel: 'Reject',
+        },
+      },
+    }).event,
+  ).toMatchObject({
+    type: 'interaction_updated',
+    interaction: {
+      id: 'memory:p1:0',
+      description: expect.stringContaining('Your words:'),
+      confirmLabel: 'Approve',
+      cancelLabel: 'Reject',
+    },
+  });
+  expect(
+    normalizeEvent({ ...raw, type: 'interaction_answered', data: { interactionId: 'memory:p1:0' } })
+      .event,
+  ).toEqual({ type: 'interaction_removed', interactionId: 'memory:p1:0' });
+  expect(normalizeEvent({ ...raw, type: 'session_deleted' }).event).toEqual({
+    type: 'session_deleted',
+  });
 });

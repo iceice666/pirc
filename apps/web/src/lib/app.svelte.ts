@@ -342,6 +342,8 @@ class AppState {
     if (this.demo) return;
     try {
       this.sessions = await api.sessions();
+      if (this.activeSessionId && !this.sessions.some((s) => s.id === this.activeSessionId))
+        this.removeSession(this.activeSessionId);
       this.markActiveRead();
     } catch {
       /* keep the last list */
@@ -544,6 +546,11 @@ class AppState {
             this.#sessionsChanged();
           },
           onEvent: (event) => {
+            if (seq === this.#openSeq && event.event.type === 'session_deleted') {
+              this.removeSession(id);
+              void this.refreshMemory();
+              return;
+            }
             const current = this.sessionState;
             if (seq !== this.#openSeq || current?.session.id !== id) return;
             this.sessionState = reduceEvent(current, event);
@@ -600,6 +607,34 @@ class AppState {
         if (seq === this.#openSeq) void this.refreshSnapshot();
       }
     }
+  }
+
+  private removeSession(id: string) {
+    const session =
+      this.sessions.find((s) => s.id === id) ??
+      (this.sessionState?.session.id === id ? this.sessionState.session : undefined);
+    this.sessions = this.sessions.filter((s) => s.id !== id);
+    if (id === this.activeSessionId) {
+      ++this.#openSeq;
+      this.#events?.close();
+      this.#events = undefined;
+      this.sessionState = undefined;
+      this.activeSessionId = undefined;
+      this.#draftPending = undefined;
+      clearTimeout(this.#draftTimer);
+      this.draft = '';
+      this.uploads = [];
+      this.panel.reset('');
+      if (session) this.showWorkspace(session.workspaceId);
+    }
+    removeDraft(id);
+  }
+
+  async deleteSession(id: string) {
+    if (!this.demo) await api.deleteSession(id);
+    this.removeSession(id);
+    this.memoryRevision++;
+    await this.refreshMemory();
   }
 
   /** Rename, pin or settle from the sidebar. Applied at once and rolled back on failure. */

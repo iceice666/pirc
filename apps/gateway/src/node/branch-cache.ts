@@ -16,6 +16,10 @@ export class BranchCache {
     { size: number; mtimeMs: number; branch: SessionEntry[] }
   >();
 
+  forget(dir: string): void {
+    this.entries.delete(dir);
+  }
+
   read(dir: string): SessionEntry[] {
     let stat: { size: number; mtimeMs: number };
     try {

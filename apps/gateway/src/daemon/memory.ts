@@ -217,7 +217,7 @@ export class MemoryStore {
   }
 
   /** What an assistant session starts with. */
-  context(user: string) {
+  context(user: string, sessionId?: string) {
     const active = this.entries(user, { status: 'active' });
     const brief = ({ id, content, revision, updatedAt }: MemoryEntry) => ({
       id,
@@ -230,6 +230,19 @@ export class MemoryStore {
       notes: active.filter((entry) => entry.kind === 'note').map(brief),
       usage: this.usage(user),
       pendingProposals: this.proposals(user, 'pending').length,
+      proposalDecisions: sessionId
+        ? this.proposals(user)
+            .filter((p) => p.sessionId === sessionId && p.status !== 'pending')
+            .sort((a, b) => (a.decidedAt ?? 0) - (b.decidedAt ?? 0))
+            .slice(-20)
+            .map((p) => ({
+              id: p.id,
+              action: p.action,
+              status: p.status,
+              targetId: p.targetId,
+              decidedAt: p.decidedAt,
+            }))
+        : [],
     };
   }
 
@@ -378,6 +391,19 @@ export class MemoryStore {
           now(),
         );
       return { proposal: this.proposal(user, id), duplicate: false };
+    });
+  }
+
+  /** Erase entries created here, not entries merely recalled or edited here. */
+  forgetSession(user: string, sessionId: string): void {
+    this.tx(() => {
+      const rows = this.db
+        .query('SELECT id FROM memory_entries WHERE owner_user=? AND created_by_session=?')
+        .all(user, sessionId) as { id: string }[];
+      for (const row of rows) this.forget(user, row.id);
+      this.db
+        .query('DELETE FROM memory_proposals WHERE owner_user=? AND session_id=?')
+        .run(user, sessionId);
     });
   }
 
@@ -603,7 +629,7 @@ export class MemoryStore {
     const at = now();
     this.db
       .prepare(
-        "INSERT INTO memory_entries (id,owner_user,kind,content,status,revision,origins_json,sources_json,created_at,updated_at) VALUES (?,?,?,?,'active',1,?,?,?,?)",
+        "INSERT INTO memory_entries (id,owner_user,kind,content,status,revision,origins_json,sources_json,created_at,updated_at,created_by_session) VALUES (?,?,?,?,'active',1,?,?,?,?,?)",
       )
       .run(
         id,
@@ -614,6 +640,7 @@ export class MemoryStore {
         JSON.stringify(change.sources),
         at,
         at,
+        change.sources.sessionId ?? null,
       );
     const entry = this.entry(user, id);
     this.log(user, entry, 'add', change.actor);

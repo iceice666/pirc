@@ -63,7 +63,7 @@ const daemonMessage = z.discriminatedUnion('type', [
     type: z.literal('request'),
     requestId: z.string().min(1).max(100),
     data: z.object({
-      method: z.enum(['GET', 'POST', 'PATCH', 'PUT']),
+      method: z.enum(['GET', 'POST', 'PATCH', 'PUT', 'DELETE']),
       url: z.string().startsWith('/api/').max(8192),
       user: z.string().min(1),
       payload: z.unknown().optional(),
