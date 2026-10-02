@@ -382,9 +382,15 @@ describe('team kinds and results', () => {
     expect(role.model).toBeUndefined();
     expect(role.thinking).toBeUndefined();
     expect(role.role.enum).toEqual(['general', 'reviewer', 'writer']);
+    // Workspace roles keep overriding node roles, but say where they come from (M6).
     expect(role.role.description).toContain(
-      '- reviewer: Read-only code review [tools: read, grep]',
+      "- reviewer: Read-only code review [from this workspace's .pirc/roles, overriding the node's role of the same name; tools: read, grep]",
     );
+    expect(role.role.description).toContain(
+      "- writer: Writes docs [from this workspace's .pirc/roles]",
+    );
+    expect(role.role.description).toContain('- general: General-purpose agent');
+    expect(role.role.description).not.toMatch(/- general:.*\.pirc\/roles/);
     expect(texts(parentRequest.body)).not.toContain('Report findings as file:line');
     const childRequest = agent.llm.requests.find((r) => isSubagent(r.body))!;
     expect(texts(childRequest.body)).toContain('## Role: reviewer');

@@ -25,6 +25,7 @@
   import { foldRecent, isRunning, needsInput, pinnedFirst } from '../work';
   import ProjectInstructions from './ProjectInstructions.svelte';
   import ProjectSettings from './ProjectSettings.svelte';
+  import ProjectTrust from './ProjectTrust.svelte';
 
   interface Props {
     workspace: Workspace;
@@ -272,8 +273,16 @@
                   </div>
                 {/if}
               </dl>
-              <p>Per-workspace settings will appear here.</p>
             </section>
+            {#if app.usingDemo}
+              <p class="note">The project config is unavailable in demo mode.</p>
+            {:else if !online}
+              <p class="note">
+                The workspace's node is offline: its project config can be reviewed once it is back.
+              </p>
+            {:else}
+              <ProjectTrust workspaceId={workspace.id} />
+            {/if}
           {/if}
         </div>
       {/if}

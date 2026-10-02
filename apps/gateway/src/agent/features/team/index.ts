@@ -9,6 +9,7 @@ import { askQuestions, askQuestionSchema } from '../ask-question.js';
 import { parentChannel, teamChildMode, teamChildName } from './channel.js';
 import { Team, userQuestion, type SubagentOutcome } from './team.js';
 import { configRoles } from '../../config.js';
+import { isInside } from '../../sandbox.js';
 import { DEFAULT_ROLES, describeRoles, roleBriefs, type RoleBrief } from '../../roles.js';
 import { toolPrompt } from '../../prompts/tools.js';
 
@@ -165,10 +166,20 @@ function roleField(agent: Agent) {
   };
 }
 
+/** Where a child's cwd may be: the workspace and allowed paths, not the read-only config ones. */
+function childRoots(agent: Agent): string[] {
+  const { workspace, allowedPaths, protectedPaths } = agent.config;
+  return [workspace, ...allowedPaths].filter(
+    (root, index, all) =>
+      all.indexOf(root) === index && !protectedPaths.some((item) => isInside(root, item)),
+  );
+}
+
 const spawnFields = {
   cwd: {
     type: 'string',
-    description: 'Existing working directory or worktree; defaults to parent cwd',
+    description:
+      'Existing working directory or worktree inside the workspace or its allowed paths; defaults to parent cwd',
   },
 };
 const MAX_FOREGROUND_RESULT = 40_000;
@@ -231,6 +242,13 @@ export function teamFeature(): Feature {
         ? { subagentLimit: options.subagentLimit }
         : {}),
       env: { ...process.env, ...agent.config.env },
+      // Children work inside the parent's workspace and allowed paths (M12),
+      // with the parent's project config (H4).
+      allowedRoots: () => childRoots(agent),
+      project: {
+        root: agent.config.projectRoot ?? agent.config.workspace,
+        trust: process.env.PIRC_PROJECT_TRUST,
+      },
       models: agent.config.models,
       capabilities: () => agent.capabilities,
       instructions: () => (agent.config.workspaceKind === 'chat' ? frozenInstructions(agent) : ''),

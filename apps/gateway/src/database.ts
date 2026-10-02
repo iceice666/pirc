@@ -213,6 +213,12 @@ const migrations = [
   ALTER TABLE sessions ADD COLUMN activity_at INTEGER;
   ALTER TABLE sessions ADD COLUMN read_at INTEGER;
   `,
+  // The project config (.pirc/config.json hooks / env / allowedPaths) the user
+  // trusted for a directory workspace, by hash (agent/config.ts, H3). Node-local.
+  `CREATE TABLE workspace_trust (
+    workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+    project_hash TEXT NOT NULL, trusted_by TEXT NOT NULL, trusted_at INTEGER NOT NULL
+  );`,
 ];
 
 const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');
@@ -447,6 +453,29 @@ export class GatewayDatabase {
 
   requireSessionCapability(sessionId: string, capability: WorkspaceCapability): void {
     this.requireWorkspaceCapability(this.getSession(sessionId).workspaceId, capability);
+  }
+
+  /** The project-config hash the user trusted for a directory workspace (H3), if any. */
+  getWorkspaceTrust(workspaceId: string): string | null {
+    const row = this.raw
+      .prepare('SELECT project_hash FROM workspace_trust WHERE workspace_id=?')
+      .get(workspaceId) as { project_hash: string } | null;
+    return row?.project_hash ?? null;
+  }
+
+  /** Trust `hash` for the workspace, or revoke trust with `null`. */
+  setWorkspaceTrust(workspaceId: string, hash: string | null, user: string): void {
+    if (this.getWorkspace(workspaceId).kind !== 'directory')
+      throw new ApiError(400, 'invalid_input', 'Only directory workspaces have a project config');
+    if (hash === null) {
+      this.raw.prepare('DELETE FROM workspace_trust WHERE workspace_id=?').run(workspaceId);
+      return;
+    }
+    this.raw
+      .prepare(
+        'INSERT INTO workspace_trust (workspace_id,project_hash,trusted_by,trusted_at) VALUES (?,?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET project_hash=excluded.project_hash, trusted_by=excluded.trusted_by, trusted_at=excluded.trusted_at',
+      )
+      .run(workspaceId, hash, user, now());
   }
 
   /** New sessions get a placeholder name that the agent's generated title replaces. */

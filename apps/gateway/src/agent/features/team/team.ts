@@ -8,12 +8,13 @@
  * task, report their final message once, and exit.
  */
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { Subprocess } from 'bun';
 import { thinkingLevels } from '../../config.js';
 import type { ModelsConfig } from '../../../models.js';
 import { relaySandboxRequest } from '../../sandbox-channel.js';
+import { isInside, realResolve } from '../../sandbox.js';
 import { killGroup } from '../../tools/bash.js';
 import type { Question, QuestionResult } from '../ask-question.js';
 import {
@@ -315,6 +316,16 @@ export interface TeamOptions {
   instructions?: () => string;
   /** Children write under the parent session's lease (see write-lease.ts). */
   acquireWrite?(path: string, signal?: AbortSignal): Promise<void>;
+  /**
+   * Directories a child's cwd must be inside: the parent's workspace and
+   * allowed paths (M12). Unset, any directory is accepted (tests only).
+   */
+  allowedRoots?: () => readonly string[];
+  /**
+   * Where children read project config (`.pirc/`) from, and the trust hash
+   * for it: always the parent's, whatever their cwd (H3, H4).
+   */
+  project?: { root: string; trust?: string | undefined };
 }
 
 export class Team {
@@ -524,9 +535,19 @@ export class Team {
     if (mode === 'subagent' && running >= this.subagentLimit)
       throw new Error(`Limit of ${this.subagentLimit} running subagents reached`);
     const task = text(args.task, 'task');
+    if (args.cwd !== undefined && typeof args.cwd !== 'string')
+      throw new Error('cwd must be a path');
     const cwd = resolve(defaults.cwd, args.cwd ?? '.');
     if (!statSync(cwd, { throwIfNoEntry: false })?.isDirectory())
       throw new Error('cwd must be a directory');
+    const roots = this.options.allowedRoots?.();
+    if (roots) {
+      const real = realpathSync(cwd);
+      if (!roots.some((root) => isInside(real, realResolve(root))))
+        throw new Error(
+          `cwd ${cwd} is outside this workspace and its allowed paths (${roots.join(', ')}); a child must work inside them`,
+        );
+    }
     // Only the user picks models, through roles in configuration.
     if (args.model !== undefined || args.thinking !== undefined)
       throw new Error(
@@ -602,6 +623,13 @@ export class Team {
           cwd: member.cwd,
           env: {
             ...(this.options.env ?? process.env),
+            // The parent's project config, never one in the child's cwd (H4).
+            ...(this.options.project
+              ? {
+                  PIRC_PROJECT_ROOT: this.options.project.root,
+                  PIRC_PROJECT_TRUST: this.options.project.trust ?? '',
+                }
+              : {}),
             PIRC_TEAM_AGENT: name,
             PIRC_TEAM_MODE: member.mode,
             PIRC_TEAM_PARENT_PID: String(process.pid),

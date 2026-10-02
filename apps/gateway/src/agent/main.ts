@@ -128,6 +128,8 @@ export async function runAgent(argv: string[]): Promise<void> {
   }
   if (typeof values.thinking === 'string') agent.setThinking(values.thinking);
   if (typeof values.name === 'string' && !agent.sessionName) agent.setName(values.name);
+  // E.g. an untrusted project config whose hooks / env / allowedPaths were ignored (H3).
+  for (const warning of config.warnings ?? []) ui.notify(warning, 'warning');
   await agent.init();
   const shutdown = async () => {
     ui.cancelAll();

@@ -20,7 +20,15 @@ import { NODE_USER_HEADER } from '../protocol.js';
 import { applySessionName, publicSession } from '../session-name.js';
 import type { CommandPayload, Snapshot } from '../types.js';
 import { id, parse, payloadHash } from '../util.js';
-import { loadAgentConfig, sessionSettings } from '../agent/config.js';
+import {
+  loadAgentConfig,
+  parseTrustHash,
+  projectTrustEmpty,
+  projectTrustFields,
+  projectTrustHash,
+  readProjectConfig,
+  sessionSettings,
+} from '../agent/config.js';
 import { recall } from '../agent/features/memory/index.js';
 import { WorkspaceLedger, recallFromWorkspace } from '../agent/features/memory/workspace.js';
 import { historyOf } from '../agent/session-store.js';
@@ -281,6 +289,72 @@ export async function buildNodeApp(
         maxChars: INSTRUCTIONS_MAX_CHARS,
       },
     };
+  });
+
+  /**
+   * A directory workspace's project config (`.pirc/config.json`): its hooks,
+   * env and allowedPaths reach agents only once the user trusted exactly
+   * these values here (agent/config.ts, PIRC_PROJECT_TRUST in runner.ts).
+   */
+  const directoryWorkspace = (request: FastifyRequest) => {
+    const { id: workspaceId } = parse(z.object({ id: z.string().min(1) }), request.params);
+    const workspace = db.getWorkspace(workspaceId);
+    if (workspace.kind !== 'directory')
+      throw new ApiError(400, 'invalid_input', 'Only directory workspaces have a project config');
+    return workspace;
+  };
+  const projectSummary = (workspace: { id: string; canonicalPath: string }) => {
+    const trustedHash = db.getWorkspaceTrust(workspace.id);
+    try {
+      const fields = projectTrustFields(readProjectConfig(workspace.canonicalPath));
+      const hash = projectTrustHash(fields);
+      return {
+        ...fields,
+        hash,
+        trustedHash,
+        trusted: trustedHash === hash,
+        empty: projectTrustEmpty(fields),
+      };
+    } catch (error) {
+      return {
+        error: (error as Error).message.slice(0, 2000),
+        hash: null,
+        trustedHash,
+        trusted: false,
+        empty: true,
+      };
+    }
+  };
+  app.get('/api/workspaces/:id/project-config', async (request) => ({
+    project: projectSummary(directoryWorkspace(request)),
+  }));
+  app.post('/api/workspaces/:id/project-trust', async (request) => {
+    const workspace = directoryWorkspace(request);
+    const body = parse(
+      z.union([
+        z.object({ trusted: z.literal(true), hash: z.string() }).strict(),
+        z.object({ trusted: z.literal(false) }).strict(),
+      ]),
+      request.body,
+    );
+    if (!body.trusted) {
+      db.setWorkspaceTrust(workspace.id, null, request.identity!.user);
+      return { project: projectSummary(workspace) };
+    }
+    const hash = parseTrustHash(body.hash);
+    if (!hash) throw new ApiError(400, 'invalid_input', 'hash must be a sha256 hex digest');
+    const current = projectSummary(workspace);
+    if ('error' in current)
+      throw new ApiError(400, 'invalid_input', `The project config is invalid: ${current.error}`);
+    // Trust only what the user reviewed: the config may have changed since.
+    if (current.hash !== hash)
+      throw new ApiError(
+        409,
+        'conflict',
+        'The project config changed since it was shown; review it again before trusting it',
+      );
+    db.setWorkspaceTrust(workspace.id, hash, request.identity!.user);
+    return { project: projectSummary(workspace) };
   });
 
   app.post('/api/sessions', async (request, reply) => {

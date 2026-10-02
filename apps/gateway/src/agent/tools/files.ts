@@ -1,7 +1,8 @@
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { lstat, mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { truncateOutput } from '../sandbox.js';
-import { optionalNumber, requireString, text, type Tool } from './types.js';
+import { optionalNumber, requireString, text, type Tool, type ToolContext } from './types.js';
 import { toolPrompt } from '../prompts/tools.js';
 
 const imageTypes: Record<string, string> = {
@@ -56,6 +57,37 @@ export const readTool: Tool = {
   },
 };
 
+/** Create or truncate, but never follow a symlink in the last component. */
+const NO_FOLLOW_WRITE =
+  constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW;
+
+/**
+ * The file a write to `file` (already allowed by the guard) really lands in
+ * (plans/security-audit.md M4). The guard resolves a dangling symlink to its
+ * own location, so a link to a missing file outside the writable roots would
+ * pass it: refuse those, and re-check the target of any other link.
+ */
+async function writeTarget(file: string, ctx: ToolContext, shown: string): Promise<string> {
+  const info = await lstat(file).catch(() => undefined);
+  if (!info?.isSymbolicLink()) return file;
+  let target: string;
+  try {
+    target = await realpath(file);
+  } catch {
+    throw new Error(
+      `${shown} is a symbolic link to a missing target; refusing to write through it`,
+    );
+  }
+  return ctx.guard.resolve(target, 'write');
+}
+
+/** Write `content` to `file` once its directory exists, re-checked against the guard. */
+async function writeChecked(file: string, content: string, ctx: ToolContext): Promise<void> {
+  // The parent may only exist now: check where it really is before writing.
+  ctx.guard.resolve(path.join(await realpath(path.dirname(file)), path.basename(file)), 'write');
+  await writeFile(file, content, { flag: NO_FOLLOW_WRITE });
+}
+
 export const writeTool: Tool = {
   name: 'write',
   ptc: true,
@@ -70,11 +102,12 @@ export const writeTool: Tool = {
     additionalProperties: false,
   },
   async execute(args, ctx) {
-    const file = ctx.guard.resolve(requireString(args, 'path'), 'write');
+    const requested = requireString(args, 'path');
     if (typeof args.content !== 'string') throw new Error('content must be a string');
+    const file = await writeTarget(ctx.guard.resolve(requested, 'write'), ctx, requested);
     await ctx.acquireWrite(file);
     await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, args.content);
+    await writeChecked(file, args.content, ctx);
     return text(`Wrote ${Buffer.byteLength(args.content)} bytes to ${args.path}`);
   },
 };
@@ -115,7 +148,8 @@ export const editTool: Tool = {
     additionalProperties: false,
   },
   async execute(args, ctx) {
-    const file = ctx.guard.resolve(requireString(args, 'path'), 'write');
+    const requested = requireString(args, 'path');
+    const file = await writeTarget(ctx.guard.resolve(requested, 'write'), ctx, requested);
     const oldText = requireString(args, 'oldText');
     if (typeof args.newText !== 'string') throw new Error('newText must be a string');
     const before = await readFile(file, 'utf8');
@@ -129,7 +163,7 @@ export const editTool: Tool = {
       ? before.split(oldText).join(args.newText)
       : before.replace(oldText, () => args.newText as string);
     await ctx.acquireWrite(file);
-    await writeFile(file, after);
+    await writeChecked(file, after, ctx);
     const diff = simpleDiff(before, after, String(args.path));
     return text(`Edited ${args.path} (${count} replacement${count === 1 ? '' : 's'})`, { diff });
   },

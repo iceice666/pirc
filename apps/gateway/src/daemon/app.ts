@@ -524,6 +524,39 @@ export async function buildDaemonApp(
       payload: { text: body.text },
     });
   });
+  /**
+   * A directory workspace's project config and its trust (agent/config.ts):
+   * the node keeps both; the gateway only relays the user's decision.
+   */
+  const directoryOnNode = (request: FastifyRequest, rest: string) => {
+    const { workspaceId } = parse(z.object({ workspaceId: z.string().min(1) }), request.params);
+    const workspace = db.getWorkspace(workspaceId);
+    if (workspace.kind !== 'directory' || !workspace.id.startsWith(`${workspace.hostId}:`))
+      throw new ApiError(400, 'invalid_input', 'Only directory workspaces have a project config');
+    if (!nodes.get(workspace.hostId))
+      throw new ApiError(503, 'node_offline', `${workspace.hostId} is offline`);
+    const local = workspace.id.slice(workspace.hostId.length + 1);
+    return { nodeId: workspace.hostId, url: `/api/workspaces/${encodeURIComponent(local)}${rest}` };
+  };
+  app.get('/api/workspaces/:workspaceId/project-config', async (request, reply) => {
+    const target = directoryOnNode(request, '/project-config');
+    return forward(reply, target.nodeId, request, { method: 'GET', url: target.url });
+  });
+  app.post('/api/workspaces/:workspaceId/project-trust', async (request, reply) => {
+    const target = directoryOnNode(request, '/project-trust');
+    const body = parse(
+      z.union([
+        z.object({ trusted: z.literal(true), hash: z.string().regex(/^[0-9a-f]{64}$/) }).strict(),
+        z.object({ trusted: z.literal(false) }).strict(),
+      ]),
+      request.body,
+    );
+    return forward(reply, target.nodeId, request, {
+      method: 'POST',
+      url: target.url,
+      payload: body,
+    });
+  });
   app.post('/api/workspaces', async (request, reply) => {
     const body = parse(createWorkspaceBody, request.body);
     if (!nodes.get(body.nodeId)) throw new ApiError(503, 'node_offline', 'Node is offline');

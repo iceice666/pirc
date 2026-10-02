@@ -54,6 +54,9 @@ const registration = z.object({
               models: z.array(z.string().max(200)).max(20).optional(),
               thinking: z.string().max(20).optional(),
               tools: z.array(z.string().max(64)).max(64).optional(),
+              /** From the workspace's .pirc/roles, possibly replacing a node or built-in role. */
+              source: z.enum(['workspace']).optional(),
+              overrides: z.enum(['node', 'builtin']).optional(),
             }),
           )
           .max(50)

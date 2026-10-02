@@ -186,6 +186,10 @@ class PiRunner {
         PIRC_GATEWAY: '1',
         // `chat` makes the agent a personal assistant (see node/chat.ts).
         PIRC_WORKSPACE_KIND: workspace.kind,
+        // The project config hash the user trusted in Settings; the agent ignores
+        // .pirc/config.json hooks / env / allowedPaths unless they still match.
+        PIRC_PROJECT_TRUST:
+          (workspace.kind === 'directory' && db.getWorkspaceTrust(workspace.id)) || '',
         // Only for protecting it: the agent gets the text on its configure line.
         ...(workspace.kind === 'chat'
           ? { PIRC_PROJECT_INSTRUCTIONS: projectInstructionsPath(workspace)! }

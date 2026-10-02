@@ -11,7 +11,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'bun:test';
 import { Agent } from '../src/agent/agent.js';
-import { loadAgentConfig } from '../src/agent/config.js';
+import {
+  loadAgentConfig,
+  projectTrustFields,
+  projectTrustHash,
+  readProjectConfig,
+} from '../src/agent/config.js';
 import { RpcUi } from '../src/agent/rpc.js';
 import { SessionStore } from '../src/agent/session-store.js';
 import { builtinTools } from '../src/agent/tools/index.js';
@@ -402,7 +407,7 @@ describe('project hooks', () => {
     expect(agent.llm.requests[0]!.body.messages[0].content).toContain('SESSION-HOOK-CONTEXT');
   });
 
-  it('merges project config from .pirc and rejects unknown project keys', async () => {
+  it('merges trusted project config from .pirc', async () => {
     const root = path.join(tmpdir(), `pirc-proj-${Date.now()}`);
     mkdirSync(path.join(root, '.pirc'), { recursive: true });
     writeFileSync(path.join(root, '.pirc/AGENTS.md'), 'PROJECT-PROMPT');
@@ -410,7 +415,9 @@ describe('project hooks', () => {
       path.join(root, '.pirc/config.json'),
       JSON.stringify({ env: { PIRC_TEST_VAR: 'from-project' } }),
     );
-    const agent = await start({ workspace: root });
+    // Project env applies only once trusted (agent-project-trust.test.ts).
+    const trust = projectTrustHash(projectTrustFields(readProjectConfig(root)));
+    const agent = await start({ workspace: root, env: { PIRC_PROJECT_TRUST: trust } });
     agent.llm.push(
       { tool: { id: 'e', name: 'bash', args: { command: 'echo $PIRC_TEST_VAR' } } },
       { text: 'k' },

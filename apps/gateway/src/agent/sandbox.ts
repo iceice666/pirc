@@ -8,7 +8,7 @@ import {
   type PathPolicy,
 } from '../sandbox-policy.js';
 
-export { realResolve } from '../sandbox-policy.js';
+export { isInside, realResolve } from '../sandbox-policy.js';
 
 /**
  * The file tools' view of the sandbox policy (sandbox-policy.ts): reads are
@@ -64,10 +64,30 @@ export class PathGuard {
       throw new Error(
         `Path ${shown} is outside the writable paths (${this.policy.allowWrite.join(', ')})`,
       );
-    if (this.protectedRoots.some((root) => isInside(real, root)))
+    if (
+      this.protectedRoots.some((root) => isInside(real, root)) ||
+      inProjectConfigDir(real, this.policy.allowWrite)
+    )
       throw new Error(`Path ${input} is protected agent configuration and cannot be modified`);
     return absolute;
   }
+}
+
+/**
+ * Inside a `.pirc/` directory below a writable root, at any depth: project
+ * config (hooks, env, roles, skills) that only the user writes. A nested one
+ * would otherwise let the agent author config for a child started there (H4).
+ * Compared case-insensitively, as macOS file systems usually are.
+ */
+export function inProjectConfigDir(real: string, roots: readonly string[]): boolean {
+  return roots.some(
+    (root) =>
+      isInside(real, root) &&
+      path
+        .relative(root, real)
+        .split(path.sep)
+        .some((part) => part.toLowerCase() === '.pirc'),
+  );
 }
 
 /** Keep the head and tail of oversized output so errors at the end stay visible. */

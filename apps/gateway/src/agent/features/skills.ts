@@ -53,7 +53,12 @@ export function skillsFeature(): Feature {
   let current: Agent | null = null;
   const scan = () =>
     current && enabled(current)
-      ? discoverSkills(skillRoots(current.config.configDir, current.config.workspace))
+      ? discoverSkills(
+          skillRoots(
+            current.config.configDir,
+            current.config.projectRoot ?? current.config.workspace,
+          ),
+        )
       : { skills: [], problems: [] };
 
   const invoke = (agent: Agent, skill: Skill, args: string) => {

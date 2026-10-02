@@ -50,18 +50,32 @@ beforeEach(() => {
     vi.fn(async (url: string) =>
       String(url).endsWith('/instructions')
         ? new Response(JSON.stringify({ instructions: { text: 'Be brief', maxChars: 8000 } }))
-        : new Response(
-            JSON.stringify({
-              capabilities: {
-                version: 1,
-                delegation: true,
-                memory_search: true,
-                remote_recall: true,
-                schedules: true,
-                web_search: true,
-              },
-            }),
-          ),
+        : String(url).endsWith('/project-config')
+          ? new Response(
+              JSON.stringify({
+                project: {
+                  hooks: { sessionStart: [{ command: 'make setup', timeoutMs: 10000 }] },
+                  env: {},
+                  allowedPaths: [],
+                  hash: 'a'.repeat(64),
+                  trustedHash: null,
+                  trusted: false,
+                  empty: false,
+                },
+              }),
+            )
+          : new Response(
+              JSON.stringify({
+                capabilities: {
+                  version: 1,
+                  delegation: true,
+                  memory_search: true,
+                  remote_recall: true,
+                  schedules: true,
+                  web_search: true,
+                },
+              }),
+            ),
     ),
   );
 });
@@ -153,7 +167,7 @@ describe('WorkspacePage', () => {
     expect(update).toHaveBeenCalledWith('a', { name: 'Renamed' });
   });
 
-  it("shows a directory workspace's facts under Settings", () => {
+  it("shows a directory workspace's facts and project config under Settings", async () => {
     render(directory);
     tab('Settings').click();
     flushSync();
@@ -162,6 +176,13 @@ describe('WorkspacePage', () => {
     expect(facts).toContain('Held by “Beta”');
     expect(facts).toContain('gpt-x');
     expect(target.querySelector('textarea')).toBeNull();
+    await flush();
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/workspaces/node%3Aws/project-config',
+      expect.anything(),
+    );
+    expect(target.textContent).toContain('make setup');
+    expect(target.textContent).toContain('Not trusted');
   });
 
   it("edits a chat project's instructions and capabilities under Settings", async () => {

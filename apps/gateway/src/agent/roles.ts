@@ -9,6 +9,8 @@
  * `$PIRC_CONFIG_DIR/roles/`, then the workspace's `.pirc/roles/`; a later
  * file replaces a role of the same name as a whole. `.pirc/` is protected
  * from the agent's tools, so an agent cannot define or widen its own roles.
+ * A role from the workspace (the repository) is marked as such wherever roles
+ * are listed, including when it replaces a node role (security audit M6).
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -30,6 +32,16 @@ export interface RolePreset {
   thinking?: string;
   /** Tool allowlist (team coordination tools are always kept for teammates). */
   tools?: string[];
+  /** Set by `readRoles` for a role defined by the workspace's `.pirc/roles/`. */
+  source?: 'workspace';
+  /** Set when that workspace role replaced a node (or built-in) role of the same name. */
+  overrides?: 'node' | 'builtin';
+}
+
+/** A directory of role files and who wrote it. */
+export interface RoleDir {
+  dir: string;
+  source: 'node' | 'workspace';
 }
 
 /** A role as the agent it applies to carries it. */
@@ -47,6 +59,10 @@ export interface RoleBrief {
   models?: string[] | undefined;
   thinking?: string | undefined;
   tools?: string[] | undefined;
+  /** `workspace`: defined by the repository's `.pirc/roles/`, not the node's user. */
+  source?: 'workspace' | undefined;
+  /** The workspace role replaces a role of the same name from here. */
+  overrides?: 'node' | 'builtin' | undefined;
 }
 
 export const DEFAULT_ROLES: Record<string, RolePreset> = {
@@ -177,14 +193,24 @@ export function expandModels(
 }
 
 /** Where role files are looked up, lowest precedence first. */
-export function roleDirs(configDir: string, workspace: string): string[] {
-  return [path.join(configDir, 'roles'), path.join(workspace, '.pirc', 'roles')];
+export function roleDirs(configDir: string, workspace: string): RoleDir[] {
+  return [
+    { dir: path.join(configDir, 'roles'), source: 'node' },
+    { dir: path.join(workspace, '.pirc', 'roles'), source: 'workspace' },
+  ];
 }
 
-/** The roles in `dirs` over the built-in ones. Throws on an invalid role file. */
-export function readRoles(dirs: string[]): Record<string, RolePreset> {
+/**
+ * The roles in `dirs` over the built-in ones (a plain path is a node
+ * directory). Throws on an invalid role file.
+ */
+export function readRoles(dirs: Array<string | RoleDir>): Record<string, RolePreset> {
   const roles: Record<string, RolePreset> = { ...DEFAULT_ROLES };
-  for (const dir of dirs) {
+  const origin: Record<string, 'node' | 'builtin'> = Object.fromEntries(
+    Object.keys(DEFAULT_ROLES).map((name) => [name, 'builtin' as const]),
+  );
+  for (const item of dirs) {
+    const { dir, source } = typeof item === 'string' ? { dir: item, source: 'node' } : item;
     let entries: string[];
     try {
       entries = readdirSync(dir).sort();
@@ -194,10 +220,23 @@ export function readRoles(dirs: string[]): Record<string, RolePreset> {
     for (const entry of entries) {
       if (entry.startsWith('.') || !entry.endsWith('.md')) continue;
       const file = path.join(dir, entry);
+      const name = entry.slice(0, -3);
+      let role: RolePreset;
       try {
-        roles[entry.slice(0, -3)] = parseRole(entry.slice(0, -3), readFileSync(file, 'utf8'));
+        role = parseRole(name, readFileSync(file, 'utf8'));
       } catch (error) {
         throw new Error(`${file}: ${(error as Error).message}`);
+      }
+      if (source === 'workspace') {
+        const replaced = Object.hasOwn(roles, name) ? origin[name] : undefined;
+        roles[name] = {
+          ...role,
+          source: 'workspace',
+          ...(replaced ? { overrides: replaced } : {}),
+        };
+      } else {
+        roles[name] = role;
+        origin[name] = 'node';
       }
     }
   }
@@ -213,20 +252,33 @@ export function loadRoles(
 }
 
 export function roleBriefs(roles: Record<string, RolePreset>): RoleBrief[] {
-  return Object.entries(roles).map(([name, { description, models, thinking, tools }]) => ({
-    name,
-    ...(description ? { description } : {}),
-    ...(models ? { models } : {}),
-    ...(thinking ? { thinking } : {}),
-    ...(tools ? { tools } : {}),
-  }));
+  return Object.entries(roles).map(
+    ([name, { description, models, thinking, tools, source, overrides }]) => ({
+      name,
+      ...(description ? { description } : {}),
+      ...(models ? { models } : {}),
+      ...(thinking ? { thinking } : {}),
+      ...(tools ? { tools } : {}),
+      ...(source ? { source } : {}),
+      ...(overrides ? { overrides } : {}),
+    }),
+  );
+}
+
+/** Where a role comes from, when that is the workspace (repository) rather than the user. */
+export function roleSourceNote(role: Pick<RoleBrief, 'source' | 'overrides'>): string {
+  if (role.source !== 'workspace') return '';
+  return role.overrides
+    ? `from this workspace's .pirc/roles, overriding the ${role.overrides === 'node' ? "node's" : 'built-in'} role of the same name`
+    : "from this workspace's .pirc/roles";
 }
 
 /** One line per role, for the picking agent. */
 export function describeRoles(roles: RoleBrief[]): string {
   return roles
-    .map(({ name, description, models, thinking, tools }) => {
+    .map(({ name, description, models, thinking, tools, source, overrides }) => {
       const traits = [
+        roleSourceNote({ source, overrides }),
         models && `model ${models.join(' > ')}`,
         thinking && `thinking ${thinking}`,
         tools && `tools: ${tools.join(', ')}`,
