@@ -1,9 +1,22 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { BrowserAuthConfig } from '../config.js';
 import { ApiError } from '../errors.js';
 
 const singleHeader = (value: string | string[] | undefined) =>
   Array.isArray(value) ? undefined : value;
+
+/** Header the reverse proxy sets to `PIRC_PROXY_SECRET` (and must strip from clients). */
+export const PROXY_SECRET_HEADER = 'x-pirc-proxy-secret';
+
+const digest = (value: string) => createHash('sha256').update(value).digest();
+
+/** Constant-time comparison of the proxy's header with the configured secret. */
+export function proxySecretMatches(header: string | string[] | undefined, secret: string): boolean {
+  const value = singleHeader(header);
+  // Hashing gives equal-length buffers, so timingSafeEqual never leaks the length.
+  return value !== undefined && timingSafeEqual(digest(value), digest(secret));
+}
 
 /** Checks a device token; see `DeviceTokens.authenticate`. */
 export interface DeviceAuthenticator {
@@ -17,7 +30,8 @@ const DEVICE_DENIED = /^\/api\/(?:devices|providers|provider-auth)(?:\/|$)/;
 
 /**
  * Identify the caller of a browser-API request. Every request must come
- * through a trusted proxy with an allowed Host. The identity is either the
+ * through a trusted proxy (its address and, when `PIRC_PROXY_SECRET` is set,
+ * the shared secret header) with an allowed Host. The identity is either the
  * proxy's forward-auth header or, for native clients, a device bearer token;
  * a request carrying both is refused so a misrouted proxy fails closed.
  */
@@ -29,6 +43,12 @@ export function validateRequest(
 ): void {
   const remoteAddress = request.socket.remoteAddress;
   if (!remoteAddress || !config.trustedProxies.has(remoteAddress))
+    throw new ApiError(401, 'unauthenticated', 'Request did not arrive from a trusted proxy');
+  // A local process connecting from the proxy's address is not the proxy.
+  if (
+    config.proxySecret !== undefined &&
+    !proxySecretMatches(request.headers[PROXY_SECRET_HEADER], config.proxySecret)
+  )
     throw new ApiError(401, 'unauthenticated', 'Request did not arrive from a trusted proxy');
   const host = singleHeader(request.headers.host);
   if (!host || !config.allowedHosts.has(host))

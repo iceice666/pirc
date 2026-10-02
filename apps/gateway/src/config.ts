@@ -56,6 +56,12 @@ export interface BrowserAuthConfig {
   allowedOrigins: Set<string>;
   allowedHosts: Set<string>;
   identityHeader: string;
+  /**
+   * Shared secret the proxy proves itself with (`PIRC_PROXY_SECRET`, sent as
+   * `x-pirc-proxy-secret`). Without it any local process that can reach the
+   * gateway port from a trusted address is "the proxy" (audit M14).
+   */
+  proxySecret?: string | undefined;
 }
 
 /**
@@ -249,6 +255,7 @@ export function loadDaemonConfig(env: NodeJS.ProcessEnv = process.env): DaemonCo
     allowedOrigins,
     allowedHosts,
     identityHeader: (env.PIRC_IDENTITY_HEADER ?? 'x-pirc-user').toLowerCase(),
+    ...proxySecret(env.PIRC_PROXY_SECRET),
     nodeTokens,
     eventBufferSize: integer(env.PIRC_EVENT_BUFFER_SIZE, 1000),
     websocketMaxBufferedBytes: integer(env.PIRC_WS_MAX_BUFFERED_BYTES, 1_048_576),
@@ -332,6 +339,11 @@ export function loadNodeConfig(
       ),
       idleMs: integer(env.PIRC_BROWSER_IDLE_MS, 30 * 60_000),
       viewport: viewport(env.PIRC_BROWSER_VIEWPORT),
+      // Private hosts the agent's browser may reach anyway (node/browser-hosts.ts).
+      allowPrivateHosts: csv(env.PIRC_BROWSER_ALLOW_PRIVATE),
+      // The gateway's own origins are never a browsing target.
+      gatewayHost: new URL(daemonUrl).hostname,
+      blockedHosts: csv(env.PIRC_BROWSER_BLOCK_HOSTS),
     },
     sandbox: {
       enabled: env.PIRC_SANDBOX !== 'off',
@@ -341,6 +353,14 @@ export function loadNodeConfig(
     interactionTtlMs: integer(env.PIRC_INTERACTION_TTL_MS, 3_600_000),
     shutdownGraceMs: integer(env.PIRC_SHUTDOWN_GRACE_MS, 5_000),
   };
+}
+
+/** `PIRC_PROXY_SECRET`: optional, but a guessable one would be worse than an honest absence. */
+function proxySecret(value: string | undefined): { proxySecret?: string } {
+  const secret = value?.trim();
+  if (!secret) return {};
+  if (secret.length < 32) throw new Error('PIRC_PROXY_SECRET must be at least 32 characters');
+  return { proxySecret: secret };
 }
 
 /** An IANA time zone (`PIRC_TIMEZONE`), else the system's. */

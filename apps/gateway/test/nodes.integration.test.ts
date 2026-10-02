@@ -32,6 +32,35 @@ function receive(socket: WebSocket): Promise<any> {
   });
 }
 
+describe('trusted proxy secret', () => {
+  it('refuses browser requests without the proxy secret, but still accepts nodes', async () => {
+    const secret = 'p'.repeat(40);
+    const { app } = await buildDaemonApp(
+      daemonConfig({ proxySecret: secret, nodeTokens: new Map([['node-a', 'a'.repeat(32)]]) }),
+    );
+    apps.push(app);
+    const forged = await app.inject({ method: 'GET', url: '/api/workspaces', headers });
+    expect(forged.statusCode).toBe(401);
+    const wrong = await app.inject({
+      method: 'GET',
+      url: '/api/workspaces',
+      headers: { ...headers, 'x-pirc-proxy-secret': 'q'.repeat(40) },
+    });
+    expect(wrong.statusCode).toBe(401);
+    const proxied = await app.inject({
+      method: 'GET',
+      url: '/api/workspaces',
+      headers: { ...headers, 'x-pirc-proxy-secret': secret },
+    });
+    expect(proxied.statusCode).toBe(200);
+    // The node link authenticates with its own token, not the proxy secret.
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const port = (app.server.address() as { port: number }).port;
+    const node = await open(`ws://127.0.0.1:${port}/node/connect`, 'node-a', 'a'.repeat(32));
+    expect(node.readyState).toBe(WebSocket.OPEN);
+  });
+});
+
 describe('node registrations', () => {
   it('registers independent nodes and removes them on disconnect', async () => {
     const { app } = await buildDaemonApp(

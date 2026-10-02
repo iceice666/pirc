@@ -11,6 +11,7 @@ import {
   checkUrl,
   findBrowserExecutable,
   maskPasswords,
+  sensitiveField,
   type BrowserFrame,
   type BrowserTarget,
 } from '../src/node/browser.js';
@@ -32,6 +33,57 @@ describe('browser helpers', () => {
     );
     // A short password does not blank unrelated text.
     expect(maskPasswords('- text: a b a', ['a'])).toBe('- text: a b a');
+  });
+
+  it('recognizes secret fields, including password inputs toggled to text', () => {
+    const field = (
+      tagName: string,
+      attributes: Record<string, string> = {},
+      extra: Record<string, unknown> = {},
+    ) => ({
+      nodeType: 1,
+      tagName,
+      type: attributes.type ?? (tagName === 'INPUT' ? 'text' : undefined),
+      getAttribute: (name: string) => attributes[name] ?? null,
+      labels: [],
+      ...extra,
+    });
+    expect(sensitiveField(field('INPUT', { type: 'password' }))).toBe(true);
+    expect(sensitiveField(field('INPUT', { name: 'user_password' }))).toBe(true);
+    expect(sensitiveField(field('INPUT', { id: 'pass' }))).toBe(true);
+    expect(sensitiveField(field('INPUT', { 'aria-label': 'Client secret' }))).toBe(true);
+    expect(sensitiveField(field('INPUT', { autocomplete: 'one-time-code' }))).toBe(true);
+    expect(sensitiveField(field('INPUT', { autocomplete: 'cc-csc' }))).toBe(true);
+    expect(sensitiveField(field('INPUT', { name: 'otp' }))).toBe(true);
+    expect(sensitiveField(field('INPUT', { name: 'cvv' }))).toBe(true);
+    expect(
+      sensitiveField(field('INPUT', { name: 'x' }, { labels: [{ textContent: 'Password' }] })),
+    ).toBe(true);
+    expect(sensitiveField(field('INPUT', { name: 'email' }))).toBe(false);
+    expect(sensitiveField(field('TEXTAREA', { name: 'comment' }))).toBe(false);
+    // Only editable fields: a "Forgot password?" button is not one.
+    expect(sensitiveField(field('BUTTON', { id: 'forgot-password' }))).toBe(false);
+    expect(sensitiveField(field('INPUT', { type: 'checkbox', name: 'show-password' }))).toBe(false);
+    expect(sensitiveField(null)).toBe(false);
+  });
+
+  it('checks the focused element, through shadow roots', () => {
+    const inner = {
+      nodeType: 1,
+      tagName: 'INPUT',
+      type: 'password',
+      getAttribute: () => null,
+    };
+    const host = { nodeType: 1, tagName: 'X-LOGIN', shadowRoot: { activeElement: inner } };
+    const saved = (globalThis as any).document;
+    (globalThis as any).document = { activeElement: host };
+    try {
+      expect(sensitiveField()).toBe(true);
+      (globalThis as any).document = { activeElement: { nodeType: 1, tagName: 'BODY' } };
+      expect(sensitiveField()).toBe(false);
+    } finally {
+      (globalThis as any).document = saved;
+    }
   });
 
   it('finds a browser on PATH before the macOS app bundles', () => {
@@ -61,12 +113,19 @@ describe.skipIf(!executable)('BrowserManager (real Chromium)', () => {
         const html =
           url.pathname === '/login'
             ? `<!doctype html><title>Login</title><form><label>User <input name=u></label><label>Password <input type=password name=p value="hunter2"></label></form>`
-            : url.pathname === '/done'
-              ? `<!doctype html><title>Done</title><h1>Thanks ${url.searchParams.get('q') ?? ''}</h1>`
-              : `<!doctype html><title>Home</title><main><h1>Hello</h1><p>Some <b>bold</b> text and a <a href="/done?q=link">link</a>.</p>
+            : url.pathname === '/toggled'
+              ? `<!doctype html><title>Toggled</title><label>Secret <input type=text name=password value="hunter2"></label><input aria-label=Note name=note>`
+              : url.pathname === '/redirect'
+                ? null
+                : url.pathname === '/done'
+                  ? `<!doctype html><title>Done</title><h1>Thanks ${url.searchParams.get('q') ?? ''}</h1>`
+                  : `<!doctype html><title>Home</title><main><h1>Hello</h1><p>Some <b>bold</b> text and a <a href="/done?q=link">link</a>.</p>
 <ul><li>one</li><li>two</li></ul><table><tr><th>a</th><th>b</th></tr><tr><td>1</td><td>2</td></tr></table>
 <form action="/done"><input name=q aria-label=Query><select name=s aria-label=Size><option>S</option><option>M</option></select><button>Go</button></form>
 <script>document.querySelector('h1').insertAdjacentHTML('afterend','<p id=js>Rendered by JS</p>')</script></main>`;
+        if (html === null)
+          // To a host the guard blocks (only 127.0.0.1 is allowed).
+          return Response.redirect(`http://localhost:${server.port}/done?q=private`, 302);
         return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
       },
     });
@@ -78,6 +137,8 @@ describe.skipIf(!executable)('BrowserManager (real Chromium)', () => {
       profilesDir: mkdtempSync(path.join(tmpdir(), 'pirc-browser-profiles-')),
       idleMs: 60_000,
       viewport: { width: 800, height: 600 },
+      // The test server is on loopback, which the browser refuses by default.
+      allowPrivateHosts: ['127.0.0.1'],
     });
   });
   afterAll(async () => {
@@ -137,6 +198,49 @@ describe.skipIf(!executable)('BrowserManager (real Chromium)', () => {
     await expect(
       manager.handle(target, 'type', { ref: pass, text: 'x' }, signal),
     ).rejects.toMatchObject({ code: 'password_field' });
+  }, 30_000);
+
+  it('refuses keys on a focused secret field, and fields toggled to text', async () => {
+    const login = (await manager.handle(
+      target,
+      'navigate',
+      { url: `${base}/login` },
+      signal,
+    )) as any;
+    const pass = /textbox "Password" \[ref=(\w+)\]/.exec(login.snapshot)?.[1];
+    await manager.handle(target, 'click', { ref: pass, snapshot: false }, signal);
+    await expect(manager.handle(target, 'press', { key: 'a' }, signal)).rejects.toMatchObject({
+      code: 'password_field',
+    });
+    // Moving on is fine.
+    await manager.handle(target, 'press', { key: 'Tab', snapshot: false }, signal);
+    const toggled = (await manager.handle(
+      target,
+      'navigate',
+      { url: `${base}/toggled` },
+      signal,
+    )) as any;
+    const secret = /textbox "Secret" \[ref=(\w+)\]/.exec(toggled.snapshot)?.[1];
+    const note = /textbox "Note" \[ref=(\w+)\]/.exec(toggled.snapshot)?.[1];
+    await expect(
+      manager.handle(target, 'type', { ref: secret, text: 'x' }, signal),
+    ).rejects.toMatchObject({ code: 'password_field' });
+    await manager.handle(target, 'type', { ref: note, text: 'fine', snapshot: false }, signal);
+    await manager.handle(target, 'press', { key: 'a', snapshot: false }, signal);
+  }, 30_000);
+
+  it('refuses private hosts, before navigating and after a redirect', async () => {
+    await expect(
+      manager.handle(target, 'navigate', { url: `http://localhost:${server.port}/` }, signal),
+    ).rejects.toMatchObject({ statusCode: 403, message: expect.stringContaining('loopback') });
+    await expect(
+      manager.handle(target, 'fetch', { url: 'http://169.254.169.254/latest/meta-data/' }, signal),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    await expect(
+      manager.handle(target, 'fetch', { url: `${base}/redirect` }, signal),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    const status = (await manager.handle(target, 'status', {}, signal)) as any;
+    expect(status.url).not.toContain('private');
   }, 30_000);
 
   it('streams frames to viewers, and makes the agent wait while the user has control', async () => {

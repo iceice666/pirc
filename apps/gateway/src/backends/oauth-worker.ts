@@ -5,6 +5,7 @@ import {
   type OAuthLoginCallbacks,
 } from '@mariozechner/pi-ai/oauth';
 import { createInterface } from 'node:readline';
+import { allowlistedEnv } from '../env-allowlist.js';
 import { selfCommand } from '../self.js';
 
 export type LoginRunner = (
@@ -30,6 +31,26 @@ type WorkerEvent =
   | { type: 'result'; credentials: OAuthCredentials }
   | { type: 'error' };
 
+/**
+ * The worker runs provider login code; it needs to find its executable, a
+ * temporary directory, certificates and the outbound proxy the gateway uses,
+ * never the gateway's node tokens, web search or VAPID keys.
+ */
+const PROXY_ENV = [
+  'HTTPS_PROXY',
+  'https_proxy',
+  'HTTP_PROXY',
+  'http_proxy',
+  'NO_PROXY',
+  'no_proxy',
+];
+export const oauthWorkerEnv = (
+  env: NodeJS.ProcessEnv = process.env,
+): Record<string, string | undefined> => ({
+  ...allowlistedEnv(env, PROXY_ENV),
+  PI_OAUTH_CALLBACK_HOST: '127.0.0.1',
+});
+
 async function runWorker(
   request: WorkerRequest,
   callbacks: OAuthLoginCallbacks,
@@ -39,7 +60,7 @@ async function runWorker(
     stdin: 'pipe',
     stdout: 'pipe',
     stderr: 'ignore',
-    env: { ...process.env, PI_OAUTH_CALLBACK_HOST: '127.0.0.1' },
+    env: oauthWorkerEnv(),
   });
   const abort = () => child.kill('SIGKILL');
   callbacks.signal?.addEventListener('abort', abort, { once: true });

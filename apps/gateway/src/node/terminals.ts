@@ -4,14 +4,23 @@
  * connections (a reconnect replays the retained scrollback) and end when the
  * shell exits, the user closes them, or the gateway shuts down.
  *
- * Not a sandbox: the shell has the gateway account's permissions, exactly
+ * Not a sandbox: the shell has the node account's permissions, exactly
  * like the agent's own Bash tool.
+ *
+ * Environment: the same allowlist as every process the node starts
+ * (node/secrets.ts), so the node's tokens and any provider keys in its
+ * service environment never show up in a browser-reachable shell. A login
+ * shell re-reads the user's profile, which restores their usual setup. The
+ * one addition is the ssh-agent socket: only the human types here (the agent
+ * has no access to panel terminals), and on macOS the socket comes from
+ * launchd, not from a profile, so `git push` over ssh would break without it.
  */
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import type { Subprocess, Terminal } from 'bun';
 import { ApiError } from '../errors.js';
 import { killGroup } from '../agent/tools/bash.js';
+import { withoutSecrets } from './secrets.js';
 
 const SCROLLBACK_BYTES = 256 * 1024;
 const PER_SESSION = 4;
@@ -56,7 +65,8 @@ export class TerminalManager {
   private closing = false;
 
   constructor(
-    private readonly env: () => Record<string, string | undefined> = () => process.env,
+    private readonly env: () => Record<string, string | undefined> = () =>
+      withoutSecrets(process.env),
     private readonly shell?: string,
   ) {}
 
@@ -103,6 +113,7 @@ export class TerminalManager {
         detached: true,
         env: {
           ...this.env(),
+          ...(process.env.SSH_AUTH_SOCK ? { SSH_AUTH_SOCK: process.env.SSH_AUTH_SOCK } : {}),
           TERM: 'xterm-256color',
           COLORTERM: 'truecolor',
           PIRC_TERMINAL: '1',

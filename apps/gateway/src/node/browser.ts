@@ -10,7 +10,11 @@
  * input is forwarded until control is returned.
  *
  * Not a sandbox: the browser has the node account's network access and the
- * workspace profile's logins.
+ * workspace profile's logins. It may only reach public hosts: loopback,
+ * private and link-local addresses, local names and the gateway itself are
+ * refused (node/browser-hosts.ts) unless the node allows them
+ * (PIRC_BROWSER_ALLOW_PRIVATE). Never log into the pirc web UI inside an
+ * agent's browser profile: a later agent could drive it with those cookies.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdirSync, statSync } from 'node:fs';
@@ -18,6 +22,7 @@ import path from 'node:path';
 import type { BrowserContext, Page } from 'playwright-core';
 import { ApiError } from '../errors.js';
 import { pageMarkdown, passwordValues } from './browser-extract.js';
+import { BrowserHostGuard, blockedError, type Resolver } from './browser-hosts.js';
 import { withoutSecrets } from './secrets.js';
 
 export interface BrowserSettings {
@@ -38,6 +43,17 @@ export interface BrowserSettings {
   /** Close a session's tabs after this long without activity or viewers. */
   idleMs: number;
   viewport: { width: number; height: number };
+  /**
+   * Private hosts the browser may reach anyway (PIRC_BROWSER_ALLOW_PRIVATE):
+   * host names, `*.suffix`, IP addresses, CIDR ranges, or `*` for all.
+   */
+  allowPrivateHosts?: string[] | undefined;
+  /** Host of the gateway this node connects to; always refused unless allowed above. */
+  gatewayHost?: string | undefined;
+  /** The gateway's other (public) host names (PIRC_BROWSER_BLOCK_HOSTS), refused likewise. */
+  blockedHosts?: string[] | undefined;
+  /** For tests: replace DNS resolution for the host check. */
+  resolveHost?: Resolver;
   /** For tests: replace Playwright's launcher. */
   launch?: (profileDir: string, settings: BrowserSettings) => Promise<BrowserContext>;
 }
@@ -151,6 +167,8 @@ async function defaultLaunch(profileDir: string, settings: BrowserSettings) {
     viewport: settings.viewport,
     // The node account's own browser: keep downloads inside the profile.
     acceptDownloads: false,
+    // Requests a service worker makes would bypass the host check (context.route).
+    serviceWorkers: 'block',
     // Pages run untrusted code; the browser needs none of the node's secrets.
     env: withoutSecrets(process.env),
   });
@@ -170,6 +188,57 @@ export function checkUrl(raw: unknown): string {
     throw new ApiError(400, 'invalid_input', 'Only http and https URLs can be opened');
   return url.href;
 }
+
+/**
+ * In-page: whether a field takes a secret (audit M9), for `el` or else the
+ * focused element (through shadow roots). Password inputs, and editable fields
+ * whose name, id, aria-label, autocomplete, placeholder or label mentions a
+ * password, secret, one-time code or card security code: a "show password"
+ * toggle turns the input into type=text but leaves those in place.
+ * Self-contained, because Playwright serializes it into the page.
+ */
+export function sensitiveField(target?: unknown): boolean {
+  let el: any = target ?? (globalThis as any).document?.activeElement;
+  if (target === undefined) while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
+  if (!el || el.nodeType !== 1) return false;
+  const tag = String(el.tagName).toUpperCase();
+  const type = String(el.type ?? '').toLowerCase();
+  if (tag === 'INPUT' && type === 'password') return true;
+  const editable =
+    (tag === 'INPUT' &&
+      ![
+        'checkbox',
+        'radio',
+        'submit',
+        'button',
+        'reset',
+        'image',
+        'file',
+        'range',
+        'color',
+      ].includes(type)) ||
+    tag === 'TEXTAREA' ||
+    el.isContentEditable === true;
+  if (!editable) return false;
+  const pattern = /pass(word)?|secret|otp|one-time|cvc|cvv|csc/i;
+  const names = ['name', 'id', 'aria-label', 'autocomplete', 'placeholder'].map(
+    (name) => el.getAttribute?.(name) ?? '',
+  );
+  const labels = Array.from((el.labels ?? []) as ArrayLike<any>).map(
+    (label: any) => label.textContent ?? '',
+  );
+  return [...names, ...labels].some((text) => pattern.test(String(text)));
+}
+
+/** Keys the agent may press on a secret field: they move focus or submit, never insert text. */
+const SAFE_KEYS_ON_SECRET = new Set(['Enter', 'Tab', 'Shift+Tab', 'Escape']);
+
+const passwordFieldError = () =>
+  new ApiError(
+    403,
+    'password_field',
+    'The agent does not type into password or other secret fields. Use browser_handoff so the user can enter it.',
+  );
 
 export function maskPasswords(snapshot: string, values: string[]): string {
   let out = snapshot;
@@ -216,8 +285,18 @@ export class BrowserManager {
   private readonly viewers = new Map<string, Set<Viewer>>();
   private readonly idleTimer: NodeJS.Timeout;
   private closing = false;
+  /** Which hosts pages may reach (audit M8). */
+  readonly hosts: BrowserHostGuard;
 
   constructor(readonly settings: BrowserSettings) {
+    this.hosts = new BrowserHostGuard(
+      {
+        allowPrivateHosts: settings.allowPrivateHosts,
+        gatewayHost: settings.gatewayHost,
+        blockedHosts: settings.blockedHosts,
+      },
+      settings.resolveHost,
+    );
     this.idleTimer = setInterval(() => this.reapIdle(), 60_000);
     this.idleTimer.unref();
   }
@@ -249,7 +328,8 @@ export class BrowserManager {
       );
       mkdirSync(profileDir, { recursive: true, mode: 0o700 });
       const launch = this.settings.launch ?? defaultLaunch;
-      const context = launch(profileDir, this.settings).then((context) => {
+      const context = launch(profileDir, this.settings).then(async (context) => {
+        await this.guardContext(context);
         context.on('close', () => {
           if (this.workspaces.get(workspaceId)?.context !== contextPromise) return;
           this.workspaces.delete(workspaceId);
@@ -273,6 +353,43 @@ export class BrowserManager {
         'runner_unavailable',
         `Could not start the browser: ${(error as Error).message.split('\n')[0]}`,
       );
+    }
+  }
+
+  /**
+   * Refuse every request and WebSocket of every page to a host the guard
+   * blocks: subresources, form posts, script navigations and popups. Redirect
+   * hops are not routed by Playwright; `assertAllowed` catches a page that
+   * ended up on a blocked host before the agent sees any of it.
+   */
+  private async guardContext(context: BrowserContext): Promise<void> {
+    await context.route('**/*', async (route) => {
+      const reason = await this.hosts.blockedReason(route.request().url());
+      if (reason) await route.abort('blockedbyclient').catch(() => undefined);
+      else await route.continue().catch(() => undefined);
+    });
+    await context.routeWebSocket(
+      () => true,
+      async (ws) => {
+        const reason = await this.hosts.blockedReason(ws.url());
+        if (reason)
+          await ws.close({ code: 1008, reason: 'blocked by pirc' }).catch(() => undefined);
+        else ws.connectToServer();
+      },
+    );
+  }
+
+  /**
+   * Throws (after leaving the page) when any frame of `page` is on a blocked
+   * host, e.g. after a redirect: the agent never reads such a page.
+   */
+  private async assertAllowed(page: Page): Promise<void> {
+    for (const frame of page.frames()) {
+      const url = frame.url();
+      const reason = await this.hosts.blockedReason(url);
+      if (!reason) continue;
+      await page.goto('about:blank', { timeout: 10_000 }).catch(() => undefined);
+      throw blockedError(url, reason);
     }
   }
 
@@ -727,17 +844,8 @@ export class BrowserManager {
         const locator = page.locator(`aria-ref=${ref(args.ref)}`);
         const text = typeof args.text === 'string' ? args.text : '';
         if (text.length > 20_000) throw new ApiError(400, 'invalid_input', 'text is too long');
-        const kind = await locator.evaluate(
-          (el: any) => `${el.tagName}:${el.type ?? ''}:${el.getAttribute('autocomplete') ?? ''}`,
-          undefined,
-          { timeout: 10_000 },
-        );
-        if (/^INPUT:password:/i.test(kind) || /:(current|new)-password$/i.test(kind))
-          throw new ApiError(
-            403,
-            'password_field',
-            'The agent does not type into password fields. Use browser_handoff so the user can log in.',
-          );
+        if (await locator.evaluate(sensitiveField, undefined, { timeout: 10_000 }))
+          throw passwordFieldError();
         if (args.slowly === true) {
           if (args.clear !== false) await locator.fill('', { timeout: 10_000 });
           await locator.pressSequentially(text, { timeout: 30_000, delay: 20 });
@@ -757,6 +865,10 @@ export class BrowserManager {
       }
       case 'press': {
         const key = str(args.key, 'key', 100);
+        // After a click into a password field, keys would type the secret one by one.
+        if (!SAFE_KEYS_ON_SECRET.has(key))
+          for (const frame of page.frames())
+            if (await frame.evaluate(sensitiveField).catch(() => false)) throw passwordFieldError();
         await page.keyboard.press(key);
         await settle(page);
         return this.pageSummary(tab, args.snapshot !== false);
@@ -771,6 +883,7 @@ export class BrowserManager {
         return this.pageSummary(tab, args.snapshot !== false);
       }
       case 'screenshot': {
+        await this.assertAllowed(page);
         const jpeg = await page.screenshot({
           type: 'jpeg',
           quality: 70,
@@ -811,8 +924,17 @@ export class BrowserManager {
   }
 
   private async goto(page: Page, url: string) {
-    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await this.hosts.check(url);
+    let response;
+    try {
+      response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    } catch (error) {
+      if (/ERR_BLOCKED_BY_CLIENT/.test(String((error as Error)?.message)))
+        throw blockedError(url, 'it (or a page it loads) is on a blocked host');
+      throw error;
+    }
     await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => undefined);
+    await this.assertAllowed(page);
     return response;
   }
 
@@ -831,6 +953,7 @@ export class BrowserManager {
   private async pageSummary(tab: Tab, withSnapshot: boolean, args: Record<string, unknown> = {}) {
     const page = tab.active;
     if (!page) return { url: '', title: '', tabs: [] };
+    await this.assertAllowed(page);
     const summary: Record<string, unknown> = {
       url: page.url(),
       title: await page.title().catch(() => ''),

@@ -32,7 +32,7 @@ import { registerPushRoutes } from './push-routes.js';
 import { loadVapidKeys, Push, watchInteractions } from './push.js';
 import { registerScheduleRoutes } from './schedule-routes.js';
 import { Schedules } from './schedules.js';
-import { NodeRegistry, validNodeToken } from './nodes.js';
+import { NodeRegistry, RELAY_MESSAGE_MAX_BYTES, validNodeToken } from './nodes.js';
 import { BackendService } from '../backends/service.js';
 import { registerBackendRoutes } from '../backends/routes.js';
 import { GatewayInference } from '../backends/inference.js';
@@ -42,6 +42,30 @@ const sessionParams = z.object({ id: z.string().min(1) });
 type LiveActivity = { run?: RunStatus | undefined; writeLease?: boolean | undefined };
 /** Live browser frames are skipped while this much is queued to the client. */
 const BROWSER_SOCKET_BACKLOG_BYTES = 2 * 1024 * 1024;
+/** Browsers send nothing on the event socket; anything large is abuse. */
+const EVENTS_MESSAGE_MAX_BYTES = 4 * 1024;
+
+/**
+ * @fastify/websocket has one ws server, so one `maxPayload` (the node link's
+ * 16 MiB) for every route. Browser-facing sockets get a small limit of their
+ * own so ws refuses (1009) a large frame from its header, before buffering
+ * it, and it can never reach the node link (audit M13).
+ */
+function limitIncoming(socket: object, bytes: number): void {
+  const receiver = (socket as unknown as { _receiver?: { _maxPayload?: unknown } })._receiver;
+  if (receiver && typeof receiver._maxPayload === 'number') receiver._maxPayload = bytes;
+}
+
+/** A browser message to relay to a node, or undefined when it is not JSON. */
+function relayMessage(raw: unknown, maxBytes: number): unknown {
+  const text = String(raw);
+  if (Buffer.byteLength(text) > maxBytes) throw new RangeError('message too large');
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
 
 /** A node answered with an error; passed through to the client unchanged. */
 class NodeReplyError extends Error {
@@ -150,6 +174,12 @@ export async function buildDaemonApp(
   const db = new GatewayDatabase(config.databasePath);
   const recovery = db.recoverStartup();
   app.log.info({ recovery }, 'daemon startup recovery complete');
+  if (!config.proxySecret)
+    app.log.warn(
+      'PIRC_PROXY_SECRET is not set: any process that can reach the gateway port from a trusted ' +
+        'proxy address (PIRC_TRUSTED_PROXIES) can claim to be any allowed user. Set it and have ' +
+        'the proxy send it as x-pirc-proxy-secret (docs/deploy).',
+    );
   const events = new EventHub(config.eventBufferSize);
   const models = new ModelStore();
   // Invalid baseline/state at startup is fatal. Never log raw key-command output.
@@ -846,6 +876,7 @@ export async function buildDaemonApp(
   // ---- WebSockets -----------------------------------------------------------
 
   app.get('/api/events', { websocket: true }, (socket, request) => {
+    limitIncoming(socket, EVENTS_MESSAGE_MAX_BYTES);
     try {
       validateRequest(request, config, devices, true);
       const query = parse(
@@ -935,6 +966,7 @@ export async function buildDaemonApp(
     '/api/sessions/:id/terminals/:terminalId/stream',
     { websocket: true },
     (socket, request) => {
+      limitIncoming(socket, RELAY_MESSAGE_MAX_BYTES.terminal);
       try {
         validateRequest(request, config, devices, true);
         const session = claim(request);
@@ -963,11 +995,12 @@ export async function buildDaemonApp(
         socket.on('message', (raw) => {
           let message: unknown;
           try {
-            message = JSON.parse(String(raw));
+            message = relayMessage(raw, RELAY_MESSAGE_MAX_BYTES.terminal);
           } catch {
-            return;
+            // Oversized: this stream ends, the node link is untouched.
+            return socket.close(1009, 'message too large');
           }
-          stream.send(message);
+          if (message !== undefined) stream.send(message);
         });
         const untrack = trackDevice(request, socket);
         const done = () => {
@@ -990,6 +1023,7 @@ export async function buildDaemonApp(
    * dropped (not queued) while the socket is backed up; the next one catches up.
    */
   app.get('/api/sessions/:id/browser/stream', { websocket: true }, (socket, request) => {
+    limitIncoming(socket, RELAY_MESSAGE_MAX_BYTES.browser);
     try {
       validateRequest(request, config, devices, true);
       const session = claim(request);
@@ -1020,11 +1054,11 @@ export async function buildDaemonApp(
       socket.on('message', (raw) => {
         let message: unknown;
         try {
-          message = JSON.parse(String(raw));
+          message = relayMessage(raw, RELAY_MESSAGE_MAX_BYTES.browser);
         } catch {
-          return;
+          return socket.close(1009, 'message too large');
         }
-        stream.send(message);
+        if (message !== undefined) stream.send(message);
       });
       const untrack = trackDevice(request, socket);
       const done = () => {

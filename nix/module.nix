@@ -70,6 +70,18 @@ let
   tokenFile = "${daemonState}/local-node-token";
   legacyTokenFile = "${cfg.stateDirectory}/local-node-token";
 
+  # The gateway accepts forward-auth identities only from trusted proxy
+  # addresses. On one host that is 127.0.0.1, which every local process
+  # (agents included) can also connect from, so nginx additionally proves
+  # itself with a shared secret (PIRC_PROXY_SECRET / x-pirc-proxy-secret).
+  # Generated at runtime, never in the store: the gateway reads it from its
+  # state directory; nginx includes a header snippet from a directory only
+  # root and the nginx group can read.
+  useProxySecret = cfg.nginx.enable && cfg.nginx.proxySecret;
+  proxySecretFile = "${daemonState}/proxy-secret";
+  proxySecretDir = "/run/pirc-nginx";
+  nginxGroup = config.services.nginx.group;
+
   gatewayEnvironment = {
     PIRC_HOST = cfg.listenAddress;
     PIRC_PORT = toString cfg.port;
@@ -123,23 +135,43 @@ let
     chmod 0600 ${tokenFile}
   '';
 
+  # Runs as root (pirc-proxy-secret.service): creates the shared secret once,
+  # and on every boot the nginx snippet in /run (a tmpfs) that sends it.
+  ensureProxySecret = pkgs.writeShellScript "pirc-proxy-secret" ''
+    set -eu
+    PATH=${lib.makeBinPath [ pkgs.coreutils ]}
+    install -d -m 0700 -o ${gatewayUser} -g ${gatewayUser} ${daemonState}
+    if [ ! -s ${proxySecretFile} ]; then
+      (umask 077; head -c 48 /dev/urandom | base64 -w0 | tr -d '/+=' > ${proxySecretFile})
+    fi
+    chown ${gatewayUser}:${gatewayUser} ${proxySecretFile}
+    chmod 0600 ${proxySecretFile}
+    install -d -m 0750 -o root -g ${nginxGroup} ${proxySecretDir}
+    snippet=${proxySecretDir}/proxy-secret.conf
+    (umask 077; printf 'proxy_set_header X-Pirc-Proxy-Secret "%s";\n' "$(cat ${proxySecretFile})" > "$snippet.tmp")
+    chown root:${nginxGroup} "$snippet.tmp"
+    chmod 0640 "$snippet.tmp"
+    mv -f "$snippet.tmp" "$snippet"
+  '';
+
   # Remote nodes may be added through PIRC_NODE_TOKENS in environmentFile;
   # the local node's token is merged in.
-  gatewayStart = pkgs.writeShellScript "pirc-gateway" (
-    if cfg.localNode.enable then
-      ''
-        set -eu
-        token=$(cat ${tokenFile})
-        remote=''${PIRC_NODE_TOKENS:-}
-        [ -n "$remote" ] || remote='{}'
-        PIRC_NODE_TOKENS=$(printf '%s' "$remote" \
-          | ${pkgs.jq}/bin/jq -c --arg id ${lib.escapeShellArg cfg.localNode.id} --arg token "$token" '. + {($id): $token}')
-        export PIRC_NODE_TOKENS
-        exec ${lib.getExe cfg.gatewayPackage}
-      ''
-    else
-      "exec ${lib.getExe cfg.gatewayPackage}"
-  );
+  gatewayStart = pkgs.writeShellScript "pirc-gateway" ''
+    set -eu
+    ${lib.optionalString useProxySecret ''
+      PIRC_PROXY_SECRET=$(cat ${proxySecretFile})
+      export PIRC_PROXY_SECRET
+    ''}
+    ${lib.optionalString cfg.localNode.enable ''
+      token=$(cat ${tokenFile})
+      remote=''${PIRC_NODE_TOKENS:-}
+      [ -n "$remote" ] || remote='{}'
+      PIRC_NODE_TOKENS=$(printf '%s' "$remote" \
+        | ${pkgs.jq}/bin/jq -c --arg id ${lib.escapeShellArg cfg.localNode.id} --arg token "$token" '. + {($id): $token}')
+      export PIRC_NODE_TOKENS
+    ''}
+    exec ${lib.getExe cfg.gatewayPackage}
+  '';
 
   nodeStart = pkgs.writeShellScript "pirc-node" ''
     set -eu
@@ -570,6 +602,19 @@ in
         default = "Remote-User";
         description = "Header returned by forward auth containing the authenticated identity.";
       };
+      proxySecret = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Have nginx prove itself to the gateway with a generated shared
+          secret (header `X-Pirc-Proxy-Secret`, gateway `PIRC_PROXY_SECRET`).
+          Without it, any local process that can connect to the gateway port
+          from 127.0.0.1 (agents included, unless network-sandboxed) can claim
+          any allowed user. The secret lives in the gateway's state directory
+          and in `/run/pirc-nginx` (root and the nginx group only), never in
+          the Nix store.
+        '';
+      };
     };
   };
 
@@ -694,6 +739,25 @@ in
       };
     })
 
+    (mkIf useProxySecret {
+      systemd.services.pirc-proxy-secret = {
+        description = "pirc gateway and nginx shared proxy secret";
+        wantedBy = [
+          "pirc.service"
+          "nginx.service"
+        ];
+        before = [
+          "pirc.service"
+          "nginx.service"
+        ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = ensureProxySecret;
+        };
+      };
+    })
+
     (mkIf cfg.nginx.enable {
       services.nginx.enable = true;
       services.nginx.virtualHosts.${cfg.nginx.hostName} = {
@@ -733,6 +797,11 @@ in
               lib.toLower (builtins.replaceStrings [ "-" ] [ "_" ] cfg.nginx.authUserResponseHeader)
             };
             proxy_set_header ${cfg.identityHeader} $pirc_user;
+            ${lib.optionalString useProxySecret ''
+              # A glob: build-time validation (no secret there) passes. Should the
+              # snippet ever be missing, the gateway refuses every request.
+              include ${proxySecretDir}/proxy-secret[.]conf;
+            ''}
             proxy_set_header Host $http_host;
             proxy_set_header Origin $http_origin;
             proxy_set_header X-Forwarded-Proto $scheme;
@@ -745,6 +814,7 @@ in
           proxyWebsockets = true;
           extraConfig = ''
             proxy_set_header ${cfg.identityHeader} "";
+            proxy_set_header X-Pirc-Proxy-Secret "";
             proxy_read_timeout 1h;
           '';
         };

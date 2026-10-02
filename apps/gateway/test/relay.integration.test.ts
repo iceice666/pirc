@@ -246,6 +246,66 @@ it.skipIf(!ptyAvailable)('ends relayed terminal streams when the node goes away'
   expect(await stream.closed).toBe(1012);
 });
 
+it.skipIf(!ptyAvailable)(
+  'ends a stream that sends an oversized frame, but keeps the node link',
+  async () => {
+    const cluster = await startCluster([{ nodeId: 'test', terminalShell: '/bin/sh' }]);
+    clusters.push(cluster);
+    const { app, url, services } = cluster;
+    const { sessionId, control } = await openSession(cluster);
+    const terminalId = (
+      await app.inject({
+        method: 'POST',
+        url: `/api/sessions/${sessionId}/terminals`,
+        headers,
+        payload: control,
+      })
+    ).json().terminal.id as string;
+    const streamUrl = `${url}/api/sessions/${sessionId}/terminals/${terminalId}/stream`;
+    const stream = terminalSocket(streamUrl);
+    await stream.until(() => stream.messages.some((m) => m.type === 'ready'));
+    let nodeDropped = false;
+    const previous = services.nodes.onDisconnect;
+    services.nodes.onDisconnect = (nodeId) => {
+      nodeDropped = true;
+      previous?.(nodeId);
+    };
+    // Well past the browser-socket limit, below the node link's 16 MiB.
+    stream.socket.send(JSON.stringify({ ...control, type: 'input', data: 'x'.repeat(4 << 20) }));
+    expect(await stream.closed).toBe(1009);
+    await Bun.sleep(100);
+    expect(nodeDropped).toBe(false);
+    expect(services.nodes.list().map((node) => node.id)).toEqual(['test']);
+    // The terminal and the link still work.
+    const again = terminalSocket(streamUrl);
+    await again.until(() => again.messages.some((m) => m.type === 'ready'));
+    again.socket.send(JSON.stringify({ ...control, type: 'input', data: 'echo ok-$((6*7))\r' }));
+    await again.until(() => again.output().includes('ok-42'));
+  },
+);
+
+it('fails a node request too large for the link without dropping the node', async () => {
+  const cluster = await startCluster();
+  clusters.push(cluster);
+  const { services } = cluster;
+  await expect(
+    services.nodes.request('test', {
+      method: 'POST',
+      url: '/api/sessions',
+      user: 'test@example.com',
+      payload: { blob: 'x'.repeat(17 << 20) },
+    }),
+  ).rejects.toMatchObject({ statusCode: 413, code: 'payload_too_large' });
+  expect(services.nodes.list().map((node) => node.id)).toEqual(['test']);
+  // The link still answers (whatever the node makes of the request).
+  const answer = await services.nodes.request('test', {
+    method: 'GET',
+    url: '/api/workspaces/test/instructions',
+    user: 'test@example.com',
+  });
+  expect(answer.status).toBeGreaterThanOrEqual(200);
+});
+
 it('closes a terminal stream for an unknown terminal or another user', async () => {
   const cluster = await startCluster(undefined, {
     allowedUsers: new Set(['test@example.com', 'other@example.com']),
@@ -340,6 +400,8 @@ it.skipIf(!browserExecutable || !Bun.which('ffmpeg'))(
             profilesDir: mkdtempSync(path.join(os.tmpdir(), 'pirc-relay-browser-')),
             idleMs: 60_000,
             viewport: { width: 640, height: 480 },
+            // The test page is on loopback, which agents' browsers refuse by default.
+            allowPrivateHosts: ['127.0.0.1'],
           },
         },
       ]);

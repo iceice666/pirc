@@ -36,6 +36,21 @@ const MAX_TERMINAL_STREAMS = 64;
 /** Agent requests the daemon works on at once for one node. */
 const MAX_AGENT_REQUESTS = 32;
 const REQUEST_TIMEOUT_MS = 30_000;
+/**
+ * Largest browser→node relayed message, per stream kind: terminal input
+ * (keystrokes, a paste, a resize) and browser-view input (mouse, keys, text
+ * the node caps at 10 000 characters). Larger ones end that stream, never
+ * the node link (audit M13).
+ */
+export const RELAY_MESSAGE_MAX_BYTES = { terminal: 1024 * 1024, browser: 64 * 1024 } as const;
+/**
+ * Bytes queued on a node link before further sends fail (the request or
+ * stream that sent them, not the link). Room for a few maximal frames
+ * (uploads) behind a slow node.
+ */
+const NODE_SEND_BUFFER_MAX_BYTES = 4 * NODE_FRAME_MAX_BYTES;
+
+type SendFailure = 'too_large' | 'backpressure' | 'failed';
 
 const registration = z.object({
   type: z.literal('register'),
@@ -212,10 +227,30 @@ export class NodeRegistry {
     return connection.socket;
   }
 
-  private send(socket: WebSocket, message: DaemonToNode, onError?: () => void): void {
-    socket.send(JSON.stringify(message), (error) => {
-      if (error) onError?.();
+  /**
+   * Send one frame to a node. A frame the node would reject (larger than its
+   * frame limit: it closes the whole link with 1009) or one that would pile
+   * up behind a stalled link fails only its sender, through `onError`.
+   */
+  private send(
+    socket: WebSocket,
+    message: DaemonToNode,
+    onError?: (failure: SendFailure) => void,
+  ): boolean {
+    const frame = JSON.stringify(message);
+    const bytes = Buffer.byteLength(frame);
+    if (bytes > NODE_FRAME_MAX_BYTES) {
+      onError?.('too_large');
+      return false;
+    }
+    if (socket.bufferedAmount + bytes > NODE_SEND_BUFFER_MAX_BYTES) {
+      onError?.('backpressure');
+      return false;
+    }
+    socket.send(frame, (error) => {
+      if (error) onError?.('failed');
     });
+    return true;
   }
 
   /**
@@ -241,10 +276,16 @@ export class NodeRegistry {
         );
       }, REQUEST_TIMEOUT_MS);
       this.requests.set(requestId, { nodeId, resolve, reject, timer });
-      this.send(socket, { type: 'request', requestId, data }, () => {
+      this.send(socket, { type: 'request', requestId, data }, (failure) => {
         clearTimeout(timer);
         this.requests.delete(requestId);
-        reject(new ApiError(503, 'node_offline', 'Node connection failed'));
+        reject(
+          failure === 'too_large'
+            ? new ApiError(413, 'payload_too_large', 'Request is too large to relay to the node')
+            : failure === 'backpressure'
+              ? new ApiError(503, 'node_error', 'Node link is congested; try again')
+              : new ApiError(503, 'node_offline', 'Node connection failed'),
+        );
       });
     });
   }
@@ -260,11 +301,19 @@ export class NodeRegistry {
       throw new ApiError(503, 'node_error', 'Too many open terminal streams');
     const streamId = randomUUID();
     this.streams.set(streamId, { nodeId, handlers });
-    const fail = () => this.endStream(streamId, 1011, 'node connection failed');
+    const fail = (failure: SendFailure) =>
+      failure === 'failed'
+        ? this.endStream(streamId, 1011, 'node connection failed')
+        : this.endStream(streamId, 1013, 'node link congested');
     this.send(socket, { type: 'terminal_open', streamId, ...target }, fail);
     return {
       send: (message) => {
         if (!this.streams.has(streamId)) return;
+        const bytes = Buffer.byteLength(JSON.stringify(message ?? null));
+        if (bytes > RELAY_MESSAGE_MAX_BYTES[target.kind ?? 'terminal']) {
+          this.endStream(streamId, 1009, 'message too large');
+          return;
+        }
         this.send(socket, { type: 'terminal_input', streamId, message }, fail);
       },
       close: () => {
@@ -430,8 +479,15 @@ export class NodeRegistry {
     message: { requestId: string; sessionId: string; op: string; args?: unknown },
   ): void {
     const reply = ({ status, body }: AgentAnswer) => {
-      if (socket.readyState === socket.OPEN)
-        this.send(socket, { type: 'agent_response', requestId: message.requestId, status, body });
+      if (socket.readyState !== socket.OPEN) return;
+      const requestId = message.requestId;
+      this.send(socket, { type: 'agent_response', requestId, status, body }, (failure) => {
+        // An answer too large for one frame becomes an error, not a dropped link.
+        if (failure === 'too_large') {
+          const error = agentError(413, 'payload_too_large', 'Gateway answer is too large');
+          this.send(socket, { type: 'agent_response', requestId, ...error });
+        }
+      });
     };
     const inFlight = this.agentRequests.get(nodeId) ?? 0;
     if (inFlight >= MAX_AGENT_REQUESTS)

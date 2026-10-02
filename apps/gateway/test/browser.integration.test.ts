@@ -50,6 +50,8 @@ async function setup(browserEnabled = true) {
       enabled: browserEnabled,
       executable,
       viewport: { width: 800, height: 600 },
+      // The test page is on loopback, which agents' browsers refuse by default.
+      allowPrivateHosts: ['127.0.0.1'],
     },
   };
   const { app, services } = await buildNodeApp(config);

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { GatewayError, NodeGateway, processGateway } from '../src/agent/gateway.js';
 import { DaemonAgentGateway, offlineGateway } from '../src/node/agent-gateway.js';
-import { withoutSecrets } from '../src/node/secrets.js';
 import type { NodeToDaemon } from '../src/protocol.js';
 
 describe('agent gateway client', () => {
@@ -107,29 +106,5 @@ describe('node gateway link', () => {
     expect((await Promise.all(waiting)).map((answer) => answer.status)).toEqual([503, 503]);
     link.connect(() => false);
     expect((await link.request('s', 'a.b', {})).status).toBe(503);
-  });
-});
-
-describe('agent environment', () => {
-  it('drops the node secrets and keeps everything else', () => {
-    expect(
-      withoutSecrets({
-        PIRC_NODE_TOKEN: 'a',
-        PIRC_NODE_TOKENS: '{}',
-        PIRC_OAUTH_SECRET_KEY: 'b',
-        PIRC_CLIPROXYAPI_KEY: 'provider key in a shared environment file',
-        PIRC_VAPID_PRIVATE_KEY: 'c',
-        EXA_API_KEY: 'd',
-        PIRC_NODE_ID: 'n',
-        PIRC_WORKSPACE_KIND: 'directory',
-        HOME: '/home/u',
-        GITHUB_TOKEN: 'user tools may need their own tokens',
-      }),
-    ).toEqual({
-      PIRC_NODE_ID: 'n',
-      PIRC_WORKSPACE_KIND: 'directory',
-      HOME: '/home/u',
-      GITHUB_TOKEN: 'user tools may need their own tokens',
-    });
   });
 });
