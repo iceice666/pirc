@@ -4,6 +4,10 @@ User-facing changes are recorded here. See [release policy](docs/releasing.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- Observational-memory settings now warn once at agent startup when invalid fields cause the entire configuration to use defaults, including re-enabling memory. Diagnostics identify fields without exposing rejected values. Unknown fields are warned about and ignored while valid settings remain in effect; validation strictness and defaults are unchanged.
+
 ## [0.2.0] - 2026-10-02
 
 This is the first tagged release. Earlier development used 0.1.0 without a published release; this entry summarizes the current release rather than inventing a historical 0.1.0 changelog.
