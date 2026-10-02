@@ -154,54 +154,63 @@
 
       <h4>API keys and custom endpoints</h4>
       {#each settings.providers.filter((provider) => provider.source !== 'oauth') as provider (provider.id)}
-        <div class="backend-card">
-          <strong>{provider.name || provider.id}</strong>
-          <small
-            >{provider.source === 'file' ? 'File-managed · Read only' : 'Web-managed'} · {provider.api}
-            · {provider.hasApiKey ? 'API key saved' : 'No API key'}</small
-          >
-          {#if provider.baseUrl}<p class="endpoint">{provider.baseUrl}</p>{/if}
-          <details>
-            <summary>{provider.models.length} models</summary>
-            <ul>
-              {#each provider.models as model}<li>
-                  {model.name ?? model.id} <small>{model.id}</small>
-                </li>{/each}
-            </ul>
-          </details>
-          {#if !provider.readOnly}<div class="backend-actions">
-              <button
-                class="button ghost"
-                type="button"
-                disabled={locked || activeLogin}
-                onclick={() => editProvider(provider)}>Edit {provider.id}</button
-              ><button
-                class="button ghost"
-                type="button"
-                disabled={locked || activeLogin}
-                onclick={() => mutate(() => backendApi.remove(provider.id))}
-                >Remove {provider.id}</button
-              >
-            </div>{/if}
-        </div>
+        {#if editor?.provider?.id === provider.id}
+          {#key editor}
+            <ProviderEditor
+              provider={editor.provider}
+              locked={locked || activeLogin}
+              onsave={saveProvider}
+              oncancel={closeEditor}
+            />
+          {/key}
+        {:else}<div class="backend-card">
+            <strong>{provider.name || provider.id}</strong>
+            <small
+              >{provider.source === 'file' ? 'File-managed · Read only' : 'Web-managed'} · {provider.api}
+              · {provider.hasApiKey ? 'API key saved' : 'No API key'}{provider.preset
+                ? ` · ${provider.preset} preset`
+                : ''}</small
+            >
+            {#if provider.baseUrl}<p class="endpoint">{provider.baseUrl}</p>{/if}
+            <details>
+              <summary>{provider.models.length} models</summary>
+              <ul>
+                {#each provider.models as model}<li>
+                    {model.name ?? model.id} <small>{model.id}</small>
+                  </li>{/each}
+              </ul>
+            </details>
+            {#if !provider.readOnly}<div class="backend-actions">
+                <button
+                  class="button ghost"
+                  type="button"
+                  disabled={locked || activeLogin}
+                  onclick={() => editProvider(provider)}>Edit {provider.id}</button
+                ><button
+                  class="button ghost"
+                  type="button"
+                  disabled={locked || activeLogin}
+                  onclick={() => mutate(() => backendApi.remove(provider.id))}
+                  >Remove {provider.id}</button
+                >
+              </div>{/if}
+          </div>{/if}
       {/each}
-      <button
-        class="button ghost"
-        type="button"
-        disabled={locked || activeLogin}
-        onclick={() => editProvider()}>Add backend</button
-      >
-
-      {#if editor}
+      {#if editor && !editor.provider}
         {#key editor}
           <ProviderEditor
-            provider={editor.provider}
+            takenIds={settings.providers.map((provider) => provider.id)}
             locked={locked || activeLogin}
             onsave={saveProvider}
             oncancel={closeEditor}
           />
         {/key}
-      {/if}
+      {:else}<button
+          class="button ghost"
+          type="button"
+          disabled={locked || activeLogin || !!editor}
+          onclick={() => editProvider()}>Add backend</button
+        >{/if}
 
       <h4>Default model</h4>
       <label

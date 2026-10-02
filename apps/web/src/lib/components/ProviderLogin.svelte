@@ -1,8 +1,9 @@
 <script lang="ts">
   /**
    * Subscription (OAuth) accounts: log in, answer the provider's prompts, poll
-   * until the login completes or expires, log out. A pending login is
-   * cancelled on the gateway when this unmounts (closing settings).
+   * until the login completes or expires, log out. Each login is shown inside
+   * its provider's card. A pending login is cancelled on the gateway when this
+   * unmounts (closing settings).
    */
   import { onMount } from 'svelte';
   import { backendApi, ApiError } from '../api';
@@ -30,14 +31,19 @@
     onsucceeded,
   }: Props = $props();
 
-  let error = $state('');
-  let consent: Record<string, boolean> = $state({});
+  /** An error, shown in the card of the provider it belongs to. */
+  let error: { providerId: string; text: string } | undefined = $state();
+  /** The provider whose policy-consent confirmation is open. */
+  let consenting: string | undefined = $state();
   let login: ProviderAuthSession | undefined = $state();
   let answers: Record<string, string> = $state({});
+  let copied: string | undefined = $state();
   let alive = true;
   let generation = 0;
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
   let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+  let dismissTimer: ReturnType<typeof setTimeout> | undefined;
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   const activeLogin = $derived(login?.status === 'pending');
   const locked = $derived(parentLocked || busy);
@@ -61,6 +67,8 @@
       alive = false;
       generation++;
       clearTimers();
+      clearTimeout(dismissTimer);
+      clearTimeout(copiedTimer);
       answers = {};
       if (login?.status === 'pending') void backendApi.cancelLogin(login.id).catch(() => {});
     };
@@ -78,6 +86,23 @@
     }
   }
 
+  async function copy(text: string, what: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      return;
+    }
+    if (!alive) return;
+    copied = what;
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => (copied = undefined), 2000);
+  }
+
+  function remaining(expiresAt: number) {
+    const minutes = Math.max(1, Math.ceil((expiresAt - Date.now()) / 60_000));
+    return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  }
+
   async function acceptLogin(snapshot: ProviderAuthSession, version: number) {
     if (!alive || version !== generation) return;
     clearTimers();
@@ -87,39 +112,58 @@
     );
     if (snapshot.status === 'succeeded') {
       answers = {};
+      // The card shows "Connected"; the confirmation fades after a moment.
+      dismissTimer = setTimeout(() => {
+        if (login?.id === snapshot.id) login = undefined;
+      }, 6000);
       if (alive) await onsucceeded();
     } else if (snapshot.status === 'pending') {
-      const remaining = snapshot.expiresAt - Date.now();
-      if (remaining <= 0) {
+      const left = snapshot.expiresAt - Date.now();
+      if (left <= 0) {
         await expireLogin();
         return;
       }
-      expiryTimer = setTimeout(() => void expireLogin(), remaining);
+      expiryTimer = setTimeout(() => void expireLogin(), left);
       pollTimer = setTimeout(
         async () => {
           try {
             await acceptLogin(await backendApi.login(snapshot.id), version);
           } catch {
             if (alive && version === generation) {
-              error = 'Login status is unavailable. Start a new login to retry.';
+              error = {
+                providerId: snapshot.providerId,
+                text: 'Login status is unavailable. Start a new login to retry.',
+              };
               await cancelLogin();
             }
           }
         },
-        Math.min(1000, remaining),
+        Math.min(1000, left),
       );
-    } else answers = {};
+    } else {
+      answers = {};
+      // Cancelled elsewhere (e.g. a logout): nothing to report.
+      if (snapshot.status === 'cancelled') login = undefined;
+    }
   }
 
-  async function startLogin(provider: OAuthProviderOption) {
-    if (locked || activeLogin || (provider.requiresPolicyConsent && !consent[provider.id])) return;
+  function requestLogin(provider: OAuthProviderOption) {
+    if (locked || activeLogin) return;
+    if (provider.requiresPolicyConsent) consenting = provider.id;
+    else void startLogin(provider, false);
+  }
+
+  async function startLogin(provider: OAuthProviderOption, policyConsent: boolean) {
+    if (locked || activeLogin) return;
     busy = true;
-    error = '';
+    error = undefined;
+    consenting = undefined;
+    clearTimeout(dismissTimer);
     login = undefined;
     answers = {};
     const version = ++generation;
     try {
-      const snapshot = await backendApi.startLogin(provider.id, consent[provider.id] === true);
+      const snapshot = await backendApi.startLogin(provider.id, policyConsent);
       // Closing the dialog while creation is in flight must not leave a live login behind.
       if (!alive || version !== generation) {
         await backendApi.cancelLogin(snapshot.id);
@@ -127,7 +171,7 @@
       }
       await acceptLogin(snapshot, version);
     } catch (cause) {
-      if (alive) error = safeError(cause);
+      if (alive) error = { providerId: provider.id, text: safeError(cause) };
     } finally {
       busy = false;
     }
@@ -135,15 +179,22 @@
 
   async function cancelLogin(expired = false) {
     if (!login || login.status !== 'pending') return;
-    const id = login.id;
+    const { id, providerId } = login;
     generation++;
     clearTimers();
-    login = { ...login, status: expired ? 'expired' : 'cancelled', prompts: [], auth: undefined };
+    // A user cancellation simply closes the panel; an expiry stays visible.
+    login = expired
+      ? { ...login, status: 'expired', prompts: [], auth: undefined, progress: undefined }
+      : undefined;
     answers = {};
     try {
       await backendApi.cancelLogin(id);
     } catch {
-      if (alive) error = 'Could not confirm cancellation. This login will expire on the gateway.';
+      if (alive)
+        error = {
+          providerId,
+          text: 'Could not confirm cancellation. This login will expire on the gateway.',
+        };
     }
   }
 
@@ -156,11 +207,11 @@
     const value = answers[prompt.id] ?? '';
     if (!cancel && !prompt.allowEmpty && !value) return;
     busy = true;
-    error = '';
+    error = undefined;
     // Invalidate an older polling response so it cannot restore an answered prompt.
     const version = ++generation;
     clearTimers();
-    const id = login.id;
+    const { id, providerId } = login;
     expiryTimer = setTimeout(() => void expireLogin(), Math.max(0, login.expiresAt - Date.now()));
     answers = { ...answers, [prompt.id]: '' };
     try {
@@ -170,7 +221,7 @@
       );
     } catch (cause) {
       if (alive && version === generation) {
-        error = safeError(cause);
+        error = { providerId, text: safeError(cause) };
         try {
           await acceptLogin(await backendApi.login(id), version);
         } catch {
@@ -183,138 +234,190 @@
   }
 </script>
 
-{#if error}<p class="backend-error" role="alert">{error}</p>{/if}
 <h4>Subscription accounts</h4>
-<p>
-  pi-ai's built-in model catalog is not a verification of your account's model access or service
-  policy.
+<p class="note">
+  Sign in with an existing subscription. pi-ai's built-in model list is not a verification of your
+  account's model access or service policy.
 </p>
 {#each providers as provider (provider.id)}
+  {@const current = login?.providerId === provider.id ? login : undefined}
   <div class="backend-card">
     <div class="backend-row">
       <div>
         <strong>{provider.name}</strong><small
-          >{provider.connected ? 'Connected' : 'Not connected'} · {provider.modelCount} known models</small
+          ><span class="badge" class:connected={provider.connected}
+            >{provider.connected ? 'Connected' : 'Not connected'}</span
+          >
+          · {provider.modelCount} known models</small
         >
       </div>
-      <button
-        class="button ghost"
-        type="button"
-        disabled={locked ||
-          activeLogin ||
-          (provider.requiresPolicyConsent && !consent[provider.id])}
-        onclick={() => startLogin(provider)}>{provider.connected ? 'Reconnect' : 'Log in'}</button
-      >
-    </div>
-    {#if provider.requiresPolicyConsent}
-      <label class="backend-checkbox"
-        ><input
-          type="checkbox"
-          bind:checked={consent[provider.id]}
-          disabled={locked || activeLogin}
-        /><span
-          >I consent to this login enabling policies for all known GitHub Copilot models in my
-          account.</span
-        ></label
-      >
-    {/if}
-    {#if provider.usesCallbackServer}<p>
-        For a remote gateway, paste the complete final localhost redirect URL below after
-        authorizing. You do not need to expose a callback port.
-      </p>{/if}
-    {#if provider.connected}<button
-        class="button ghost"
-        type="button"
-        disabled={locked || activeLogin}
-        onclick={() => onlogout(provider.providerId)}>Log out {provider.name}</button
-      >{/if}
-  </div>
-{/each}
-<p>
-  Log out removes this gateway's saved credentials and prevents new requests. It does not revoke
-  your account upstream or recall content already sent.
-</p>
-
-{#if login}
-  <div class="backend-card login-card" role="region" aria-label="Provider login" aria-live="polite">
-    <strong>Login: {login.status}</strong>
-    {#if login.status === 'pending'}
-      <p>
-        Expires at {new Date(login.expiresAt).toLocaleTimeString()}. Closing settings cancels this
-        login.
-      </p>
-      {#if login.auth}
-        {@const url = authUrl(login.auth.url)}
-        {#if url}<a
+      <div class="backend-actions">
+        {#if current?.status !== 'pending' && consenting !== provider.id}<button
             class="button ghost"
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            referrerpolicy="no-referrer">Open authorization page</a
-          >{:else}<p role="alert">The provider returned an unsupported authorization URL.</p>{/if}
-        {#if login.auth.instructions}<p class="instructions">
-            {login.auth.instructions}
-          </p>{/if}
-      {/if}
-      {#if login.progress}<p>{login.progress}</p>{/if}
-      {#each login.prompts as prompt (prompt.id)}
-        <form
-          onsubmit={(event) => {
-            event.preventDefault();
-            void answerPrompt(prompt);
-          }}
-          autocomplete="off"
-        >
-          <label
-            ><span>{prompt.message}</span>
-            {#if prompt.kind === 'select'}
-              <select
-                bind:value={answers[prompt.id]}
-                disabled={locked}
-                required={!prompt.allowEmpty}
-                ><option value="">Choose an option</option
-                >{#each prompt.options ?? [] as option}<option value={option.id}
-                    >{option.label}</option
-                  >{/each}</select
-              >
-            {:else}
-              <input
-                type={prompt.kind === 'manual' ? 'password' : 'text'}
-                bind:value={answers[prompt.id]}
-                placeholder={prompt.placeholder ??
-                  (prompt.kind === 'manual' ? 'Complete localhost redirect URL' : '')}
-                disabled={locked}
-                required={!prompt.allowEmpty}
-                autocomplete="off"
-                spellcheck={false}
-              />
+            type="button"
+            disabled={locked || activeLogin}
+            onclick={() => requestLogin(provider)}
+            >{provider.connected ? 'Reconnect' : 'Log in'}</button
+          >{/if}
+        {#if provider.connected && current?.status !== 'pending'}<button
+            class="button ghost"
+            type="button"
+            title="Removes this gateway's saved credentials. It does not revoke your account upstream or recall content already sent."
+            disabled={locked || activeLogin}
+            onclick={() => onlogout(provider.providerId)}>Log out {provider.name}</button
+          >{/if}
+      </div>
+    </div>
+
+    {#if error?.providerId === provider.id}<p class="backend-error" role="alert">
+        {error.text}
+      </p>{/if}
+
+    {#if consenting === provider.id}
+      <div class="login-panel" role="region" aria-label="Login consent">
+        <p>Logging in enables the policies for all known GitHub Copilot models in your account.</p>
+        <div class="backend-actions">
+          <button
+            class="button primary"
+            type="button"
+            disabled={locked || activeLogin}
+            onclick={() => startLogin(provider, true)}>I agree, log in</button
+          ><button class="button ghost" type="button" onclick={() => (consenting = undefined)}
+            >Not now</button
+          >
+        </div>
+      </div>
+    {/if}
+
+    {#if current}
+      <div class="login-panel" role="region" aria-label="Provider login" aria-live="polite">
+        {#if current.status === 'pending'}
+          {#if current.auth}
+            {@const url = authUrl(current.auth.url)}
+            {#if current.auth.userCode}
+              <div class="step">
+                <span>1. Copy your one-time code</span>
+                <div class="backend-actions">
+                  <code class="user-code">{current.auth.userCode}</code><button
+                    class="button ghost"
+                    type="button"
+                    onclick={() => copy(current.auth!.userCode!, 'code')}
+                    >{copied === 'code' ? 'Copied' : 'Copy code'}</button
+                  >
+                </div>
+              </div>
             {/if}
-          </label>
+            <div class="step">
+              {#if current.auth.userCode}<span>2. Enter it on the authorization page</span>{/if}
+              {#if url}<div class="backend-actions">
+                  <a
+                    class="button primary"
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    referrerpolicy="no-referrer">Open authorization page</a
+                  ><button class="button ghost" type="button" onclick={() => copy(url, 'link')}
+                    >{copied === 'link' ? 'Copied' : 'Copy link'}</button
+                  >
+                </div>
+              {:else}<p role="alert">
+                  The provider returned an unsupported authorization URL.
+                </p>{/if}
+            </div>
+            {#if provider.usesCallbackServer}<p class="instructions">
+                Sign in on the authorization page. If this browser runs on the gateway's machine,
+                the login finishes by itself. Otherwise the browser ends on a localhost page that
+                may not load. Copy that page's full address and paste it below.
+              </p>
+            {:else if current.auth.instructions && !current.auth.userCode}<p class="instructions">
+                {current.auth.instructions}
+              </p>{/if}
+          {:else}<p>Preparing the login…</p>{/if}
+          {#if current.progress}<p class="note">{current.progress}</p>{/if}
+          {#each current.prompts as prompt (prompt.id)}
+            <form
+              onsubmit={(event) => {
+                event.preventDefault();
+                void answerPrompt(prompt);
+              }}
+              autocomplete="off"
+            >
+              <label
+                ><span>{prompt.message}</span>
+                {#if prompt.kind === 'select'}
+                  <select
+                    bind:value={answers[prompt.id]}
+                    disabled={locked}
+                    required={!prompt.allowEmpty}
+                    ><option value="">Choose an option</option
+                    >{#each prompt.options ?? [] as option}<option value={option.id}
+                        >{option.label}</option
+                      >{/each}</select
+                  >
+                {:else}
+                  <input
+                    type={prompt.kind === 'manual' ? 'password' : 'text'}
+                    bind:value={answers[prompt.id]}
+                    placeholder={prompt.placeholder ??
+                      (prompt.kind === 'manual' ? 'http://localhost:…/callback?code=…' : '')}
+                    disabled={locked}
+                    required={!prompt.allowEmpty}
+                    autocomplete="off"
+                    spellcheck={false}
+                  />
+                {/if}
+              </label>
+              <div class="backend-actions">
+                <button
+                  class="button ghost"
+                  type="submit"
+                  disabled={locked || (!prompt.allowEmpty && !answers[prompt.id])}
+                  >{prompt.kind === 'manual' ? 'Finish login' : 'Continue'}</button
+                >{#if prompt.kind === 'select'}<button
+                    class="button ghost"
+                    type="button"
+                    disabled={locked}
+                    onclick={() => answerPrompt(prompt, true)}>Skip selection</button
+                  >{/if}
+              </div>
+            </form>
+          {/each}
+          <div class="backend-actions footer">
+            <small
+              >Waiting for authorization · expires in {remaining(current.expiresAt)} · closing settings
+              cancels it</small
+            ><button class="button ghost" type="button" onclick={() => cancelLogin()}
+              >Cancel login</button
+            >
+          </div>
+        {:else if current.status === 'succeeded'}<p class="backend-ok">
+            Connected. {provider.modelCount} models are now available.
+          </p>
+        {:else}
+          <p role="alert">
+            {current.status === 'expired'
+              ? 'The login timed out before it was completed.'
+              : 'The login failed.'}
+          </p>
           <div class="backend-actions">
             <button
               class="button ghost"
-              type="submit"
-              disabled={locked || (!prompt.allowEmpty && !answers[prompt.id])}
-              >Submit response</button
-            >{#if prompt.kind === 'select'}<button
-                class="button ghost"
-                type="button"
-                disabled={locked}
-                onclick={() => answerPrompt(prompt, true)}>Skip selection</button
-              >{/if}
+              type="button"
+              disabled={locked || activeLogin}
+              onclick={() => requestLogin(provider)}>Try again</button
+            ><button class="button ghost" type="button" onclick={() => (login = undefined)}
+              >Dismiss</button
+            >
           </div>
-        </form>
-      {/each}
-      <button class="button ghost" type="button" onclick={() => cancelLogin()}>Cancel login</button>
-    {:else if login.status === 'succeeded'}<p>
-        Login complete. The model catalog has been refreshed.
-      </p>
-    {:else if login.status === 'failed'}<p role="alert">
-        Login failed. Please start a new login and try again.
-      </p>
-    {:else if login.status === 'expired'}<p>Login expired. Please start a new login.</p>{/if}
+        {/if}
+      </div>
+    {/if}
   </div>
-{/if}
+{/each}
+<p class="note">
+  Log out removes this gateway's saved credentials and prevents new requests. It does not revoke
+  your account upstream or recall content already sent.
+</p>
 
 <style>
   h4 {
@@ -337,8 +440,30 @@
   .backend-row {
     justify-content: space-between;
   }
-  .backend-actions {
-    margin-top: 10px;
+  .login-panel {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+  .login-panel .backend-actions {
+    margin-top: 8px;
+  }
+  .step {
+    margin-bottom: 12px;
+  }
+  .step > span {
+    font-size: 13px;
+  }
+  .user-code {
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    user-select: all;
+  }
+  .footer {
+    justify-content: space-between;
   }
   strong {
     font-size: 13px;
@@ -349,16 +474,12 @@
     color: var(--muted);
     font-size: 12px;
   }
-  .backend-checkbox {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
+  .note {
+    color: var(--muted);
+    font-size: 12px;
   }
-  .backend-checkbox input {
-    width: 16px;
-    height: 16px;
-    flex: none;
-    margin: 2px 0;
+  .badge.connected {
+    color: var(--success, #2f9e5b);
   }
   .instructions {
     white-space: pre-wrap;
@@ -366,5 +487,8 @@
   }
   .backend-error {
     color: var(--danger, #d54444);
+  }
+  .backend-ok {
+    color: var(--success, #2f9e5b);
   }
 </style>

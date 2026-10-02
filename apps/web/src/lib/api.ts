@@ -12,8 +12,13 @@ import { uuid } from './id';
 import { getClientId } from './storage';
 import type {
   Attachment,
+  BackendModel,
+  BackendPreset,
+  BackendProbeInput,
   BackendProviderInput,
   BackendSettingsSnapshot,
+  ConnectionTestResult,
+  DiscoveredModel,
   ProviderAuthSession,
   CommandReceipt,
   ControlLease,
@@ -42,8 +47,14 @@ export { ApiError } from './http';
  * that looks like a credential or an upstream body.
  */
 function safeBackendMessage(body: any, status: number): string {
-  const message: unknown = body?.error?.message;
-  const fallback = `Backend request failed (${status}). Check your settings and try again.`;
+  return safeBackendText(
+    body?.error?.message,
+    `Backend request failed (${status}). Check your settings and try again.`,
+  );
+}
+
+/** A curated gateway message, or `fallback` when it could carry a credential or upstream body. */
+export function safeBackendText(message: unknown, fallback: string): string {
   if (typeof message !== 'string' || !message || message.length > 200) return fallback;
   return /bearer|token|secret|api[_-]?key|[=:{}]|https?:\/\//i.test(message) ? fallback : message;
 }
@@ -251,6 +262,24 @@ export const backendApi = {
     backendRequest<BackendSettingsSnapshot>(`/api/providers/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     }),
+  presets: async () =>
+    (await backendRequest<{ presets?: BackendPreset[] }>('/api/providers/presets')).presets ?? [],
+  discover: async (input: BackendProbeInput) =>
+    (
+      await backendRequest<{ models?: DiscoveredModel[] }>('/api/providers/discover', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      })
+    ).models ?? [],
+  testConnection: async (input: BackendProbeInput & { model: BackendModel }) => {
+    const result = await backendRequest<ConnectionTestResult>('/api/providers/test', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return result.ok
+      ? result
+      : { ...result, message: safeBackendText(result.message, 'The connection test failed.') };
+  },
   setDefault: (model: BackendSettingsSnapshot['defaultModel'] | null) =>
     backendRequest<BackendSettingsSnapshot>('/api/providers/default-model', {
       method: 'PUT',

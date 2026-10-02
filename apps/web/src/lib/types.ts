@@ -270,8 +270,44 @@ export interface BackendProvider {
   api: string;
   baseUrl?: string;
   opencodeGo?: boolean;
+  /** The pi-ai catalog preset a web-managed backend was set up from. */
+  preset?: string;
   hasApiKey: boolean;
   models: BackendModel[];
+}
+
+/** A known service to start a new API-key backend from. */
+export interface BackendPreset {
+  id: string;
+  name: string;
+  api: string;
+  baseUrl: string;
+  /** A local server that normally needs no key. */
+  keyless?: boolean;
+  /** Models come from pi-ai's catalog; saving keeps its request compatibility. */
+  catalog: boolean;
+  models: BackendModel[];
+}
+
+/** A model an endpoint lists; `known` when pi-ai's catalog supplied its limits. */
+export interface DiscoveredModel extends BackendModel {
+  known: boolean;
+}
+
+/** An unsaved backend form to probe; no `apiKey` reuses the edited backend's saved key. */
+export interface BackendProbeInput {
+  api: string;
+  baseUrl: string;
+  opencodeGo?: boolean;
+  apiKey?: string;
+  preset?: string;
+  backendId?: string;
+}
+
+export interface ConnectionTestResult {
+  ok: boolean;
+  message: string;
+  latencyMs: number;
 }
 
 export interface OAuthProviderOption {
@@ -295,6 +331,7 @@ export interface BackendProviderInput {
   baseUrl: string;
   opencodeGo?: boolean;
   apiKey?: string;
+  preset?: string;
   models: BackendModel[];
 }
 
@@ -311,7 +348,8 @@ export interface ProviderAuthSession {
   id: string;
   providerId: string;
   status: 'pending' | 'succeeded' | 'failed' | 'cancelled' | 'expired';
-  auth?: { url: string; instructions?: string };
+  /** `userCode`: a device-flow code to type on the authorization page. */
+  auth?: { url: string; instructions?: string; userCode?: string };
   prompts: ProviderAuthPrompt[];
   progress?: string;
   error?: string;
