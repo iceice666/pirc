@@ -208,6 +208,11 @@ const migrations = [
   `,
   // The role a delegation's new session starts in (agent/roles.ts).
   `ALTER TABLE delegations ADD COLUMN role TEXT;`,
+  // Unread: the agent finished something (activity_at) after the user last read it (read_at).
+  `
+  ALTER TABLE sessions ADD COLUMN activity_at INTEGER;
+  ALTER TABLE sessions ADD COLUMN read_at INTEGER;
+  `,
 ];
 
 const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');
@@ -486,6 +491,7 @@ export class GatewayDatabase {
       runnerEpoch: row.runner_epoch,
       pinnedAt: row.pinned_at ?? null,
       settledAt: row.settled_at ?? null,
+      unread: row.activity_at != null && row.activity_at > (row.read_at ?? 0),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       privateSessionPath: row.private_session_path,
@@ -538,6 +544,26 @@ export class GatewayDatabase {
       .prepare('UPDATE sessions SET pinned_at=?, settled_at=? WHERE id=?')
       .run(next(flags.pinned, session.pinnedAt), next(flags.settled, session.settledAt), sessionId);
     return this.getSession(sessionId);
+  }
+
+  /**
+   * The agent finished a run or stopped to ask something: the session is
+   * unread until the user reads it. Like pinning, this never touches
+   * `updated_at`.
+   */
+  markSessionActivity(sessionId: string): void {
+    this.raw.prepare('UPDATE sessions SET activity_at=? WHERE id=?').run(now(), sessionId);
+  }
+
+  /** The user has seen the session's latest activity. Returns whether it was unread. */
+  markSessionRead(sessionId: string): boolean {
+    return (
+      this.raw
+        .prepare(
+          'UPDATE sessions SET read_at=MAX(?, activity_at) WHERE id=? AND activity_at > COALESCE(read_at, 0)',
+        )
+        .run(now(), sessionId).changes > 0
+    );
   }
 
   /** Apply a generated title unless the user has named the session. Returns whether it changed. */

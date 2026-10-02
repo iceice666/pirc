@@ -70,6 +70,7 @@ it('lists open runs and write leases the node reports, and tells opted-in socket
   const changes = (socket: { received: any[] }) =>
     socket.received.filter((event) => event.type === 'sessions_changed').length;
   expect(await listed(holder.sessionId)).not.toHaveProperty('writeLease');
+  expect((await listed(holder.sessionId)).unread).toBe(false);
 
   // `hold` keeps the run open with a write lease on the workspace.
   expect((await holder.send({ type: 'prompt', message: `hold ${root}` })).statusCode).toBe(202);
@@ -87,6 +88,24 @@ it('lists open runs and write leases the node reports, and tells opted-in socket
   await waitFor(async () => (await listed(holder.sessionId))?.writeLease, undefined);
   expect((await listed(holder.sessionId)).runStatus).not.toBe('running');
   await waitFor(() => changes(watcher) > before, true);
+
+  // The finished run is unread until the user reads it, on every device.
+  expect((await listed(holder.sessionId)).unread).toBe(true);
+  const unreadChanges = changes(watcher);
+  const read = await app.inject({
+    method: 'POST',
+    url: `/api/sessions/${holder.sessionId}/read`,
+    headers,
+  });
+  expect(read.statusCode).toBe(200);
+  expect(read.json().session.unread).toBe(false);
+  expect((await listed(holder.sessionId)).unread).toBe(false);
+  await waitFor(() => changes(watcher) > unreadChanges, true);
+  // Reading it again changes nothing, so nobody is told.
+  const settledChanges = changes(watcher);
+  await app.inject({ method: 'POST', url: `/api/sessions/${holder.sessionId}/read`, headers });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(changes(watcher)).toBe(settledChanges);
 
   watcher.socket.close();
   plain.socket.close();

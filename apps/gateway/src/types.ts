@@ -40,6 +40,8 @@ export interface SessionSummary {
   pinnedAt: number | null;
   /** When the user marked the session settled (done); `null` while it is open. */
   settledAt: number | null;
+  /** The agent finished a run or asked something since the user last read the session. */
+  unread: boolean;
   createdAt: number;
   updatedAt: number;
 }

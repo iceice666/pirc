@@ -251,7 +251,11 @@ export async function buildDaemonApp(
   };
   /** Open runs and write leases each node reported, by gateway session id. */
   const activity = new Map<string, Map<string, LiveActivity>>();
-  const replaceActivity = (nodeId: string, next: Map<string, LiveActivity>) => {
+  /**
+   * `settled`: the node reported its runs, so a run it no longer lists has
+   * finished; a disconnect only forgets them (they were interrupted, not done).
+   */
+  const replaceActivity = (nodeId: string, next: Map<string, LiveActivity>, settled = true) => {
     const before = activity.get(nodeId) ?? new Map();
     if (next.size) activity.set(nodeId, next);
     else activity.delete(nodeId);
@@ -260,7 +264,11 @@ export async function buildDaemonApp(
       const a = before.get(sessionId);
       const b = next.get(sessionId);
       if (a?.run === b?.run && !!a?.writeLease === !!b?.writeLease) continue;
+      // Something for the user to read: the run finished, or it asks a question.
+      const finished = settled && !!a?.run && !b?.run;
+      const asks = b?.run === 'waiting_input' && a?.run !== 'waiting_input';
       try {
+        if (finished || asks) db.markSessionActivity(sessionId);
         const owner = db.getSession(sessionId).ownerUser;
         if (owner) owners.add(owner);
       } catch {
@@ -385,7 +393,7 @@ export async function buildDaemonApp(
     replaceActivity(nodeId, next);
   };
   nodes.onDisconnect = (nodeId) => {
-    replaceActivity(nodeId, new Map());
+    replaceActivity(nodeId, new Map(), false);
     for (const sessionId of db.remoteSessionIds(nodeId)) {
       db.interruptRemoteSession(sessionId);
       db.setRunnerState(sessionId, 'failed');
@@ -596,6 +604,12 @@ export async function buildDaemonApp(
     }
     if (pinned !== undefined || settled !== undefined)
       db.setSessionFlags(session.id, { pinned, settled });
+    return { session: publicSession(db.getSession(session.id)) };
+  });
+  /** The user has read the session: its unread mark clears on every device. */
+  app.post('/api/sessions/:id/read', async (request) => {
+    const session = claim(request);
+    if (db.markSessionRead(session.id)) sessionsChanged(session.ownerUser);
     return { session: publicSession(db.getSession(session.id)) };
   });
 
