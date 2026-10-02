@@ -1,5 +1,5 @@
 import type { Api, Model } from '@mariozechner/pi-ai';
-import { getModels } from './pi-catalog.js';
+import { getModels, getProviders } from './pi-catalog.js';
 import {
   getOAuthProviders,
   type OAuthCredentials,
@@ -28,6 +28,15 @@ import {
   type ModelsConfig,
   type ProviderConfig,
 } from '../models.js';
+import {
+  catalogMetadata,
+  catalogPresets,
+  discoverModels,
+  testConnection,
+  type BackendPreset,
+  type ConnectionResult,
+  type DiscoveredModel,
+} from './discovery.js';
 import {
   workerLogin,
   workerRefresh,
@@ -73,10 +82,24 @@ export const customProviderSchema = z
     baseUrl: endpoint,
     opencodeGo: z.boolean().optional(),
     apiKey: z.string().max(32_768).optional(),
+    /** A pi-ai catalog provider this backend was set up from (keeps its request compatibility). */
+    preset: z.string().max(100).optional(),
     models: z.array(uiModel).min(1).max(200),
   })
   .strict()
   .refine((value) => new Set(value.models.map((model) => model.id)).size === value.models.length);
+/** An unsaved form: the key may be omitted to reuse a saved web-managed backend's key. */
+const probeSchema = z
+  .object({
+    api: customProviderSchema.innerType().shape.api,
+    baseUrl: endpoint,
+    opencodeGo: z.boolean().optional(),
+    apiKey: z.string().max(32_768).optional(),
+    preset: z.string().max(100).optional(),
+    backendId: z.string().max(100).optional(),
+  })
+  .strict();
+const testSchema = probeSchema.extend({ model: uiModel }).strict();
 const credentialsSchema = z
   .object({ access: z.string().min(1), refresh: z.string().min(1), expires: z.number().finite() })
   .passthrough();
@@ -101,7 +124,8 @@ export interface AuthSession {
   id: string;
   providerId: string;
   status: 'pending' | 'succeeded' | 'failed' | 'cancelled' | 'expired';
-  auth?: { url: string; instructions?: string };
+  /** `userCode`: a device-flow code the user types on the authorization page. */
+  auth?: { url: string; instructions?: string; userCode?: string };
   prompts: AuthPrompt[];
   progress?: string;
   error?: string;
@@ -125,6 +149,12 @@ export interface BackendServiceOptions {
   onChange?: () => void;
   registry?: OAuthProviderInterface[];
   catalog?: (providerId: string) => Model<Api>[];
+  /** Catalog provider IDs offered as API-key presets (default: pi-ai's full catalog). */
+  catalogProviders?: () => string[];
+  /** Injectable network access for model discovery tests. */
+  fetcher?: typeof fetch;
+  /** Injectable connection test so route tests need no model server. */
+  connectionTester?: typeof testConnection;
   loginRunner?: LoginRunner;
   refreshRunner?: RefreshRunner;
   sessionTimeoutMs?: number;
@@ -155,6 +185,8 @@ export class BackendService {
   private readonly refreshControllers = new Map<string, AbortController>();
   private readonly loginRunner: LoginRunner;
   private readonly refreshRunner: RefreshRunner;
+  private presetCache: BackendPreset[] | undefined;
+  private probes = 0;
   private closed = false;
 
   constructor(private readonly options: BackendServiceOptions) {
@@ -280,7 +312,10 @@ export class BackendService {
         api: provider.api,
         opencodeGo: provider.opencodeGo ?? false,
         ...(own(this.state.providers, id) && !own(this.baseline.providers, id)
-          ? { baseUrl: provider.baseUrl }
+          ? {
+              baseUrl: provider.baseUrl,
+              ...(provider.piProvider ? { preset: provider.piProvider } : {}),
+            }
           : {}),
         hasApiKey: !!provider.apiKey || id.startsWith('oauth:'),
         models: safe.providers[id]!.models,
@@ -308,15 +343,95 @@ export class BackendService {
     const value = parsed.data;
     const apiKey =
       value.apiKey === undefined ? this.state.providers[id]?.apiKey : value.apiKey || undefined;
+    const provider = this.providerConfig(value, apiKey);
+    this.commit({ ...this.state, providers: { ...this.state.providers, [id]: provider } });
+  }
+  /**
+   * A web-managed provider. With a catalog preset, models known to pi-ai keep
+   * the catalog's gateway-only request metadata (compat, headers, thinking map)
+   * and requests run through pi-ai under the catalog provider's name.
+   */
+  private providerConfig(
+    value: Omit<z.infer<typeof customProviderSchema>, 'models'> & {
+      models: Array<Omit<ModelConfig, 'compat'>>;
+    },
+    apiKey: string | undefined,
+  ): ProviderConfig {
+    const { preset, apiKey: _input, ...rest } = value;
+    let known = new Map<string, Model<Api>>();
+    if (preset !== undefined) {
+      const entry = this.presets().find((item) => item.id === preset && item.catalog);
+      if (!entry || entry.api !== value.api) throw invalid('Unknown backend preset');
+      known = new Map(this.catalog(preset).map((model) => [model.id, model]));
+    }
     const provider: ProviderConfig = {
-      ...value,
-      models: value.models.map((model) => ({ ...model, compat: {} })),
+      ...rest,
+      ...(preset === undefined ? {} : { piProvider: preset }),
+      models: value.models.map((model) => {
+        const entry = known.get(model.id);
+        return { ...model, compat: {}, ...(entry ? catalogMetadata(entry) : {}) };
+      }),
       headers: {},
       compat: {},
-      ...(apiKey === undefined ? {} : { apiKey }),
+      ...(apiKey ? { apiKey } : {}),
     };
-    if (!apiKey) delete provider.apiKey;
-    this.commit({ ...this.state, providers: { ...this.state.providers, [id]: provider } });
+    return provider;
+  }
+  /** API-key presets: pi-ai catalog providers plus common local servers. */
+  presets(): BackendPreset[] {
+    this.presetCache ??= catalogPresets(this.options.catalogProviders?.() ?? getProviders(), (id) =>
+      this.catalog(id),
+    );
+    return this.presetCache;
+  }
+  /** The key a probe uses: the typed one, else the saved key of the backend being edited. */
+  private probeKey(input: { apiKey?: string | undefined; backendId?: string | undefined }) {
+    if (input.apiKey !== undefined) return input.apiKey || undefined;
+    const id = input.backendId;
+    return id && own(this.state.providers, id) && !own(this.baseline.providers, id)
+      ? this.state.providers[id]!.apiKey
+      : undefined;
+  }
+  /** Probes reach user-chosen endpoints; a few at a time is plenty for one settings form. */
+  private async probe<T>(task: () => Promise<T>): Promise<T> {
+    if (this.closed) throw conflict('Backend service is closed');
+    if (this.probes >= 4)
+      throw new ApiError(429, 'too_many_requests', 'Too many backend checks; try again shortly');
+    this.probes++;
+    try {
+      return await task();
+    } finally {
+      this.probes--;
+    }
+  }
+  /** List an unsaved (or edited) endpoint's models, enriched with catalog metadata. */
+  discover(input: unknown): Promise<DiscoveredModel[]> {
+    const parsed = probeSchema.safeParse(input);
+    if (!parsed.success) throw invalid();
+    const value = parsed.data;
+    const preset = value.preset ? this.catalog(value.preset) : [];
+    const lookup = (id: string) => preset.find((model) => model.id === id);
+    return this.probe(() =>
+      discoverModels(
+        { api: value.api, baseUrl: value.baseUrl, apiKey: this.probeKey(value) },
+        lookup,
+        this.options.fetcher,
+      ),
+    );
+  }
+  /** Run one tiny request against an unsaved (or edited) backend's model. */
+  testProvider(input: unknown): Promise<ConnectionResult> {
+    const parsed = testSchema.safeParse(input);
+    if (!parsed.success) throw invalid();
+    const { backendId: _id, model, ...value } = parsed.data;
+    const provider = this.providerConfig({ ...value, models: [model] }, this.probeKey(parsed.data));
+    return this.probe(() =>
+      (this.options.connectionTester ?? testConnection)({
+        provider,
+        model: provider.models[0]!,
+        apiKey: provider.apiKey,
+      }),
+    );
   }
   deleteProvider(id: string): void {
     if (own(this.baseline.providers, id)) throw conflict('File-managed backends are read-only');
@@ -479,9 +594,13 @@ export class BackendService {
                 url.searchParams.has('refresh_token')
               )
                 throw new Error('Unsafe authorization URL');
+              const userCode = value.instructions?.match(
+                /\bcode:\s*([A-Z0-9]{4,8}-[A-Z0-9]{4,8})\b/i,
+              )?.[1];
               session.view.auth = {
                 url: url.toString(),
                 ...(value.instructions ? { instructions: text(value.instructions) } : {}),
+                ...(userCode ? { userCode } : {}),
               };
             },
             onProgress: (value) => {

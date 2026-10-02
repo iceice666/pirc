@@ -116,9 +116,14 @@ Consequences of B, as built:
 
 - `GET /api/providers`: registry plus redacted config/login state/source/scope.
 - `POST /api/provider-auth/sessions`: provider ID and required consent info; the owner comes from the trusted identity, never the request body.
-- `GET /api/provider-auth/sessions/:id`: a bounded state snapshot — authorization link, pending prompt ID/kind, progress.
+- `GET /api/provider-auth/sessions/:id`: a bounded state snapshot — authorization link, device-flow user code (when the provider shows one), pending prompt ID/kind, progress.
 - `POST /api/provider-auth/sessions/:id/input`: a one-shot reply to the current prompt; checked against the current prompt and owner.
 - `DELETE /api/provider-auth/sessions/:id`: cancels the login in progress ("cancel login" is not "remove a saved account" — that's a separate logout/remove API).
+
+API-key backend setup (`apps/gateway/src/backends/discovery.ts`):
+
+- `GET /api/providers/presets`: pi-ai catalog providers usable with a plain key (one supported API, one concrete endpoint; subscription-only catalogs excluded) plus local Ollama/LM Studio servers. A backend saved with `preset` stores it as `piProvider` and keeps the catalog's gateway-only compat/headers/thinking map for known model IDs, so requests behave like pi-ai's own provider.
+- `POST /api/providers/discover`: lists an unsaved form's models from the endpoint (`/models`, or `/v1/models` for Anthropic Messages). `POST /api/providers/test`: sends one tiny request through the normal inference path. Both accept the form without saving it; an omitted `apiKey` reuses only the saved key of the web-managed `backendId` being edited. Redirects are refused (a key is never forwarded), bodies are size- and time-capped, at most four probes run at once, and only curated messages come back — never upstream bodies.
 
 Each login session has a random ID, TTL, generation counter, and count limit; every query/input/cancel checks ownership. `onAuth` and a manual-paste prompt can coexist; the state model must not collapse them into a single screen and lose information.
 

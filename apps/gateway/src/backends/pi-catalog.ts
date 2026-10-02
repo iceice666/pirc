@@ -8,4 +8,4 @@
  * tsconfig.json (`#pi-models`). The dependency is pinned to an exact version,
  * so this internal path is stable for the version pirc was verified against.
  */
-export { getModels } from '#pi-models';
+export { getModels, getProviders } from '#pi-models';

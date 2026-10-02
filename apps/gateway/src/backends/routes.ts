@@ -26,6 +26,12 @@ export function registerBackendRoutes(app: FastifyInstance, backends: BackendSer
     const owner = (request: { identity?: { user: string } }) => request.identity!.user;
 
     scope.get('/api/providers', async () => backends.snapshot());
+    scope.get('/api/providers/presets', async () => ({ presets: backends.presets() }));
+    // Probes of an unsaved form: keys are write-only and never returned.
+    scope.post('/api/providers/discover', async (request) => ({
+      models: await backends.discover(request.body ?? {}),
+    }));
+    scope.post('/api/providers/test', async (request) => backends.testProvider(request.body ?? {}));
     scope.post('/api/providers', async (request, reply) => {
       const body = (request.body ?? {}) as Record<string, unknown>;
       const { id, ...rest } = body;

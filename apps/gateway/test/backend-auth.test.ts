@@ -308,6 +308,26 @@ describe('BackendService', () => {
     );
   });
 
+  test('exposes a device-flow user code separately from the instructions', async () => {
+    const { backends } = service({
+      runner: async (_id, callbacks) => {
+        callbacks.onAuth({
+          url: 'https://github.com/login/device',
+          instructions: 'Enter code: AB12-CD34',
+        });
+        await callbacks.onPrompt({ message: 'Hold' });
+        throw new Error('unused');
+      },
+    });
+    const { id } = backends.startAuth('me', 'github-copilot', true);
+    await until(() => backends.authStatus('me', id).prompts.length === 1);
+    expect(backends.authStatus('me', id).auth).toEqual({
+      url: 'https://github.com/login/device',
+      instructions: 'Enter code: AB12-CD34',
+      userCode: 'AB12-CD34',
+    });
+  });
+
   test('cancellation and logout win over late login and refresh results', async () => {
     let release!: () => void;
     const hold = new Promise<void>((resolve) => (release = resolve));
