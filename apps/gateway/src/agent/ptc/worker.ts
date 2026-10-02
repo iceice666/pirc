@@ -5,6 +5,23 @@
  */
 type Pending = { resolve: (value: any) => void; reject: (error: Error) => void };
 
+/**
+ * Remove the Function constructors (`f.constructor`, `Object.constructor`) so
+ * a script cannot compile code from a computed string such as
+ * `tools.call['constr' + 'uctor']('return Bun')()`. Auto mode lets scripts
+ * without capability words run unprompted (`auto-mode/script.ts`); this keeps
+ * that judgement honest. Not a sandbox: the OS sandbox is the boundary.
+ */
+export function tameFunctionConstructors(): void {
+  const samples = [function () {}, async function () {}, function* () {}, async function* () {}];
+  for (const sample of samples)
+    Object.defineProperty(Object.getPrototypeOf(sample), 'constructor', {
+      value: undefined,
+      writable: false,
+      configurable: false,
+    });
+}
+
 export async function runPtcWorker(argv: string[]): Promise<void> {
   const file = argv[0];
   if (!file || typeof process.send !== 'function') {
@@ -52,6 +69,7 @@ export async function runPtcWorker(argv: string[]): Promise<void> {
   );
   let exitCode = 0;
   try {
+    tameFunctionConstructors();
     const module = await import(file);
     if (typeof module.default !== 'function') throw new Error('Script has no default export');
     const value = await module.default({ tools });

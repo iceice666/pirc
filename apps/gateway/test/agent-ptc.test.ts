@@ -89,6 +89,20 @@ describe('code mode (PTC)', () => {
     expect(text).toContain('line 4999');
   });
 
+  it('cannot compile code from strings through a computed constructor (H2)', async () => {
+    const agent = await start();
+    const end = await runCode(
+      agent,
+      `const k = 'constr' + 'uctor';
+       const fns = [tools.call, async () => 0, function* () {}, async function* () {}];
+       return fns.map((f) => typeof (f as any)[k]).concat(typeof (Object as any)[k]);`,
+    );
+    expect(end.isError).toBe(false);
+    expect(end.result.content[0].text).toContain(
+      '["undefined","undefined","undefined","undefined","undefined"]',
+    );
+  });
+
   it('applies beforeTool hooks to calls made from code', async () => {
     const agent = await start({
       config: {

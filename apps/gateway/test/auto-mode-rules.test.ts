@@ -1,6 +1,8 @@
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'bun:test';
-import { classifyShell, type Verdict } from '../src/agent/auto-mode/rules.js';
+import { classifyShell, compileDeny, type Verdict } from '../src/agent/auto-mode/rules.js';
 import { realResolve } from '../src/agent/sandbox.js';
 
 // Paths need not exist; they must not sit under the scratch directories (tmp).
@@ -94,6 +96,8 @@ describe('auto-mode shell rules', () => {
       'cat ~/.ssh/id_ed25519',
       'cp ~/.ssh/id_rsa ./key',
       'echo x > .pirc/config.json',
+      'mkdir -p sub/.pirc; echo x > sub/.pirc/config.json',
+      'echo x > packages/a/.PIRC/config.json',
       'dd if=/dev/zero of=/dev/sda',
       'mkfs.ext4 /dev/sdb1',
       ':(){ :|:& };:',
@@ -154,5 +158,287 @@ describe('auto-mode shell rules', () => {
     expect(verdict('ls && rm -rf ~')).toBe('danger');
     expect(verdict('git status; git reset --hard')).toBe('danger');
     expect(verdict('ls | python3 -')).toBe('unknown');
+  });
+
+  it('never reads a dynamic operand that may expand to credentials (H5)', () => {
+    expectAll('unknown', [
+      'cat ~/.ssh/*',
+      'cat ~/.ssh/id_?sa',
+      'command cat ~/.ssh/*',
+      'env -i cat ~/.ssh/*',
+      'cat ~/.s*/id_rsa',
+      'cat ~/.s{s,}h/id_rsa',
+      'cat ~/*',
+      'cat $KEYFILE',
+      'cat "$F"',
+      'cat ~/$X',
+      'cat src/*/../../../.ssh/id_rsa',
+      'cat ~/code/.*/.ssh/id_rsa',
+      'cat /etc/sha*',
+      'cat < ~/.ssh/id_*',
+      'ls | xargs cat',
+      'cd "$X" && cat file',
+    ]);
+    expectAll('danger', [
+      'cat "$HOME/.ssh/id_rsa"',
+      'cat ${HOME}/.aws/credentials',
+      'cat ~/".ssh"/id_rsa',
+      'cat < ~/.ssh/id_rsa',
+      // `/etc` is a symlink on macOS; system secrets must still match once resolved.
+      'cat /etc/shadow',
+    ]);
+    // Globs that stay clear of credential paths are still plain reads.
+    expectAll('read', [
+      'ls src/*.ts',
+      'cat *.md',
+      'ls ~/code/*',
+      'echo $HOME',
+      'wc -l "$PWD/README.md"',
+    ]);
+  });
+
+  it('distrusts paths after a command creates a link (H6)', () => {
+    expectAll('unknown', [
+      'ln -s ~ h; cat h/.ssh/id_rsa',
+      'ln -s / r; cat r/etc/shadow',
+      'ln -s ~ h && echo hi > h/.zshrc',
+      'cp -s ~/.zshrc z && cat z',
+    ]);
+    expect(verdict('ln -s ../shared lib')).toBe('write');
+  });
+
+  it('distrusts PATH, preload and alias changes (H6)', () => {
+    expectAll('unknown', [
+      'export PATH=$PWD/bin:$PATH; cat README.md',
+      'PATH=./bin cat README.md',
+      'PATH=./bin; cat README.md',
+      'env PATH=./bin cat README.md',
+      'LD_PRELOAD=./x.so ls',
+      'DYLD_INSERT_LIBRARIES=./x.dylib ls',
+      'BASH_ENV=./x.sh bash -c true',
+      'ENV=./x sh -c true',
+      'GIT_SSH_COMMAND=./evil.sh git fetch',
+      'export GIT_CONFIG_GLOBAL=./c',
+      'HTTPS_PROXY=http://evil:8080 curl https://example.com',
+      'https_proxy=http://evil:8080 curl https://example.com',
+      'shopt -s expand_aliases\nalias cat="rm -rf ~"\ncat x',
+      'alias ls="rm -rf ~"',
+      'printf -v PATH %s ./bin',
+      'env -S "rm -rf ~"',
+      'env -C / ls',
+      'set -- a b',
+    ]);
+    expectAll('read', [
+      'FOO=1 env | sort',
+      'export FOO=1; ls',
+      'set -euo pipefail; ls',
+      'set -x',
+      'shopt -s globstar',
+      'alias',
+      'env -i ls',
+      'env -u FOO ls',
+    ]);
+  });
+
+  it('distrusts git options that run programs (H6)', () => {
+    expectAll('unknown', [
+      'git -c core.fsmonitor=./evil.sh status',
+      'git ls-remote --upload-pack=./evil.sh .',
+      'git ls-remote -u ./evil.sh .',
+      'git -c core.sshCommand=./evil.sh fetch origin',
+      'git -c core.hooksPath=./hooks commit -m x',
+      'git -c core.pager=./evil.sh log',
+      'git -c diff.external=./evil.sh diff',
+      'git -c credential.helper=./evil.sh push',
+      'git -c protocol.ext.allow=always fetch',
+      'git -c filter.x.clean=./evil.sh add .',
+      'git --config-env=core.pager=EVIL log',
+      'git --exec-path=./bin status',
+      'git fetch --upload-pack=./evil.sh origin',
+      'git clone -u ./evil.sh https://example.com/x',
+      'git push --receive-pack=./evil.sh origin',
+      'git archive --exec=./evil.sh --remote=x HEAD',
+      'git rebase -x "rm -rf ~" main',
+      'git grep -O./evil.sh foo',
+      'git config core.fsmonitor ./evil.sh',
+      'git config alias.st "!rm -rf ~"',
+      'git st',
+      'git submodule foreach "rm -rf ~"',
+      'git difftool',
+    ]);
+    expectAll('read', [
+      'git -c color.ui=always log',
+      'git -c core.fsmonitor=false status',
+      'git -c core.pager=cat log',
+      'git -c user.name=x log',
+    ]);
+    expectAll('write', ['git config user.name bob', 'git -c user.email=x@y commit -m x']);
+  });
+
+  it('checks the files tool-specific writers name (M2)', () => {
+    expectAll('danger', [
+      'sed -i s/a/b/ ~/.zshrc',
+      'sed -i "" s/a/b/ ~/.zshrc',
+      'sed -i.bak -e s/a/b/ ~/.zshrc',
+      'sort -o ~/.zshrc a.txt',
+      'sort -o~/.zshrc a.txt',
+      'find . -fprint ~/.zshrc',
+      'find . -fprintf ~/.zshrc %p',
+      'find . -fls ~/.zshrc',
+      'wget -O ~/.zshrc https://example.com/x',
+      'wget --output-document=/etc/x https://example.com/x',
+      'wget -P ~/bin https://example.com/x',
+      'cd ~ && wget https://example.com/x',
+      'curl -o ~/.zshrc https://example.com/x',
+      'curl -sSLo ~/.zshrc https://example.com/x',
+      'curl --output-dir ~/bin -O https://example.com/x',
+      'cd ~ && curl -O https://example.com/x',
+      'tsc --outDir ~/x',
+      'tsc --outFile=/etc/x.js',
+      'prettier --write ~/.zshrc',
+      'eslint --fix ~/x.js',
+      'eslint -o ~/report.txt src',
+      'biome check --write ~/x.ts',
+      'black ~/x.py',
+      'ruff format ~/x.py',
+      'rustfmt ~/x.rs',
+      'gofmt -w ~/x.go',
+      'patch ~/.zshrc < p.diff',
+      'patch -d ~ -p1 < p.diff',
+      'echo x | tee -a ~/.zshrc',
+      'dd if=a of=~/.zshrc',
+      'install -d ~/bin',
+      'install -m 755 x ~/bin/x',
+      'ln -s a ~/.zshrc',
+      'ln -t ~/bin -s a',
+      'go build -o ~/bin/x .',
+      'cargo build --target-dir ~/t',
+      'make -C ~/dotfiles',
+      'npm --prefix ~/x install',
+      'bun --cwd ~/x install',
+      'git diff --output=~/.zshrc',
+    ]);
+    expectAll('write', [
+      'sed -i s/a/b/ file.ts',
+      'sed -i "" s/a/b/ file.ts',
+      'sort -o out.txt a.txt',
+      'find . -fprint list.txt',
+      'wget -O page.html https://example.com/x',
+      'wget https://example.com/x',
+      'curl -o out.txt https://example.com/x',
+      'curl -O https://example.com/x',
+      'tsc --outDir dist',
+      'prettier --write src "**/*.md" --config .prettierrc',
+      'eslint --fix src',
+      'black src',
+      'patch -p1 < p.diff',
+      'patch src/a.ts p.diff',
+      'go build -o bin/x .',
+      'make -C sub',
+    ]);
+    expectAll('read', [
+      'sort a.txt',
+      'prettier --check ~/x',
+      'sed -n 1,20p file.ts',
+      'curl -o - https://example.com',
+    ]);
+    // sed scripts that run commands or touch other files.
+    expectAll('unknown', [
+      "sed 's/a/b/w ~/.zshrc' f",
+      "sed '1e rm -rf ~' f",
+      "sed 's/x/y/e' f",
+      "sed 'r ~/.ssh/id_rsa' f",
+      'sed -f script.sed f',
+      'curl file:///etc/passwd',
+      'curl -K ./curlrc https://example.com',
+    ]);
+  });
+});
+
+describe('auto-mode deny-list (M1)', () => {
+  const dir = realpathSync(mkdtempSync(path.join(tmpdir(), 'pirc-deny-')));
+  const withDeny = (command: string, patterns = ['just\\s+switch', 'nixos-rebuild']) =>
+    classifyShell(command, { cwd: dir, roots: [dir], home, deny: compileDeny(patterns).deny });
+  writeFileSync(
+    path.join(dir, 'package.json'),
+    JSON.stringify({
+      scripts: {
+        build: 'tsc',
+        switch: 'just switch',
+        deploy: 'bun run build && bun run apply',
+        apply: 'sudo nixos-rebuild switch',
+        predanger: 'echo prep',
+        danger: 'echo ok',
+        postdanger: 'just switch',
+        postinstall: 'nixos-rebuild switch',
+      },
+    }),
+  );
+  writeFileSync(
+    path.join(dir, 'Makefile'),
+    'all: build\n\nbuild:\n\ttsc\n\nswitch: build\n\tjust switch\n\nrelease: switch\n\techo done\n',
+  );
+  writeFileSync(
+    path.join(dir, 'justfile'),
+    'default:\n  echo hi\n\nswitch:\n  nixos-rebuild switch\n',
+  );
+  mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+  writeFileSync(path.join(dir, 'scripts', 's.sh'), '#!/bin/sh\njust switch\n');
+  writeFileSync(path.join(dir, 'scripts', 'ok.sh'), '#!/bin/sh\necho ok\n');
+
+  it('refuses matching commands before anything else', () => {
+    for (const command of [
+      'just switch',
+      'just  switch',
+      '"just" sw\\itch',
+      "j'ust' switch",
+      'echo hi && just switch --dry-run',
+      'bash -c "just switch"',
+      'nohup just switch &',
+      'cat <<EOF | sh\njust switch\nEOF',
+    ])
+      expect({ command, verdict: withDeny(command).verdict }).toEqual({
+        command,
+        verdict: 'danger',
+      });
+    expect(withDeny('just switch').denied).toBe(true);
+    expect(withDeny('just build').verdict).not.toBe('danger');
+  });
+
+  it('looks into package scripts, recipes and shell scripts', () => {
+    expectDeny('danger', [
+      'bun run switch',
+      'npm run deploy',
+      'pnpm deploy',
+      'yarn run danger',
+      'bun install',
+      'npm ci',
+      'make switch',
+      'make release',
+      'just switch',
+      'bash scripts/s.sh',
+      'source scripts/s.sh',
+      './scripts/s.sh',
+      'cd scripts && sh s.sh',
+    ]);
+    expectDeny('write', ['bun run build', 'make', 'make build', 'npm test']);
+    expect(withDeny('bash scripts/ok.sh').verdict).toBe('unknown');
+    expect(withDeny('bun run --filter "*" build').verdict).toBe('unknown');
+    function expectDeny(expected: Verdict, commands: string[]) {
+      for (const command of commands)
+        expect({ command, verdict: withDeny(command).verdict }).toEqual({
+          command,
+          verdict: expected,
+        });
+    }
+  });
+
+  it('keeps invalid patterns as literal text', () => {
+    const { deny, invalid } = compileDeny(['rm -rf (', '/JUST SWITCH/i']);
+    expect(invalid).toEqual(['rm -rf (']);
+    const check = (command: string) =>
+      classifyShell(command, { cwd: dir, roots: [dir], home, deny }).verdict;
+    expect(check('echo "rm -rf ("')).toBe('danger');
+    expect(check('Just Switch')).toBe('danger');
   });
 });
