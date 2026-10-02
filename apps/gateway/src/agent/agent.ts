@@ -1,4 +1,16 @@
 import { randomUUID } from 'node:crypto';
+import {
+  captureContext,
+  joinPrompt,
+  trimSections,
+  withReportedUsage,
+  writeContext,
+  type ContextSnapshot,
+  type PromptSection,
+} from './context.js';
+import { memoryPanel } from './features/memory/panel.js';
+import { isFoldedDetails } from './features/memory/ledger.js';
+import { memoryConfigFrom } from './features/memory/index.js';
 import { capabilities, capabilityForTool, type Capabilities } from './capabilities.js';
 import type {
   AgentConfig,
@@ -254,7 +266,8 @@ export class Agent {
    * compaction summary reuse it, so their prefix matches the turns the
    * provider has cached.
    */
-  private runPrompt = '';
+  private runPrompt: PromptSection[] = [];
+  lastContext: ContextSnapshot | null = null;
   private compacting: AbortController | null = null;
   private closed = false;
   modelRef: { provider: string; id: string } | null = null;
@@ -749,9 +762,43 @@ export class Agent {
 
   /** The system prompt; `extra` defaults to the latest run's feature additions. */
   systemPrompt(extra = this.runPrompt): string {
-    const parts = [this.config.systemPrompt, this.extraSystemPrompt, extra];
-    parts.push(`Current working directory: ${this.config.workspace}`);
-    return parts.filter(Boolean).join('\n\n');
+    return joinPrompt(this.promptSections(extra));
+  }
+
+  promptSections(extra = this.runPrompt): PromptSection[] {
+    return [
+      ...this.config.systemPrompt,
+      ...(this.extraSystemPrompt
+        ? [
+            {
+              id: 'hook:sessionStart',
+              title: 'Session start hook',
+              source: 'hook',
+              text: this.extraSystemPrompt,
+            },
+          ]
+        : []),
+      ...extra,
+      {
+        id: 'cwd',
+        title: 'Working directory',
+        source: 'built-in',
+        text: 'Current working directory: ' + this.config.workspace,
+      },
+    ];
+  }
+
+  private saveContext(snapshot: ContextSnapshot): void {
+    this.lastContext = snapshot;
+    try {
+      writeContext(this.store.dir, snapshot);
+    } catch {
+      this.ui.notify(
+        'Unable to persist the context snapshot; the live inspector is still available.',
+        'warning',
+      );
+    }
+    this.panelChanged('context');
   }
 
   toolSpecs(): ToolSpec[] {
@@ -908,6 +955,56 @@ export class Agent {
             model: model.id,
           },
         });
+      const messages = [
+        ...sanitizeHistory(this.contextFor(options.upTo)),
+        ...(options.extraMessages ?? []),
+      ];
+      const tools = this.toolSpecs();
+      const sections = this.promptSections();
+      const branch = this.store.branch();
+      const compaction = branch.findLast((entry) => entry.type === 'compaction');
+      let memoryTokens = 0;
+      if (
+        compaction?.type === 'compaction' &&
+        isFoldedDetails(compaction.details) &&
+        messages.some(
+          (m) =>
+            m.role === 'compactionSummary' &&
+            m.summary === compaction.summary &&
+            m.timestamp === compaction.timestamp,
+        )
+      ) {
+        const panel = memoryPanel(
+          branch,
+          memoryConfigFrom(this.config.features),
+          model.contextWindow,
+        );
+        memoryTokens = [...panel.observations, ...panel.reflections]
+          .filter((item) => item.visible)
+          .reduce((sum, item) => sum + item.tokenCount, 0);
+      }
+      const snapshot = captureContext({
+        sections:
+          joinPrompt(sections) === systemPrompt
+            ? sections
+            : [
+                {
+                  id: 'request',
+                  title: 'Request system prompt',
+                  source: 'built-in',
+                  text: systemPrompt,
+                },
+              ],
+        tools,
+        messages,
+        memoryTokens,
+        model: {
+          provider: providerName,
+          id: model.id,
+          ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
+        },
+      });
+      this.saveContext(snapshot);
       let message: AssistantMessage;
       try {
         message = await streamFn(
@@ -917,11 +1014,8 @@ export class Agent {
             model,
             apiKey: provider.apiKey,
             systemPrompt,
-            messages: [
-              ...sanitizeHistory(this.contextFor(options.upTo)),
-              ...(options.extraMessages ?? []),
-            ],
-            tools: this.toolSpecs(),
+            messages,
+            tools,
             thinking: model.reasoning ? (options.thinking ?? this.thinking) : 'off',
             sessionId: this.store.sessionId,
             signal,
@@ -945,6 +1039,8 @@ export class Agent {
           timestamp,
         };
       }
+      if (this.lastContext?.id === snapshot.id)
+        this.saveContext(withReportedUsage(snapshot, message.usage));
       message.timestamp = timestamp;
       message.completedAt = Date.now();
       const retryable =
@@ -997,12 +1093,24 @@ export class Agent {
     const signal = controller.signal;
     const produced: Message[] = [];
     this.emit({ type: 'agent_start' });
-    let extraPrompt = '';
+    const extraPrompt: PromptSection[] = [];
     try {
       const hidden: CustomMessage[] = [];
       for (const feature of this.features) {
         const result = await feature.beforeAgentStart?.(this);
-        if (result?.systemPrompt) extraPrompt += `\n\n${result.systemPrompt}`;
+        if (result?.systemPrompt)
+          extraPrompt.push(
+            ...(typeof result.systemPrompt === 'string'
+              ? [
+                  {
+                    id: feature.name,
+                    title: feature.name,
+                    source: 'feature:' + feature.name,
+                    text: result.systemPrompt,
+                  },
+                ]
+              : result.systemPrompt),
+          );
         if (result?.messages) hidden.push(...result.messages);
       }
       await this.admit([
@@ -1013,7 +1121,7 @@ export class Agent {
     } catch (error) {
       this.ui.notify(`Failed to start run: ${(error as Error).message}`, 'error');
     }
-    this.runPrompt = extraPrompt.trim();
+    this.runPrompt = trimSections(extraPrompt);
     let turns = 0;
     let overflowRetried = false;
     let completionTimedOut = false;

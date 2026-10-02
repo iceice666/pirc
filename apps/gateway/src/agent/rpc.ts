@@ -220,6 +220,15 @@ export async function handleCommand(
     case 'set_session_name':
       agent.setName(String(command.name ?? ''));
       return undefined;
+    case 'get_context':
+      // Large prompts use the same node-local disk snapshot, never overflow the RPC line.
+      return agent.lastContext &&
+        Buffer.byteLength(JSON.stringify(agent.lastContext)) <
+          (typeof command.maxBytes === 'number' && Number.isFinite(command.maxBytes)
+            ? Math.min(512 * 1024, Math.max(0, command.maxBytes))
+            : 512 * 1024)
+        ? agent.lastContext
+        : null;
     case 'get_panel_state':
       return agent.panelState();
     case 'deliver': {

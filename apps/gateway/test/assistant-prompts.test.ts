@@ -13,6 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { inspectAssistantPrompt, writeAssistantPrompt } from '../src/assistant-prompts.js';
+import { joinPrompt } from '../src/agent/context.js';
 import { loadAgentConfig } from '../src/agent/config.js';
 
 const dirs: string[] = [];
@@ -77,24 +78,24 @@ it('separates chat rules and persona from all coding AGENTS files', () => {
     writeFileSync(path.join(root, 'AGENTS.md'), `Coding rules ${root}`);
   const env = { PIRC_CONFIG_DIR: dir, PIRC_WORKSPACE_KIND: 'chat' };
   const chat = loadAgentConfig(workspace, { providers: {} }, env);
-  expect(chat.systemPrompt).toMatch(/^Unique persona\n\nThis chat/);
-  expect(chat.systemPrompt.endsWith('Unique chat rules')).toBe(true);
-  expect(chat.systemPrompt).not.toContain('Coding rules');
+  expect(joinPrompt(chat.systemPrompt)).toMatch(/^Unique persona\n\nThis chat/);
+  expect(joinPrompt(chat.systemPrompt).endsWith('Unique chat rules')).toBe(true);
+  expect(joinPrompt(chat.systemPrompt)).not.toContain('Coding rules');
   expect(chat.protectedPaths).toContain(path.join(dir, 'SOUL.md'));
   const work = loadAgentConfig(
     workspace,
     { providers: {} },
     { ...env, PIRC_WORKSPACE_KIND: 'directory' },
   );
-  expect(work.systemPrompt.match(/Coding rules/g)).toHaveLength(3);
-  expect(work.systemPrompt).not.toContain('Unique');
+  expect(joinPrompt(work.systemPrompt).match(/Coding rules/g)).toHaveLength(3);
+  expect(joinPrompt(work.systemPrompt)).not.toContain('Unique');
   rmSync(path.join(dir, 'SOUL.md'));
-  expect(loadAgentConfig(workspace, { providers: {} }, env).systemPrompt).toContain(
+  expect(joinPrompt(loadAgentConfig(workspace, { providers: {} }, env).systemPrompt)).toContain(
     "the user's personal assistant",
   );
   writeFileSync(path.join(dir, 'SOUL.md'), 'x'.repeat(9000));
   expect(
-    loadAgentConfig(workspace, { providers: {} }, env).systemPrompt.startsWith(
+    joinPrompt(loadAgentConfig(workspace, { providers: {} }, env).systemPrompt).startsWith(
       'x'.repeat(8000) + '\n\n',
     ),
   ).toBe(true);

@@ -8,10 +8,19 @@
  * into or closing a terminal requires the session's control lease (the
  * same authority as prompting the agent).
  */
-import { closeSync, openSync, readSync, statSync } from 'node:fs';
+import {
+  accessSync,
+  constants,
+  closeSync,
+  openSync,
+  readSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { readContext, type ContextSnapshot } from '../agent/context.js';
 import { loadAgentConfig } from '../agent/config.js';
 import { memoryConfigFrom } from '../agent/features/memory/index.js';
 import { memoryPanel } from '../agent/features/memory/panel.js';
@@ -225,6 +234,55 @@ export function registerPanelRoutes(
         memoryRuntime: live.memoryRuntime ?? null,
         backgroundTasks: live.backgroundTasks ?? [],
         team: live.team ?? { agents: [] },
+      };
+    }),
+  );
+  app.get(
+    '/api/sessions/:id/panel/context',
+    local(async ({ session, root }) => {
+      const runner = runners.get(session.id);
+      let snapshot: ContextSnapshot | null = null;
+      let live = false;
+      if (runner?.alive) {
+        try {
+          const response = await runner.request({
+            type: 'get_context',
+            maxBytes: Math.max(0, config.rpcMaxLineBytes - 1024),
+          });
+          if (response.success && response.data) {
+            snapshot = response.data as ContextSnapshot;
+            live = true;
+          }
+        } catch {
+          /* A stopped or older agent can still have a disk snapshot. */
+        }
+      }
+      snapshot ??= readContext(session.privateSessionPath);
+      if (!snapshot)
+        throw new ApiError(404, 'no_context', 'Send a message first to inspect its context');
+      const sections = snapshot.sections.map((section) => {
+        if (!path.isAbsolute(section.source)) return section;
+        try {
+          const canonicalRoot = realpathSync(root);
+          const file = realpathSync(section.source);
+          const relative = path.relative(canonicalRoot, file);
+          if (
+            relative === '..' ||
+            relative.startsWith('..' + path.sep) ||
+            path.isAbsolute(relative)
+          )
+            return section;
+          if (!statSync(file).isFile()) return section;
+          accessSync(file, constants.R_OK);
+          return { ...section, filePath: relative };
+        } catch {
+          return section;
+        }
+      });
+      return {
+        snapshot: { ...snapshot, sections },
+        agentRunning: !!runner?.alive,
+        source: live ? 'live' : 'snapshot',
       };
     }),
   );

@@ -6,7 +6,15 @@
    * tab switches; each tab loads and refreshes its own data while it is shown.
    * The left edge is a drag handle that resizes the panel.
    */
-  import { Brain, FolderTree, GitBranch, Globe, ListChecks, SquareTerminal } from '@lucide/svelte';
+  import {
+    Brain,
+    FolderTree,
+    GitBranch,
+    Globe,
+    ListChecks,
+    SquareTerminal,
+    ScanText,
+  } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { rovingFocus } from '../../a11y';
@@ -17,6 +25,7 @@
   import FilesTab from './FilesTab.svelte';
   import GitTab from './GitTab.svelte';
   import MemoryTab from './MemoryTab.svelte';
+  import ContextTab from './ContextTab.svelte';
   import TasksTab from './TasksTab.svelte';
   import TerminalTab from './TerminalTab.svelte';
   import BrowserTab from './BrowserTab.svelte';
@@ -55,6 +64,7 @@
     { id: 'files', label: 'Files', icon: FolderTree },
     { id: 'git', label: 'Git', icon: GitBranch },
     { id: 'memory', label: 'Memory', icon: Brain },
+    { id: 'context', label: 'Context', icon: ScanText },
     { id: 'tasks', label: 'Tasks', icon: ListChecks },
     { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
     { id: 'browser', label: 'Browser', icon: Globe },
@@ -199,6 +209,8 @@
               <GitTab {sessionId} active={open && tab === 'git'} onopenfile={openFile} />
             {:else if item.id === 'memory'}
               <MemoryTab active={open && tab === 'memory'} />
+            {:else if item.id === 'context'}
+              <ContextTab {sessionId} active={open && tab === 'context'} onopenfile={openFile} />
             {:else if item.id === 'tasks'}
               <TasksTab {sessionId} active={open && tab === 'tasks'} />
             {:else if item.id === 'browser'}

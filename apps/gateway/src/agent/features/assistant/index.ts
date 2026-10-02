@@ -637,7 +637,19 @@ export function assistantFeature(): Feature {
       const gateway = gatewayOf(agent);
       if (!gateway) return;
       const section = presentSection(await memorySection(agent, gateway), agent.capabilities);
-      return section ? { systemPrompt: section } : undefined;
+      return section
+        ? {
+            systemPrompt: [
+              {
+                id: 'assistant',
+                title: 'Assistant memory and workspaces',
+                source: 'gateway',
+                frozen: true,
+                text: section,
+              },
+            ],
+          }
+        : undefined;
     },
   };
 }

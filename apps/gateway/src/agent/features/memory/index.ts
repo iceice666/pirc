@@ -574,7 +574,19 @@ export function memoryFeature(): Feature {
       maybeConsolidate(agent);
       if (!workspaceOn(agent)) return;
       const text = workspaceSnapshot(agent);
-      return text ? { systemPrompt: text } : undefined;
+      return text
+        ? {
+            systemPrompt: [
+              {
+                id: 'observational-memory',
+                title: 'Workspace memory',
+                source: 'feature:observational-memory',
+                frozen: true,
+                text,
+              },
+            ],
+          }
+        : undefined;
     },
     turnEnd(agent) {
       maybeConsolidate(agent);

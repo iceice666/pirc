@@ -1,9 +1,9 @@
 # Prompt customization: SOUL.md, CHAT.md and a context inspector
 
-Status: implementation in progress. Baseline: `main@69ae62c`.
+Status: implemented and verified (2026-10-02). Baseline: `main@69ae62c`.
 
 - [x] Milestone 1: SOUL.md / CHAT.md loading, node-local web management and persistent chat-node binding.
-- [ ] Milestone 2: sectioned Context inspector, usage accounting and node-local last-request snapshots.
+- [x] Milestone 2: sectioned Context inspector, usage accounting and node-local last-request snapshots.
 
 Implementation clarifications (maintainer, 2026-10-02): prompt management uses the gateway and node `allowedUsers`, not a new sole-owner field. The first chat node ID is persistently bound across disconnects/restarts. Settings → Assistant can release that binding after explicit confirmation and disconnect the old node; the next successful chat registration claims it. Stop the old node first to prevent it reclaiming the binding. Registration errors use a WebSocket frame with status/code (not an HTTP response after upgrade).
 

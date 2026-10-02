@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readAssistantPrompt } from '../assistant-prompts.js';
+import type { PromptSection } from './context.js';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
@@ -177,7 +178,7 @@ export interface AgentConfig {
   features: Record<string, unknown>;
   /** Role file directories, lowest precedence first (roles.ts); read when a role is used. */
   roleDirs?: Array<string | RoleDir>;
-  systemPrompt: string;
+  systemPrompt: PromptSection[];
   /** `chat` when the node runs this agent in a chat workspace (PIRC_WORKSPACE_KIND). */
   workspaceKind: WorkspaceKind;
 }
@@ -266,20 +267,42 @@ export function loadAgentConfig(
         denyWrite: sandboxed ? nodePolicy.denyWrite : [],
       }
     : defaultPathPolicy(writable);
+  const section = (id: string, title: string, source: string, text: string): PromptSection => ({
+    id,
+    title,
+    source,
+    text,
+  });
+  const soul = workspaceKind === 'chat' ? readAssistantPrompt(path.join(configDir, 'SOUL.md')) : '';
   const prompts = (
     workspaceKind === 'chat'
       ? [
-          readAssistantPrompt(path.join(configDir, 'SOUL.md')) || chatIdentity,
-          chatEnvironment,
-          readAssistantPrompt(path.join(configDir, 'CHAT.md')),
+          section(
+            'soul',
+            'Persona',
+            soul ? path.join(configDir, 'SOUL.md') : 'built-in',
+            soul || chatIdentity,
+          ),
+          section('chat-env', 'Chat environment', 'built-in', chatEnvironment),
+          section(
+            'chat-md',
+            'Chat rules',
+            path.join(configDir, 'CHAT.md'),
+            readAssistantPrompt(path.join(configDir, 'CHAT.md')),
+          ),
         ]
       : [
-          basePrompt,
-          readText(path.join(configDir, 'AGENTS.md')),
-          readText(path.join(workspace, 'AGENTS.md')),
-          readText(path.join(projectDir, 'AGENTS.md')),
+          section('base', 'Coding instructions', 'built-in', basePrompt),
+          ...[
+            [configDir, 'global'],
+            [workspace, 'workspace'],
+            [projectDir, 'project'],
+          ].map(([dir, kind]) => {
+            const file = path.join(dir!, 'AGENTS.md');
+            return section('agents:' + kind, 'AGENTS.md (' + kind + ')', file, readText(file));
+          }),
         ]
-  ).filter(Boolean);
+  ).filter((s) => !!s.text);
   const defaultModel = project.defaultModel ?? models.defaultModel;
   return {
     configDir,
@@ -310,7 +333,7 @@ export function loadAgentConfig(
     limits: global.limits,
     features: global.features,
     roleDirs: roleDirs(configDir, projectRoot),
-    systemPrompt: prompts.join('\n\n'),
+    systemPrompt: prompts,
     workspaceKind,
   };
 }

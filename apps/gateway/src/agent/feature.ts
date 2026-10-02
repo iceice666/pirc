@@ -1,3 +1,4 @@
+import type { PromptSection } from './context.js';
 import type { Agent } from './agent.js';
 import type { AssistantMessage, CustomMessage, Message } from './messages.js';
 import type { Tool } from './tools/types.js';
@@ -40,7 +41,7 @@ export interface Feature {
   /** Before each run: extend the system prompt or inject hidden context. */
   beforeAgentStart?(
     agent: Agent,
-  ): Promise<{ systemPrompt?: string; messages?: CustomMessage[] } | void>;
+  ): Promise<{ systemPrompt?: string | PromptSection[]; messages?: CustomMessage[] } | void>;
   turnEnd?(agent: Agent, message: AssistantMessage): void | Promise<void>;
   /** Messages actually admitted to model history (not merely queued). */
   messageAdmitted?(agent: Agent, message: Message): void;

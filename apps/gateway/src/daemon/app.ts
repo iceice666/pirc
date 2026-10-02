@@ -126,7 +126,7 @@ const answerBody = z
  * panel, terminal REST). Anything else under a session is refused.
  */
 const RELAYED_GET =
-  /^(?:git\/(?:status|diff|log|commits\/[0-9a-fA-F]{4,64})|files(?:\/content)?|panel\/(?:state|background\/[^/?]+)|terminals)$/;
+  /^(?:git\/(?:status|diff|log|commits\/[0-9a-fA-F]{4,64})|files(?:\/content)?|panel\/(?:state|context|background\/[^/?]+)|terminals)$/;
 const RELAYED_POST = /^(?:terminals(?:\/[^/?]+\/close)?|panel\/background\/[^/?]+\/stop)$/;
 
 function cursorFrom(value: unknown): EventCursor | null {

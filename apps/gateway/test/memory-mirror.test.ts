@@ -133,3 +133,15 @@ it('resumes where the gateway is, starts over when the ledger shrank, and retrie
   expect(frames).toHaveLength(2);
   expect(frames[1]).toMatchObject({ offset: frames[0]!.end, lines: [{ type: 'cleared' }] });
 });
+
+it('does not mirror context snapshots or recurse into session directories', () => {
+  const { file, frames, connect, sessionDir } = setup();
+  mkdirSync(sessionDir, { recursive: true });
+  writeFileSync(path.join(sessionDir, 'context.json'), JSON.stringify({ text: 'private context' }));
+  writeFileSync(
+    path.join(path.dirname(file), 'context.json'),
+    JSON.stringify({ text: 'private context' }),
+  );
+  connect();
+  expect(frames).toHaveLength(0);
+});

@@ -5,6 +5,7 @@ export type ErrorCode =
   | 'invalid_host'
   | 'invalid_input'
   | 'not_found'
+  | 'no_context'
   | 'conflict'
   | 'read_only'
   | 'binding_changed'

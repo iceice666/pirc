@@ -2,7 +2,40 @@
 import { request } from './http';
 import { getClientId } from './storage';
 
-export type PanelTab = 'files' | 'git' | 'memory' | 'tasks' | 'terminal' | 'browser';
+export type PanelTab = 'files' | 'git' | 'memory' | 'context' | 'tasks' | 'terminal' | 'browser';
+
+export interface ContextPanel {
+  agentRunning: boolean;
+  source: 'live' | 'snapshot';
+  snapshot: {
+    version: 1;
+    id: string;
+    takenAt: number;
+    model: { provider: string; id: string; contextWindow?: number };
+    sections: Array<{
+      id: string;
+      title: string;
+      source: string;
+      text: string;
+      frozen?: boolean;
+      filePath?: string;
+      estimatedTokens: number;
+    }>;
+    tools: Array<{
+      name: string;
+      description: string;
+      parameters: Record<string, unknown>;
+      estimatedTokens: number;
+    }>;
+    usage: {
+      estimatedInput: number;
+      reportedInput?: number;
+      scale: number;
+      remaining: number | null;
+      buckets: { system: number; tools: number; messages: number; memory: number };
+    };
+  };
+}
 
 const base = (sessionId: string) => `/api/sessions/${encodeURIComponent(sessionId)}`;
 const qs = (params: Record<string, string | number | boolean | undefined>) => {
@@ -226,6 +259,8 @@ export const RECORDING_LOG = /^Saved recording (\.pirc\/recordings\/\S+\.webm)$/
 const get = <T>(path: string, signal?: AbortSignal) => request<T>(path, { signal });
 
 export const panelApi = {
+  context: (sessionId: string, signal?: AbortSignal) =>
+    get<ContextPanel>(`${base(sessionId)}/panel/context`, signal),
   gitStatus: (sessionId: string, signal?: AbortSignal) =>
     get<GitStatus>(`${base(sessionId)}/git/status`, signal),
   gitDiff: (

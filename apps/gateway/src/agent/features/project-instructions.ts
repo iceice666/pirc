@@ -49,7 +49,19 @@ export function projectInstructionsFeature(): Feature {
     async beforeAgentStart(agent) {
       if (agent.config.workspaceKind !== 'chat') return;
       section ??= renderInstructions(frozenInstructions(agent));
-      return section ? { systemPrompt: section } : undefined;
+      return section
+        ? {
+            systemPrompt: [
+              {
+                id: 'project-instructions',
+                title: 'Project instructions',
+                source: 'node:project-instructions',
+                frozen: true,
+                text: section,
+              },
+            ],
+          }
+        : undefined;
     },
   };
 }

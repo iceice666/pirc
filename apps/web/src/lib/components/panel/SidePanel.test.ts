@@ -33,13 +33,21 @@ function render(workspaceId: string) {
 
 it('shows chats their files, memory, tasks and browser but no Git or terminal', () => {
   const chat = render('home:chats');
-  expect(chat.labels).toEqual(['Files', 'Memory', 'Tasks', 'Browser']);
+  expect(chat.labels).toEqual(['Files', 'Memory', 'Context', 'Tasks', 'Browser']);
   // A hidden tab that was selected falls back to Files.
   expect(chat.active).toBe('Files');
 });
 
 it('keeps every tab for directory workspaces', () => {
   const directory = render('node:ws');
-  expect(directory.labels).toEqual(['Files', 'Git', 'Memory', 'Tasks', 'Terminal', 'Browser']);
+  expect(directory.labels).toEqual([
+    'Files',
+    'Git',
+    'Memory',
+    'Context',
+    'Tasks',
+    'Terminal',
+    'Browser',
+  ]);
   expect(directory.active).toBe('Terminal');
 });
