@@ -75,7 +75,6 @@ export const demoSessions: SessionSummary[] = [
     lastActivityAt: new Date().toISOString(),
     runStatus: 'running',
     runnerStatus: 'ready',
-    unreadCount: 0,
     preview: 'Implementing the responsive conversation workspace…',
   },
   {
@@ -85,7 +84,7 @@ export const demoSessions: SessionSummary[] = [
     lastActivityAt: new Date(Date.now() - 3_600_000).toISOString(),
     runStatus: 'waiting_input',
     runnerStatus: 'ready',
-    unreadCount: 1,
+    unread: true,
     pendingInteractionCount: 1,
     preview: 'Which cursor policy should be used?',
   },
@@ -96,7 +95,6 @@ export const demoSessions: SessionSummary[] = [
     lastActivityAt: new Date(Date.now() - 86_400_000).toISOString(),
     runStatus: 'succeeded',
     runnerStatus: 'stopped',
-    unreadCount: 0,
     preview: 'Drafted the service configuration.',
   },
   {
@@ -106,7 +104,6 @@ export const demoSessions: SessionSummary[] = [
     lastActivityAt: new Date(Date.now() - 60_000).toISOString(),
     runStatus: 'running',
     runnerStatus: 'ready',
-    unreadCount: 0,
     writeLease: true,
     origin: {
       kind: 'delegation',
@@ -122,7 +119,6 @@ export const demoSessions: SessionSummary[] = [
     lastActivityAt: new Date(Date.now() - day * 86_400_000 - 3_600_000).toISOString(),
     runStatus: 'succeeded' as const,
     runnerStatus: 'stopped' as const,
-    unreadCount: 0,
     origin: {
       kind: 'schedule' as const,
       scheduleId: 'sch-flake',
@@ -136,7 +132,6 @@ export const demoSessions: SessionSummary[] = [
     name: 'Explain Authelia forward-auth',
     lastActivityAt: new Date(Date.now() - 7_200_000).toISOString(),
     runnerStatus: 'stopped',
-    unreadCount: 0,
   },
   {
     id: 'chat-backup',
@@ -144,7 +139,6 @@ export const demoSessions: SessionSummary[] = [
     name: 'Backup rotation policy',
     lastActivityAt: new Date(Date.now() - 5 * 86_400_000).toISOString(),
     runnerStatus: 'stopped',
-    unreadCount: 0,
   },
 ];
 

@@ -4,7 +4,7 @@
  * the UI sends. Components read it directly instead of receiving it as props.
  */
 import { api, connectEvents, type EventConnection } from './api';
-import type { NewWorkspace } from './chats';
+import { isChatWorkspace, type NewWorkspace } from './chats';
 import { memoryApi, type MemoryProposal } from './memory';
 import { schedulesApi, type Schedule, type ScheduleRun } from './schedules';
 import { targetFromUrl, type PushTarget } from './push';
@@ -45,8 +45,8 @@ export type Upload = Attachment & { preview?: string; uploading?: boolean };
 
 /** The sidebar's two lists: the assistant's chats, or the agents' work. */
 export type SidebarMode = 'chat' | 'work';
-/** What the main column shows. */
-export type MainView = 'session' | 'schedules';
+/** What the main column shows: a session, the schedules, or a project's or workspace's page. */
+export type MainView = 'session' | 'schedules' | 'workspace';
 
 /** Something waiting for you, shown under "Needs you". */
 export type InboxItem =
@@ -109,6 +109,8 @@ class AppState {
   /** Chat or Work; remembered. */
   mode = $state<SidebarMode>(loadLayout('workMode', false) ? 'work' : 'chat');
   view = $state<MainView>('session');
+  /** The project or workspace whose page is showing (view `workspace`). */
+  workspaceViewId = $state<string>();
   models = $state.raw<ModelOption[]>([]);
   activeSessionId = $state<string>();
   connection = $state<ConnectionState>(navigator.onLine ? 'reconnecting' : 'offline');
@@ -227,6 +229,42 @@ class AppState {
     this.view = 'schedules';
   }
 
+  /**
+   * Show a project's or workspace's page: its sessions and its settings. The
+   * open session stays connected behind it, so going back is instant.
+   */
+  showWorkspace(workspaceId: string) {
+    const workspace = this.workspaces.find((item) => item.id === workspaceId);
+    if (!workspace) return;
+    // The sidebar shows the list the page belongs to.
+    this.setMode(isChatWorkspace(workspace) ? 'chat' : 'work');
+    this.workspaceViewId = workspaceId;
+    this.view = 'workspace';
+    this.#address(`?workspace=${encodeURIComponent(workspaceId)}`);
+  }
+
+  /** The address names what is on screen: a reload or a shared link comes back to it. */
+  #address(search: string) {
+    if (!this.demo && typeof history !== 'undefined')
+      history.replaceState(history.state, '', search);
+  }
+
+  /**
+   * Clear the open session's unread mark (on every device) while you are
+   * looking at it: the page is visible and the session is on screen.
+   */
+  markActiveRead() {
+    const id = this.activeSessionId;
+    if (!id || this.view !== 'session') return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    const session = this.sessions.find((item) => item.id === id);
+    if (!session?.unread) return;
+    this.sessions = this.sessions.map((item) =>
+      item.id === id ? { ...item, unread: false } : item,
+    );
+    if (!this.demo) void api.markRead(id).catch(() => undefined);
+  }
+
   /** Listen for side-panel refresh signals. Returns the unsubscribe function. */
   onPanel(listener: (signal: PanelSignal) => void): () => void {
     this.#panelListeners.add(listener);
@@ -274,7 +312,16 @@ class AppState {
         this.pageError = errorMessage(error, 'Unable to connect to the gateway.');
       }
     }
-    if (this.activeSessionId) await this.openSession(this.activeSessionId);
+    // A project or workspace page the address names stays in front of the session behind it.
+    const page = new URL(location.href).searchParams.get('workspace');
+    const pageWorkspace = page ? this.workspaces.find((item) => item.id === page) : undefined;
+    if (pageWorkspace) {
+      this.setMode(isChatWorkspace(pageWorkspace) ? 'chat' : 'work');
+      this.workspaceViewId = pageWorkspace.id;
+      this.view = 'workspace';
+    }
+    if (this.activeSessionId)
+      await this.openSession(this.activeSessionId, { show: this.view === 'session' });
     this.loading = false;
   }
 
@@ -295,6 +342,7 @@ class AppState {
     if (this.demo) return;
     try {
       this.sessions = await api.sessions();
+      this.markActiveRead();
     } catch {
       /* keep the last list */
     }
@@ -422,15 +470,23 @@ class AppState {
     if (hiddenFor >= RESUME_SNAPSHOT_AFTER) void this.refreshSnapshot();
   }
 
-  async openSession(id: string) {
-    this.view = 'session';
+  /** `show: false` connects the session behind the page on screen (a project page, the schedules). */
+  async openSession(id: string, { show = true }: { show?: boolean } = {}) {
+    if (show) {
+      this.view = 'session';
+      // The address names the open session: a reload or a shared link comes back
+      // to it, and the service worker skips notifications about what is on screen.
+      this.#address(`?session=${encodeURIComponent(id)}`);
+    }
+    // Back from a page to the session still connected behind it.
+    if (id === this.activeSessionId && this.sessionState?.session.id === id && this.#events) {
+      this.markActiveRead();
+      return;
+    }
     this.flushDraft();
     const seq = ++this.#openSeq;
     this.activeSessionId = id;
-    // The address names the open session: a reload or a shared link comes back
-    // to it, and the service worker skips notifications about what is on screen.
-    if (!this.demo && typeof history !== 'undefined')
-      history.replaceState(history.state, '', `?session=${encodeURIComponent(id)}`);
+    this.markActiveRead();
     this.#events?.close();
     this.#events = undefined;
     this.sessionState = undefined;
@@ -907,11 +963,11 @@ class AppState {
             name: 'New session',
             lastActivityAt: new Date().toISOString(),
             runnerStatus: 'stopped' as const,
-            unreadCount: 0,
           }
         : await api.createSession({ workspaceId });
       this.sessions = [created, ...this.sessions];
       if (demo) {
+        this.view = 'session';
         this.activeSessionId = created.id;
         this.panel.reset(created.id, demo.demoPanelState);
         this.sessionState = fromSnapshot({

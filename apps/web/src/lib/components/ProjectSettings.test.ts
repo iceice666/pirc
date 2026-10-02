@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { mount, tick, unmount } from 'svelte';
 import ProjectSettings from './ProjectSettings.svelte';
-import { app } from '../app.svelte';
 import type { ProjectCapabilities } from '../capabilities';
+import { reactiveProps } from '../testing/props.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -19,16 +19,13 @@ async function flush() {
 async function setup(disabled = false) {
   target = document.createElement('div');
   document.body.append(target);
-  component = mount(ProjectSettings, { target, props: { disabled } });
+  const props = reactiveProps({ workspaceId: 'home:chat/project', disabled });
+  component = mount(ProjectSettings, { target, props });
   await flush();
+  return props;
 }
 
 beforeEach(() => {
-  app.workspaces = [
-    { id: 'home:chat/project', hostId: 'home', displayName: 'Project', kind: 'chat', defaults: {} },
-    { id: 'work:code', hostId: 'work', displayName: 'Code', kind: 'directory', defaults: {} },
-    { id: 'home:chats', hostId: 'home', displayName: 'Chats', kind: 'chat', defaults: {} },
-  ];
   policy = {
     version: 1,
     delegation: true,
@@ -49,7 +46,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it('loads gateway policy with accessible switches for chat workspaces only', async () => {
+it('loads the gateway policy of its workspace with accessible switches', async () => {
   policy.memory_search = false;
   await setup();
   expect(fetch).toHaveBeenCalledWith(
@@ -58,7 +55,6 @@ it('loads gateway policy with accessible switches for chat workspaces only', asy
   );
   expect(switches()).toHaveLength(5);
   expect(switches().map((input) => input.checked)).toEqual([true, false, true, true, true]);
-  expect(target.querySelectorAll('option')).toHaveLength(2);
   expect(target.textContent).toContain('not a sandbox');
   expect(target.textContent).toContain('enforced by the gateway');
 });
@@ -117,12 +113,14 @@ it('ignores stale policy responses when changing projects', async () => {
         finish = resolve;
       }),
   );
-  await setup();
+  const props = await setup();
   expect(target.textContent).toContain('Loading project capabilities');
-  const select = target.querySelector('select')!;
-  select.value = 'home:chats';
-  select.dispatchEvent(new Event('change', { bubbles: true }));
+  props.workspaceId = 'home:chats';
   await flush();
+  expect(fetch).toHaveBeenLastCalledWith(
+    '/api/workspaces/home%3Achats/capabilities',
+    expect.objectContaining({ credentials: 'include' }),
+  );
   expect(switches()[0]!.checked).toBe(true);
   finish(response({ capabilities: { ...policy, delegation: false } }));
   await flush();

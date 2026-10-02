@@ -12,7 +12,6 @@ const session = (id: string, name: string, extra: Partial<SessionSummary> = {}) 
   name,
   lastActivityAt: new Date().toISOString(),
   runnerStatus: 'ready' as const,
-  unreadCount: 0,
   ...extra,
 });
 
@@ -24,6 +23,7 @@ const handlers = {
   onnew: vi.fn(),
   onaddworkspace: vi.fn(),
   onaddproject: vi.fn(),
+  onopenworkspace: vi.fn(),
   onclose: vi.fn(),
   onsettings: vi.fn(),
 };
@@ -42,6 +42,8 @@ beforeEach(() => {
   app.missedRuns = [];
   app.schedules = [];
   app.mode = 'chat';
+  app.view = 'session';
+  app.workspaceViewId = undefined;
   target = document.createElement('div');
   document.body.append(target);
 });
@@ -53,8 +55,8 @@ afterEach(async () => {
   Object.values(handlers).forEach((handler) => handler.mockReset());
 });
 
-function render(props: { open?: boolean; showSettled?: boolean } = {}) {
-  const reactive = reactiveProps({ open: false, showSettled: false, ...props, ...handlers });
+function render(props: { open?: boolean } = {}) {
+  const reactive = reactiveProps({ open: false, ...props, ...handlers });
   component = mount(Sidebar, { target, props: reactive });
   flushSync();
   return reactive;
@@ -66,58 +68,61 @@ const names = () =>
   );
 
 describe('Sidebar', () => {
-  it('lists pinned sessions first and hides done ones behind a toggle', () => {
-    const props = render();
-    expect(names()).toEqual(['Beta', 'Alpha']);
-    const toggle = target.querySelector<HTMLButtonElement>('.heading-toggle')!;
-    expect(toggle.textContent).toContain('Show done · 1');
-    toggle.click();
-    flushSync();
-    expect(props.showSettled).toBe(true);
-    expect(names()).toEqual(['Beta', 'Alpha', 'Gamma']);
-  });
+  const chatWorkspaces = () => {
+    app.nodes = [{ id: 'node' } as never, { id: 'home' } as never];
+    app.workspaces = [
+      { id: 'node:ws', hostId: 'node', displayName: 'Project' } as never,
+      { id: 'home:chats', hostId: 'home', displayName: 'Chats', kind: 'chat' } as never,
+      { id: 'home:trip', hostId: 'home', displayName: 'Trip', kind: 'chat' } as never,
+    ];
+  };
+  const text = (selector: string) => target.querySelector(selector)?.textContent ?? '';
+  const namesIn = (label: string) =>
+    Array.from(target.querySelectorAll(`[aria-label="${label}"] .session-name`)).map(
+      (item) => item.textContent,
+    );
 
-  it('groups work by state: needs you, running, then recent', () => {
+  it('shows workspaces as rows that open their page, with only unread and open sessions under them', () => {
     app.sessions = [
       session('a', 'Alpha'),
+      session('n', 'Newer', { unread: true }),
       session('r', 'Runner', { runStatus: 'running', writeLease: true }),
-      session('w', 'Waiter', { runStatus: 'waiting_input' }),
+      session('w', 'Waiter', { runStatus: 'waiting_input', unread: true }),
     ];
     render();
-    const section = (label: string) =>
-      Array.from(
-        target.querySelectorAll(
-          `[aria-label="${label}"] .session-name, [aria-label="${label}"] .inbox-text strong`,
-        ),
-      ).map((item) => item.textContent);
-    expect(section('Needs you')).toEqual(['Waiter']);
-    expect(section('Running')).toEqual(['Runner']);
-    expect(section('Recent')).toEqual(['Alpha']);
-    // Only the session holding the write lease shows the lock.
-    expect(target.querySelectorAll('[aria-label="Holds the write lease"]')).toHaveLength(1);
-    target.querySelector<HTMLButtonElement>('.inbox-item .pill-button')!.click();
-    expect(handlers.onselect).toHaveBeenCalledWith('w');
+    // Waiting sessions are under "Needs you", not again under their workspace.
+    expect(namesIn('node')).toEqual(['Alpha', 'Newer']);
+    const row = target.querySelector('[aria-label="node"] .workspace-heading')!;
+    expect(row.textContent).toContain('Project');
+    expect(row.querySelector('.running-count')?.textContent).toContain('1');
+    expect(row.querySelector('.unread')?.textContent).toBe('2');
+    expect(row.querySelector('[aria-label="A session holds the write lease"]')).not.toBeNull();
+    row.querySelector<HTMLButtonElement>('button')!.click();
+    expect(handlers.onopenworkspace).toHaveBeenCalledWith('node:ws');
+    target.querySelector<HTMLButtonElement>('[aria-label="New session in Project"]')!.click();
+    expect(handlers.onnew).toHaveBeenCalledWith('node:ws');
+    target.querySelector<HTMLButtonElement>('[aria-label="Add workspace on node"]')!.click();
+    expect(handlers.onaddworkspace).toHaveBeenCalledWith('node');
   });
 
-  it('folds the runs of one schedule into a row that expands', () => {
-    const origin = { kind: 'schedule' as const, scheduleId: 's1', title: 'Digest', dueAt: 0 };
-    app.sessions = [
-      session('x', 'Digest #2', { origin }),
-      session('a', 'Alpha'),
-      session('y', 'Digest #1', { origin }),
-    ];
-    app.activeSessionId = 'a';
+  it('marks the page that is showing instead of the session behind it', () => {
+    app.view = 'workspace';
+    app.workspaceViewId = 'node:ws';
     render();
-    expect(names()).toEqual(['Digest', 'Alpha']);
-    expect(target.querySelector('.fold-card')!.textContent).toContain('2 runs');
-    target.querySelector<HTMLButtonElement>('.fold-card')!.click();
-    flushSync();
-    expect(names()).toEqual(['Digest', 'Digest #2', 'Digest #1', 'Alpha']);
+    const heading = target.querySelector('.workspace-heading')!;
+    expect(heading.classList.contains('current')).toBe(true);
+    expect(heading.querySelector('[aria-current="page"]')).not.toBeNull();
+    // The open session is behind the page: nothing unread to list.
+    expect(names()).toEqual([]);
+    // New session goes straight into the workspace on screen.
+    target.querySelector<HTMLButtonElement>('.new-session')!.click();
+    expect(handlers.onnew).toHaveBeenCalledWith('node:ws');
   });
 
-  it('answers missed runs and memory proposals under "Needs you"', () => {
+  it('answers sessions, missed runs and memory proposals under "Needs you"', () => {
     const decideMissed = vi.spyOn(app, 'decideMissed').mockResolvedValue();
     const decideProposal = vi.spyOn(app, 'decideProposal').mockResolvedValue();
+    app.sessions = [session('w', 'Waiter', { runStatus: 'waiting_input' })];
     const schedule = { id: 's1', title: 'Backup', timezone: 'UTC' } as never;
     app.missedRuns = [{ schedule, run: { id: 'run1', dueAt: 0 } as never }];
     const proposal = { id: 'p1', action: 'add', content: 'Likes tea', target: null } as never;
@@ -125,6 +130,8 @@ describe('Sidebar', () => {
     render();
     const buttons = (kind: string) =>
       Array.from(target.querySelectorAll<HTMLButtonElement>(`[data-kind="${kind}"] .pill-button`));
+    buttons('session')[0]!.click();
+    expect(handlers.onselect).toHaveBeenCalledWith('w');
     expect(buttons('missed').map((b) => b.textContent)).toEqual(['Allow & run', 'Dismiss']);
     buttons('missed')[0]!.click();
     expect(decideMissed).toHaveBeenCalledWith('s1', 'run1', true);
@@ -132,25 +139,34 @@ describe('Sidebar', () => {
     expect(decideProposal).toHaveBeenCalledWith(proposal, false);
   });
 
-  it('filters by the search query', () => {
+  it('searches every session of the mode, whatever its workspace', () => {
     render();
     const search = target.querySelector<HTMLInputElement>('.search input')!;
+    search.value = 'a';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    expect(namesIn('Search results')).toEqual(['Alpha', 'Beta', 'Gamma']);
+    expect(target.querySelector('.workspace-heading')).toBeNull();
     search.value = 'alp';
     search.dispatchEvent(new Event('input', { bubbles: true }));
     flushSync();
-    expect(names()).toEqual(['Alpha']);
+    expect(namesIn('Search results')).toEqual(['Alpha']);
   });
 
   it('selects a session and marks the open one as current', () => {
+    app.sessions = [session('a', 'Alpha'), session('b', 'Beta', { unread: true, pinned: true })];
     render();
+    expect(names()).toEqual(['Beta', 'Alpha']);
     const cards = target.querySelectorAll<HTMLButtonElement>('.session-card');
     expect(cards[1]!.getAttribute('aria-current')).toBe('page');
+    expect(cards[0]!.querySelector('[aria-label="Unread"]')).not.toBeNull();
     cards[0]!.click();
     expect(handlers.onselect).toHaveBeenCalledWith('b');
   });
 
   it('reveals row actions of another session through its "more" button', () => {
     const update = vi.spyOn(app, 'updateSession').mockResolvedValue();
+    app.sessions = [session('a', 'Alpha'), session('b', 'Beta', { unread: true, pinned: true })];
     render();
     // The open session needs no "more" button; the other row has one.
     expect(target.querySelector('[aria-label="Actions for Alpha"]')).toBeNull();
@@ -167,7 +183,7 @@ describe('Sidebar', () => {
   it('renames with F2 and Enter', async () => {
     const update = vi.spyOn(app, 'updateSession').mockResolvedValue();
     render();
-    const card = target.querySelectorAll<HTMLButtonElement>('.session-card')[1]!;
+    const card = target.querySelector<HTMLButtonElement>('.session-card')!;
     card.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true }));
     await Promise.resolve();
     flushSync();
@@ -197,7 +213,7 @@ describe('Sidebar', () => {
 
   it('opens the schedules page and settings from the footer', () => {
     const onschedules = vi.fn();
-    const reactive = reactiveProps({ open: false, showSettled: false, ...handlers, onschedules });
+    const reactive = reactiveProps({ open: false, ...handlers, onschedules });
     component = mount(Sidebar, { target, props: reactive });
     flushSync();
     target.querySelector<HTMLButtonElement>('.schedules-entry')!.click();
@@ -215,40 +231,44 @@ describe('Sidebar', () => {
     expect(target.querySelector('[aria-label="Chats"]')).toBeNull();
   });
 
-  it('puts chats and projects first when a chat node is connected', () => {
-    app.nodes = [{ id: 'node' } as never, { id: 'home' } as never];
-    app.workspaces = [
-      { id: 'node:ws', hostId: 'node', displayName: 'Project' } as never,
-      { id: 'home:chats', hostId: 'home', displayName: 'Chats', kind: 'chat' } as never,
-      { id: 'home:trip', hostId: 'home', displayName: 'Trip', kind: 'chat' } as never,
-    ];
+  it('lists projects as rows and top-level chats when a chat node is connected', () => {
+    chatWorkspaces();
     app.sessions = [
-      session('a', 'Alpha'),
+      session('a', 'Alpha', { unread: true }),
       session('t', 'Top chat', { workspaceId: 'home:chats' }),
+      session('d', 'Done chat', { workspaceId: 'home:chats', settled: true }),
       session('p', 'Planning', { workspaceId: 'home:trip' }),
+      session('u', 'Packing', { workspaceId: 'home:trip', unread: true }),
     ];
     render();
-    const text = (selector: string) => target.querySelector(selector)?.textContent ?? '';
     // New chat opens a top-level chat right away, like ChatGPT's.
     const button = target.querySelector<HTMLButtonElement>('.new-session')!;
     expect(button.textContent).toContain('New chat');
     button.click();
     expect(handlers.onnew).toHaveBeenCalledWith('home:chats');
-    expect(text('[aria-label="Chats"]')).toContain('Top chat');
+    expect(namesIn('Chats')).toEqual(['Top chat']);
+    // A project is one row; only its unread chat shows under it.
     expect(text('[aria-label="Projects"]')).toContain('Trip');
-    expect(text('[aria-label="Projects"]')).toContain('Planning');
+    expect(namesIn('Projects')).toEqual(['Packing']);
     // Chat mode shows no work sessions.
     expect(names()).not.toContain('Alpha');
+    target
+      .querySelector<HTMLButtonElement>('[aria-label="Projects"] .workspace-heading button')!
+      .click();
+    expect(handlers.onopenworkspace).toHaveBeenCalledWith('home:trip');
+    target.querySelector<HTMLButtonElement>('[aria-label="All chats and their settings"]')!.click();
+    expect(handlers.onopenworkspace).toHaveBeenLastCalledWith('home:chats');
     target.querySelector<HTMLButtonElement>('[aria-label="New project"]')!.click();
     expect(handlers.onaddproject).toHaveBeenCalledWith('home');
     target.querySelector<HTMLButtonElement>('[aria-label="New chat in Trip"]')!.click();
     expect(handlers.onnew).toHaveBeenLastCalledWith('home:trip');
-    // Work lists the directory workspaces' sessions, never chats.
+    // Work lists the directory workspaces, never chats.
     Array.from(target.querySelectorAll<HTMLButtonElement>('.mode-switch button'))
       .find((button) => button.textContent?.includes('Work'))!
       .click();
     flushSync();
     expect(app.mode).toBe('work');
+    expect(target.querySelector('[aria-label="home"]')).toBeNull();
     expect(names()).toEqual(['Alpha']);
   });
 });

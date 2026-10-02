@@ -51,7 +51,8 @@ export interface SessionSummary {
   lastActivityAt: string;
   runStatus?: RunStatus;
   runnerStatus: RunnerStatus;
-  unreadCount: number;
+  /** The agent finished a run or asked something since you last read it (any device). */
+  unread?: boolean;
   /** Pinned sessions sort first in their workspace. */
   pinned?: boolean;
   /** Settled (done) sessions are tucked away at the bottom of their workspace. */

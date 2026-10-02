@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { app } from '../app.svelte';
-  import { isChatWorkspace } from '../chats';
   import { ApiError } from '../http';
   import {
     capabilitiesApi,
@@ -9,19 +7,8 @@
     type ProjectCapabilities,
   } from '../capabilities';
 
-  let {
-    disabled = false,
-    selectedProject = $bindable(),
-  }: { disabled?: boolean; selectedProject?: string | undefined } = $props();
-  const workspaces = $derived(app.workspaces.filter(isChatWorkspace));
-  let selected = $state('');
-  const workspaceId = $derived(
-    workspaces.some((workspace) => workspace.id === selected) ? selected : workspaces[0]?.id,
-  );
-  // The project picked here, for the other project settings next to this one.
-  $effect(() => {
-    selectedProject = disabled ? undefined : workspaceId;
-  });
+  /** A chat workspace: a project, or the top-level chats. */
+  let { workspaceId, disabled = false }: { workspaceId: string; disabled?: boolean } = $props();
   let capabilities: ProjectCapabilities | undefined = $state();
   let loading = $state(false);
   let saving = $state(false);
@@ -95,21 +82,7 @@
   </p>
   {#if disabled}
     <p>Project capabilities are unavailable in demo mode.</p>
-  {:else if !workspaces.length}
-    <p>No chat projects available. Add a chat project to configure its capabilities.</p>
   {:else}
-    <label class="project-picker">
-      <span>Chat workspace</span>
-      <select
-        value={workspaceId}
-        disabled={saving}
-        onchange={(event) => (selected = event.currentTarget.value)}
-      >
-        {#each workspaces as workspace (workspace.id)}
-          <option value={workspace.id}>{workspace.displayName} · {workspace.hostId}</option>
-        {/each}
-      </select>
-    </label>
     {#if loading}
       <p role="status">Loading project capabilities…</p>
     {:else if capabilities}
@@ -139,14 +112,6 @@
 </section>
 
 <style>
-  .project-picker {
-    display: grid;
-    gap: 6px;
-    margin: 16px 0;
-  }
-  select {
-    width: 100%;
-  }
   fieldset {
     margin: 16px 0 0;
     padding: 0;

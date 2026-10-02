@@ -27,6 +27,7 @@
   import MobileTabs from './lib/components/MobileTabs.svelte';
   import RunCard from './lib/components/RunCard.svelte';
   import SchedulesPage from './lib/components/SchedulesPage.svelte';
+  import WorkspacePage from './lib/components/WorkspacePage.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
   import { isChatWorkspace, topLevelChats } from './lib/chats';
   import { timelineItems } from './lib/work';
@@ -87,9 +88,17 @@
     settingsOpen = true;
     app.requestedTarget = undefined;
   });
-  // The schedules page replaces the phone's list.
+  /** The project or workspace whose page is showing, if it still exists. */
+  const pageWorkspace = $derived(
+    app.view === 'workspace'
+      ? app.workspaces.find((workspace) => workspace.id === app.workspaceViewId)
+      : undefined,
+  );
+  /** A page in the main column (not a conversation): the phone keeps its bottom tabs. */
+  const onPage = $derived(app.view === 'schedules' || !!pageWorkspace);
+  // A page replaces the phone's list.
   $effect(() => {
-    if (app.view === 'schedules') sidebarOpen = false;
+    if (onPage) sidebarOpen = false;
   });
   const hasChats = $derived(!!topLevelChats(app.workspaces));
   /** The open session is one of the assistant's chats: no engineering chrome. */
@@ -385,6 +394,11 @@
     void app.openSession(id);
   }
 
+  function openWorkspace(id: string) {
+    sidebarOpen = false;
+    app.showWorkspace(id);
+  }
+
   function resetLayout() {
     sidebarCollapsed = false;
     detailsOpen = false;
@@ -422,7 +436,13 @@
 <svelte:window bind:innerWidth={viewportWidth} onkeydown={onWindowKeydown} />
 
 <svelte:head
-  ><title>{sessionState ? `${sessionState.session.name} · pirc` : 'pirc'}</title></svelte:head
+  ><title
+    >{pageWorkspace
+      ? `${pageWorkspace.displayName} · pirc`
+      : sessionState
+        ? `${sessionState.session.name} · pirc`
+        : 'pirc'}</title
+  ></svelte:head
 >
 
 <div
@@ -440,7 +460,7 @@
     onaddworkspace={showNewWorkspace}
     onaddproject={showNewProject}
     onclose={() => (sidebarOpen = false)}
-    bind:showSettled
+    onopenworkspace={openWorkspace}
     onsettings={() => {
       settingsTab = 'general';
       settingsOpen = true;
@@ -467,6 +487,15 @@
         onexpand={() => (sidebarCollapsed = false)}
         onopenchat={openSession}
       />
+    {:else if pageWorkspace}
+      <WorkspacePage
+        workspace={pageWorkspace}
+        {sidebarCollapsed}
+        {showSettled}
+        onexpand={() => (sidebarCollapsed = false)}
+        onselect={openSession}
+        onnew={showNewSession}
+      />
     {:else if app.loading}
       <div class="loading-state">
         <span class="large-mark"><Sparkles size={24} /></span>
@@ -486,7 +515,13 @@
         {/if}
         <div class="title-block">
           <div class="breadcrumb">
-            <span>{app.activeWorkspace?.displayName ?? 'Workspace'}</span><span>/</span><span
+            {#if app.activeWorkspace}<button
+                class="crumb"
+                type="button"
+                title="Open {app.activeWorkspace.displayName}"
+                onclick={() => openWorkspace(app.activeWorkspace!.id)}
+                >{app.activeWorkspace.displayName}</button
+              >{:else}<span>Workspace</span>{/if}<span>/</span><span
               >{sessionState.session.name}</span
             >
           </div>
@@ -675,7 +710,7 @@
   oncreated={(workspaceId) => showNewSession(workspaceId)}
 />
 <NewSessionDialog bind:open={newSessionOpen} />
-{#if sidebarOpen || app.view === 'schedules'}
+{#if sidebarOpen || onPage}
   <MobileTabs current={mobileTab} chats={hasChats} onpick={pickTab} />
 {/if}
 
@@ -760,8 +795,19 @@
     font-size: 12px;
     white-space: nowrap;
   }
-  .breadcrumb span:nth-child(n + 2) {
+  .breadcrumb > :nth-child(n + 2) {
     display: none;
+  }
+  .crumb {
+    padding: 0;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font-size: inherit;
+  }
+  .crumb:hover {
+    color: var(--ink);
+    text-decoration: underline;
   }
   .title-block h1 {
     margin: 0;

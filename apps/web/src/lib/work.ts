@@ -1,7 +1,7 @@
 /**
- * The sidebar's Work mode: sessions grouped by what they need (Needs you,
- * Running, Recent) instead of by workspace, with repeated runs of one
- * schedule folded into one row. Pure functions, shared by the sidebar and tests.
+ * Session lists: the sidebar's rows under each project and workspace, and the
+ * project and workspace pages, where repeated runs of one schedule fold into
+ * one row. Pure functions, shared by the components and tests.
  */
 import type { ConversationMessage, SessionSummary, ToolCall } from './types';
 
@@ -62,32 +62,24 @@ export function pinnedFirst(sessions: SessionSummary[]): SessionSummary[] {
   return [...sessions.filter((item) => item.pinned), ...sessions.filter((item) => !item.pinned)];
 }
 
-export interface WorkGroups {
-  running: SessionSummary[];
-  recent: RecentRow[];
-  /** Settled sessions left out of `recent`. */
-  settled: number;
-}
-
 /**
- * Work sessions (directory workspaces, optionally one workspace) by state.
- * Sessions waiting for an answer are left to "Needs you".
+ * The sessions the sidebar lists under a project or workspace row: the unread
+ * ones, and the open one so you can see where you are. The page lists the rest.
+ * `skipWaiting`: Work's "Needs you" already lists sessions waiting for an answer.
  */
-export function workGroups(
+export function sidebarSessions(
   sessions: SessionSummary[],
-  include: (session: SessionSummary) => boolean,
-  showSettled: boolean,
-): WorkGroups {
-  const running: SessionSummary[] = [];
-  const rest: SessionSummary[] = [];
-  let settled = 0;
-  for (const session of sessions) {
-    if (!include(session) || needsInput(session)) continue;
-    if (isRunning(session)) running.push(session);
-    else if (session.settled && !showSettled) settled++;
-    else rest.push(session);
-  }
-  return { running, recent: foldRecent(pinnedFirst(rest)), settled };
+  workspaceId: string,
+  activeId: string | undefined,
+  skipWaiting = false,
+): SessionSummary[] {
+  return pinnedFirst(
+    sessions.filter(
+      (session) =>
+        session.workspaceId === workspaceId &&
+        (session.id === activeId || (session.unread && !(skipWaiting && needsInput(session)))),
+    ),
+  );
 }
 
 /** A write refused because another session holds the lease (node/runner.ts `grantWrite`). */

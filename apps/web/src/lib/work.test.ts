@@ -4,8 +4,8 @@ import {
   blockingSession,
   foldRecent,
   summarizeRun,
+  sidebarSessions,
   timelineItems,
-  workGroups,
   writeBlock,
 } from './work';
 
@@ -15,7 +15,6 @@ const session = (id: string, extra: Partial<SessionSummary> = {}): SessionSummar
   name: id,
   lastActivityAt: '2026-09-29T00:00:00Z',
   runnerStatus: 'ready',
-  unreadCount: 0,
   ...extra,
 });
 const scheduled = (scheduleId: string) => ({
@@ -51,27 +50,23 @@ describe('foldRecent', () => {
   });
 });
 
-describe('workGroups', () => {
-  it('splits running from recent, leaves waiting sessions to "Needs you", hides done ones', () => {
-    const groups = workGroups(
-      [
-        session('run', { runStatus: 'running' }),
-        session('queued', { runStatus: 'queued' }),
-        session('wait', { runStatus: 'waiting_input' }),
-        session('done', { settled: true }),
-        session('idle', { runStatus: 'succeeded' }),
-        session('pin', { pinned: true }),
-        session('other', { workspaceId: 'n:other' }),
-      ],
-      (item) => item.workspaceId === 'n:ws',
-      false,
-    );
-    expect(groups.running.map((s) => s.id)).toEqual(['run', 'queued']);
-    expect(groups.recent.map((row) => row.kind === 'session' && row.session.id)).toEqual([
-      'pin',
-      'idle',
-    ]);
-    expect(groups.settled).toBe(1);
+describe('sidebarSessions', () => {
+  const sessions = [
+    session('read'),
+    session('new', { unread: true }),
+    session('wait', { unread: true, runStatus: 'waiting_input' }),
+    session('open'),
+    session('pin', { unread: true, pinned: true }),
+    session('other', { workspaceId: 'n:other', unread: true }),
+  ];
+  const ids = (list: SessionSummary[]) => list.map((item) => item.id);
+
+  it('lists the unread sessions of one workspace and the open one, pinned first', () => {
+    expect(ids(sidebarSessions(sessions, 'n:ws', 'open'))).toEqual(['pin', 'new', 'wait', 'open']);
+  });
+
+  it('can leave sessions waiting for an answer to "Needs you"', () => {
+    expect(ids(sidebarSessions(sessions, 'n:ws', undefined, true))).toEqual(['pin', 'new']);
   });
 });
 

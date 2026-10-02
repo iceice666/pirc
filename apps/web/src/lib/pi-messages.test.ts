@@ -218,7 +218,6 @@ describe('live Pi events', () => {
       name: 'n',
       lastActivityAt: '2025-01-01T00:00:00Z',
       runnerStatus: 'ready',
-      unreadCount: 0,
     },
     runnerStatus: 'ready',
     run: null,

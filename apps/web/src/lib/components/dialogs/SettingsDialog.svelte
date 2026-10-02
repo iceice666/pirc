@@ -1,7 +1,6 @@
 <script lang="ts" module>
   const SETTINGS_TABS = [
     { id: 'general', label: 'General' },
-    { id: 'projects', label: 'Projects' },
     { id: 'memory', label: 'Memory' },
     { id: 'models', label: 'Models' },
     { id: 'devices', label: 'Devices' },
@@ -17,8 +16,6 @@
   import Modal from './Modal.svelte';
   import BackendSettings from '../BackendSettings.svelte';
   import MemorySettings from '../MemorySettings.svelte';
-  import ProjectSettings from '../ProjectSettings.svelte';
-  import ProjectInstructions from '../ProjectInstructions.svelte';
   import NotificationSettings from '../NotificationSettings.svelte';
   import PairedDevices from '../PairedDevices.svelte';
 
@@ -26,7 +23,7 @@
     open: boolean;
     /** The category shown; the opener may pick one (e.g. Memory, when proposals wait). */
     tab?: SettingsTab;
-    /** Sidebar shows settled sessions. */
+    /** Project and workspace pages list settled sessions. */
     showSettled: boolean;
     onresetlayout: () => void;
     /** Open a chat that memory refers to (the dialog closes). */
@@ -40,8 +37,6 @@
     onresetlayout,
     onopenchat,
   }: Props = $props();
-  /** The chat project picked under Projects: its instructions are edited below its capabilities. */
-  let selectedProject: string | undefined = $state();
 </script>
 
 <Modal bind:open labelledby="settings-title" class="settings">
@@ -90,12 +85,15 @@
         hidden={settingsTab !== 'general'}
       >
         <section class="settings-section">
-          <h3>Sidebar</h3>
+          <h3>Sessions</h3>
           <label class="settings-toggle">
             <span>Show done sessions</span>
             <input type="checkbox" bind:checked={showSettled} />
           </label>
-          <p>Settled (done) sessions are hidden from Work's Recent list unless this is on.</p>
+          <p>
+            Settled (done) sessions are hidden from project and workspace pages unless this is on.
+            Project and workspace settings are on their own pages.
+          </p>
         </section>
 
         <NotificationSettings disabled={app.usingDemo} />
@@ -107,20 +105,6 @@
             <button class="button ghost" type="button" onclick={onresetlayout}>Reset</button>
           </div>
         </section>
-      </div>
-
-      <div
-        role="tabpanel"
-        id="settings-panel-projects"
-        aria-labelledby="settings-tab-projects"
-        hidden={settingsTab !== 'projects'}
-      >
-        {#if settingsTab === 'projects'}
-          <ProjectSettings disabled={app.usingDemo} bind:selectedProject />
-          {#if selectedProject}
-            <ProjectInstructions workspaceId={selectedProject} />
-          {/if}
-        {/if}
       </div>
 
       <div

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
 import { app, MESSAGE_PAGE } from './lib/app.svelte';
 import { panelApi } from './lib/panel-api';
+import { demoWorkspaces } from './lib/mock';
 import { seedApp, stubMatchMedia } from './lib/testing/app-state';
 import type { ConversationMessage } from './lib/types';
 
@@ -85,6 +86,8 @@ afterEach(async () => {
   component = undefined;
   target.remove();
   observers.clear();
+  app.view = 'session';
+  history.replaceState(null, '', '/');
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -159,6 +162,54 @@ describe('App header', () => {
     app.sessionState = { ...app.sessionState!, sandbox: { active: true } };
     flushSync();
     expect(target.querySelector('.unsandboxed')).toBeNull();
+  });
+});
+
+describe('App workspace page', () => {
+  it('opens from the breadcrumb, lists the sessions and goes back to one', async () => {
+    await start(2);
+    app.workspaces = demoWorkspaces;
+    flushSync();
+    const session = app.sessionState!.session;
+    target.querySelector<HTMLButtonElement>('.breadcrumb .crumb')!.click();
+    flushSync();
+    expect(app.view).toBe('workspace');
+    expect(location.search).toBe(`?workspace=${session.workspaceId}`);
+    expect(target.querySelector('.workspace-page h1')!.textContent).toBe('pirc');
+    expect(target.querySelector('.conversation')).toBeNull();
+    expect(document.title).toBe('pirc · pirc');
+
+    const open = vi.spyOn(app, 'openSession').mockImplementation(async () => {
+      app.view = 'session';
+    });
+    target.querySelector<HTMLButtonElement>('.workspace-page .row-main')!.click();
+    flushSync();
+    expect(open).toHaveBeenCalledWith(session.id);
+    expect(target.querySelector('.workspace-page')).toBeNull();
+    expect(target.querySelector('.conversation')).not.toBeNull();
+  });
+});
+
+describe('App unread sessions', () => {
+  it('marks the session on screen read, but not one behind a page', async () => {
+    await start(2);
+    const id = app.sessionState!.session.id;
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ session: { id } })));
+    vi.stubGlobal('fetch', fetch);
+    app.view = 'workspace';
+    app.sessions = app.sessions.map((item) => ({ ...item, unread: true }));
+    app.markActiveRead();
+    expect(fetch).not.toHaveBeenCalled();
+    app.view = 'session';
+    app.markActiveRead();
+    expect(app.sessions.find((item) => item.id === id)!.unread).toBe(false);
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/sessions/${encodeURIComponent(id)}/read`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+    // Already read: nothing more to tell the gateway.
+    app.markActiveRead();
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 

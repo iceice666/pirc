@@ -4,16 +4,12 @@
     ArchiveRestore,
     Brain,
     CalendarClock,
-    Check,
-    ChevronDown,
     ChevronLeft,
-    ChevronsUpDown,
     Clock,
     Command,
     Ellipsis,
     Folder,
     Forward,
-    Layers,
     Lock,
     PanelLeftClose,
     Pencil,
@@ -21,8 +17,8 @@
     PinOff,
     Plus,
     Search,
-    Server,
     Settings,
+    Settings2,
     SquarePen,
     X,
   } from '@lucide/svelte';
@@ -33,7 +29,7 @@
   import { shortAgo } from '../time';
   import type { SessionSummary, Workspace } from '../types';
   import { watch } from '../watch.svelte';
-  import { needsInput, workGroups, type RecentRow } from '../work';
+  import { isRunning, pinnedFirst, sidebarSessions } from '../work';
 
   interface Props {
     open?: boolean;
@@ -42,6 +38,8 @@
     oncollapse: () => void;
     onselect: (id: string) => void;
     onnew: (workspaceId?: string) => void;
+    /** Open a project's or workspace's page: all its sessions and its settings. */
+    onopenworkspace: (workspaceId: string) => void;
     onaddworkspace: (nodeId: string) => void;
     /** New chat project on the chat node. */
     onaddproject: (nodeId: string) => void;
@@ -51,8 +49,6 @@
     onschedules?: () => void;
     /** Review memory changes in Settings. */
     onmemory?: () => void;
-    /** Settled (done) work sessions are listed too. */
-    showSettled?: boolean;
   }
 
   let {
@@ -61,13 +57,13 @@
     oncollapse,
     onselect,
     onnew,
+    onopenworkspace,
     onaddworkspace,
     onaddproject,
     onclose,
     onsettings,
     onschedules,
     onmemory,
-    showSettled = $bindable(false),
   }: Props = $props();
 
   const nodes = $derived(app.nodes);
@@ -77,7 +73,10 @@
     return nodes.filter((node) => !chatNodes.has(node.id));
   });
   const sessions = $derived(app.sessions);
-  const activeSessionId = $derived(app.activeSessionId);
+  /** The open session, unless a page covers it. */
+  const activeSessionId = $derived(app.view === 'session' ? app.activeSessionId : undefined);
+  /** The project or workspace whose page is showing. */
+  const pageId = $derived(app.view === 'workspace' ? app.workspaceViewId : undefined);
   const onrename = (id: string, name: string) => app.updateSession(id, { name });
   const onpin = (id: string, pinned: boolean) => app.updateSession(id, { pinned });
   const onsettle = (id: string, settled: boolean) => app.updateSession(id, { settled });
@@ -92,48 +91,27 @@
   const mode = $derived(chats ? app.mode : 'work');
 
   let query = $state('');
-  let collapsedGroups = $state(new Set<string>());
-  let openFolds = $state(new Set<string>());
   let renamingId: string | undefined = $state();
   let renameValue = $state('');
   let renameInput: HTMLInputElement | undefined = $state();
 
-  let visibleSessions = $derived(
-    sessions.filter((session) => session.name.toLowerCase().includes(query.toLowerCase())),
+  // ── Chat mode ──
+  /** Top-level chats, pinned first, then by activity; settled ones are on the Chats page. */
+  const topChats = $derived(
+    chats
+      ? pinnedFirst(
+          sessions.filter((session) => session.workspaceId === chats.id && !session.settled),
+        )
+      : [],
   );
 
-  // ── Chat mode ──
-  /** Chats per chat workspace, pinned first, then by activity; settled ones are left out. */
-  let chatGroups = $derived.by(() => {
-    const map = new Map<string, SessionSummary[]>();
-    for (const session of visibleSessions) {
-      if (session.settled && !query) continue;
-      const list = map.get(session.workspaceId) ?? [];
-      list.push(session);
-      map.set(session.workspaceId, list);
-    }
-    for (const [id, list] of map)
-      map.set(id, [...list.filter((s) => s.pinned), ...list.filter((s) => !s.pinned)]);
-    return map;
-  });
-
   // ── Work mode ──
-  /** '' (all), `node:<id>`, or a workspace id. */
-  let filter = $state('');
-  let filterOpen = $state(false);
-  $effect.pre(() => {
-    if (
-      filter &&
-      !(filter.startsWith('node:')
-        ? app.workspaces.some((w) => `node:${w.hostId}` === filter)
-        : workspaceById.has(filter))
-    )
-      filter = '';
-  });
   const directoryWorkspaces = $derived(app.workspaces.filter((w) => !isChatWorkspace(w)));
-  /** Hosts with directory workspaces, online first. */
+  /** Devices with their workspaces (connected devices without any too), online first. */
   const hosts = $derived.by(() => {
-    const ids = [...new Set(directoryWorkspaces.map((w) => w.hostId))];
+    const ids = [
+      ...new Set([...directoryWorkspaces.map((w) => w.hostId), ...deviceNodes.map((n) => n.id)]),
+    ];
     const online = (id: string) => nodes.some((node) => node.id === id);
     return ids
       .sort((a, b) => Number(online(b)) - Number(online(a)) || a.localeCompare(b))
@@ -143,50 +121,31 @@
         workspaces: directoryWorkspaces.filter((w) => w.hostId === id),
       }));
   });
-  const inFilter = (session: SessionSummary) => {
-    const workspace = workspaceById.get(session.workspaceId);
-    if (!workspace || isChatWorkspace(workspace)) return false;
-    if (!filter) return true;
-    return filter.startsWith('node:')
-      ? `node:${workspace.hostId}` === filter
-      : workspace.id === filter;
-  };
-  let work = $derived(workGroups(visibleSessions, inFilter, showSettled || !!query));
-  const inbox = $derived(
-    query
-      ? app.inbox.filter(
-          (item) =>
-            item.kind !== 'session' ||
-            item.session.name.toLowerCase().includes(query.toLowerCase()),
-        )
-      : app.inbox,
-  );
-  const openCount = (hostId: string, workspaceId?: string) =>
-    sessions.filter((session) => {
+  const inbox = $derived(app.inbox);
+
+  /** Searching lists every matching session of the mode, whatever its workspace. */
+  const results = $derived.by(() => {
+    if (!query) return [];
+    const needle = query.toLowerCase();
+    return sessions.filter((session) => {
       const workspace = workspaceById.get(session.workspaceId);
       return (
-        workspace?.hostId === hostId &&
-        (!workspaceId || workspace.id === workspaceId) &&
-        (session.runStatus === 'running' || needsInput(session))
+        !!workspace &&
+        isChatWorkspace(workspace) === (mode === 'chat') &&
+        session.name.toLowerCase().includes(needle)
       );
-    }).length;
-  const filterLabel = $derived(
-    !filter
-      ? 'All workspaces'
-      : filter.startsWith('node:')
-        ? filter.slice(5)
-        : (workspaceById.get(filter)?.displayName ?? 'Workspace'),
-  );
-  /** New session: straight into the chosen workspace, else a dialog to pick one. */
-  const filteredWorkspace = $derived(
-    filter && !filter.startsWith('node:') ? workspaceById.get(filter) : undefined,
+    });
+  });
+  /** New session: straight into the workspace whose page is open, else a dialog to pick one. */
+  const pageWorkspace = $derived(pageId ? workspaceById.get(pageId) : undefined);
+  const newSessionTarget = $derived(
+    pageWorkspace && !isChatWorkspace(pageWorkspace) ? pageWorkspace : undefined,
   );
 
-  function toggleIn(set: Set<string>, id: string) {
-    const next = new Set(set);
-    next.has(id) ? next.delete(id) : next.add(id);
-    return next;
-  }
+  const unreadIn = (workspaceId: string) =>
+    sessions.filter((session) => session.workspaceId === workspaceId && session.unread).length;
+  const runningIn = (workspaceId: string) =>
+    sessions.filter((session) => session.workspaceId === workspaceId && isRunning(session)).length;
 
   async function startRename(session: SessionSummary) {
     renamingId = session.id;
@@ -223,7 +182,6 @@
         closeButton?.focus();
       } else {
         revealedId = undefined;
-        filterOpen = false;
         if (aside?.contains(document.activeElement)) menuButton?.focus();
       }
     },
@@ -301,7 +259,7 @@
     <button
       class="new-session"
       type="button"
-      onclick={() => (filteredWorkspace ? onnew(filteredWorkspace.id) : onnew())}
+      onclick={() => (newSessionTarget ? onnew(newSessionTarget.id) : onnew())}
       ><SquarePen size={16} /> New session</button
     >
   {/if}
@@ -312,7 +270,16 @@
   </label>
 
   <div class="sidebar-scroll">
-    {#if mode === 'chat' && chats}
+    {#if query}
+      <section class="list-section" aria-label="Search results">
+        <div class="section-heading"><strong>Results</strong><small>{results.length}</small></div>
+        <div class="session-list">
+          {#each results as session (session.id)}{@render sessionRow(session, true)}{:else}
+            <p class="empty-note">Nothing matches.</p>
+          {/each}
+        </div>
+      </section>
+    {:else if mode === 'chat' && chats}
       <section class="list-section" aria-label="Projects">
         <div class="section-heading">
           <strong>Projects</strong>
@@ -326,7 +293,7 @@
         </div>
         <div class="workspace-list">
           {#each projects as project (project.id)}
-            {@render projectGroup(project)}
+            {@render workspaceRow(project, false)}
           {:else}
             <p class="empty-note">Group related chats into a project.</p>
           {/each}
@@ -336,9 +303,17 @@
         <div class="section-heading">
           <strong>Chats</strong>
           {#if !app.workspaceOnline(chats)}<small>offline</small>{/if}
+          <button
+            class="heading-action"
+            class:current={pageId === chats.id}
+            type="button"
+            title="All chats and their settings"
+            aria-label="All chats and their settings"
+            onclick={() => onopenworkspace(chats.id)}><Settings2 size={14} /></button
+          >
         </div>
         <div class="session-list">
-          {#each chatGroups.get(chats.id) ?? [] as session (session.id)}
+          {#each topChats as session (session.id)}
             {@render sessionRow(session, false)}
           {/each}
         </div>
@@ -354,121 +329,33 @@
           </div>
         </section>
       {/if}
-      {#if work.running.length}
-        <section class="list-section" aria-label="Running">
+      {#each hosts as host (host.id)}
+        <section class="list-section" aria-label={host.id}>
           <div class="section-heading">
-            <strong>Running</strong><small>{work.running.length}</small>
+            <span class="host-dot" class:online={host.online}></span>
+            <strong>{host.id}</strong>
+            {#if !host.online}<small>offline</small>{/if}
+            <button
+              class="heading-action"
+              type="button"
+              onclick={() => onaddworkspace(host.id)}
+              disabled={!host.online}
+              aria-label="Add workspace on {host.id}"><Plus size={15} /></button
+            >
           </div>
-          <div class="session-list">
-            {#each work.running as session (session.id)}{@render sessionRow(session, true)}{/each}
+          <div class="workspace-list">
+            {#each host.workspaces as workspace (workspace.id)}
+              {@render workspaceRow(workspace, true)}
+            {:else}
+              <p class="empty-note">No workspaces yet.</p>
+            {/each}
           </div>
         </section>
-      {/if}
-      <section class="list-section" aria-label="Recent">
-        <div class="section-heading">
-          <strong>Recent</strong>
-          {#if work.settled || showSettled}
-            <button
-              class="heading-toggle"
-              type="button"
-              aria-pressed={showSettled}
-              onclick={() => (showSettled = !showSettled)}
-              >{showSettled ? 'Hide done' : `Show done · ${work.settled}`}</button
-            >
-          {/if}
-        </div>
-        <nav class="session-list">
-          {#each work.recent as row (row.kind === 'session' ? row.session.id : `fold:${row.scheduleId}`)}
-            {#if row.kind === 'session'}{@render sessionRow(
-                row.session,
-                true,
-              )}{:else}{@render foldRow(row)}{/if}
-          {:else}
-            <p class="empty-note">
-              {query ? 'Nothing matches.' : 'Sessions you start in a workspace show here.'}
-            </p>
-          {/each}
-        </nav>
-      </section>
+      {:else}
+        <p class="empty-note">Connect a device to add a workspace.</p>
+      {/each}
     {/if}
   </div>
-
-  {#if mode === 'work'}
-    <div class="work-filter">
-      {#if filterOpen}
-        <div class="filter-popover" role="dialog" aria-label="Show sessions from">
-          <span class="popover-title">Show sessions from</span>
-          <button
-            type="button"
-            class="filter-option"
-            aria-pressed={!filter}
-            onclick={() => ((filter = ''), (filterOpen = false))}
-          >
-            <Layers size={15} /><span>All workspaces</span>
-            {#if !filter}<Check size={15} />{/if}
-          </button>
-          {#each hosts as host (host.id)}
-            <button
-              type="button"
-              class="filter-host"
-              aria-pressed={filter === `node:${host.id}`}
-              onclick={() => ((filter = `node:${host.id}`), (filterOpen = false))}
-            >
-              <span class="host-dot" class:online={host.online}></span>
-              <strong>{host.id}</strong><small>· {host.online ? 'online' : 'offline'}</small>
-              {#if filter === `node:${host.id}`}<Check size={14} />{/if}
-            </button>
-            {#each host.workspaces as workspace (workspace.id)}
-              {@const busy = openCount(host.id, workspace.id)}
-              <button
-                type="button"
-                class="filter-option"
-                aria-pressed={filter === workspace.id}
-                onclick={() => ((filter = workspace.id), (filterOpen = false))}
-              >
-                <Folder size={15} /><span>{workspace.displayName}</span>
-                {#if sessions.some((s) => s.writeLease && s.workspaceId === workspace.id)}<span
-                    class="lease-mark"
-                    title="A session holds the write lease"><Lock size={12} /> writing</span
-                  >{/if}
-                {#if busy}<small>{busy} active</small>{/if}
-                {#if filter === workspace.id}<Check size={15} />{/if}
-              </button>
-            {/each}
-          {/each}
-          <div class="popover-actions">
-            <button
-              type="button"
-              onclick={() => {
-                filterOpen = false;
-                onaddworkspace(
-                  filter.startsWith('node:')
-                    ? filter.slice(5)
-                    : (filteredWorkspace?.hostId ?? deviceNodes[0]?.id ?? ''),
-                );
-              }}
-              disabled={!deviceNodes.length}><Plus size={15} /> Add workspace</button
-            >
-          </div>
-        </div>
-      {/if}
-      <button
-        class="filter-button"
-        type="button"
-        aria-expanded={filterOpen}
-        onclick={() => (filterOpen = !filterOpen)}
-      >
-        <Server size={15} />
-        <span class="filter-label">{filterLabel}</span>
-        <span class="filter-hosts">
-          {#each hosts.slice(0, 3) as host (host.id)}<span
-              ><span class="host-dot" class:online={host.online}></span>{host.id}</span
-            >{/each}
-        </span>
-        <ChevronsUpDown size={14} />
-      </button>
-    </div>
-  {/if}
 
   <div class="sidebar-footer">
     {#if mode === 'work'}
@@ -500,28 +387,44 @@
   onclick={() => (open = true)}><ChevronLeft size={22} /></button
 >
 
-{#snippet projectGroup(workspace: Workspace)}
-  {@const list = chatGroups.get(workspace.id) ?? []}
+<!-- A project or workspace: one row that opens its page, with its unread sessions under it. -->
+{#snippet workspaceRow(workspace: Workspace, work: boolean)}
+  {@const list = sidebarSessions(sessions, workspace.id, activeSessionId, work)}
+  {@const unread = unreadIn(workspace.id)}
+  {@const running = work ? runningIn(workspace.id) : 0}
+  {@const online = app.workspaceOnline(workspace)}
   <section class="workspace-group">
-    <div class="workspace-heading">
+    <div class="workspace-heading" class:current={pageId === workspace.id}>
       <button
         type="button"
-        onclick={() => (collapsedGroups = toggleIn(collapsedGroups, workspace.id))}
-        aria-expanded={!collapsedGroups.has(workspace.id)}
+        onclick={() => onopenworkspace(workspace.id)}
+        aria-current={pageId === workspace.id ? 'page' : undefined}
       >
         <Folder size={15} />
         <strong>{workspace.displayName}</strong>
-        {#if !app.workspaceOnline(workspace)}<small>· offline</small>{/if}
-        <small class="group-count">{list.length}</small>
+        {#if !online && !work}<small>· offline</small>{/if}
+        <span class="workspace-meta">
+          {#if work && sessions.some((s) => s.writeLease && s.workspaceId === workspace.id)}<span
+              class="lease-lock"
+              role="img"
+              aria-label="A session holds the write lease"
+              title="A session holds the write lease"><Lock size={12} /></span
+            >{/if}
+          {#if running}<small class="running-count" title="{running} running"
+              ><span class="status-dot running"></span>{running}</small
+            >{/if}
+          {#if unread}<span class="unread" aria-label="{unread} unread">{unread}</span>{/if}
+        </span>
       </button>
       <button
         class="mini-action"
         type="button"
-        aria-label="New chat in {workspace.displayName}"
+        aria-label="New {work ? 'session' : 'chat'} in {workspace.displayName}"
+        disabled={!online}
         onclick={() => onnew(workspace.id)}><Plus size={15} /></button
       >
     </div>
-    {#if !collapsedGroups.has(workspace.id)}
+    {#if list.length}
       <div class="session-list nested">
         {#each list as session (session.id)}{@render sessionRow(session, false)}{/each}
       </div>
@@ -602,37 +505,13 @@
   </div>
 {/snippet}
 
-{#snippet foldRow(row: Extract<RecentRow, { kind: 'schedule' }>)}
-  {@const expanded =
-    openFolds.has(row.scheduleId) || row.sessions.some((s) => s.id === activeSessionId)}
-  <div class="fold">
-    <button
-      class="session-card fold-card"
-      type="button"
-      aria-expanded={expanded}
-      onclick={() => (openFolds = toggleIn(openFolds, row.scheduleId))}
-    >
-      <span class="origin-icon" title="Scheduled"><Clock size={13} /></span>
-      <span class="session-name">{row.title}</span>
-      <span class="session-meta">
-        <small>{row.sessions.length} runs</small>
-        <span class:collapsed={!expanded} class="chevron"><ChevronDown size={13} /></span>
-      </span>
-    </button>
-    {#if expanded}
-      <div class="session-list nested">
-        {#each row.sessions as session (session.id)}{@render sessionRow(session, false)}{/each}
-      </div>
-    {/if}
-  </div>
-{/snippet}
-
 {#snippet sessionRow(session: SessionSummary, showWorkspace: boolean)}
   {@const workspace = workspaceById.get(session.workspaceId)}
   <div
     class="session-item"
     class:active={session.id === activeSessionId}
     class:settled={session.settled}
+    class:unread={session.unread}
     class:renaming={renamingId === session.id}
     class:revealed={revealedId === session.id}
   >
@@ -696,12 +575,10 @@
               ><Lock size={12} /></span
             >{/if}
           {#if session.pinned}<span class="pin-mark" title="Pinned"><Pin size={12} /></span>{/if}
-          {#if showWorkspace && !filter && workspace}<span class="workspace-chip"
-              >{workspace.displayName}</span
+          {#if showWorkspace && workspace}<span class="workspace-chip">{workspace.displayName}</span
             >{/if}
-          {#if session.unreadCount}<span class="unread">{session.unreadCount}</span>{:else}<small
-              >{shortAgo(session.lastActivityAt)}</small
-            >{/if}
+          {#if session.unread}<span class="unread-dot" role="img" aria-label="Unread"></span>{/if}
+          <small>{shortAgo(session.lastActivityAt)}</small>
         </span>
       </button>
       {#if session.id !== activeSessionId && revealedId !== session.id}
@@ -932,8 +809,7 @@
     text-align: center;
     letter-spacing: 0;
   }
-  .heading-action,
-  .heading-toggle {
+  .heading-action {
     margin-left: auto;
     display: grid;
     place-items: center;
@@ -949,9 +825,12 @@
     text-transform: none;
   }
   .heading-action:hover:not(:disabled),
-  .heading-toggle:hover {
+  .heading-action.current {
     color: var(--ink);
     background: var(--bg-hover);
+  }
+  .section-heading small + .heading-action {
+    margin-left: 0;
   }
   .empty-note {
     margin: 2px 10px 6px;
@@ -997,17 +876,24 @@
     color: var(--muted);
     font-size: 11px;
   }
-  .workspace-heading .group-count {
+  .workspace-heading.current {
+    background: var(--bg-active);
+  }
+  .workspace-meta {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin-left: auto;
     padding-right: 4px;
   }
-  .chevron {
-    display: grid;
-    color: var(--muted);
-    transition: transform 0.18s var(--ease);
+  .running-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
-  .chevron.collapsed {
-    transform: rotate(-90deg);
+  .running-count .status-dot {
+    margin-left: 0;
   }
   .mini-action {
     display: grid;
@@ -1050,16 +936,10 @@
     background: transparent;
     text-align: left;
   }
-  .fold-card:hover {
-    background: var(--bg-hover);
-  }
   .origin-icon {
     flex: none;
     display: grid;
     color: var(--muted);
-  }
-  .fold-card .origin-icon {
-    margin-left: -14px;
   }
   .session-item {
     position: relative;
@@ -1077,6 +957,9 @@
   }
   .session-item.settled .session-name {
     color: var(--muted);
+  }
+  .session-item.unread .session-name {
+    font-weight: 600;
   }
   .session-meta {
     flex: none;
@@ -1238,6 +1121,13 @@
   .status-dot.waiting {
     background: var(--warning);
   }
+  .unread-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
   .unread {
     flex: none;
     min-width: 18px;
@@ -1335,54 +1225,7 @@
   .pill-button.primary:hover {
     background: var(--accent-hover);
   }
-  /* ── Workspace filter ── */
-  .work-filter {
-    position: relative;
-    flex: none;
-    padding: 6px 8px 0;
-  }
-  .filter-button {
-    width: 100%;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 10px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    color: var(--text-2);
-    background: var(--bg-layer);
-    font-size: 13px;
-    text-align: left;
-  }
-  .filter-button:hover {
-    background: var(--bg-hover);
-  }
-  .filter-label {
-    min-width: 0;
-    flex: none;
-    max-width: 50%;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    color: var(--ink);
-    font-weight: 500;
-  }
-  .filter-hosts {
-    min-width: 0;
-    flex: 1;
-    display: flex;
-    gap: 8px;
-    overflow: hidden;
-    color: var(--muted);
-    font-size: 11px;
-    white-space: nowrap;
-  }
-  .filter-hosts > span {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
+  /* ── Devices ── */
   .host-dot {
     flex: none;
     width: 6px;
@@ -1393,96 +1236,9 @@
   .host-dot.online {
     background: var(--success);
   }
-  .filter-popover {
-    position: absolute;
-    z-index: 5;
-    right: 8px;
-    bottom: calc(100% + 4px);
-    left: 8px;
-    max-height: min(60vh, 420px);
-    overflow: auto;
-    display: grid;
-    padding: 6px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-lg);
-    background: var(--bg-layer);
-    box-shadow: var(--shadow-pop);
-  }
-  .popover-title {
-    padding: 6px 8px;
-    color: var(--muted);
-    font-size: 12px;
-  }
-  .filter-option,
-  .filter-host {
-    min-height: 32px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 8px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    color: var(--ink);
-    background: transparent;
-    font-size: 13px;
-    text-align: left;
-  }
-  .filter-option:hover,
-  .filter-host:hover {
-    background: var(--bg-hover);
-  }
-  .filter-option > span:first-of-type {
-    min-width: 0;
-    flex: 1;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .filter-option small,
-  .filter-host small {
-    color: var(--muted);
-    font-size: 11px;
-  }
-  .filter-host {
-    margin-top: 6px;
-    color: var(--muted);
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-  .filter-host strong {
-    font-weight: 600;
-  }
-  .filter-host :global(svg) {
-    margin-left: auto;
-  }
-  .lease-mark {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    color: var(--warning);
-    font-size: 11px;
-  }
-  .popover-actions {
-    display: flex;
-    margin-top: 6px;
-    padding-top: 6px;
-    border-top: 1px solid var(--line);
-  }
-  .popover-actions button {
-    height: 32px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0 8px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    color: var(--text-2);
-    background: transparent;
-    font-size: 13px;
-  }
-  .popover-actions button:hover:not(:disabled) {
-    background: var(--bg-hover);
+  .section-heading .host-dot + strong {
+    text-transform: none;
+    letter-spacing: 0;
   }
   /* ── Footer ── */
   .sidebar-footer {
@@ -1586,9 +1342,6 @@
       display: grid;
       width: 40px;
       height: 40px;
-    }
-    .work-filter {
-      padding-bottom: 6px;
     }
   }
 </style>

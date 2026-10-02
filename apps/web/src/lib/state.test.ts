@@ -10,7 +10,6 @@ const snapshot: SessionSnapshot = {
     name: 'Test session',
     lastActivityAt: '2025-01-01T00:00:00Z',
     runnerStatus: 'ready',
-    unreadCount: 0,
   },
   runnerStatus: 'ready',
   run: { id: 'r1', status: 'running' },

@@ -70,7 +70,7 @@ function sessionSummary(raw: any): SessionSummary {
     lastActivityAt: iso(raw.updatedAt),
     runStatus: raw.runStatus ?? undefined,
     runnerStatus: raw.runnerState ?? 'stopped',
-    unreadCount: 0,
+    ...(raw.unread === true ? { unread: true } : {}),
     pinned: raw.pinnedAt != null,
     settled: raw.settledAt != null,
     ...(raw.writeLease === true ? { writeLease: true } : {}),
@@ -329,6 +329,15 @@ export const api = {
         await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}`, {
           method: 'PATCH',
           body: JSON.stringify(input),
+        })
+      ).session,
+    ),
+  /** You have read the session: its unread mark clears on every device. */
+  markRead: async (sessionId: string) =>
+    sessionSummary(
+      (
+        await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/read`, {
+          method: 'POST',
         })
       ).session,
     ),
