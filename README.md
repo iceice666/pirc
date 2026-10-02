@@ -226,6 +226,10 @@ bun run check
 
 Real-model smoke tests are deliberately separate because they require credentials and incur provider cost. The automated suite drives the real agent against a scripted fake OpenAI/Anthropic SSE server (end to end through gateway inference), and covers subscription logins, refresh and logout with fake OAuth providers, and the pi-ai adapter with an injected stream.
 
+## Releases
+
+See [CHANGELOG.md](./CHANGELOG.md) for user-facing changes and migrations, and [release policy](./docs/releasing.md) for version bumps, validation and publishing. `bun run version:check` verifies synchronized product versions and is part of `bun run check`.
+
 ## Nix integration
 
 A reusable flake, package, development shell, and NixOS module are available in [`flake.nix`](./flake.nix) and [`nix/`](./nix/README.md):

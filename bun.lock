@@ -12,7 +12,7 @@
     },
     "apps/gateway": {
       "name": "@pirc/gateway",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "bin": {
         "pirc-gateway": "src/entry/gateway.ts",
         "pirc-chat": "src/entry/chat.ts",
@@ -38,7 +38,7 @@
     },
     "apps/web": {
       "name": "@pirc/web",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@lucide/svelte": "0.544.0",
         "@xterm/addon-fit": "0.10.0",

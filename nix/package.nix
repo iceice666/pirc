@@ -19,7 +19,7 @@ assert lib.elem role [
 ];
 
 let
-  version = "0.1.0";
+  version = (builtins.fromJSON (builtins.readFile ../package.json)).version;
   executable = "pirc-${role}";
   runsAgents = role != "gateway";
 

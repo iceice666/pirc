@@ -1,6 +1,6 @@
 {
   "name": "pirc",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Private, forward-authenticated web client for persistent coding-agent sessions",
   "type": "module",
@@ -16,7 +16,9 @@
     "test": "bun run --filter \"*\" test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "bun run format:check && bun run typecheck && bun run test && bun run build && bun run test:compiled",
+    "version:check": "bun scripts/version.ts check",
+    "version:bump": "bun scripts/version.ts bump",
+    "check": "bun run version:check && bun run format:check && bun run typecheck && bun run test && bun run build && bun run test:compiled",
     "dev:chat": "bun run --filter @pirc/gateway dev:chat",
     "test:compiled": "bun run --filter @pirc/gateway test:compiled"
   },

@@ -1,8 +1,10 @@
+import { version } from '../../../../package.json';
+
 /** CLI parsing shared by the three role-specific entry points (no runtime imports). */
 export function commandFor(name: string, internal: readonly string[]): string | undefined {
   const [command, ...args] = process.argv.slice(2);
   if (command === 'version' || command === '--version') {
-    console.log('0.1.0');
+    console.log(version);
     process.exit(0);
   }
   const usage = `Usage: ${name} [--help | --version]

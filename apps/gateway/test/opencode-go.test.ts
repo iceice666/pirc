@@ -1,3 +1,4 @@
+import { version } from '../../../package.json';
 import { expect, test } from 'bun:test';
 import { streamAnthropic } from '../src/agent/providers/anthropic.js';
 import { streamOpenAIChat } from '../src/agent/providers/openai-chat.js';
@@ -48,7 +49,7 @@ for (const [api, stream] of [
       };
       await stream(request, () => {});
       expect(seen[0]?.get('x-opencode-session')).toBe('stable-session');
-      expect(seen[0]?.get('user-agent')).toBe('pirc/0.1.0');
+      expect(seen[0]?.get('user-agent')).toBe(`pirc/${version}`);
       request.provider.opencodeGo = false;
       expect(opencodeGoHeaders(request)).toEqual({});
       request.provider.baseUrl = 'https://opencode.ai.evil.example/zen/go/v1';

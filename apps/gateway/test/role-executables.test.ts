@@ -1,3 +1,4 @@
+import { version } from '../../../package.json';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -67,7 +68,7 @@ function cliContract(role: ExecutableRole, command: string[]) {
   for (const flag of ['version', '--version']) {
     it(`prints the version with ${flag}`, async () => {
       const result = await runCli(command, [flag]);
-      expect(result).toEqual({ code: 0, stdout: '0.1.0\n', stderr: '' });
+      expect(result).toEqual({ code: 0, stdout: version + '\n', stderr: '' });
     });
   }
   for (const flag of ['help', '--help', '-h']) {

@@ -47,7 +47,7 @@ Set `PIRC_HOST`/`PIRC_PORT`, `PIRC_STATE_DIR`, the browser checks (`PIRC_TRUSTED
 
 ### OpenCode Go
 
-For [OpenCode Go](https://opencode.ai/docs/go/#where-can-i-use-it), use `https://opencode.ai/zen/go/v1` as the base URL and select the API required by your model (Chat Completions, Responses, or Anthropic Messages). Requests to `opencode.ai/zen/go` automatically include a stable per-conversation `x-opencode-session` and `User-Agent: pirc/0.1.0` across all transports. For a custom proxy URL, enable **OpenCode Go compatibility** in the backend editor, or set `"opencodeGo": true` on the provider in `models.json`. Your proxy must preserve these headers. No manual session header or API key replacement is needed.
+For [OpenCode Go](https://opencode.ai/docs/go/#where-can-i-use-it), use `https://opencode.ai/zen/go/v1` as the base URL and select the API required by your model (Chat Completions, Responses, or Anthropic Messages). Requests to `opencode.ai/zen/go` automatically include a stable per-conversation `x-opencode-session` and `User-Agent: pirc/<product-version>` across all transports. For a custom proxy URL, enable **OpenCode Go compatibility** in the backend editor, or set `"opencodeGo": true` on the provider in `models.json`. Your proxy must preserve these headers. No manual session header or API key replacement is needed.
 
 ### Device tokens
 

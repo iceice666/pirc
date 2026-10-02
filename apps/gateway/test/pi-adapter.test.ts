@@ -1,3 +1,4 @@
+import { version } from '../../../package.json';
 import { describe, expect, test } from 'bun:test';
 import type {
   AssistantMessage as PiAssistantMessage,
@@ -98,7 +99,7 @@ describe('gateway Pi adapter', () => {
       await mock.stream(req, () => {});
       expect(mock.get().options.headers).toEqual({
         'x-opencode-session': 'session',
-        'user-agent': 'pirc/0.1.0',
+        'user-agent': `pirc/${version}`,
       });
       await mock.stream(req, () => {});
       expect(mock.get().options.headers?.['x-opencode-session']).toBe('session');
