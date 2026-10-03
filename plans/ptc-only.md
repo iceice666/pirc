@@ -1,6 +1,6 @@
 # PTC-only agent interface: `ptc` and `ptc_docs`
 
-Status: proposed; not implemented. Baseline: `main@ff2bfde`.
+Status: proposed; not implemented. Baseline: `main@2530bd2` (code references and statistics, refreshed 2026-10-03). Decided 2026-10-03: the script runtime is QuickJS compiled to WASM (option B, §4) and the TempestMiku `tm` security model is adopted where it fits (see "Prior art"). Decided 2026-10-03: no runtime mode switch; the change is all-or-nothing, developed on a branch and either cut over or abandoned on the Milestone 4 evaluation (§7).
 
 ## Direction and scope
 
@@ -17,21 +17,34 @@ The two-tool target is the requested direction. Contracts, rollout details and e
 
 Local statistics supplied by the maintainer (`ptc-stats.txt`, untracked; do not include raw session data in this plan):
 
-| Measure                                          |                           Observed |
-| ------------------------------------------------ | ---------------------------------: |
-| Coding main sessions indexed / readable          |                          165 / 151 |
-| Main sessions with tool calls using PTC          |                   74 / 140 (52.9%) |
-| Nested sessions with tool calls using PTC        |                   63 / 111 (56.8%) |
-| PTC calls / direct model tool calls              |              1,214 / 18,741 (6.5%) |
-| Recorded operations inside PTC                   |                              5,858 |
-| PTC results with two or more internal operations | 1,074 / 1,213 with details (88.5%) |
-| Average internal operations per detailed result  |                               4.83 |
-| Outer PTC error results                          |                  64 / 1,214 (5.3%) |
-| Internal edit / read operations                  |                      3,038 / 1,391 |
+| Measure                                                   |                           Observed |
+| --------------------------------------------------------- | ---------------------------------: |
+| Coding main sessions indexed / readable                   |                          169 / 155 |
+| Main sessions with tool calls using PTC                   |                   76 / 144 (52.8%) |
+| Nested sessions with tool calls using PTC                 |                   69 / 121 (57.0%) |
+| PTC calls / direct model tool calls                       |              1,249 / 19,227 (6.5%) |
+| Direct `bash` calls / direct model tool calls             |             8,165 / 19,227 (42.5%) |
+| Recorded operations inside PTC                            |                              6,046 |
+| PTC results with two or more internal operations          | 1,108 / 1,248 with details (88.8%) |
+| Average internal operations per detailed result           |                               4.84 |
+| Internal operations per PTC result: p50 / p90 / p99 / max |                    4 / 8 / 17 / 57 |
+| PTC results with 100 or more internal operations          |                          0 / 1,248 |
+| Outer PTC error results                                   |                  68 / 1,249 (5.4%) |
+| Internal edit / read operations                           |                      3,085 / 1,502 |
 
-PTC carries approximately 25.1% of recorded underlying operations after excluding the outer `code` calls. This is **not** a token-saving percentage. The sample covers one node's indexed coding sessions, retained branches and nested agents; 14 main records were missing/unlocatable. Tool availability and model mix were not controlled. Error results are not necessarily script bugs. These counts do not establish that all operations benefit from PTC or that batch calls require arbitrary TypeScript.
+PTC carries approximately 25.2% of recorded underlying operations after excluding the outer `code` calls. This is **not** a token-saving percentage. The sample covers one node's indexed coding sessions, retained branches and nested agents; 14 main records were missing/unlocatable. Tool availability and model mix were not controlled. Error results are not necessarily script bugs. These counts do not establish that all operations benefit from PTC or that batch calls require arbitrary TypeScript.
 
 Before claiming savings, distinguish fixed batches, repetitive edits, result-dependent execution and output reduction. Use synthetic tasks by default; any additional historical-content analysis needs an authorized scope. Never replay historical scripts against live workspaces to benchmark them.
+
+## Prior art: TempestMiku `tm`
+
+[TempestMiku's `tm` design](https://github.com/mozufu/TempestMiku/tree/main/docs/design/tm) (archived project) shipped a custom language for `execute(code)`. This plan borrows its security and observability model, **not** the language:
+
+- **Adopted:** no ambient authority (every host interaction goes through the registry); a capability manifest checked before evaluation; approval policy as registry metadata, separate from capability identity; denial as a typed error the script may handle; an explicit structured-concurrency scope; parent-linked trace nodes with an explicit state machine; opaque handles that no script operation can dereference; a not-worse comparative fluency gate.
+- **Adapted:** tm's durable events are content-blind because they persist to a server-side database and bindings outlive cells. pirc's durable record is the node-local session.jsonl, which already holds full direct-call arguments and results, so inner operations follow direct-call exposure instead (§6).
+- **Not adopted:** a new language. tm's own gate showed both TypeScript and tm at 1,000/1,000 first-try successes; tm won only on code length (mean generated-code tokens 50.8 → 40.2) on 20 small prompts. A language unknown to models needs resident syntax documentation, which works against moving schemas out of context, and a parser/checker/interpreter is substantial maintenance. Static capability inference is approximated with literal capability names instead (§3).
+- **Deferred:** tm's persistent REPL with atomic binding commit. This plan stays one-shot; revisit only after Milestone 4 evidence.
+- **Not needed:** continuation capture for resumable approval. In a one-shot in-memory execution, awaiting a host promise that resolves after the human answers already suspends the script; neither tm nor this plan serializes a suspended execution, so runtime loss ends it without replaying effects.
 
 ## Current implementation to inspect
 
@@ -61,9 +74,18 @@ In PTC-only mode the provider receives exactly two schemas, regardless of how ma
 
 Role/config tool lists continue to restrict **internal capabilities**, not just the two wrappers. Unknown or disabled identifiers fail closed. Capability discovery and execution use the same availability calculation, with authorization rechecked for each execution.
 
+### Role tool lists (decided 2026-10-03)
+
+- A role's `tools:` names internal capabilities. Identifiers are unchanged, so existing role files and the role tool lists recorded in sessions (`ROLE_ENTRY`) need no migration.
+- `ptc` and `ptc_docs` are implicit whenever at least one capability is available. A role with no available capabilities gets no tools at all.
+- `code`, `ptc` and `ptc_docs` in a role list are ignored with a warning, not an error. Omitting `code` is not a restriction worth preserving: under the QuickJS boundary the wrapper carries no authority beyond the listed capabilities.
+- Unknown names in a role list produce a warning when roles are loaded. They still grant nothing; today `restrictTools` drops them silently.
+- Team members keep the forced `TEAM_TOOL_NAMES`, now as internal capabilities.
+- In scope: main coding sessions, delegated sessions, team members and subagents. Internal workers that are not user-facing agents (observational-memory observer/reflector with `record_*` tools, title generation, the auto-mode classifier) keep direct tool calls; Milestone 1 inventory confirms the list.
+
 ### Chat and worker roles
 
-Changing the transport must not enable Team, Goal, background tasks or other capabilities currently absent from chat by default. The proposed chat target exposes PTC for its existing permitted operations, superseding only the old absence of the `code` wrapper; confirm this migration behavior before changing defaults. Child agents inherit their intended role restrictions and must not obtain a broader registry through PTC. Feature-restricted internal workers need explicit coverage rather than assuming all agent types use the same public tool surface.
+Changing the transport must not enable Team, Goal, background tasks or other capabilities currently absent from chat by default. Chat's capabilities under PTC-only are exactly its current set: gateway capability flags and `features.<key>.enabled` re-enables apply unchanged, and `features.code.enabled` no longer has an effect. This supersedes only the old absence of the `code` wrapper in chat. Chat traffic is dominated by single calls (`web_search`, `memory_search`), so chat is evaluated separately from coding with its own fixtures and bounds (Milestone 4). Child agents inherit their intended role restrictions and must not obtain a broader registry through PTC. Feature-restricted internal workers need explicit coverage rather than assuming all agent types use the same public tool surface.
 
 ## 2. `ptc_docs`: bounded capability discovery
 
@@ -102,6 +124,17 @@ ptc({
 - Reject recursive `ptc`/`ptc_docs` dispatch through the capability broker. Capability discovery remains the separate tool; code cannot obtain another unrestricted agent interface.
 - Keep one-shot execution initially. Cross-call state uses explicit job/artifact handles, not a persistent mutable JS global environment.
 
+### Capability manifest before evaluation
+
+Capability names must be string literals: `tools.read(...)` or `tools.call("read", ...)`. Computed names (`tools[name]`, `tools.call(name)`) are rejected before evaluation, and the runtime also refuses dispatch through any name absent from the manifest. Before the script runs, parse it, derive the set of capabilities it may invoke, and fail closed with a structured error listing every unavailable capability, so an unavailable capability is rejected before any side effect.
+
+The manifest is a pre-check and display aid, not authorization: every operation is still validated, authorized and approved at execution time (§4). It may be shown with approval prompts and in the client trace. Loops over capabilities are written as explicit literal branches.
+
+### Errors and structured concurrency
+
+- Convenience calls throw typed errors with stable codes; at minimum `ApprovalDenied`, `CapabilityUnavailable`, `InvalidArguments`, `QuotaExceeded`, `Cancelled`, `Timeout` and `OperationFailed`. A script may catch them; retries are the script's explicit choice, never a hidden runtime loop.
+- `tools.par(items, fn, { concurrency })` is the supported parallel form. It owns its children: it enforces the concurrency limit, cancels remaining siblings on failure according to a documented policy, and emits one scope node for client aggregation. `Promise.all` over capability calls still passes through the per-execution concurrency quota but is not the documented form.
+
 ### Images and large results
 
 Introduce an explicit host-mediated way to attach existing image/artifact results to the outer response. The worker must not need to print base64 or arbitrarily read host files to return screenshots. Handles are owner/session-scoped, unforgeable, size-bounded and checked at use; define expiry and cleanup.
@@ -117,8 +150,16 @@ The design changes the model interface, **not the authority of a tool call**.
 3. Approval binds to a particular operation, target and validated arguments. Approval of outer code never approves all future operations. Cancellation, timeout, unavailable answers or stale approvals never imply consent.
 4. Preserve existing special rules: each cross-workspace delegation requires confirmation; schedule creation/modification requires confirmation; existing pause/delete rules remain unchanged. Team workers do not acquire assistant-only cross-workspace scheduling privileges.
 5. Do not expose node tokens, gateway credentials or ambient secret environment variables to the worker. The capability broker must have narrow authority; it is not an authenticated gateway proxy accepting arbitrary routes.
-6. Arbitrary `Bun`, `process`, imports, filesystem/network access, subprocesses and computed code can bypass a tools-only broker if left available. Milestone 1 must choose and document an enforceable execution boundary. Static script classification, hidden globals and Function-constructor removal alone do not establish a secure JS compartment. Prefer a worker restricted to computation plus broker calls, in addition to mandatory OS sandboxing; if this cannot be enforced, do not claim all operations are mediated and block PTC-only rollout until the policy gap is resolved.
-7. Deny prototype/property tricks and malformed IPC; validate sender identity, call correlation and capability names. Prevent access to credential stores and other sessions' state through direct or broker paths.
+6. Arbitrary `Bun`, `process`, imports, filesystem/network access, subprocesses and computed code can bypass a tools-only broker if left available. Static script classification, hidden globals and Function-constructor removal alone do not establish a secure JS compartment.
+
+   **Chosen boundary:** run scripts in QuickJS compiled to WASM (for example quickjs-emscripten, asyncify build) inside the agent process, which already runs under mandatory srt. TypeScript is type-stripped on the host (`Bun.Transpiler`) before evaluation. The realm receives only injected `tools`, bounded `console` and attachment helpers; there is no `Bun`, `process`, module loader, filesystem, network or subprocess access. Memory limits and the interrupt handler enforce memory and CPU budgets. This replaces the Bun subprocess worker for PTC-only mode.
+
+   Rejected alternatives: nesting another srt/Seatbelt sandbox around a Bun worker fails on macOS inside srt (`sandbox_apply: Operation not permitted`, observed 2026-10-03); `node:vm` and Bun workers with hidden globals are not security boundaries.
+
+   Milestone 1 spike acceptance: escape tests cannot reach `Bun`, `process`, `import()`, constructor chains or host objects; asynchronous capability calls support cancellation and timeout; the compiled single-binary build loads the WASM module; fixture latency is measured against the current worker. If the spike fails, do not claim all operations are mediated and keep PTC-only rollout blocked.
+
+7. The current worker inherits the agent environment (`{ ...process.env, ...ctx.env }`). Milestone 1 inventories which values reach it; the QuickJS realm receives no environment at all.
+8. Deny prototype/property tricks and malformed IPC; validate sender identity, call correlation and capability names. Prevent access to credential stores and other sessions' state through direct or broker paths.
 
 ## 5. Lifecycle, partial failure and human interaction
 
@@ -127,23 +168,30 @@ Define explicit execution states: running, waiting approval, waiting user, waiti
 - Separate active execution budget from human wait time; retain a bounded wait/expiry policy. A confirmation must not fail merely because the ordinary script timeout expires while the user reads it.
 - User cancellation stops queued work, cancels pending interactions and terminates eligible in-flight subprocess groups. Late answers/results cannot resume a cancelled execution. Durable jobs use their documented independent lifecycle.
 - Long builds/servers return handles. Waiting uses event-driven bounded waits, never agent polling loops.
+- Approval denial surfaces as `ApprovalDenied` on that operation only; earlier operations are reported as completed.
 - Sequential code stops on a thrown error unless explicitly handled. Parallel work has explicit concurrency limits and documented failure/cancellation behavior. Writes are not implicitly parallelized.
 - Return an authoritative bounded completion summary even when the script crashes: completed, failed, cancelled, and unknown-outcome operations. Already completed effects are not rolled back automatically.
 - Never retry a whole script automatically after side effects. Use operation-specific idempotency/deduplication where supported; otherwise surface uncertain outcomes for inspection. Test disconnects after execution but before acknowledgement.
 
-## 6. Observability without duplicating private content
+## 6. Observability without new private-content exposure
 
-Assign outer execution and inner operation IDs, parent links, order, status and duration. Web and Android show expandable internal operations, meaningful labels, approvals and errors instead of an opaque `ptc` blob. The context inspector distinguishes the two provider-visible tools from permitted internal capabilities.
+Assign outer execution and inner operation IDs, parent links, order, status and duration. Follow tm's trace structure: every node carries `turnId`, `executionId`, `nodeId`, optional `parentNodeId`, `sequence`, `type`, `status` and `createdAt`; node types cover execution, `par` scope and operation; operations add capability name, duration, counts and approved handle references. An operation moves `running → suspended → running → completed | failed | timed_out | cancelled`; suspension links to the existing approval/question records rather than creating a second approval record. Events are append-only and ordered; reconnect may coalesce progress but never drops or reorders terminal or approval transitions.
 
-Operational metadata must survive worker failure. Do not duplicate all intermediate outputs into model context or append-only session logs to achieve this. Reuse/redact existing operation display data; define retention, payload budgets and owner checks before adding new storage or events. Audit node-to-gateway event forwarding explicitly: new telemetry must not silently export script bodies, file contents, arguments or intermediate results. Benchmark reports contain aggregates, not raw transcripts.
+**Inner operations have the same exposure as direct calls (decided 2026-10-03).** Today a direct call emits `tool_execution_start/update/end` (`agent.ts` `executeTool`) with full arguments and results to the owner's live event stream and records them in node-local session.jsonl; the gateway daemon does not persist them. Inner operations reuse those events with parent IDs and are recorded in session.jsonl with the same result truncation, so a reloaded session can still expand them. Stored volume is no larger than if every step had been a direct call. The boundary is not redaction but location: content must not reach anywhere a direct call's content does not reach today (gateway storage, push notifications, logs, telemetry, benchmark reports). No per-capability safe-preview redaction rules are needed. Web and Android show expandable internal operations, meaningful labels, approvals and errors instead of an opaque `ptc` blob. The context inspector distinguishes the two provider-visible tools from permitted internal capabilities.
+
+Operational records must survive script failure. Inner results enter model context only through the script's bounded return value; session.jsonl records them under the direct-call rules above, not a second copy. Define owner checks before adding new storage or events. Audit node-to-gateway event forwarding explicitly: new paths must not export script bodies, file contents, arguments or intermediate results beyond what the existing live tool-event stream already carries. Benchmark reports contain aggregates, not raw transcripts.
 
 ## 7. Compatibility and rollout
 
-- First add an operator-selected experimental tool-surface mode; do not let model-written code enable capabilities or change modes. A fallback is an operator rollout control, not a model-accessible policy bypass.
+- **No runtime mode switch.** There is no operator setting, per-session mode or fallback: the tool surface is all-or-nothing. Develop on a dedicated branch (rebased onto `main` regularly); `main` keeps the current surface until cutover. Evaluate by building both `main` and the branch and running the same fixtures against each binary, so the fixture harness drives agents through their public interface and works unchanged on both.
+- If the Milestone 4 evaluation passes and the maintainer approves, merge the branch as the cutover: the provider-facing `code` tool and direct tool schemas are removed together with `features.code` and the legacy auto-mode script classifier (`auto-mode/script.ts`). If it fails, the branch is not merged and the plan records why.
+- Model-written code can never enable capabilities.
 - Keep old `code`/tool-call history readable without rewriting JSONL. Update provider replay/adapters so old tool names in history do not break a new two-tool run; test resume and compaction.
+- Existing sessions resumed after cutover get the new surface; their old history must replay correctly (previous item).
 - Audit roles, prompts, skills guidance, capability gates, provider schemas, context inspector, RPC events and client renderers. Existing tool-specific hook/policy names continue to refer to internal operations.
+- Rules that name `code` (hook matchers, auto-mode deny lists, `SHELL_TOOLS` in `features/sandbox.ts`) are applied to `ptc` with a deprecation warning, so a user's restriction on scripts does not silently stop applying. `ptc` keeps the `code` argument name, so hooks inspecting `args.code` keep working.
 - Update node/chat configuration docs and release notes, including the chat migration and any contract incompatibilities. Treat breaking configuration changes under the repository's release policy.
-- Only retire legacy provider-facing entry points after parity, evaluation and an explicit rollout decision. Do not delete underlying tool implementations merely because their schemas are hidden.
+- Do not delete underlying tool implementations merely because their schemas are hidden; they become the capabilities.
 - No service-language rewrite or binary-size claim in this plan. PTC-only still needs an execution runtime; moving schemas does not remove bundled code.
 
 ## Milestones and acceptance
@@ -151,16 +199,17 @@ Operational metadata must survive worker failure. Do not duplicate all intermedi
 ### Milestone 1 — Contracts and baseline
 
 - [ ] Inventory every model tool and restricted worker, including currently non-PTC tools; map permissions, results, interaction/lifecycle and migration needs.
-- [ ] Specify registry, input/result/error contracts, docs pagination, numeric budgets, capability visibility and worker isolation approach.
-- [ ] Confirm chat defaults and role/config compatibility described above.
-- [ ] Build reproducible disposable fixtures: single read, multi-file edits, dependent read/edit, output filtering, browser image, user question, approval denial, background build, team wait, schedule and permission rejection.
-- [ ] Record baseline task success, retries, model rounds, input/output/cache usage, docs/schema/context size, wall time and runtime resource use. Predeclare acceptable regression bounds before comparing modes; no fabricated token savings.
+- [ ] Specify registry (including approval class, suspension support and UI labels), input/result/error contracts, docs pagination, numeric budgets and capability visibility.
+- [ ] QuickJS-WASM isolation spike against the §4 acceptance criteria; inventory environment values reaching the current worker.
+- [ ] Confirm the internal-worker list exempt from PTC-only (§1) and the role-list warnings.
+- [ ] Build reproducible disposable fixtures: single `bash` command (highest weight: 8,165 of 19,227 direct calls), single read, multi-file edits, dependent read/edit, output filtering, browser image, user question, approval denial, background build, team wait, schedule and permission rejection.
+- [ ] On `main`, record baseline task success, retries, model rounds, input/output/cache usage, docs/schema/context size, wall time and runtime resource use. Predeclare acceptable regression bounds before comparing modes; no fabricated token savings.
 
 ### Milestone 2 — Execution and discovery
 
-- [ ] Implement registry-backed `ptc_docs` and a two-schema surface behind the rollout control.
-- [ ] Implement structured SDK, mediated execution, quotas, partial-result reporting and cancellation.
-- [ ] Test invalid inputs, stale docs, forbidden capabilities, direct-runtime escape attempts, IPC abuse, pending-call quota races, worker crashes and unacknowledged side effects.
+- [ ] On the PTC-only branch, implement registry-backed `ptc_docs` and the two-schema surface.
+- [ ] Implement structured SDK (typed errors, `tools.par`), literal-name capability manifest and pre-evaluation check, mediated execution, quotas, partial-result reporting and cancellation.
+- [ ] Test invalid inputs, stale docs, forbidden capabilities, computed capability names, direct-runtime escape attempts, IPC abuse, pending-call quota races, worker crashes and unacknowledged side effects.
 - [ ] Verify mandatory sandbox failure blocks startup and execution, including chat.
 
 ### Milestone 3 — Capability and client parity
@@ -172,17 +221,28 @@ Operational metadata must survive worker failure. Do not duplicate all intermedi
 
 ### Milestone 4 — Evaluation and migration
 
-- [ ] Compare both modes on the same task fixtures, models, permissions and completion checks, with repeated trials and cold/warm cache cases. Include docs overhead, script generation, failures and retries.
+Evaluation bounds (decided 2026-10-03; applied separately to coding and chat):
+
+- Authorization and cancellation fixtures: results identical to `main` in every trial.
+- Success rate: not lower than `main` in any fixture category.
+- Single-call tasks (one `bash`, one `read`, chat `web_search`): at most +15% tokens and +20% wall time versus `main`.
+- Batch tasks: fewer model rounds and fewer tokens than `main`. Failing this removes the reason for PTC-only.
+- Total tokens across all fixtures: not more than `main`.
+
+Only Claude Opus 5.5 is evaluated. Cutover is all-or-nothing, so users of other providers also get the PTC-only surface on the strength of this single-model result; the maintainer accepts this risk.
+
+- [ ] Compare the `main` and branch binaries on the same task fixtures, model, permissions and completion checks: Claude Opus 5.5, 10 trials per fixture per binary, cold and warm cache. Include docs overhead, script generation, failures and retries.
 - [ ] Use disposable workspaces and fake external services; never benchmark by publishing, purchasing, sending messages or changing real schedules.
-- [ ] Report per-task results as well as totals so gains on large batches do not hide regressions on simple calls or human-interactive tasks.
-- [ ] Require full critical authorization/cancellation parity; accept efficiency/reliability only against the bounds agreed in Milestone 1. If bounds fail, retain experimental status and document why.
+- [ ] Report per-task results as well as totals so gains on large batches do not hide regressions on simple calls or human-interactive tasks. Report chat separately from coding, against its own bounds.
+- [ ] Require full critical authorization/cancellation parity; accept efficiency/reliability only against the bounds below. If bounds fail, do not merge; record why in this plan.
 - [ ] Fresh independent security/design review, fixes, narrow regression tests and repo-required checks (`bun run check`; Android validation when changed). Document real-runtime checks not executable in CI.
-- [ ] Obtain rollout decision, update defaults/docs/release notes, and only then retire legacy model entry points. Mark milestones complete only after verified acceptance.
+- [ ] Obtain the cutover decision, update docs/release notes (including the chat change and removed `features.code`), then merge. Mark milestones complete only after verified acceptance.
 
 ## Open decisions before implementation
 
-- Exact worker isolation mechanism and whether a smaller embedded JS engine can meet the required contract safely; not a commitment to replacing Bun.
-- Final SDK result/attachment API and enforced numeric quotas.
-- Compatibility mapping for role tool lists and the chat wrapper default.
-- Minimal persisted operation metadata and client detail retention without increasing private-content transport.
-- Evaluation regression bounds, tested model set, and criteria/timing for removing the experimental fallback.
+- ~~Worker isolation mechanism~~: decided, QuickJS-WASM (§4), pending spike acceptance. The service runtime stays Bun.
+- Final SDK result/attachment API.
+- ~~Numeric quotas~~: decided as starting values: 64 KB source; 200 internal calls, lowered from the current `MAX_TOOL_CALLS` of 500 (observed p99 17, maximum 57; the limit stops runaway loops, and larger batches split across `ptc` calls). PTC-only routes all work through scripts, so fan-out may grow; record the distribution during Milestone 4 and adjust if needed; model-facing output capped at `toolOutputBytes` (51,200 bytes); execution budget default 120 s and maximum 1 h (`ptcTimeoutMs` and the current cap), excluding human wait, which follows the existing approval/question expiry; at most 8 concurrent operations with 1 write at a time; 128 MB QuickJS memory, verified in the spike with a large-file fixture. The in-process realm has no IPC, so the IPC message limit no longer applies.
+- ~~Role tool lists and chat defaults~~: decided (§1, §7). Deferred until evaluation results exist: what happens if coding passes its bounds but chat fails its own. All-or-nothing implies abandoning both; the alternative is a fixed, non-configurable split where chat keeps direct tool calls.
+- ~~Persisted operation data~~: decided, same exposure as direct calls (§6).
+- ~~Evaluation bounds and model~~: decided (Milestone 4).
