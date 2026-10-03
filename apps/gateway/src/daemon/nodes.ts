@@ -51,6 +51,8 @@ export const RELAY_MESSAGE_MAX_BYTES = { terminal: 1024 * 1024, browser: 64 * 10
  * (uploads) behind a slow node.
  */
 const NODE_SEND_BUFFER_MAX_BYTES = 4 * NODE_FRAME_MAX_BYTES;
+/** Reserve one small detach frame per admitted stream, even behind a congested link. */
+const STREAM_CLOSE_RESERVE_BYTES = MAX_TERMINAL_STREAMS * 256;
 
 type SendFailure = 'too_large' | 'backpressure' | 'failed';
 
@@ -99,7 +101,7 @@ export class NodeRegistry {
   >();
   private readonly streams = new Map<
     string,
-    { nodeId: string; handlers: TerminalStreamHandlers }
+    { nodeId: string; socket: WebSocket; handlers: TerminalStreamHandlers }
   >();
   private readonly inferences = new Map<
     string,
@@ -163,14 +165,22 @@ export class NodeRegistry {
       onError?.('too_large');
       return false;
     }
-    if (socket.bufferedAmount + bytes > NODE_SEND_BUFFER_MAX_BYTES) {
+    const limit =
+      NODE_SEND_BUFFER_MAX_BYTES +
+      (message.type === 'terminal_close' ? STREAM_CLOSE_RESERVE_BYTES : 0);
+    if (socket.bufferedAmount + bytes > limit) {
       onError?.('backpressure');
       return false;
     }
-    socket.send(frame, (error) => {
-      if (error) onError?.('failed');
-    });
-    return true;
+    try {
+      socket.send(frame, (error) => {
+        if (error) onError?.('failed');
+      });
+      return true;
+    } catch {
+      onError?.('failed');
+      return false;
+    }
   }
 
   /**
@@ -220,35 +230,46 @@ export class NodeRegistry {
     if (this.streams.size >= MAX_TERMINAL_STREAMS)
       throw new ApiError(503, 'node_error', 'Too many open terminal streams');
     const streamId = randomUUID();
-    this.streams.set(streamId, { nodeId, handlers });
+    this.streams.set(streamId, { nodeId, socket, handlers });
     const fail = (failure: SendFailure) =>
-      failure === 'failed'
-        ? this.endStream(streamId, 1011, 'node connection failed')
-        : this.endStream(streamId, 1013, 'node link congested');
+      this.endStream(streamId, {
+        code: failure === 'failed' ? 1011 : 1013,
+        reason: failure === 'failed' ? 'node connection failed' : 'node link congested',
+        detach: true,
+      });
     this.send(socket, { type: 'terminal_open', streamId, ...target }, fail);
     return {
       send: (message) => {
         if (!this.streams.has(streamId)) return;
         const bytes = Buffer.byteLength(JSON.stringify(message ?? null));
         if (bytes > RELAY_MESSAGE_MAX_BYTES[target.kind ?? 'terminal']) {
-          this.endStream(streamId, 1009, 'message too large');
+          this.endStream(streamId, { code: 1009, reason: 'message too large', detach: true });
           return;
         }
         this.send(socket, { type: 'terminal_input', streamId, message }, fail);
       },
-      close: () => {
-        if (!this.streams.delete(streamId)) return;
-        if (socket.readyState === socket.OPEN)
-          this.send(socket, { type: 'terminal_close', streamId });
-      },
+      close: () => this.endStream(streamId, { detach: true }),
     };
   }
 
-  private endStream(streamId: string, code: number, reason: string): void {
+  /** One finalizer for local detach, remote close and link loss. Never kills the shell. */
+  private endStream(
+    streamId: string,
+    end: { detach?: boolean; code?: number; reason?: string },
+  ): void {
     const stream = this.streams.get(streamId);
     if (!stream) return;
+    // Remove first: synchronous send failures and client close callbacks can reenter.
     this.streams.delete(streamId);
-    stream.handlers.onClose(code, reason);
+    if (end.detach && stream.socket.readyState === stream.socket.OPEN) {
+      this.send(stream.socket, { type: 'terminal_close', streamId }, () => {
+        // A tiny reserved control budget normally permits detach under congestion.
+        // If even that fails, close this original link: node link teardown detaches
+        // all subscriptions. Never send an old stream's close on a replacement link.
+        stream.socket.close(1013, 'stream cleanup failed');
+      });
+    }
+    if (end.code !== undefined) stream.handlers.onClose(end.code, end.reason ?? '');
   }
 
   addWorkspace(nodeId: string, workspace: RegisteredWorkspace): void {
@@ -407,7 +428,7 @@ export class NodeRegistry {
         }
         case 'terminal_closed': {
           if (this.streams.get(current.streamId)?.nodeId === nodeId)
-            this.endStream(current.streamId, current.code, current.reason);
+            this.endStream(current.streamId, { code: current.code, reason: current.reason });
           return;
         }
       }
@@ -570,7 +591,7 @@ export class NodeRegistry {
       );
     }
     for (const [id, stream] of this.streams)
-      if (stream.nodeId === nodeId) this.endStream(id, 1012, 'node disconnected');
+      if (stream.nodeId === nodeId) this.endStream(id, { code: 1012, reason: 'node disconnected' });
   }
 
   /** Push the current providers to every node; agents started afterwards use them. */

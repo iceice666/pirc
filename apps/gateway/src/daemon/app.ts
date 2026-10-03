@@ -8,6 +8,7 @@
  * workspace IDs (`piSessionId`, `<nodeId>:<id>`) never leave this process.
  */
 import websocket from '@fastify/websocket';
+import type WebSocket from 'ws';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { DaemonConfig } from '../config.js';
@@ -32,7 +33,8 @@ import { registerPushRoutes } from './push-routes.js';
 import { loadVapidKeys, Push, watchInteractions } from './push.js';
 import { registerScheduleRoutes } from './schedule-routes.js';
 import { Schedules } from './schedules.js';
-import { NodeRegistry, RELAY_MESSAGE_MAX_BYTES, validNodeToken } from './nodes.js';
+import { NodeRegistry, validNodeToken } from './nodes.js';
+import { limitIncoming, relaySocket, wsCloseCode } from './socket-relay.js';
 import { BackendService } from '../backends/service.js';
 import { registerBackendRoutes } from '../backends/routes.js';
 import { GatewayInference } from '../backends/inference.js';
@@ -40,32 +42,8 @@ import { WebSearch } from './web-search.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
 type LiveActivity = { run?: RunStatus | undefined; writeLease?: boolean | undefined };
-/** Live browser frames are skipped while this much is queued to the client. */
-const BROWSER_SOCKET_BACKLOG_BYTES = 2 * 1024 * 1024;
 /** Browsers send nothing on the event socket; anything large is abuse. */
 const EVENTS_MESSAGE_MAX_BYTES = 4 * 1024;
-
-/**
- * @fastify/websocket has one ws server, so one `maxPayload` (the node link's
- * 16 MiB) for every route. Browser-facing sockets get a small limit of their
- * own so ws refuses (1009) a large frame from its header, before buffering
- * it, and it can never reach the node link (audit M13).
- */
-function limitIncoming(socket: object, bytes: number): void {
-  const receiver = (socket as unknown as { _receiver?: { _maxPayload?: unknown } })._receiver;
-  if (receiver && typeof receiver._maxPayload === 'number') receiver._maxPayload = bytes;
-}
-
-/** A browser message to relay to a node, or undefined when it is not JSON. */
-function relayMessage(raw: unknown, maxBytes: number): unknown {
-  const text = String(raw);
-  if (Buffer.byteLength(text) > maxBytes) throw new RangeError('message too large');
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}
 
 /** A node answered with an error; passed through to the client unchanged. */
 class NodeReplyError extends Error {
@@ -135,11 +113,6 @@ function cursorFrom(value: unknown): EventCursor | null {
   if (!match) throw new ApiError(400, 'invalid_input', 'cursor must be epoch:sequence');
   return { epoch: Number(match[1]), sequence: Number(match[2]) };
 }
-
-const wsCloseCode = (error: unknown) => {
-  const status = error instanceof ApiError ? error.statusCode : 500;
-  return status === 401 ? 4401 : status === 403 ? 4403 : status === 404 ? 4404 : 4400;
-};
 
 export interface DaemonServices {
   db: GatewayDatabase;
@@ -1010,119 +983,43 @@ export async function buildDaemonApp(
     }
   });
 
-  /** Terminal stream, relayed to the session's node over the node link. */
+  /** Both browser-facing relays keep authentication and ownership checks here. */
+  const streamRoute =
+    (kind: 'terminal' | 'browser') => (socket: WebSocket, request: FastifyRequest) => {
+      relaySocket(socket, {
+        kind,
+        maxBufferedBytes: config.websocketMaxBufferedBytes,
+        open(handlers) {
+          validateRequest(request, config, devices, true);
+          const session = claim(request);
+          const terminalId =
+            kind === 'browser'
+              ? 'browser'
+              : parse(
+                  z.object({ id: z.string(), terminalId: z.string().min(1).max(100) }),
+                  request.params,
+                ).terminalId;
+          return nodes.openTerminal(
+            session.nodeId,
+            {
+              user: request.identity!.user,
+              sessionId: session.piSessionId,
+              terminalId,
+              ...(kind === 'browser' ? { kind } : {}),
+            },
+            handlers,
+          );
+        },
+        track: (close) => trackDevice(request, { close }),
+      });
+    };
+
   app.get(
     '/api/sessions/:id/terminals/:terminalId/stream',
     { websocket: true },
-    (socket, request) => {
-      limitIncoming(socket, RELAY_MESSAGE_MAX_BYTES.terminal);
-      try {
-        validateRequest(request, config, devices, true);
-        const session = claim(request);
-        const { terminalId } = parse(
-          z.object({ id: z.string(), terminalId: z.string().min(1).max(100) }),
-          request.params,
-        );
-        const stream = nodes.openTerminal(
-          session.nodeId,
-          { user: request.identity!.user, sessionId: session.piSessionId, terminalId },
-          {
-            onFrame(frame) {
-              if (socket.readyState !== socket.OPEN) return;
-              if (socket.bufferedAmount > config.websocketMaxBufferedBytes) {
-                // The client reconnects and gets the scrollback replayed.
-                socket.close(1013, 'resync required');
-                return;
-              }
-              socket.send(JSON.stringify(frame));
-            },
-            onClose(code, reason) {
-              if (socket.readyState === socket.OPEN) socket.close(code, reason.slice(0, 120));
-            },
-          },
-        );
-        socket.on('message', (raw) => {
-          let message: unknown;
-          try {
-            message = relayMessage(raw, RELAY_MESSAGE_MAX_BYTES.terminal);
-          } catch {
-            // Oversized: this stream ends, the node link is untouched.
-            return socket.close(1009, 'message too large');
-          }
-          if (message !== undefined) stream.send(message);
-        });
-        const untrack = trackDevice(request, socket);
-        const done = () => {
-          stream.close();
-          untrack();
-        };
-        socket.once('close', done);
-        socket.once('error', done);
-      } catch (error) {
-        socket.close(
-          wsCloseCode(error),
-          error instanceof Error ? error.message.slice(0, 120) : 'invalid request',
-        );
-      }
-    },
+    streamRoute('terminal'),
   );
-
-  /**
-   * Browser live view, relayed like a terminal stream. Live frames are
-   * dropped (not queued) while the socket is backed up; the next one catches up.
-   */
-  app.get('/api/sessions/:id/browser/stream', { websocket: true }, (socket, request) => {
-    limitIncoming(socket, RELAY_MESSAGE_MAX_BYTES.browser);
-    try {
-      validateRequest(request, config, devices, true);
-      const session = claim(request);
-      const stream = nodes.openTerminal(
-        session.nodeId,
-        {
-          user: request.identity!.user,
-          sessionId: session.piSessionId,
-          terminalId: 'browser',
-          kind: 'browser',
-        },
-        {
-          onFrame(frame) {
-            if (socket.readyState !== socket.OPEN) return;
-            const live = (frame as { type?: unknown })?.type === 'frame';
-            if (live && socket.bufferedAmount > BROWSER_SOCKET_BACKLOG_BYTES) return;
-            if (socket.bufferedAmount > config.websocketMaxBufferedBytes) {
-              socket.close(1013, 'resync required');
-              return;
-            }
-            socket.send(JSON.stringify(frame));
-          },
-          onClose(code, reason) {
-            if (socket.readyState === socket.OPEN) socket.close(code, reason.slice(0, 120));
-          },
-        },
-      );
-      socket.on('message', (raw) => {
-        let message: unknown;
-        try {
-          message = relayMessage(raw, RELAY_MESSAGE_MAX_BYTES.browser);
-        } catch {
-          return socket.close(1009, 'message too large');
-        }
-        if (message !== undefined) stream.send(message);
-      });
-      const untrack = trackDevice(request, socket);
-      const done = () => {
-        stream.close();
-        untrack();
-      };
-      socket.once('close', done);
-      socket.once('error', done);
-    } catch (error) {
-      socket.close(
-        wsCloseCode(error),
-        error instanceof Error ? error.message.slice(0, 120) : 'invalid request',
-      );
-    }
-  });
+  app.get('/api/sessions/:id/browser/stream', { websocket: true }, streamRoute('browser'));
 
   /**
    * A browser recording (`.pirc/recordings/*.webm` in the session's
