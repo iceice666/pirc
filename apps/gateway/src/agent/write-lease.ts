@@ -9,40 +9,27 @@
  *   (routed here by serveRpc).
  * - Standalone agents have no broker and are always granted.
  */
-import { randomUUID } from 'node:crypto';
+import { PendingRequests } from './pending-requests.js';
 import { parentChannel, teamChildName } from './features/team/channel.js';
 
 export type AcquireWrite = (root: string, signal?: AbortSignal) => Promise<void>;
 
-type Pending = { resolve: () => void; reject: (error: Error) => void };
-
 export class NodeWriteBroker {
-  private readonly pending = new Map<string, Pending>();
+  private readonly pending = new PendingRequests<void>();
   constructor(private readonly write: (value: unknown) => void) {}
 
   acquire(root: string, signal?: AbortSignal): Promise<void> {
-    signal?.throwIfAborted();
-    const id = randomUUID();
-    return new Promise((resolve, reject) => {
-      const onAbort = () => {
-        this.pending.delete(id);
-        reject(new Error('Aborted'));
-      };
-      const settle = () => signal?.removeEventListener('abort', onAbort);
-      this.pending.set(id, {
-        resolve: () => (settle(), resolve()),
-        reject: (error) => (settle(), reject(error)),
-      });
-      signal?.addEventListener('abort', onAbort, { once: true });
-      this.write({ type: 'write_lease_request', id, path: root });
+    return this.pending.request({
+      signal,
+      abortError: () => new Error('Aborted'),
+      send: (id) => this.write({ type: 'write_lease_request', id, path: root }),
     });
   }
 
   respond(message: { id?: unknown; granted?: unknown; error?: unknown }): void {
     const pending = typeof message.id === 'string' ? this.pending.get(message.id) : undefined;
     if (!pending) return;
-    this.pending.delete(message.id as string);
-    if (message.granted === true) pending.resolve();
+    if (message.granted === true) pending.resolve(undefined);
     else
       pending.reject(
         new Error(typeof message.error === 'string' ? message.error : 'Write lease refused'),
@@ -50,8 +37,7 @@ export class NodeWriteBroker {
   }
 
   closeAll(): void {
-    for (const pending of this.pending.values()) pending.reject(new Error('Write broker closed'));
-    this.pending.clear();
+    this.pending.closeAll(() => new Error('Write broker closed'));
   }
 }
 

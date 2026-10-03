@@ -8,7 +8,7 @@
  * forward their requests to it over the team channel (`sandbox_request`),
  * which names them to the human.
  */
-import { randomUUID } from 'node:crypto';
+import { PendingRequests } from './pending-requests.js';
 import { parentChannel, teamChildName } from './features/team/channel.js';
 
 export type SandboxOp = 'network' | 'exec';
@@ -32,10 +32,8 @@ export class SandboxRequestError extends Error {
   }
 }
 
-type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void };
-
 export class NodeSandboxChannel implements SandboxRequester {
-  private readonly pending = new Map<string, Pending>();
+  private readonly pending = new PendingRequests<Record<string, any>>();
   constructor(private readonly write: (value: unknown) => void) {}
 
   /** No lost-reply timer: approvals wait for the human, and the node answers every request. */
@@ -44,31 +42,18 @@ export class NodeSandboxChannel implements SandboxRequester {
     args: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<Record<string, any>> {
-    signal?.throwIfAborted();
-    const id = randomUUID();
-    return new Promise((resolve, reject) => {
-      const settle = () => {
-        signal?.removeEventListener('abort', onAbort);
-        this.pending.delete(id);
-      };
-      const onAbort = () => {
-        settle();
-        this.write({ type: 'sandbox_cancel', id });
-        reject(new SandboxRequestError('aborted', 'Aborted'));
-      };
-      this.pending.set(id, {
-        resolve: (value) => (settle(), resolve(value as Record<string, any>)),
-        reject: (error) => (settle(), reject(error)),
-      });
-      signal?.addEventListener('abort', onAbort, { once: true });
-      this.write({ type: 'sandbox_request', id, op, args });
+    return this.pending.request({
+      signal,
+      abortError: () => new SandboxRequestError('aborted', 'Aborted'),
+      cancel: (id) => this.write({ type: 'sandbox_cancel', id }),
+      send: (id) => this.write({ type: 'sandbox_request', id, op, args }),
     });
   }
 
   respond(message: { id?: unknown; ok?: unknown; result?: unknown; error?: any }): void {
     const pending = typeof message.id === 'string' ? this.pending.get(message.id) : undefined;
     if (!pending) return;
-    if (message.ok === true) return pending.resolve(message.result ?? {});
+    if (message.ok === true) return pending.resolve((message.result ?? {}) as Record<string, any>);
     const error = message.error ?? {};
     pending.reject(
       new SandboxRequestError(
@@ -79,8 +64,7 @@ export class NodeSandboxChannel implements SandboxRequester {
   }
 
   closeAll(): void {
-    for (const pending of [...this.pending.values()])
-      pending.reject(new SandboxRequestError('closed', 'The sandbox channel closed'));
+    this.pending.closeAll(() => new SandboxRequestError('closed', 'The sandbox channel closed'));
   }
 }
 
