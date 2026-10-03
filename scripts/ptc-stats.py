@@ -55,6 +55,7 @@ def analyze(database):
             scan_errors += 1
 
     stats = {k: Counter() for k in ("主 session", "子／巢狀 session")}
+    sizes = {k: [] for k in stats}
     tools, inner_tools = Counter(), Counter()
     bad_lines = unreadable = 0
     for file, kind in files.items():
@@ -120,6 +121,7 @@ def analyze(database):
             if isinstance(nested, list):
                 s["with_details"] += 1
                 s["inner_calls"] += len(nested)
+                sizes[kind].append(len(nested))
                 s["multi_call"] += len(nested) >= 2
                 for item in nested:
                     if isinstance(item, dict):
@@ -149,6 +151,12 @@ def analyze(database):
         avg = s["inner_calls"] / s["with_details"] if s["with_details"] else None
         print("平均內部工具呼叫：", f"{avg:.2f}" if avg is not None else "N/A")
         print("內部工具呼叫合計：", s["inner_calls"], "；回報錯誤：", s["inner_errors"])
+        counts = sorted(sizes[label] if label in sizes else [n for v in sizes.values() for n in v])
+        if counts:
+            pct = lambda p: counts[max(0, -(-p * len(counts) // 100) - 1)]
+            print(f"每次 PTC 內部呼叫數：p50 {pct(50)}、p90 {pct(90)}、p99 {pct(99)}、最大 {counts[-1]}")
+            print("  ≥100：", sum(n >= 100 for n in counts), "；≥200：", sum(n >= 200 for n in counts),
+                  "；≥500（撞到目前上限）：", sum(n >= 500 for n in counts))
     print("\n模型直接呼叫的工具 Top 15：")
     for name, count in tools.most_common(15):
         print(f"  {name}: {count}")
