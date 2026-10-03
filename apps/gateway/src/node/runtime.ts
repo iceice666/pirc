@@ -5,12 +5,11 @@
  * `app.inject`; terminal streams are multiplexed on the same connection.
  */
 import { WebSocket } from 'ws';
-import { z } from 'zod';
 import type { NodeConfig } from '../config.js';
 import { ApiError } from '../errors.js';
 import { legacyModelKeys, legacyRoleConfig } from '../agent/config.js';
 import { loadRoles, roleBriefs } from '../agent/roles.js';
-import { modelsSchema } from '../models.js';
+import { daemonMessageSchema, type ParsedDaemonMessage } from '../protocol-schema.js';
 import {
   NODE_FRAME_MAX_BYTES,
   NODE_PROTOCOL_VERSION,
@@ -24,11 +23,7 @@ import { DaemonAgentGateway } from './agent-gateway.js';
 import { buildNodeApp } from './app.js';
 import { MemoryMirror } from './memory-mirror.js';
 import { startNodeInference } from './inference.js';
-import {
-  inferenceEventFrames,
-  inferenceEventSchema,
-  INFERENCE_BUFFER_MAX_BYTES,
-} from '../inference-wire.js';
+import { inferenceEventSchema, INFERENCE_BUFFER_MAX_BYTES } from '../inference-wire.js';
 import type { TerminalConnection } from './panel-routes.js';
 
 const RECONNECT_MS = 3_000;
@@ -37,57 +32,6 @@ const HEARTBEAT_MS = 15_000;
 const ACTIVITY_COALESCE_MS = 100;
 /** Browser live-view frames are skipped while this much is queued on the daemon link. */
 const BROWSER_FRAME_BACKLOG_BYTES = 4 * 1024 * 1024;
-
-const daemonMessage = z.discriminatedUnion('type', [
-  ...inferenceEventFrames,
-  z.object({
-    type: z.literal('registration_error'),
-    status: z.number(),
-    code: z.string(),
-    message: z.string(),
-  }),
-  z.object({
-    type: z.literal('registered'),
-    nodeId: z.string(),
-    models: modelsSchema,
-    mirrors: z.record(z.number().int().nonnegative()).optional(),
-  }),
-  z.object({
-    type: z.literal('memory_mirror_ack'),
-    ledgerKey: z.string().regex(/^[0-9a-f]{16}$/),
-    watermark: z.number().int().nonnegative(),
-  }),
-  z.object({ type: z.literal('models'), models: modelsSchema }),
-  z.object({ type: z.literal('heartbeat_ack') }),
-  z.object({
-    type: z.literal('request'),
-    requestId: z.string().min(1).max(100),
-    data: z.object({
-      method: z.enum(['GET', 'POST', 'PATCH', 'PUT']),
-      url: z.string().startsWith('/api/').max(8192),
-      user: z.string().min(1),
-      payload: z.unknown().optional(),
-      bodyBase64: z.string().optional(),
-      contentType: z.string().max(200).optional(),
-    }),
-  }),
-  z.object({
-    type: z.literal('terminal_open'),
-    streamId: z.string().min(1).max(100),
-    user: z.string().min(1),
-    sessionId: z.string().min(1),
-    terminalId: z.string().min(1),
-    kind: z.enum(['terminal', 'browser']).optional(),
-  }),
-  z.object({ type: z.literal('terminal_input'), streamId: z.string(), message: z.unknown() }),
-  z.object({ type: z.literal('terminal_close'), streamId: z.string() }),
-  z.object({
-    type: z.literal('agent_response'),
-    requestId: z.string().min(1).max(100),
-    status: z.number().int(),
-    body: z.unknown().optional(),
-  }),
-]);
 
 export async function startNode(config: NodeConfig): Promise<{ close: () => Promise<void> }> {
   const gateway = new DaemonAgentGateway();
@@ -195,7 +139,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
   const unsubscribeLeases = services.writes.onChange(activityChanged);
 
   async function handleRequest(
-    data: z.infer<typeof daemonMessage> & { type: 'request' },
+    data: ParsedDaemonMessage & { type: 'request' },
   ): Promise<NodeHttpResponse> {
     const { method, url, user, payload, bodyBase64, contentType } = data.data;
     const response = await app.inject({
@@ -224,7 +168,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
     return { status: response.statusCode, body };
   }
 
-  function openTerminal(message: z.infer<typeof daemonMessage> & { type: 'terminal_open' }) {
+  function openTerminal(message: ParsedDaemonMessage & { type: 'terminal_open' }) {
     const { streamId } = message;
     if (terminals.has(streamId)) return;
     try {
@@ -285,9 +229,9 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
     });
     connection.on('message', (raw) => {
       if (connection !== socket) return;
-      let parsed: ReturnType<typeof daemonMessage.safeParse>;
+      let parsed: ReturnType<typeof daemonMessageSchema.safeParse>;
       try {
-        parsed = daemonMessage.safeParse(JSON.parse(raw.toString()));
+        parsed = daemonMessageSchema.safeParse(JSON.parse(raw.toString()));
       } catch {
         connection.close(1007, 'invalid JSON');
         return;

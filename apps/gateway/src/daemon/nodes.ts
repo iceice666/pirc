@@ -1,7 +1,10 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import { z } from 'zod';
-import { NODE_ID_PATTERN } from '../config.js';
+import {
+  registrationSchema as registration,
+  nodeMessageSchema as nodeMessage,
+} from '../protocol-schema.js';
 import { ApiError } from '../errors.js';
 import {
   AGENT_OP_MAX_LENGTH,
@@ -26,7 +29,6 @@ import {
   INFERENCE_REQUEST_MAX_BYTES,
   INFERENCE_STREAM_MAX_BYTES,
   INFERENCE_TIMEOUT_MS,
-  inferenceRequestSchema,
   type InferenceRequest,
   type InferenceEvent,
 } from '../inference-wire.js';
@@ -51,91 +53,6 @@ export const RELAY_MESSAGE_MAX_BYTES = { terminal: 1024 * 1024, browser: 64 * 10
 const NODE_SEND_BUFFER_MAX_BYTES = 4 * NODE_FRAME_MAX_BYTES;
 
 type SendFailure = 'too_large' | 'backpressure' | 'failed';
-
-const registration = z.object({
-  type: z.literal('register'),
-  role: z.enum(['chat', 'node']),
-  protocol: z.number().int().optional(),
-  workspaces: z
-    .array(
-      z.object({
-        id: z.string().regex(NODE_ID_PATTERN),
-        displayName: z.string().min(1).max(200),
-        kind: z.enum(['directory', 'chat']).optional(),
-        roles: z
-          .array(
-            z.object({
-              name: z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/),
-              description: z.string().max(500).optional(),
-              models: z.array(z.string().max(200)).max(20).optional(),
-              thinking: z.string().max(20).optional(),
-              tools: z.array(z.string().max(64)).max(64).optional(),
-              /** From the workspace's .pirc/roles, possibly replacing a node or built-in role. */
-              source: z.enum(['workspace']).optional(),
-              overrides: z.enum(['node', 'builtin']).optional(),
-            }),
-          )
-          .max(50)
-          .optional(),
-      }),
-    )
-    .max(100),
-});
-const nodeMessage = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('model_start'),
-    requestId: z.string().min(1).max(100),
-    request: inferenceRequestSchema,
-  }),
-  z.object({ type: z.literal('model_cancel'), requestId: z.string().min(1).max(100) }),
-  z.object({ type: z.literal('heartbeat') }),
-  z.object({
-    type: z.literal('response'),
-    requestId: z.string(),
-    data: z.object({ status: z.number().int(), body: z.unknown() }),
-  }),
-  z.object({
-    type: z.literal('event'),
-    sessionId: z.string(),
-    event: z.record(z.unknown()),
-  }),
-  z.object({
-    type: z.literal('activity'),
-    sessions: z
-      .array(
-        z.object({
-          id: z.string().max(200),
-          run: z.enum(['queued', 'running', 'waiting_input', 'stopping']).optional(),
-          writeLease: z.boolean().optional(),
-        }),
-      )
-      .max(10_000),
-  }),
-  z.object({
-    type: z.literal('memory_mirror'),
-    ledgerKey: z.string().regex(/^[0-9a-f]{16}$/),
-    offset: z.number().int().nonnegative(),
-    end: z.number().int().nonnegative(),
-    reset: z.boolean().optional(),
-    // Lines are checked one by one when stored: bad data is skipped, never fatal to the link.
-    lines: z.array(z.unknown()).max(10_000),
-  }),
-  z.object({
-    type: z.literal('agent_request'),
-    requestId: z.string().min(1).max(100),
-    sessionId: z.string().min(1).max(200),
-    // Checked by the handler: an agent chose it, so a bad one gets an answer, not a closed link.
-    op: z.string().max(1000),
-    args: z.unknown().optional(),
-  }),
-  z.object({ type: z.literal('terminal_frame'), streamId: z.string(), frame: z.unknown() }),
-  z.object({
-    type: z.literal('terminal_closed'),
-    streamId: z.string(),
-    code: z.number().int(),
-    reason: z.string(),
-  }),
-]);
 
 export interface ConnectedNode {
   id: string;
