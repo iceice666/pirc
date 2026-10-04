@@ -131,7 +131,7 @@ interface Tab {
   mode: 'agent' | 'user';
   handoff: string | null;
   waiting: number;
-  modeWaiters: Set<() => void>;
+  modeWaiters: Set<(error?: Error) => void>;
   action: string | null;
   screencast: { page: Page } | null;
   /** Serializes screencast start/stop. */
@@ -283,6 +283,11 @@ export class BrowserManager {
   private readonly workspaces = new Map<string, WorkspaceBrowser>();
   private readonly tabs = new Map<string, Tab>();
   private readonly viewers = new Map<string, Set<Viewer>>();
+  /** Browser requests accepted before a session is closed must drain first. */
+  private readonly sessionOperations = new Map<string, number>();
+  private readonly sessionOperationWaiters = new Map<string, Set<() => void>>();
+  private readonly closingSessions = new Set<string>();
+  private readonly sessionClosures = new Map<string, Promise<void>>();
   private readonly idleTimer: NodeJS.Timeout;
   private closing = false;
   /** Which hosts pages may reach (audit M8). */
@@ -315,6 +320,41 @@ export class BrowserManager {
         'No Chromium found on this node; set PIRC_BROWSER_EXECUTABLE',
       );
     if (this.closing) throw new ApiError(503, 'runner_unavailable', 'The node is shutting down');
+  }
+
+  /**
+   * Take a lease for the full lifetime of an accepted browser request. A
+   * session close fences new requests and waits for these leases before
+   * disposing its tab or workspace context.
+   */
+  private beginSessionOperation(sessionId: string): () => void {
+    if (this.closing) throw new ApiError(503, 'runner_unavailable', 'The node is shutting down');
+    if (this.closingSessions.has(sessionId))
+      throw new ApiError(409, 'conflict', 'The browser session is closing');
+    this.sessionOperations.set(sessionId, (this.sessionOperations.get(sessionId) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const remaining = (this.sessionOperations.get(sessionId) ?? 1) - 1;
+      if (remaining > 0) {
+        this.sessionOperations.set(sessionId, remaining);
+        return;
+      }
+      this.sessionOperations.delete(sessionId);
+      const waiters = this.sessionOperationWaiters.get(sessionId);
+      this.sessionOperationWaiters.delete(sessionId);
+      for (const wake of waiters ?? []) wake();
+    };
+  }
+
+  private async waitForSessionOperations(sessionId: string): Promise<void> {
+    if (!this.sessionOperations.get(sessionId)) return;
+    await new Promise<void>((resolve) => {
+      let waiters = this.sessionOperationWaiters.get(sessionId);
+      if (!waiters) this.sessionOperationWaiters.set(sessionId, (waiters = new Set()));
+      waiters.add(resolve);
+    });
   }
 
   // ---- lifecycle ------------------------------------------------------------
@@ -401,38 +441,66 @@ export class BrowserManager {
     }
     if (!create) return undefined;
     this.require();
-    const context = await this.context(target.workspaceId);
-    const again = this.tabs.get(target.sessionId);
-    if (again && !again.closed) return again;
-    const tab: Tab = {
-      target,
-      pages: [],
-      active: undefined,
-      mode: 'agent',
-      handoff: null,
-      waiting: 0,
-      modeWaiters: new Set(),
-      action: null,
-      screencast: null,
-      screencastChain: Promise.resolve(),
-      lastFrame: null,
-      frameTimer: null,
-      lastSent: 0,
-      recording: null,
-      log: [],
-      logCount: 0,
-      lastActivity: Date.now(),
-      closed: false,
-      busy: Promise.resolve(),
-    };
-    this.tabs.set(target.sessionId, tab);
-    this.workspaces.get(target.workspaceId)?.sessions.add(target.sessionId);
-    // A fresh persistent context opens with one blank page nobody owns.
-    const owned = new Set([...this.tabs.values()].flatMap((t) => t.pages));
-    const spare = context.pages().find((page) => !owned.has(page) && page.url() === 'about:blank');
-    if (spare) this.adopt(tab, spare);
-    else await this.newPage(tab);
-    return tab;
+    // Reserve the session before awaiting the shared launch. Closing another
+    // session in this workspace must not dispose a context that this request
+    // is still waiting to use.
+    const contextPromise = this.context(target.workspaceId);
+    const workspace = this.workspaces.get(target.workspaceId)!;
+    workspace.sessions.add(target.sessionId);
+    let tab: Tab | undefined;
+    try {
+      const context = await contextPromise;
+      // closeSession fences work accepted earlier as well as later requests:
+      // a pending launch must not install a tab after deletion has started.
+      if (this.closing || this.closingSessions.has(target.sessionId))
+        throw new ApiError(409, 'conflict', 'The browser session is closing');
+      const again = this.tabs.get(target.sessionId);
+      if (again && !again.closed) return again;
+      tab = {
+        target,
+        pages: [],
+        active: undefined,
+        mode: 'agent',
+        handoff: null,
+        waiting: 0,
+        modeWaiters: new Set(),
+        action: null,
+        screencast: null,
+        screencastChain: Promise.resolve(),
+        lastFrame: null,
+        frameTimer: null,
+        lastSent: 0,
+        recording: null,
+        log: [],
+        logCount: 0,
+        lastActivity: Date.now(),
+        closed: false,
+        busy: Promise.resolve(),
+      };
+      this.tabs.set(target.sessionId, tab);
+      // A fresh persistent context opens with one blank page nobody owns.
+      const owned = new Set([...this.tabs.values()].flatMap((t) => t.pages));
+      const spare = context
+        .pages()
+        .find((page) => !owned.has(page) && page.url() === 'about:blank');
+      if (spare) this.adopt(tab, spare);
+      else await this.newPage(tab);
+      return tab;
+    } catch (error) {
+      // A failed initial page creation must not leave an empty tab registered.
+      if (tab && this.tabs.get(target.sessionId) === tab && !tab.pages.length) this.dropTab(tab);
+      if (!this.tabs.has(target.sessionId)) {
+        workspace.sessions.delete(target.sessionId);
+        if (
+          workspace.sessions.size === 0 &&
+          this.workspaces.get(target.workspaceId) === workspace
+        ) {
+          this.workspaces.delete(target.workspaceId);
+          await closeContext(workspace.context);
+        }
+      }
+      throw error;
+    }
   }
 
   private async newPage(tab: Tab): Promise<Page> {
@@ -483,17 +551,42 @@ export class BrowserManager {
   }
 
   async closeSession(sessionId: string): Promise<void> {
-    const tab = this.tabs.get(sessionId);
-    if (!tab) return;
-    const pages = [...tab.pages];
-    if (tab.recording) await this.stopRecording(tab).catch(() => undefined);
-    this.dropTab(tab);
-    await Promise.allSettled(pages.map((page) => page.close()));
-    const workspace = this.workspaces.get(tab.target.workspaceId);
-    if (workspace && workspace.sessions.size === 0) {
-      this.workspaces.delete(tab.target.workspaceId);
-      await closeContext(workspace.context);
-    }
+    const existing = this.sessionClosures.get(sessionId);
+    if (existing) return existing;
+    this.closingSessions.add(sessionId);
+    // Cancel control-lease waits before draining. Waking them as successful
+    // would let a queued action start after close was requested.
+    const current = this.tabs.get(sessionId);
+    const closingError = new ApiError(409, 'conflict', 'The browser session is closing');
+    for (const cancel of current?.modeWaiters ?? []) cancel(closingError);
+    const closing = (async () => {
+      await this.waitForSessionOperations(sessionId);
+      const tab = this.tabs.get(sessionId);
+      const workspaceIds = new Set<string>();
+      if (tab) workspaceIds.add(tab.target.workspaceId);
+      for (const [workspaceId, workspace] of this.workspaces)
+        if (workspace.sessions.has(sessionId)) workspaceIds.add(workspaceId);
+      const pages = [...(tab?.pages ?? [])];
+      if (tab?.recording) await this.stopRecording(tab).catch(() => undefined);
+      if (tab) this.dropTab(tab);
+      await Promise.allSettled(pages.map((page) => page.close()));
+
+      // The session may have only reserved a workspace while its tab launch
+      // was pending. Remove that reservation too, then close an unused context.
+      for (const workspaceId of workspaceIds) {
+        const workspace = this.workspaces.get(workspaceId);
+        if (!workspace) continue;
+        workspace.sessions.delete(sessionId);
+        if (workspace.sessions.size !== 0) continue;
+        if (this.workspaces.get(workspaceId) === workspace) this.workspaces.delete(workspaceId);
+        await closeContext(workspace.context);
+      }
+    })().finally(() => {
+      this.sessionClosures.delete(sessionId);
+      this.closingSessions.delete(sessionId);
+    });
+    this.sessionClosures.set(sessionId, closing);
+    return closing;
   }
 
   private reapIdle(): void {
@@ -511,10 +604,12 @@ export class BrowserManager {
   async shutdown(): Promise<void> {
     this.closing = true;
     clearInterval(this.idleTimer);
-    await Promise.allSettled(
-      [...this.tabs.values()].map((tab) => (tab.recording ? this.stopRecording(tab) : null)),
-    );
-    for (const tab of [...this.tabs.values()]) this.dropTab(tab);
+    const sessionIds = new Set([
+      ...this.tabs.keys(),
+      ...this.sessionOperations.keys(),
+      ...[...this.workspaces.values()].flatMap((workspace) => [...workspace.sessions]),
+    ]);
+    await Promise.allSettled([...sessionIds].map((sessionId) => this.closeSession(sessionId)));
     const contexts = [...this.workspaces.values()].map((entry) => entry.context);
     this.workspaces.clear();
     await Promise.allSettled(contexts.map(closeContext));
@@ -686,6 +781,9 @@ export class BrowserManager {
   }
 
   private waitForAgentMode(tab: Tab, signal: AbortSignal, timeoutMs: number): Promise<void> {
+    if (signal.aborted) return Promise.reject(new ApiError(499, 'aborted', 'Aborted'));
+    if (this.closingSessions.has(tab.target.sessionId))
+      return Promise.reject(new ApiError(409, 'conflict', 'The browser session is closing'));
     if (tab.mode === 'agent') return Promise.resolve();
     tab.waiting++;
     this.emitState(tab);
@@ -699,7 +797,7 @@ export class BrowserManager {
         if (error) reject(error);
         else resolve();
       };
-      const wake = () => done();
+      const wake = (error?: Error) => done(error);
       const onAbort = () => done(new ApiError(499, 'aborted', 'Aborted'));
       const timer =
         timeoutMs > 0
@@ -734,36 +832,45 @@ export class BrowserManager {
       await this.closeSession(target.sessionId);
       return { closed: true };
     }
-    const tab = (await this.tab(target, op !== 'status'))!;
-    if (op === 'status') return this.view(tab);
-    tab.lastActivity = Date.now();
-    switch (op) {
-      case 'handoff': {
-        const reason = str(args.reason, 'reason', 2_000);
-        this.setMode(tab, 'user', reason);
-        this.log(tab, 'agent', `Handed control to the user: ${reason}`);
-        return this.view(tab);
-      }
-      case 'wait_control':
-        await this.waitForAgentMode(tab, signal, 0);
-        return this.pageSummary(tab, true);
-      case 'release':
-        if (tab.mode === 'user') {
-          this.setMode(tab, 'agent');
-          this.log(tab, 'agent', 'Took back control');
-        }
-        return this.view(tab);
-      case 'record':
-        return this.record(tab, args);
-    }
-    const previous = tab.busy;
-    let release!: () => void;
-    tab.busy = new Promise<void>((resolve) => (release = resolve));
+    const release = this.beginSessionOperation(target.sessionId);
     try {
-      await previous;
-      signal.throwIfAborted();
-      await this.waitForAgentMode(tab, signal, int(args.waitMs, AGENT_WAIT_MS, 0, 30 * 60_000));
-      return await this.run(tab, op, args);
+      const tab = (await this.tab(target, op !== 'status'))!;
+      if (this.closingSessions.has(target.sessionId))
+        throw new ApiError(409, 'conflict', 'The browser session is closing');
+      if (op === 'status') return this.view(tab);
+      tab.lastActivity = Date.now();
+      switch (op) {
+        case 'handoff': {
+          const reason = str(args.reason, 'reason', 2_000);
+          this.setMode(tab, 'user', reason);
+          this.log(tab, 'agent', `Handed control to the user: ${reason}`);
+          return this.view(tab);
+        }
+        case 'wait_control':
+          await this.waitForAgentMode(tab, signal, 0);
+          return await this.pageSummary(tab, true);
+        case 'release':
+          if (tab.mode === 'user') {
+            this.setMode(tab, 'agent');
+            this.log(tab, 'agent', 'Took back control');
+          }
+          return this.view(tab);
+        case 'record':
+          return await this.record(tab, args);
+      }
+      const previous = tab.busy;
+      let unlock!: () => void;
+      tab.busy = new Promise<void>((resolve) => (unlock = resolve));
+      try {
+        await previous;
+        if (this.closingSessions.has(target.sessionId))
+          throw new ApiError(409, 'conflict', 'The browser session is closing');
+        signal.throwIfAborted();
+        await this.waitForAgentMode(tab, signal, int(args.waitMs, AGENT_WAIT_MS, 0, 30 * 60_000));
+        return await this.run(tab, op, args);
+      } finally {
+        unlock();
+      }
     } finally {
       release();
     }
@@ -1142,8 +1249,23 @@ export class BrowserManager {
       const entry = tab?.log.find((e) => e.index === index);
       return { type: 'log_image', index, data: entry?.jpeg?.toString('base64') ?? null };
     }
+    const release = this.beginSessionOperation(target.sessionId);
+    try {
+      return await this.handleInput(target, message);
+    } finally {
+      release();
+    }
+  }
+
+  private async handleInput(
+    target: BrowserTarget,
+    message: Record<string, unknown>,
+  ): Promise<BrowserFrame | void> {
+    const type = message.type;
     const creates = type === 'takeover' || type === 'navigate';
     const tab = await this.tab(target, creates);
+    if (this.closingSessions.has(target.sessionId))
+      throw new ApiError(409, 'conflict', 'The browser session is closing');
     if (!tab)
       return { type: 'error', code: 'not_found', message: 'No browser is open for this session' };
     tab.lastActivity = Date.now();

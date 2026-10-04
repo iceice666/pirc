@@ -708,6 +708,15 @@ export class GatewayDatabase {
       if (!this.sessionDeletion(sessionId)) throw new Error('Deletion must be fenced first');
       for (const table of ['interactions', 'commands', 'leases', 'runs'])
         this.raw.query(`DELETE FROM ${table} WHERE session_id=?`).run(sessionId);
+      // Deletion fences the final node events, so the scheduler cannot rely on
+      // an agent-stop event to settle a run. Preserve its audit record and the
+      // schedule, but release the open-run guard and remove the dead chat link.
+      this.raw
+        .query(
+          "UPDATE schedule_runs SET status='failed', result='The chat was deleted.', finished_at=? WHERE session_id=? AND status IN ('running','waiting_input')",
+        )
+        .run(now(), sessionId);
+      this.raw.query('UPDATE schedule_runs SET session_id=NULL WHERE session_id=?').run(sessionId);
       this.raw.query('DELETE FROM schedule_proposals WHERE session_id=?').run(sessionId);
       this.raw.query('DELETE FROM delegations WHERE assistant_session_id=?').run(sessionId);
       this.raw.query('DELETE FROM sessions WHERE id=?').run(sessionId);

@@ -732,6 +732,7 @@ export async function buildDaemonApp(
     events.publish(sessionId, session.runnerEpoch, 'session_deleted', { sessionId });
     events.forget(sessionId);
     sessionsChanged(user);
+    schedulesChanged(user);
     return reply.status(204).send();
   });
 

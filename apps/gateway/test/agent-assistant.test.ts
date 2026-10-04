@@ -136,25 +136,35 @@ describe('assistant memory in chats', () => {
       { text: 'Decision acknowledged.' },
       { text: 'New decision.' },
     );
-    await chat.prompt('hello', async () => chat.ok(await chat.next('assistant.context'), memory()));
+    await chat.prompt('hello', async () =>
+      chat.ok(
+        await chat.next('assistant.context'),
+        memory({ workspaces: [{ id: 'work:test', name: 'Test', node: 'work', online: true }] }),
+      ),
+    );
     const first = chat.system();
     expect(first).not.toContain('Memory proposal decisions (current)');
+    expect(first).toContain('## Workspaces');
     await chat.prompt('continue', async () =>
       chat.ok(
         await chat.next('assistant.context'),
         memory({
+          capabilities: { delegation: false },
           proposalDecisions: [
             { id: 'p123', action: 'add', status: 'approved', targetId: 'u123', decidedAt: 1 },
           ],
         }),
       ),
     );
+    expect(chat.system()).not.toContain('## Workspaces');
+    expect(chat.system()).not.toContain('[work:test]');
     expect(chat.system()).toContain('Memory proposal decisions (current)');
     expect(chat.system()).toContain('"status":"approved"');
     await chat.prompt('one more', async () =>
       chat.ok(
         await chat.next('assistant.context'),
         memory({
+          capabilities: { delegation: false },
           proposalDecisions: [
             { id: 'p456', action: 'replace', status: 'rejected', targetId: 'u123', decidedAt: 2 },
           ],

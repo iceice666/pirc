@@ -1,5 +1,5 @@
 import { createECDH, randomBytes } from 'node:crypto';
-import { afterEach, expect, it } from 'bun:test';
+import { afterEach, expect, it, spyOn } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import { formatTime, nextFire } from '../src/daemon/schedules.js';
 import { headers, promptSession, startCluster, waitFor } from './helpers.js';
@@ -538,4 +538,130 @@ it('pushes the runs each schedule asks for, to the places the user subscribed', 
   await fire(all, 'completed');
   await Bun.sleep(200);
   expect(received).toHaveLength(3);
+}, 20_000);
+
+for (const status of ['running', 'waiting_input'] as const) {
+  it(`deleting a ${status} scheduled chat releases the schedule and preserves its history`, async () => {
+    const { app, services } = await start();
+    const created = await api(app, 'POST', '/api/schedules', {
+      workspaceId: 'home:chats',
+      title: 'Recurring chat',
+      prompt: 'Summarize the logs.',
+      cron: '0 0 * * *',
+      timezone: 'UTC',
+    });
+    expect(created.statusCode).toBe(201);
+    const schedule = created.json().schedule;
+    expect((await api(app, 'POST', `/api/schedules/${schedule.id}/run`, {})).statusCode).toBe(202);
+    await waitFor(async () => (await runsOf(app, schedule.id))[0]?.status, 'completed');
+    const [history] = await runsOf(app, schedule.id);
+    expect((await api(app, 'DELETE', `/api/sessions/${history.sessionId}`)).statusCode).toBe(204);
+    expect((await runsOf(app, schedule.id))[0]).toMatchObject({
+      id: history.id,
+      status: 'completed',
+      result: history.result,
+      finishedAt: history.finishedAt,
+      sessionId: null,
+      session: null,
+    });
+
+    expect(
+      (
+        await api(app, 'PATCH', `/api/schedules/${schedule.id}`, {
+          prompt:
+            status === 'running' ? 'Hold scheduled run.' : 'Please ask the user before proceeding.',
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect((await api(app, 'POST', `/api/schedules/${schedule.id}/run`, {})).statusCode).toBe(202);
+    await waitFor(async () => {
+      const [run] = await runsOf(app, schedule.id);
+      if (run.status !== status || !run.sessionId) return false;
+      // The scheduler records running before dispatch; wait for the real agent too.
+      const snap = await snapshot(app, run.sessionId);
+      return snap.history.some((m: any) => m.customType === 'scheduled-run');
+    }, true);
+    const [active] = await runsOf(app, schedule.id);
+    expect((await api(app, 'POST', `/api/schedules/${schedule.id}/run`, {})).statusCode).toBe(409);
+    expect((await api(app, 'DELETE', `/api/sessions/${active.sessionId}`)).statusCode).toBe(204);
+    const [deleted] = await runsOf(app, schedule.id);
+    expect(deleted).toMatchObject({
+      id: active.id,
+      status: 'failed',
+      result: 'The chat was deleted.',
+      sessionId: null,
+      session: null,
+    });
+    expect(deleted.finishedAt).toBeGreaterThanOrEqual(active.startedAt);
+    expect(services.schedules.get(USER, schedule.id)).toMatchObject({
+      status: 'active',
+      nextRunAt: schedule.nextRunAt,
+    });
+    expect((await api(app, 'DELETE', `/api/sessions/${active.sessionId}`)).statusCode).toBe(204);
+    expect((await runsOf(app, schedule.id))[0]).toEqual(deleted);
+
+    await api(app, 'PATCH', `/api/schedules/${schedule.id}`, { prompt: 'Continue normally.' });
+    expect((await api(app, 'POST', `/api/schedules/${schedule.id}/run`, {})).statusCode).toBe(202);
+    await waitFor(async () => (await runsOf(app, schedule.id))[0]?.status, 'completed');
+    services.db.raw
+      .prepare('UPDATE schedules SET next_run_at=? WHERE id=?')
+      .run(Date.now(), schedule.id);
+    services.schedules.tick();
+    await waitFor(async () => (await runsOf(app, schedule.id))[0]?.status, 'completed');
+    const runs = await runsOf(app, schedule.id);
+    expect(runs).toHaveLength(4);
+    expect(runs.map((run) => run.status)).toEqual([
+      'completed',
+      'completed',
+      'failed',
+      'completed',
+    ]);
+  }, 20_000);
+}
+
+it('does not revive a deleted scheduled chat when an older progress snapshot arrives', async () => {
+  const { app, services } = await start();
+  const created = await api(app, 'POST', '/api/schedules', {
+    workspaceId: 'home:chats',
+    prompt: 'Please ask the user before proceeding.',
+    cron: '0 0 * * *',
+    timezone: 'UTC',
+  });
+  const schedule = created.json().schedule;
+  await api(app, 'POST', `/api/schedules/${schedule.id}/run`, {});
+  await waitFor(async () => (await runsOf(app, schedule.id))[0]?.status, 'waiting_input');
+  const [run] = await runsOf(app, schedule.id);
+  const session = services.db.getSession(run.sessionId);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  let fetched!: () => void;
+  const ready = new Promise<void>((resolve) => (fetched = resolve));
+  const original = services.nodes.request.bind(services.nodes);
+  const request = spyOn(services.nodes, 'request').mockImplementation(async (...args) => {
+    const response = await original(...args);
+    if (args[1].url === `/api/sessions/${encodeURIComponent(session.piSessionId!)}/snapshot`) {
+      fetched();
+      await held;
+    }
+    return response;
+  });
+  try {
+    services.db.raw.prepare("UPDATE schedule_runs SET status='running' WHERE id=?").run(run.id);
+    const checking = (services.schedules as unknown as { check(id: string): Promise<void> }).check(
+      run.id,
+    );
+    await ready;
+    expect((await api(app, 'DELETE', `/api/sessions/${run.sessionId}`)).statusCode).toBe(204);
+    release();
+    await checking;
+    expect((await runsOf(app, schedule.id))[0]).toMatchObject({
+      id: run.id,
+      status: 'failed',
+      result: 'The chat was deleted.',
+      sessionId: null,
+    });
+  } finally {
+    release();
+    request.mockRestore();
+  }
 }, 20_000);

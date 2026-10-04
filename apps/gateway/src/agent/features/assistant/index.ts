@@ -131,7 +131,7 @@ export function renderMemory(context: MemoryContext): string {
  * guidance for disabled tools is taken out each time it is shown.
  */
 export function presentSection(section: string, capabilities: Capabilities): string {
-  if (!capabilities.delegation) return section.replace(/\n*## Workspaces\n[\s\S]*$/, '');
+  if (!capabilities.delegation) return section.replace(/\n*## Workspaces\n[\s\S]*?(?=\n## |$)/, '');
   if (!capabilities.memory_search)
     return section.replace(
       / Their coding sessions keep notes there \(workspace memory\)[^\n]*/,
