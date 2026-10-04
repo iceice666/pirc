@@ -19,6 +19,7 @@ import type { SessionEntry } from './session-store.js';
 import { skillReadPaths, skillRoots } from './skills.js';
 import { defaultPathPolicy, type PathPolicy } from '../sandbox-policy.js';
 import { readRoles, roleDirs, type RoleDir, type RolePreset } from './roles.js';
+import { validateMemoryConfig } from './features/memory/config.js';
 
 export {
   defaultConfigDir,
@@ -237,6 +238,8 @@ export function loadAgentConfig(
     ? { ...parsed, allowedPaths: [], env: {}, hooks: hooksSchema.parse({}) }
     : parsed;
   const warnings = untrusted && !child ? [UNTRUSTED_PROJECT_WARNING] : [];
+  const memoryWarning = validateMemoryConfig(global.features).warning;
+  if (memoryWarning) warnings.push(memoryWarning);
   const resolvePaths = (items: string[], base: string) =>
     items.map((item) => path.resolve(base, expandHome(item)));
   // Skills are read by the file tools but are configuration, like .pirc/.

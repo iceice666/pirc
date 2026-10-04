@@ -1,6 +1,6 @@
 # Chat project isolation: capability policy and future data isolation
 
-Status: Phase C implementation in this change; **B, D and E below are proposals, not shipped privacy guarantees**. Baseline: `9572bbcb15be8bd12097976ddf43d6c2cf20202c`. Source references in B/D/E refer to that baseline (implementation may shift line numbers).
+Status: Phase C implementation in this change; **B, D, E1 and E3 below are proposals, not shipped privacy guarantees**. E2 is implemented and locally verified (2026-10-02), pending review and release. Baseline: `9572bbcb15be8bd12097976ddf43d6c2cf20202c`. Source references in B/D/E refer to that baseline (implementation may shift line numbers).
 
 A project is a `kind='chat'` workspace; gateway identity is the node-qualified workspace ID, not its display name. Capabilities do not make a project private by themselves. In particular, disabling `memory_search` or `remote_recall` does **not** disable the global USER/MEMORY context or its writes. Global USER/MEMORY is the default and the preferred mode; project-only memory (B) would be an opt-in, and until it exists every project uses global memory.
 
@@ -158,9 +158,9 @@ C reduces derivative data only for the actual mediated services it disables. A p
 
 Maintainer decisions: shared artifact ownership; old-node upgrade requirements; lost-node policy; whether metadata tombstones may persist; retention/backup/provider guarantee wording; restricted-profile sandbox strength. Literal removal of every byte everywhere cannot be promised by this application alone.
 
-## E — Independent follow-ups (not implemented in this change)
+## E — Independent follow-ups
 
-All three are deferred to keep this security-sensitive change focused. They require separate tests and review, not an assumption that C supplies physical privacy.
+E2 is implemented and locally verified (2026-10-02), pending review; E1 and E3 remain deferred. These require separate tests and review, not an assumption that C supplies physical privacy.
 
 ### E1 secure_delete
 
@@ -168,9 +168,23 @@ Change `apps/gateway/src/database.ts:211-228` to run `PRAGMA secure_delete = ON`
 
 ### E2 OM config validation and docs
 
-`apps/gateway/src/agent/features/memory/index.ts:65-112` validates the whole object. Any invalid field currently resets the **whole config** to defaults without a warning; fallback array entries are not independently dropped. `docs/architecture-observational-memory.md:26` incorrectly describes invalid fallback entries as dropped and default as unset: actual default is `[]`, and an invalid entry invalidates the full OM config. In the follow-up correct this table and explicitly document the whole-object fallback.
+**Implemented and locally verified; pending review and release (2026-10-02).**
 
-Add a single clearly visible warning at config load, with invalid field paths and concise reasons, not raw config values (which may contain sensitive data). Avoid warning once per token/worker by validating/caching at startup. Consider `.strict()` on top-level/model/workspace schemas only with staged compatibility: unknown keys are currently stripped, so immediate strictness would turn harmless legacy keys into whole-config resets and could enable defaults the user intended to disable. Recommended sequence: warn on unknown keys, then introduce opt-in strict validation or a versioned schema. Tests: malformed fallback entry, invalid disabled/workspace fields, unknown keys and rate-limited notifications. No DB migration; explicit release note for any stricter behavior.
+- `apps/gateway/src/agent/features/memory/config.ts` owns the unchanged schema and caches validation per loaded settings object. An invalid field (including any malformed fallback model) still resets the **whole** OM config to defaults; a missing `fallbackModels` still defaults to `[]`.
+- `loadAgentConfig` adds one combined warning to the existing startup notification flow. It lists invalid field paths and concise reasons, never raw values, and explicitly states that fallback can re-enable memory even if the config tried to disable it. Worker/panel/turn reads do not emit warnings again. This is once per agent start, not once per node lifetime.
+- Unknown keys at the top level, model, fallback-model entries and workspace are warned about and stripped. Valid settings stay effective, including `enabled: false`. No `.strict()` switch or model-selection policy was added.
+- `PIRC_MEMORY_PASSIVE` still overrides the parsed/fallback setting. `showWorkerNotifications: false` does not hide configuration problems. The architecture reference and Unreleased changelog explain the behavior.
+
+**Verification (2026-10-02):** gateway TypeScript check passed; 62 tests passed across configuration diagnostics, OM/workspace memory, context, agent core, chat tools, prompt config and project trust. Includes 9 new configuration cases. A separate loopback deployment with the built web UI, real gateway/nodes and embedded macOS sandbox also passed browser checks for valid, unknown-key and invalid configurations: warning counts, effective memory enablement, second turns, file-tool execution, context retrieval, reload persistence and expanding the full warning. Direct gateway access without credentials and requests with an untrusted Origin were rejected. The model was a local scripted SSE fixture, with background memory in passive mode; no live provider or production configuration was used.
+
+**Acceptance:** run `bun test apps/gateway/test/memory-config.test.ts` from the repo root. The test uses temporary configs and a local fake model, not the operator's files or live provider.
+
+1. Malformed `fallbackModels[1].provider` plus disabled memory → one warning identifying the field, clearly saying the whole object uses defaults and memory is enabled.
+2. Unknown keys plus `enabled: false` → one warning that keys were ignored; memory stays disabled and other valid settings are retained.
+3. Invalid boolean / workspace fields and enum values → paths and reasons only; sentinel private values never appear.
+4. Two real agent turns, worker checks, panel reads and `/om:status` → no duplicate startup warning; passive environment override remains effective.
+
+For a UI acceptance on a **test node**, merge `"oldOption": true` into its existing `features.observationalMemory` config, restart an agent and send a message. Expect one “unknown fields were ignored; valid settings remain in effect” warning. Further messages must not repeat it. Remove the test key afterwards. The local acceptance deployment uses separate test state and config; no production node configuration was changed.
 
 ### E3 missing OM model policy
 
