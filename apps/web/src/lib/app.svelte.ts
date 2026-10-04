@@ -620,7 +620,7 @@ class AppState {
         this.#sessionsVersion++;
       }
     } catch (error) {
-      if (seq === this.#openSeq)
+      if (seq === this.#openSeq && !this.#snapshotAgain.has(seq))
         this.pageError = errorMessage(error, 'Could not refresh the session.');
     } finally {
       this.#snapshotLoading.delete(seq);
