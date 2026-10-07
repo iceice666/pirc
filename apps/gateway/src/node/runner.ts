@@ -21,6 +21,7 @@ import { emptyReducedState, reducePiEvent, type ReducedSessionState } from './re
 import { JsonlParser } from './rpc-framing.js';
 import type { CommandPayload } from '../types.js';
 import { id, now } from '../util.js';
+import { collectRecap } from './recap.js';
 
 interface PendingRequest {
   resolve: (value: Record<string, any>) => void;
@@ -479,6 +480,22 @@ class PiRunner {
       return fail(413, 'payload_too_large', 'Gateway request arguments are too large');
     if (this.gatewayRequests >= MAX_GATEWAY_REQUESTS)
       return fail(429, 'too_many_requests', 'Too many gateway requests are in flight');
+    // Local-only: historical evidence never passes through the gateway transport.
+    // The runner binds identity; the caller cannot supply a workspace or source path.
+    if (op === 'recap.collect') {
+      this.gatewayRequests++;
+      void Promise.resolve()
+        .then(() => collectRecap(this.db, this.session.id, args))
+        .then(
+          (result) => reply({ ok: true, result }),
+          (error: unknown) =>
+            error instanceof ApiError
+              ? fail(error.statusCode, error.code, error.message)
+              : fail(500, 'recap_failed', 'Could not collect workspace recap evidence'),
+        )
+        .finally(() => this.gatewayRequests--);
+      return;
+    }
     this.gatewayRequests++;
     void this.gateway
       .request(this.session.id, op, args)

@@ -89,6 +89,19 @@ it('answers offline without a gateway link and keeps the node secrets from its a
     expect(await ask('env PIRC_NODE_TOKEN')).toBe('env:PIRC_NODE_TOKEN unset');
     expect(await ask('env PIRC_TEST_SECRET')).toBe('env:PIRC_TEST_SECRET unset');
     expect(await ask('env PIRC_GATEWAY')).toBe('env:PIRC_GATEWAY=1');
+    // Recap is answered by this node even with the gateway offline. The
+    // caller cannot choose another workspace, session or private path.
+    const recap = await ask('gateway recap.collect {}');
+    expect(recap.startsWith('gateway:ok ')).toBe(true);
+    expect(JSON.parse(recap.slice('gateway:ok '.length))).toMatchObject({
+      version: 1,
+      scope: { workspaceId: 'test', days: 14 },
+      sessions: [],
+    });
+    expect(errorOf(await ask('gateway recap.collect {"workspaceId":"other"}'))).toMatchObject({
+      status: 400,
+      code: 'invalid_input',
+    });
   } finally {
     for (const [name, value] of [
       ['PIRC_NODE_TOKEN', saved.token],

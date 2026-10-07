@@ -77,6 +77,8 @@ export function renderMessage(message: Message, style: 'observer' | 'recall' = '
         ? `[Tool result: ${message.toolName} @ ${at}]: ${quote(message.content)}`
         : `[Tool result for ${message.toolName} @ ${at}]: ${message.toolName === 'recall' || startedCapabilities(message)?.includes('recall') ? RECALL_OMITTED : quote(message.content)}`;
     case 'custom':
+      // Recaps are derived recommendations, not new evidence or approved preferences.
+      if (message.customType === 'recap.report' && style === 'observer') return '';
       // A loaded skill is installed instructions, not something the user said.
       if (message.customType === 'skill' && style === 'observer')
         return `[Skill loaded @ ${at}: ${neutralizeHeaders((message.details as { name?: string } | undefined)?.name ?? 'unknown')}]`;

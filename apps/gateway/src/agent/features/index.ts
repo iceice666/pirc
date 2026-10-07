@@ -15,6 +15,7 @@ import { schedulesFeature } from './schedules.js';
 import { todoFeature } from './todo/index.js';
 import { webSearchFeature } from './web-search.js';
 import { sandboxFeature } from './sandbox.js';
+import { recapFeature } from './recap.js';
 
 export function builtinFeatures(): Feature[] {
   return [
@@ -30,6 +31,7 @@ export function builtinFeatures(): Feature[] {
     // Chat sessions only: the user's memory, held by the gateway.
     assistantFeature(),
     skillsFeature(),
+    recapFeature(),
     // Node agents with a browser only (PIRC_BROWSER=1).
     browserFeature(),
     // Node agents with a gateway only; the gateway holds the search key.

@@ -27,6 +27,22 @@ import type { SessionEntry } from '../src/agent/session-store.js';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
 import { ptcCall } from './fixtures/fake-llm.js';
 
+it('does not promote recap recommendations into observational memory', () => {
+  const message = {
+    role: 'custom' as const,
+    customType: 'recap.report',
+    content: 'Derived recommendation, not an approved preference',
+    display: true,
+    timestamp: 0,
+  };
+  expect(renderMessage(message)).toBe('');
+  expect(
+    serializeChunk([{ id: 'recap', parentId: null, timestamp: 0, type: 'message', message }], 1000)
+      .sourceEntryIds,
+  ).toEqual([]);
+  expect(renderMessage(message, 'recall')).toContain('Derived recommendation');
+});
+
 let n = 0;
 const msg = (role: 'user' | 'assistant', text: string): SessionEntry => {
   const id = `m${++n}`;
