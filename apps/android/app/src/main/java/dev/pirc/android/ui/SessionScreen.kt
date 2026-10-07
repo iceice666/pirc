@@ -62,6 +62,7 @@ import dev.pirc.android.core.SessionOrigin
 import dev.pirc.android.core.TimelineItem
 import dev.pirc.android.core.blockingSession
 import dev.pirc.android.core.timelineItems
+import dev.pirc.android.ui.session.LocalPendingInteractions
 import dev.pirc.android.ui.session.LocalWriteBlockOpener
 import dev.pirc.android.ui.session.RunCard
 import androidx.compose.material3.AlertDialog
@@ -212,7 +213,7 @@ fun SessionScreen(
         Box(Modifier.fillMaxSize().padding(padding)) {
             val current = state
             when {
-                current != null -> CompositionLocalProvider(LocalUriHandler provides links, LocalFileOpener provides onOpenFile, LocalRecordingOpener provides onOpenRecording, LocalWriteBlockOpener provides blockers) {
+                current != null -> CompositionLocalProvider(LocalUriHandler provides links, LocalFileOpener provides onOpenFile, LocalRecordingOpener provides onOpenRecording, LocalWriteBlockOpener provides blockers, LocalPendingInteractions provides current.interactions.filter { it.status == "pending" }) {
                     Timeline(current, viewModel)
                 }
                 error != null -> Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {

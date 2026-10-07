@@ -33,12 +33,26 @@ export class PathGuard {
       allowWrite: resolve(policy.allowWrite),
       denyWrite: resolve(policy.denyWrite),
     };
+    this.sharedRoots = new Set(resolve(policy.sharedWrite ?? []));
     this.protectedRoots = resolve(protectedPaths);
   }
+
+  private readonly sharedRoots: Set<string>;
 
   /** Roots the file tools may write under. */
   get allowedRoots(): readonly string[] {
     return this.policy.allowWrite;
+  }
+
+  /**
+   * The root whose write lease covers writing `absolute`: its writable root,
+   * else the path itself; undefined for a root every session shares (temp
+   * dirs, build caches), which needs no lease.
+   */
+  leaseRoot(absolute: string): string | undefined {
+    const root = this.rootOf(absolute);
+    if (root && this.sharedRoots.has(root)) return undefined;
+    return root ?? absolute;
   }
 
   /** The writable root containing `absolute` (innermost match), or undefined. */

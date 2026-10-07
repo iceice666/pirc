@@ -1,16 +1,13 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { formatRunResult, formatSchedules } from '../src/agent/features/schedules.js';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
+import { ptcCall } from './fixtures/fake-llm.js';
+import { CODING_SURFACE, GATEWAY_SURFACE } from './fixtures/surface.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
   await Promise.all(agents.splice(0).map((agent) => agent.close()));
 });
-
-const toolNames = (agent: AgentProcess) =>
-  (agent.llm.requests.at(-1)!.body.tools ?? []).map(
-    (tool: any) => tool.function?.name ?? tool.name,
-  ) as string[];
 
 const toolResult = (agent: AgentProcess, id: string) => {
   const messages = agent.llm.requests.at(-1)!.body.messages as any[];
@@ -20,6 +17,31 @@ const toolResult = (agent: AgentProcess, id: string) => {
       ? message.content
       : message?.content?.map((part: any) => part.text).join(''),
   );
+};
+
+const toolNames = (agent: AgentProcess) =>
+  (agent.llm.requests.at(-1)!.body.tools ?? []).map(
+    (tool: any) => tool.function?.name ?? tool.name,
+  ) as string[];
+
+/** The capability names the system prompt's "## Capabilities" section offers. */
+const offered = (agent: AgentProcess) => {
+  const system = String(agent.llm.requests.at(-1)!.body.messages[0].content);
+  const section = system.split('## Capabilities')[1] ?? '';
+  return [...section.matchAll(/^- [\w-]+: (.+)$/gm)].flatMap((match) => match[1]!.split(', '));
+};
+
+/** Calls schedule from a ptc script, which must fail before anything runs. */
+const expectUnavailable = async (agent: AgentProcess, args: Record<string, unknown>) => {
+  agent.llm.push({ tool: ptcCall('missing', 'schedule', args) }, { text: 'hi' });
+  const from = agent.events.length;
+  await agent.send({ type: 'prompt', message: 'try it' });
+  await settledAfter(agent, from);
+  // With or without a gateway (web_search), schedule is never a tool or capability.
+  expect(toolNames(agent).slice(0, 2)).toEqual(['ptc', 'ptc_docs']);
+  expect(toolNames(agent)).not.toContain('schedule');
+  expect(offered(agent)).not.toContain('schedule');
+  expect(toolResult(agent, 'missing')).toContain('Not available in this session: schedule');
 };
 
 const brief = {
@@ -43,21 +65,27 @@ describe('schedule', () => {
     const agent = await startAgent({ env: { PIRC_GATEWAY: '1' } });
     agents.push(agent);
     agent.llm.push(
+      // A model from the agent never reaches the gateway: only the user picks it.
+      // Capability arguments are schema-checked, so the call is refused outright.
       {
-        tool: {
-          id: 'c1',
-          name: 'schedule',
-          args: {
-            action: 'create',
-            prompt: ' Check CI. ',
-            cron: '0 9 * * 1-5',
-            title: 'CI',
-            model: 'gw/a',
-          },
-        },
+        tool: ptcCall('c0', 'schedule', {
+          action: 'create',
+          prompt: ' Check CI. ',
+          cron: '0 9 * * 1-5',
+          title: 'CI',
+          model: 'gw/a',
+        }),
       },
-      { tool: { id: 'c2', name: 'schedule', args: { action: 'pause' } } },
-      { tool: { id: 'c3', name: 'schedule', args: { action: 'update', id: 's1', cron: 'bad' } } },
+      {
+        tool: ptcCall('c1', 'schedule', {
+          action: 'create',
+          prompt: ' Check CI. ',
+          cron: '0 9 * * 1-5',
+          title: 'CI',
+        }),
+      },
+      { tool: ptcCall('c2', 'schedule', { action: 'pause' }) },
+      { tool: ptcCall('c3', 'schedule', { action: 'update', id: 's1', cron: 'bad' }) },
       { text: 'Done.' },
     );
     const from = agent.events.length;
@@ -65,7 +93,6 @@ describe('schedule', () => {
     const create = await agent.waitFor(
       (event) => event.type === 'gateway_request' && event.op === 'schedule.create',
     );
-    // A model from the agent never reaches the gateway: only the user picks it.
     expect(create.args).toEqual({
       prompt: 'Check CI.',
       cron: '0 9 * * 1-5',
@@ -89,10 +116,22 @@ describe('schedule', () => {
     });
     await settledAfter(agent, from);
 
-    expect(toolNames(agent)).toContain('schedule');
+    expect(toolNames(agent)).toEqual(GATEWAY_SURFACE);
+    expect(offered(agent)).toContain('schedule');
+    expect(toolResult(agent, 'c0')).toContain(
+      '[error] InvalidArguments: Invalid arguments for schedule: model is not allowed',
+    );
+    expect(
+      agent.events.filter((e) => e.type === 'gateway_request' && e.op === 'schedule.create'),
+    ).toHaveLength(1);
     expect(toolResult(agent, 'c1')).toContain('Asked the user to approve the schedule “CI”');
-    expect(toolResult(agent, 'c2')).toBe('id is required');
-    expect(toolResult(agent, 'c3')).toBe('Invalid cron "bad"');
+    // Failures surface as the script's error, with the schedule tool's message.
+    expect(toolResult(agent, 'c2')).toContain('[error] OperationFailed: id is required\n');
+    expect(toolResult(agent, 'c3')).toContain('[error] OperationFailed: Invalid cron "bad"\n');
+    // pause without an id never reached the gateway.
+    expect(
+      agent.events.some((e) => e.type === 'gateway_request' && e.op === 'schedule.pause'),
+    ).toBe(false);
   });
 
   it('/cron lists and pauses without the model', async () => {
@@ -141,7 +180,8 @@ describe('schedule', () => {
     let from = plain.events.length;
     await plain.send({ type: 'prompt', message: 'hi' });
     await settledAfter(plain, from);
-    expect(toolNames(plain)).not.toContain('schedule');
+    expect(offered(plain)).not.toContain('schedule');
+    await expectUnavailable(plain, { action: 'list' });
 
     const off = await startAgent({
       env: { PIRC_GATEWAY: '1' },
@@ -152,7 +192,9 @@ describe('schedule', () => {
     from = off.events.length;
     await off.send({ type: 'prompt', message: 'hi' });
     await settledAfter(off, from);
-    expect(toolNames(off)).not.toContain('schedule');
+    expect(offered(off)).not.toContain('schedule');
+    await expectUnavailable(off, { action: 'list' });
+    expect(off.events.some((e) => e.type === 'gateway_request')).toBe(false);
   });
 
   it('formats the list', () => {

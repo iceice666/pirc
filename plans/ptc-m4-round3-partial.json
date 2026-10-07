@@ -1,0 +1,1302 @@
+{
+  "kind": "ptc-m4-round3-partial",
+  "verdict": "none: the matrix is incomplete (stopped runs; maintainer decision to end the round)",
+  "stops": [
+    {
+      "name": "ptc-m4-r3-001",
+      "trials": "cf6ce8d5bac9ddf5a469a6612f394b63c68f0b007eae624df457e46368650c5d",
+      "budget": "fc0a8b4b45d2c061c9b9f7cba07c86ea57fa798e477605e6c4e93ae9b30acf6e",
+      "summary": "3e5a43db7353b8b20dc4aebc348b65a8bd99fcb5ca3b7d9de21c0d7381dc370a",
+      "superseded": [
+        {
+          "arm": "main",
+          "fixture": "team-wait",
+          "phase": "uncached",
+          "index": 3,
+          "reason": "uncertain_usage"
+        }
+      ],
+      "chargedUncertain": { "attempts": 1, "units": 48557600 }
+    },
+    {
+      "name": "ptc-m4-r3-002",
+      "trials": "7c73e3cbae7f588c89d90e363c36a31a3a39be0ecfaa97d486d0dd05c6793ffd",
+      "budget": "1d0694d1c3f1e98c15143a87e7d25c06bfb191a562445eca1d593de744a79eb4",
+      "summary": "f4a730735eedad390f1f52ff9d588e3613c1ee31b092644f20a7f21306a488b7",
+      "superseded": [
+        {
+          "arm": "main",
+          "fixture": "team-wait",
+          "phase": "prime",
+          "index": 3,
+          "reason": "uncertain_usage"
+        }
+      ],
+      "chargedUncertain": { "attempts": 1, "units": 48557600 }
+    },
+    {
+      "name": "ptc-m4-r3-003",
+      "trials": "bf9bad7672a14750dbe97771300a0da53511ecd3cf3767ea4209a767af7477ea",
+      "budget": "6cb87dd8bf71fcc16b7db2510c2b9fe3a561a199b5086d9e70e08cd44f095925",
+      "summary": "6ad7fc719275fb3fb69909a8b43b0c79c750e10a9e69b06ffe886024a4d886a8",
+      "superseded": [
+        {
+          "arm": "main",
+          "fixture": "team-wait",
+          "phase": "warm",
+          "index": 3,
+          "reason": "uncertain_usage"
+        },
+        {
+          "arm": "main",
+          "fixture": "team-wait",
+          "phase": "prime",
+          "index": 3,
+          "reason": "pair_lost"
+        }
+      ],
+      "chargedUncertain": { "attempts": 1, "units": 48557600 }
+    },
+    {
+      "name": "ptc-m4-r3-004",
+      "trials": "3becb979624ba1c7ae860e317682f352ce6af56b92fe2c4c6c204ba97c0f702f",
+      "budget": "bde3f5444a1e508f7cd5308475103105b6f4cee107b3d99d307e5c218cc87928",
+      "summary": "901192ce8b6fa7332d397a3e3e2a0a4d13ece3a18482392a72d0b40bc8f21d68",
+      "superseded": [
+        {
+          "arm": "main",
+          "fixture": "team-wait",
+          "phase": "uncached",
+          "index": 4,
+          "reason": "uncertain_usage"
+        }
+      ],
+      "chargedUncertain": { "attempts": 1, "units": 48557600 }
+    }
+  ],
+  "rows": 564,
+  "measured": { "main": 188, "ptc": 188 },
+  "fixtures": [
+    {
+      "fixture": "single-bash",
+      "kind": "coding",
+      "complete": true,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 12771.2,
+            "meanWallMs": 4471.283033000004,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 4440.886375000005,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "bash": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 6645.3,
+            "meanWallMs": 3728.443229599988,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 3699.8414494999843,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "bash": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 12773.6,
+            "meanWallMs": 4964.66592270001,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 4936.481295800015,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "bash": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 6642.9,
+            "meanWallMs": 4502.61634140001,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 4473.006505799996,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "bash": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 10,
+          "meanTokens": 12772.2,
+          "meanWallMs": 4467.104676399979,
+          "meanModelRounds": 2
+        },
+        "warm": {
+          "successes": 10,
+          "meanTokens": 12773.4,
+          "meanWallMs": 3726.842353400031,
+          "meanModelRounds": 2
+        }
+      }
+    },
+    {
+      "fixture": "single-read",
+      "kind": "coding",
+      "complete": true,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 12752.6,
+            "meanWallMs": 4188.480589599989,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 4164.779277000006,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 6621.8,
+            "meanWallMs": 4170.339424299996,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 4146.091000599996,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 12756.5,
+            "meanWallMs": 4879.72537369997,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 4856.276383999968,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 6629.9,
+            "meanWallMs": 5746.139940800005,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 5722.402574199974,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 10,
+          "meanTokens": 12752.3,
+          "meanWallMs": 3943.7557906000175,
+          "meanModelRounds": 2
+        },
+        "warm": {
+          "successes": 10,
+          "meanTokens": 12756.4,
+          "meanWallMs": 3992.5787449999943,
+          "meanModelRounds": 2
+        }
+      }
+    },
+    {
+      "fixture": "multi-edit",
+      "kind": "coding",
+      "complete": true,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 22345.3,
+            "meanWallMs": 17013.625452200045,
+            "meanModelRounds": 3.1,
+            "meanMainModelMs": 8565.195383499877,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "bash": 13, "other": 8 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 10490.7,
+            "meanWallMs": 8377.51719899997,
+            "meanModelRounds": 3,
+            "meanMainModelMs": 8035.18577899998,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 2,
+            "directCallsByCapability": {},
+            "operationsByCapability": { "read": 60, "edit": 30 },
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 22351.5,
+            "meanWallMs": 23716.738698100067,
+            "meanModelRounds": 3.1,
+            "meanMainModelMs": 13632.490678399965,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "bash": 13, "other": 8 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 10505.7,
+            "meanWallMs": 10743.542100900038,
+            "meanModelRounds": 3,
+            "meanMainModelMs": 10397.745923299994,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 2,
+            "directCallsByCapability": {},
+            "operationsByCapability": { "read": 60, "edit": 30 },
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 9,
+          "meanTokens": 25847.2,
+          "meanWallMs": 11034.655758599984,
+          "meanModelRounds": 3.7
+        },
+        "warm": {
+          "successes": 8,
+          "meanTokens": 26396.8,
+          "meanWallMs": 12294.695058600022,
+          "meanModelRounds": 3.7
+        }
+      }
+    },
+    {
+      "fixture": "dependent-edit",
+      "kind": "coding",
+      "complete": true,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 31985.4,
+            "meanWallMs": 13308.23933940006,
+            "meanModelRounds": 5,
+            "meanMainModelMs": 13263.961545500113,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 30, "edit": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 16656.3,
+            "meanWallMs": 8921.806694999988,
+            "meanModelRounds": 5,
+            "meanMainModelMs": 8880.273773700139,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 30, "edit": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 32011.1,
+            "meanWallMs": 13029.702711499995,
+            "meanModelRounds": 5,
+            "meanMainModelMs": 12986.002203399967,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 30, "edit": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 16668.5,
+            "meanWallMs": 10642.841744799913,
+            "meanModelRounds": 5,
+            "meanMainModelMs": 10601.073497999832,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 30, "edit": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 10,
+          "meanTokens": 31338.1,
+          "meanWallMs": 9133.412334699975,
+          "meanModelRounds": 4.9
+        },
+        "warm": {
+          "successes": 10,
+          "meanTokens": 31349.7,
+          "meanWallMs": 10107.968727399968,
+          "meanModelRounds": 4.9
+        }
+      }
+    },
+    {
+      "fixture": "output-filter",
+      "kind": "coding",
+      "complete": true,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 10,
+            "successes": 9,
+            "enforced": 9,
+            "meanTokens": 12758.4,
+            "meanWallMs": 6051.137227600115,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 6028.15933489995,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 6628,
+            "meanWallMs": 3347.2753229999917,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 3323.0379880998285,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 10,
+            "successes": 9,
+            "enforced": 9,
+            "meanTokens": 12763,
+            "meanWallMs": 4911.395069300011,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 4888.247495199879,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 6631.8,
+            "meanWallMs": 4388.261368200043,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 4364.103667599894,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 10,
+          "meanTokens": 12758.4,
+          "meanWallMs": 3753.4386789000127,
+          "meanModelRounds": 2
+        },
+        "warm": {
+          "successes": 10,
+          "meanTokens": 12762.6,
+          "meanWallMs": 3587.4508921000643,
+          "meanModelRounds": 2
+        }
+      }
+    },
+    {
+      "fixture": "browser-image",
+      "kind": "coding",
+      "complete": true,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 13051.5,
+            "meanWallMs": 10274.443248200045,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 10224.433842000086,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "browser": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 11122.5,
+            "meanWallMs": 10409.547604299942,
+            "meanModelRounds": 3,
+            "meanMainModelMs": 10195.748784100031,
+            "meanDocsCalls": 1,
+            "meanPtcCalls": 1,
+            "directCallsByCapability": {},
+            "operationsByCapability": { "browser": 10 },
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 13012.3,
+            "meanWallMs": 8983.38833289994,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 8932.980244799983,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "browser": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 11150.1,
+            "meanWallMs": 12577.710126500204,
+            "meanModelRounds": 3,
+            "meanMainModelMs": 12362.789644899964,
+            "meanDocsCalls": 1,
+            "meanPtcCalls": 1,
+            "directCallsByCapability": {},
+            "operationsByCapability": { "browser": 10 },
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 10,
+          "meanTokens": 13045.3,
+          "meanWallMs": 7821.821443100087,
+          "meanModelRounds": 2
+        },
+        "warm": {
+          "successes": 10,
+          "meanTokens": 13039.2,
+          "meanWallMs": 8211.83660109993,
+          "meanModelRounds": 2
+        }
+      }
+    },
+    {
+      "fixture": "user-question",
+      "kind": "coding",
+      "complete": true,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 12806.3,
+            "meanWallMs": 7557.763975699898,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 7509.638036499918,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "ask_user_question": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": { "select": 10 }
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 11155.3,
+            "meanWallMs": 6057.76656459975,
+            "meanModelRounds": 3,
+            "meanMainModelMs": 5844.568914399948,
+            "meanDocsCalls": 1,
+            "meanPtcCalls": 1,
+            "directCallsByCapability": {},
+            "operationsByCapability": { "ask_user_question": 10 },
+            "interactionRequests": { "select": 10 }
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 12868.6,
+            "meanWallMs": 6230.094008199963,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 6181.261531499773,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "ask_user_question": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": { "select": 10 }
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 11161.7,
+            "meanWallMs": 9250.220755699882,
+            "meanModelRounds": 3,
+            "meanMainModelMs": 9037.211199700041,
+            "meanDocsCalls": 1,
+            "meanPtcCalls": 1,
+            "directCallsByCapability": {},
+            "operationsByCapability": { "ask_user_question": 10 },
+            "interactionRequests": { "select": 10 }
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 10,
+          "meanTokens": 12806.7,
+          "meanWallMs": 4028.7853515001016,
+          "meanModelRounds": 2
+        },
+        "warm": {
+          "successes": 10,
+          "meanTokens": 12815.6,
+          "meanWallMs": 4329.141853700113,
+          "meanModelRounds": 2
+        }
+      }
+    },
+    {
+      "fixture": "approval-denial",
+      "kind": "coding",
+      "complete": true,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 12908,
+            "meanWallMs": 7899.472262699996,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 7851.194846800249,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "unsandboxed_bash": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": { "sandbox": 10, "sandboxMatched": 10 }
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 11068.8,
+            "meanWallMs": 7096.258935399912,
+            "meanModelRounds": 3,
+            "meanMainModelMs": 7036.41739399964,
+            "meanDocsCalls": 1,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "bash": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": { "confirm": 10, "confirmMatched": 10 }
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 12910.4,
+            "meanWallMs": 6408.980090000108,
+            "meanModelRounds": 2,
+            "meanMainModelMs": 6359.75459479997,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "unsandboxed_bash": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": { "sandbox": 10, "sandboxMatched": 10 }
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 11072.2,
+            "meanWallMs": 8632.454761700146,
+            "meanModelRounds": 3,
+            "meanMainModelMs": 8572.893964199815,
+            "meanDocsCalls": 1,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "bash": 10 },
+            "operationsByCapability": {},
+            "interactionRequests": { "confirm": 10, "confirmMatched": 10 }
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 10,
+          "meanTokens": 12886.9,
+          "meanWallMs": 5076.911179899999,
+          "meanModelRounds": 2
+        },
+        "warm": {
+          "successes": 10,
+          "meanTokens": 12896,
+          "meanWallMs": 4985.650561399999,
+          "meanModelRounds": 2
+        }
+      }
+    },
+    {
+      "fixture": "background-build",
+      "kind": "coding",
+      "complete": true,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 19354.7,
+            "meanWallMs": 10429.205884099938,
+            "meanModelRounds": 3,
+            "meanMainModelMs": 10395.279778700415,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "background_task": 20 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 16162.3,
+            "meanWallMs": 6655.849661999848,
+            "meanModelRounds": 3,
+            "meanMainModelMs": 6461.051828099788,
+            "meanDocsCalls": 1,
+            "meanPtcCalls": 1,
+            "directCallsByCapability": {},
+            "operationsByCapability": { "background_task": 20 },
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 19366.1,
+            "meanWallMs": 8718.903401800058,
+            "meanModelRounds": 3,
+            "meanMainModelMs": 8685.598541499954,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "background_task": 20 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 10,
+            "successes": 10,
+            "enforced": 10,
+            "meanTokens": 16155.3,
+            "meanWallMs": 10510.930277900025,
+            "meanModelRounds": 3,
+            "meanMainModelMs": 10316.972058899515,
+            "meanDocsCalls": 1,
+            "meanPtcCalls": 1,
+            "directCallsByCapability": {},
+            "operationsByCapability": { "background_task": 20 },
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 10,
+          "meanTokens": 19366.9,
+          "meanWallMs": 6310.179823500058,
+          "meanModelRounds": 3
+        },
+        "warm": {
+          "successes": 10,
+          "meanTokens": 19371.3,
+          "meanWallMs": 6364.093145499937,
+          "meanModelRounds": 3
+        }
+      }
+    },
+    {
+      "fixture": "team-wait",
+      "kind": "coding",
+      "complete": false,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 4,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": 46701,
+            "meanWallMs": 31605.975165750162,
+            "meanModelRounds": 4,
+            "meanMainModelMs": 27480.803727250273,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "bash": 2, "team": 8, "read": 2 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 4,
+            "successes": 2,
+            "enforced": 2,
+            "meanTokens": 34363,
+            "meanWallMs": 25495.96452925005,
+            "meanModelRounds": 4.75,
+            "meanMainModelMs": 20819.47898025019,
+            "meanDocsCalls": 1,
+            "meanPtcCalls": 1.75,
+            "directCallsByCapability": { "read": 2, "bash": 2 },
+            "operationsByCapability": { "team": 8 },
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 4,
+            "successes": 2,
+            "enforced": 2,
+            "meanTokens": 48133.75,
+            "meanWallMs": 44033.64623400006,
+            "meanModelRounds": 4,
+            "meanMainModelMs": 33748.60479950013,
+            "meanDocsCalls": 0,
+            "meanPtcCalls": 0,
+            "directCallsByCapability": { "read": 2, "team": 8, "bash": 2 },
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 4,
+            "successes": 3,
+            "enforced": 3,
+            "meanTokens": 37043.25,
+            "meanWallMs": 39363.65550325019,
+            "meanModelRounds": 4.75,
+            "meanMainModelMs": 32083.95905124978,
+            "meanDocsCalls": 1,
+            "meanPtcCalls": 1.75,
+            "directCallsByCapability": { "read": 4 },
+            "operationsByCapability": { "team": 8 },
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 0,
+          "meanTokens": 57441.5,
+          "meanWallMs": 26233.539803099964,
+          "meanModelRounds": 4.8
+        },
+        "warm": {
+          "successes": 3,
+          "meanTokens": 53751.9,
+          "meanWallMs": 25543.972894299997,
+          "meanModelRounds": 4.4
+        }
+      }
+    },
+    {
+      "fixture": "schedule",
+      "kind": "coding",
+      "complete": false,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 10,
+          "meanTokens": 13039.6,
+          "meanWallMs": 7285.604542099999,
+          "meanModelRounds": 2
+        },
+        "warm": {
+          "successes": 7,
+          "meanTokens": 13037.8,
+          "meanWallMs": 6801.087322400004,
+          "meanModelRounds": 2
+        }
+      }
+    },
+    {
+      "fixture": "permission-rejection",
+      "kind": "coding",
+      "complete": false,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 0,
+          "meanTokens": 12476.8,
+          "meanWallMs": 4253.675641399995,
+          "meanModelRounds": 2
+        },
+        "warm": {
+          "successes": 0,
+          "meanTokens": 12483.3,
+          "meanWallMs": 4491.072372800007,
+          "meanModelRounds": 2
+        }
+      }
+    },
+    {
+      "fixture": "cancel-wait",
+      "kind": "coding",
+      "complete": false,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 10,
+          "meanTokens": 6453.4,
+          "meanWallMs": 2432.867565499997,
+          "meanModelRounds": 1
+        },
+        "warm": {
+          "successes": 10,
+          "meanTokens": 6458,
+          "meanWallMs": 2450.0869769999963,
+          "meanModelRounds": 1
+        }
+      }
+    },
+    {
+      "fixture": "chat-web-search",
+      "kind": "chat",
+      "complete": false,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 10,
+          "meanTokens": 8609.7,
+          "meanWallMs": 4003.2759693000057,
+          "meanModelRounds": 2
+        },
+        "warm": {
+          "successes": 10,
+          "meanTokens": 8608.9,
+          "meanWallMs": 4177.360370099998,
+          "meanModelRounds": 2
+        }
+      }
+    },
+    {
+      "fixture": "chat-permission",
+      "kind": "chat",
+      "complete": false,
+      "conditions": {
+        "uncached": {
+          "main": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        },
+        "warm": {
+          "main": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          },
+          "ptc": {
+            "trials": 0,
+            "successes": 0,
+            "enforced": 0,
+            "meanTokens": null,
+            "meanWallMs": null,
+            "meanModelRounds": null,
+            "meanMainModelMs": null,
+            "meanDocsCalls": null,
+            "meanPtcCalls": null,
+            "directCallsByCapability": {},
+            "operationsByCapability": {},
+            "interactionRequests": {}
+          }
+        }
+      },
+      "m1": {
+        "uncached": {
+          "successes": 8,
+          "meanTokens": 4367.2,
+          "meanWallMs": 3336.8051098999917,
+          "meanModelRounds": 1
+        },
+        "warm": {
+          "successes": 5,
+          "meanTokens": 4374.7,
+          "meanWallMs": 3716.644404199999,
+          "meanModelRounds": 1
+        }
+      }
+    }
+  ],
+  "budget": {
+    "carry": { "spentUnits": 292259993, "admittedAttempts": 6169 },
+    "final": { "spentUnits": 587296559, "admittedAttempts": 8545 },
+    "roundSpentUnits": 295036566,
+    "roundAttempts": 2376
+  }
+}

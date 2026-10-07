@@ -21,6 +21,7 @@ import {
 } from '../src/agent/features/memory/workspace.js';
 import { SessionStore, type SessionEntry } from '../src/agent/session-store.js';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
+import { ptcCall } from './fixtures/fake-llm.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
@@ -433,11 +434,15 @@ describe('workspace memory agent flow', () => {
     expect(system(mainCalls().at(-1)!.body)).toBe(prompt);
     // The workspace id is recallable from the new session.
     const id = /\[([a-f0-9]{12})\] [^\n]*Uploads are stored in S3/.exec(prompt)![1]!;
-    second.llm.push({ tool: { id: 'rc', name: 'recall', args: { id } } }, { text: 'ok' });
+    second.llm.push({ tool: ptcCall('rc', 'recall', { id }) }, { text: 'ok' });
     const third = second.events.length;
     await second.send({ type: 'prompt', message: 'recall it' });
     await settledAfter(second, third);
-    const end = second.events.findLast((e) => e.type === 'tool_execution_end');
+    const end = second.events.findLast(
+      (e) => e.type === 'tool_execution_end' && !e.parentToolCallId,
+    );
+    expect(end!.toolCallId).toBe('rc');
+    expect(end!.isError).toBe(false);
     expect(end!.result.content[0].text).toContain('Store uploads in S3, not on disk.');
 
     // Forgetting it (a namespaced command typed as a prompt) makes recall refuse it.
@@ -447,11 +452,14 @@ describe('workspace memory agent flow', () => {
         e.method === 'notify' && String(e.message).startsWith(`Workspace memory: forgot ${id}`),
     );
     expect(read()).toContain('"reason":"forgotten"');
-    second.llm.push({ tool: { id: 'rc2', name: 'recall', args: { id } } }, { text: 'gone' });
+    second.llm.push({ tool: ptcCall('rc2', 'recall', { id }) }, { text: 'gone' });
     const fourth = second.events.length;
     await second.send({ type: 'prompt', message: 'recall it again' });
     await settledAfter(second, fourth);
-    const gone = second.events.findLast((e) => e.type === 'tool_execution_end');
+    const gone = second.events.findLast(
+      (e) => e.type === 'tool_execution_end' && !e.parentToolCallId,
+    );
+    expect(gone!.toolCallId).toBe('rc2');
     expect(gone!.result.content[0].text).toContain('forgotten at the user');
     expect(gone!.result.content[0].text).not.toContain('Store uploads in S3');
   }, 30_000);

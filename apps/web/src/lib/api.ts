@@ -101,6 +101,7 @@ function interaction(raw: any): PendingInteraction {
   const base = {
     id: raw.id,
     runnerEpoch: String(raw.runnerEpoch),
+    ...(typeof request.toolCallId === 'string' ? { toolCallId: request.toolCallId } : {}),
     title: request.title ?? 'The agent needs your input',
     description: request.message,
     ...(typeof raw.expiresAt === 'number' ? { expiresAt: iso(raw.expiresAt) } : {}),
@@ -185,7 +186,7 @@ export function snapshotFromRaw(raw: any, lease: unknown): SessionSnapshot {
         }
       : null,
     messages: interleave(
-      piHistory(raw.history ?? []),
+      piHistory(raw.history ?? [], Array.isArray(raw.operations) ? raw.operations : []),
       (raw.notifications ?? [])
         .filter((item: any) => item?.method === 'notify')
         .map(piNotification),
@@ -520,6 +521,10 @@ const SNAPSHOT_EVENTS = new Set([
 /** Agent lifecycle events that change run status. */
 const RUN_EVENTS = new Set(['agent_start', 'agent_end', 'agent_settled']);
 
+/** A `ptc` operation's link to its `ptc` call. */
+const parentOf = (pi: any): { parentId?: string } =>
+  typeof pi.parentToolCallId === 'string' ? { parentId: pi.parentToolCallId } : {};
+
 function piEvent(pi: any, timestamp: unknown): GatewayEvent {
   switch (pi.type) {
     case 'message_start': {
@@ -578,12 +583,13 @@ function piEvent(pi: any, timestamp: unknown): GatewayEvent {
           input: pi.args,
           status: 'running',
           startedAt: iso(timestamp),
+          ...parentOf(pi),
         },
       };
     case 'tool_execution_update':
       return {
         type: 'tool_updated',
-        tool: { id: pi.toolCallId, ...toolResultFields(pi.partialResult) },
+        tool: { id: pi.toolCallId, ...toolResultFields(pi.partialResult), ...parentOf(pi) },
       };
     case 'tool_execution_end':
       return {
@@ -594,6 +600,7 @@ function piEvent(pi: any, timestamp: unknown): GatewayEvent {
           status: pi.isError ? 'failed' : 'succeeded',
           endedAt: iso(timestamp),
           ...toolResultFields(pi.result),
+          ...parentOf(pi),
         },
       };
     case 'queue_update':

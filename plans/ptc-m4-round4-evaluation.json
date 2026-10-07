@@ -1,0 +1,4603 @@
+{
+  "kind": "ptc-m4-round4-evaluation",
+  "run": {
+    "name": "ptc-m4-r4-001",
+    "trials": "e2199118a08bfc7696ca8bcee7f080c3ca1637b932b76501c6ff2817942bd249",
+    "budget": "b2af178765c33e8b97df042ebfcf13d1cad9e18f786bf9643d429dd9c0295bd5",
+    "summary": "8c4c7ca51cf44dc7e9520565e6380a1cbf93b2f1e867bafefa8d87bbf1c3f4c3",
+    "controller": "8912c9ca189fb01d23cf5e66c2c985447ded0c2ccd6af0060208043ba12c4395",
+    "arms": {
+      "main": {
+        "node": "164769ca8c6645747eed2c6c47a2e2561a53936a9cf30427069a0ff8fb7f1d80",
+        "chat": "be2eb5fbf1908dd1ddaa74be79cdb503e7dafcf73413a0d1fb2a87618fea8aaf"
+      },
+      "ptc": {
+        "node": "e9408bbb91b67634d68ec7760f7698eaa30fc0b894ba7b6efd1ffdc32d124bd8",
+        "chat": "b54be5b0be56edfd385915e5c010de92fc3f07a54d0eb7be676f57233b75e7a5"
+      }
+    },
+    "runComplete": true,
+    "runMissing": { "main": [], "ptc": [] }
+  },
+  "continuations": [],
+  "measuredTrials": { "main": 300, "ptc": 300 },
+  "primes": 300,
+  "readiness": {
+    "main": { "missing": [], "complete": true },
+    "ptc": { "missing": [], "complete": true }
+  },
+  "pass": false,
+  "primary": {
+    "against": "concurrent-main",
+    "pass": false,
+    "verdicts": {
+      "coding": {
+        "pass": false,
+        "checks": [
+          {
+            "bound": "readiness",
+            "metric": "missing",
+            "baseline": 0,
+            "ptc": 0,
+            "limit": "complete PTC matrix under the M1 readiness function",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-bash",
+            "condition": "uncached",
+            "metric": "mean tokens",
+            "baseline": 12626.2,
+            "ptc": 10990.6,
+            "limit": "<= 1.15 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-bash",
+            "condition": "uncached",
+            "metric": "mean wall ms",
+            "baseline": 4140.887299300002,
+            "ptc": 3118.141962599985,
+            "limit": "<= 1.2 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-bash",
+            "condition": "warm",
+            "metric": "mean tokens",
+            "baseline": 12630.2,
+            "ptc": 10994,
+            "limit": "<= 1.15 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-bash",
+            "condition": "warm",
+            "metric": "mean wall ms",
+            "baseline": 4513.31142240001,
+            "ptc": 3633.308955300023,
+            "limit": "<= 1.2 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "single-bash",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-read",
+            "condition": "uncached",
+            "metric": "mean tokens",
+            "baseline": 12610.4,
+            "ptc": 10974.2,
+            "limit": "<= 1.15 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-read",
+            "condition": "uncached",
+            "metric": "mean wall ms",
+            "baseline": 4151.133335899981,
+            "ptc": 3123.2359859000194,
+            "limit": "<= 1.2 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-read",
+            "condition": "warm",
+            "metric": "mean tokens",
+            "baseline": 12614.4,
+            "ptc": 10979,
+            "limit": "<= 1.15 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-read",
+            "condition": "warm",
+            "metric": "mean wall ms",
+            "baseline": 3782.176449199999,
+            "ptc": 3780.0116859999716,
+            "limit": "<= 1.2 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "single-read",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "batch",
+            "fixture": "multi-edit",
+            "condition": "uncached",
+            "metric": "mean model rounds",
+            "baseline": 3.3,
+            "ptc": 3,
+            "limit": "< baseline",
+            "pass": true
+          },
+          {
+            "bound": "batch",
+            "fixture": "multi-edit",
+            "condition": "uncached",
+            "metric": "mean tokens",
+            "baseline": 23383.7,
+            "ptc": 17071.8,
+            "limit": "< baseline",
+            "pass": true
+          },
+          {
+            "bound": "batch",
+            "fixture": "multi-edit",
+            "condition": "warm",
+            "metric": "mean model rounds",
+            "baseline": 3.3,
+            "ptc": 3,
+            "limit": "< baseline",
+            "pass": true
+          },
+          {
+            "bound": "batch",
+            "fixture": "multi-edit",
+            "condition": "warm",
+            "metric": "mean tokens",
+            "baseline": 23316.2,
+            "ptc": 17127.1,
+            "limit": "< baseline",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "multi-edit",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "batch",
+            "fixture": "dependent-edit",
+            "condition": "uncached",
+            "metric": "mean model rounds",
+            "baseline": 5,
+            "ptc": 5,
+            "limit": "< baseline",
+            "pass": false
+          },
+          {
+            "bound": "batch",
+            "fixture": "dependent-edit",
+            "condition": "uncached",
+            "metric": "mean tokens",
+            "baseline": 31836.9,
+            "ptc": 27752.8,
+            "limit": "< baseline",
+            "pass": true
+          },
+          {
+            "bound": "batch",
+            "fixture": "dependent-edit",
+            "condition": "warm",
+            "metric": "mean model rounds",
+            "baseline": 5,
+            "ptc": 5,
+            "limit": "< baseline",
+            "pass": false
+          },
+          {
+            "bound": "batch",
+            "fixture": "dependent-edit",
+            "condition": "warm",
+            "metric": "mean tokens",
+            "baseline": 31847,
+            "ptc": 27759.6,
+            "limit": "< baseline",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "dependent-edit",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "output-filter",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 18,
+            "limit": ">= baseline, same trial count",
+            "pass": false
+          },
+          {
+            "bound": "success",
+            "fixture": "browser-image",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "user-question",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "approval-denial",
+            "condition": "uncached",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "approval-denial",
+            "condition": "warm",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "approval-denial",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "background-build",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "team-wait",
+            "metric": "successes (uncached + warm)",
+            "baseline": 3,
+            "ptc": 10,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "schedule",
+            "condition": "uncached",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "schedule",
+            "condition": "warm",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "schedule",
+            "metric": "successes (uncached + warm)",
+            "baseline": 17,
+            "ptc": 16,
+            "limit": ">= baseline, same trial count",
+            "pass": false
+          },
+          {
+            "bound": "authorization",
+            "fixture": "permission-rejection",
+            "condition": "uncached",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "permission-rejection",
+            "condition": "warm",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "permission-rejection",
+            "metric": "successes (uncached + warm)",
+            "baseline": 0,
+            "ptc": 10,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "cancellation",
+            "fixture": "cancel-wait",
+            "condition": "uncached",
+            "metric": "cancelled trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial cancelled, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "cancellation",
+            "fixture": "cancel-wait",
+            "condition": "warm",
+            "metric": "cancelled trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial cancelled, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "cancel-wait",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "total",
+            "condition": "uncached",
+            "metric": "weighted mean tokens",
+            "baseline": 16623.782352941176,
+            "ptc": 16213.270588235297,
+            "limit": "<= baseline",
+            "pass": true
+          },
+          {
+            "bound": "total",
+            "condition": "warm",
+            "metric": "weighted mean tokens",
+            "baseline": 16343.247058823526,
+            "ptc": 16341.870588235297,
+            "limit": "<= baseline",
+            "pass": true
+          }
+        ]
+      },
+      "chat": {
+        "pass": false,
+        "checks": [
+          {
+            "bound": "readiness",
+            "metric": "missing",
+            "baseline": 0,
+            "ptc": 0,
+            "limit": "complete PTC matrix under the M1 readiness function",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "chat-web-search",
+            "condition": "uncached",
+            "metric": "mean tokens",
+            "baseline": 8456.3,
+            "ptc": 11145,
+            "limit": "<= 1.15 x baseline",
+            "pass": false
+          },
+          {
+            "bound": "single",
+            "fixture": "chat-web-search",
+            "condition": "uncached",
+            "metric": "mean wall ms",
+            "baseline": 4048.118313499913,
+            "ptc": 3286.997789600119,
+            "limit": "<= 1.2 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "chat-web-search",
+            "condition": "warm",
+            "metric": "mean tokens",
+            "baseline": 8459.7,
+            "ptc": 11150.2,
+            "limit": "<= 1.15 x baseline",
+            "pass": false
+          },
+          {
+            "bound": "single",
+            "fixture": "chat-web-search",
+            "condition": "warm",
+            "metric": "mean wall ms",
+            "baseline": 4266.652738499828,
+            "ptc": 4004.2456650000067,
+            "limit": "<= 1.2 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "chat-web-search",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "chat-permission",
+            "condition": "uncached",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "chat-permission",
+            "condition": "warm",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "chat-permission",
+            "metric": "successes (uncached + warm)",
+            "baseline": 17,
+            "ptc": 9,
+            "limit": ">= baseline, same trial count",
+            "pass": false
+          },
+          {
+            "bound": "total",
+            "condition": "uncached",
+            "metric": "weighted mean tokens",
+            "baseline": 6337.65,
+            "ptc": 14757.75,
+            "limit": "<= baseline",
+            "pass": false
+          },
+          {
+            "bound": "total",
+            "condition": "warm",
+            "metric": "weighted mean tokens",
+            "baseline": 6342.75,
+            "ptc": 14762.6,
+            "limit": "<= baseline",
+            "pass": false
+          }
+        ]
+      }
+    }
+  },
+  "secondary": {
+    "against": "m1-baseline",
+    "pass": false,
+    "verdicts": {
+      "coding": {
+        "pass": false,
+        "checks": [
+          {
+            "bound": "readiness",
+            "metric": "missing",
+            "baseline": 0,
+            "ptc": 0,
+            "limit": "complete PTC matrix under the M1 readiness function",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-bash",
+            "condition": "uncached",
+            "metric": "mean tokens",
+            "baseline": 12772.2,
+            "ptc": 10990.6,
+            "limit": "<= 1.15 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-bash",
+            "condition": "uncached",
+            "metric": "mean wall ms",
+            "baseline": 4467.104676399979,
+            "ptc": 3118.141962599985,
+            "limit": "<= 1.2 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-bash",
+            "condition": "warm",
+            "metric": "mean tokens",
+            "baseline": 12773.4,
+            "ptc": 10994,
+            "limit": "<= 1.15 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-bash",
+            "condition": "warm",
+            "metric": "mean wall ms",
+            "baseline": 3726.842353400031,
+            "ptc": 3633.308955300023,
+            "limit": "<= 1.2 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "single-bash",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-read",
+            "condition": "uncached",
+            "metric": "mean tokens",
+            "baseline": 12752.3,
+            "ptc": 10974.2,
+            "limit": "<= 1.15 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-read",
+            "condition": "uncached",
+            "metric": "mean wall ms",
+            "baseline": 3943.7557906000175,
+            "ptc": 3123.2359859000194,
+            "limit": "<= 1.2 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-read",
+            "condition": "warm",
+            "metric": "mean tokens",
+            "baseline": 12756.4,
+            "ptc": 10979,
+            "limit": "<= 1.15 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "single-read",
+            "condition": "warm",
+            "metric": "mean wall ms",
+            "baseline": 3992.5787449999943,
+            "ptc": 3780.0116859999716,
+            "limit": "<= 1.2 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "single-read",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "batch",
+            "fixture": "multi-edit",
+            "condition": "uncached",
+            "metric": "mean model rounds",
+            "baseline": 3.7,
+            "ptc": 3,
+            "limit": "< baseline",
+            "pass": true
+          },
+          {
+            "bound": "batch",
+            "fixture": "multi-edit",
+            "condition": "uncached",
+            "metric": "mean tokens",
+            "baseline": 25847.2,
+            "ptc": 17071.8,
+            "limit": "< baseline",
+            "pass": true
+          },
+          {
+            "bound": "batch",
+            "fixture": "multi-edit",
+            "condition": "warm",
+            "metric": "mean model rounds",
+            "baseline": 3.7,
+            "ptc": 3,
+            "limit": "< baseline",
+            "pass": true
+          },
+          {
+            "bound": "batch",
+            "fixture": "multi-edit",
+            "condition": "warm",
+            "metric": "mean tokens",
+            "baseline": 26396.8,
+            "ptc": 17127.1,
+            "limit": "< baseline",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "multi-edit",
+            "metric": "successes (uncached + warm)",
+            "baseline": 17,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "batch",
+            "fixture": "dependent-edit",
+            "condition": "uncached",
+            "metric": "mean model rounds",
+            "baseline": 4.9,
+            "ptc": 5,
+            "limit": "< baseline",
+            "pass": false
+          },
+          {
+            "bound": "batch",
+            "fixture": "dependent-edit",
+            "condition": "uncached",
+            "metric": "mean tokens",
+            "baseline": 31338.1,
+            "ptc": 27752.8,
+            "limit": "< baseline",
+            "pass": true
+          },
+          {
+            "bound": "batch",
+            "fixture": "dependent-edit",
+            "condition": "warm",
+            "metric": "mean model rounds",
+            "baseline": 4.9,
+            "ptc": 5,
+            "limit": "< baseline",
+            "pass": false
+          },
+          {
+            "bound": "batch",
+            "fixture": "dependent-edit",
+            "condition": "warm",
+            "metric": "mean tokens",
+            "baseline": 31349.7,
+            "ptc": 27759.6,
+            "limit": "< baseline",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "dependent-edit",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "output-filter",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 18,
+            "limit": ">= baseline, same trial count",
+            "pass": false
+          },
+          {
+            "bound": "success",
+            "fixture": "browser-image",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "user-question",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "approval-denial",
+            "condition": "uncached",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "approval-denial",
+            "condition": "warm",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "approval-denial",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "background-build",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "team-wait",
+            "metric": "successes (uncached + warm)",
+            "baseline": 3,
+            "ptc": 10,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "schedule",
+            "condition": "uncached",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "schedule",
+            "condition": "warm",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "schedule",
+            "metric": "successes (uncached + warm)",
+            "baseline": 17,
+            "ptc": 16,
+            "limit": ">= baseline, same trial count",
+            "pass": false
+          },
+          {
+            "bound": "authorization",
+            "fixture": "permission-rejection",
+            "condition": "uncached",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "permission-rejection",
+            "condition": "warm",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "permission-rejection",
+            "metric": "successes (uncached + warm)",
+            "baseline": 0,
+            "ptc": 10,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "cancellation",
+            "fixture": "cancel-wait",
+            "condition": "uncached",
+            "metric": "cancelled trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial cancelled, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "cancellation",
+            "fixture": "cancel-wait",
+            "condition": "warm",
+            "metric": "cancelled trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial cancelled, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "cancel-wait",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "total",
+            "condition": "uncached",
+            "metric": "weighted mean tokens",
+            "baseline": 17298.476470588233,
+            "ptc": 16213.270588235297,
+            "limit": "<= baseline",
+            "pass": true
+          },
+          {
+            "bound": "total",
+            "condition": "warm",
+            "metric": "weighted mean tokens",
+            "baseline": 17116.8,
+            "ptc": 16341.870588235297,
+            "limit": "<= baseline",
+            "pass": true
+          }
+        ]
+      },
+      "chat": {
+        "pass": false,
+        "checks": [
+          {
+            "bound": "readiness",
+            "metric": "missing",
+            "baseline": 0,
+            "ptc": 0,
+            "limit": "complete PTC matrix under the M1 readiness function",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "chat-web-search",
+            "condition": "uncached",
+            "metric": "mean tokens",
+            "baseline": 8609.7,
+            "ptc": 11145,
+            "limit": "<= 1.15 x baseline",
+            "pass": false
+          },
+          {
+            "bound": "single",
+            "fixture": "chat-web-search",
+            "condition": "uncached",
+            "metric": "mean wall ms",
+            "baseline": 4003.2759693000057,
+            "ptc": 3286.997789600119,
+            "limit": "<= 1.2 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "single",
+            "fixture": "chat-web-search",
+            "condition": "warm",
+            "metric": "mean tokens",
+            "baseline": 8608.9,
+            "ptc": 11150.2,
+            "limit": "<= 1.15 x baseline",
+            "pass": false
+          },
+          {
+            "bound": "single",
+            "fixture": "chat-web-search",
+            "condition": "warm",
+            "metric": "mean wall ms",
+            "baseline": 4177.360370099998,
+            "ptc": 4004.2456650000067,
+            "limit": "<= 1.2 x baseline",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "chat-web-search",
+            "metric": "successes (uncached + warm)",
+            "baseline": 20,
+            "ptc": 20,
+            "limit": ">= baseline, same trial count",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "chat-permission",
+            "condition": "uncached",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "authorization",
+            "fixture": "chat-permission",
+            "condition": "warm",
+            "metric": "enforced trials",
+            "baseline": 10,
+            "ptc": 10,
+            "limit": "every trial enforced, as in every baseline trial",
+            "pass": true
+          },
+          {
+            "bound": "success",
+            "fixture": "chat-permission",
+            "metric": "successes (uncached + warm)",
+            "baseline": 13,
+            "ptc": 9,
+            "limit": ">= baseline, same trial count",
+            "pass": false
+          },
+          {
+            "bound": "total",
+            "condition": "uncached",
+            "metric": "weighted mean tokens",
+            "baseline": 6488.450000000001,
+            "ptc": 14757.75,
+            "limit": "<= baseline",
+            "pass": false
+          },
+          {
+            "bound": "total",
+            "condition": "warm",
+            "metric": "weighted mean tokens",
+            "baseline": 6491.799999999999,
+            "ptc": 14762.6,
+            "limit": "<= baseline",
+            "pass": false
+          }
+        ]
+      }
+    }
+  },
+  "authorization": {
+    "main": {
+      "approval-denial/uncached": { "trials": 10, "enforced": 10, "taskSuccesses": 10 },
+      "approval-denial/warm": { "trials": 10, "enforced": 10, "taskSuccesses": 10 },
+      "schedule/uncached": { "trials": 10, "enforced": 10, "taskSuccesses": 9 },
+      "schedule/warm": { "trials": 10, "enforced": 10, "taskSuccesses": 8 },
+      "permission-rejection/uncached": { "trials": 10, "enforced": 10, "taskSuccesses": 0 },
+      "permission-rejection/warm": { "trials": 10, "enforced": 10, "taskSuccesses": 0 },
+      "chat-permission/uncached": { "trials": 10, "enforced": 10, "taskSuccesses": 10 },
+      "chat-permission/warm": { "trials": 10, "enforced": 10, "taskSuccesses": 7 }
+    },
+    "ptc": {
+      "approval-denial/uncached": { "trials": 10, "enforced": 10, "taskSuccesses": 10 },
+      "approval-denial/warm": { "trials": 10, "enforced": 10, "taskSuccesses": 10 },
+      "schedule/uncached": { "trials": 10, "enforced": 10, "taskSuccesses": 8 },
+      "schedule/warm": { "trials": 10, "enforced": 10, "taskSuccesses": 8 },
+      "permission-rejection/uncached": { "trials": 10, "enforced": 10, "taskSuccesses": 9 },
+      "permission-rejection/warm": { "trials": 10, "enforced": 10, "taskSuccesses": 1 },
+      "chat-permission/uncached": { "trials": 10, "enforced": 10, "taskSuccesses": 4 },
+      "chat-permission/warm": { "trials": 10, "enforced": 10, "taskSuccesses": 5 }
+    }
+  },
+  "aggregates": {
+    "main": {
+      "coding": {
+        "groups": [
+          {
+            "fixture": "single-bash",
+            "condition": "uncached",
+            "weight": 5,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12626.2,
+            "meanWallMs": 4140.887299300002,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "single-bash",
+            "condition": "warm",
+            "weight": 5,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12630.2,
+            "meanWallMs": 4513.31142240001,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "single-read",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12610.4,
+            "meanWallMs": 4151.133335899981,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "single-read",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12614.4,
+            "meanWallMs": 3782.176449199999,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "multi-edit",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 23383.7,
+            "meanWallMs": 11120.843047100003,
+            "meanModelRounds": 3.3,
+            "meanRequests": 4.8
+          },
+          {
+            "fixture": "multi-edit",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 23316.2,
+            "meanWallMs": 11104.04676489993,
+            "meanModelRounds": 3.3,
+            "meanRequests": 4.5
+          },
+          {
+            "fixture": "dependent-edit",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 31836.9,
+            "meanWallMs": 10025.710127600096,
+            "meanModelRounds": 5,
+            "meanRequests": 5
+          },
+          {
+            "fixture": "dependent-edit",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 31847,
+            "meanWallMs": 10124.546449799882,
+            "meanModelRounds": 5,
+            "meanRequests": 5
+          },
+          {
+            "fixture": "output-filter",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12618.4,
+            "meanWallMs": 4259.734485600051,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "output-filter",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12623,
+            "meanWallMs": 3971.0792816000526,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "browser-image",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12928.3,
+            "meanWallMs": 9501.971143600065,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "browser-image",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12905.9,
+            "meanWallMs": 9085.296688200067,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "user-question",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12669.2,
+            "meanWallMs": 4449.483053699974,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "user-question",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12673.8,
+            "meanWallMs": 4879.639803599939,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "approval-denial",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12726.9,
+            "meanWallMs": 4919.251899999939,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "approval-denial",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12729.2,
+            "meanWallMs": 5239.385051099956,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "background-build",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 19207.7,
+            "meanWallMs": 6661.941000299901,
+            "meanModelRounds": 3,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "background-build",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 19219.7,
+            "meanWallMs": 7056.498132699914,
+            "meanModelRounds": 3,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "team-wait",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 0,
+            "meanTokens": 49973,
+            "meanWallMs": 24803.628948800266,
+            "meanModelRounds": 4.2,
+            "meanRequests": 11.2
+          },
+          {
+            "fixture": "team-wait",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 3,
+            "meanTokens": 45232.3,
+            "meanWallMs": 21634.744616400356,
+            "meanModelRounds": 4,
+            "meanRequests": 10.2
+          },
+          {
+            "fixture": "schedule",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 9,
+            "meanTokens": 12881.7,
+            "meanWallMs": 6742.776498199906,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "schedule",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 8,
+            "meanTokens": 12882.3,
+            "meanWallMs": 6703.306564900093,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "permission-rejection",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 0,
+            "meanTokens": 12323.5,
+            "meanWallMs": 4739.195900399796,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "permission-rejection",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 0,
+            "meanTokens": 12326.6,
+            "meanWallMs": 4458.060816599987,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "cancel-wait",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 6313.6,
+            "meanWallMs": 2373.93022700008,
+            "meanModelRounds": 1,
+            "meanRequests": 1
+          },
+          {
+            "fixture": "cancel-wait",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 6313.8,
+            "meanWallMs": 2524.912520099897,
+            "meanModelRounds": 1,
+            "meanRequests": 1
+          }
+        ],
+        "aggregates": [
+          {
+            "condition": "uncached",
+            "weightedMeanTokens": 16623.782352941176,
+            "unweightedMeanTokens": 17853.807692307695,
+            "weightedMeanWallMs": 6732.590362629416
+          },
+          {
+            "condition": "warm",
+            "weightedMeanTokens": 16343.247058823526,
+            "unweightedMeanTokens": 17485.723076923077,
+            "weightedMeanWallMs": 6654.720603005891
+          }
+        ]
+      },
+      "chat": {
+        "groups": [
+          {
+            "fixture": "chat-web-search",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 8456.3,
+            "meanWallMs": 4048.118313499913,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "chat-web-search",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 8459.7,
+            "meanWallMs": 4266.652738499828,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "chat-permission",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 4219,
+            "meanWallMs": 3391.7066534003243,
+            "meanModelRounds": 1,
+            "meanRequests": 1
+          },
+          {
+            "fixture": "chat-permission",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 7,
+            "meanTokens": 4225.8,
+            "meanWallMs": 3682.7747169999407,
+            "meanModelRounds": 1,
+            "meanRequests": 1
+          }
+        ],
+        "aggregates": [
+          {
+            "condition": "uncached",
+            "weightedMeanTokens": 6337.65,
+            "unweightedMeanTokens": 6337.65,
+            "weightedMeanWallMs": 3719.9124834501185
+          },
+          {
+            "condition": "warm",
+            "weightedMeanTokens": 6342.75,
+            "unweightedMeanTokens": 6342.75,
+            "weightedMeanWallMs": 3974.713727749884
+          }
+        ]
+      }
+    },
+    "ptc": {
+      "coding": {
+        "groups": [
+          {
+            "fixture": "single-bash",
+            "condition": "uncached",
+            "weight": 5,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 10990.6,
+            "meanWallMs": 3118.141962599985,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "single-bash",
+            "condition": "warm",
+            "weight": 5,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 10994,
+            "meanWallMs": 3633.308955300023,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "single-read",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 10974.2,
+            "meanWallMs": 3123.2359859000194,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "single-read",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 10979,
+            "meanWallMs": 3780.0116859999716,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "multi-edit",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 17071.8,
+            "meanWallMs": 7243.875913300039,
+            "meanModelRounds": 3,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "multi-edit",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 17127.1,
+            "meanWallMs": 8024.650870900043,
+            "meanModelRounds": 3,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "dependent-edit",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 27752.8,
+            "meanWallMs": 8552.035274800006,
+            "meanModelRounds": 5,
+            "meanRequests": 5
+          },
+          {
+            "fixture": "dependent-edit",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 27759.6,
+            "meanWallMs": 9179.282362799999,
+            "meanModelRounds": 5,
+            "meanRequests": 5
+          },
+          {
+            "fixture": "output-filter",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 9,
+            "meanTokens": 10983.2,
+            "meanWallMs": 4618.357733100001,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "output-filter",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 9,
+            "meanTokens": 10987,
+            "meanWallMs": 3549.7543197999707,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "browser-image",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 11389.3,
+            "meanWallMs": 7623.035818199953,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "browser-image",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 11406.1,
+            "meanWallMs": 8145.6247710000725,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "user-question",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 11084.4,
+            "meanWallMs": 3922.497321999911,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "user-question",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 11088.6,
+            "meanWallMs": 5267.986578100082,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "approval-denial",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 11092.2,
+            "meanWallMs": 4063.8287383000365,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "approval-denial",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 11106.7,
+            "meanWallMs": 4702.463049399946,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "background-build",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 22759,
+            "meanWallMs": 6233.936206400208,
+            "meanModelRounds": 3,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "background-build",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 22766.5,
+            "meanWallMs": 7460.59589869976,
+            "meanModelRounds": 3,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "team-wait",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 8,
+            "meanTokens": 59656.1,
+            "meanWallMs": 21313.413516099936,
+            "meanModelRounds": 4.9,
+            "meanRequests": 11.1
+          },
+          {
+            "fixture": "team-wait",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 2,
+            "meanTokens": 62413.6,
+            "meanWallMs": 25934.257319800185,
+            "meanModelRounds": 5,
+            "meanRequests": 12.2
+          },
+          {
+            "fixture": "schedule",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 8,
+            "meanTokens": 21098.9,
+            "meanWallMs": 8422.390528100077,
+            "meanModelRounds": 3,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "schedule",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 8,
+            "meanTokens": 21099.7,
+            "meanWallMs": 8771.239784400164,
+            "meanModelRounds": 3,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "permission-rejection",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 9,
+            "meanTokens": 11303,
+            "meanWallMs": 4376.9213838001715,
+            "meanModelRounds": 2.1,
+            "meanRequests": 2.1
+          },
+          {
+            "fixture": "permission-rejection",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 1,
+            "meanTokens": 10597.9,
+            "meanWallMs": 4142.57295350004,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "cancel-wait",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 5507.7,
+            "meanWallMs": 2464.983721000049,
+            "meanModelRounds": 1,
+            "meanRequests": 1
+          },
+          {
+            "fixture": "cancel-wait",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 5510,
+            "meanWallMs": 2691.900818100199,
+            "meanModelRounds": 1,
+            "meanRequests": 1
+          }
+        ],
+        "aggregates": [
+          {
+            "condition": "uncached",
+            "weightedMeanTokens": 16213.270588235297,
+            "unweightedMeanTokens": 17820.246153846154,
+            "weightedMeanWallMs": 5738.189526705903
+          },
+          {
+            "condition": "warm",
+            "weightedMeanTokens": 16341.870588235297,
+            "unweightedMeanTokens": 17987.369230769233,
+            "weightedMeanWallMs": 6459.816775823561
+          }
+        ]
+      },
+      "chat": {
+        "groups": [
+          {
+            "fixture": "chat-web-search",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 11145,
+            "meanWallMs": 3286.997789600119,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "chat-web-search",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 11150.2,
+            "meanWallMs": 4004.2456650000067,
+            "meanModelRounds": 2,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "chat-permission",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 4,
+            "meanTokens": 18370.5,
+            "meanWallMs": 6625.654435599968,
+            "meanModelRounds": 3,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "chat-permission",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 5,
+            "meanTokens": 18375,
+            "meanWallMs": 6889.061642700061,
+            "meanModelRounds": 3,
+            "meanRequests": 3
+          }
+        ],
+        "aggregates": [
+          {
+            "condition": "uncached",
+            "weightedMeanTokens": 14757.75,
+            "unweightedMeanTokens": 14757.75,
+            "weightedMeanWallMs": 4956.326112600043
+          },
+          {
+            "condition": "warm",
+            "weightedMeanTokens": 14762.6,
+            "unweightedMeanTokens": 14762.6,
+            "weightedMeanWallMs": 5446.653653850034
+          }
+        ]
+      }
+    },
+    "m1": {
+      "coding": {
+        "groups": [
+          {
+            "fixture": "single-bash",
+            "condition": "uncached",
+            "weight": 5,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12772.2,
+            "meanWallMs": 4467.104676399979,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "single-bash",
+            "condition": "warm",
+            "weight": 5,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12773.4,
+            "meanWallMs": 3726.842353400031,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "single-read",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12752.3,
+            "meanWallMs": 3943.7557906000175,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "single-read",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12756.4,
+            "meanWallMs": 3992.5787449999943,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "multi-edit",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 9,
+            "meanTokens": 25847.2,
+            "meanWallMs": 11034.655758599984,
+            "meanModelRounds": 3.7,
+            "meanRequests": 5.9
+          },
+          {
+            "fixture": "multi-edit",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 8,
+            "meanTokens": 26396.8,
+            "meanWallMs": 12294.695058600022,
+            "meanModelRounds": 3.7,
+            "meanRequests": 6.1
+          },
+          {
+            "fixture": "dependent-edit",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 31338.1,
+            "meanWallMs": 9133.412334699975,
+            "meanModelRounds": 4.9,
+            "meanRequests": 5.9
+          },
+          {
+            "fixture": "dependent-edit",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 31349.7,
+            "meanWallMs": 10107.968727399968,
+            "meanModelRounds": 4.9,
+            "meanRequests": 5.9
+          },
+          {
+            "fixture": "output-filter",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12758.4,
+            "meanWallMs": 3753.4386789000127,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "output-filter",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12762.6,
+            "meanWallMs": 3587.4508921000643,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "browser-image",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 13045.3,
+            "meanWallMs": 7821.821443100087,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "browser-image",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 13039.2,
+            "meanWallMs": 8211.83660109993,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "user-question",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12806.7,
+            "meanWallMs": 4028.7853515001016,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "user-question",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12815.6,
+            "meanWallMs": 4329.141853700113,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "approval-denial",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12886.9,
+            "meanWallMs": 5076.911179899999,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "approval-denial",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 12896,
+            "meanWallMs": 4985.650561399999,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "background-build",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 19366.9,
+            "meanWallMs": 6310.179823500058,
+            "meanModelRounds": 3,
+            "meanRequests": 4
+          },
+          {
+            "fixture": "background-build",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 19371.3,
+            "meanWallMs": 6364.093145499937,
+            "meanModelRounds": 3,
+            "meanRequests": 4
+          },
+          {
+            "fixture": "team-wait",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 0,
+            "meanTokens": 57441.5,
+            "meanWallMs": 26233.539803099964,
+            "meanModelRounds": 4.8,
+            "meanRequests": 13.6
+          },
+          {
+            "fixture": "team-wait",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 3,
+            "meanTokens": 53751.9,
+            "meanWallMs": 25543.972894299997,
+            "meanModelRounds": 4.4,
+            "meanRequests": 13
+          },
+          {
+            "fixture": "schedule",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 13039.6,
+            "meanWallMs": 7285.604542099999,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "schedule",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 7,
+            "meanTokens": 13037.8,
+            "meanWallMs": 6801.087322400004,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "permission-rejection",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 0,
+            "meanTokens": 12476.8,
+            "meanWallMs": 4253.675641399995,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "permission-rejection",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 0,
+            "meanTokens": 12483.3,
+            "meanWallMs": 4491.072372800007,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "cancel-wait",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 6453.4,
+            "meanWallMs": 2432.867565499997,
+            "meanModelRounds": 1,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "cancel-wait",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 6458,
+            "meanWallMs": 2450.0869769999963,
+            "meanModelRounds": 1,
+            "meanRequests": 2
+          }
+        ],
+        "aggregates": [
+          {
+            "condition": "uncached",
+            "weightedMeanTokens": 17298.476470588233,
+            "unweightedMeanTokens": 18691.17692307692,
+            "weightedMeanWallMs": 6684.951252641182
+          },
+          {
+            "condition": "warm",
+            "weightedMeanTokens": 17116.8,
+            "unweightedMeanTokens": 18453.230769230766,
+            "weightedMeanWallMs": 6576.108642252952
+          }
+        ]
+      },
+      "chat": {
+        "groups": [
+          {
+            "fixture": "chat-web-search",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 8609.7,
+            "meanWallMs": 4003.2759693000057,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "chat-web-search",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 8608.9,
+            "meanWallMs": 4177.360370099998,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "chat-permission",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 8,
+            "meanTokens": 4367.2,
+            "meanWallMs": 3336.8051098999917,
+            "meanModelRounds": 1,
+            "meanRequests": 2
+          },
+          {
+            "fixture": "chat-permission",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 5,
+            "meanTokens": 4374.7,
+            "meanWallMs": 3716.644404199999,
+            "meanModelRounds": 1,
+            "meanRequests": 2
+          }
+        ],
+        "aggregates": [
+          {
+            "condition": "uncached",
+            "weightedMeanTokens": 6488.450000000001,
+            "unweightedMeanTokens": 6488.450000000001,
+            "weightedMeanWallMs": 3670.0405395999987
+          },
+          {
+            "condition": "warm",
+            "weightedMeanTokens": 6491.799999999999,
+            "unweightedMeanTokens": 6491.799999999999,
+            "weightedMeanWallMs": 3947.002387149999
+          }
+        ]
+      }
+    },
+    "round2": {
+      "coding": {
+        "groups": [
+          {
+            "fixture": "single-bash",
+            "condition": "uncached",
+            "weight": 5,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 6754.1,
+            "meanWallMs": 4308.411175799999,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "single-bash",
+            "condition": "warm",
+            "weight": 5,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 6758,
+            "meanWallMs": 4489.788560000004,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "single-read",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 6758.4,
+            "meanWallMs": 3973.354138999997,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "single-read",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 6776.3,
+            "meanWallMs": 5460.613916400005,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "multi-edit",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 10665.4,
+            "meanWallMs": 8468.351045300009,
+            "meanModelRounds": 3,
+            "meanRequests": 4
+          },
+          {
+            "fixture": "multi-edit",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 10661.7,
+            "meanWallMs": 9284.781529300031,
+            "meanModelRounds": 3,
+            "meanRequests": 4
+          },
+          {
+            "fixture": "dependent-edit",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 13701.7,
+            "meanWallMs": 9520.485648899956,
+            "meanModelRounds": 4,
+            "meanRequests": 5
+          },
+          {
+            "fixture": "dependent-edit",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 14073.3,
+            "meanWallMs": 11725.875514399993,
+            "meanModelRounds": 4.1,
+            "meanRequests": 5.1
+          },
+          {
+            "fixture": "output-filter",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 6747.4,
+            "meanWallMs": 4442.8829409,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "output-filter",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 6744.3,
+            "meanWallMs": 5896.925037300028,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "browser-image",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 11015.7,
+            "meanWallMs": 9194.555600200012,
+            "meanModelRounds": 3,
+            "meanRequests": 4
+          },
+          {
+            "fixture": "browser-image",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 11031.3,
+            "meanWallMs": 10878.08752349997,
+            "meanModelRounds": 3,
+            "meanRequests": 4
+          },
+          {
+            "fixture": "user-question",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 11260.9,
+            "meanWallMs": 6275.007906100014,
+            "meanModelRounds": 3,
+            "meanRequests": 4
+          },
+          {
+            "fixture": "user-question",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 11290.2,
+            "meanWallMs": 9049.232280200022,
+            "meanModelRounds": 3,
+            "meanRequests": 4
+          },
+          {
+            "fixture": "approval-denial",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 0,
+            "meanTokens": 16295.3,
+            "meanWallMs": 9644.406216400093,
+            "meanModelRounds": 4,
+            "meanRequests": 5
+          },
+          {
+            "fixture": "approval-denial",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 1,
+            "meanTokens": 15847.4,
+            "meanWallMs": 11135.450335800042,
+            "meanModelRounds": 3.9,
+            "meanRequests": 4.9
+          },
+          {
+            "fixture": "background-build",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 16272.5,
+            "meanWallMs": 6303.480401500035,
+            "meanModelRounds": 3,
+            "meanRequests": 4
+          },
+          {
+            "fixture": "background-build",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 16302.8,
+            "meanWallMs": 10020.25398550001,
+            "meanModelRounds": 3,
+            "meanRequests": 4
+          },
+          {
+            "fixture": "team-wait",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 8,
+            "meanTokens": 33514.7,
+            "meanWallMs": 22040.80573970005,
+            "meanModelRounds": 5,
+            "meanRequests": 9.9
+          },
+          {
+            "fixture": "team-wait",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 9,
+            "meanTokens": 35702.3,
+            "meanWallMs": 26053.365472099977,
+            "meanModelRounds": 5,
+            "meanRequests": 10.6
+          },
+          {
+            "fixture": "schedule",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 9,
+            "meanTokens": 14631.1,
+            "meanWallMs": 9236.742985699992,
+            "meanModelRounds": 3,
+            "meanRequests": 4
+          },
+          {
+            "fixture": "schedule",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 14622.2,
+            "meanWallMs": 9892.99391499995,
+            "meanModelRounds": 3,
+            "meanRequests": 4
+          },
+          {
+            "fixture": "permission-rejection",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 4,
+            "meanTokens": 7245,
+            "meanWallMs": 4797.268851799998,
+            "meanModelRounds": 2.2,
+            "meanRequests": 3.2
+          },
+          {
+            "fixture": "permission-rejection",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 4,
+            "meanTokens": 8352.1,
+            "meanWallMs": 6130.345372000011,
+            "meanModelRounds": 2.5,
+            "meanRequests": 3.5
+          },
+          {
+            "fixture": "cancel-wait",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 7308.8,
+            "meanWallMs": 4512.662769400003,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "cancel-wait",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 7332.5,
+            "meanWallMs": 5541.3205973000095,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          }
+        ],
+        "aggregates": [
+          {
+            "condition": "uncached",
+            "weightedMeanTokens": 11128.670588235294,
+            "unweightedMeanTokens": 12474.692307692309,
+            "weightedMeanWallMs": 7056.00353670001
+          },
+          {
+            "condition": "warm",
+            "weightedMeanTokens": 11325.082352941177,
+            "unweightedMeanTokens": 12730.338461538464,
+            "weightedMeanWallMs": 8442.246369341181
+          }
+        ]
+      },
+      "chat": {
+        "groups": [
+          {
+            "fixture": "chat-web-search",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 6428.7,
+            "meanWallMs": 4464.064844100026,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "chat-web-search",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 10,
+            "meanTokens": 6429.2,
+            "meanWallMs": 6655.909646699974,
+            "meanModelRounds": 2,
+            "meanRequests": 3
+          },
+          {
+            "fixture": "chat-permission",
+            "condition": "uncached",
+            "weight": 1,
+            "trials": 10,
+            "successes": 6,
+            "meanTokens": 9645,
+            "meanWallMs": 6144.228896800009,
+            "meanModelRounds": 2.7,
+            "meanRequests": 3.7
+          },
+          {
+            "fixture": "chat-permission",
+            "condition": "warm",
+            "weight": 1,
+            "trials": 10,
+            "successes": 8,
+            "meanTokens": 9184.7,
+            "meanWallMs": 5547.565371499991,
+            "meanModelRounds": 2.6,
+            "meanRequests": 3.6
+          }
+        ],
+        "aggregates": [
+          {
+            "condition": "uncached",
+            "weightedMeanTokens": 8036.85,
+            "unweightedMeanTokens": 8036.85,
+            "weightedMeanWallMs": 5304.146870450018
+          },
+          {
+            "condition": "warm",
+            "weightedMeanTokens": 7806.950000000001,
+            "unweightedMeanTokens": 7806.950000000001,
+            "weightedMeanWallMs": 6101.737509099982
+          }
+        ]
+      }
+    },
+    "round3": [
+      {
+        "fixture": "single-bash",
+        "kind": "coding",
+        "complete": true,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 12771.2,
+              "meanWallMs": 4471.283033000004,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 4440.886375000005,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "bash": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 6645.3,
+              "meanWallMs": 3728.443229599988,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 3699.8414494999843,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "bash": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 12773.6,
+              "meanWallMs": 4964.66592270001,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 4936.481295800015,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "bash": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 6642.9,
+              "meanWallMs": 4502.61634140001,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 4473.006505799996,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "bash": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 10,
+            "meanTokens": 12772.2,
+            "meanWallMs": 4467.104676399979,
+            "meanModelRounds": 2
+          },
+          "warm": {
+            "successes": 10,
+            "meanTokens": 12773.4,
+            "meanWallMs": 3726.842353400031,
+            "meanModelRounds": 2
+          }
+        }
+      },
+      {
+        "fixture": "single-read",
+        "kind": "coding",
+        "complete": true,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 12752.6,
+              "meanWallMs": 4188.480589599989,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 4164.779277000006,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 6621.8,
+              "meanWallMs": 4170.339424299996,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 4146.091000599996,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 12756.5,
+              "meanWallMs": 4879.72537369997,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 4856.276383999968,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 6629.9,
+              "meanWallMs": 5746.139940800005,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 5722.402574199974,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 10,
+            "meanTokens": 12752.3,
+            "meanWallMs": 3943.7557906000175,
+            "meanModelRounds": 2
+          },
+          "warm": {
+            "successes": 10,
+            "meanTokens": 12756.4,
+            "meanWallMs": 3992.5787449999943,
+            "meanModelRounds": 2
+          }
+        }
+      },
+      {
+        "fixture": "multi-edit",
+        "kind": "coding",
+        "complete": true,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 22345.3,
+              "meanWallMs": 17013.625452200045,
+              "meanModelRounds": 3.1,
+              "meanMainModelMs": 8565.195383499877,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "bash": 13, "other": 8 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 10490.7,
+              "meanWallMs": 8377.51719899997,
+              "meanModelRounds": 3,
+              "meanMainModelMs": 8035.18577899998,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 2,
+              "directCallsByCapability": {},
+              "operationsByCapability": { "read": 60, "edit": 30 },
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 22351.5,
+              "meanWallMs": 23716.738698100067,
+              "meanModelRounds": 3.1,
+              "meanMainModelMs": 13632.490678399965,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "bash": 13, "other": 8 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 10505.7,
+              "meanWallMs": 10743.542100900038,
+              "meanModelRounds": 3,
+              "meanMainModelMs": 10397.745923299994,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 2,
+              "directCallsByCapability": {},
+              "operationsByCapability": { "read": 60, "edit": 30 },
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 9,
+            "meanTokens": 25847.2,
+            "meanWallMs": 11034.655758599984,
+            "meanModelRounds": 3.7
+          },
+          "warm": {
+            "successes": 8,
+            "meanTokens": 26396.8,
+            "meanWallMs": 12294.695058600022,
+            "meanModelRounds": 3.7
+          }
+        }
+      },
+      {
+        "fixture": "dependent-edit",
+        "kind": "coding",
+        "complete": true,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 31985.4,
+              "meanWallMs": 13308.23933940006,
+              "meanModelRounds": 5,
+              "meanMainModelMs": 13263.961545500113,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 30, "edit": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 16656.3,
+              "meanWallMs": 8921.806694999988,
+              "meanModelRounds": 5,
+              "meanMainModelMs": 8880.273773700139,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 30, "edit": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 32011.1,
+              "meanWallMs": 13029.702711499995,
+              "meanModelRounds": 5,
+              "meanMainModelMs": 12986.002203399967,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 30, "edit": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 16668.5,
+              "meanWallMs": 10642.841744799913,
+              "meanModelRounds": 5,
+              "meanMainModelMs": 10601.073497999832,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 30, "edit": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 10,
+            "meanTokens": 31338.1,
+            "meanWallMs": 9133.412334699975,
+            "meanModelRounds": 4.9
+          },
+          "warm": {
+            "successes": 10,
+            "meanTokens": 31349.7,
+            "meanWallMs": 10107.968727399968,
+            "meanModelRounds": 4.9
+          }
+        }
+      },
+      {
+        "fixture": "output-filter",
+        "kind": "coding",
+        "complete": true,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 10,
+              "successes": 9,
+              "enforced": 9,
+              "meanTokens": 12758.4,
+              "meanWallMs": 6051.137227600115,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 6028.15933489995,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 6628,
+              "meanWallMs": 3347.2753229999917,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 3323.0379880998285,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 10,
+              "successes": 9,
+              "enforced": 9,
+              "meanTokens": 12763,
+              "meanWallMs": 4911.395069300011,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 4888.247495199879,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 6631.8,
+              "meanWallMs": 4388.261368200043,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 4364.103667599894,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 10,
+            "meanTokens": 12758.4,
+            "meanWallMs": 3753.4386789000127,
+            "meanModelRounds": 2
+          },
+          "warm": {
+            "successes": 10,
+            "meanTokens": 12762.6,
+            "meanWallMs": 3587.4508921000643,
+            "meanModelRounds": 2
+          }
+        }
+      },
+      {
+        "fixture": "browser-image",
+        "kind": "coding",
+        "complete": true,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 13051.5,
+              "meanWallMs": 10274.443248200045,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 10224.433842000086,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "browser": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 11122.5,
+              "meanWallMs": 10409.547604299942,
+              "meanModelRounds": 3,
+              "meanMainModelMs": 10195.748784100031,
+              "meanDocsCalls": 1,
+              "meanPtcCalls": 1,
+              "directCallsByCapability": {},
+              "operationsByCapability": { "browser": 10 },
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 13012.3,
+              "meanWallMs": 8983.38833289994,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 8932.980244799983,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "browser": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 11150.1,
+              "meanWallMs": 12577.710126500204,
+              "meanModelRounds": 3,
+              "meanMainModelMs": 12362.789644899964,
+              "meanDocsCalls": 1,
+              "meanPtcCalls": 1,
+              "directCallsByCapability": {},
+              "operationsByCapability": { "browser": 10 },
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 10,
+            "meanTokens": 13045.3,
+            "meanWallMs": 7821.821443100087,
+            "meanModelRounds": 2
+          },
+          "warm": {
+            "successes": 10,
+            "meanTokens": 13039.2,
+            "meanWallMs": 8211.83660109993,
+            "meanModelRounds": 2
+          }
+        }
+      },
+      {
+        "fixture": "user-question",
+        "kind": "coding",
+        "complete": true,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 12806.3,
+              "meanWallMs": 7557.763975699898,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 7509.638036499918,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "ask_user_question": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": { "select": 10 }
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 11155.3,
+              "meanWallMs": 6057.76656459975,
+              "meanModelRounds": 3,
+              "meanMainModelMs": 5844.568914399948,
+              "meanDocsCalls": 1,
+              "meanPtcCalls": 1,
+              "directCallsByCapability": {},
+              "operationsByCapability": { "ask_user_question": 10 },
+              "interactionRequests": { "select": 10 }
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 12868.6,
+              "meanWallMs": 6230.094008199963,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 6181.261531499773,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "ask_user_question": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": { "select": 10 }
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 11161.7,
+              "meanWallMs": 9250.220755699882,
+              "meanModelRounds": 3,
+              "meanMainModelMs": 9037.211199700041,
+              "meanDocsCalls": 1,
+              "meanPtcCalls": 1,
+              "directCallsByCapability": {},
+              "operationsByCapability": { "ask_user_question": 10 },
+              "interactionRequests": { "select": 10 }
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 10,
+            "meanTokens": 12806.7,
+            "meanWallMs": 4028.7853515001016,
+            "meanModelRounds": 2
+          },
+          "warm": {
+            "successes": 10,
+            "meanTokens": 12815.6,
+            "meanWallMs": 4329.141853700113,
+            "meanModelRounds": 2
+          }
+        }
+      },
+      {
+        "fixture": "approval-denial",
+        "kind": "coding",
+        "complete": true,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 12908,
+              "meanWallMs": 7899.472262699996,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 7851.194846800249,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "unsandboxed_bash": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": { "sandbox": 10, "sandboxMatched": 10 }
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 11068.8,
+              "meanWallMs": 7096.258935399912,
+              "meanModelRounds": 3,
+              "meanMainModelMs": 7036.41739399964,
+              "meanDocsCalls": 1,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "bash": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": { "confirm": 10, "confirmMatched": 10 }
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 12910.4,
+              "meanWallMs": 6408.980090000108,
+              "meanModelRounds": 2,
+              "meanMainModelMs": 6359.75459479997,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "unsandboxed_bash": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": { "sandbox": 10, "sandboxMatched": 10 }
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 11072.2,
+              "meanWallMs": 8632.454761700146,
+              "meanModelRounds": 3,
+              "meanMainModelMs": 8572.893964199815,
+              "meanDocsCalls": 1,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "bash": 10 },
+              "operationsByCapability": {},
+              "interactionRequests": { "confirm": 10, "confirmMatched": 10 }
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 10,
+            "meanTokens": 12886.9,
+            "meanWallMs": 5076.911179899999,
+            "meanModelRounds": 2
+          },
+          "warm": {
+            "successes": 10,
+            "meanTokens": 12896,
+            "meanWallMs": 4985.650561399999,
+            "meanModelRounds": 2
+          }
+        }
+      },
+      {
+        "fixture": "background-build",
+        "kind": "coding",
+        "complete": true,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 19354.7,
+              "meanWallMs": 10429.205884099938,
+              "meanModelRounds": 3,
+              "meanMainModelMs": 10395.279778700415,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "background_task": 20 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 16162.3,
+              "meanWallMs": 6655.849661999848,
+              "meanModelRounds": 3,
+              "meanMainModelMs": 6461.051828099788,
+              "meanDocsCalls": 1,
+              "meanPtcCalls": 1,
+              "directCallsByCapability": {},
+              "operationsByCapability": { "background_task": 20 },
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 19366.1,
+              "meanWallMs": 8718.903401800058,
+              "meanModelRounds": 3,
+              "meanMainModelMs": 8685.598541499954,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "background_task": 20 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 10,
+              "successes": 10,
+              "enforced": 10,
+              "meanTokens": 16155.3,
+              "meanWallMs": 10510.930277900025,
+              "meanModelRounds": 3,
+              "meanMainModelMs": 10316.972058899515,
+              "meanDocsCalls": 1,
+              "meanPtcCalls": 1,
+              "directCallsByCapability": {},
+              "operationsByCapability": { "background_task": 20 },
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 10,
+            "meanTokens": 19366.9,
+            "meanWallMs": 6310.179823500058,
+            "meanModelRounds": 3
+          },
+          "warm": {
+            "successes": 10,
+            "meanTokens": 19371.3,
+            "meanWallMs": 6364.093145499937,
+            "meanModelRounds": 3
+          }
+        }
+      },
+      {
+        "fixture": "team-wait",
+        "kind": "coding",
+        "complete": false,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 4,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": 46701,
+              "meanWallMs": 31605.975165750162,
+              "meanModelRounds": 4,
+              "meanMainModelMs": 27480.803727250273,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "bash": 2, "team": 8, "read": 2 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 4,
+              "successes": 2,
+              "enforced": 2,
+              "meanTokens": 34363,
+              "meanWallMs": 25495.96452925005,
+              "meanModelRounds": 4.75,
+              "meanMainModelMs": 20819.47898025019,
+              "meanDocsCalls": 1,
+              "meanPtcCalls": 1.75,
+              "directCallsByCapability": { "read": 2, "bash": 2 },
+              "operationsByCapability": { "team": 8 },
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 4,
+              "successes": 2,
+              "enforced": 2,
+              "meanTokens": 48133.75,
+              "meanWallMs": 44033.64623400006,
+              "meanModelRounds": 4,
+              "meanMainModelMs": 33748.60479950013,
+              "meanDocsCalls": 0,
+              "meanPtcCalls": 0,
+              "directCallsByCapability": { "read": 2, "team": 8, "bash": 2 },
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 4,
+              "successes": 3,
+              "enforced": 3,
+              "meanTokens": 37043.25,
+              "meanWallMs": 39363.65550325019,
+              "meanModelRounds": 4.75,
+              "meanMainModelMs": 32083.95905124978,
+              "meanDocsCalls": 1,
+              "meanPtcCalls": 1.75,
+              "directCallsByCapability": { "read": 4 },
+              "operationsByCapability": { "team": 8 },
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 0,
+            "meanTokens": 57441.5,
+            "meanWallMs": 26233.539803099964,
+            "meanModelRounds": 4.8
+          },
+          "warm": {
+            "successes": 3,
+            "meanTokens": 53751.9,
+            "meanWallMs": 25543.972894299997,
+            "meanModelRounds": 4.4
+          }
+        }
+      },
+      {
+        "fixture": "schedule",
+        "kind": "coding",
+        "complete": false,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 10,
+            "meanTokens": 13039.6,
+            "meanWallMs": 7285.604542099999,
+            "meanModelRounds": 2
+          },
+          "warm": {
+            "successes": 7,
+            "meanTokens": 13037.8,
+            "meanWallMs": 6801.087322400004,
+            "meanModelRounds": 2
+          }
+        }
+      },
+      {
+        "fixture": "permission-rejection",
+        "kind": "coding",
+        "complete": false,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 0,
+            "meanTokens": 12476.8,
+            "meanWallMs": 4253.675641399995,
+            "meanModelRounds": 2
+          },
+          "warm": {
+            "successes": 0,
+            "meanTokens": 12483.3,
+            "meanWallMs": 4491.072372800007,
+            "meanModelRounds": 2
+          }
+        }
+      },
+      {
+        "fixture": "cancel-wait",
+        "kind": "coding",
+        "complete": false,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 10,
+            "meanTokens": 6453.4,
+            "meanWallMs": 2432.867565499997,
+            "meanModelRounds": 1
+          },
+          "warm": {
+            "successes": 10,
+            "meanTokens": 6458,
+            "meanWallMs": 2450.0869769999963,
+            "meanModelRounds": 1
+          }
+        }
+      },
+      {
+        "fixture": "chat-web-search",
+        "kind": "chat",
+        "complete": false,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 10,
+            "meanTokens": 8609.7,
+            "meanWallMs": 4003.2759693000057,
+            "meanModelRounds": 2
+          },
+          "warm": {
+            "successes": 10,
+            "meanTokens": 8608.9,
+            "meanWallMs": 4177.360370099998,
+            "meanModelRounds": 2
+          }
+        }
+      },
+      {
+        "fixture": "chat-permission",
+        "kind": "chat",
+        "complete": false,
+        "conditions": {
+          "uncached": {
+            "main": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          },
+          "warm": {
+            "main": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            },
+            "ptc": {
+              "trials": 0,
+              "successes": 0,
+              "enforced": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanMainModelMs": null,
+              "meanDocsCalls": null,
+              "meanPtcCalls": null,
+              "directCallsByCapability": {},
+              "operationsByCapability": {},
+              "interactionRequests": {}
+            }
+          }
+        },
+        "m1": {
+          "uncached": {
+            "successes": 8,
+            "meanTokens": 4367.2,
+            "meanWallMs": 3336.8051098999917,
+            "meanModelRounds": 1
+          },
+          "warm": {
+            "successes": 5,
+            "meanTokens": 4374.7,
+            "meanWallMs": 3716.644404199999,
+            "meanModelRounds": 1
+          }
+        }
+      }
+    ]
+  },
+  "surface": [
+    {
+      "arm": "main",
+      "fixture": "single-bash",
+      "condition": "uncached",
+      "meanWallMs": 4140.887299300002,
+      "meanMainModelMs": 4111.089440999977,
+      "meanOtherMs": 29.79785830002593,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "bash": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "single-bash",
+      "condition": "warm",
+      "meanWallMs": 4513.31142240001,
+      "meanMainModelMs": 4485.249537300011,
+      "meanOtherMs": 28.06188509999829,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "bash": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "single-read",
+      "condition": "uncached",
+      "meanWallMs": 4151.133335899981,
+      "meanMainModelMs": 4127.867292100052,
+      "meanOtherMs": 23.26604379992932,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "single-read",
+      "condition": "warm",
+      "meanWallMs": 3782.176449199999,
+      "meanMainModelMs": 3758.8929523999336,
+      "meanOtherMs": 23.28349680006504,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "multi-edit",
+      "condition": "uncached",
+      "meanWallMs": 11120.843047100003,
+      "meanMainModelMs": 8311.429214200005,
+      "meanOtherMs": 2809.413832899998,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "bash": 12, "other": 11 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "multi-edit",
+      "condition": "warm",
+      "meanWallMs": 11104.04676489993,
+      "meanMainModelMs": 8625.574995200197,
+      "meanOtherMs": 2478.4717696997336,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "bash": 11, "other": 12 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "dependent-edit",
+      "condition": "uncached",
+      "meanWallMs": 10025.710127600096,
+      "meanMainModelMs": 9982.037016799906,
+      "meanOtherMs": 43.673110800189896,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 30, "edit": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "dependent-edit",
+      "condition": "warm",
+      "meanWallMs": 10124.546449799882,
+      "meanMainModelMs": 10081.83932330003,
+      "meanOtherMs": 42.707126499852166,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 30, "edit": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "output-filter",
+      "condition": "uncached",
+      "meanWallMs": 4259.734485600051,
+      "meanMainModelMs": 4236.705277800002,
+      "meanOtherMs": 23.029207800049335,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "output-filter",
+      "condition": "warm",
+      "meanWallMs": 3971.0792816000526,
+      "meanMainModelMs": 3948.2054362001363,
+      "meanOtherMs": 22.87384539991617,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "browser-image",
+      "condition": "uncached",
+      "meanWallMs": 9501.971143600065,
+      "meanMainModelMs": 9452.315749600064,
+      "meanOtherMs": 49.65539400000125,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "browser": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "browser-image",
+      "condition": "warm",
+      "meanWallMs": 9085.296688200067,
+      "meanMainModelMs": 9035.454039200069,
+      "meanOtherMs": 49.842648999998346,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "browser": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "user-question",
+      "condition": "uncached",
+      "meanWallMs": 4449.483053699974,
+      "meanMainModelMs": 4401.164845099952,
+      "meanOtherMs": 48.3182086000219,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "ask_user_question": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": { "select": 10 },
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "user-question",
+      "condition": "warm",
+      "meanWallMs": 4879.639803599939,
+      "meanMainModelMs": 4829.039740400016,
+      "meanOtherMs": 50.600063199922445,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "ask_user_question": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": { "select": 10 },
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "approval-denial",
+      "condition": "uncached",
+      "meanWallMs": 4919.251899999939,
+      "meanMainModelMs": 4871.2118250998665,
+      "meanOtherMs": 48.04007490007207,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "unsandboxed_bash": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": { "sandbox": 10, "sandboxMatched": 10 },
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "approval-denial",
+      "condition": "warm",
+      "meanWallMs": 5239.385051099956,
+      "meanMainModelMs": 5191.786860300135,
+      "meanOtherMs": 47.59819079982117,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "unsandboxed_bash": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": { "sandbox": 10, "sandboxMatched": 10 },
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "background-build",
+      "condition": "uncached",
+      "meanWallMs": 6661.941000299901,
+      "meanMainModelMs": 6628.726365700364,
+      "meanOtherMs": 33.21463459953666,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "background_task": 20 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "background-build",
+      "condition": "warm",
+      "meanWallMs": 7056.498132699914,
+      "meanMainModelMs": 7022.384878199734,
+      "meanOtherMs": 34.11325450018048,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "background_task": 20 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "team-wait",
+      "condition": "uncached",
+      "meanWallMs": 24803.628948800266,
+      "meanMainModelMs": 23733.727124100365,
+      "meanOtherMs": 1069.901824699901,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 2, "team": 22, "bash": 8 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "team-wait",
+      "condition": "warm",
+      "meanWallMs": 21634.744616400356,
+      "meanMainModelMs": 20714.581759099943,
+      "meanOtherMs": 920.1628573004157,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "bash": 7, "team": 20, "read": 3 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "schedule",
+      "condition": "uncached",
+      "meanWallMs": 6742.776498199906,
+      "meanMainModelMs": 6691.228647600207,
+      "meanOtherMs": 51.54785059969872,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "schedule": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "schedule",
+      "condition": "warm",
+      "meanWallMs": 6703.306564900093,
+      "meanMainModelMs": 6652.375409100112,
+      "meanOtherMs": 50.931155799981205,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "schedule": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "permission-rejection",
+      "condition": "uncached",
+      "meanWallMs": 4739.195900399796,
+      "meanMainModelMs": 4690.762127400097,
+      "meanOtherMs": 48.43377299970016,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "web_fetch": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "permission-rejection",
+      "condition": "warm",
+      "meanWallMs": 4458.060816599987,
+      "meanMainModelMs": 4410.755845400132,
+      "meanOtherMs": 47.30497119985521,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "web_fetch": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "cancel-wait",
+      "condition": "uncached",
+      "meanWallMs": 2373.93022700008,
+      "meanMainModelMs": 2332.6284422999247,
+      "meanOtherMs": 41.30178470015526,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "ask_user_question": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": { "select": 10 },
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "cancel-wait",
+      "condition": "warm",
+      "meanWallMs": 2524.912520099897,
+      "meanMainModelMs": 2483.3380536000245,
+      "meanOtherMs": 41.57446649987251,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "ask_user_question": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": { "select": 10 },
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "chat-web-search",
+      "condition": "uncached",
+      "meanWallMs": 4048.118313499913,
+      "meanMainModelMs": 3977.184356699511,
+      "meanOtherMs": 70.9339568004012,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "web_search": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "chat-web-search",
+      "condition": "warm",
+      "meanWallMs": 4266.652738499828,
+      "meanMainModelMs": 4196.071961299516,
+      "meanOtherMs": 70.58077720031142,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "web_search": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "chat-permission",
+      "condition": "uncached",
+      "meanWallMs": 3391.7066534003243,
+      "meanMainModelMs": 3352.9749547000974,
+      "meanOtherMs": 38.73169870022684,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": {},
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "main",
+      "fixture": "chat-permission",
+      "condition": "warm",
+      "meanWallMs": 3682.7747169999407,
+      "meanMainModelMs": 3644.1804252998904,
+      "meanOtherMs": 38.594291700050235,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": {},
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "single-bash",
+      "condition": "uncached",
+      "meanWallMs": 3118.141962599985,
+      "meanMainModelMs": 3084.754335499928,
+      "meanOtherMs": 33.387627100057216,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "bash": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "single-bash",
+      "condition": "warm",
+      "meanWallMs": 3633.308955300023,
+      "meanMainModelMs": 3600.250436600032,
+      "meanOtherMs": 33.058518699991325,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "bash": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "single-read",
+      "condition": "uncached",
+      "meanWallMs": 3123.2359859000194,
+      "meanMainModelMs": 3094.1542981000384,
+      "meanOtherMs": 29.081687799980863,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "single-read",
+      "condition": "warm",
+      "meanWallMs": 3780.0116859999716,
+      "meanMainModelMs": 3751.1765123999444,
+      "meanOtherMs": 28.83517360002734,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "multi-edit",
+      "condition": "uncached",
+      "meanWallMs": 7243.875913300039,
+      "meanMainModelMs": 6888.227002900047,
+      "meanOtherMs": 355.648910399992,
+      "meanPtcCalls": 2,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "read": 60, "edit": 30 },
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "multi-edit",
+      "condition": "warm",
+      "meanWallMs": 8024.650870900043,
+      "meanMainModelMs": 7670.117644899944,
+      "meanOtherMs": 354.5332260000985,
+      "meanPtcCalls": 2,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "read": 60, "edit": 30 },
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "dependent-edit",
+      "condition": "uncached",
+      "meanWallMs": 8552.035274800006,
+      "meanMainModelMs": 8500.993080799886,
+      "meanOtherMs": 51.042194000119345,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 30, "edit": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "dependent-edit",
+      "condition": "warm",
+      "meanWallMs": 9179.282362799999,
+      "meanMainModelMs": 9128.762793300022,
+      "meanOtherMs": 50.51956949997693,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 30, "edit": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "output-filter",
+      "condition": "uncached",
+      "meanWallMs": 4618.357733100001,
+      "meanMainModelMs": 4590.15813620016,
+      "meanOtherMs": 28.19959689984098,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "output-filter",
+      "condition": "warm",
+      "meanWallMs": 3549.7543197999707,
+      "meanMainModelMs": 3521.7027077001053,
+      "meanOtherMs": 28.05161209986545,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "browser-image",
+      "condition": "uncached",
+      "meanWallMs": 7623.035818199953,
+      "meanMainModelMs": 7409.37448369991,
+      "meanOtherMs": 213.66133450004273,
+      "meanPtcCalls": 1,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "browser": 10 },
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "browser-image",
+      "condition": "warm",
+      "meanWallMs": 8145.6247710000725,
+      "meanMainModelMs": 7930.144400499948,
+      "meanOtherMs": 215.480370500125,
+      "meanPtcCalls": 1,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "browser": 10 },
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "user-question",
+      "condition": "uncached",
+      "meanWallMs": 3922.497321999911,
+      "meanMainModelMs": 3711.1888589000328,
+      "meanOtherMs": 211.30846309987828,
+      "meanPtcCalls": 1,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "ask_user_question": 10 },
+      "interactionRequests": { "select": 10 },
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "user-question",
+      "condition": "warm",
+      "meanWallMs": 5267.986578100082,
+      "meanMainModelMs": 5055.227710400242,
+      "meanOtherMs": 212.7588676998392,
+      "meanPtcCalls": 1,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "ask_user_question": 10 },
+      "interactionRequests": { "select": 10 },
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "approval-denial",
+      "condition": "uncached",
+      "meanWallMs": 4063.8287383000365,
+      "meanMainModelMs": 3882.00453200005,
+      "meanOtherMs": 181.82420629998668,
+      "meanPtcCalls": 0.8,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "bash": 2 },
+      "operationsByCapability": { "unsandboxed_bash": 8 },
+      "interactionRequests": {
+        "sandbox": 8,
+        "sandboxMatched": 8,
+        "confirm": 2,
+        "confirmMatched": 2
+      },
+      "scriptErrors": 8
+    },
+    {
+      "arm": "ptc",
+      "fixture": "approval-denial",
+      "condition": "warm",
+      "meanWallMs": 4702.463049399946,
+      "meanMainModelMs": 4491.226615400146,
+      "meanOtherMs": 211.2364339997992,
+      "meanPtcCalls": 1,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "unsandboxed_bash": 10 },
+      "interactionRequests": { "sandbox": 10, "sandboxMatched": 10 },
+      "scriptErrors": 10
+    },
+    {
+      "arm": "ptc",
+      "fixture": "background-build",
+      "condition": "uncached",
+      "meanWallMs": 6233.936206400208,
+      "meanMainModelMs": 6031.449112899974,
+      "meanOtherMs": 202.48709350023418,
+      "meanPtcCalls": 1,
+      "meanDocsCalls": 1,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "background_task": 20 },
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "background-build",
+      "condition": "warm",
+      "meanWallMs": 7460.59589869976,
+      "meanMainModelMs": 7258.99615330007,
+      "meanOtherMs": 201.59974539969116,
+      "meanPtcCalls": 1,
+      "meanDocsCalls": 1,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "background_task": 20 },
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "team-wait",
+      "condition": "uncached",
+      "meanWallMs": 21313.413516099936,
+      "meanMainModelMs": 20475.192079199758,
+      "meanOtherMs": 838.2214369001798,
+      "meanPtcCalls": 1.9,
+      "meanDocsCalls": 1,
+      "directCallsByCapability": { "read": 8, "bash": 2 },
+      "operationsByCapability": { "team": 20 },
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "team-wait",
+      "condition": "warm",
+      "meanWallMs": 25934.257319800185,
+      "meanMainModelMs": 24074.617409700062,
+      "meanOtherMs": 1859.6399101001211,
+      "meanPtcCalls": 2,
+      "meanDocsCalls": 1,
+      "directCallsByCapability": { "bash": 8, "read": 2 },
+      "operationsByCapability": { "team": 20 },
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "schedule",
+      "condition": "uncached",
+      "meanWallMs": 8422.390528100077,
+      "meanMainModelMs": 8197.122552500106,
+      "meanOtherMs": 225.26797559997067,
+      "meanPtcCalls": 1,
+      "meanDocsCalls": 1,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "schedule": 10 },
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "schedule",
+      "condition": "warm",
+      "meanWallMs": 8771.239784400164,
+      "meanMainModelMs": 8545.992765699793,
+      "meanOtherMs": 225.24701870037242,
+      "meanPtcCalls": 1,
+      "meanDocsCalls": 1,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "schedule": 10 },
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "permission-rejection",
+      "condition": "uncached",
+      "meanWallMs": 4376.9213838001715,
+      "meanMainModelMs": 4345.02933990024,
+      "meanOtherMs": 31.892043899931014,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 1,
+      "directCallsByCapability": { "web_fetch": 1 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "permission-rejection",
+      "condition": "warm",
+      "meanWallMs": 4142.57295350004,
+      "meanMainModelMs": 4091.5975241001697,
+      "meanOtherMs": 50.975429399870336,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0.1,
+      "directCallsByCapability": { "web_fetch": 9 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "cancel-wait",
+      "condition": "uncached",
+      "meanWallMs": 2464.983721000049,
+      "meanMainModelMs": 2262.9792558001354,
+      "meanOtherMs": 202.00446519991382,
+      "meanPtcCalls": 1,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "ask_user_question": 10 },
+      "interactionRequests": { "select": 10 },
+      "scriptErrors": 10
+    },
+    {
+      "arm": "ptc",
+      "fixture": "cancel-wait",
+      "condition": "warm",
+      "meanWallMs": 2691.900818100199,
+      "meanMainModelMs": 2489.532970699854,
+      "meanOtherMs": 202.3678474003449,
+      "meanPtcCalls": 1,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "ask_user_question": 10 },
+      "interactionRequests": { "select": 10 },
+      "scriptErrors": 10
+    },
+    {
+      "arm": "ptc",
+      "fixture": "chat-web-search",
+      "condition": "uncached",
+      "meanWallMs": 3286.997789600119,
+      "meanMainModelMs": 3211.8079014996065,
+      "meanOtherMs": 75.18988810051232,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "web_search": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "chat-web-search",
+      "condition": "warm",
+      "meanWallMs": 4004.2456650000067,
+      "meanMainModelMs": 3928.9303977997974,
+      "meanOtherMs": 75.3152672002092,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "web_search": 10 },
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "chat-permission",
+      "condition": "uncached",
+      "meanWallMs": 6625.654435599968,
+      "meanMainModelMs": 6566.868182999827,
+      "meanOtherMs": 58.78625260014087,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 2,
+      "directCallsByCapability": {},
+      "operationsByCapability": {},
+      "interactionRequests": {},
+      "scriptErrors": 0
+    },
+    {
+      "arm": "ptc",
+      "fixture": "chat-permission",
+      "condition": "warm",
+      "meanWallMs": 6889.061642700061,
+      "meanMainModelMs": 6814.407935100421,
+      "meanOtherMs": 74.65370759963989,
+      "meanPtcCalls": 0.1,
+      "meanDocsCalls": 1.9,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "other": 1 },
+      "interactionRequests": {},
+      "scriptErrors": 1
+    }
+  ],
+  "budget": {
+    "limitUsd": 150,
+    "carry": { "spentUnits": 587296559, "admittedAttempts": 8545 },
+    "final": { "spentUnits": 763944992, "admittedAttempts": 11232 },
+    "roundSpentUnits": 176648433,
+    "roundAttempts": 2687
+  }
+}

@@ -12,6 +12,8 @@ import { configRoles } from '../../config.js';
 import { isInside } from '../../sandbox.js';
 import { DEFAULT_ROLES, describeRoles, roleBriefs, type RoleBrief } from '../../roles.js';
 import { toolPrompt } from '../../prompts/tools.js';
+import { QUESTION_RESULT } from '../ask-question.js';
+import { arr, bool, fields, int, nullable, obj, record, str } from '../../tools/result-schema.js';
 
 type Json = Record<string, any>;
 const short = { type: 'string', minLength: 1, maxLength: 12000 };
@@ -144,6 +146,121 @@ const DEFINITIONS: Array<[string, string, Json]> = [
   ],
 ];
 
+/** A team event (message, question, reply, post, task change …); kinds add their own fields. */
+const EVENT = record(
+  {
+    id: str(),
+    time: str(),
+    kind: str('message, question, reply, post, task, result, …'),
+    from: str(),
+    to: str(),
+    body: str(),
+    truncated: bool('body is cut; read the event with agent_inbox event_id'),
+  },
+  ['from', 'to', 'body', 'truncated'],
+);
+const PAGE = fields({
+  items: arr(EVENT),
+  next: nullable(str('Cursor for after')),
+  more: bool(),
+  archive: str('Path of the full event log'),
+});
+const AGENT = record(
+  {
+    name: str(),
+    kind: str(),
+    mode: str('team or subagent'),
+    status: str(),
+    cwd: str(),
+    model: str(),
+    thinking: str(),
+    task: str(),
+    background: bool(),
+    lastError: str(),
+    activity: str('What it is doing now'),
+  },
+  ['kind', 'mode', 'cwd', 'model', 'thinking', 'task', 'background', 'lastError', 'activity'],
+);
+const TASK = record(
+  {
+    id: str(),
+    subject: str(),
+    description: str(),
+    status: str('pending, in_progress or completed'),
+    owner: str(),
+    blockedBy: arr(str()),
+    revision: int('Pass as expected_revision to task_update'),
+    blocked: bool(),
+    ready: bool('pending, unowned and unblocked'),
+  },
+  ['owner'],
+);
+const SUBAGENT_OUTCOME = fields(
+  {
+    name: str(),
+    status: { type: 'string', enum: ['done', 'failed', 'stopped'] },
+    result: str(),
+    error: str(),
+    event_id: str('Read the whole result with agent_inbox event_id'),
+  },
+  ['result', 'error', 'event_id'],
+);
+const PENDING_QUESTION = fields({
+  id: str(),
+  question_id: str(),
+  from: str(),
+  to: { const: 'user' },
+  status: { const: 'pending', description: 'The answer arrives later as a team event' },
+});
+
+/** Result contracts of the team capabilities. */
+const TEAM_RESULTS = {
+  agent_list: fields({
+    directory: str(),
+    roles: arr(record({ name: str(), description: str() }, ['description'])),
+    agents: arr(AGENT),
+  }),
+  agent_wait: fields(
+    {
+      agent: str(),
+      reason: str('Why the wait ended: a status, question, cancelled, timeout, …'),
+      status: str(),
+      question_id: str(),
+      question_to: str(),
+      sessionFile: str(),
+    },
+    ['question_id', 'question_to', 'sessionFile'],
+  ),
+  agent_send: EVENT,
+  agent_ask: { oneOf: [EVENT, PENDING_QUESTION, QUESTION_RESULT] },
+  agent_reply: EVENT,
+  agent_inbox: {
+    oneOf: [
+      PAGE,
+      fields({
+        event: record({
+          id: str(),
+          body: str(),
+          offset: int(),
+          total_chars: int(),
+          next_offset: nullable(int()),
+        }),
+      }),
+    ],
+  },
+  board_post: EVENT,
+  board_read: PAGE,
+  task_create: TASK,
+  task_list: fields({ tasks: arr(TASK) }),
+  task_get: TASK,
+  task_update: { oneOf: [TASK, fields({ deleted: str() })] },
+  agent_stop: fields({ stopped: str() }),
+  agent_spawn: AGENT,
+  subagent: {
+    oneOf: [SUBAGENT_OUTCOME, record({ name: str(), status: str(), note: str() })],
+  },
+} satisfies Record<string, Record<string, unknown>>;
+
 /** Coordination tools a team member keeps regardless of its kind's tool allowlist. */
 export const TEAM_TOOL_NAMES = DEFINITIONS.map(([name]) => name);
 
@@ -187,7 +304,37 @@ const MAX_FOREGROUND_RESULT = 40_000;
 const result = (data: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(data) }],
   details: {},
+  data: JSON.parse(JSON.stringify(data ?? {})) as Record<string, unknown>,
 });
+
+/**
+ * Events an `agent_inbox` result returned whole (addressed to the parent):
+ * a single event read in one piece, or untruncated page entries.
+ */
+function fullEvents(output: string): Array<{ id: string; body: string }> {
+  let page: Json;
+  try {
+    page = JSON.parse(output);
+  } catch {
+    return []; // Hook output may include non-JSON text.
+  }
+  const out: Array<{ id: string; body: string }> = [];
+  const body = (entry: Json) => (typeof entry.body === 'string' ? entry.body : '');
+  const event = page?.event;
+  if (
+    event &&
+    event.offset === 0 &&
+    event.next_offset === null &&
+    event.to === 'parent' &&
+    typeof event.id === 'string'
+  )
+    out.push({ id: event.id, body: body(event) });
+  if (Array.isArray(page?.items))
+    for (const entry of page.items as Json[])
+      if (!entry.truncated && entry.to === 'parent' && typeof entry.id === 'string')
+        out.push({ id: entry.id, body: body(entry) });
+  return out;
+}
 
 export function teamFeature(): Feature {
   const childName = teamChildName();
@@ -197,6 +344,8 @@ export function teamFeature(): Feature {
   let suspended = false;
   const delivered = new Set<string>();
   const deferred = new Map<string, Json>();
+  /** Events `agent_inbox` operations returned whole, by the `ptc` call they ran in. */
+  const inboxReads = new Map<string, Array<{ id: string; body: string }>>();
   const eventId = (message: { customType?: string; details?: unknown }) => {
     if (message.customType !== 'agent-team') return undefined;
     return (message.details as { event?: { id?: string } } | undefined)?.event?.id;
@@ -325,6 +474,7 @@ export function teamFeature(): Feature {
       },
       ['task'],
     ),
+    resultSchema: TEAM_RESULTS.subagent,
     async execute(args, ctx) {
       const background = args.background === true;
       const { background: _flag, ...rest } = args ?? {};
@@ -348,6 +498,7 @@ export function teamFeature(): Feature {
           },
         ],
         details: { name: report.name, status: report.status, event_id: report.event_id },
+        data: JSON.parse(JSON.stringify(report)) as Record<string, unknown>,
         ...(report.status === 'done' ? {} : { isError: true }),
       };
     },
@@ -360,6 +511,7 @@ export function teamFeature(): Feature {
       name,
       description,
       parameters,
+      resultSchema: TEAM_RESULTS[name as keyof typeof TEAM_RESULTS],
       async execute(args, ctx) {
         return result(await call(agent, name, args, ctx.signal));
       },
@@ -379,6 +531,7 @@ export function teamFeature(): Feature {
           },
           ['name', 'task'],
         ),
+        resultSchema: TEAM_RESULTS.agent_spawn,
         async execute(args, ctx) {
           const signal = AbortSignal.any([ctx.signal, lifetime.signal]);
           return result(await manager(agent).spawn(args, defaults(agent, ctx.cwd), signal));
@@ -388,6 +541,7 @@ export function teamFeature(): Feature {
         name: 'agent_stop',
         description: toolPrompt('agent_stop'),
         parameters: object({ agent: { type: 'string' } }, ['agent']),
+        resultSchema: TEAM_RESULTS.agent_stop,
         async execute(args, ctx) {
           return result(await call(agent, 'agent_stop', args, ctx.signal));
         },
@@ -444,37 +598,50 @@ export function teamFeature(): Feature {
         message.toolName === 'agent_inbox' &&
         !message.isError
       ) {
-        // Inspect actual model-visible output, not a nested PTC invocation or
-        // hidden details: calling inbox alone does not mean its result was read.
-        for (const part of message.content) {
-          if (part.type !== 'text') continue;
-          try {
-            const page = JSON.parse(part.text);
-            // A single-event read counts only when the whole body came back at once.
-            const event = page.event;
-            if (
-              event &&
-              event.offset === 0 &&
-              event.next_offset === null &&
-              event.to === 'parent' &&
-              typeof event.id === 'string'
+        // Inspect actual model-visible output, not hidden details: calling
+        // inbox alone does not mean its result was read.
+        for (const part of message.content)
+          if (part.type === 'text')
+            acknowledge(
+              agent,
+              fullEvents(part.text).map(({ id }) => id),
+            );
+      } else if (message.role === 'toolResult' && message.toolName === 'ptc') {
+        // A ptc script read the inbox: an event counts as read only when the
+        // script handed the model both its id and its whole body (a short body
+        // alone, like "ok", could appear by chance). Otherwise it is delivered.
+        const read = inboxReads.get(message.toolCallId);
+        inboxReads.delete(message.toolCallId);
+        if (!read?.length) return;
+        const visible = message.content
+          .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+          .join('');
+        acknowledge(
+          agent,
+          read
+            .filter(
+              ({ id, body }) =>
+                body.length > 0 &&
+                visible.includes(id) &&
+                (visible.includes(body) || visible.includes(JSON.stringify(body).slice(1, -1))),
             )
-              acknowledge(agent, [event.id]);
-            if (Array.isArray(page.items))
-              acknowledge(
-                agent,
-                page.items
-                  .filter(
-                    (entry: Json) =>
-                      !entry.truncated && entry.to === 'parent' && typeof entry.id === 'string',
-                  )
-                  .map((entry: Json) => entry.id),
-              );
-          } catch {
-            /* Hook output may include non-JSON text. */
-          }
-        }
+            .map(({ id }) => id),
+        );
       }
+    },
+    operationRecorded(_agent, entry) {
+      if (childName || entry.toolName !== 'agent_inbox' || entry.isError) return;
+      const events = entry.content.flatMap((part) =>
+        part.type === 'text' ? fullEvents(part.text) : [],
+      );
+      if (!events.length) return;
+      // Bounded: results of ptc calls that never got recorded are dropped.
+      if (!inboxReads.has(entry.parentToolCallId) && inboxReads.size >= 50)
+        inboxReads.delete(inboxReads.keys().next().value!);
+      inboxReads.set(entry.parentToolCallId, [
+        ...(inboxReads.get(entry.parentToolCallId) ?? []),
+        ...events,
+      ]);
     },
     tools: (agent) => (on(agent) ? tools(agent) : []),
     panel() {

@@ -1,4 +1,4 @@
-import { mergeTool } from './pi-messages';
+import { mergeTool, withOperation } from './pi-messages';
 import type {
   ClientSessionState,
   ConversationMessage,
@@ -122,6 +122,23 @@ export function reduceEvent(
     }
     case 'tool_updated': {
       const tool = event.tool;
+      // A ptc operation goes under its ptc call.
+      if (tool.parentId) {
+        const parentId = tool.parentId;
+        const owner = findLastIndex(
+          state.messages,
+          (message) => !!message.tools?.some((item) => item.id === parentId),
+        );
+        if (owner !== -1)
+          return {
+            ...base,
+            messages: state.messages.map((message, position) =>
+              position === owner
+                ? { ...message, tools: withOperation(message.tools ?? [], parentId, tool)! }
+                : message,
+            ),
+          };
+      }
       let index = event.messageId
         ? state.messages.findIndex((message) => message.id === event.messageId)
         : findLastIndex(

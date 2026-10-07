@@ -9,7 +9,8 @@ import type { Agent } from '../agent.js';
 import { capabilities } from '../capabilities.js';
 import type { Feature } from '../feature.js';
 import { GatewayError, processGateway, type NodeGateway } from '../gateway.js';
-import { text, type Tool, type ToolResult } from '../tools/types.js';
+import { text, typed, type Tool, type ToolResult } from '../tools/types.js';
+import { arr, byAction, int, nullable, obj, str } from '../tools/result-schema.js';
 import { toolPrompt } from '../prompts/tools.js';
 
 export const SCHEDULE_TOOL = 'schedule';
@@ -92,7 +93,65 @@ export function formatRunResult(run: RunResult): string {
   return `${head}:\n${run.result}${footer}`;
 }
 
-const str = (description: string) => ({ type: 'string', description });
+const param = (description: string) => ({ type: 'string', description });
+
+const BRIEF = obj(
+  {
+    id: str(),
+    title: str(),
+    workspace: str(),
+    when: str('The cron expression or one-off time, as text'),
+    status: str(),
+    nextRun: str(),
+    model: str(),
+    thinking: str(),
+    notify: str(),
+    prompt: str(),
+    lastRun: obj({ id: str(), status: str(), due: str(), result: str(), resultChars: int() }, [
+      'result',
+      'resultChars',
+    ]),
+  },
+  ['nextRun', 'model', 'thinking', 'notify', 'lastRun'],
+);
+
+/** Only the documented fields of a gateway record, so results match the contract. */
+function pick(record: Record<string, any>, schema: Record<string, any>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(schema.properties as Record<string, any>)) {
+    const value = record?.[key];
+    if (value === undefined || value === null) continue;
+    out[key] = field.type === 'object' ? pick(value, field) : value;
+  }
+  return out;
+}
+
+const SCHEDULE_RESULT = byAction({
+  list: { properties: { timezone: str(), schedules: arr(BRIEF) } },
+  create: {
+    properties: {
+      proposalId: str('The user approves it in the chat; it does not exist until then'),
+      title: str(),
+    },
+  },
+  update: { properties: { proposalId: str(), title: str() } },
+  pause: { properties: { id: str(), title: str(), nextRun: str() }, optional: ['nextRun'] },
+  resume: { properties: { id: str(), title: str(), nextRun: str() }, optional: ['nextRun'] },
+  delete: { properties: { id: str(), title: str() } },
+  result: {
+    properties: {
+      id: str('The run'),
+      schedule: str(),
+      status: str(),
+      session: str(),
+      result: str('This chunk of the result'),
+      resultOffset: int(),
+      resultChars: int(),
+      nextOffset: nullable(int('Where the next chunk starts, or null at the end')),
+    },
+    optional: ['session'],
+  },
+});
 
 function scheduleTool(gateway: NodeGateway): Tool {
   return {
@@ -105,7 +164,7 @@ function scheduleTool(gateway: NodeGateway): Tool {
           type: 'string',
           enum: ['list', 'create', 'update', 'pause', 'resume', 'delete', 'result'],
         },
-        id: str(
+        id: param(
           'The schedule (like s1a2b3c4d) for update, pause, resume and delete; the run (like r1a2b3c4d) for result',
         ),
         offset: {
@@ -113,12 +172,12 @@ function scheduleTool(gateway: NodeGateway): Tool {
           minimum: 0,
           description: 'With result: first result character to return (default 0)',
         },
-        prompt: str('What the scheduled agent should do, standing on its own'),
-        title: str('A short title; it names each run session'),
-        cron: str('Repeat: 5-field cron expression'),
-        at: str('Once: ISO 8601 time; without an offset it is read in timezone'),
-        timezone: str('IANA time zone for cron and at'),
-        workspace: str(
+        prompt: param('What the scheduled agent should do, standing on its own'),
+        title: param('A short title; it names each run session'),
+        cron: param('Repeat: 5-field cron expression'),
+        at: param('Once: ISO 8601 time; without an offset it is read in timezone'),
+        timezone: param('IANA time zone for cron and at'),
+        workspace: param(
           'Where it runs (workspace id or name). Default: this workspace. Only the assistant may pick another one.',
         ),
         notify: {
@@ -131,6 +190,7 @@ function scheduleTool(gateway: NodeGateway): Tool {
       required: ['action'],
       additionalProperties: false,
     },
+    resultSchema: SCHEDULE_RESULT,
     async execute(args, ctx) {
       const action = typeof args.action === 'string' ? args.action : '';
       const field = (key: string) =>
@@ -154,9 +214,15 @@ function scheduleTool(gateway: NodeGateway): Tool {
               schedules: Brief[];
               timezone: string;
             };
-            return text(formatSchedules(result.schedules, result.timezone), {
-              ids: result.schedules.map((item) => item.id),
-            });
+            return typed(
+              formatSchedules(result.schedules, result.timezone),
+              {
+                action,
+                timezone: result.timezone,
+                schedules: result.schedules.map((item) => pick(item, BRIEF)),
+              },
+              { details: { ids: result.schedules.map((item) => item.id) } },
+            );
           }
           case 'create': {
             if (!('prompt' in spec)) return text('prompt is required', undefined, true);
@@ -164,9 +230,10 @@ function scheduleTool(gateway: NodeGateway): Tool {
               proposalId: string;
               title: string;
             };
-            return text(
+            return typed(
               `Asked the user to approve the schedule “${result.title}”. It does not exist until they do; check with list afterwards.`,
-              { proposalId: result.proposalId },
+              { action, proposalId: result.proposalId, title: result.title },
+              { details: { proposalId: result.proposalId } },
             );
           }
           case 'update': {
@@ -176,9 +243,10 @@ function scheduleTool(gateway: NodeGateway): Tool {
               { id, ...spec },
               ctx.signal,
             )) as { proposalId: string; title: string };
-            return text(
+            return typed(
               `Asked the user to approve the change to “${result.title}”. It keeps its current settings until they do.`,
-              { proposalId: result.proposalId },
+              { action, proposalId: result.proposalId, title: result.title },
+              { details: { proposalId: result.proposalId } },
             );
           }
           case 'pause':
@@ -190,9 +258,16 @@ function scheduleTool(gateway: NodeGateway): Tool {
               | { title: string };
             const done =
               action === 'pause' ? 'Paused' : action === 'resume' ? 'Resumed' : 'Deleted';
-            return text(
-              `${done} “${result.title}”${'nextRun' in result && result.nextRun ? `; next run ${result.nextRun}` : ''}.`,
-              { id },
+            const nextRun = 'nextRun' in result && result.nextRun ? result.nextRun : undefined;
+            return typed(
+              `${done} “${result.title}”${nextRun ? `; next run ${nextRun}` : ''}.`,
+              {
+                action,
+                id,
+                title: result.title,
+                ...(nextRun && action !== 'delete' ? { nextRun } : {}),
+              },
+              { details: { id } },
             );
           }
           case 'result': {
@@ -203,7 +278,21 @@ function scheduleTool(gateway: NodeGateway): Tool {
               { id, ...(offset ? { offset } : {}) },
               ctx.signal,
             )) as RunResult;
-            return text(formatRunResult(run), { id: run.id, nextOffset: run.nextOffset ?? null });
+            return typed(
+              formatRunResult(run),
+              {
+                action,
+                id: run.id,
+                schedule: run.schedule,
+                status: run.status,
+                ...(run.session ? { session: run.session } : {}),
+                result: run.result,
+                resultOffset: run.resultOffset,
+                resultChars: run.resultChars,
+                nextOffset: run.nextOffset ?? null,
+              },
+              { details: { id: run.id, nextOffset: run.nextOffset ?? null } },
+            );
           }
           default:
             return text(

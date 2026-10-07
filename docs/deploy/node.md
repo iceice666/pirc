@@ -45,7 +45,7 @@ The chat node keeps every chat workspace under `$STATE/chat/<workspaceId>/` (the
 
 ## Agent process
 
-Both node executables support the internal `agent` and `ptc-worker` commands and re-execute themselves for those workers. These are not separately deployed executables. Keep the gateway and both node roles on the same release/protocol version ([Upgrades](./upgrades.md)).
+Both node executables support the internal `agent` and `ptc-guest` commands and re-execute themselves for those workers (`ptc-guest` runs one `ptc` script in the embedded QuickJS WASM interpreter, with an empty environment, inside the agent's sandbox). These are not separately deployed executables. Keep the gateway and both node roles on the same release/protocol version ([Upgrades](./upgrades.md)).
 
 | Variable                                          | Default           | Meaning                                                                                               |
 | ------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------- |
@@ -63,7 +63,7 @@ Both node executables support the internal `agent` and `ptc-worker` commands and
 
 Everything the node starts (agents and their tools, approved host commands, side-panel terminals and git, Chromium, ffmpeg) gets an **allowlisted** environment (`apps/gateway/src/node/secrets.ts`): `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`/`LC_*`, `TERM`/`COLORTERM`/`TERM_PROGRAM*`, `TZ`, `TMPDIR`, `PWD`, `EDITOR`/`VISUAL`/`PAGER`, `XDG_*`, Nix and CA-certificate variables, `LOCALE_ARCHIVE`, display variables, a few toolchain directories (`CARGO_HOME`, `GOPATH`, `JAVA_HOME`, …) and non-secret `PIRC_*`. Everything else is dropped, including `PIRC_NODE_TOKEN` and every `PIRC_*TOKEN*`/`*SECRET*`/`*KEY*`/`*PASSWORD*`, `EXA_API_KEY`, provider keys (`ANTHROPIC_API_KEY`, …), `AWS_*`, `GH_TOKEN`/`GITHUB_TOKEN`, `SSH_AUTH_SOCK`, `GIT_*` and `*_PROXY` (inside srt the sandbox sets its own proxy). Side-panel terminals additionally keep `SSH_AUTH_SOCK`, since only the human types there; their login shell re-reads the user's profile.
 
-To give agents a credential on purpose (a `GITHUB_TOKEN` for the agent's own `gh`), either put it in the agent config's `env`, or keep it in the node's environment and name it in `PIRC_AGENT_ENV_ALLOW=GITHUB_TOKEN`. pirc's own secrets cannot be passed this way.
+To give agents a credential on purpose (a `GITHUB_TOKEN` for the agent's own `gh`), either put it in the agent config's `env`, or keep it in the node's environment and name it in `PIRC_AGENT_ENV_ALLOW=GITHUB_TOKEN`. pirc's own secrets cannot be passed this way. `gh` and git need a few more settings to work inside the sandbox: see [Git and the GitHub CLI](./sandbox-and-browser.md#git-and-the-github-cli).
 
 ## The agent config directory
 
@@ -134,7 +134,7 @@ Do not edit files. Cite file:line evidence and mark anything unverified.
 - `providers` and `defaultModel` do **not** belong here any more; they are ignored with a warning (models live on the [gateway](./gateway.md#model-backends)). Legacy `roles` and `features.agentTeam.kinds` JSON settings are also ignored with a startup warning; move them to `$PIRC_CONFIG_DIR/roles/<name>.md`.
 - `features.*` is documented in the [top-level README](../../README.md#agent); `features.observationalMemory` in [`docs/architecture-observational-memory.md`](../architecture-observational-memory.md). Each feature object is validated as a whole: an invalid value resets that feature to its defaults.
 - Hooks (`sessionStart`, `beforePrompt`, `beforeTool`, `afterTool`, `agentSettled`) receive JSON on stdin; a `beforeTool` hook exits `2` to block a call. They run inside the sandbox.
-- `features.autoMode.deny`: regular expressions (or `/re/flags`) for commands you never want run without asking. A match makes the action dangerous: the agent must ask you, and teammates and subagents are refused. It is checked before anything else, also when auto mode is off, against the raw command, each unquoted command, the package.json scripts, Makefile/justfile recipes and shell scripts a command runs, tty input to background tasks and `code` scripts. An invalid pattern is matched as literal text and the session shows a warning.
+- `features.autoMode.deny`: regular expressions (or `/re/flags`) for commands you never want run without asking. A match makes the action dangerous: the agent must ask you, and teammates and subagents are refused. It is checked before anything else, also when auto mode is off, against the raw command, each unquoted command, the package.json scripts, Makefile/justfile recipes and shell scripts a command runs, tty input to background tasks and `ptc` scripts (an operation inside a script is checked like the same direct call). An invalid pattern is matched as literal text and the session shows a warning.
 - `allowedPaths` widens the file tools' write roots and the sandbox's writable paths (node config only; a project's `allowedPaths` never widens the sandbox).
 - Skills: `$PIRC_CONFIG_DIR/skills/<name>/SKILL.md` reaches every session on the node; `~/.agents/skills/` of the node account is read too (lowest precedence); `<workspace>/.pirc/skills/` is per project. Programs a skill runs must be on the node's `PATH`.
 

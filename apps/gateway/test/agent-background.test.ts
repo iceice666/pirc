@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { TaskManager } from '../src/agent/features/background/manager.js';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
+import { ptcCall } from './fixtures/fake-llm.js';
 
 const agents: AgentProcess[] = [];
 const managers: TaskManager[] = [];
@@ -103,16 +104,12 @@ describe('background_task tool', () => {
     agents.push(agent);
     agent.llm.push(
       {
-        tool: {
-          id: 'b1',
-          name: 'background_task',
-          args: {
-            action: 'start',
-            tty: true,
-            notify_on: 'READY',
-            command: 'sleep 0.2; echo READY; read line; echo "got $line"; sleep 30',
-          },
-        },
+        tool: ptcCall('b1', 'background_task', {
+          action: 'start',
+          tty: true,
+          notify_on: 'READY',
+          command: 'sleep 0.2; echo READY; read line; echo "got $line"; sleep 30',
+        }),
       },
       { text: 'Waiting for the server.' },
       {
@@ -120,11 +117,7 @@ describe('background_task tool', () => {
           const last = JSON.stringify(body.messages.at(-1).content);
           const id = /([0-9a-f]{8}) \//.exec(last)![1]!;
           return {
-            tool: {
-              id: 'w1',
-              name: 'background_task',
-              args: { action: 'write', id, input: 'ping\n' },
-            },
+            tool: ptcCall('w1', 'background_task', { action: 'write', id, input: 'ping\n' }),
           };
         },
       },
@@ -141,7 +134,9 @@ describe('background_task tool', () => {
     await agent.waitFor(
       (e) => e.type === 'message_end' && e.message.content?.[0]?.text === 'Sent input.',
     );
-    const end = agent.events.findLast((e) => e.type === 'tool_execution_end');
+    const end = agent.events.findLast(
+      (e) => e.type === 'tool_execution_end' && !e.parentToolCallId && e.toolCallId === 'w1',
+    );
     expect(end!.isError).toBeFalsy();
     expect(end!.result.content[0].text).toContain('got ping');
   });
@@ -151,11 +146,10 @@ describe('background_task tool', () => {
     agents.push(agent);
     agent.llm.push(
       {
-        tool: {
-          id: 'b1',
-          name: 'background_task',
-          args: { action: 'start', command: 'sleep 0.3; echo built' },
-        },
+        tool: ptcCall('b1', 'background_task', {
+          action: 'start',
+          command: 'sleep 0.3; echo built',
+        }),
       },
       { text: 'Started the build; I will check when it finishes.' },
       { text: 'The build finished.' },
@@ -187,18 +181,14 @@ describe('background_task tool', () => {
     agent.llm.push(
       {
         dynamic: () => ({
-          tool: {
-            id: 's',
-            name: 'background_task',
-            args: { action: 'start', command: 'echo quick' },
-          },
+          tool: ptcCall('s', 'background_task', { action: 'start', command: 'echo quick' }),
         }),
       },
       {
         dynamic: (body) => {
           const started = body.messages.at(-1).content as string;
           const id = started.split(' ')[0];
-          return { tool: { id: 'w', name: 'background_task', args: { action: 'wait', id } } };
+          return { tool: ptcCall('w', 'background_task', { action: 'wait', id }) };
         },
       },
       { text: 'done' },
@@ -206,7 +196,9 @@ describe('background_task tool', () => {
     const from = agent.events.length;
     await agent.send({ type: 'prompt', message: 'quick task' });
     await settledAfter(agent, from);
-    const waited = agent.events.findLast((e) => e.type === 'tool_execution_end');
+    const waited = agent.events.findLast(
+      (e) => e.type === 'tool_execution_end' && !e.parentToolCallId && e.toolCallId === 'w',
+    );
     expect(waited!.result.content[0].text).toContain('Wait finished');
     expect(waited!.result.content[0].text).toContain('quick');
     await Bun.sleep(300);

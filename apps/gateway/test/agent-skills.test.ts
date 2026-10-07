@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import os, { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PathGuard } from '../src/agent/sandbox.js';
 import { discoverSkills, parseSkillFile, skillReadPaths, skillRoots } from '../src/agent/skills.js';
 import { settledAfter, startAgent, writeAgentConfig, type AgentProcess } from './agent-harness.js';
+import { ptcCall } from './fixtures/fake-llm.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
@@ -165,13 +166,12 @@ describe('skills feature', () => {
     const reference = path.join(env.configDir, 'skills', 'moodle-cli', 'references', 'commands.md');
     agent.llm.push(
       {
-        tool: { id: 'r1', name: 'read', args: { path: reference } },
+        tool: ptcCall('r1', 'read', { path: reference }),
         also: [
-          {
-            id: 'w1',
-            name: 'write',
-            args: { path: path.join(env.external, 'moodle-cli', 'SKILL.md'), content: 'x' },
-          },
+          ptcCall('w1', 'write', {
+            path: path.join(env.external, 'moodle-cli', 'SKILL.md'),
+            content: 'x',
+          }),
         ],
       },
       { text: 'done' },
@@ -186,11 +186,19 @@ describe('skills feature', () => {
     // Personal ~/.agents/skills skill is discovered, at the lowest precedence.
     expect(system).toContain('<name>gif-search</name>');
     expect(system).not.toContain('Personal PDF skill');
-    const results = agent.events.filter((e) => e.type === 'tool_execution_end');
+    const results = ['r1', 'w1'].map(
+      (id) =>
+        agent.events.find(
+          (e) => e.type === 'tool_execution_end' && !e.parentToolCallId && e.toolCallId === id,
+        )!,
+    );
     expect(results[0]!.isError).toBe(false);
     expect(results[0]!.result.content[0].text).toContain('moodle grades');
     expect(results[1]!.isError).toBe(true);
     expect(results[1]!.result.content[0].text).toContain('protected');
+    expect(readFileSync(path.join(env.external, 'moodle-cli', 'SKILL.md'), 'utf8')).toContain(
+      'name: moodle-cli',
+    );
   });
 
   it('/skill:<name> loads the skill and sends the request', async () => {

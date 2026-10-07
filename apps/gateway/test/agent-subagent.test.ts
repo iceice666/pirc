@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { Reply } from './fixtures/fake-llm.js';
 import { settledAfter, startAgent, writeRoles, type AgentProcess } from './agent-harness.js';
-import { startFakeLlm } from './fixtures/fake-llm.js';
+import { ptcCall, startFakeLlm, type Reply } from './fixtures/fake-llm.js';
+import { CODING_SURFACE, surface } from './fixtures/surface.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
@@ -17,9 +17,21 @@ const texts = (body: any): string =>
     .join('\n');
 const isSubagent = (body: any) => texts(body).includes('You are a one-shot subagent');
 const isTeammate = (body: any) => texts(body).includes('Team message (agent data');
+/** The provider-facing tools: only ptc and ptc_docs since the PTC-only surface. */
 const toolNames = (body: any): string[] => (body.tools ?? []).map((t: any) => t.function.name);
-const toolEnd = (agent: AgentProcess, name: string) =>
-  agent.events.filter((e) => e.type === 'tool_execution_end' && e.toolName === name);
+/** Capability names the system prompt's "## Capabilities" section offers. */
+const capabilities = (body: any): string[] => {
+  const system = String(body.messages[0].content);
+  const section = system.split('## Capabilities')[1]?.split('\n## ')[0] ?? '';
+  return [...section.matchAll(/^- [^:\n]+: (.+)$/gm)].flatMap((match) => match[1]!.split(', '));
+};
+/** Every provider tool call is a ptc call now: find results by call id. */
+const toolEnd = (agent: AgentProcess, ...ids: string[]) =>
+  ids.map((id) =>
+    agent.events.find(
+      (e) => e.type === 'tool_execution_end' && !e.parentToolCallId && e.toolCallId === id,
+    ),
+  );
 const alive = (pid: number) => {
   try {
     process.kill(pid, 0);
@@ -37,17 +49,11 @@ describe('subagent tool', () => {
     });
     agents.push(agent);
     const child: Reply[] = [
-      { tool: { id: 'c1', name: 'ls', args: {} } },
+      { tool: ptcCall('c1', 'ls', {}) },
       { text: 'Found nothing interesting.' },
     ];
     const parent: Reply[] = [
-      {
-        tool: {
-          id: 'p1',
-          name: 'subagent',
-          args: { task: 'look around', role: 'explorer', name: 'scout' },
-        },
-      },
+      { tool: ptcCall('p1', 'subagent', { task: 'look around', role: 'explorer', name: 'scout' }) },
       { text: 'parent done' },
     ];
     agent.llm.route = (body) =>
@@ -55,7 +61,7 @@ describe('subagent tool', () => {
     const from = agent.events.length;
     await agent.send({ type: 'prompt', message: 'delegate' });
     await settledAfter(agent, from);
-    const [end] = toolEnd(agent, 'subagent');
+    const [end] = toolEnd(agent, 'p1');
     expect(end!.isError).toBeFalsy();
     expect(end!.result.content[0].text).toContain('Subagent scout done');
     expect(end!.result.content[0].text).toContain('Found nothing interesting.');
@@ -63,9 +69,10 @@ describe('subagent tool', () => {
     expect(
       agent.events.some((e) => e.type === 'message_end' && e.message.customType === 'agent-team'),
     ).toBe(false);
-    // Kind allowlist applies, and one-shot subagents get no team or spawn tools.
+    // Kind allowlist applies, and one-shot subagents get no team or spawn capabilities.
     const childRequest = agent.llm.requests.find((r) => isSubagent(r.body))!;
-    expect(toolNames(childRequest.body).sort()).toEqual(['grep', 'ls', 'read']);
+    expect(toolNames(childRequest.body)).toEqual(surface('read', 'ls', 'grep'));
+    expect(capabilities(childRequest.body).sort()).toEqual(['grep', 'ls', 'read']);
     const state = await agent.send({ type: 'get_panel_state' });
     const scout = state.data.team.agents.find((a: any) => a.name === 'scout');
     expect(scout).toMatchObject({
@@ -81,12 +88,12 @@ describe('subagent tool', () => {
     const agent = await startAgent({ env: { PIRC_WRITE_BROKER: '1' } });
     agents.push(agent);
     const child: Reply[] = [
-      { tool: { id: 'c1', name: 'write', args: { path: 'first.txt', content: 'x' } } },
-      { tool: { id: 'c2', name: 'write', args: { path: 'second.txt', content: 'y' } } },
+      { tool: ptcCall('c1', 'write', { path: 'first.txt', content: 'x' }) },
+      { tool: ptcCall('c2', 'write', { path: 'second.txt', content: 'y' }) },
       { text: 'wrote what I could' },
     ];
     const parent: Reply[] = [
-      { tool: { id: 'p1', name: 'subagent', args: { task: 'write files', name: 'writer' } } },
+      { tool: ptcCall('p1', 'subagent', { task: 'write files', name: 'writer' }) },
       { text: 'parent done' },
     ];
     agent.llm.route = (body) =>
@@ -113,6 +120,8 @@ describe('subagent tool', () => {
     expect(await Bun.file(`${agent.workspace}/second.txt`).exists()).toBe(false);
     const childRequest = agent.llm.requests.filter((r) => isSubagent(r.body)).at(-1)!;
     expect(texts(childRequest.body)).toContain('another session is writing');
+    // A refused lease is an OperationFailed inside the child's script.
+    expect(texts(childRequest.body)).toContain('[error] OperationFailed');
   }, 30_000);
 
   it('asks for sandbox approvals through the parent, named in the reason', async () => {
@@ -120,23 +129,21 @@ describe('subagent tool', () => {
     agents.push(agent);
     const child: Reply[] = [
       {
-        tool: {
-          id: 'c1',
-          name: 'sandbox_allow_domains',
-          args: { domains: ['api.example.com'], reason: 'fetch the schema' },
-        },
+        tool: ptcCall('c1', 'sandbox_allow_domains', {
+          domains: ['api.example.com'],
+          reason: 'fetch the schema',
+        }),
       },
       {
-        tool: {
-          id: 'c2',
-          name: 'unsandboxed_bash',
-          args: { command: 'nix build', reason: 'needs the nix daemon' },
-        },
+        tool: ptcCall('c2', 'unsandboxed_bash', {
+          command: 'nix build',
+          reason: 'needs the nix daemon',
+        }),
       },
       { text: 'asked' },
     ];
     const parent: Reply[] = [
-      { tool: { id: 'p1', name: 'subagent', args: { task: 'build it', name: 'scout' } } },
+      { tool: ptcCall('p1', 'subagent', { task: 'build it', name: 'scout' }) },
       { text: 'parent done' },
     ];
     agent.llm.route = (body) =>
@@ -169,7 +176,8 @@ describe('subagent tool', () => {
     });
     await settledAfter(agent, from);
     const childRequests = agent.llm.requests.filter((r) => isSubagent(r.body));
-    expect(toolNames(childRequests[0]!.body)).toEqual(
+    expect(toolNames(childRequests[0]!.body)).toEqual(CODING_SURFACE);
+    expect(capabilities(childRequests[0]!.body)).toEqual(
       expect.arrayContaining(['sandbox_allow_domains', 'unsandboxed_bash']),
     );
     const seen = texts(childRequests.at(-1)!.body);
@@ -182,7 +190,7 @@ describe('subagent tool', () => {
     const agent = await startAgent();
     agents.push(agent);
     const parent: Reply[] = [
-      { tool: { id: 'p1', name: 'subagent', args: { task: 'slow work', background: true } } },
+      { tool: ptcCall('p1', 'subagent', { task: 'slow work', background: true }) },
       { text: 'started it' },
       { text: 'got the report' },
     ];
@@ -191,12 +199,14 @@ describe('subagent tool', () => {
       if (!isSubagent(body)) return parent.shift() ?? { text: 'extra' };
       childCalls++;
       return childCalls === 1
-        ? { tool: { id: 'c1', name: 'bash', args: { command: 'sleep 0.3' } } }
+        ? { tool: ptcCall('c1', 'bash', { command: 'sleep 0.3' }) }
         : { text: 'background report' };
     };
     await agent.send({ type: 'prompt', message: 'delegate in background' });
     const [start] = await Promise.all([
-      agent.waitFor((e) => e.type === 'tool_execution_end' && e.toolName === 'subagent'),
+      agent.waitFor(
+        (e) => e.type === 'tool_execution_end' && !e.parentToolCallId && e.toolCallId === 'p1',
+      ),
     ]);
     const started = JSON.parse(start.result.content[0].text);
     expect(started).toMatchObject({ mode: 'subagent', background: true });
@@ -236,13 +246,13 @@ describe('subagent tool', () => {
     };
     let eventId = '';
     const parent: Array<(body: any) => Reply> = [
-      () => ({ tool: { id: 'p1', name: 'subagent', args: { task: 'write it', name: 'writer' } } }),
+      () => ({ tool: ptcCall('p1', 'subagent', { task: 'write it', name: 'writer' }) }),
       (body) => {
         eventId = /agent_inbox with event_id=(\S+) offset=40000/.exec(lastTool(body))![1]!;
-        return { tool: { id: 'p2', name: 'agent_inbox', args: {} } };
+        return { tool: ptcCall('p2', 'agent_inbox', {}) };
       },
       () => ({
-        tool: { id: 'p3', name: 'agent_inbox', args: { event_id: eventId, offset: 40_000 } },
+        tool: ptcCall('p3', 'agent_inbox', { event_id: eventId, offset: 40_000 }),
       }),
       () => ({ text: 'read it all' }),
     ];
@@ -252,14 +262,14 @@ describe('subagent tool', () => {
     await agent.send({ type: 'prompt', message: 'delegate' });
     await settledAfter(agent, from);
 
-    const [end] = toolEnd(agent, 'subagent');
+    const [end] = toolEnd(agent, 'p1');
     const shown = end!.result.content[0].text as string;
     expect(shown).toContain('row 4443');
     expect(shown).not.toContain('row 4445');
     expect(shown).toContain('[Result truncated at 40000 of 44999 characters');
 
-    const [page, rest] = toolEnd(agent, 'agent_inbox').map((e) =>
-      JSON.parse(e.result.content[0].text),
+    const [page, rest] = toolEnd(agent, 'p2', 'p3').map((e) =>
+      JSON.parse(e!.result.content[0].text),
     );
     const entry = page.items.find((item: any) => item.id === eventId);
     expect(entry).toMatchObject({ truncated: true, total_chars: total, next_offset: 12_000 });
@@ -280,7 +290,7 @@ describe('subagent tool', () => {
     const agent = await startAgent();
     agents.push(agent);
     const parent: Reply[] = [
-      { tool: { id: 'p1', name: 'subagent', args: { task: 'break' } } },
+      { tool: ptcCall('p1', 'subagent', { task: 'break' }) },
       { text: 'noted' },
     ];
     agent.llm.route = (body) =>
@@ -288,7 +298,7 @@ describe('subagent tool', () => {
     const from = agent.events.length;
     await agent.send({ type: 'prompt', message: 'delegate' });
     await settledAfter(agent, from);
-    const [end] = toolEnd(agent, 'subagent');
+    const [end] = toolEnd(agent, 'p1');
     expect(end!.isError).toBe(true);
     expect(end!.result.content[0].text).toMatch(/failed/);
   }, 30_000);
@@ -302,17 +312,11 @@ describe('team kinds and results', () => {
     });
     agents.push(agent);
     const child: Reply[] = [
-      { text: 'thinking out loud', tool: { id: 'c1', name: 'read', args: { path: 'nope' } } },
+      { text: 'thinking out loud', tool: ptcCall('c1', 'read', { path: 'nope' }) },
       { text: 'final teammate answer' },
     ];
     const parent: Reply[] = [
-      {
-        tool: {
-          id: 'p1',
-          name: 'agent_spawn',
-          args: { name: 'reader', task: 'read', role: 'reader' },
-        },
-      },
+      { tool: ptcCall('p1', 'agent_spawn', { name: 'reader', task: 'read', role: 'reader' }) },
       { text: 'spawned' },
       { text: 'noted' },
     ];
@@ -332,7 +336,8 @@ describe('team kinds and results', () => {
       agent.events.filter((e) => e.type === 'message_end' && e.message.customType === 'agent-team'),
     ).toHaveLength(1);
     const childRequest = agent.llm.requests.find((r) => isTeammate(r.body))!;
-    const names = toolNames(childRequest.body);
+    expect(toolNames(childRequest.body)).toEqual(surface('read'));
+    const names = capabilities(childRequest.body);
     expect(names).toContain('read');
     expect(names).toContain('task_update');
     expect(names).toContain('agent_send');
@@ -366,7 +371,10 @@ describe('team kinds and results', () => {
     agents.push(agent);
     const child: Reply[] = [{ text: 'no findings' }];
     const parent: Reply[] = [
-      { tool: { id: 'p1', name: 'subagent', args: { task: 'review', role: 'reviewer' } } },
+      // The subagent schema is no longer in the provider tool list: the parent
+      // reads it through ptc_docs.
+      { tool: { id: 'd1', name: 'ptc_docs', args: { names: ['subagent'] } } },
+      { tool: ptcCall('p1', 'subagent', { task: 'review', role: 'reviewer' }) },
       { text: 'parent done' },
     ];
     agent.llm.route = (body) =>
@@ -374,11 +382,16 @@ describe('team kinds and results', () => {
     const from = agent.events.length;
     await agent.send({ type: 'prompt', message: 'delegate' });
     await settledAfter(agent, from);
-    const [end] = toolEnd(agent, 'subagent');
+    const [end] = toolEnd(agent, 'p1');
     expect(end!.isError).toBeFalsy();
     const parentRequest = agent.llm.requests.find((r) => !isSubagent(r.body))!;
-    const role = parentRequest.body.tools.find((t: any) => t.function.name === 'subagent').function
-      .parameters.properties;
+    expect(toolNames(parentRequest.body)).toEqual(CODING_SURFACE);
+    expect(capabilities(parentRequest.body)).toContain('subagent');
+    const [docs] = toolEnd(agent, 'd1');
+    expect(docs!.isError).toBeFalsy();
+    const contract = JSON.parse(docs!.result.content[0].text).items[0];
+    expect(contract.name).toBe('subagent');
+    const role = contract.inputSchema.properties;
     expect(role.model).toBeUndefined();
     expect(role.thinking).toBeUndefined();
     expect(role.role.enum).toEqual(['general', 'reviewer', 'writer']);
@@ -398,22 +411,37 @@ describe('team kinds and results', () => {
       'Report findings as file:line with severity.\n\nSecond paragraph.',
     );
     expect(texts(childRequest.body)).not.toContain('Global text.');
-    expect(toolNames(childRequest.body).sort()).toEqual(['grep', 'read']);
+    expect(toolNames(childRequest.body)).toEqual(surface('read', 'grep'));
+    expect(capabilities(childRequest.body).sort()).toEqual(['grep', 'read']);
   }, 30_000);
 
   it('refuses a model or thinking level from the agent', async () => {
     const agent = await startAgent({ config: { features: { sessionTitle: { enabled: false } } } });
     agents.push(agent);
     agent.llm.push(
-      { tool: { id: 'a', name: 'subagent', args: { task: 'x', model: 'fake/other' } } },
+      { tool: ptcCall('p1', 'subagent', { task: 'x', model: 'fake/other' }) },
+      { tool: ptcCall('p2', 'subagent', { task: 'x', thinking: 'high' }) },
       { text: 'ok' },
     );
     const from = agent.events.length;
     await agent.send({ type: 'prompt', message: 'try' });
     await settledAfter(agent, from);
-    const [end] = toolEnd(agent, 'subagent');
-    expect(end!.isError).toBe(true);
-    expect(end!.result.content[0].text).toMatch(/set by the role/);
+    // Argument validation now refuses the extra properties before the team
+    // code's own "set by the role" check, and nothing is started.
+    const [model, thinking] = toolEnd(agent, 'p1', 'p2');
+    expect(model!.isError).toBe(true);
+    expect(model!.result.content[0].text).toContain(
+      '[error] InvalidArguments: Invalid arguments for subagent: model is not allowed',
+    );
+    expect(thinking!.isError).toBe(true);
+    expect(thinking!.result.content[0].text).toContain(
+      '[error] InvalidArguments: Invalid arguments for subagent: thinking is not allowed',
+    );
+    for (const end of [model, thinking])
+      expect(end!.result.details.operations).toMatchObject([
+        { capability: 'subagent', outcome: 'not_started', errorCode: 'InvalidArguments' },
+      ]);
+    expect(agent.llm.requests.filter((r) => isSubagent(r.body))).toHaveLength(0);
   });
 
   it('rejects invalid role files', async () => {
@@ -422,11 +450,11 @@ describe('team kinds and results', () => {
       roles: { bad: '---\nthinking: loud\ncolor: red\n---\nText.\n' },
     });
     agents.push(agent);
-    agent.llm.push({ tool: { id: 'a', name: 'subagent', args: { task: 'x' } } }, { text: 'ok' });
+    agent.llm.push({ tool: ptcCall('p1', 'subagent', { task: 'x' }) }, { text: 'ok' });
     const from = agent.events.length;
     await agent.send({ type: 'prompt', message: 'try' });
     await settledAfter(agent, from);
-    const [end] = toolEnd(agent, 'subagent');
+    const [end] = toolEnd(agent, 'p1');
     expect(end!.isError).toBe(true);
     expect(end!.result.content[0].text).toMatch(
       /bad\.md: Unknown front matter for role bad: color/,
@@ -439,11 +467,11 @@ describe('team kinds and results', () => {
       roles: { bad: '---\ntools: ["Not A Tool"]\n---\n' },
     });
     agents.push(agent);
-    agent.llm.push({ tool: { id: 'a', name: 'subagent', args: { task: 'x' } } }, { text: 'ok' });
+    agent.llm.push({ tool: ptcCall('p1', 'subagent', { task: 'x' }) }, { text: 'ok' });
     const from = agent.events.length;
     await agent.send({ type: 'prompt', message: 'try' });
     await settledAfter(agent, from);
-    const [end] = toolEnd(agent, 'subagent');
+    const [end] = toolEnd(agent, 'p1');
     expect(end!.isError).toBe(true);
     expect(end!.result.content[0].text).toMatch(/Invalid tool name/);
   });
@@ -454,7 +482,7 @@ describe('team task board', () => {
     const agent = await startAgent();
     agents.push(agent);
     const call = (id: string, name: string, args: Record<string, unknown>): Reply => ({
-      tool: { id, name, args },
+      tool: ptcCall(id, name, args),
     });
     agent.llm.push(
       call('t1', 'task_create', { subject: 'schema', description: 'design schema' }),
@@ -470,7 +498,7 @@ describe('team task board', () => {
     const from = agent.events.length;
     await agent.send({ type: 'prompt', message: 'plan' });
     await settledAfter(agent, from);
-    const ends = agent.events.filter((e) => e.type === 'tool_execution_end');
+    const ends = agent.events.filter((e) => e.type === 'tool_execution_end' && !e.parentToolCallId);
     const body = (i: number) => ends[i]!.result.content[0].text as string;
     expect(JSON.parse(body(1))).toMatchObject({ id: '2', blocked: true, ready: false });
     expect(ends[2]!.isError).toBe(true);
@@ -510,7 +538,8 @@ describe('session roles', () => {
     const [request] = agent.llm.requests;
     expect(texts(request!.body)).toContain('## Role: reviewer');
     expect(texts(request!.body)).toContain('Review only; cite file:line.');
-    expect(toolNames(request!.body).sort()).toEqual(['grep', 'read']);
+    expect(toolNames(request!.body)).toEqual(surface('read', 'grep'));
+    expect(capabilities(request!.body).sort()).toEqual(['grep', 'read']);
     expect((await agent.send({ type: 'get_state' })).data.thinkingLevel).toBe('high');
     await agent.close();
     agents.splice(agents.indexOf(agent), 1);
@@ -530,7 +559,8 @@ describe('session roles', () => {
     await settledAfter(again, next);
     const [resumed] = again.llm.requests;
     expect(texts(resumed!.body)).toContain('## Role: reviewer');
-    expect(toolNames(resumed!.body).sort()).toEqual(['grep', 'read']);
+    expect(toolNames(resumed!.body)).toEqual(surface('read', 'grep'));
+    expect(capabilities(resumed!.body).sort()).toEqual(['grep', 'read']);
   }, 30_000);
 });
 
@@ -624,7 +654,7 @@ describe('role model fallback', () => {
     try {
       const child: Reply[] = [{ status: 429, body: 'rate limited' }, { text: 'child done' }];
       const parent: Reply[] = [
-        { tool: { id: 'p1', name: 'subagent', args: { task: 'work', role: 'worker' } } },
+        { tool: ptcCall('p1', 'subagent', { task: 'work', role: 'worker' }) },
         { text: 'parent done' },
       ];
       llm.route = (body) =>
@@ -632,7 +662,7 @@ describe('role model fallback', () => {
       const from = agent.events.length;
       await agent.send({ type: 'prompt', message: 'delegate' });
       await settledAfter(agent, from);
-      const [end] = toolEnd(agent, 'subagent');
+      const [end] = toolEnd(agent, 'p1');
       expect(end!.result.content[0].text).toContain('child done');
       expect(
         llm.requests

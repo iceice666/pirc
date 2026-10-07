@@ -109,6 +109,8 @@ export async function startAgent(
     /** Exercise either fixed role entry, or a compiled role binary. */
     role?: 'chat' | 'node';
     executable?: string;
+    /** Synthetic evaluation can provide a minimal environment instead of inheriting the host. */
+    baseEnv?: Record<string, string>;
     config?: Record<string, unknown>;
     args?: string[];
     workspace?: string;
@@ -148,7 +150,7 @@ export async function startAgent(
     {
       cwd: workspace,
       env: {
-        ...testEnv(),
+        ...(options.baseEnv ?? testEnv()),
         HOME: home,
         PIRC_CONFIG_DIR: configDir,
         PIRC_WORKSPACE_MEMORY_DIR: path.join(root, 'workspace-memory'),

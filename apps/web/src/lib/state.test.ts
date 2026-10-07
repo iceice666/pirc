@@ -143,6 +143,38 @@ describe('session event reducer', () => {
     ]);
   });
 
+  it('nests ptc operations under their ptc call, wherever the call is', () => {
+    let state = fromSnapshot({
+      ...snapshot,
+      messages: [
+        {
+          id: 'm1',
+          role: 'assistant',
+          content: '',
+          createdAt: '2025-01-01T00:00:01Z',
+          tools: [{ id: 'p1', name: 'ptc', status: 'running' }],
+        },
+        { id: 'm2', role: 'user', content: 'meanwhile', createdAt: '2025-01-01T00:00:02Z' },
+      ],
+    });
+    for (const tool of [
+      { id: 'o1', name: 'read', status: 'running' as const, parentId: 'p1' },
+      { id: 'o1', status: 'succeeded' as const, output: 'text', parentId: 'p1' },
+      { id: 'p1', status: 'running' as const, output: '1 operation' },
+    ])
+      state = reduceEvent(state, envelope({ type: 'tool_updated', tool }));
+    expect(state.messages[0]?.tools).toEqual([
+      {
+        id: 'p1',
+        name: 'ptc',
+        status: 'running',
+        output: '1 operation',
+        operations: [{ id: 'o1', name: 'read', status: 'succeeded', output: 'text' }],
+      },
+    ]);
+    expect(state.messages[1]?.tools).toBeUndefined();
+  });
+
   it('requires a fresh snapshot after reset or epoch mismatch', () => {
     const state = fromSnapshot(snapshot);
     expect(

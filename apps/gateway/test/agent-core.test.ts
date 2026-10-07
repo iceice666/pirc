@@ -22,6 +22,8 @@ import { SessionStore } from '../src/agent/session-store.js';
 import { builtinTools } from '../src/agent/tools/index.js';
 import type { AssistantMessage } from '../src/agent/messages.js';
 import { settledAfter, startAgent, testModels, type AgentProcess } from './agent-harness.js';
+import { ptcCall } from './fixtures/fake-llm.js';
+import { CODING_SURFACE } from './fixtures/surface.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
@@ -38,7 +40,7 @@ describe('pirc agent (OpenAI chat)', () => {
     const agent = await start();
     writeFileSync(path.join(agent.workspace, 'hello.txt'), 'line one\nline two\n');
     agent.llm.push(
-      { tool: { id: 'call_1', name: 'read', args: { path: 'hello.txt' } }, thinking: 'look' },
+      { tool: ptcCall('call_1', 'read', { path: 'hello.txt' }), thinking: 'look' },
       { text: 'The file has two lines.' },
     );
     const state = await agent.send({ type: 'get_state' });
@@ -50,7 +52,9 @@ describe('pirc agent (OpenAI chat)', () => {
     const types = agent.events.map((event) => event.type);
     expect(types).toContain('agent_start');
     expect(types).toContain('tool_execution_start');
-    const end = agent.events.find((event) => event.type === 'tool_execution_end');
+    const end = agent.events.find(
+      (event) => event.type === 'tool_execution_end' && !event.parentToolCallId,
+    );
     expect(end?.result.content[0].text).toContain('1\tline one');
     const deltas = agent.events
       .filter((e) => e.type === 'message_update' && e.assistantMessageEvent.type === 'text_delta')
@@ -64,7 +68,9 @@ describe('pirc agent (OpenAI chat)', () => {
     expect(second.reasoning_effort).toBe('low');
     const roles = second.messages.map((m: any) => m.role);
     expect(roles).toEqual(['system', 'user', 'assistant', 'tool']);
-    expect(second.messages[2].tool_calls[0].function.name).toBe('read');
+    expect(second.messages[2].tool_calls[0].function.name).toBe('ptc');
+    // The provider sees exactly the two PTC tools.
+    expect(second.tools.map((tool: any) => tool.function.name)).toEqual(CODING_SURFACE);
     expect(agent.llm.requests[0]!.headers.authorization).toBe('Bearer test-key');
 
     const messages = await agent.send({ type: 'get_messages' });
@@ -133,7 +139,14 @@ describe('pirc agent (OpenAI chat)', () => {
     const seen: Array<{ role: string; stored: number }> = [];
     await runInProcess(
       [
-        [{ type: 'toolCall', id: 'call_1', name: 'ls', arguments: {} }],
+        [
+          {
+            type: 'toolCall',
+            id: 'call_1',
+            name: 'ptc',
+            arguments: { code: 'return (await tools.ls({})).text;' },
+          },
+        ],
         [{ type: 'text', text: 'Listed.' }],
       ],
       (event, store) => {
@@ -156,8 +169,8 @@ describe('pirc agent (OpenAI chat)', () => {
     const calls = Array.from({ length: 30 }, (_, index) => ({
       type: 'toolCall' as const,
       id: `call_${index}`,
-      name: 'read',
-      arguments: { path: 'big.txt' },
+      name: 'ptc',
+      arguments: { code: 'return (await tools.read({ path: "big.txt" })).text;' },
     }));
     const sizes: Record<string, number> = {};
     await runInProcess(
@@ -192,22 +205,18 @@ describe('pirc agent (OpenAI chat)', () => {
     writeFileSync(path.join(ssh, 'id_ed25519'), 'key');
     symlinkSync(outside, path.join(agent.workspace, 'escape'));
     agent.llm.push(
-      { tool: { id: 'a', name: 'read', args: { path: path.join(outside, 'notes.txt') } } },
-      { tool: { id: 'b', name: 'write', args: { path: 'escape/new.txt', content: 'x' } } },
-      {
-        tool: {
-          id: 'c',
-          name: 'write',
-          args: { path: path.join(allowed, 'ok.txt'), content: 'y' },
-        },
-      },
-      { tool: { id: 'd', name: 'read', args: { path: path.join(ssh, 'id_ed25519') } } },
-      { tool: { id: 'e', name: 'write', args: { path: '.pirc/config.json', content: '{}' } } },
+      { tool: ptcCall('a', 'read', { path: path.join(outside, 'notes.txt') }) },
+      { tool: ptcCall('b', 'write', { path: 'escape/new.txt', content: 'x' }) },
+      { tool: ptcCall('c', 'write', { path: path.join(allowed, 'ok.txt'), content: 'y' }) },
+      { tool: ptcCall('d', 'read', { path: path.join(ssh, 'id_ed25519') }) },
+      { tool: ptcCall('e', 'write', { path: '.pirc/config.json', content: '{}' }) },
       { text: 'done' },
     );
     await agent.send({ type: 'prompt', message: 'go' });
     await settledAfter(agent, 0);
-    const results = agent.events.filter((event) => event.type === 'tool_execution_end');
+    const results = agent.events.filter(
+      (event) => event.type === 'tool_execution_end' && !event.parentToolCallId,
+    );
     expect(results.map((r) => r.isError)).toEqual([false, true, false, true, true]);
     expect(results[0]!.result.content[0].text).toContain('readable');
     expect(results[1]!.result.content[0].text).toContain('outside the writable paths');
@@ -240,15 +249,17 @@ describe('pirc agent (OpenAI chat)', () => {
       config: { allowedPaths: [root] },
     });
     agent.llm.push(
-      { tool: { id: 'a', name: 'read', args: { path: path.join(state, 'node.sqlite') } } },
-      { tool: { id: 'b', name: 'read', args: { path: path.join(session, 'log.jsonl') } } },
-      { tool: { id: 'c', name: 'write', args: { path: path.join(root, 'x.txt'), content: 'x' } } },
-      { tool: { id: 'd', name: 'write', args: { path: 'ok.txt', content: 'ok' } } },
+      { tool: ptcCall('a', 'read', { path: path.join(state, 'node.sqlite') }) },
+      { tool: ptcCall('b', 'read', { path: path.join(session, 'log.jsonl') }) },
+      { tool: ptcCall('c', 'write', { path: path.join(root, 'x.txt'), content: 'x' }) },
+      { tool: ptcCall('d', 'write', { path: 'ok.txt', content: 'ok' }) },
       { text: 'done' },
     );
     await agent.send({ type: 'prompt', message: 'go' });
     await settledAfter(agent, 0);
-    const results = agent.events.filter((event) => event.type === 'tool_execution_end');
+    const results = agent.events.filter(
+      (event) => event.type === 'tool_execution_end' && !event.parentToolCallId,
+    );
     expect(results.map((r) => r.isError)).toEqual([true, false, true, false]);
     expect(results[0]!.result.content[0].text).toContain('is private');
     expect(results[2]!.result.content[0].text).toContain('outside the writable paths');
@@ -258,21 +269,29 @@ describe('pirc agent (OpenAI chat)', () => {
     const agent = await start();
     writeFileSync(path.join(agent.workspace, 'a.txt'), 'alpha\nbeta\n');
     agent.llm.push(
-      {
-        tool: { id: 'e', name: 'edit', args: { path: 'a.txt', oldText: 'beta', newText: 'gamma' } },
-      },
-      { tool: { id: 'f', name: 'bash', args: { command: 'cat a.txt; exit 3' } } },
-      { tool: { id: 'g', name: 'bash', args: { command: 'sleep 5', timeout: 0.3 } } },
+      { tool: ptcCall('e', 'edit', { path: 'a.txt', oldText: 'beta', newText: 'gamma' }) },
+      { tool: ptcCall('f', 'bash', { command: 'cat a.txt; exit 3' }) },
+      { tool: ptcCall('g', 'bash', { command: 'sleep 5', timeout: 0.3 }) },
       { text: 'ok' },
     );
     await agent.send({ type: 'prompt', message: 'edit' });
     await settledAfter(agent, 0);
     expect(readFileSync(path.join(agent.workspace, 'a.txt'), 'utf8')).toBe('alpha\ngamma\n');
-    const ends = agent.events.filter((event) => event.type === 'tool_execution_end');
-    expect(ends[0]!.result.details.diff).toContain('+gamma');
+    const ends = agent.events.filter(
+      (event) => event.type === 'tool_execution_end' && !event.parentToolCallId,
+    );
+    // The edit's diff lived in the former per-tool details, which ptc does not
+    // keep; the model sees the edit's text and the ptc details record the operation.
+    expect(ends[0]!.isError).toBe(false);
+    expect(ends[0]!.result.content[0].text).toContain('Edited a.txt (1 replacement)');
+    expect(ends[0]!.result.details.operations).toMatchObject([
+      { capability: 'edit', outcome: 'completed' },
+    ]);
     expect(ends[1]!.result.content[0].text).toContain('gamma');
     expect(ends[1]!.result.content[0].text).toContain('[exit 3]');
-    expect(ends[1]!.isError).toBe(true);
+    // A non-zero exit is a result in scripts (the script reads exitCode); a timeout fails.
+    expect(ends[1]!.isError).toBe(false);
+    expect(ends[2]!.isError).toBe(true);
     expect(ends[2]!.result.content[0].text).toContain('[timed out]');
   });
 
@@ -280,11 +299,9 @@ describe('pirc agent (OpenAI chat)', () => {
     const agent = await start({ env: { PIRC_WRITE_BROKER: '1' } });
     writeFileSync(path.join(agent.workspace, 'a.txt'), 'alpha\n');
     agent.llm.push(
-      { tool: { id: 'w', name: 'write', args: { path: 'sub/b.txt', content: 'new' } } },
-      {
-        tool: { id: 'e', name: 'edit', args: { path: 'a.txt', oldText: 'alpha', newText: 'beta' } },
-      },
-      { tool: { id: 'r', name: 'read', args: { path: 'a.txt' } } },
+      { tool: ptcCall('w', 'write', { path: 'sub/b.txt', content: 'new' }) },
+      { tool: ptcCall('e', 'edit', { path: 'a.txt', oldText: 'alpha', newText: 'beta' }) },
+      { tool: ptcCall('r', 'read', { path: 'a.txt' }) },
       { text: 'done' },
     );
     await agent.send({ type: 'prompt', message: 'write' });
@@ -306,9 +323,14 @@ describe('pirc agent (OpenAI chat)', () => {
     const root = realpathSync(agent.workspace);
     expect(requests.map((request) => request.path)).toEqual([root, root]);
     expect(agent.events.filter((event) => event.type === 'write_lease_request')).toHaveLength(2);
-    const ends = agent.events.filter((event) => event.type === 'tool_execution_end');
+    const ends = agent.events.filter(
+      (event) => event.type === 'tool_execution_end' && !event.parentToolCallId,
+    );
     expect(ends.map((end) => end.isError)).toEqual([true, false, false]);
     expect(ends[0]!.result.content[0].text).toContain('busy elsewhere');
+    // A refused lease is an OperationFailed inside the script.
+    expect(ends[0]!.result.content[0].text).toContain('[error] OperationFailed');
+    expect(ends[2]!.result.content[0].text).toContain('beta');
     expect(existsSync(path.join(agent.workspace, 'sub'))).toBe(false);
     expect(readFileSync(path.join(agent.workspace, 'a.txt'), 'utf8')).toBe('beta\n');
   });
@@ -348,7 +370,7 @@ describe('pirc agent (Anthropic messages)', () => {
     const agent = await start({ args: ['--model', 'fakeclaude/claude-x'] });
     writeFileSync(path.join(agent.workspace, 'x.txt'), 'x');
     agent.llm.push(
-      { tool: { id: 'toolu_1', name: 'ls', args: {} }, thinking: 'hmm', text: 'Listing.' },
+      { tool: ptcCall('toolu_1', 'ls', {}), thinking: 'hmm', text: 'Listing.' },
       { text: 'Done.' },
     );
     await agent.send({ type: 'prompt', message: 'list' });
@@ -362,6 +384,8 @@ describe('pirc agent (Anthropic messages)', () => {
     expect(assistant.role).toBe('assistant');
     expect(assistant.content.map((b: any) => b.type)).toEqual(['thinking', 'text', 'tool_use']);
     expect(assistant.content[0].signature).toBe('sig');
+    expect(assistant.content[2].name).toBe('ptc');
+    expect(first!.body.tools.map((tool: any) => tool.name)).toEqual(CODING_SURFACE);
     const toolResult = second!.body.messages[2].content[0];
     expect(toolResult.type).toBe('tool_result');
     expect(toolResult.content[0].text).toContain('x.txt');
@@ -393,15 +417,19 @@ describe('project hooks', () => {
       },
     });
     agent.llm.push(
-      { tool: { id: 'h1', name: 'bash', args: { command: 'rm -rf /tmp/whatever' } } },
-      { tool: { id: 'h2', name: 'write', args: { path: 'out.txt', content: 'quiet' } } },
+      { tool: ptcCall('h1', 'bash', { command: 'rm -rf /tmp/whatever' }) },
+      { tool: ptcCall('h2', 'write', { path: 'out.txt', content: 'quiet' }) },
       { text: 'ok' },
     );
     await agent.send({ type: 'prompt', message: 'go' });
     await settledAfter(agent, 0);
-    const ends = agent.events.filter((event) => event.type === 'tool_execution_end');
+    const ends = agent.events.filter(
+      (event) => event.type === 'tool_execution_end' && !event.parentToolCallId,
+    );
     expect(ends[0]!.isError).toBe(true);
     expect(ends[0]!.result.content[0].text).toContain('no deleting');
+    // A hook block is an ApprovalDenied inside the script.
+    expect(ends[0]!.result.content[0].text).toContain('[error] ApprovalDenied');
     expect(readFileSync(path.join(agent.workspace, 'out.txt'), 'utf8')).toBe('QUIET');
     expect(ends[1]!.result.content.at(-1).text).toContain('formatted');
     expect(agent.llm.requests[0]!.body.messages[0].content).toContain('SESSION-HOOK-CONTEXT');
@@ -419,12 +447,14 @@ describe('project hooks', () => {
     const trust = projectTrustHash(projectTrustFields(readProjectConfig(root)));
     const agent = await start({ workspace: root, env: { PIRC_PROJECT_TRUST: trust } });
     agent.llm.push(
-      { tool: { id: 'e', name: 'bash', args: { command: 'echo $PIRC_TEST_VAR' } } },
+      { tool: ptcCall('e', 'bash', { command: 'echo $PIRC_TEST_VAR' }) },
       { text: 'k' },
     );
     await agent.send({ type: 'prompt', message: 'env' });
     await settledAfter(agent, 0);
-    const end = agent.events.find((event) => event.type === 'tool_execution_end');
+    const end = agent.events.find(
+      (event) => event.type === 'tool_execution_end' && !event.parentToolCallId,
+    );
     expect(end!.result.content[0].text).toContain('from-project');
     expect(agent.llm.requests[0]!.body.messages[0].content).toContain('PROJECT-PROMPT');
   });

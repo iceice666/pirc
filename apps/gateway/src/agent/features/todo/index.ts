@@ -11,6 +11,19 @@ import {
   type State,
 } from './model.js';
 import { toolPrompt } from '../../prompts/tools.js';
+import { arr, fields, int, obj, oneOfStrings, str } from '../../tools/result-schema.js';
+
+const TODO = obj(
+  {
+    id: int(),
+    text: str(),
+    status: oneOfStrings(['pending', 'in_progress', 'completed']),
+    activeForm: str(),
+    category: str(),
+    blockedBy: arr(int()),
+  },
+  ['activeForm', 'category'],
+);
 
 export const TODO_ENTRY = 'local-todo-state-v1';
 const CONTEXT = 'local-todo-context';
@@ -162,6 +175,10 @@ export function todoFeature(): Feature {
       required: ['action'],
       additionalProperties: false,
     },
+    resultSchema: fields({
+      action: oneOfStrings(['list', 'add', 'update', 'remove', 'prune', 'clear']),
+      todos: arr(TODO, 'The whole list after the action'),
+    }),
     async execute(args, ctx) {
       if (ctx.signal.aborted) throw new Error('Aborted');
       const before = state;
@@ -174,6 +191,7 @@ export function todoFeature(): Feature {
       return {
         content: [{ type: 'text', text }],
         details: { state: snapshot, action: args.action },
+        data: { action: args.action, todos: snapshot.todos },
       };
     },
   });

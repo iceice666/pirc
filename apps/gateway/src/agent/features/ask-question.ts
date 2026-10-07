@@ -1,5 +1,6 @@
 import type { Feature } from '../feature.js';
 import type { Tool, UiApi } from '../tools/types.js';
+import { arr, fields, obj, oneOfStrings, str } from '../tools/result-schema.js';
 import { toolPrompt } from '../prompts/tools.js';
 
 export interface Question {
@@ -104,6 +105,22 @@ export async function askQuestions(
   return { status: 'answered', answers };
 }
 
+/** Typed result of asking the human (`ask_user_question`, `agent_ask` to the user). */
+export const QUESTION_RESULT = fields({
+  status: oneOfStrings(['answered', 'cancelled', 'unavailable']),
+  answers: arr(
+    obj(
+      {
+        question: str(),
+        selected: arr(str(), 'Labels of the chosen options'),
+        customText: str('A typed answer'),
+      },
+      ['customText'],
+    ),
+    'One per question, in order (empty unless answered)',
+  ),
+});
+
 export const askQuestionSchema = {
   type: 'object',
   properties: {
@@ -143,6 +160,7 @@ export function askQuestionFeature(): Feature {
     name: 'ask_user_question',
     description: toolPrompt('ask_user_question'),
     parameters: askQuestionSchema,
+    resultSchema: QUESTION_RESULT,
     async execute(args, ctx) {
       const questions = validateQuestions(args);
       if (!ctx.hasUI)
@@ -154,6 +172,7 @@ export function askQuestionFeature(): Feature {
             },
           ],
           details: { status: 'unavailable', answers: [] },
+          data: { status: 'unavailable', answers: [] },
         };
       const result = await askQuestions(
         ctx.ui,
@@ -173,6 +192,7 @@ export function askQuestionFeature(): Feature {
           },
         ],
         details: result,
+        data: { ...result },
       };
     },
   };

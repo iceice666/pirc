@@ -5,7 +5,7 @@ import { afterEach, expect, it } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import { defaultAgentCommand } from '../src/config.js';
 import { writeAgentConfig, writeRoles } from './agent-harness.js';
-import { startFakeLlm } from './fixtures/fake-llm.js';
+import { ptcCall, startFakeLlm } from './fixtures/fake-llm.js';
 import { headers, promptSession, startCluster, waitFor, type Cluster } from './helpers.js';
 
 const USER = 'test@example.com';
@@ -470,11 +470,12 @@ it('delegates end to end between real agents', async () => {
     if (text(last).includes('Delegation update')) return { text: 'The build is fixed.' };
     if (last.role === 'tool') return { text: 'I asked you to approve it.' };
     return {
-      tool: {
-        id: 'd1',
-        name: 'delegate',
-        args: { workspace: 'work:test', task: 'Fix the build.', title: 'Fix build', role: 'fixer' },
-      },
+      tool: ptcCall('d1', 'delegate', {
+        workspace: 'work:test',
+        task: 'Fix the build.',
+        title: 'Fix build',
+        role: 'fixer',
+      }),
     };
   };
   const { app, services } = await start({ modelsFile }, defaultAgentCommand({}));
@@ -509,6 +510,22 @@ it('delegates end to end between real agents', async () => {
   const [confirmation] = (await snapshot(app, chatId)).interactions;
   expect(confirmation.request.message).toBe('Fix build\n\nFix the build.');
   expect(confirmation.request.title).toBe('Delegate to Test on work as fixer?');
+  // The assistant's ptc script ran delegate and got the pending approval back.
+  await waitFor(
+    async () =>
+      (await snapshot(app, chatId)).history.some(
+        (m: any) =>
+          m.role === 'toolResult' &&
+          m.toolCallId === 'd1' &&
+          m.toolName === 'ptc' &&
+          !m.isError &&
+          String(m.content[0]?.text).includes(
+            `Asked the user to approve delegation ${confirmation.id}`,
+          ),
+      ),
+    true,
+    15_000,
+  );
   await answer(app, chatId, generation, confirmation.id, true);
   await waitFor(() => services.delegations.get(USER, confirmation.id).status, 'completed', 15_000);
   expect(services.delegations.get(USER, confirmation.id).result).toBe('Build fixed.');

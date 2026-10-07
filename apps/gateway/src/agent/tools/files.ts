@@ -2,7 +2,8 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { truncateOutput } from '../sandbox.js';
-import { optionalNumber, requireString, text, type Tool, type ToolContext } from './types.js';
+import { optionalNumber, requireString, typed, type Tool, type ToolContext } from './types.js';
+import { arr, bool, fields, int, nullable, obj, oneOfStrings, str } from './result-schema.js';
 import { toolPrompt } from '../prompts/tools.js';
 
 const imageTypes: Record<string, string> = {
@@ -12,6 +13,21 @@ const imageTypes: Record<string, string> = {
   '.gif': 'image/gif',
   '.webp': 'image/webp',
 };
+
+/** Bytes of `content` (as JSON) a `read` result carries at most. */
+const READ_CONTENT_BYTES = 4 * 1024 * 1024;
+
+/** The longest prefix of `text` whose JSON encoding fits `bytes`. */
+function cutJson(text: string, bytes: number): string {
+  let low = 0;
+  let high = text.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (Buffer.byteLength(JSON.stringify(text.slice(0, middle))) <= bytes) low = middle;
+    else high = middle - 1;
+  }
+  return text.slice(0, low);
+}
 
 export const readTool: Tool = {
   name: 'read',
@@ -27,6 +43,27 @@ export const readTool: Tool = {
     required: ['path'],
     additionalProperties: false,
   },
+  resultSchema: {
+    oneOf: [
+      fields({
+        kind: { const: 'text' },
+        path: str('The path as requested'),
+        content: str('The lines read, without line numbers (at most 4 MiB)'),
+        contentTruncated: bool('content was cut at 4 MiB; read fewer lines'),
+        offset: int('1-based first line returned'),
+        lines: int('Lines returned'),
+        totalLines: int(),
+        nextOffset: nullable(int('Offset of the next unread line, or null at the end')),
+        truncated: bool('text was cut to the output limit'),
+      }),
+      fields({
+        kind: { const: 'image' },
+        path: str(),
+        mimeType: str(),
+        bytes: int(),
+      }),
+    ],
+  },
   async execute(args, ctx) {
     const file = ctx.guard.resolve(requireString(args, 'path'), 'read');
     const info = await stat(file);
@@ -39,6 +76,7 @@ export const readTool: Tool = {
           { type: 'text', text: `Image ${args.path} (${info.size} bytes)` },
           { type: 'image', data: (await readFile(file)).toString('base64'), mimeType: mime },
         ],
+        data: { kind: 'image', path: String(args.path), mimeType: mime, bytes: info.size },
       };
     }
     const raw = await readFile(file, 'utf8');
@@ -53,7 +91,23 @@ export const readTool: Tool = {
     const end = offset - 1 + slice.length;
     if (end < lines.length)
       body += `\n\n[Showing lines ${offset}-${end} of ${lines.length}. Use offset=${end + 1} to continue.]`;
-    return text(truncateOutput(body, ctx.config.limits.toolOutputBytes * 2).text);
+    const shown = truncateOutput(body, ctx.config.limits.toolOutputBytes * 2);
+    // Scripts get the lines whole, up to a bound that keeps one huge line from
+    // filling their memory.
+    const content = slice.join('\n');
+    // Bytes as the script receives them (JSON), which is what its result limit counts.
+    const contentTruncated = Buffer.byteLength(JSON.stringify(content)) > READ_CONTENT_BYTES;
+    return typed(shown.text, {
+      kind: 'text',
+      path: String(args.path),
+      content: contentTruncated ? cutJson(content, READ_CONTENT_BYTES) : content,
+      contentTruncated,
+      offset,
+      lines: slice.length,
+      totalLines: lines.length,
+      nextOffset: end < lines.length ? end + 1 : null,
+      truncated: shown.truncated,
+    });
   },
 };
 
@@ -101,6 +155,7 @@ export const writeTool: Tool = {
     required: ['path', 'content'],
     additionalProperties: false,
   },
+  resultSchema: fields({ path: str('The path as requested'), bytes: int('Bytes written') }),
   async execute(args, ctx) {
     const requested = requireString(args, 'path');
     if (typeof args.content !== 'string') throw new Error('content must be a string');
@@ -108,7 +163,8 @@ export const writeTool: Tool = {
     await ctx.acquireWrite(file);
     await mkdir(path.dirname(file), { recursive: true });
     await writeChecked(file, args.content, ctx);
-    return text(`Wrote ${Buffer.byteLength(args.content)} bytes to ${args.path}`);
+    const bytes = Buffer.byteLength(args.content);
+    return typed(`Wrote ${bytes} bytes to ${args.path}`, { path: requested, bytes });
   },
 };
 
@@ -147,6 +203,11 @@ export const editTool: Tool = {
     required: ['path', 'oldText', 'newText'],
     additionalProperties: false,
   },
+  resultSchema: fields({
+    path: str('The path as requested'),
+    replacements: int(),
+    diff: str('A unified diff of the change'),
+  }),
   async execute(args, ctx) {
     const requested = requireString(args, 'path');
     const file = await writeTarget(ctx.guard.resolve(requested, 'write'), ctx, requested);
@@ -165,7 +226,11 @@ export const editTool: Tool = {
     await ctx.acquireWrite(file);
     await writeChecked(file, after, ctx);
     const diff = simpleDiff(before, after, String(args.path));
-    return text(`Edited ${args.path} (${count} replacement${count === 1 ? '' : 's'})`, { diff });
+    return typed(
+      `Edited ${args.path} (${count} replacement${count === 1 ? '' : 's'})`,
+      { path: requested, replacements: count, diff },
+      { details: { diff } },
+    );
   },
 };
 
@@ -178,19 +243,41 @@ export const lsTool: Tool = {
     properties: { path: { type: 'string', description: 'Default: workspace root' } },
     additionalProperties: false,
   },
+  resultSchema: fields({
+    entries: arr(
+      obj({ name: str(), type: oneOfStrings(['file', 'directory', 'symlink', 'other']) }),
+      'Sorted by name; at most 1000',
+    ),
+    total: int('Entries in the directory'),
+    truncated: bool(),
+  }),
   async execute(args, ctx) {
     const dir = ctx.guard.resolve(
       typeof args.path === 'string' && args.path ? args.path : '.',
       'read',
     );
-    const entries = await readdir(dir, { withFileTypes: true });
-    const names = entries
-      .map((entry) => (entry.isDirectory() ? `${entry.name}/` : entry.name))
-      .sort((a, b) => a.localeCompare(b));
+    const entries = (await readdir(dir, { withFileTypes: true })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+    const names = entries.map((entry) => (entry.isDirectory() ? `${entry.name}/` : entry.name));
     const shown = names.slice(0, 1000);
-    return text(
+    return typed(
       shown.join('\n') +
         (names.length > shown.length ? `\n[${names.length - shown.length} more]` : '') || '(empty)',
+      {
+        entries: entries.slice(0, 1000).map((entry) => ({
+          name: entry.name,
+          type: entry.isDirectory()
+            ? 'directory'
+            : entry.isFile()
+              ? 'file'
+              : entry.isSymbolicLink()
+                ? 'symlink'
+                : 'other',
+        })),
+        total: entries.length,
+        truncated: entries.length > 1000,
+      },
     );
   },
 };
@@ -232,6 +319,10 @@ export const findTool: Tool = {
     required: ['pattern'],
     additionalProperties: false,
   },
+  resultSchema: fields({
+    paths: arr(str(), 'Matching files relative to the searched directory, sorted; at most 500'),
+    truncated: bool('The 500-match limit was reached'),
+  }),
   async execute(args, ctx) {
     const root = ctx.guard.resolve(
       typeof args.path === 'string' && args.path ? args.path : '.',
@@ -244,7 +335,11 @@ export const findTool: Tool = {
       if (glob.match(relative)) matches.push(relative);
       if (matches.length >= 500) break;
     }
-    return text(matches.sort().join('\n') || 'No matches');
+    matches.sort();
+    return typed(matches.join('\n') || 'No matches', {
+      paths: matches,
+      truncated: matches.length >= 500,
+    });
   },
 };
 
@@ -264,6 +359,16 @@ export const grepTool: Tool = {
     required: ['pattern'],
     additionalProperties: false,
   },
+  resultSchema: fields({
+    matches: arr(
+      obj({
+        path: str('Relative to the searched directory'),
+        line: int('1-based'),
+        text: str('The line, cut at 300 characters'),
+      }),
+    ),
+    truncated: bool('The match limit was reached'),
+  }),
   async execute(args, ctx) {
     const root = ctx.guard.resolve(
       typeof args.path === 'string' && args.path ? args.path : '.',
@@ -273,6 +378,7 @@ export const grepTool: Tool = {
     const filter = typeof args.glob === 'string' && args.glob ? new Bun.Glob(args.glob) : undefined;
     const limit = Math.max(1, Math.floor(optionalNumber(args, 'limit') ?? 200));
     const results: string[] = [];
+    const matches: Array<{ path: string; line: number; text: string }> = [];
     const info = await stat(root);
     const files = info.isFile() ? [root] : walk(root, { left: 100_000 });
     const base = info.isFile() ? path.dirname(root) : root;
@@ -293,15 +399,17 @@ export const grepTool: Tool = {
       for (let index = 0; index < lines.length; index++) {
         if (regex.test(lines[index]!)) {
           results.push(`${relative}:${index + 1}: ${lines[index]!.slice(0, 300)}`);
+          matches.push({ path: relative, line: index + 1, text: lines[index]!.slice(0, 300) });
           if (results.length >= limit) break;
         }
       }
       if (results.length >= limit) break;
     }
-    return text(
+    return typed(
       results.length
         ? results.join('\n') + (results.length >= limit ? `\n[limit ${limit} reached]` : '')
         : 'No matches',
+      { matches, truncated: results.length >= limit },
     );
   },
 };

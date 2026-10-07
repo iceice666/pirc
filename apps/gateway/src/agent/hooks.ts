@@ -26,11 +26,25 @@ export class HookRunner {
     return this.hooks[name].length > 0;
   }
 
+  private readonly warnedCode = new Set<string>();
+
   private matching(name: HookName, subject?: string): HookConfig[] {
     return this.hooks[name].filter((hook) => {
       if (!hook.matcher || subject === undefined) return true;
       try {
-        return new RegExp(`^(?:${hook.matcher})$`).test(subject);
+        const pattern = new RegExp(`^(?:${hook.matcher})$`);
+        if (pattern.test(subject)) return true;
+        // `ptc` replaced the `code` tool: a rule written for scripts keeps applying.
+        if (subject === 'ptc' && pattern.test('code')) {
+          if (!this.warnedCode.has(hook.matcher)) {
+            this.warnedCode.add(hook.matcher);
+            this.warn(
+              `Hook matcher "${hook.matcher}" names the retired code tool; it now applies to ptc. Match "ptc" instead.`,
+            );
+          }
+          return true;
+        }
+        return false;
       } catch {
         return false;
       }

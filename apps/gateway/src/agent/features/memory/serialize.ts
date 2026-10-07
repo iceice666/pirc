@@ -1,5 +1,6 @@
 import type { Message } from '../../messages.js';
 import type { SessionEntry } from '../../session-store.js';
+import { startedCapabilities } from '../../ptc/contracts.js';
 import { estimateStringTokens, isSource, localStamp } from './ledger.js';
 
 const textOf = (content: unknown): string =>
@@ -74,7 +75,7 @@ export function renderMessage(message: Message, style: 'observer' | 'recall' = '
     case 'toolResult':
       return style === 'recall'
         ? `[Tool result: ${message.toolName} @ ${at}]: ${quote(message.content)}`
-        : `[Tool result for ${message.toolName} @ ${at}]: ${message.toolName === 'recall' ? RECALL_OMITTED : quote(message.content)}`;
+        : `[Tool result for ${message.toolName} @ ${at}]: ${message.toolName === 'recall' || startedCapabilities(message)?.includes('recall') ? RECALL_OMITTED : quote(message.content)}`;
     case 'custom':
       // A loaded skill is installed instructions, not something the user said.
       if (message.customType === 'skill' && style === 'observer')

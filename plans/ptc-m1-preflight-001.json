@@ -1,0 +1,70 @@
+{
+  "kind": "preflight-not-baseline",
+  "fixture": "single-bash",
+  "baseline": "16c80846da64c07114d8cd43bab68748e5474127",
+  "binaryHash": "164769ca8c6645747eed2c6c47a2e2561a53936a9cf30427069a0ff8fb7f1d80",
+  "protocol": 3,
+  "fixtureHash": "39f59e86faee6ff61d053c62d0e485e0bd2c1d355d7764d3292caa3ac491d106",
+  "success": false,
+  "measured": {
+    "wallMs": 4759.1355920000005,
+    "startupMs": 435.506595,
+    "cpuMs": 64.005,
+    "cgroupMemoryPeakBytes": 57929728,
+    "resourceStartLeadMs": 0.0011100000000396903,
+    "resourceEndLagMs": 0.5550999999995838,
+    "memoryWindow": "unit-start-through-post-settled-sample",
+    "cpuWindow": "pre-dispatch-through-post-settled-sample"
+  },
+  "mainRounds": 2,
+  "bashCalls": 1,
+  "bashResults": 1,
+  "attempts": [
+    {
+      "schemaBytes": 2,
+      "contextBytes": 708,
+      "requestBytes": 765,
+      "responseBytes": 1493,
+      "durationMs": 2458.017895,
+      "status": 200,
+      "usage": { "input": 309, "output": 16, "cacheWrite": 0, "cacheRead": 0 }
+    },
+    {
+      "schemaBytes": 32432,
+      "contextBytes": 2371,
+      "requestBytes": 34938,
+      "responseBytes": 2131,
+      "durationMs": 2745.100615,
+      "status": 200,
+      "usage": { "input": 2, "output": 70, "cacheWrite": 14300, "cacheRead": 0 }
+    },
+    {
+      "schemaBytes": 32432,
+      "contextBytes": 2691,
+      "requestBytes": 35258,
+      "responseBytes": 2042,
+      "durationMs": 1980.921848,
+      "status": 200,
+      "usage": { "input": 2, "output": 43, "cacheWrite": 92, "cacheRead": 14300 }
+    },
+    {
+      "schemaBytes": 1219,
+      "contextBytes": 11617,
+      "requestBytes": 12968,
+      "responseBytes": 954,
+      "durationMs": 1988.1653900000001,
+      "status": 200,
+      "usage": null
+    }
+  ],
+  "budget": {
+    "spentUnits": 715776,
+    "reservedUnits": 41638400,
+    "limitUsdEquivalent": 100,
+    "spentUsdEquivalent": 0.1431552,
+    "reservedUsdEquivalent": 8.32768,
+    "unknownAttempts": 1,
+    "admittedAttempts": 4,
+    "halted": true
+  }
+}

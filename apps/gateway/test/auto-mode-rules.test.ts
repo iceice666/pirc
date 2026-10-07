@@ -23,6 +23,31 @@ function expectAll(expected: Verdict, commands: string[]) {
     expect({ command, verdict: verdict(command) }).toEqual({ command, verdict: expected });
 }
 
+describe('auto-mode shell rules: write targets', () => {
+  const writes = (command: string) =>
+    classifyShell(command, { cwd: workspace, roots: [workspace], home }).writes;
+  const tmp = realResolve('/tmp');
+
+  it('lists every path a command writes when all are known', () => {
+    expect(writes('cd /tmp && mkdir -p ghpirc && GH_CONFIG_DIR=/tmp/ghpirc gh --version')).toEqual([
+      path.join(tmp, 'ghpirc'),
+    ]);
+    expect(writes('echo x > /tmp/a.txt; touch notes.md')).toEqual([
+      path.join(tmp, 'a.txt'),
+      path.join(workspace, 'notes.md'),
+    ]);
+    expect(writes('cp -r src /tmp/pirc-copy')).toEqual([path.join(tmp, 'pirc-copy')]);
+    expect(writes('echo hi > /dev/null')).toBeUndefined(); // read
+  });
+
+  it('drops the list once any write has no known target', () => {
+    expect(writes('mkdir -p /tmp/x && git commit -m x')).toBeUndefined();
+    expect(writes('sed -i s/a/b/ /tmp/f')).toBeUndefined();
+    expect(writes('git add -A; echo x > /tmp/y')).toBeUndefined();
+    expect(writes('bun install > /tmp/log')).toBeUndefined();
+  });
+});
+
 describe('auto-mode shell rules', () => {
   it('lets read-only commands through without a lease', () => {
     expectAll('read', [
@@ -41,6 +66,8 @@ describe('auto-mode shell rules', () => {
       'curl -s https://example.com/api',
       'bun pm ls',
       'git clean -n',
+      'gh --version',
+      'gh version',
       '# just a comment',
     ]);
   });

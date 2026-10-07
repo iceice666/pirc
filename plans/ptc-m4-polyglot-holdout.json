@@ -1,0 +1,230 @@
+{
+  "kind": "ptc-m4-polyglot-report",
+  "run": {
+    "name": "ptc-m4-poly-003",
+    "mode": "holdout",
+    "complete": true,
+    "trials": "15556e4ae1e12613436e3cb53b37261faa7e4e0581a4aaf8ddc4554d32092274",
+    "budget": "201aac8702c785d8d7b8b5df5a1a7aaa872e6e6fc8970b222fd09b47e0c39612",
+    "summary": "88ba56d0e56ca48e9da4629fa14461372da6807ddc97b97d9f364639667a5373",
+    "arms": {
+      "main": {
+        "node": "164769ca8c6645747eed2c6c47a2e2561a53936a9cf30427069a0ff8fb7f1d80",
+        "chat": "be2eb5fbf1908dd1ddaa74be79cdb503e7dafcf73413a0d1fb2a87618fea8aaf"
+      },
+      "ptc": {
+        "node": "fe093f1c0fefadb3a236713b8d06c0a279de08f1f8064abcaa7d59b6285cbf9a",
+        "chat": "065ce3e2123ffb1a9568541e8695fcc0559a9873f29f9fa1b2c99cd815435dec"
+      }
+    },
+    "controller": "d98a6883ced8a30f59eead2baf09d0f05fca6c0857548b1f8b6148e20b276627"
+  },
+  "dataset": {
+    "repository": "https://github.com/Aider-AI/polyglot-benchmark",
+    "commit": "7e0611e77b54e2dea774cdc0aa00cf9f7ed6144f",
+    "path": "python/exercises/practice",
+    "splitSalt": "pirc-m4-polyglot:",
+    "exercises": [
+      "affine-cipher",
+      "book-store",
+      "bottle-song",
+      "bowling",
+      "connect",
+      "dominoes",
+      "dot-dsl",
+      "forth",
+      "go-counting",
+      "grep",
+      "list-ops",
+      "phone-number",
+      "pov",
+      "robot-name",
+      "scale-generator",
+      "simple-linked-list",
+      "transpose",
+      "tree-building",
+      "two-bucket"
+    ]
+  },
+  "readiness": { "missing": [], "complete": true },
+  "runComplete": true,
+  "runMissing": [],
+  "byArm": {
+    "main": {
+      "trials": 38,
+      "testsPassed": 38,
+      "succeeded": 38,
+      "deadlineExceeded": 0,
+      "missingMeasurement": 0,
+      "suspiciousSolutions": 0,
+      "meanTokens": 52001.36842105263,
+      "meanModelRounds": 5.552631578947368,
+      "meanRequests": 7.684210526315789,
+      "meanWallMs": 24799.37190513157,
+      "meanPtcCalls": 0,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 76, "write": 26, "bash": 41, "ls": 18, "edit": 20 },
+      "operationsByCapability": {},
+      "perExercise": {
+        "affine-cipher": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 46987,
+          "meanModelRounds": 5.5
+        },
+        "book-store": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 53647.5,
+          "meanModelRounds": 6.5
+        },
+        "bottle-song": { "trials": 2, "testsPassed": 2, "meanTokens": 40451, "meanModelRounds": 5 },
+        "bowling": { "trials": 2, "testsPassed": 2, "meanTokens": 68800, "meanModelRounds": 5 },
+        "connect": { "trials": 2, "testsPassed": 2, "meanTokens": 46163, "meanModelRounds": 6 },
+        "dominoes": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 44057.5,
+          "meanModelRounds": 5.5
+        },
+        "dot-dsl": { "trials": 2, "testsPassed": 2, "meanTokens": 46127.5, "meanModelRounds": 5.5 },
+        "forth": { "trials": 2, "testsPassed": 2, "meanTokens": 72451, "meanModelRounds": 5.5 },
+        "go-counting": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 68591.5,
+          "meanModelRounds": 8
+        },
+        "grep": { "trials": 2, "testsPassed": 2, "meanTokens": 65692, "meanModelRounds": 5.5 },
+        "list-ops": { "trials": 2, "testsPassed": 2, "meanTokens": 40646, "meanModelRounds": 5 },
+        "phone-number": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 43187,
+          "meanModelRounds": 5
+        },
+        "pov": { "trials": 2, "testsPassed": 2, "meanTokens": 44604.5, "meanModelRounds": 5 },
+        "robot-name": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 48235,
+          "meanModelRounds": 6.5
+        },
+        "scale-generator": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 42985,
+          "meanModelRounds": 5
+        },
+        "simple-linked-list": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 64296.5,
+          "meanModelRounds": 5
+        },
+        "transpose": { "trials": 2, "testsPassed": 2, "meanTokens": 37870.5, "meanModelRounds": 5 },
+        "tree-building": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 68375.5,
+          "meanModelRounds": 5.5
+        },
+        "two-bucket": { "trials": 2, "testsPassed": 2, "meanTokens": 44858, "meanModelRounds": 5.5 }
+      }
+    },
+    "ptc": {
+      "trials": 38,
+      "testsPassed": 38,
+      "succeeded": 38,
+      "deadlineExceeded": 0,
+      "missingMeasurement": 0,
+      "suspiciousSolutions": 0,
+      "meanTokens": 35218,
+      "meanModelRounds": 3.1578947368421053,
+      "meanRequests": 5.421052631578948,
+      "meanWallMs": 17778.84079947368,
+      "meanPtcCalls": 2.0789473684210527,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": { "read": 2, "bash": 1 },
+      "operationsByCapability": { "read": 78, "write": 24, "ls": 4, "bash": 40, "edit": 25 },
+      "perExercise": {
+        "affine-cipher": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 25196,
+          "meanModelRounds": 3
+        },
+        "book-store": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 25367.5,
+          "meanModelRounds": 3
+        },
+        "bottle-song": { "trials": 2, "testsPassed": 2, "meanTokens": 21490, "meanModelRounds": 3 },
+        "bowling": { "trials": 2, "testsPassed": 2, "meanTokens": 60653.5, "meanModelRounds": 3 },
+        "connect": { "trials": 2, "testsPassed": 2, "meanTokens": 22073, "meanModelRounds": 3 },
+        "dominoes": { "trials": 2, "testsPassed": 2, "meanTokens": 23338.5, "meanModelRounds": 3 },
+        "dot-dsl": { "trials": 2, "testsPassed": 2, "meanTokens": 22834.5, "meanModelRounds": 3 },
+        "forth": { "trials": 2, "testsPassed": 2, "meanTokens": 59056.5, "meanModelRounds": 3 },
+        "go-counting": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 52479.5,
+          "meanModelRounds": 5
+        },
+        "grep": { "trials": 2, "testsPassed": 2, "meanTokens": 60167.5, "meanModelRounds": 3 },
+        "list-ops": { "trials": 2, "testsPassed": 2, "meanTokens": 21168, "meanModelRounds": 3 },
+        "phone-number": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 25092.5,
+          "meanModelRounds": 3
+        },
+        "pov": { "trials": 2, "testsPassed": 2, "meanTokens": 68018, "meanModelRounds": 3.5 },
+        "robot-name": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 19203.5,
+          "meanModelRounds": 3
+        },
+        "scale-generator": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 24215,
+          "meanModelRounds": 3
+        },
+        "simple-linked-list": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 37158,
+          "meanModelRounds": 3
+        },
+        "transpose": { "trials": 2, "testsPassed": 2, "meanTokens": 20882.5, "meanModelRounds": 3 },
+        "tree-building": {
+          "trials": 2,
+          "testsPassed": 2,
+          "meanTokens": 57479.5,
+          "meanModelRounds": 3.5
+        },
+        "two-bucket": { "trials": 2, "testsPassed": 2, "meanTokens": 23268.5, "meanModelRounds": 3 }
+      }
+    }
+  },
+  "bounds": {
+    "checks": [
+      { "bound": "tests-pass count", "main": 38, "ptc": 38, "pass": true },
+      { "bound": "mean tokens", "main": 52001.36842105263, "ptc": 35218, "pass": true },
+      {
+        "bound": "mean model rounds",
+        "main": 5.552631578947368,
+        "ptc": 3.1578947368421053,
+        "pass": true
+      }
+    ],
+    "pass": true
+  },
+  "budget": {
+    "start": { "spentUnits": 995064847, "admittedAttempts": 13965 },
+    "final": { "spentUnits": 1066480527, "reservedUnits": 0, "admittedAttempts": 14463 }
+  }
+}

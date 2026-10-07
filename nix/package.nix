@@ -9,7 +9,7 @@
   # Not named `srt`: callPackage would inject nixpkgs' unrelated `srt`
   # (a video streaming library) instead of this default.
   sandboxRuntime ? callPackage ./sandbox-runtime.nix { },
-  nodeModulesHash ? "sha256-JL1G5OErpSpGhIkS53Q/+1X4vYho291+YgrhPP39kSQ=",
+  nodeModulesHash ? "sha256-6ewZSbFTpl1szNtRtIp5epzSDKYXOY7Z5lU6I9JBFvY=",
 }:
 
 assert lib.elem role [

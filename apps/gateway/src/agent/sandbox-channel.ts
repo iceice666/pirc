@@ -19,6 +19,8 @@ export interface SandboxRequester {
     op: SandboxOp,
     args: Record<string, unknown>,
     signal?: AbortSignal,
+    /** The `ptc` operation asking, shown with the approval (this session's own requests only). */
+    toolCallId?: string,
   ): Promise<Record<string, any>>;
 }
 
@@ -41,12 +43,20 @@ export class NodeSandboxChannel implements SandboxRequester {
     op: SandboxOp,
     args: Record<string, unknown>,
     signal?: AbortSignal,
+    toolCallId?: string,
   ): Promise<Record<string, any>> {
     return this.pending.request({
       signal,
       abortError: () => new SandboxRequestError('aborted', 'Aborted'),
       cancel: (id) => this.write({ type: 'sandbox_cancel', id }),
-      send: (id) => this.write({ type: 'sandbox_request', id, op, args }),
+      send: (id) =>
+        this.write({
+          type: 'sandbox_request',
+          id,
+          op,
+          args,
+          ...(toolCallId ? { toolCallId } : {}),
+        }),
     });
   }
 

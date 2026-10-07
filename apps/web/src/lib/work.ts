@@ -153,6 +153,25 @@ export interface RunSummary {
 
 const FILE_TOOLS = new Set(['read', 'edit', 'write']);
 
+/**
+ * The calls behind some tool calls: a `ptc` script stands for the operations
+ * it ran (none yet: the script itself), and capability lookups are left out.
+ */
+export function effectiveTools(tools: ToolCall[]): ToolCall[] {
+  const calls = tools.flatMap((tool) =>
+    tool.name === 'ptc_docs' ? [] : tool.operations?.length ? tool.operations : [tool],
+  );
+  return calls.length ? calls : tools;
+}
+
+/** A script's operations in a few words: names in first-use order, with counts. */
+export function operationsSummary(operations: ToolCall[]): string {
+  const counts = new Map<string, number>();
+  for (const operation of operations)
+    counts.set(operation.name, (counts.get(operation.name) ?? 0) + 1);
+  return [...counts].map(([name, count]) => (count > 1 ? `${name} ×${count}` : name)).join(', ');
+}
+
 export function summarizeRun(tools: ToolCall[]): RunSummary {
   const status = tools.some((tool) => tool.status === 'failed')
     ? 'failed'
@@ -166,12 +185,13 @@ export function summarizeRun(tools: ToolCall[]): RunSummary {
       ? Math.max(0, Math.max(...ends) - Math.min(...starts))
       : undefined;
   const files: string[] = [];
-  for (const tool of tools) {
+  const calls = effectiveTools(tools);
+  for (const tool of calls) {
     const path = (tool.input as { path?: unknown } | undefined)?.path;
     if (!FILE_TOOLS.has(tool.name) || typeof path !== 'string' || !path) continue;
     const parts = path.split('/').filter(Boolean);
     const name = parts[parts.length - 1] ?? path;
     if (!files.includes(name)) files.push(name);
   }
-  return { count: tools.length, status, durationMs, files };
+  return { count: calls.length, status, durationMs, files };
 }

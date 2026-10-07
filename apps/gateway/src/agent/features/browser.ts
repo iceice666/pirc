@@ -9,6 +9,17 @@ import type { Agent } from '../agent.js';
 import type { Feature } from '../feature.js';
 import type { Tool, ToolContext, ToolResult } from '../tools/types.js';
 import { toolPrompt } from '../prompts/tools.js';
+import {
+  arr,
+  bool,
+  byAction,
+  fields,
+  int,
+  nullable,
+  obj,
+  oneOfStrings,
+  str,
+} from '../tools/result-schema.js';
 
 const BROWSER_PROMPT = `## Browser
 
@@ -79,6 +90,57 @@ function rangeNote(label: string, result: Record<string, any>): string {
     : `${label} (untrusted):`;
 }
 
+const TAB = obj({ index: int(), url: str(), title: str(), active: bool() });
+
+/** The page after a browser action (untrusted content). */
+const PAGE_FIELDS = {
+  url: str(),
+  title: str(),
+  status: nullable(int('HTTP status of a navigation')),
+  tabs: arr(TAB, 'All tabs, when more than one is open'),
+  snapshot: obj(
+    {
+      text: str('Accessibility snapshot with element refs (untrusted page content)'),
+      offset: int(),
+      totalChars: int(),
+      truncated: bool(),
+    },
+    [],
+  ),
+};
+const PAGE_RESULT = fields(PAGE_FIELDS, ['status', 'tabs', 'snapshot']);
+
+const tabOf = (tab: Record<string, any>) => ({
+  index: Number(tab.index),
+  url: String(tab.url ?? ''),
+  title: String(tab.title ?? ''),
+  active: tab.active === true,
+});
+
+/** Typed page fields from the node's page summary. */
+export function pageData(result: Record<string, any>): Record<string, unknown> {
+  return {
+    url: String(result.url ?? ''),
+    title: String(result.title ?? ''),
+    ...('status' in result
+      ? { status: typeof result.status === 'number' ? result.status : null }
+      : {}),
+    ...(Array.isArray(result.tabs) && result.tabs.length > 1
+      ? { tabs: result.tabs.map(tabOf) }
+      : {}),
+    ...(typeof result.snapshot === 'string'
+      ? {
+          snapshot: {
+            text: result.snapshot,
+            offset: Number(result.offset ?? 0),
+            totalChars: Number(result.totalChars ?? result.snapshot.length),
+            truncated: result.truncated === true,
+          },
+        }
+      : {}),
+  };
+}
+
 export function browserFeature(): Feature {
   let lifetime = new AbortController();
   const channel = (): NodeBrowser => {
@@ -102,9 +164,13 @@ export function browserFeature(): Feature {
     name,
     description,
     parameters: { type: 'object', properties, required, additionalProperties: false },
+    resultSchema: PAGE_RESULT,
     async execute(args, ctx) {
       const result = await call(op, args ?? {}, ctx);
-      return text(formatPage(result), { url: result.url, title: result.title });
+      return {
+        ...text(formatPage(result), { url: result.url, title: result.title }),
+        data: pageData(result),
+      };
     },
   });
 
@@ -124,6 +190,16 @@ export function browserFeature(): Feature {
         required: ['url'],
         additionalProperties: false,
       },
+      resultSchema: fields({
+        url: str(),
+        title: str(),
+        status: nullable(int()),
+        format: oneOfStrings(['markdown', 'text', 'html']),
+        content: str('This range of the page (untrusted content)'),
+        offset: int(),
+        totalChars: int(),
+        truncated: bool('More content follows; fetch again with offset'),
+      }),
       async execute(args, ctx) {
         const result = await call('fetch', args, ctx);
         const header = [
@@ -136,12 +212,24 @@ export function browserFeature(): Feature {
         const footer = result.truncated
           ? `\n[truncated: call web_fetch with offset=${result.offset + result.content.length} for more]`
           : '';
-        return text(`${header.join('\n')}\n${result.content}${footer}`, {
-          url: result.url,
-          title: result.title,
-          status: result.status,
-          totalChars: result.totalChars,
-        });
+        return {
+          ...text(`${header.join('\n')}\n${result.content}${footer}`, {
+            url: result.url,
+            title: result.title,
+            status: result.status,
+            totalChars: result.totalChars,
+          }),
+          data: {
+            url: String(result.url ?? ''),
+            title: String(result.title ?? ''),
+            status: typeof result.status === 'number' ? result.status : null,
+            format: ['text', 'html'].includes(result.format) ? result.format : 'markdown',
+            content: String(result.content ?? ''),
+            offset: Number(result.offset ?? 0),
+            totalChars: Number(result.totalChars ?? 0),
+            truncated: result.truncated === true,
+          },
+        };
       },
     },
     pageTool(
@@ -222,6 +310,8 @@ export function browserFeature(): Feature {
         properties: { fullPage: { type: 'boolean' } },
         additionalProperties: false,
       },
+      // The screenshot itself is in `images`: attachments.add(result.images[0]).
+      resultSchema: fields({ url: str(), title: str() }),
       async execute(args, ctx) {
         const result = await call('screenshot', args ?? {}, ctx);
         return {
@@ -230,6 +320,7 @@ export function browserFeature(): Feature {
             { type: 'image', data: result.image, mimeType: result.mimeType },
           ],
           details: { url: result.url, title: result.title },
+          data: { url: String(result.url ?? ''), title: String(result.title ?? '') },
         };
       },
     },
@@ -246,10 +337,11 @@ export function browserFeature(): Feature {
         required: ['action'],
         additionalProperties: false,
       },
+      resultSchema: fields({ tabs: arr(TAB) }),
       async execute(args, ctx) {
         const result = await call('tabs', args, ctx);
         const tabs = (result.tabs ?? []) as Array<Record<string, any>>;
-        return text(
+        const done = text(
           tabs.length
             ? tabs
                 .map(
@@ -260,6 +352,7 @@ export function browserFeature(): Feature {
             : 'No tabs',
           result,
         );
+        return { ...done, data: { tabs: tabs.map(tabOf) } };
       },
     },
     {
@@ -276,6 +369,18 @@ export function browserFeature(): Feature {
         },
         required: ['reason'],
         additionalProperties: false,
+      },
+      resultSchema: {
+        oneOf: [
+          fields(
+            {
+              outcome: { const: 'returned', description: 'The user gave control back' },
+              ...PAGE_FIELDS,
+            },
+            ['status', 'tabs', 'snapshot'],
+          ),
+          fields({ outcome: { const: 'cancelled' } }),
+        ],
       },
       async execute(args, ctx) {
         const reason = typeof args?.reason === 'string' ? args.reason.trim() : '';
@@ -307,7 +412,8 @@ export function browserFeature(): Feature {
           | { kind: 'panel'; summary: Record<string, any> }
           | { kind: 'done' | 'cancelled' };
         try {
-          outcome = await Promise.race([panel, dialog]);
+          // The human holds the browser: a ptc script's budget pauses.
+          outcome = await ctx.humanWait(Promise.race([panel, dialog]));
         } finally {
           local.abort();
           panel.catch(() => undefined);
@@ -316,16 +422,22 @@ export function browserFeature(): Feature {
         if (outcome.kind !== 'panel')
           await channel().request('release', {}, AbortSignal.any([ctx.signal, lifetime.signal]));
         if (outcome.kind === 'cancelled')
-          return text(
-            'The user cancelled the handoff. Do not assume the task was done; ask them how to proceed.',
-            { status: 'cancelled' },
-          );
+          return {
+            ...text(
+              'The user cancelled the handoff. Do not assume the task was done; ask them how to proceed.',
+              { status: 'cancelled' },
+            ),
+            data: { outcome: 'cancelled' },
+          };
         const summary =
           outcome.kind === 'panel' ? outcome.summary : await call('snapshot', {}, ctx);
-        return text(`The user returned control of the browser.\n\n${formatPage(summary)}`, {
-          status: 'returned',
-          url: summary.url,
-        });
+        return {
+          ...text(`The user returned control of the browser.\n\n${formatPage(summary)}`, {
+            status: 'returned',
+            url: summary.url,
+          }),
+          data: { outcome: 'returned', ...pageData(summary) },
+        };
       },
     },
     {
@@ -340,25 +452,46 @@ export function browserFeature(): Feature {
         required: ['action'],
         additionalProperties: false,
       },
+      resultSchema: byAction({
+        start: { properties: { path: str('Workspace-relative video path') } },
+        stop: {
+          properties: {
+            path: str('Workspace-relative video path'),
+            bytes: int(),
+            durationMs: int(),
+          },
+        },
+      }),
       async execute(args, ctx) {
         const result = await call('record', args, ctx);
         if (args.action === 'start')
-          return text(
-            `Recording to ${result.path}. Call browser_record with action "stop" to save it.`,
-            {
-              recording: true,
-              path: result.path,
-            },
-          );
-        return text(
-          `Saved recording ${result.path} (${Math.round(result.durationMs / 1000)} s, ${Math.round(result.bytes / 1024)} KiB). The user can play it from this tool call.`,
-          {
-            recording: false,
-            path: result.path,
-            bytes: result.bytes,
-            durationMs: result.durationMs,
+          return {
+            data: { action: 'start', path: String(result.path ?? '') },
+            ...text(
+              `Recording to ${result.path}. Call browser_record with action "stop" to save it.`,
+              {
+                recording: true,
+                path: result.path,
+              },
+            ),
+          };
+        return {
+          data: {
+            action: 'stop',
+            path: String(result.path ?? ''),
+            bytes: Number(result.bytes ?? 0),
+            durationMs: Math.round(Number(result.durationMs ?? 0)),
           },
-        );
+          ...text(
+            `Saved recording ${result.path} (${Math.round(result.durationMs / 1000)} s, ${Math.round(result.bytes / 1024)} KiB). The user can play it from this tool call.`,
+            {
+              recording: false,
+              path: result.path,
+              bytes: result.bytes,
+              durationMs: result.durationMs,
+            },
+          ),
+        };
       },
     },
   ];

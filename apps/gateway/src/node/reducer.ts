@@ -14,6 +14,35 @@ export interface ReducedSessionState {
   /** Extension panels (`setWidget`) and status-line entries (`setStatus`), keyed by extension. */
   widgets: Record<string, string[]>;
   statuses: Record<string, string>;
+  /**
+   * `ptc` operations still running (started, not ended), so a snapshot can
+   * show them under their `ptc` call — e.g. one waiting for an approval.
+   * Finished ones are in the session file's history.
+   */
+  operations: RunningOperation[];
+}
+
+export interface RunningOperation {
+  toolCallId: string;
+  parentToolCallId: string;
+  toolName: string;
+  args: unknown;
+}
+
+/** A ptc execution has at most 8 operations in flight; keep a margin, never grow unbounded. */
+const MAX_RUNNING_OPERATIONS = 32;
+/** Arguments kept per running operation (e.g. a `write` may carry 1 MiB of content). */
+const MAX_ARGS_CHARS = 4096;
+
+/** Arguments for display: long strings are cut, and anything larger than the bound is dropped. */
+function boundedArgs(args: unknown): unknown {
+  const cut = (value: unknown): unknown =>
+    typeof value === 'string' && value.length > 1000 ? `${value.slice(0, 1000)}…` : value;
+  const shallow =
+    args && typeof args === 'object' && !Array.isArray(args)
+      ? Object.fromEntries(Object.entries(args).map(([key, value]) => [key, cut(value)]))
+      : cut(args);
+  return JSON.stringify(shallow ?? {}).length <= MAX_ARGS_CHARS ? (shallow ?? {}) : {};
 }
 
 export const emptyReducedState = (): ReducedSessionState => ({
@@ -23,6 +52,7 @@ export const emptyReducedState = (): ReducedSessionState => ({
   notifications: [],
   widgets: {},
   statuses: {},
+  operations: [],
 });
 
 export function reducePiEvent(state: ReducedSessionState, event: Record<string, any>): void {
@@ -79,7 +109,24 @@ export function reducePiEvent(state: ReducedSessionState, event: Record<string, 
   } else if (event.type === 'message_end') {
     state.history.push(event.message);
     state.partialMessage = null;
-  } else if (event.type === 'queue_update')
+  } else if (
+    event.type === 'tool_execution_start' &&
+    typeof event.parentToolCallId === 'string' &&
+    typeof event.toolCallId === 'string'
+  ) {
+    state.operations = [
+      ...state.operations.filter((item) => item.toolCallId !== event.toolCallId),
+      {
+        toolCallId: event.toolCallId,
+        parentToolCallId: event.parentToolCallId,
+        toolName: String(event.toolName ?? 'tool'),
+        args: boundedArgs(event.args),
+      },
+    ].slice(-MAX_RUNNING_OPERATIONS);
+  } else if (event.type === 'tool_execution_end' && typeof event.parentToolCallId === 'string')
+    state.operations = state.operations.filter((item) => item.toolCallId !== event.toolCallId);
+  else if (event.type === 'agent_end' || event.type === 'agent_settled') state.operations = [];
+  else if (event.type === 'queue_update')
     state.queue = { steering: event.steering ?? [], followUp: event.followUp ?? [] };
   else if (event.type === 'extension_ui_request' && event.method === 'notify')
     state.notifications.push({ ...event, receivedAt: Date.now() });

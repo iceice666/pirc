@@ -1,9 +1,12 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import {
+    BookOpen,
     Check,
     ChevronDown,
     CircleAlert,
+    CodeXml,
+    Hand,
     FilePen,
     FilePlus,
     FileText,
@@ -20,13 +23,16 @@
   import { panelApi } from '../panel-api';
   import { elapsed } from '../time';
   import type { ToolCall } from '../types';
-  import { blockingSession, writeBlock } from '../work';
+  import { blockingSession, operationsSummary, writeBlock } from '../work';
+  import ToolCard from './ToolCard.svelte';
 
   interface Props {
     tool: ToolCall;
+    /** Shown inside a `ptc` card: one operation of its script. */
+    nested?: boolean;
   }
 
-  let { tool }: Props = $props();
+  let { tool, nested = false }: Props = $props();
   let open = $state(false);
   let userToggled = $state(false);
 
@@ -52,6 +58,13 @@
         return [first(input.pattern), input.path ? `in ${input.path}` : '']
           .filter(Boolean)
           .join(' ');
+      // A script: what it did, not its source.
+      case 'ptc':
+        return operationsSummary(tool.operations ?? []);
+      case 'ptc_docs':
+        return Array.isArray(input.names)
+          ? input.names.filter((name: unknown) => typeof name === 'string').join(', ')
+          : first(input.category) || 'index';
       default: {
         const value = Object.values(input).find((item) => typeof item === 'string');
         return typeof value === 'string' ? value : '';
@@ -70,6 +83,7 @@
       edit: ['path', 'edits'],
       write: ['path', 'content'],
       ls: ['path'],
+      ptc: ['code'],
     };
     const skip = hidden[name];
     if (!skip) return Object.keys(input).length ? input : undefined;
@@ -96,21 +110,35 @@
     tool.status === 'running' ? 'Running' : tool.status === 'failed' ? 'Failed' : 'Done',
   );
   let Icon = $derived(
-    tool.name === 'bash'
-      ? Terminal
-      : tool.name === 'read'
-        ? FileText
-        : tool.name === 'edit'
-          ? FilePen
-          : tool.name === 'write'
-            ? FilePlus
-            : tool.name === 'grep' || tool.name === 'find'
-              ? Search
-              : tool.name === 'ls'
-                ? FolderTree
-                : Wrench,
+    tool.name === 'ptc'
+      ? CodeXml
+      : tool.name === 'ptc_docs'
+        ? BookOpen
+        : tool.name === 'bash'
+          ? Terminal
+          : tool.name === 'read'
+            ? FileText
+            : tool.name === 'edit'
+              ? FilePen
+              : tool.name === 'write'
+                ? FilePlus
+                : tool.name === 'grep' || tool.name === 'find'
+                  ? Search
+                  : tool.name === 'ls'
+                    ? FolderTree
+                    : Wrench,
   );
   let summary = $derived(describe(tool.name, args));
+  let title = $derived(
+    tool.title ??
+      (tool.name === 'ptc' ? 'Script' : tool.name === 'ptc_docs' ? 'Capability docs' : tool.name),
+  );
+  /** A question or approval this operation waits for (the card itself sits at the bottom). */
+  const waiting = $derived(
+    tool.status === 'running'
+      ? app.pendingInteractions.find((item) => item.toolCallId === tool.id)
+      : undefined,
+  );
   /** Refused because another session holds the workspace's write lease. */
   const blocked = $derived(writeBlock(tool));
   const holder = $derived(blocked ? blockingSession(app.sessions, blocked.holderName) : undefined);
@@ -127,6 +155,12 @@
   let pendingEdits = $derived(
     open && !tool.diff && tool.name === 'edit' && Array.isArray(args.edits) ? args.edits : [],
   );
+  const scriptHtml = $derived.by(() => {
+    void $rendererTick;
+    return open && tool.name === 'ptc' && typeof args.code === 'string'
+      ? highlightCode(clipText(args.code), 'typescript')
+      : '';
+  });
   const commandHtml = $derived.by(() => {
     void $rendererTick;
     return open && tool.name === 'bash' && typeof args.command === 'string'
@@ -159,15 +193,23 @@
 <div
   class:failed={tool.status === 'failed'}
   class:running={tool.status === 'running'}
+  class:nested
   class="tool-card"
   data-tool={tool.name}
 >
   <button class="tool-summary" type="button" onclick={toggle} aria-expanded={open}>
     <span class="tool-icon" aria-hidden="true"><Icon size={14} strokeWidth={1.8} /></span>
     <span class="tool-name">
-      <strong>{tool.title ?? tool.name}</strong>
+      <strong>{title}</strong>
       {#if summary}<code title={summary}>{summary}</code>{:else}<span>{statusLabel}</span>{/if}
     </span>
+    {#if waiting}
+      <span class="tool-waiting" title={waiting.title}
+        ><Hand size={13} aria-hidden="true" />{waiting.kind === 'confirm'
+          ? 'Waiting for approval'
+          : 'Waiting for your answer'}</span
+      >
+    {/if}
     {#if duration}<span class="tool-duration">{duration}</span>{/if}
     <span class="tool-status" role="img" aria-label={statusLabel} title={statusLabel}>
       {#if tool.status === 'running'}
@@ -209,8 +251,22 @@
       ></video>
     </div>
   {/if}
+  {#if tool.operations?.length}
+    <!-- What the script ran, each a call of its own. -->
+    <div class="tool-operations" role="list" aria-label="Operations">
+      {#each tool.operations as operation (operation.id)}<div role="listitem">
+          <ToolCard tool={operation} nested />
+        </div>{/each}
+    </div>
+  {/if}
   {#if open}
     <div class="tool-content">
+      {#if tool.name === 'ptc' && typeof args.code === 'string'}
+        <section class="tool-section">
+          <span class="tool-label">Script</span>
+          <pre><code class="hljs">{@html scriptHtml}</code></pre>
+        </section>
+      {/if}
       {#if tool.name === 'bash' && typeof args.command === 'string'}
         <section class="tool-section">
           <span class="tool-label">Command</span>
@@ -251,7 +307,9 @@
       {/if}
       {#if tool.output}
         <section class="tool-section">
-          <span class="tool-label">{tool.status === 'failed' ? 'Error' : 'Output'}</span>
+          <span class="tool-label"
+            >{tool.status === 'failed' ? 'Error' : tool.name === 'ptc' ? 'Result' : 'Output'}</span
+          >
           <pre class:error={tool.status === 'failed'}><code class="hljs">{@html outputHtml}</code
             ></pre>
         </section>
@@ -362,6 +420,27 @@
   .tool-card {
     min-width: 0;
     border-radius: var(--radius-sm);
+  }
+  .tool-operations {
+    display: grid;
+    margin: 0 0 4px 9px;
+    padding-left: 10px;
+    border-left: 1px solid var(--line);
+  }
+  .tool-card.nested .tool-summary {
+    font-size: 13px;
+  }
+  .tool-waiting {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    color: var(--warning);
+    background: var(--warning-soft);
+    font-size: 12px;
+    white-space: nowrap;
   }
   .tool-summary {
     width: 100%;

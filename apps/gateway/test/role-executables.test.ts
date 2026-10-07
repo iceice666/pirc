@@ -80,6 +80,7 @@ function cliContract(role: ExecutableRole, command: string[]) {
       expect(result.stdout).toContain('with no arguments');
       expect(result.stdout).not.toContain('oauth-worker');
       expect(result.stdout).not.toContain('ptc-worker');
+      expect(result.stdout).not.toContain('ptc-guest');
     });
   }
   const invalid = [
@@ -87,7 +88,7 @@ function cliContract(role: ExecutableRole, command: string[]) {
     'chat',
     'node',
     'unknown',
-    ...(role === 'gateway' ? ['agent', 'ptc-worker', 'srt'] : ['oauth-worker']),
+    ...(role === 'gateway' ? ['agent', 'ptc-guest', 'ptc-worker', 'srt'] : ['oauth-worker']),
   ];
   for (const argument of invalid) {
     it(`rejects ${argument} rather than dispatching another role`, async () => {
@@ -128,11 +129,16 @@ function cliContract(role: ExecutableRole, command: string[]) {
       const result = await runCli(command, ['srt', '--version']);
       expect(result).toEqual({ code: 0, stdout: '0.0.78\n', stderr: '' });
     });
-    it('accepts the private PTC worker command but requires parent IPC', async () => {
-      const result = await runCli(command, ['ptc-worker']);
+    it('accepts the private ptc-guest command but requires an agent IPC channel', async () => {
+      const result = await runCli(command, ['ptc-guest']);
       expect(result.code).toBe(2);
-      expect(result.stderr).toContain('ptc-worker must be started by');
+      expect(result.stderr).toContain('ptc-guest must be started by a pirc agent');
       expect(result.stderr).not.toContain('Unknown command:');
+    });
+    it('no longer accepts the retired Bun ptc-worker command', async () => {
+      const result = await runCli(command, ['ptc-worker']);
+      expect(result.code).not.toBe(0);
+      expect(result.stderr).toContain('Unknown command: ptc-worker');
     });
   }
 }
@@ -310,7 +316,8 @@ describe('role bundle dependency boundaries', () => {
       } else {
         expect(hasModule('/src/node/runtime.ts')).toBe(true);
         expect(hasModule('/src/agent/main.ts')).toBe(true);
-        expect(hasModule('/src/agent/ptc/worker.ts')).toBe(true);
+        expect(hasModule('/src/agent/ptc/runtime.ts')).toBe(true);
+        expect(hasModule('/src/agent/ptc/guest.ts')).toBe(true);
         expect(graph.filter((module) => /\/src\/(daemon|backends)\//.test(module))).toEqual([]);
         expect(graph.some((module) => module.includes('/node_modules/web-push/'))).toBe(false);
       }
@@ -322,52 +329,52 @@ async function exerciseAgentWorkers(role: 'chat' | 'node', compiled: boolean) {
   const agent = await startAgent({ role, ...(compiled ? { executable: executable(role) } : {}) });
   agents.push(agent);
   writeFileSync(path.join(agent.workspace, 'role.txt'), `pirc-${role}`);
+  // PTC scripts run in the QuickJS WASM module the binary carries, with no host process access.
   agent.llm.push(
     {
       tool: {
-        id: 'role-code',
-        name: 'code',
+        id: 'role-ptc',
+        name: 'ptc',
         args: {
-          code: `return { text: await tools.read({ path: 'role.txt' }), executable: process.execPath, entry: process.argv[1] };`,
+          code: `return { text: (await tools.read({ path: 'role.txt' })).text, process: typeof (globalThis as any).process };`,
         },
       },
     },
     { text: 'worker finished' },
   );
-  await agent.send({ type: 'prompt', message: 'read role.txt through code' });
+  await agent.send({ type: 'prompt', message: 'read role.txt through ptc' });
   await settledAfter(agent, 0);
-  const codeEnd = agent.events.find(
-    (event) => event.type === 'tool_execution_end' && event.toolName === 'code',
+  const ptcEnd = agent.events.find(
+    (event) =>
+      event.type === 'tool_execution_end' &&
+      !event.parentToolCallId &&
+      event.toolCallId === 'role-ptc',
   );
-  expect(codeEnd?.isError).toBe(false);
-  expect(codeEnd?.result.content[0].text).toContain(`pirc-${role}`);
-  expect(codeEnd?.result.content[0].text).toContain(compiled ? executable(role) : entry(role));
+  expect(ptcEnd?.isError).toBe(false);
+  expect(JSON.parse(ptcEnd?.result.content[0].text)).toEqual({
+    text: expect.stringContaining(`pirc-${role}`),
+    process: 'undefined',
+  });
 
-  // Team tools are not exposed to code mode, so the child's PTC worker
-  // records its identity in the workspace and the child posts separately.
+  // Team workers re-execute this binary; the child records that it runs as a teammate.
   const child: Reply[] = [
-    {
-      tool: {
-        id: 'child-code',
-        name: 'code',
-        args: {
-          code: `return await tools.write({ path: 'child-role.json', content: JSON.stringify({ executable: process.execPath, entry: process.argv[1] }) });`,
-        },
-      },
-    },
-    { tool: { id: 'child-board', name: 'board_post', args: { topic: 'role', body: 'recorded' } } },
+    ptcReply(
+      'child-bash',
+      `return (await tools.bash({ command: 'printf %s "$PIRC_TEAM_AGENT" > child-role.txt' })).text;`,
+    ),
+    ptcReply(
+      'child-board',
+      `return (await tools.board_post({ topic: 'role', body: 'recorded' })).text;`,
+    ),
     { text: 'role child finished' },
   ];
   const parent: Reply[] = [
-    {
-      tool: {
-        id: 'role-spawn',
-        name: 'agent_spawn',
-        args: { name: 'helper', task: 'report role' },
-      },
-    },
+    ptcReply(
+      'role-spawn',
+      `return (await tools.agent_spawn({ name: 'helper', task: 'report role' })).text;`,
+    ),
     { text: 'role child spawned' },
-    { tool: { id: 'role-board', name: 'board_read', args: {} } },
+    ptcReply('role-board', `return (await tools.board_read({})).text;`),
     { text: 'role team finished' },
   ];
   agent.llm.route = (body) =>
@@ -381,21 +388,26 @@ async function exerciseAgentWorkers(role: 'chat' | 'node', compiled: boolean) {
     15_000,
   );
   const spawnEnd = agent.events.find(
-    (event) => event.type === 'tool_execution_end' && event.toolName === 'agent_spawn',
+    (event) =>
+      event.type === 'tool_execution_end' &&
+      !event.parentToolCallId &&
+      event.toolCallId === 'role-spawn',
   );
   expect(spawnEnd?.isError).toBeFalsy();
   const boardEnd = agent.events.find(
-    (event) => event.type === 'tool_execution_end' && event.toolName === 'board_read',
+    (event) =>
+      event.type === 'tool_execution_end' &&
+      !event.parentToolCallId &&
+      event.toolCallId === 'role-board',
   );
   const note = JSON.parse(boardEnd?.result.content[0].text).items[0];
   expect(note).toMatchObject({ from: 'helper', topic: 'role' });
-  const identity = JSON.parse(readFileSync(path.join(agent.workspace, 'child-role.json'), 'utf8'));
-  if (compiled) expect(identity.executable).toBe(executable(role));
-  else {
-    expect(identity.executable).toBe(process.execPath);
-    expect(identity.entry).toBe(entry(role));
-  }
+  expect(readFileSync(path.join(agent.workspace, 'child-role.txt'), 'utf8')).toBe('helper');
 }
+
+const ptcReply = (id: string, code: string): Reply => ({
+  tool: { id, name: 'ptc', args: { code } },
+});
 
 for (const role of ['chat', 'node'] as const) {
   it(

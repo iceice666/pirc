@@ -1,0 +1,1 @@
+Look up the capabilities `ptc` scripts can call. `{}` lists categories and names; `{ category }` gives one-line summaries (continue with the returned `cursor`); `{ names: [...] }` (1–8) gives argument schemas, results, errors, effects and approval behavior. Read-only. Docs already in the conversation stay valid until a call fails with StaleContract.

@@ -27,6 +27,8 @@ data class ToolCall(
     val endedAt: Long? = null,
     /** A saved browser recording (`browser_record` stop), relative to the session's workspace. */
     val recording: String? = null,
+    /** The operations a `ptc` call ran, in start order (each a capability call). */
+    val operations: List<ToolCall> = emptyList(),
 )
 
 /** Fields of a tool that an event changes; `null` keeps the current value. */
@@ -42,6 +44,8 @@ data class ToolUpdate(
     val startedAt: Long? = null,
     val endedAt: Long? = null,
     val recording: String? = null,
+    /** A `ptc` operation: the `ptc` call it ran in, to nest it there. */
+    val parentId: String? = null,
 )
 
 data class Message(
@@ -85,6 +89,8 @@ data class InteractionOption(val value: String, val label: String, val descripti
 data class Interaction(
     val id: String,
     val runnerEpoch: String,
+    /** The `ptc` operation that asks (shown as waiting on it); null for anything else. */
+    val toolCallId: String? = null,
     /** `select`, `confirm`, `input` or `editor`. */
     val kind: String,
     val title: String,

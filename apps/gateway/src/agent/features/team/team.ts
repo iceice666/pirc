@@ -154,6 +154,15 @@ export class ChildProcess {
         this.stderr = (this.stderr + decoder.decode(chunk, { stream: true })).slice(-8192);
     })();
     void this.exited.then((code) => {
+      // Whatever the child left in its process group (a busy ptc script process cannot notice
+      // its parent is gone) ends with it.
+      // Only the group, which outlives its reaped leader while members remain (an empty
+      // group's id could in principle be reused, a far smaller window than the bare pid).
+      try {
+        process.kill(-this.proc.pid, 'SIGKILL');
+      } catch {
+        /* nothing left */
+      }
       for (const pending of this.pending.values()) {
         clearTimeout(pending.timer);
         pending.reject(new Error('Agent exited'));
@@ -788,9 +797,12 @@ export class Team {
       member.activity = event.assistantMessageEvent?.type?.startsWith('thinking')
         ? 'thinking'
         : 'responding';
+    // A ptc operation (parentToolCallId) names the capability at work; when it
+    // ends the script is still running, so the activity returns to `ptc`.
+    const inner = typeof event.parentToolCallId === 'string';
     if (event.type === 'tool_execution_start' || event.type === 'tool_execution_update')
-      member.activity = `tool: ${String(event.toolName ?? 'tool').slice(0, 120)}`;
-    if (event.type === 'tool_execution_end') member.activity = 'running';
+      member.activity = `tool: ${inner ? 'ptc › ' : ''}${String(event.toolName ?? 'tool').slice(0, 120)}`;
+    if (event.type === 'tool_execution_end') member.activity = inner ? 'tool: ptc' : 'running';
     if (event.type === 'agent_start') this.change(member, 'running');
     if (event.type === 'message_end' && event.message?.role === 'assistant') {
       const message = event.message;

@@ -6,6 +6,75 @@ import { truncateOutput } from '../../sandbox.js';
 import type { Tool } from '../../tools/types.js';
 import { TaskManager, MATCH_LIMIT, type TaskInfo, type WaitResult } from './manager.js';
 import { toolPrompt } from '../../prompts/tools.js';
+import {
+  bool,
+  byAction,
+  int,
+  nullable,
+  obj,
+  oneOfStrings,
+  str,
+} from '../../tools/result-schema.js';
+
+const TASK = obj(
+  {
+    id: str(),
+    command: str('Cut at 2000 characters'),
+    cwd: str(),
+    status: str('running, stopping, completed, failed, stopped or timed_out'),
+    pid: int(),
+    exitCode: nullable(int()),
+    signal: nullable(str()),
+    logPath: str(),
+    tty: bool(),
+    notifyOn: str(),
+    matches: int(),
+    startedAt: str(),
+    endedAt: str(),
+    error: str(),
+  },
+  ['pid', 'exitCode', 'signal', 'tty', 'notifyOn', 'matches', 'endedAt', 'error'],
+);
+const OUTPUT = {
+  output: str('The latest output lines (terminal control characters removed)'),
+  truncated: bool('Display cut; the whole log is at task.logPath'),
+};
+const BACKGROUND_RESULT = byAction({
+  start: { properties: { task: TASK } },
+  list: { properties: { tasks: { type: 'array', items: TASK } } },
+  output: { properties: { task: TASK, ...OUTPUT } },
+  wait: {
+    properties: {
+      outcome: oneOfStrings(['finished', 'timed_out', 'aborted'], 'timed_out: the job still runs'),
+      task: TASK,
+      ...OUTPUT,
+    },
+  },
+  write: { properties: { task: TASK, sent: int('Characters sent'), ...OUTPUT } },
+  monitor: { properties: { task: TASK } },
+  stop: { properties: { task: TASK } },
+});
+
+/** A task as the typed result shows it (only documented fields). */
+function taskData(task: TaskInfo): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    id: task.id,
+    command: clean(task.command).slice(0, 2000),
+    cwd: task.cwd,
+    status: task.status,
+    logPath: task.logPath,
+    startedAt: task.startedAt,
+  };
+  if (typeof task.pid === 'number') out.pid = task.pid;
+  if (task.exitCode !== undefined) out.exitCode = task.exitCode;
+  if (task.signal !== undefined) out.signal = task.signal;
+  if (task.tty !== undefined) out.tty = task.tty;
+  if (task.notifyOn !== undefined) out.notifyOn = task.notifyOn;
+  if (task.matches !== undefined) out.matches = task.matches;
+  if (task.endedAt !== undefined) out.endedAt = task.endedAt;
+  if (task.error !== undefined) out.error = task.error;
+  return out;
+}
 
 const HELP = `/bg or /bg list — List tasks
 /bg start <shell command> — Run in the background
@@ -115,7 +184,8 @@ export function backgroundFeature(): Feature {
       },
     },
   );
-  const output = (id: string, lines = 200) => {
+  /** A task's latest output: the text for the model and the typed fields. */
+  const outputOf = (id: string, lines = 200) => {
     if (!Number.isInteger(lines) || lines < 1 || lines > 2000)
       throw new Error('lines must be an integer from 1 to 2000.');
     const task = manager.get(id);
@@ -125,8 +195,12 @@ export function backgroundFeature(): Feature {
       .filter((line) => /^\[(Output|Log) truncated:/.test(line))
       .join('\n');
     const tail = truncateOutput(tailLines(raw, lines), 48 * 1024);
-    return `${summary(task)}\ncwd: ${task.cwd}\nLog (capped at 10 MiB): ${task.logPath}\n${tail.truncated ? `[Display truncated]\n${markers ? `${markers}\n` : ''}` : ''}${tail.text}`;
+    return {
+      text: `${summary(task)}\ncwd: ${task.cwd}\nLog (capped at 10 MiB): ${task.logPath}\n${tail.truncated ? `[Display truncated]\n${markers ? `${markers}\n` : ''}` : ''}${tail.text}`,
+      fields: { task: taskData(task), output: tail.text, truncated: tail.truncated },
+    };
   };
+  const output = (id: string, lines = 200) => outputOf(id, lines).text;
   const requireOpen = () => {
     if (closed) throw new Error('Background task runtime has shut down.');
   };
@@ -175,11 +249,13 @@ export function backgroundFeature(): Feature {
       required: ['action'],
       additionalProperties: false,
     },
+    resultSchema: BACKGROUND_RESULT,
     async execute(params, ctx) {
       ctx.signal.throwIfAborted();
       requireOpen();
       agentRef = agent;
       let text: string;
+      let data: Record<string, unknown>;
       let wait: WaitResult | undefined;
       if (params.action === 'start') {
         if (!params.command?.trim()) throw new Error('command is required for start.');
@@ -192,8 +268,10 @@ export function backgroundFeature(): Feature {
           notifyOn: params.notify_on,
         });
         text = `${summary(task)}\nLog: ${task.logPath}\nStarted in background; this is not a completion result.`;
+        data = { task: taskData(task) };
       } else if (params.action === 'list') {
         text = manager.list().map(summary).join('\n') || 'No background tasks.';
+        data = { tasks: manager.list().map(taskData) };
       } else {
         if (!params.id) throw new Error('id is required.');
         if (params.action === 'wait') {
@@ -204,7 +282,9 @@ export function backgroundFeature(): Feature {
               : wait.outcome === 'timed_out'
                 ? 'Wait timed out; the job was not stopped.'
                 : 'Wait cancelled; the job was not stopped.';
-          text = `${notice}\n${output(params.id, params.lines)}`;
+          const shown = outputOf(params.id, params.lines);
+          text = `${notice}\n${shown.text}`;
+          data = { outcome: wait.outcome, ...shown.fields };
           // The model saw the result; do not also wake it for this task.
           if (wait.outcome === 'finished') {
             const index = completed.findIndex((task) => task.id === params.id);
@@ -216,16 +296,25 @@ export function backgroundFeature(): Feature {
           const task = manager.write(params.id, params.input);
           // Give the program a moment to react so the reply includes its response.
           await Bun.sleep(300);
-          text = `Sent ${params.input.length} characters.\n${output(task.id, params.lines ?? 40)}`;
+          const shown = outputOf(task.id, params.lines ?? 40);
+          text = `Sent ${params.input.length} characters.\n${shown.text}`;
+          data = { sent: params.input.length, ...shown.fields };
         } else if (params.action === 'monitor') {
           const task = manager.monitor(params.id, params.notify_on);
           matched.delete(task.id);
           text = task.notifyOn
             ? `${summary(task)}\nMonitoring output for /${task.notifyOn}/.`
             : `${summary(task)}\nMonitor cleared.`;
-        } else if (params.action === 'stop') text = summary(await manager.stop(params.id));
-        else if (params.action === 'output') text = output(params.id, params.lines);
-        else throw new Error(`Unknown action ${params.action}`);
+          data = { task: taskData(task) };
+        } else if (params.action === 'stop') {
+          const task = await manager.stop(params.id);
+          text = summary(task);
+          data = { task: taskData(task) };
+        } else if (params.action === 'output') {
+          const shown = outputOf(params.id, params.lines);
+          text = shown.text;
+          data = shown.fields;
+        } else throw new Error(`Unknown action ${params.action}`);
       }
       refresh();
       return {
@@ -241,6 +330,7 @@ export function backgroundFeature(): Feature {
             : {}),
           tasks: manager.list().map((task) => ({ ...task, command: task.command.slice(0, 180) })),
         },
+        data: { action: params.action, ...data },
       };
     },
   });

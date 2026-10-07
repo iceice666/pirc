@@ -224,6 +224,26 @@ data class RunSummary(
 
 private val FILE_TOOLS = setOf("read", "edit", "write")
 
+/**
+ * The calls behind some tool calls: a `ptc` script stands for the operations
+ * it ran (none yet: the script itself), and capability lookups are left out.
+ */
+fun effectiveTools(tools: List<ToolCall>): List<ToolCall> {
+    val calls = tools.flatMap { tool ->
+        when {
+            tool.name == "ptc_docs" -> emptyList()
+            tool.operations.isNotEmpty() -> tool.operations
+            else -> listOf(tool)
+        }
+    }
+    return calls.ifEmpty { tools }
+}
+
+/** A script's operations in a few words: names in first-use order, with counts. */
+fun operationsSummary(operations: List<ToolCall>): String =
+    operations.groupingBy { it.name }.eachCount().entries
+        .joinToString(", ") { (name, count) -> if (count > 1) "$name ×$count" else name }
+
 fun summarizeRun(tools: List<ToolCall>): RunSummary {
     val status = when {
         tools.any { it.status == "failed" } -> "failed"
@@ -234,13 +254,14 @@ fun summarizeRun(tools: List<ToolCall>): RunSummary {
     val ends = tools.mapNotNull { it.endedAt }
     val duration = if (starts.isNotEmpty() && ends.isNotEmpty() && status != "running") maxOf(0L, ends.max() - starts.min()) else null
     val files = mutableListOf<String>()
-    for (tool in tools) {
+    val calls = effectiveTools(tools)
+    for (tool in calls) {
         if (tool.name !in FILE_TOOLS) continue
         val path = ((tool.input as? JsonObject)?.get("path") as? JsonPrimitive)?.takeIf { it.isString }?.content ?: continue
         val name = path.split('/').lastOrNull { it.isNotEmpty() } ?: continue
         if (name !in files) files += name
     }
-    return RunSummary(tools.size, status, duration, files)
+    return RunSummary(calls.size, status, duration, files)
 }
 
 /** "850 ms", "12 s", "3 m 4 s", "1 h 2 m". */

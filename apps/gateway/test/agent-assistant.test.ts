@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { currentOrigins, findQuote } from '../src/agent/features/assistant/index.js';
 import type { SessionEntry } from '../src/agent/session-store.js';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
+import { ptcCall } from './fixtures/fake-llm.js';
+import { GATEWAY_SURFACE } from './fixtures/surface.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
@@ -21,6 +23,22 @@ const memory = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 const usage = { used: 40, max: 8000 };
+
+/** The "## Capabilities" section of a system prompt (empty when there is none). */
+const capabilitySection = (system: string) =>
+  system.match(/## Capabilities\n[\s\S]*?(?=\n## |$)/)?.[0] ?? '';
+/** The tool names a provider request offered. */
+const toolNames = (body: any) => (body.tools ?? []).map((tool: any) => tool.function.name);
+/** Outer ptc results by tool call id: [isError, text]. */
+const ptcResults = (agent: AgentProcess) =>
+  Object.fromEntries(
+    agent.events
+      .filter((event) => event.type === 'tool_execution_end' && !event.parentToolCallId)
+      .map((event) => {
+        expect(event.toolName).toBe('ptc');
+        return [event.toolCallId, [event.isError, event.result.content[0].text]];
+      }),
+  ) as Record<string, [boolean, string]>;
 
 /** An agent whose gateway requests the test answers itself. */
 async function start(options: Parameters<typeof startAgent>[0] = {}) {
@@ -120,9 +138,9 @@ describe('assistant memory in chats', () => {
     expect(first).toContain('### USER (22/2,000 characters)\n[u11111111] Prefers short answers.');
     expect(first).toContain('### MEMORY (26/8,000 characters)\n[n22222222] 2026-09-20 m5pro holds');
     expect(first).toContain("1 proposed USER change is waiting for the user's approval.");
-    const tools = chat.agent.llm.requests[0]!.body.tools.map((tool: any) => tool.function.name);
-    expect(tools).toContain('memory_note');
-    expect(tools).toContain('memory_propose_user');
+    expect(toolNames(chat.agent.llm.requests[0]!.body)).toEqual(GATEWAY_SURFACE);
+    expect(capabilitySection(first)).toContain('memory_note');
+    expect(capabilitySection(first)).toContain('memory_propose_user');
 
     await chat.prompt('more', async () => chat.ok(await chat.next('assistant.context'), memory()));
     expect(chat.system()).toBe(first);
@@ -154,7 +172,7 @@ describe('assistant memory in chats', () => {
     const chat = await start();
     writeFileSync(path.join(chat.agent.workspace, 'plan.txt'), 'the plan\n');
     const call = (id: string, name: string, args: Record<string, unknown>) => ({
-      tool: { id, name, args },
+      tool: ptcCall(id, name, args),
     });
     chat.agent.llm.push(
       call('p1', 'memory_propose_user', {
@@ -235,9 +253,9 @@ describe('assistant memory in chats', () => {
         entryIds: [],
       },
     ]);
-    const results = chat.agent.events
-      .filter((event) => event.type === 'tool_execution_end' && event.toolName !== 'read')
-      .map((event) => [event.toolCallId, event.isError, event.result.content[0].text]);
+    const results = Object.entries(ptcResults(chat.agent))
+      .filter(([id]) => id !== 'r1')
+      .map(([id, [isError, text]]) => [id, isError, text] as const);
     expect(results.map(([id, isError]) => [id, isError])).toEqual([
       ['p1', false],
       ['p2', true],
@@ -266,7 +284,7 @@ describe('assistant memory in chats', () => {
   it('remembers the revisions it wrote after a restart', async () => {
     const first = await start();
     first.agent.llm.push(
-      { tool: { id: 'n1', name: 'memory_note', args: { action: 'add', content: 'Fact.' } } },
+      { tool: ptcCall('n1', 'memory_note', { action: 'add', content: 'Fact.' }) },
       { text: 'Saved.' },
     );
     await first.prompt('remember this fact', async () => {
@@ -285,11 +303,11 @@ describe('assistant memory in chats', () => {
     });
     second.agent.llm.push(
       {
-        tool: {
-          id: 'n2',
-          name: 'memory_note',
-          args: { action: 'replace', id: 'n55555555', content: 'Better fact.' },
-        },
+        tool: ptcCall('n2', 'memory_note', {
+          action: 'replace',
+          id: 'n55555555',
+          content: 'Better fact.',
+        }),
       },
       { text: 'Updated.' },
     );
@@ -309,7 +327,7 @@ describe('assistant memory in chats', () => {
   it('lists the workspaces it can delegate to and delegates through the gateway', async () => {
     const chat = await start();
     const call = (id: string, name: string, args: Record<string, unknown>) => ({
-      tool: { id, name, args },
+      tool: ptcCall(id, name, args),
     });
     chat.agent.llm.push(
       call('d1', 'delegate', {
@@ -361,17 +379,13 @@ describe('assistant memory in chats', () => {
     expect(chat.system()).toContain(
       "## Workspaces\n\nThe user's repositories you can hand tasks to with delegate. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with memory_search, and open a note's sources with recall.\n[work:test] Test on work\n[lab:x] X on lab (offline)",
     );
-    const results = Object.fromEntries(
-      chat.agent.events
-        .filter((event) => event.type === 'tool_execution_end')
-        .map((event) => [event.toolCallId, [event.isError, event.result.content[0].text]]),
-    );
+    const results = ptcResults(chat.agent);
     expect(results.d1![0]).toBe(false);
     expect(results.d1![1]).toContain('Asked the user to approve delegation d12345678');
-    expect(results.d2).toEqual([
-      true,
-      'Name a workspace, or pass follows with an earlier delegation id',
-    ]);
+    expect(results.d2![0]).toBe(true);
+    expect(results.d2![1]).toContain(
+      '[error] OperationFailed: Name a workspace, or pass follows with an earlier delegation id',
+    );
     expect(results.s1![1]).toBe(
       'd12345678 · completed · “Fix build” → Test on work (session “Fix build”)\nBuild fixed.',
     );
@@ -380,9 +394,9 @@ describe('assistant memory in chats', () => {
   it('searches workspace memory and recalls what it finds through the gateway', async () => {
     const chat = await start();
     chat.agent.llm.push(
-      { tool: { id: 'q1', name: 'memory_search', args: { query: 'staging', limit: 3 } } },
-      { tool: { id: 'r1', name: 'recall', args: { id: 'abcdefabcdef' } } },
-      { tool: { id: 'r2', name: 'recall', args: { id: '000000000000' } } },
+      { tool: ptcCall('q1', 'memory_search', { query: 'staging', limit: 3 }) },
+      { tool: ptcCall('r1', 'recall', { id: 'abcdefabcdef' }) },
+      { tool: ptcCall('r2', 'recall', { id: '000000000000' }) },
       { text: 'Found it.' },
     );
     await chat.prompt('what did we decide about deploys?', async () => {
@@ -419,21 +433,17 @@ describe('assistant memory in chats', () => {
         message: 'No workspace memory note 000000000000',
       });
     });
-    const results = Object.fromEntries(
-      chat.agent.events
-        .filter((event) => event.type === 'tool_execution_end')
-        .map((event) => [event.toolCallId, [event.isError, event.result.content[0].text]]),
-    );
+    const results = ptcResults(chat.agent);
     expect(results.q1).toEqual([
       false,
       '[abcdefabcdef] pirc on m5pro · 2026-09-27 10:05 · main@abcdef1\nDeploys go through staging first.\n\n[d12345678] delegation to pirc on m5pro · 2026-09-28 09:00 · completed\nFix deploy: done',
     ]);
     expect(results.r1).toEqual([false, 'pirc on m5pro:\nDeploy through staging first.']);
     // Found nowhere: the local answer stands.
-    expect(results.r2).toEqual([
-      true,
-      'No observation or reflection with id 000000000000 was found on the current branch.',
-    ]);
+    expect(results.r2![0]).toBe(true);
+    expect(results.r2![1]).toContain(
+      '[error] OperationFailed: No observation or reflection with id 000000000000 was found on the current branch.',
+    );
   });
 
   it("runs on messages the gateway pushes, keeping them apart from the user's", async () => {
@@ -474,9 +484,11 @@ describe('assistant memory in chats', () => {
     const from = agent.events.length;
     await agent.send({ type: 'prompt', message: 'hello' });
     await settledAfter(agent, from);
-    const tools = agent.llm.requests[0]!.body.tools.map((tool: any) => tool.function.name);
-    expect(tools).not.toContain('memory_note');
-    expect(String(agent.llm.requests[0]!.body.messages[0].content)).not.toContain('## Memory');
+    expect(toolNames(agent.llm.requests[0]!.body)).toEqual(GATEWAY_SURFACE);
+    const system = String(agent.llm.requests[0]!.body.messages[0].content);
+    expect(capabilitySection(system)).toContain('## Capabilities');
+    expect(capabilitySection(system)).not.toContain('memory_note');
+    expect(system).not.toContain('## Memory');
     expect(agent.events.some((event) => event.type === 'gateway_request')).toBe(false);
   });
 });

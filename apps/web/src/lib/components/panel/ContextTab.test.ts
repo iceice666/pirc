@@ -29,6 +29,15 @@ const snapshot = {
       estimatedTokens: 10,
     },
   ],
+  capabilities: [
+    {
+      name: 'bash',
+      category: 'shell',
+      uiLabel: 'Bash',
+      effects: ['process', 'write'],
+      approval: 'operation-policy',
+    },
+  ],
   usage: {
     estimatedInput: 20,
     reportedInput: 40,
@@ -68,6 +77,12 @@ it('shows saved sections, tool schemas, scaled usage, source links and copy-all'
   expect(target.textContent).toContain('agent stopped');
   expect(target.textContent).toContain('Frozen');
   expect(target.textContent).toContain('Read files');
+  // Provider tools and the capabilities scripts call are listed apart.
+  expect(target.textContent).toContain('Model tools (1)');
+  expect(target.textContent).toContain('Capabilities (1)');
+  expect(target.querySelector('.capabilities')?.textContent).toContain(
+    'bash shell · process, write · operation-policy',
+  );
   expect(target.querySelector('[role="img"]')?.getAttribute('aria-label')).toContain('system 8');
   [...target.querySelectorAll('button')]
     .find((b) => b.textContent?.includes('/work/AGENTS.md'))!

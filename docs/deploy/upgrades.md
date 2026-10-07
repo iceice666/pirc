@@ -67,3 +67,13 @@ cd ../infra && nix flake update pirc && git commit -am 'bump pirc' # 2. pin
 ## Chat prompt migration (node protocol 8)
 
 Upgrade the gateway and all nodes together. Chats no longer load any `AGENTS.md`: move chat-relevant rules into the chat node's `$PIRC_CONFIG_DIR/CHAT.md`, and put persona text in global `SOUL.md`. Coding prompts are unchanged. For Nix use `services.pirc.chatPrompt` and `services.pirc.soulPrompt`; the web editor reports these store-managed files as read-only. The first chat node registration is now persistently bound; replacing that node requires releasing the binding in Settings → Assistant after stopping the old node.
+
+## Programmatic tool calling (the `code` tool removed)
+
+Upgrade the gateway (it ships the web bundle) and every chat and coding node from the same release, then reload web clients and update the Android app so operations nest under their scripts in the timeline (older clients show them as separate tool calls). The node protocol is unchanged.
+
+- The `code` tool and `features.code` are gone. `ptc` scripts replace them: they run in an isolated QuickJS interpreter, not with Bun's full access, and call other tools only as `tools.<name>(args)`. Scripts that used Bun, Node or `fetch` APIs no longer work; the operations they need are tools (`bash`, `web_fetch`, …). `features.code.enabled` has no effect; chats always have `ptc` scripts, over the same tools they already had.
+- Hook matchers that name `code` apply to `ptc`; the session shows a warning the first time each one matches. Rename them to `ptc`. `ptc` keeps the `code` argument, so hooks reading `args.code` still work. Hooks run for each operation inside a script, named after that operation.
+- Role `tools:` lists name tools as before. `code`, `ptc` and `ptc_docs` in a list are ignored with a warning (the script tools come with any tool); unknown names warn instead of being dropped silently.
+- Auto mode no longer judges a script's text (the old `code` script rules are removed): only your `deny` list applies to it, and each operation is judged like the same direct call.
+- Existing sessions resume with the new tools; their old `code` and tool-call history still loads and replays.

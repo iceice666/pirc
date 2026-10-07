@@ -4,7 +4,6 @@ import { assistantFeature } from './assistant/index.js';
 import { backgroundFeature } from './background/index.js';
 import { browserFeature } from './browser.js';
 import { teamFeature } from './team/index.js';
-import { codeFeature } from './code.js';
 import { compactFeature } from './compact.js';
 import { goalFeature } from './goal/index.js';
 import { memoryFeature } from './memory/index.js';
@@ -22,7 +21,6 @@ export function builtinFeatures(): Feature[] {
     titleFeature(),
     askQuestionFeature(),
     todoFeature(),
-    codeFeature(),
     compactFeature(),
     // Chat sessions only: the project's instructions, before USER/MEMORY.
     projectInstructionsFeature(),

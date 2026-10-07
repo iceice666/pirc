@@ -1,5 +1,6 @@
 import type { PromptSection } from './context.js';
 import type { Agent } from './agent.js';
+import type { OperationEntry } from './session-store.js';
 import type { AssistantMessage, CustomMessage, Message } from './messages.js';
 import type { Tool } from './tools/types.js';
 
@@ -45,6 +46,8 @@ export interface Feature {
   turnEnd?(agent: Agent, message: AssistantMessage): void | Promise<void>;
   /** Messages actually admitted to model history (not merely queued). */
   messageAdmitted?(agent: Agent, message: Message): void;
+  /** A `ptc` operation finished and was recorded (its result reaches the model only through the script). */
+  operationRecorded?(agent: Agent, entry: OperationEntry): void;
   /** Required background work that prevents a clean end. Empty means no runtime blocker. */
   completionBlockers?(agent: Agent): string[];
   /** Queued custom messages removed by clear_queue; features may retain them for later. */

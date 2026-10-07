@@ -275,16 +275,76 @@ export function mergeTool(
   return merged;
 }
 
-/** Convert a full agent history, folding tool results into their assistant turn. */
-export function piHistory(history: unknown[]): ConversationMessage[] {
+/**
+ * Merge a `ptc` operation into its `ptc` call among `tools`; null when that
+ * call is not there. Operations keep their start order.
+ */
+export function withOperation(
+  tools: ToolCall[],
+  parentId: string,
+  update: Partial<ToolCall> & { id: string },
+): ToolCall[] | null {
+  if (!tools.some((tool) => tool.id === parentId)) return null;
+  const { parentId: _parent, ...fields } = update;
+  return tools.map((tool) => {
+    if (tool.id !== parentId) return tool;
+    const operations = tool.operations ?? [];
+    return {
+      ...tool,
+      operations: operations.some((item) => item.id === update.id)
+        ? operations.map((item) => (item.id === update.id ? mergeTool(item, fields) : item))
+        : [...operations, mergeTool(undefined, fields)],
+    };
+  });
+}
+
+/** A running `ptc` operation from a snapshot (`operations`). */
+export interface RunningOperation {
+  toolCallId: string;
+  parentToolCallId: string;
+  toolName: string;
+  args?: unknown;
+}
+
+/**
+ * Convert a full agent history, folding tool results into their assistant
+ * turn and `ptc` operations (results with `parentToolCallId`, then the still
+ * `running` ones) into their `ptc` call.
+ */
+export function piHistory(
+  history: unknown[],
+  running: RunningOperation[] = [],
+): ConversationMessage[] {
   const messages: ConversationMessage[] = [];
   const owners = new Map<string, number>();
   const seen = new Set<string>();
+  const nest = (parentId: string, update: Partial<ToolCall> & { id: string }): boolean => {
+    const ownerIndex = owners.get(parentId);
+    if (ownerIndex === undefined) return false;
+    const owner = messages[ownerIndex]!;
+    const tools = withOperation(owner.tools ?? [], parentId, update);
+    if (!tools) return false;
+    messages[ownerIndex] = { ...owner, tools };
+    return true;
+  };
   history.forEach((entry, index) => {
     const raw = entry as Raw;
     let id = piMessageId(raw);
     if (seen.has(id)) id = `${id}-${index}`;
     seen.add(id);
+
+    if (
+      raw?.role === 'toolResult' &&
+      typeof raw.parentToolCallId === 'string' &&
+      nest(raw.parentToolCallId, {
+        id: String(raw.toolCallId ?? id),
+        name: String(raw.toolName ?? 'tool'),
+        status: raw.isError ? 'failed' : 'succeeded',
+        ...(raw.args !== undefined ? { input: raw.args } : {}),
+        ...toolResultFields(raw),
+      })
+    )
+      return;
 
     if (raw?.role === 'toolResult' && owners.has(raw.toolCallId)) {
       const ownerIndex = owners.get(raw.toolCallId)!;
@@ -310,6 +370,14 @@ export function piHistory(history: unknown[]): ConversationMessage[] {
     for (const tool of message.tools ?? [])
       if (message.role === 'assistant') owners.set(tool.id, messages.length - 1);
   });
+  for (const operation of running)
+    if (typeof operation?.toolCallId === 'string' && typeof operation.parentToolCallId === 'string')
+      nest(operation.parentToolCallId, {
+        id: operation.toolCallId,
+        name: String(operation.toolName ?? 'tool'),
+        status: 'running',
+        ...(operation.args !== undefined ? { input: operation.args } : {}),
+      });
   return messages;
 }
 

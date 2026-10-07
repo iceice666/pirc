@@ -6,11 +6,19 @@ export interface ToolResult {
   content: Array<TextContent | ImageContent>;
   details?: unknown;
   isError?: boolean;
+  /**
+   * Typed fields for `ptc` scripts, described by the tool's `resultSchema`
+   * (plans/ptc-m1-contracts.md "SDK v1"). The script receives them next to
+   * `text`, the output above; never shown to the model or stored by itself.
+   */
+  data?: Record<string, unknown>;
 }
 
 export interface DialogOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** The `ptc` operation this dialog belongs to, so clients can show it there. */
+  toolCallId?: string;
 }
 
 export interface UiApi {
@@ -51,6 +59,12 @@ export interface ToolContext {
   acquireWrite(file: string): Promise<void>;
   /** Stream partial output to observers (`tool_execution_update`). */
   update(partial: ToolResult): void;
+  /**
+   * Wait for something only a human can settle (an approval asked by the
+   * node, a browser handoff): a `ptc` script's active-time budget pauses
+   * meanwhile. Dialogs through `ui` count already.
+   */
+  humanWait<T>(work: Promise<T>): Promise<T>;
 }
 
 export interface Tool<A = any> {
@@ -60,6 +74,12 @@ export interface Tool<A = any> {
   parameters: Record<string, unknown>;
   /** Tool can be called from PTC code (`tools.<name>(args)`). */
   ptc?: boolean;
+  /**
+   * JSON schema of the typed `data` fields a result carries besides `text`
+   * (an object schema; `oneOf` for action-dependent results). Every
+   * capability declares one; `ptc` checks results against it.
+   */
+  resultSchema?: Record<string, unknown>;
   execute(args: A, ctx: ToolContext): Promise<ToolResult>;
 }
 
@@ -68,6 +88,13 @@ export const text = (value: string, details?: unknown, isError = false): ToolRes
   ...(details === undefined ? {} : { details }),
   ...(isError ? { isError: true } : {}),
 });
+
+/** `text(…)` with typed `data` for `ptc` scripts. */
+export const typed = (
+  value: string,
+  data: Record<string, unknown>,
+  options: { details?: unknown; isError?: boolean } = {},
+): ToolResult => ({ ...text(value, options.details, options.isError), data });
 
 export function requireString(args: Record<string, unknown>, key: string): string {
   const value = args[key];

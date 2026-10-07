@@ -7,6 +7,7 @@ import { AutoMode, classifierChoices } from '../src/agent/auto-mode/index.js';
 import type { Agent } from '../src/agent/agent.js';
 import type { ShellAction } from '../src/agent/auto-mode/classifier.js';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
+import { ptcCall } from './fixtures/fake-llm.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
@@ -29,8 +30,9 @@ async function start(options: Parameters<typeof startAgent>[0] = {}) {
 
 const isClassifierRequest = (body: any) => JSON.stringify(body.messages).includes('safety monitor');
 const ends = (agent: AgentProcess) =>
-  agent.events.filter((event) => event.type === 'tool_execution_end');
-const bash = (id: string, command: string) => ({ tool: { id, name: 'bash', args: { command } } });
+  agent.events.filter((event) => event.type === 'tool_execution_end' && !event.parentToolCallId);
+const bash = (id: string, command: string) => ({ tool: ptcCall(id, 'bash', { command }) });
+const ptc = (id: string, code: string) => ({ tool: { id, name: 'ptc', args: { code } } });
 
 describe('auto-mode helpers', () => {
   it('parses classifier verdicts', () => {
@@ -201,6 +203,48 @@ describe('auto mode', () => {
     expect(existsSync(path.join(agent.workspace, 'ran.txt'))).toBe(true);
   });
 
+  it('asks the user before a dangerous direct bash call, links the dialog, and runs it only when approved', async () => {
+    const agent = await start();
+    const command = 'git push --force nowhere 2>/dev/null; touch ran.txt';
+    // Hybrid surface: bash is also a direct tool, through the same auto-mode policy.
+    agent.llm.push(
+      { tool: { id: 'd1', name: 'bash', args: { command } } },
+      { tool: { id: 'd2', name: 'bash', args: { command } } },
+      { text: 'done' },
+    );
+    await agent.send({ type: 'prompt', message: 'go' });
+    const first = await agent.waitFor((event) => event.method === 'confirm');
+    expect(first.message).toContain('force-push');
+    expect(first.toolCallId).toBe('d1');
+    agent.raw({ type: 'extension_ui_response', id: first.id, confirmed: false });
+    const second = await agent.waitFor(
+      (event) => event.method === 'confirm' && event.id !== first.id,
+    );
+    expect(existsSync(path.join(agent.workspace, 'ran.txt'))).toBe(false);
+    agent.raw({ type: 'extension_ui_response', id: second.id, confirmed: true });
+    await settledAfter(agent, 0);
+    const [declined, approved] = ends(agent);
+    expect(declined!.toolName).toBe('bash');
+    expect(declined!.isError).toBe(true);
+    expect(declined!.result.content[0].text).toContain('Blocked by auto mode');
+    expect(approved!.result.content[0].text).not.toContain('Blocked by auto mode');
+    expect(existsSync(path.join(agent.workspace, 'ran.txt'))).toBe(true);
+  });
+
+  it('refuses a dangerous direct bash call outright without a UI', async () => {
+    const agent = await start({ args: ['--headless'] });
+    agent.llm.push(
+      { tool: { id: 'd', name: 'bash', args: { command: 'rm -rf ~' } } },
+      { text: 'done' },
+    );
+    await agent.send({ type: 'prompt', message: 'go' });
+    await settledAfter(agent, 0);
+    expect(agent.events.some((event) => event.method === 'confirm')).toBe(false);
+    const [end] = ends(agent);
+    expect(end!.isError).toBe(true);
+    expect(end!.result.content[0].text).toContain('no UI');
+  });
+
   it('refuses dangerous commands outright without a UI', async () => {
     const agent = await start({ args: ['--headless'] });
     agent.llm.push(bash('b', 'rm -rf ~'), { text: 'done' });
@@ -286,53 +330,166 @@ describe('auto mode', () => {
   it('gates bash calls made from PTC code too', async () => {
     const agent = await start({ args: ['--headless'] });
     agent.llm.push(
-      {
-        tool: {
-          id: 'p',
-          name: 'code',
-          args: { code: 'return await tools.call("bash", { command: "rm -rf ~" });' },
-        },
-      },
+      ptc(
+        'p',
+        'const r = await tools.call("bash", { command: "rm -rf ~" }); return r.ok ? "ran" : r.error.code + ": " + r.error.message;',
+      ),
       { text: 'done' },
     );
     await agent.send({ type: 'prompt', message: 'go' });
     await settledAfter(agent, 0);
-    expect(ends(agent)[0]!.result.content[0].text).toContain('Blocked by auto mode');
+    expect(agent.events.some((event) => event.method === 'confirm')).toBe(false);
+    const [end] = ends(agent);
+    expect(end!.toolName).toBe('ptc');
+    const text = end!.result.content[0].text;
+    expect(text).toContain('ApprovalDenied: Blocked by auto mode');
+    expect(text).toContain('no UI');
+    expect(end!.result.details.operations).toMatchObject([
+      { capability: 'bash', errorCode: 'ApprovalDenied' },
+    ]);
   });
 
-  it('gates the code script itself, not only its tool calls (H2)', async () => {
-    const agent = await start({ args: ['--headless'] });
-    const code = (id: string, script: string) => ({
-      tool: { id, name: 'code', args: { code: script } },
-    });
-    agent.llm.push(
-      code('direct', 'await Bun.$`touch escaped.txt`; return 1;'),
-      code('tools', 'return (await tools.bash({ command: "echo hi" })).split("\\n")[0];'),
-      { text: 'done' },
-    );
-    await agent.send({ type: 'prompt', message: 'go' });
-    await settledAfter(agent, 0);
-    const [direct, viaTools] = ends(agent);
-    expect(direct!.isError).toBe(true);
-    expect(direct!.result.content[0].text).toContain('Blocked by auto mode');
-    expect(direct!.result.content[0].text).toContain('no UI');
-    expect(existsSync(path.join(agent.workspace, 'escaped.txt'))).toBe(false);
-    expect(viaTools!.isError).toBe(false);
-    expect(viaTools!.result.content[0].text).toContain('[return]\n"hi"');
-  });
-
-  it('asks the user before a code script that spawns processes (H2)', async () => {
+  it('cancelling a script during an approval withdraws the dialog and never runs the operation', async () => {
     const agent = await start();
     agent.llm.push(
-      { tool: { id: 'c', name: 'code', args: { code: 'await Bun.$`touch made.txt`; return 1;' } } },
+      ptc(
+        'p1',
+        `await tools.write({ path: 'before.txt', content: '1' });
+         await tools.bash({ command: "git push --force nowhere 2>/dev/null; touch cancelled.txt" });`,
+      ),
       { text: 'done' },
     );
     await agent.send({ type: 'prompt', message: 'go' });
-    const confirm = await agent.waitFor((event) => event.method === 'confirm');
-    expect(confirm.message).toContain('Bun.$');
-    agent.raw({ type: 'extension_ui_response', id: confirm.id, confirmed: true });
+    const dialog = await agent.waitFor((event) => event.method === 'confirm');
+    // The dialog names the operation that asks, so clients can show it waiting there.
+    const opening = agent.events.find(
+      (event) =>
+        event.type === 'tool_execution_start' &&
+        event.toolName === 'bash' &&
+        event.parentToolCallId,
+    )!;
+    expect(dialog.toolCallId).toBe(opening.toolCallId);
+    await agent.send({ type: 'abort' });
     await settledAfter(agent, 0);
-    expect(ends(agent)[0]!.isError).toBe(false);
+    expect(
+      agent.events.some((event) => event.method === 'cancel' && event.targetId === dialog.id),
+    ).toBe(true);
+    // A late "yes" for the withdrawn dialog grants nothing.
+    agent.raw({ type: 'extension_ui_response', id: dialog.id, confirmed: true });
+    await Bun.sleep(200);
+    expect(existsSync(path.join(agent.workspace, 'before.txt'))).toBe(true);
+    expect(existsSync(path.join(agent.workspace, 'cancelled.txt'))).toBe(false);
+    const bash = agent.events.find(
+      (event) => event.type === 'tool_execution_end' && event.toolCallId === opening.toolCallId,
+    )!;
+    expect(bash).toMatchObject({ isError: true, parentToolCallId: 'p1' });
+    const [end] = ends(agent);
+    expect(end!.isError).toBe(true);
+    expect(end!.result.details.status).toBe('cancelled');
+    expect(end!.result.details.operations).toMatchObject([
+      { capability: 'write', outcome: 'completed' },
+      { capability: 'bash', outcome: 'not_started', errorCode: 'Cancelled' },
+    ]);
+  });
+
+  it('asks the user before a dangerous bash call from PTC code and runs it only when approved', async () => {
+    const agent = await start();
+    const script = (file: string) =>
+      `return await tools.bash({ command: "git push --force nowhere 2>/dev/null; touch ${file}" });`;
+    agent.llm.push(ptc('p1', script('declined.txt')), ptc('p2', script('ran.txt')), {
+      text: 'done',
+    });
+    await agent.send({ type: 'prompt', message: 'go' });
+    const first = await agent.waitFor((event) => event.method === 'confirm');
+    expect(first.message).toContain('force-push');
+    expect(first.message).toContain('Command (bash');
+    agent.raw({ type: 'extension_ui_response', id: first.id, confirmed: false });
+    const second = await agent.waitFor(
+      (event) => event.method === 'confirm' && event.id !== first.id,
+    );
+    agent.raw({ type: 'extension_ui_response', id: second.id, confirmed: true });
+    await settledAfter(agent, 0);
+    const [declined, approved] = ends(agent);
+    expect(declined!.isError).toBe(true);
+    expect(declined!.result.content[0].text).toContain('ApprovalDenied: Blocked by auto mode');
+    expect(declined!.result.content[0].text).toContain('declined');
+    expect(approved!.isError).toBe(false);
+    expect(existsSync(path.join(agent.workspace, 'declined.txt'))).toBe(false);
+    expect(existsSync(path.join(agent.workspace, 'ran.txt'))).toBe(true);
+  });
+
+  it("applies the user's deny-list to the ptc script text itself", async () => {
+    const config = { features: { autoMode: { deny: ['forbidden-word'] } } };
+    // The script calls no capability: only its own text matches the deny-list.
+    const script = 'const note = "forbidden-word"; return note.length;';
+
+    const headless = await start({ args: ['--headless'], config });
+    headless.llm.push(ptc('h', script), { text: 'done' });
+    await headless.send({ type: 'prompt', message: 'go' });
+    await settledAfter(headless, 0);
+    expect(headless.events.some((event) => event.method === 'confirm')).toBe(false);
+    const [refused] = ends(headless);
+    expect(refused!.toolName).toBe('ptc');
+    expect(refused!.isError).toBe(true);
+    expect(refused!.result.content[0].text).toContain('Blocked by auto mode');
+    expect(refused!.result.content[0].text).toContain('deny-list');
+    expect(refused!.result.content[0].text).toContain('no UI');
+    // The script never ran.
+    expect(refused!.result.details?.executionId).toBeUndefined();
+
+    const agent = await start({ config });
+    agent.llm.push(ptc('d', script), ptc('a', script), { text: 'done' });
+    await agent.send({ type: 'prompt', message: 'go' });
+    const first = await agent.waitFor((event) => event.method === 'confirm');
+    expect(first.message).toContain('Script (ptc');
+    expect(first.message).toContain('forbidden-word');
+    expect(first.message).toContain('deny-list');
+    agent.raw({ type: 'extension_ui_response', id: first.id, confirmed: false });
+    const second = await agent.waitFor(
+      (event) => event.method === 'confirm' && event.id !== first.id,
+    );
+    agent.raw({ type: 'extension_ui_response', id: second.id, confirmed: true });
+    await settledAfter(agent, 0);
+    const [declined, approved] = ends(agent);
+    expect(declined!.isError).toBe(true);
+    expect(declined!.result.content[0].text).toContain('Blocked by auto mode');
+    expect(declined!.result.content[0].text).toContain('declined');
+    expect(declined!.result.details?.executionId).toBeUndefined();
+    expect(approved!.isError).toBe(false);
+    expect(approved!.result.content[0].text).toBe('14');
+  });
+
+  it('neither classifies nor leases an ordinary ptc script; its operations are gated one by one', async () => {
+    const agent = await start({
+      env: { PIRC_WRITE_BROKER: '1' },
+      config: { features: { sessionTitle: { enabled: false }, autoMode: { useModel: true } } },
+    });
+    agent.llm.route = (body) =>
+      isClassifierRequest(body) ? { text: '<verdict>dangerous</verdict>' } : undefined;
+    agent.llm.push(
+      // Text the old code-mode classifier would have flagged (it named process spawning).
+      ptc('plain', 'const words = ["Bun.$", "spawn"]; return words.join(" ");'),
+      ptc('reads', 'return (await tools.bash({ command: "echo hi" })).text.split("\\n")[0];'),
+      ptc('writes', 'await tools.bash({ command: "touch made.txt" }); return "made";'),
+      { text: 'done' },
+    );
+    await agent.send({ type: 'prompt', message: 'go' });
+    const lease = await agent.waitFor((event) => event.type === 'write_lease_request');
+    agent.raw({ type: 'write_lease_response', id: lease.id, granted: true });
+    await settledAfter(agent, 0);
+    // No model verdict or confirm for any script text; only the inner write takes a lease.
+    expect(agent.llm.requests.filter((request) => isClassifierRequest(request.body))).toHaveLength(
+      0,
+    );
+    expect(agent.events.some((event) => event.method === 'confirm')).toBe(false);
+    expect(agent.events.filter((event) => event.type === 'write_lease_request')).toHaveLength(1);
+    const [plain, reads, writes] = ends(agent);
+    expect(plain!.isError).toBe(false);
+    expect(plain!.result.content[0].text).toBe('Bun.$ spawn');
+    expect(reads!.isError).toBe(false);
+    expect(reads!.result.content[0].text).toBe('hi');
+    expect(writes!.isError).toBe(false);
+    expect(writes!.result.content[0].text).toBe('made');
     expect(existsSync(path.join(agent.workspace, 'made.txt'))).toBe(true);
   });
 });

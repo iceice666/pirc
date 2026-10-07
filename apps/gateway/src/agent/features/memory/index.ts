@@ -3,6 +3,7 @@
  * build an append-only memory ledger; compaction renders it as the summary
  * (no LLM call); `recall` maps memory ids back to raw source entries.
  */
+import { fields, str } from '../../tools/result-schema.js';
 import { z } from 'zod';
 import type { Agent } from '../../agent.js';
 import { contextTokens } from '../../compaction.js';
@@ -490,6 +491,12 @@ export function memoryFeature(): Feature {
       required: ['id'],
       additionalProperties: false,
     },
+    resultSchema: fields({
+      id: str(),
+      status: str(
+        'ok, partial (some sources missing), no_source, source_unavailable or forgotten; the evidence itself is in text',
+      ),
+    }),
     async execute(args, ctx) {
       if (ctx.signal.aborted) throw new Error('Aborted');
       const id = String(args.id ?? '');
@@ -513,6 +520,7 @@ export function memoryFeature(): Feature {
       return {
         content: [{ type: 'text', text: result.text }],
         details: { status: result.status, id: args.id },
+        data: { id, status: String(result.status) },
         isError: result.status === 'invalid_id' || result.status === 'not_found',
       };
     },

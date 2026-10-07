@@ -268,6 +268,7 @@ export function loadAgentConfig(
         allowRead: nodePolicy.allowRead,
         allowWrite: sandboxed ? nodePolicy.allowWrite : writable,
         denyWrite: sandboxed ? nodePolicy.denyWrite : [],
+        ...(sandboxed && nodePolicy.sharedWrite ? { sharedWrite: nodePolicy.sharedWrite } : {}),
       }
     : defaultPathPolicy(writable);
   const section = (id: string, title: string, source: string, text: string): PromptSection => ({
@@ -360,12 +361,14 @@ const pathPolicySchema = z.object({
   allowRead: z.array(z.string()),
   allowWrite: z.array(z.string()),
   denyWrite: z.array(z.string()),
+  sharedWrite: z.array(z.string()).optional(),
 });
 
 function parsePathPolicy(value: string | undefined): PathPolicy | undefined {
   if (!value) return undefined;
   try {
-    return pathPolicySchema.parse(JSON.parse(value));
+    const { sharedWrite, ...rest } = pathPolicySchema.parse(JSON.parse(value));
+    return sharedWrite ? { ...rest, sharedWrite } : rest;
   } catch {
     throw new Error('PIRC_SANDBOX_POLICY is not a valid path policy');
   }

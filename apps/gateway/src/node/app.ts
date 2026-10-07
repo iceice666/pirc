@@ -32,7 +32,7 @@ import {
 } from '../agent/config.js';
 import { recall } from '../agent/features/memory/index.js';
 import { WorkspaceLedger, recallFromWorkspace } from '../agent/features/memory/workspace.js';
-import { historyOf } from '../agent/session-store.js';
+import { historyWithOperations } from '../agent/session-store.js';
 import { offlineGateway, type AgentGateway } from './agent-gateway.js';
 import { BranchCache } from './branch-cache.js';
 import {
@@ -455,7 +455,8 @@ export async function buildNodeApp(
     // has to fit through one RPC line. The agent writes each message before
     // announcing it, so the file is never behind the watermark taken below.
     const branch = branches.read(privateSessionPath);
-    const history = historyOf(branch);
+    // With each ptc operation, so clients can nest it under its ptc call.
+    const history = historyWithOperations(branch);
     // No live runner: report the settings the next agent will start with (the
     // session file's, else the default model), so the client does not fall back
     // to another model and overwrite them on the next prompt.
@@ -472,6 +473,7 @@ export async function buildNodeApp(
       session: publicSession(session),
       history,
       partialMessage: active?.state.partialMessage ?? null,
+      operations: active?.state.operations ?? [],
       queue: active?.state.queue ?? { steering: [], followUp: [] },
       run: db.latestRun(sessionId),
       interactions: db.pendingInteractions(sessionId),

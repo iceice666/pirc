@@ -1,7 +1,8 @@
+import path from 'node:path';
 import { describe, expect, it } from 'bun:test';
 import type { Agent } from '../src/agent/agent.js';
+import { realResolve } from '../src/agent/sandbox.js';
 import { AutoMode, visibleKeys } from '../src/agent/auto-mode/index.js';
-import { classifyScript } from '../src/agent/auto-mode/script.js';
 
 const WORKSPACE = '/nonexistent-pirc-gate/home/repo';
 const HOME_RM = 'rm -rf /nonexistent-pirc-gate/home';
@@ -86,6 +87,19 @@ describe('auto mode: tty input (M3)', () => {
     expect(auto.actionFor('background_task', write('t1', 'ls'))?.text).toBe('ls');
   });
 
+  it('judges concurrent keystrokes to one task in order, not as separate pieces', async () => {
+    const { auto } = stubAgent();
+    const slow = auto as unknown as { agent: { acquireWrite: () => Promise<void> } };
+    // A slow lease answer keeps the first write inside its gate.
+    slow.agent.acquireWrite = () => Bun.sleep(30);
+    const [first, second] = await Promise.all([
+      auto.gate('background_task', write('t1', 'r'), signal),
+      auto.gate('background_task', write('t1', 'm -rf ~\n'), signal),
+    ]);
+    expect(first).toBeUndefined();
+    expect(second).toContain('deletes');
+  });
+
   it('shows the model the whole line and marks control keys', async () => {
     const { auto, prompts } = stubAgent({
       features: { autoMode: { useModel: true } },
@@ -115,6 +129,28 @@ describe('auto mode: tty input (M3)', () => {
   });
 });
 
+describe('auto mode: write lease targets', () => {
+  it('leases only the known targets of a command, else its working directory', async () => {
+    for (const features of [{ autoMode: { useModel: false } }, { autoMode: { enabled: false } }]) {
+      const { auto, leases } = stubAgent({ features });
+      await auto.gate('bash', { command: 'cd /tmp && mkdir -p ghpirc' }, signal);
+      expect(leases).toEqual([path.join(realResolve('/tmp'), 'ghpirc')]);
+      leases.length = 0;
+      await auto.gate('bash', { command: 'mkdir -p /tmp/a && git commit -m x' }, signal);
+      expect(leases).toEqual([WORKSPACE]);
+      leases.length = 0;
+      await auto.gate('bash', { command: 'ls' }, signal);
+      expect(leases).toEqual([]);
+    }
+  });
+
+  it('leases the working directory for tty input, whose shell may have moved', async () => {
+    const { auto, leases } = stubAgent();
+    await auto.gate('background_task', write('t', 'mkdir /tmp/x\n'), signal);
+    expect(leases).toEqual([WORKSPACE]);
+  });
+});
+
 describe('auto mode: deny-list (M1)', () => {
   it('applies before the verdict cache and with auto mode off', async () => {
     const { auto, config, prompts } = stubAgent({
@@ -136,83 +172,32 @@ describe('auto mode: deny-list (M1)', () => {
     expect((await auto.classify(action, signal)).verdict).toBe('danger');
   });
 
-  it('applies to tty input and code scripts', async () => {
+  it('applies to tty input and ptc scripts', async () => {
     const { auto } = stubAgent({
       features: { autoMode: { useModel: false, deny: ['just\\s+switch'] } },
     });
     await auto.gate('background_task', write('t', 'just sw'), signal);
     expect(await auto.gate('background_task', write('t', 'itch\n'), signal)).toContain('deny-list');
     const script = 'return await tools.bash({ command: "just switch" });';
-    expect(await auto.gate('code', { code: script }, signal)).toContain('deny-list');
+    expect(await auto.gate('ptc', { code: script }, signal)).toContain('deny-list');
   });
 });
 
-describe('auto mode: code scripts (H2)', () => {
-  it('classifies scripts statically', () => {
-    const verdict = (code: string) => classifyScript(code).verdict;
-    for (const code of [
-      'await Bun.$`just switch`;',
-      'const { $ } = Bun; await $`rm -rf ~`;',
-      'const cp = require("node:child_process"); cp.execSync("x");',
-      'const { spawn } = await import("child_process"); spawn("x");',
-      'import("node:fs").then((fs) => fs.writeFileSync("/tmp/x", "y"));',
-      'await Bun.write(`${process.env.HOME}/.zshrc`, "x");',
-      'Bun.spawn(["sh", "-c", "x"]);',
-      'fs.rmSync("/", { recursive: true });',
-    ])
-      expect({ code, verdict: verdict(code) }).toEqual({ code, verdict: 'danger' });
-    for (const code of [
-      'return process.env.HOME;',
-      'return await fetch("https://example.com").then((r) => r.text());',
-      'return globalThis["Bu" + "n"].version;',
-      'return (() => 0).constructor("return 1")();',
-      'return eval("1 + 1");',
-      'const x = \\u0042un;',
-      'const m = await import("./x.ts");',
-    ])
-      expect({ code, verdict: verdict(code) }).toEqual({ code, verdict: 'unknown' });
-    for (const code of [
-      'const files = (await tools.find({ pattern: "*.ts" })).split("\\n"); return files.length;',
-      'const m = /a(b)/.exec("ab"); return m?.[1];',
-      'for (const f of ["a", "b"]) await tools.read({ path: f }); return 1;',
-      // Text cannot see this one; the worker removes the Function constructors (agent-ptc test).
-      'return tools.call["constr" + "uctor"];',
-    ])
-      expect({ code, verdict: verdict(code) }).toEqual({ code, verdict: 'read' });
-  });
-
-  it('asks before scripts that bypass the tools, refuses them headless', async () => {
-    const headless = stubAgent();
-    const code = 'await Bun.$`just switch`;';
-    const refused = await headless.auto.gate('code', { code }, signal);
-    expect(refused).toContain('no UI');
-    expect(headless.leases).toEqual([]);
-
-    const ui = stubAgent({ hasUI: true, confirm: true });
-    expect(await ui.auto.gate('code', { code }, signal)).toBeUndefined();
-    expect(ui.confirms[0]).toContain('Script (code');
-    expect(ui.confirms[0]).toContain('Bun.$');
-    expect(ui.leases).toEqual([WORKSPACE]);
-  });
-
-  it('runs tools-only scripts without a prompt or lease, others through the model', async () => {
+describe('auto mode: ptc scripts', () => {
+  it('runs scripts without a prompt, lease or classifier: their operations are gated', async () => {
     const { auto, leases, confirms, prompts } = stubAgent({
       hasUI: true,
       features: { autoMode: { useModel: true } },
-      model: (prompt) =>
-        prompt.includes(HOME_RM)
-          ? '<verdict>dangerous</verdict><reason>deletes home</reason>'
-          : '<verdict>write</verdict><reason>ok</reason>',
+      model: () => '<verdict>dangerous</verdict><reason>no</reason>',
     });
-    expect(await auto.gate('code', { code: 'return await tools.ls({});' }, signal)).toBeUndefined();
-    expect(leases).toEqual([]);
-    expect(prompts).toEqual([]);
-    expect(await auto.gate('code', { code: 'return process.cwd();' }, signal)).toBeUndefined();
-    expect(leases).toEqual([WORKSPACE]);
-    expect(prompts[0]).toContain('TypeScript script');
-    expect(prompts[0]).toContain('return process.cwd();');
-    const sneaky = `const B = globalThis["Bu" + "n"]; await B.$\`${HOME_RM}\`;`;
-    expect(await auto.gate('code', { code: sneaky }, signal)).toContain('declined');
-    expect(confirms).toHaveLength(1);
+    // Text that would have alarmed the retired code classifier carries no authority here.
+    for (const code of ['return await tools.ls({});', 'await Bun.$`rm -rf ~`;'])
+      expect(await auto.gate('ptc', { code }, signal)).toBeUndefined();
+    expect([leases, confirms, prompts]).toEqual([[], [], []]);
+  });
+
+  it('the retired code tool is no longer gated as a script', () => {
+    const { auto } = stubAgent();
+    expect(auto.actionFor('code', { code: 'await Bun.$`x`;' })).toBeUndefined();
   });
 });

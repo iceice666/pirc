@@ -33,7 +33,15 @@ export interface ContextSnapshot {
   takenAt: number;
   model: { provider: string; id: string; contextWindow?: number };
   sections: Array<PromptSection & { estimatedTokens: number }>;
+  /** The tools the provider sees (`ptc`, `ptc_docs` and the direct core capabilities). */
   tools: Array<ToolSpec & { estimatedTokens: number }>;
+  /**
+   * Internal capabilities `ptc` scripts may call (no schemas here: the direct
+   * core ones appear under `tools`; the others are named in the system prompt
+   * and documented by `ptc_docs`). Absent in
+   * snapshots from before the PTC-only surface.
+   */
+  capabilities?: ContextCapability[];
   usage: {
     estimatedInput: number;
     reportedInput?: number;
@@ -42,6 +50,13 @@ export interface ContextSnapshot {
     buckets: { system: number; tools: number; messages: number; memory: number };
   };
 }
+export interface ContextCapability {
+  name: string;
+  category: string;
+  uiLabel: string;
+  effects: string[];
+  approval: string;
+}
 const textTokens = (text: string) => estimateTokens({ role: 'user', content: text, timestamp: 0 });
 export function captureContext(input: {
   sections: PromptSection[];
@@ -49,6 +64,7 @@ export function captureContext(input: {
   messages: Message[];
   model: ContextSnapshot['model'];
   memoryTokens: number;
+  capabilities?: ContextCapability[];
 }): ContextSnapshot {
   const sections = input.sections.map((section, index) => ({
     ...section,
@@ -77,6 +93,9 @@ export function captureContext(input: {
     model: { ...input.model },
     sections,
     tools,
+    ...(input.capabilities
+      ? { capabilities: input.capabilities.map((item) => ({ ...item })) }
+      : {}),
     usage: {
       estimatedInput,
       scale: 1,

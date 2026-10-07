@@ -5,7 +5,7 @@ import { afterEach, expect, it } from 'bun:test';
 import { buildNodeApp } from '../src/node/app.js';
 import { defaultAgentCommand } from '../src/config.js';
 import { testModels, writeAgentConfig } from './agent-harness.js';
-import { startFakeLlm } from './fixtures/fake-llm.js';
+import { ptcCall, startFakeLlm } from './fixtures/fake-llm.js';
 import { nodeHeaders as headers, testConfig, waitFor } from './helpers.js';
 
 const cleanup: Array<() => Promise<void> | void> = [];
@@ -42,10 +42,7 @@ it('runs a real pirc agent subprocess end to end through the gateway', async () 
     payload: { clientId: 'browser-1' },
   });
   const generation = lease.json().lease.generation as number;
-  llm.push(
-    { tool: { id: 'c1', name: 'bash', args: { command: 'echo from-bash' } } },
-    { text: 'All done.' },
-  );
+  llm.push({ tool: ptcCall('c1', 'bash', { command: 'echo from-bash' }) }, { text: 'All done.' });
   const command = await app.inject({
     method: 'POST',
     url: `/api/sessions/${sessionId}/commands`,
@@ -68,9 +65,21 @@ it('runs a real pirc agent subprocess end to end through the gateway', async () 
     'user',
     'assistant',
     'toolResult',
+    'toolResult',
     'assistant',
   ]);
-  expect(final.history[2].content[0].text).toContain('from-bash');
+  // The ptc operation comes first, linked to its ptc call, for clients to nest.
+  expect(final.history[2]).toMatchObject({
+    toolName: 'bash',
+    parentToolCallId: 'c1',
+    isError: false,
+    args: { command: expect.stringContaining('from-bash') },
+  });
+  expect(final.history[3]).toMatchObject({ toolName: 'ptc', toolCallId: 'c1', isError: false });
+  expect(final.history[3].content[0].text).toContain('from-bash');
+  expect(final.history[3].details.operations).toMatchObject([
+    { capability: 'bash', outcome: 'completed' },
+  ]);
   expect(final.history.at(-1).content[0].text).toBe('All done.');
   expect(final.history.at(-1).provider).toBe('fake');
 });
@@ -118,27 +127,25 @@ it('answers and withdraws agent dialogs through gateway interactions', async () 
     ).json();
   llm.push(
     {
-      tool: {
-        id: 'q',
-        name: 'ask_user_question',
-        args: {
-          questions: [
-            {
-              question: 'Color?',
-              multiSelect: true,
-              options: [{ label: 'red' }, { label: 'blue' }],
-            },
-          ],
-        },
-      },
+      tool: ptcCall('q', 'ask_user_question', {
+        questions: [
+          {
+            question: 'Color?',
+            multiSelect: true,
+            options: [{ label: 'red' }, { label: 'blue' }],
+          },
+        ],
+      }),
     },
     { text: 'noted' },
-    { tool: { id: 'q2', name: 'ask_user_question', args: { questions: [{ question: 'Name?' }] } } },
+    { tool: ptcCall('q2', 'ask_user_question', { questions: [{ question: 'Name?' }] }) },
   );
   await send('c1', { type: 'prompt', message: 'ask' });
   await waitFor(async () => (await snapshot()).interactions.length, 1);
   const pending = (await snapshot()).interactions[0];
   expect(pending.request.multiple).toBe(true);
+  // The dialog names the ptc operation that asks, for clients to show it there.
+  expect(pending.request.toolCallId).toMatch(/:op1$/);
   const answered = await app.inject({
     method: 'POST',
     url: `/api/sessions/${sessionId}/interactions/${pending.id}/answer`,
@@ -151,8 +158,12 @@ it('answers and withdraws agent dialogs through gateway interactions', async () 
   });
   expect(answered.statusCode).toBe(200);
   await waitFor(async () => (await snapshot()).run?.status, 'succeeded', 10_000);
-  const result = (await snapshot()).history.find((m: any) => m.role === 'toolResult');
-  expect(result.details.answers[0].selected).toEqual(['red', 'blue']);
+  const result = (await snapshot()).history.find(
+    (m: any) => m.role === 'toolResult' && !m.parentToolCallId,
+  );
+  expect(result).toMatchObject({ toolName: 'ptc', toolCallId: 'q', isError: false });
+  // The script returned the question tool's text: the answers as JSON.
+  expect(JSON.parse(result.content[0].text).answers[0].selected).toEqual(['red', 'blue']);
 
   await send('c2', { type: 'prompt', message: 'ask again' });
   await waitFor(async () => (await snapshot()).interactions.length, 1);

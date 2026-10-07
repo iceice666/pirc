@@ -9,7 +9,7 @@ import { defaultAgentCommand } from '../src/config.js';
 import { buildDaemonApp } from '../src/daemon/app.js';
 import { NODE_PROTOCOL_VERSION } from '../src/protocol.js';
 import { writeAgentConfig } from './agent-harness.js';
-import { startFakeLlm } from './fixtures/fake-llm.js';
+import { ptcCall, startFakeLlm } from './fixtures/fake-llm.js';
 import { daemonConfig, headers, startCluster, waitFor, type Cluster } from './helpers.js';
 
 const USER = 'test@example.com';
@@ -308,17 +308,16 @@ it('remembers across chats end to end: a real agent proposes and notes, the user
   const first = await openChat();
   llm.push(
     {
-      tool: {
-        id: 'p',
-        name: 'memory_propose_user',
-        args: { action: 'add', content: 'Wants to be called Ice.', quote: 'call me Ice' },
-      },
+      tool: ptcCall('p', 'memory_propose_user', {
+        action: 'add',
+        content: 'Wants to be called Ice.',
+        quote: 'call me Ice',
+      }),
       also: [
-        {
-          id: 'n',
-          name: 'memory_note',
-          args: { action: 'add', content: 'Ice is building pirc, a personal assistant.' },
-        },
+        ptcCall('n', 'memory_note', {
+          action: 'add',
+          content: 'Ice is building pirc, a personal assistant.',
+        }),
       ],
     },
     { text: 'Got it, Ice.' },

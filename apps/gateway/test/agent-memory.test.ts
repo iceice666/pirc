@@ -25,6 +25,7 @@ import {
 } from '../src/agent/features/memory/serialize.js';
 import type { SessionEntry } from '../src/agent/session-store.js';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
+import { ptcCall } from './fixtures/fake-llm.js';
 
 let n = 0;
 const msg = (role: 'user' | 'assistant', text: string): SessionEntry => {
@@ -376,11 +377,15 @@ describe('observational memory agent flow', () => {
     expect(summarizerCalls).toHaveLength(0);
     // Model can recall the observation id.
     const id = /\[([a-f0-9]{12})\] 2026-09-25 10:00 \[high\]/.exec(compacted.data.summary)![1]!;
-    agent.llm.push({ tool: { id: 'r', name: 'recall', args: { id } } }, { text: 'done' });
+    agent.llm.push({ tool: ptcCall('r', 'recall', { id }) }, { text: 'done' });
     const third = agent.events.length;
     await agent.send({ type: 'prompt', message: 'recall it' });
     await settledAfter(agent, third);
-    const end = agent.events.findLast((e) => e.type === 'tool_execution_end');
+    const end = agent.events.findLast(
+      (e) => e.type === 'tool_execution_end' && !e.parentToolCallId,
+    );
+    expect(end!.toolCallId).toBe('r');
+    expect(end!.isError).toBe(false);
     expect(end!.result.content[0].text).toContain('Hi, my name is Ada');
   });
 

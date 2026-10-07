@@ -1,9 +1,10 @@
 /**
  * Auto mode: a pre-execution filter for shell actions (`bash`,
- * `background_task` start/write, including calls made from PTC code) and for
- * `code` (PTC) scripts themselves.
+ * `background_task` start/write, called directly or from a `ptc` script) and
+ * for `ptc` scripts themselves, which only the user's deny-list can stop: a
+ * script has no authority of its own and its operations are gated one by one.
  *
- * 1. Static rules ({@link classifyShell}, {@link classifyScript}) sort the
+ * 1. Static rules ({@link classifyShell}) sort the
  *    action into read / write / danger, or `unknown` when it cannot be judged
  *    without understanding it. The user's deny-list (`features.autoMode.deny`)
  *    is matched first and always means danger.
@@ -16,7 +17,9 @@
  *    (team workers, subagents) are refused.
  * 4. Anything that may write takes the node's write lease first, so a
  *    competing session writing an overlapping workspace fails the call with
- *    `workspace_busy` instead of racing it.
+ *    `workspace_busy` instead of racing it. When the static rules know every
+ *    path a command writes, only those paths' roots are leased (none for
+ *    shared roots such as /tmp); otherwise the working directory's.
  *
  * Keystrokes for a tty task are judged together with the rest of the line
  * they belong to (everything typed since the last Enter), so a command cannot
@@ -30,8 +33,7 @@ import { z } from 'zod';
 import type { Agent } from '../agent.js';
 import { thinkingLevels } from '../config.js';
 import { classifyWithModel, type ModelChoice, type ShellAction } from './classifier.js';
-import { classifyShell, compileDeny, type Classification } from './rules.js';
-import { classifyScript } from './script.js';
+import { classifyShell, compileDeny, denyMatch, type Classification } from './rules.js';
 
 const modelChoice = z.object({
   provider: z.string().min(1),
@@ -135,6 +137,8 @@ export class AutoMode {
   private readonly cache = new Map<string, AutoModeDecision>();
   /** Per tty task: what was typed since the last Enter (or Ctrl-C). */
   private readonly lines = new Map<string, PendingLine>();
+  /** The last keystroke gate per tty task, so writes to one task are judged in order. */
+  private readonly inputGates = new Map<string, Promise<void>>();
   private warnedFailure = false;
   private warnedRulesFailure = false;
   private warnedDeny = '';
@@ -162,7 +166,14 @@ export class AutoMode {
   private rulesVerdict(action: ShellAction): Classification {
     try {
       const deny = this.deny();
-      if (action.kind === 'script') return classifyScript(action.text, deny);
+      if (action.kind === 'script')
+        return (
+          denyMatch(action.text, deny) ?? {
+            verdict: 'read',
+            reason:
+              'a ptc script has no authority of its own; its operations are checked one by one',
+          }
+        );
       const rules = classifyShell(action.text, {
         cwd: action.cwd,
         roots: this.agent.guard.allowedRoots,
@@ -203,8 +214,9 @@ export class AutoMode {
     const cwd = this.agent.config.workspace;
     if (tool === 'bash' && typeof args.command === 'string')
       return { tool, kind: 'command', text: args.command, cwd };
-    // Code mode: the script itself can do anything the agent account can.
-    if (tool === 'code' && typeof args.code === 'string')
+    // PTC scripts run in an isolated interpreter whose operations are gated one
+    // by one; only the user's deny-list still applies to the script text.
+    if (tool === 'ptc' && typeof args.code === 'string')
       return { tool, kind: 'script', text: args.code, cwd };
     if (tool === 'background_task') {
       if (args.action === 'start' && typeof args.command === 'string')
@@ -254,7 +266,7 @@ export class AutoMode {
     if (rules.denied) return { ...rules, source: 'rules' };
     if (!settings.enabled) {
       // Lease decision only: anything that is not clearly read-only writes.
-      return rules.verdict === 'read'
+      return rules.verdict === 'read' || rules.verdict === 'write'
         ? { ...rules, source: 'rules' }
         : { verdict: 'write', reason: rules.reason, source: 'rules' };
     }
@@ -317,6 +329,31 @@ export class AutoMode {
     args: Record<string, unknown>,
     signal: AbortSignal,
   ): Promise<string | undefined> {
+    // Keystrokes for one task are judged one write at a time: concurrent
+    // writes (ptc scripts can make them) must not split a line into pieces
+    // that are each judged without the others.
+    if (tool === 'background_task' && args.action === 'write') {
+      const id = String(args.id ?? '');
+      const previous = this.inputGates.get(id) ?? Promise.resolve();
+      let release!: () => void;
+      const current = new Promise<void>((resolve) => (release = resolve));
+      this.inputGates.set(id, current);
+      try {
+        await previous;
+        return await this.gateNow(tool, args, signal);
+      } finally {
+        release();
+        if (this.inputGates.get(id) === current) this.inputGates.delete(id);
+      }
+    }
+    return this.gateNow(tool, args, signal);
+  }
+
+  private async gateNow(
+    tool: string,
+    args: Record<string, unknown>,
+    signal: AbortSignal,
+  ): Promise<string | undefined> {
     const action = this.actionFor(tool, args);
     if (!action) return undefined;
     const decision = await this.classify(action, signal);
@@ -324,9 +361,28 @@ export class AutoMode {
       const refusal = await this.approve(action, decision.reason, signal);
       if (refusal) return refusal;
     }
-    if (decision.verdict !== 'read') await this.agent.acquireWrite(action.cwd, signal);
+    if (decision.verdict !== 'read')
+      for (const target of this.leaseTargets(action, decision))
+        await this.agent.acquireWrite(target, signal);
     if (action.kind === 'input') this.typed(args, action);
     return undefined;
+  }
+
+  /**
+   * What a writing action's lease must cover: the exact targets when the
+   * static rules know every path a command writes (`cd /tmp && mkdir x` needs
+   * no workspace lease), else its whole working directory. Keystrokes are
+   * excluded: the shell they go to may have changed directory since.
+   */
+  private leaseTargets(action: ShellAction, decision: AutoModeDecision): string[] {
+    if (
+      action.kind === 'command' &&
+      decision.source === 'rules' &&
+      decision.verdict === 'write' &&
+      decision.writes?.length
+    )
+      return [...new Set(decision.writes)];
+    return [action.cwd];
   }
 
   private async approve(

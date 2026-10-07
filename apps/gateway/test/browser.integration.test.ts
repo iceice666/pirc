@@ -11,7 +11,7 @@ import { buildNodeApp } from '../src/node/app.js';
 import { defaultAgentCommand } from '../src/config.js';
 import { findBrowserExecutable, type BrowserFrame } from '../src/node/browser.js';
 import { testModels, writeAgentConfig } from './agent-harness.js';
-import { startFakeLlm } from './fixtures/fake-llm.js';
+import { ptcCall, startFakeLlm } from './fixtures/fake-llm.js';
 import { nodeHeaders as headers, testConfig, waitFor } from './helpers.js';
 
 const executable = findBrowserExecutable(process.env.PIRC_BROWSER_EXECUTABLE);
@@ -112,8 +112,8 @@ it.skipIf(!executable)(
     expect(frames[0]).toMatchObject({ type: 'state', state: { active: false } });
 
     llm.push(
-      { tool: { id: 'c1', name: 'web_fetch', args: { url: `${url}/` } } },
-      { tool: { id: 'c2', name: 'browser_handoff', args: { reason: '請登入' } } },
+      { tool: ptcCall('c1', 'web_fetch', { url: `${url}/` }) },
+      { tool: ptcCall('c2', 'browser_handoff', { reason: '請登入' }) },
       { text: 'Done.' },
     );
     expect((await prompt('read the docs', 'cmd-1')).statusCode).toBe(202);
@@ -141,7 +141,12 @@ it.skipIf(!executable)(
 
     await waitFor(async () => (await snapshot()).run?.status, 'succeeded', 20_000);
     const history = (await snapshot()).history;
-    const results = history.filter((m: any) => m.role === 'toolResult');
+    // History lists each script's operations before the script's own result.
+    const operations = history.filter((m: any) => m.role === 'toolResult' && m.parentToolCallId);
+    expect(operations.map((m: any) => m.toolName)).toEqual(['web_fetch', 'browser_handoff']);
+    const results = history.filter((m: any) => m.role === 'toolResult' && !m.parentToolCallId);
+    // Both operations ran from ptc scripts.
+    expect(results.map((m: any) => m.toolName)).toEqual(['ptc', 'ptc']);
     expect(results[0].content[0].text).toContain('# Install');
     expect(results[0].content[0].text).toContain('`pirc node`');
     expect(results[1].content[0].text).toContain('The user returned control');
@@ -149,8 +154,12 @@ it.skipIf(!executable)(
     // The dialog was withdrawn when the panel ended the handoff.
     expect((await snapshot()).interactions).toEqual([]);
     expect(frames.some((f) => f.type === 'frame')).toBe(true);
-    // The tools and their prompt reached the model.
+    // The capabilities and their prompt reached the model.
     const request = llm.requests[0]!.body;
+    const names = request.tools.map((tool: any) => tool.function.name);
+    expect(names.slice(0, 2)).toEqual(['ptc', 'ptc_docs']);
+    // Browser capabilities are never direct tools; web_fetch is a core one.
+    expect(names.some((name: string) => name.startsWith('browser_'))).toBe(false);
     expect(JSON.stringify(request)).toContain('browser_snapshot');
     expect(JSON.stringify(request)).toContain('## Browser');
   },

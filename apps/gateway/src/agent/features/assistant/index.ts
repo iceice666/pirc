@@ -13,10 +13,12 @@ import type { Feature } from '../../feature.js';
 import { GatewayError, processGateway, type NodeGateway } from '../../gateway.js';
 import type { Message } from '../../messages.js';
 import type { SessionEntry } from '../../session-store.js';
-import { text, type Tool, type ToolResult } from '../../tools/types.js';
+import { text, typed, type Tool, type ToolResult } from '../../tools/types.js';
+import { arr, bool, fields, int, nullable, obj, str } from '../../tools/result-schema.js';
 import { localStamp } from '../memory/ledger.js';
 import { redactSecrets } from '../memory/redact.js';
 import { messageOrigin } from '../memory/serialize.js';
+import { startedCapabilities } from '../../ptc/contracts.js';
 import { describeRoles, type RoleBrief } from '../../roles.js';
 import { toolPrompt } from '../../prompts/tools.js';
 
@@ -28,6 +30,8 @@ export const DELEGATE_TOOL = 'delegate';
 export const DELEGATIONS_TOOL = 'delegation_status';
 export const SEARCH_TOOL = 'memory_search';
 const MEMORY_TOOLS = new Set([NOTE_TOOL, PROPOSE_TOOL]);
+/** Session entry: a note revision this chat wrote (`learn` after a restart). */
+const NOTE_REVISION = 'assistant.note_revision';
 /** A chat waits this long for its memory before starting without it (and trying again next run). */
 const CONTEXT_TIMEOUT_MS = 10_000;
 
@@ -72,6 +76,40 @@ interface DelegationBrief {
 }
 
 const number = (value: number) => value.toLocaleString('en-US');
+
+const DELEGATION = obj(
+  {
+    id: str(),
+    title: str(),
+    workspace: str(),
+    status: str(),
+    role: str(),
+    model: str(),
+    thinking: str(),
+    session: str('Name of the session doing the work'),
+    result: str('This chunk of the final answer'),
+    resultOffset: int(),
+    resultChars: int(),
+    nextOffset: nullable(int('Where the next chunk starts, or null at the end')),
+  },
+  ['role', 'model', 'thinking', 'session', 'result', 'resultOffset', 'resultChars', 'nextOffset'],
+);
+
+/** The documented fields of a gateway delegation record. */
+function delegationData(delegation: DelegationBrief): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    id: String(delegation.id),
+    title: String(delegation.title),
+    workspace: String(delegation.workspace),
+    status: String(delegation.status),
+  };
+  for (const key of ['role', 'model', 'thinking', 'session', 'result'] as const)
+    if (typeof delegation[key] === 'string') out[key] = delegation[key];
+  for (const key of ['resultOffset', 'resultChars'] as const)
+    if (typeof delegation[key] === 'number') out[key] = delegation[key];
+  if (delegation.resultChars !== undefined) out.nextOffset = delegation.nextOffset ?? null;
+  return out;
+}
 
 /** Where a chunked delegation result stands, and how to read on. */
 function resultFooter(delegation: DelegationBrief): string {
@@ -201,7 +239,7 @@ export function findQuote(branch: SessionEntry[], quote: string): string | undef
  * result and custom message since the user's last message (a page fetched
  * with `bash` taints a note written from it).
  */
-export function currentOrigins(branch: SessionEntry[]): string[] {
+export function currentOrigins(branch: SessionEntry[], running: Iterable<string> = []): string[] {
   const origins = new Set(['assistant']);
   for (let index = branch.length - 1; index >= 0; index--) {
     const entry = branch[index]!;
@@ -209,9 +247,18 @@ export function currentOrigins(branch: SessionEntry[]): string[] {
     const message = entry.message;
     if (message.role === 'user') break;
     if (message.role === 'toolResult' && MEMORY_TOOLS.has(message.toolName)) continue;
+    // A ptc result carries what its operations returned: judge by those.
+    const started = startedCapabilities(message);
+    if (started) {
+      for (const name of started) if (!MEMORY_TOOLS.has(name)) origins.add(`tool:${name}`);
+      // No operation ran, but hook output may still have been appended.
+      if (!started.length) origins.add(messageOrigin(message));
+      continue;
+    }
     if (message.role === 'toolResult' || message.role === 'custom')
       origins.add(messageOrigin(message));
   }
+  for (const name of running) if (!MEMORY_TOOLS.has(name)) origins.add(`tool:${name}`);
   return [...origins].sort();
 }
 
@@ -232,6 +279,10 @@ export function assistantFeature(): Feature {
         const seen = (entry.data as { revisions?: Record<string, unknown> })?.revisions ?? {};
         for (const [id, revision] of Object.entries(seen))
           if (typeof revision === 'number') revisions.set(id, revision);
+      } else if (entry.type === 'custom' && entry.customType === NOTE_REVISION) {
+        const data = entry.data as { id?: unknown; revision?: unknown } | undefined;
+        if (typeof data?.id === 'string' && typeof data.revision === 'number')
+          revisions.set(data.id, data.revision);
       } else if (
         entry.type === 'message' &&
         entry.message.role === 'toolResult' &&
@@ -311,6 +362,13 @@ export function assistantFeature(): Feature {
       required: ['action'],
       additionalProperties: false,
     },
+    resultSchema: fields({
+      id: str('The note, like n1a2b3c4d'),
+      revision: int(),
+      unchanged: bool('It already said this'),
+      used: int('Characters MEMORY uses now'),
+      max: int(),
+    }),
     async execute(args, ctx) {
       const action = args.action;
       if (action !== 'add' && action !== 'replace' && action !== 'remove')
@@ -322,7 +380,12 @@ export function assistantFeature(): Feature {
       if (action !== 'remove' && !content)
         return text('content is required to add or replace a note', undefined, true);
       const branch = agent.store.branch();
-      const origins = new Set(currentOrigins(branch));
+      const origins = new Set(
+        currentOrigins(
+          branch,
+          [...agent.runningScripts].flatMap((names) => [...names]),
+        ),
+      );
       let entryIds: string[] = [];
       let quote: string | undefined;
       if (typeof args.quote === 'string' && args.quote.trim()) {
@@ -357,6 +420,13 @@ export function assistantFeature(): Feature {
           usage: { used: number; max: number };
         };
         revisions.set(result.id, result.revision);
+        // The tool result reaches the session inside a ptc result, without
+        // these details: record the revision on its own for a restart.
+        agent.store.append({
+          type: 'custom',
+          customType: NOTE_REVISION,
+          data: { id: result.id, revision: result.revision },
+        });
         const room = `MEMORY now uses ${number(result.usage.used)}/${number(result.usage.max)} characters.`;
         const done =
           action === 'remove'
@@ -364,7 +434,17 @@ export function assistantFeature(): Feature {
             : result.unchanged
               ? `Note ${result.id} already says this; nothing changed.`
               : `${action === 'add' ? 'Saved' : 'Updated'} note ${result.id}. New chats will see it.`;
-        return text(`${done} ${room}`, { id: result.id, revision: result.revision });
+        return typed(
+          `${done} ${room}`,
+          {
+            id: result.id,
+            revision: result.revision,
+            unchanged: result.unchanged === true,
+            used: result.usage.used,
+            max: result.usage.max,
+          },
+          { details: { id: result.id, revision: result.revision } },
+        );
       } catch (error) {
         const current = error instanceof GatewayError ? (error.details as any) : undefined;
         if (
@@ -374,6 +454,11 @@ export function assistantFeature(): Feature {
           typeof current.revision === 'number'
         ) {
           revisions.set(current.id, current.revision);
+          agent.store.append({
+            type: 'custom',
+            customType: NOTE_REVISION,
+            data: { id: current.id, revision: current.revision },
+          });
           return text(
             `Note ${current.id} changed in another chat since you last saw it. It now reads: ${JSON.stringify(current.content)}. If your change still applies, call ${NOTE_TOOL} again.`,
             { id: current.id, revision: current.revision },
@@ -402,6 +487,10 @@ export function assistantFeature(): Feature {
       required: ['action', 'quote'],
       additionalProperties: false,
     },
+    resultSchema: fields({
+      proposalId: str('Nothing is saved until the user approves it in Settings → Memory'),
+      duplicate: bool('The same change was already waiting'),
+    }),
     async execute(args, ctx) {
       const action = args.action;
       if (action !== 'add' && action !== 'replace' && action !== 'remove')
@@ -433,11 +522,12 @@ export function assistantFeature(): Feature {
           },
           ctx.signal,
         )) as { proposalId: string; duplicate: boolean };
-        return text(
+        return typed(
           result.duplicate
             ? `This change is already waiting for the user's approval (proposal ${result.proposalId}).`
             : `Proposed (proposal ${result.proposalId}). Nothing is saved until the user approves it in Settings → Memory; tell them what you proposed.`,
-          { proposalId: result.proposalId },
+          { proposalId: result.proposalId, duplicate: result.duplicate === true },
+          { details: { proposalId: result.proposalId } },
         );
       } catch (error) {
         return failure(error);
@@ -473,6 +563,8 @@ export function assistantFeature(): Feature {
       required: ['task'],
       additionalProperties: false,
     },
+    // Asks the user; nothing runs until they approve it in the chat.
+    resultSchema: fields({ delegation: DELEGATION }),
     async execute(args, ctx) {
       const field = (key: string) => (typeof args[key] === 'string' ? args[key].trim() : '');
       const task = field('task');
@@ -501,9 +593,10 @@ export function assistantFeature(): Feature {
           },
           ctx.signal,
         )) as DelegationBrief;
-        return text(
+        return typed(
           `Asked the user to approve delegation ${result.id} (“${result.title}”, ${result.workspace}${result.role ? `, role ${result.role}` : ''}). They can pick the model when approving. Nothing runs until they do; you will get a message when it finishes, fails or needs them.`,
-          { delegationId: result.id },
+          { delegation: delegationData(result) },
+          { details: { delegationId: result.id } },
         );
       } catch (error) {
         return failure(error);
@@ -533,6 +626,22 @@ export function assistantFeature(): Feature {
       required: ['query'],
       additionalProperties: false,
     },
+    resultSchema: fields({
+      hits: arr(
+        obj(
+          {
+            id: str('Recall it with recall({ id })'),
+            kind: str(),
+            workspace: str(),
+            date: str(),
+            status: str(),
+            git: str(),
+            content: str(),
+          },
+          ['git'],
+        ),
+      ),
+    }),
     async execute(args, ctx) {
       const query = typeof args.query === 'string' ? args.query.trim() : '';
       if (!query) return text('query is required', undefined, true);
@@ -557,8 +666,18 @@ export function assistantFeature(): Feature {
             content: string;
           }>;
         };
-        if (!result.hits.length) return text(`Nothing found for ${JSON.stringify(query)}.`);
-        return text(
+        const hits = result.hits.map((hit) => ({
+          id: String(hit.id),
+          kind: String(hit.kind),
+          workspace: String(hit.workspace),
+          date: String(hit.date),
+          status: String(hit.status),
+          ...(typeof hit.git === 'string' ? { git: hit.git } : {}),
+          content: String(hit.content),
+        }));
+        if (!result.hits.length)
+          return typed(`Nothing found for ${JSON.stringify(query)}.`, { hits });
+        const shown = text(
           result.hits
             .map((hit) => {
               const where =
@@ -570,6 +689,7 @@ export function assistantFeature(): Feature {
             .join('\n\n'),
           { hits: result.hits.map((hit) => hit.id) },
         );
+        return { ...shown, data: { hits } };
       } catch (error) {
         return failure(error);
       }
@@ -591,6 +711,7 @@ export function assistantFeature(): Feature {
       },
       additionalProperties: false,
     },
+    resultSchema: fields({ delegations: arr(DELEGATION) }),
     async execute(args, ctx) {
       const id = typeof args.id === 'string' ? args.id.trim() : '';
       const offset = Number.isInteger(args.offset) && args.offset > 0 ? args.offset : 0;
@@ -600,8 +721,9 @@ export function assistantFeature(): Feature {
           id ? { id, ...(offset ? { offset } : {}) } : {},
           ctx.signal,
         )) as { delegations: DelegationBrief[] };
-        if (!result.delegations.length) return text('No delegations yet.');
-        return text(
+        const delegations = result.delegations.map(delegationData);
+        if (!result.delegations.length) return typed('No delegations yet.', { delegations });
+        const shown = text(
           result.delegations
             .map(
               (delegation) =>
@@ -610,6 +732,7 @@ export function assistantFeature(): Feature {
             .join('\n\n'),
           { delegations: result.delegations.map((delegation) => delegation.id) },
         );
+        return { ...shown, data: { delegations } };
       } catch (error) {
         return failure(error);
       }

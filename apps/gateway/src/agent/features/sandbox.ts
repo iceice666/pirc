@@ -9,11 +9,13 @@ import type { Agent } from '../agent.js';
 import type { Feature } from '../feature.js';
 import { processSandboxChannel, SandboxRequestError } from '../sandbox-channel.js';
 import { truncateOutput } from '../sandbox.js';
-import { text, type Tool } from '../tools/types.js';
+import { text, typed, type Tool } from '../tools/types.js';
+import { SHELL_RESULT } from '../tools/bash.js';
+import { arr, bool, fields, str } from '../tools/result-schema.js';
 import { toolPrompt } from '../prompts/tools.js';
 
 /** The tools that run shell commands, as far as this agent has them (chats leave some out). */
-const SHELL_TOOLS = ['bash', 'background_task', 'code'];
+const SHELL_TOOLS = ['bash', 'background_task'];
 
 const sandboxPrompt = (shells: string[]) => `## Sandbox
 
@@ -48,24 +50,41 @@ function tools(): Tool[] {
         required: ['domains', 'reason'],
         additionalProperties: false,
       },
+      // Nothing allowed fails the operation; a ptc script gets ApprovalDenied (ptc/index.ts),
+      // carrying these fields as `data`.
+      resultSchema: fields({
+        granted: arr(str(), 'Hosts this session may now reach'),
+        denied: arr(str()),
+        unrestricted: bool('This agent is not sandboxed at all'),
+      }),
       async execute(args, ctx) {
         const channel = processSandboxChannel();
         if (!channel) throw unavailable();
-        const result = await channel.request(
-          'network',
-          { domains: args.domains, reason: args.reason },
-          ctx.signal,
+        // The node asks the human; a ptc script's budget pauses meanwhile.
+        const result = await ctx.humanWait(
+          channel.request(
+            'network',
+            { domains: args.domains, reason: args.reason },
+            ctx.signal,
+            ctx.toolCallId,
+          ),
         );
         if (result.unrestricted)
-          return text('This agent is not sandboxed; its network is not restricted.');
+          return typed('This agent is not sandboxed; its network is not restricted.', {
+            granted: [],
+            denied: [],
+            unrestricted: true,
+          });
         const granted: string[] = result.granted ?? [];
+        const denied: string[] = result.denied ?? (granted.length ? [] : args.domains);
+        const data = { granted, denied, unrestricted: false };
         if (!granted.length)
-          return text(
-            `The user did not allow ${(result.denied ?? args.domains).join(', ')}. Do not try to reach them another way.`,
-            result,
-            true,
+          return typed(
+            `The user did not allow ${denied.join(', ')}. Do not try to reach them another way.`,
+            data,
+            { details: result, isError: true },
           );
-        return text(`Allowed for this session: ${granted.join(', ')}.`, result);
+        return typed(`Allowed for this session: ${granted.join(', ')}.`, data, { details: result });
       },
     },
     {
@@ -88,6 +107,7 @@ function tools(): Tool[] {
         required: ['command', 'reason'],
         additionalProperties: false,
       },
+      resultSchema: SHELL_RESULT,
       async execute(args, ctx) {
         const channel = processSandboxChannel();
         if (!channel) throw unavailable();
@@ -95,15 +115,20 @@ function tools(): Tool[] {
         await ctx.acquireWrite(ctx.cwd);
         let result: Record<string, any>;
         try {
-          result = await channel.request(
-            'exec',
-            {
-              command: args.command,
-              reason: args.reason,
-              ...(typeof args.cwd === 'string' ? { cwd: args.cwd } : {}),
-              ...(typeof args.timeout === 'number' ? { timeoutMs: args.timeout * 1000 } : {}),
-            },
-            ctx.signal,
+          // The whole request counts as waiting for the human: the node asks
+          // first, and the command it then runs is bounded by its own timeout.
+          result = await ctx.humanWait(
+            channel.request(
+              'exec',
+              {
+                command: args.command,
+                reason: args.reason,
+                ...(typeof args.cwd === 'string' ? { cwd: args.cwd } : {}),
+                ...(typeof args.timeout === 'number' ? { timeoutMs: args.timeout * 1000 } : {}),
+              },
+              ctx.signal,
+              ctx.toolCallId,
+            ),
           );
         } catch (error) {
           if (error instanceof SandboxRequestError && error.code === 'denied')
@@ -124,10 +149,17 @@ function tools(): Tool[] {
             ? '[aborted]'
             : `[exit ${result.exitCode}]`;
         const body = `${output.text}${output.text.endsWith('\n') || !output.text ? '' : '\n'}${status} (outside the sandbox)`;
-        return text(
+        const truncated = output.truncated || result.truncated === true;
+        return typed(
           body,
-          { exitCode: result.exitCode, truncated: output.truncated || result.truncated === true },
-          result.exitCode !== 0,
+          {
+            output: output.text,
+            exitCode: typeof result.exitCode === 'number' ? result.exitCode : null,
+            timedOut: result.timedOut === true,
+            aborted: result.aborted === true,
+            truncated,
+          },
+          { details: { exitCode: result.exitCode, truncated }, isError: result.exitCode !== 0 },
         );
       },
     },

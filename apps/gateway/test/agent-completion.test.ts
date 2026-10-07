@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,6 +11,16 @@ import { RpcUi } from '../src/agent/rpc.js';
 import { SessionStore } from '../src/agent/session-store.js';
 import type { Tool } from '../src/agent/tools/types.js';
 import { testModels } from './agent-harness.js';
+
+// These tests drive a top-level agent: the team variables of an enclosing pirc agent (when the
+// suite runs inside one) must not make it a team child.
+const teamEnv = Object.entries(process.env).filter(([key]) => key.startsWith('PIRC_TEAM_'));
+beforeAll(() => {
+  for (const [key] of teamEnv) delete process.env[key];
+});
+afterAll(() => {
+  for (const [key, value] of teamEnv) process.env[key] = value;
+});
 
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -76,39 +86,36 @@ function notice(id: string): Omit<CustomMessage, 'role' | 'timestamp'> {
     details: { event: { id, to: 'parent', body: `report ${id}` } },
   };
 }
-const call = (name: string): AssistantMessage['content'] => [
-  { type: 'toolCall', id: 'call', name, arguments: {} },
+/** A `ptc` call whose script runs `code`. */
+const ptc = (code: string): AssistantMessage['content'] => [
+  { type: 'toolCall', id: 'call', name: 'ptc', arguments: { code } },
 ];
+const inboxTool = (items: unknown[]): Tool => ({
+  name: 'agent_inbox',
+  description: 'test inbox',
+  parameters: {},
+  async execute() {
+    return { content: [{ type: 'text', text: JSON.stringify({ items }) }] };
+  },
+});
 
 describe('completion notification admission', () => {
-  it('deduplicates only fully returned direct inbox IDs, retaining omitted and truncated events', async () => {
+  // Under the PTC-only surface the model reads the inbox from a ptc script. An
+  // event counts as read only when the script's result shows the model its id
+  // and whole body; anything else is still delivered (seen twice, never lost).
+  it('acknowledges inbox events a ptc script returned whole, retaining the others', async () => {
     const feature = teamFeature();
     const original = feature.tools!;
     feature.tools = (agent) => original(agent).filter((tool) => tool.name !== 'agent_inbox');
     const h = await harness({
       features: [feature],
-      replies: [call('agent_inbox')],
+      // The script returns the whole page, so the model does see the "read" event.
+      replies: [ptc('return (await tools.agent_inbox({})).text;')],
       tools: [
-        {
-          name: 'agent_inbox',
-          description: 'test inbox',
-          parameters: {},
-          async execute() {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    items: [
-                      { id: 'read', to: 'parent', body: 'report read' },
-                      { id: 'preview', to: 'parent', body: 'preview', truncated: true },
-                    ],
-                  }),
-                },
-              ],
-            };
-          },
-        },
+        inboxTool([
+          { id: 'read', to: 'parent', body: 'report read' },
+          { id: 'preview', to: 'parent', body: 'preview', truncated: true },
+        ]),
       ],
       onCall(agent, n) {
         if (n === 0)
@@ -122,46 +129,57 @@ describe('completion notification admission', () => {
       .allMessages()
       .filter((m) => m.role === 'custom')
       .map((m: any) => m.details?.event?.id);
+    const result = h.agent.store.allMessages().find((m) => m.role === 'toolResult') as any;
+    expect(result.toolName).toBe('ptc');
+    expect(result.isError).toBeFalsy();
+    expect(result.content[0].text).toContain('report read');
+    // "read" reached the model in the ptc result; the preview was cut, "other" never read.
     expect(admitted).toEqual(['preview', 'other']);
-    expect(h.calls()).toBe(2); // tool answer, then final with both reports already in context
+    expect(h.calls()).toBe(2); // tool answer, then final with all reports already in context
   });
 
-  it('does not acknowledge inbox data hidden inside a PTC-like outer tool result', async () => {
+  it('does not acknowledge an event whose short body merely appears in a ptc result', async () => {
     const feature = teamFeature();
     const original = feature.tools!;
     feature.tools = (agent) => original(agent).filter((tool) => tool.name !== 'agent_inbox');
     const h = await harness({
       features: [feature],
-      replies: [call('code')],
-      tools: [
-        {
-          name: 'agent_inbox',
-          description: 'test inbox',
-          parameters: {},
-          async execute() {
-            return {
-              content: [
-                { type: 'text', text: JSON.stringify({ items: [{ id: 'unseen', to: 'parent' }] }) },
-              ],
-            };
-          },
-        },
-        {
-          name: 'code',
-          description: 'discard nested result',
-          parameters: {},
-          async execute(_args, ctx) {
-            await h.agent.invokeTool('agent_inbox', {}, ctx.signal);
-            return { content: [{ type: 'text', text: 'discarded' }] };
-          },
-        },
-      ],
+      // The body "ok" is in the result, but not the event: the model never saw it as one.
+      replies: [ptc('await tools.agent_inbox({}); return "ok";')],
+      tools: [inboxTool([{ id: 'short', to: 'parent', body: 'ok' }])],
+      onCall(agent, n) {
+        if (n === 0) agent.deliver(notice('short'), { deliverAs: 'followUp' });
+      },
+    });
+    h.agent.prompt('go');
+    await h.agent.idle();
+    const admitted = h.agent.store
+      .allMessages()
+      .filter((m) => m.role === 'custom')
+      .map((m: any) => m.details?.event?.id);
+    expect(admitted).toEqual(['short']);
+  });
+
+  it('does not acknowledge inbox data hidden inside a ptc result', async () => {
+    const feature = teamFeature();
+    const original = feature.tools!;
+    feature.tools = (agent) => original(agent).filter((tool) => tool.name !== 'agent_inbox');
+    const h = await harness({
+      features: [feature],
+      // The script reads the inbox but discards what it returned.
+      replies: [ptc('await tools.agent_inbox({}); return "discarded";')],
+      tools: [inboxTool([{ id: 'unseen', to: 'parent' }])],
       onCall(agent, n) {
         if (n === 0) agent.deliver(notice('unseen'), { deliverAs: 'followUp' });
       },
     });
     h.agent.prompt('go');
     await h.agent.idle();
+    const result = h.agent.store.allMessages().find((m) => m.role === 'toolResult') as any;
+    expect(result.content[0].text).toBe('discarded');
+    expect(result.details.operations).toMatchObject([
+      { capability: 'agent_inbox', outcome: 'completed' },
+    ]);
     expect(
       h.agent.store.allMessages().some((m) => m.role === 'custom' && m.content === 'report unseen'),
     ).toBe(true);

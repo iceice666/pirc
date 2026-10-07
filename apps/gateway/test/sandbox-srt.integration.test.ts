@@ -12,8 +12,11 @@ import path from 'node:path';
 import { afterEach, expect, it } from 'bun:test';
 import { defaultAgentCommand } from '../src/config.js';
 import { buildNodeApp } from '../src/node/app.js';
+import { startNodeInference } from '../src/node/inference.js';
+import { GatewayInference } from '../src/backends/inference.js';
+import { publicModels } from '../src/models.js';
 import { testModels, writeAgentConfig } from './agent-harness.js';
-import { startFakeLlm } from './fixtures/fake-llm.js';
+import { ptcCall, startFakeLlm } from './fixtures/fake-llm.js';
 import { nodeHeaders as headers, testConfig, waitFor } from './helpers.js';
 
 const srt = process.env.PIRC_TEST_SRT || undefined;
@@ -46,8 +49,49 @@ it.skipIf(!srt)(
     const config = testConfig({ ...agent, sandbox: srt === 'embedded' ? {} : { srt } });
     writeFileSync(path.join(config.stateDir, 'secret.txt'), 'node secret');
     const { app, services } = await buildNodeApp(config);
-    services.models.set(testModels(llm.url));
-    cleanup.push(() => app.close() as Promise<void>);
+    // Match production's secret-free Unix inference transport. Direct loopback HTTP
+    // cannot reach the host fake provider from Linux's unshared network namespace.
+    const privateModels = testModels(llm.url);
+    const catalog = publicModels(privateModels);
+    const gateway = new GatewayInference({
+      async resolve(providerName, modelId) {
+        const provider = privateModels.providers[providerName];
+        const model = provider?.models.find((candidate) => candidate.id === modelId);
+        if (!provider || !model) throw new Error('Unknown test model');
+        return { provider, model, apiKey: provider.apiKey };
+      },
+    });
+    const requests = new Map<string, AbortController>();
+    const inference = await startNodeInference({
+      stateDir: config.stateDir,
+      getModels: () => catalog,
+      send(message) {
+        if (message.type === 'model_cancel') {
+          requests.get(message.requestId)?.abort();
+          return true;
+        }
+        const controller = new AbortController();
+        requests.set(message.requestId, controller);
+        void gateway
+          .run(
+            message.request,
+            controller.signal,
+            (delta) => inference.receive(message.requestId, { type: 'model_delta', delta }),
+            'sandbox-test',
+          )
+          .then((result) =>
+            inference.receive(message.requestId, { type: 'model_end', message: result }),
+          )
+          .finally(() => requests.delete(message.requestId));
+        return true;
+      },
+    });
+    services.models.set({ ...catalog, inference: inference.config });
+    cleanup.push(async () => {
+      await app.close();
+      gateway.cancelAll();
+      await inference.close();
+    });
     const sessionId = (
       await app.inject({
         method: 'POST',
@@ -66,53 +110,43 @@ it.skipIf(!srt)(
     ).json().lease.generation as number;
     const probe = path.join(os.homedir(), `.pirc-sandbox-probe-${Date.now()}`);
     cleanup.push(() => void (existsSync(probe) && Bun.file(probe).delete()));
+    // Every operation runs from a ptc script, in its QuickJS process inside the sandbox.
     llm.push(
       {
-        tool: {
-          id: 'a',
-          name: 'bash',
-          args: { command: `cat ${path.join(config.stateDir, 'secret.txt')}` },
-        },
+        tool: ptcCall('a', 'bash', { command: `cat ${path.join(config.stateDir, 'secret.txt')}` }),
       },
-      { tool: { id: 'b', name: 'bash', args: { command: 'echo inside > ok.txt && cat ok.txt' } } },
-      { tool: { id: 'c', name: 'bash', args: { command: `touch ${probe}` } } },
-      { tool: { id: 'd', name: 'read', args: { path: path.join(config.stateDir, 'secret.txt') } } },
+      { tool: ptcCall('b', 'bash', { command: 'echo inside > ok.txt && cat ok.txt' }) },
+      { tool: ptcCall('c', 'bash', { command: `touch ${probe}` }) },
+      { tool: ptcCall('d', 'read', { path: path.join(config.stateDir, 'secret.txt') }) },
       // Not on the allowlist.
       {
-        tool: {
-          id: 'e',
-          name: 'bash',
-          args: {
-            command: 'curl -sS -m 10 -o /dev/null https://example.com/ 2>&1; echo "curl=$?"',
-          },
-        },
+        tool: ptcCall('e', 'bash', {
+          command: 'curl -sS -m 10 -o /dev/null https://example.com/ 2>&1; echo "curl=$?"',
+        }),
       },
-      // PTC: the worker is a Bun child talking to the agent over IPC.
+      // A script with its own logic: the script process starts inside srt with no environment.
       {
         tool: {
           id: 'f',
-          name: 'code',
-          args: { code: "return await tools.bash({ command: 'echo from-code' });" },
+          name: 'ptc',
+          args: {
+            code: "const r = await tools.bash({ command: 'echo from-ptc' }); return r.text + ' ' + typeof (globalThis as any).process;",
+          },
         },
       },
       // Pseudo-terminals (background_task tty:true needs them too).
       {
-        tool: {
-          id: 'g',
-          name: 'bash',
-          args: {
-            command:
-              "if [ \"$(uname)\" = Darwin ]; then script -q /dev/null sh -c 'tty; echo pty-ok'; else script -qc 'tty; echo pty-ok' /dev/null; fi",
-          },
-        },
+        tool: ptcCall('g', 'bash', {
+          command:
+            "if [ \"$(uname)\" = Darwin ]; then script -q /dev/null sh -c 'tty; echo pty-ok'; else script -qc 'tty; echo pty-ok' /dev/null; fi",
+        }),
       },
       // Outside the sandbox, after the human says yes (answered below).
       {
-        tool: {
-          id: 'i',
-          name: 'unsandboxed_bash',
-          args: { command: `touch ${probe} && echo outside-ok`, reason: 'test' },
-        },
+        tool: ptcCall('i', 'unsandboxed_bash', {
+          command: `touch ${probe} && echo outside-ok`,
+          reason: 'test',
+        }),
       },
       { text: 'done' },
     );
@@ -144,15 +178,19 @@ it.skipIf(!srt)(
     expect(answered.statusCode).toBe(200);
     await waitFor(async () => (await snapshot()).run?.status, 'succeeded', 60_000);
     const results = (await snapshot()).history
-      .filter((m: any) => m.role === 'toolResult')
+      // The script results; history also lists each script's operations before it.
+      .filter((m: any) => m.role === 'toolResult' && !m.parentToolCallId)
       .map((m: any) => m.content[0].text as string);
-    expect(results[0]).toContain('Operation not permitted');
+    expect(results[0]).toMatch(
+      /Operation not permitted|Permission denied|No such file or directory/,
+    );
     expect(results[0]).not.toContain('node secret');
     expect(results[1]).toContain('inside');
-    expect(results[2]).toContain('Operation not permitted');
+    expect(results[2]).toMatch(/Operation not permitted|Permission denied|Read-only file system/);
     expect(results[3]).toContain('is private');
     expect(results[4]).toMatch(/403|curl=[1-9]/);
-    expect(results[5]).toContain('from-code');
+    expect(results[5]).toContain('from-ptc');
+    expect(results[5]).toContain('undefined');
     expect(results[6]).toContain('pty-ok');
     expect(results[6]).toMatch(/\/dev\/(pts|ttys)/);
     expect(results[7]).toContain('outside-ok');

@@ -33,7 +33,6 @@ import browser_snapshot from './tools/browser_snapshot.md' with { type: 'text' }
 import browser_tabs from './tools/browser_tabs.md' with { type: 'text' };
 import browser_type from './tools/browser_type.md' with { type: 'text' };
 import browser_wait_for from './tools/browser_wait_for.md' with { type: 'text' };
-import code from './tools/code.md' with { type: 'text' };
 import create_goal from './tools/create_goal.md' with { type: 'text' };
 import delegate from './tools/delegate.md' with { type: 'text' };
 import delegation_status from './tools/delegation_status.md' with { type: 'text' };
@@ -45,6 +44,8 @@ import ls from './tools/ls.md' with { type: 'text' };
 import memory_note from './tools/memory_note.md' with { type: 'text' };
 import memory_propose_user from './tools/memory_propose_user.md' with { type: 'text' };
 import memory_search from './tools/memory_search.md' with { type: 'text' };
+import ptc from './tools/ptc.md' with { type: 'text' };
+import ptc_docs from './tools/ptc_docs.md' with { type: 'text' };
 import read from './tools/read.md' with { type: 'text' };
 import recall from './tools/recall.md' with { type: 'text' };
 import sandbox_allow_domains from './tools/sandbox_allow_domains.md' with { type: 'text' };
@@ -86,7 +87,6 @@ const PROMPTS: Record<string, string> = {
   browser_tabs,
   browser_type,
   browser_wait_for,
-  code,
   create_goal,
   delegate,
   delegation_status,
@@ -98,6 +98,8 @@ const PROMPTS: Record<string, string> = {
   memory_note,
   memory_propose_user,
   memory_search,
+  ptc,
+  ptc_docs,
   read,
   recall,
   sandbox_allow_domains,
