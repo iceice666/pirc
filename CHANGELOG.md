@@ -4,6 +4,8 @@ User-facing changes are recorded here. See [release policy](docs/releasing.md).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-07
+
 ### Added
 
 - `/recap` reviews a bounded sample of recent sessions in the same owner's directory workspace and proposes evidence-linked skills, rules, settings or workflow improvements. It defaults to 14 days and at most 20 sessions, excludes background and recap-marked sessions, and uses a separate no-tools model request without applying changes or promoting the report into memory. Sampled text is sent to the configured model; coverage, truncation and best-effort redaction limits are disclosed.
@@ -40,6 +42,12 @@ User-facing changes are recorded here. See [release policy](docs/releasing.md).
 - Evaluated on one model (OpenAI `gpt-6.1-sol`); other providers get the same tools without their own evaluation. Against the pre-declared bounds, dependent multi-step edits on the fixture set did not take fewer rounds; chat used 7–15% more tokens; and chat replies to a request for a disabled capability passed the wording check less often (2/20 against 12/20), although the capability was blocked every time. These were accepted at cutover.
 - Fixes made after these measurements (refusal handling, the attachment limit, lenient direct arguments) were not re-measured.
 - Image attachments from a script are limited to 512 KiB together per result, so they fit the node's RPC line.
+
+### Distribution
+
+- macOS ARM64 gateway, chat and node executables plus web static assets; source archives are available from GitHub. Native binaries are not Developer ID signed/notarized and require external Chromium/Chrome and optional ffmpeg for browser features.
+- Android versionName is 0.3.0 and versionCode is 3; no APK is published. No Linux/x86_64 binaries are included; Nix packaging is retained.
+- Recap is a bounded review, not a full transcript audit: it excludes thinking and tool payloads, uses the loaded AGENTS.md snapshot and skill/role summaries, and does not automatically apply recommendations.
 
 ## [0.2.0] - 2026-10-02
 
@@ -78,5 +86,6 @@ This is the first tagged release. Earlier development used 0.1.0 without a publi
 - Linux/x86_64 binaries are not published or newly runtime-validated as part of this release. Nix packaging is retained.
 - Token allocations are estimates scaled to matching provider input usage, not exact per-section tokenizer counts.
 
-[Unreleased]: https://github.com/iceice666/pirc/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/iceice666/pirc/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/iceice666/pirc/releases/tag/v0.3.0
 [0.2.0]: https://github.com/iceice666/pirc/releases/tag/v0.2.0
