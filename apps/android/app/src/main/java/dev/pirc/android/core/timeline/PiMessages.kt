@@ -301,15 +301,58 @@ internal fun mergeTool(existing: ToolCall?, update: ToolUpdate): ToolCall {
 
 internal fun ToolCall.asUpdate() = ToolUpdate(id, name, title, status, input, output, diff, images.ifEmpty { null }, startedAt, endedAt, recording)
 
-/** Convert a full agent history, folding tool results into their assistant turn. */
-internal fun piHistory(history: List<JsonElement>, now: () -> Long = System::currentTimeMillis): List<Message> {
+/**
+ * Merge a `ptc` operation into its `ptc` call among [tools]; null when that
+ * call is not there. Operations keep their start order.
+ */
+internal fun withOperation(tools: List<ToolCall>, parentId: String, update: ToolUpdate): List<ToolCall>? {
+    if (tools.none { it.id == parentId }) return null
+    val fields = update.copy(parentId = null)
+    return tools.map { tool ->
+        if (tool.id != parentId) tool
+        else tool.copy(
+            operations = if (tool.operations.any { it.id == update.id })
+                tool.operations.map { if (it.id == update.id) mergeTool(it, fields) else it }
+            else tool.operations + mergeTool(null, fields),
+        )
+    }
+}
+
+/**
+ * Convert a full agent history, folding tool results into their assistant
+ * turn and `ptc` operations (results with `parentToolCallId`, then the still
+ * [running] ones from the snapshot's `operations`) into their `ptc` call.
+ */
+internal fun piHistory(
+    history: List<JsonElement>,
+    now: () -> Long = System::currentTimeMillis,
+    running: List<JsonElement> = emptyList(),
+): List<Message> {
     val messages = mutableListOf<Message>()
     val owners = mutableMapOf<String, Int>()
     val seen = mutableSetOf<String>()
+    fun nest(parentId: String, update: ToolUpdate): Boolean {
+        val ownerIndex = owners[parentId] ?: return false
+        val owner = messages[ownerIndex]
+        val tools = withOperation(owner.tools, parentId, update) ?: return false
+        messages[ownerIndex] = owner.copy(tools = tools)
+        return true
+    }
     history.forEachIndexed { index, raw ->
         var id = piMessageId(raw)
         if (id in seen) id = "$id-$index"
         seen += id
+
+        val parentId = raw["parentToolCallId"].string
+        if (raw["role"].string == "toolResult" && parentId != null) {
+            val operationId = raw["toolCallId"].text ?: id
+            val update = toolResultFields(raw, operationId).copy(
+                name = raw["toolName"].text ?: "tool",
+                status = if (raw["isError"].truthy) "failed" else "succeeded",
+                input = raw["args"],
+            )
+            if (nest(parentId, update)) return@forEachIndexed
+        }
 
         val callId = raw["toolCallId"].text
         if (raw["role"].string == "toolResult" && callId != null && callId in owners) {
@@ -323,6 +366,11 @@ internal fun piHistory(history: List<JsonElement>, now: () -> Long = System::cur
         val message = piMessage(raw, id, now) ?: return@forEachIndexed
         messages += message
         if (message.role == "assistant") for (tool in message.tools) owners[tool.id] = messages.size - 1
+    }
+    for (operation in running) {
+        val operationId = operation["toolCallId"].string ?: continue
+        val parentId = operation["parentToolCallId"].string ?: continue
+        nest(parentId, ToolUpdate(operationId, name = operation["toolName"].text ?: "tool", status = "running", input = operation["args"]))
     }
     return messages
 }

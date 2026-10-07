@@ -1,0 +1,99 @@
+{
+  "kind": "ptc-m4-polyglot-report",
+  "run": {
+    "name": "ptc-m4-poly-002",
+    "mode": "dev",
+    "complete": true,
+    "trials": "16f27ad3c0985f201caeb7ca02bfe53a563263852fc06a49e459bc5d0612cc91",
+    "budget": "afecb153f1f09b592ac8d8c702b5752a83645f8dd3f728c4f46adfd9e30463fd",
+    "summary": "749703c2f22d04694975cebd2a38da6823e06f9bd6e1e7d7ac46812c20aeec5e",
+    "arms": {
+      "ptc": {
+        "node": "fe093f1c0fefadb3a236713b8d06c0a279de08f1f8064abcaa7d59b6285cbf9a",
+        "chat": "065ce3e2123ffb1a9568541e8695fcc0559a9873f29f9fa1b2c99cd815435dec"
+      }
+    },
+    "controller": "5ac4c95445d9bbe04bf6e02702a01aae97ed5f6b235151baf1b6cef7fe1a609e"
+  },
+  "dataset": {
+    "repository": "https://github.com/Aider-AI/polyglot-benchmark",
+    "commit": "7e0611e77b54e2dea774cdc0aa00cf9f7ed6144f",
+    "path": "python/exercises/practice",
+    "splitSalt": "pirc-m4-polyglot:",
+    "exercises": [
+      "beer-song",
+      "food-chain",
+      "grade-school",
+      "hangman",
+      "paasio",
+      "pig-latin",
+      "poker",
+      "proverb",
+      "react",
+      "rest-api",
+      "sgf-parsing",
+      "variable-length-quantity",
+      "wordy",
+      "zebra-puzzle",
+      "zipper"
+    ]
+  },
+  "readiness": { "missing": [], "complete": true },
+  "runComplete": true,
+  "runMissing": [],
+  "byArm": {
+    "ptc": {
+      "trials": 15,
+      "testsPassed": 15,
+      "succeeded": 15,
+      "deadlineExceeded": 0,
+      "missingMeasurement": 0,
+      "suspiciousSolutions": 0,
+      "meanTokens": 41396.73333333333,
+      "meanModelRounds": 3,
+      "meanRequests": 6.133333333333334,
+      "meanWallMs": 17849.581888866658,
+      "meanPtcCalls": 2,
+      "meanDocsCalls": 0,
+      "directCallsByCapability": {},
+      "operationsByCapability": { "read": 31, "edit": 4, "bash": 15, "write": 11 },
+      "perExercise": {
+        "beer-song": { "trials": 1, "testsPassed": 1, "meanTokens": 91788, "meanModelRounds": 3 },
+        "food-chain": { "trials": 1, "testsPassed": 1, "meanTokens": 47468, "meanModelRounds": 3 },
+        "grade-school": {
+          "trials": 1,
+          "testsPassed": 1,
+          "meanTokens": 45702,
+          "meanModelRounds": 3
+        },
+        "hangman": { "trials": 1, "testsPassed": 1, "meanTokens": 23987, "meanModelRounds": 3 },
+        "paasio": { "trials": 1, "testsPassed": 1, "meanTokens": 89228, "meanModelRounds": 3 },
+        "pig-latin": { "trials": 1, "testsPassed": 1, "meanTokens": 22455, "meanModelRounds": 3 },
+        "poker": { "trials": 1, "testsPassed": 1, "meanTokens": 25767, "meanModelRounds": 3 },
+        "proverb": { "trials": 1, "testsPassed": 1, "meanTokens": 22432, "meanModelRounds": 3 },
+        "react": { "trials": 1, "testsPassed": 1, "meanTokens": 49101, "meanModelRounds": 3 },
+        "rest-api": { "trials": 1, "testsPassed": 1, "meanTokens": 23983, "meanModelRounds": 3 },
+        "sgf-parsing": { "trials": 1, "testsPassed": 1, "meanTokens": 51743, "meanModelRounds": 3 },
+        "variable-length-quantity": {
+          "trials": 1,
+          "testsPassed": 1,
+          "meanTokens": 26570,
+          "meanModelRounds": 3
+        },
+        "wordy": { "trials": 1, "testsPassed": 1, "meanTokens": 26354, "meanModelRounds": 3 },
+        "zebra-puzzle": {
+          "trials": 1,
+          "testsPassed": 1,
+          "meanTokens": 19583,
+          "meanModelRounds": 3
+        },
+        "zipper": { "trials": 1, "testsPassed": 1, "meanTokens": 54790, "meanModelRounds": 3 }
+      }
+    }
+  },
+  "bounds": null,
+  "budget": {
+    "start": { "spentUnits": 981501827, "admittedAttempts": 13873 },
+    "final": { "spentUnits": 995064847, "reservedUnits": 0, "admittedAttempts": 13965 }
+  }
+}

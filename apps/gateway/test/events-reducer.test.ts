@@ -26,6 +26,33 @@ describe('events and reducer', () => {
     expect(seen).toEqual(['session:runner_ready', 'all:runner_ready']);
   });
 
+  it('keeps running ptc operations (start, not end) for snapshots, without results', () => {
+    const state = emptyReducedState();
+    const op = (type: string, id: string, extra: Record<string, unknown> = {}) =>
+      reducePiEvent(state, {
+        type,
+        toolCallId: id,
+        toolName: 'edit',
+        parentToolCallId: 'p',
+        ...extra,
+      });
+    op('tool_execution_start', 'p:op1', { args: { path: 'a' } });
+    op('tool_execution_start', 'p:op2', { args: { path: 'b' } });
+    // A direct call (no parent) is not an operation.
+    reducePiEvent(state, { type: 'tool_execution_start', toolCallId: 'p', toolName: 'ptc' });
+    op('tool_execution_end', 'p:op1', { result: { content: [{ type: 'text', text: 'secret' }] } });
+    expect(state.operations).toEqual([
+      { toolCallId: 'p:op2', parentToolCallId: 'p', toolName: 'edit', args: { path: 'b' } },
+    ]);
+    // Large arguments are cut for display.
+    op('tool_execution_start', 'big', { args: { path: 'a', content: 'x'.repeat(5000) } });
+    expect(state.operations.at(-1)!.args).toEqual({ path: 'a', content: `${'x'.repeat(1000)}…` });
+    for (let index = 0; index < 50; index++) op('tool_execution_start', `x${index}`);
+    expect(state.operations.length).toBe(32);
+    reducePiEvent(state, { type: 'agent_end' });
+    expect(state.operations).toEqual([]);
+  });
+
   it('assembles deltas but trusts message_end', () => {
     const state = emptyReducedState();
     reducePiEvent(state, { type: 'message_start', message: { role: 'assistant' } });

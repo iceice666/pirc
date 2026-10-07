@@ -44,7 +44,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.compositionLocalOf
 import dev.pirc.android.core.WriteBlock
+import dev.pirc.android.core.operationsSummary
 import dev.pirc.android.core.writeBlock
+import dev.pirc.android.core.timeline.Interaction
 import dev.pirc.android.core.FileTarget
 import dev.pirc.android.core.parseFileLink
 import dev.pirc.android.core.timeline.ToolCall
@@ -54,6 +56,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 private val prettyJson = Json { prettyPrint = true }
+
+/** Questions and approvals waiting for the user; a `ptc` operation shows when one is its own. */
+val LocalPendingInteractions = compositionLocalOf<List<Interaction>> { emptyList() }
 
 /** Opens a workspace file in the viewer; provided by the session screen. */
 val LocalFileOpener = staticCompositionLocalOf<((FileTarget) -> Unit)?> { null }
@@ -82,11 +87,33 @@ private const val OUTPUT_PREVIEW = 4_000
 /** The detail that identifies a call at a glance: a command, a path, or the first string argument. */
 internal fun toolSummary(tool: ToolCall): String {
     val input = tool.input
+    // A script: what it did, not its source.
+    if (tool.name == "ptc") return operationsSummary(tool.operations)
+    if (tool.name == "ptc_docs" && input is JsonObject) {
+        val names = (input["names"] as? kotlinx.serialization.json.JsonArray)
+            ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { value -> value.isString }?.content }
+        if (names != null) return names.joinToString(", ")
+        return (input["category"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: "index"
+    }
     if (input is JsonPrimitive) return input.content
     if (input !is JsonObject) return ""
     for (key in listOf("command", "path", "file_path", "pattern", "query", "url", "description", "name"))
         (input[key] as? JsonPrimitive)?.takeIf { it.isString }?.let { return it.content }
     return input.values.firstNotNullOfOrNull { (it as? JsonPrimitive)?.takeIf { value -> value.isString }?.content } ?: ""
+}
+
+/** The name a card shows: scripts and capability lookups read as what they are. */
+internal fun toolTitle(tool: ToolCall): String = tool.title ?: when (tool.name) {
+    "ptc" -> "Script"
+    "ptc_docs" -> "Capability docs"
+    else -> tool.name
+}
+
+/** What a running operation waits for: the user's approval or answer, if a pending one is its own. */
+internal fun waitingLabel(tool: ToolCall, pending: List<Interaction>): String? {
+    if (tool.status != "running") return null
+    val interaction = pending.firstOrNull { it.status == "pending" && it.toolCallId == tool.id } ?: return null
+    return if (interaction.kind == "confirm") "Waiting for approval" else "Waiting for your answer"
 }
 
 private fun pretty(input: JsonElement?): String? = when (input) {
@@ -99,6 +126,7 @@ private fun pretty(input: JsonElement?): String? = when (input) {
 fun ToolCard(tool: ToolCall, modifier: Modifier = Modifier) {
     var open by rememberSaveable(tool.id) { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
+    val waiting = waitingLabel(tool, LocalPendingInteractions.current)
     Surface(
         color = colors.surfaceContainerLow,
         shape = MaterialTheme.shapes.medium,
@@ -114,7 +142,7 @@ fun ToolCard(tool: ToolCall, modifier: Modifier = Modifier) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 StatusMark(tool.status)
-                Text(tool.title ?: tool.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(toolTitle(tool), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     toolSummary(tool),
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
@@ -123,6 +151,18 @@ fun ToolCard(tool: ToolCall, modifier: Modifier = Modifier) {
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                waiting?.let {
+                    Surface(color = colors.tertiaryContainer, contentColor = colors.onTertiaryContainer, shape = MaterialTheme.shapes.small) {
+                        Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 1, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+                    }
+                }
+            }
+            // What a script ran, each a call of its own (expandable, failures shown).
+            if (tool.operations.isNotEmpty()) Column(
+                Modifier.padding(start = 20.dp, end = 8.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                for (operation in tool.operations) ToolCard(operation)
             }
             // A write refused for another session's lease: say who, and link there. No retry.
             writeBlock(tool)?.let { block -> WriteBlockNotice(block, LocalWriteBlockOpener.current(block.holderName)) }
@@ -135,7 +175,9 @@ fun ToolCard(tool: ToolCall, modifier: Modifier = Modifier) {
             }
             AnimatedVisibility(visible = open) {
                 Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    pretty(tool.input)?.takeIf { it.isNotEmpty() }?.let { CodePane("Input", AnnotatedString(it)) }
+                    val script = ((tool.input as? JsonObject)?.get("code") as? JsonPrimitive)?.takeIf { tool.name == "ptc" && it.isString }?.content
+                    if (script != null) CodePane("Script", AnnotatedString(script))
+                    else pretty(tool.input)?.takeIf { it.isNotEmpty() }?.let { CodePane("Input", AnnotatedString(it)) }
                     tool.diff?.let { CodePane("Diff", diffText(it)) }
                     tool.output?.let { output -> OutputPane(output) }
                     // Screenshots and other images a tool returned.

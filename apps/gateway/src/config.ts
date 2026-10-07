@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
+import { NODE_ID_PATTERN } from './protocol.js';
 import { defaultModelsFile } from './models.js';
 import type { BrowserSettings } from './node/browser.js';
 import { findBrowserExecutable } from './node/browser-executable.js';
@@ -31,7 +32,7 @@ const viewport = (value: string | undefined) => {
     : { width: 1280, height: 800 };
 };
 
-export const NODE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
+export { NODE_ID_PATTERN } from './protocol.js';
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Node transport frames are capped at 16 MiB; a base64 upload (4/3 larger) must fit in one. */
 export const MAX_UPLOAD_BYTES = 11 * 1024 * 1024;

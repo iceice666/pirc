@@ -19,7 +19,7 @@ const defined = (entries: Record<string, unknown>) =>
     Object.entries(entries).filter(([, value]) => value !== undefined && value !== false),
   );
 
-const tool = (item: ToolCall) =>
+const tool = (item: ToolCall): Record<string, unknown> =>
   defined({
     id: item.id,
     name: item.name,
@@ -28,6 +28,7 @@ const tool = (item: ToolCall) =>
     output: item.output,
     diff: item.diff,
     images: item.images?.length,
+    operations: item.operations?.length ? item.operations.map(tool) : undefined,
   });
 
 const message = (item: ConversationMessage) =>
@@ -68,6 +69,7 @@ export function project(state: ClientSessionState) {
       defined({
         id: item.id,
         kind: item.kind,
+        toolCallId: item.toolCallId,
         title: item.title,
         description: item.description,
         status: item.status,

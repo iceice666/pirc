@@ -11,6 +11,7 @@ import { SessionStore } from '../src/agent/session-store.js';
 import { builtinTools } from '../src/agent/tools/index.js';
 import { text, type Tool } from '../src/agent/tools/types.js';
 import { settledAfter, startAgent, testModels, type AgentProcess } from './agent-harness.js';
+import { CODING_SURFACE, GATEWAY_SURFACE } from './fixtures/surface.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
@@ -55,32 +56,52 @@ async function chat(options: Parameters<typeof startAgent>[0] = {}) {
       (tool: any) => tool.function?.name ?? tool.name,
     ) as string[];
   const system = () => String(agent.llm.requests.at(-1)!.body.messages[0].content);
+  /** The capability names the system prompt's "## Capabilities" section offers. */
+  const offered = () => {
+    const section = system().split('## Capabilities')[1] ?? '';
+    return [...section.matchAll(/^- [\w-]+: (.+)$/gm)].flatMap((match) => match[1]!.split(', '));
+  };
   const prompt = async (message: string, result: unknown) => {
     const from = agent.events.length;
     await agent.send({ type: 'prompt', message });
     ok(await next('assistant.context'), result);
     await settledAfter(agent, from);
   };
-  return { agent, next, ok, tools, system, prompt };
+  return { agent, next, ok, tools, system, offered, prompt };
 }
 
 describe('project capabilities in the agent', () => {
   it('allows everything by default, and follows the gateway policy on the next run', async () => {
-    const { agent, tools, system, prompt } = await chat();
+    const { agent, tools, system, offered, prompt } = await chat();
+    /** The model looks up recall's contract; its documented description, as the model sees it. */
+    const recallDocs = (id: string) => {
+      agent.llm.push(
+        { tool: { id, name: 'ptc_docs', args: { names: ['recall'] } } },
+        { text: 'ok' },
+      );
+      return () =>
+        agent.events.find(
+          (e) => e.type === 'tool_execution_end' && !e.parentToolCallId && e.toolCallId === id,
+        )!.result.content[0].text as string;
+    };
     // No policy in the context (an older gateway) means everything is allowed.
+    const before = recallDocs('docs_1');
     await prompt('hi', context());
-    for (const name of GATED) expect(tools()).toContain(name);
+    // The provider only ever sees the two PTC tools; the capabilities are offered in the prompt.
+    expect(tools()).toEqual(GATEWAY_SURFACE);
+    for (const name of GATED) expect(offered()).toContain(name);
+    expect(before()).toContain('memory_search');
     expect(system()).toContain('## Workspaces');
     expect(system()).toContain('search them with memory_search');
 
+    const after = recallDocs('docs_2');
     await prompt('again', context({ capabilities: ALL_OFF }));
-    for (const name of GATED) expect(tools()).not.toContain(name);
+    expect(tools()).toEqual(CODING_SURFACE);
+    for (const name of GATED) expect(offered()).not.toContain(name);
     // Local recall stays; its description no longer points at memory_search.
-    expect(tools()).toContain('recall');
-    const recall = (agent.llm.requests.at(-1)!.body.tools as any[]).find(
-      (tool) => (tool.function?.name ?? tool.name) === 'recall',
-    );
-    expect(JSON.stringify(recall)).not.toContain('memory_search');
+    expect(offered()).toContain('recall');
+    expect(after()).toContain('"name":"recall"');
+    expect(after()).not.toContain('memory_search');
     // The frozen snapshot still has the workspaces, but they are no longer shown.
     expect(system()).not.toContain('## Workspaces');
     expect(system()).not.toContain('memory_search');

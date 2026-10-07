@@ -19,6 +19,7 @@ import {
   type GoalAction,
 } from './model.js';
 import { toolPrompt } from '../../prompts/tools.js';
+import { bool, fields, int, nullable, obj, oneOfStrings, str } from '../../tools/result-schema.js';
 
 /**
  * Session goals, after DeepSeek Harness / Codex: one persisted completion
@@ -78,6 +79,27 @@ export function goalWidget(goal: Goal, armed: boolean): string[] {
   if (reason) lines.push(safe(reason));
   return lines;
 }
+
+const GOAL_RESULT = fields({
+  goal: nullable(
+    obj(
+      {
+        id: str(),
+        revision: int(),
+        objective: str(),
+        phase: oneOfStrings(['active', 'paused', 'blocked', 'complete']),
+        rounds: int('Continuation rounds started so far'),
+        maxRounds: int(),
+        blockedReason: str(),
+        pausedReason: str(),
+        createdAt: int('Epoch milliseconds'),
+        updatedAt: int('Epoch milliseconds'),
+      },
+      ['maxRounds', 'blockedReason', 'pausedReason'],
+    ),
+  ),
+  armed: bool('Continuation rounds will run'),
+});
 
 export function goalFeature(): Feature {
   let goal: Goal | null = null;
@@ -237,6 +259,7 @@ export function goalFeature(): Feature {
   const result = (text: string, current: Goal | null, isError = false) => ({
     content: [{ type: 'text' as const, text }],
     details: { goal: current, armed },
+    data: { goal: current ? { ...current } : null, armed },
     ...(isError ? { isError: true } : {}),
   });
 
@@ -250,6 +273,7 @@ export function goalFeature(): Feature {
     {
       name: 'create_goal',
       description: toolPrompt('create_goal'),
+      resultSchema: GOAL_RESULT,
       parameters: {
         type: 'object',
         properties: {
@@ -280,6 +304,7 @@ export function goalFeature(): Feature {
     {
       name: 'get_goal',
       description: toolPrompt('get_goal'),
+      resultSchema: GOAL_RESULT,
       parameters: { type: 'object', properties: {}, additionalProperties: false },
       async execute() {
         return result(describe(goal), goal);
@@ -288,6 +313,7 @@ export function goalFeature(): Feature {
     {
       name: 'update_goal',
       description: toolPrompt('update_goal'),
+      resultSchema: GOAL_RESULT,
       parameters: {
         type: 'object',
         properties: {

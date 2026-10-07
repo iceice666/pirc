@@ -106,16 +106,19 @@ private fun piEvent(pi: JsonElement?, timestamp: JsonElement?, now: () -> Long):
                 input = pi["args"],
                 status = "running",
                 startedAt = at(timestamp, now),
+                parentId = pi["parentToolCallId"].string,
             ),
         )
         "tool_execution_update" -> TimelineEvent.ToolUpdated(
-            toolResultFields(pi["partialResult"], pi["toolCallId"].text ?: "undefined"),
+            toolResultFields(pi["partialResult"], pi["toolCallId"].text ?: "undefined")
+                .copy(parentId = pi["parentToolCallId"].string),
         )
         "tool_execution_end" -> TimelineEvent.ToolUpdated(
             toolResultFields(pi["result"], pi["toolCallId"].text ?: "undefined").copy(
                 name = pi["toolName"].text,
                 status = if (pi["isError"].truthy) "failed" else "succeeded",
                 endedAt = at(timestamp, now),
+                parentId = pi["parentToolCallId"].string,
             ),
         )
         "queue_update" -> TimelineEvent.QueueUpdated(queue(pi["steering"], pi["followUp"]))
@@ -165,6 +168,7 @@ private fun interaction(raw: JsonElement): Interaction {
     val base = Interaction(
         id = raw["id"].text ?: "",
         runnerEpoch = raw["runnerEpoch"].text ?: "undefined",
+        toolCallId = request["toolCallId"].string,
         kind = "input",
         title = request["title"].text ?: "The agent needs your input",
         description = request["message"].text,
@@ -194,7 +198,7 @@ fun snapshotState(raw: JsonElement, now: () -> Long = System::currentTimeMillis)
     val notices = raw["notifications"].array.orEmpty()
         .filter { it["method"].string == "notify" }
         .mapIndexed { index, item -> piNotification(item, index, now) }
-    val messages = interleave(piHistory(raw["history"].array.orEmpty(), now), notices)
+    val messages = interleave(piHistory(raw["history"].array.orEmpty(), now, raw["operations"].array.orEmpty()), notices)
     val run = raw["run"]
     val watermark = raw["watermark"]
     val agent = raw["agent"]
@@ -295,6 +299,17 @@ fun SessionState.reduce(envelope: EventEnvelope, now: () -> Long = System::curre
         }
         is TimelineEvent.ToolUpdated -> {
             val tool = event.tool
+            // A ptc operation goes under its ptc call.
+            val parentId = tool.parentId
+            if (parentId != null) {
+                val owner = messages.indexOfLast { message -> message.tools.any { it.id == parentId } }
+                if (owner != -1)
+                    return base.copy(
+                        messages = messages.mapIndexed { position, message ->
+                            if (position == owner) message.copy(tools = withOperation(message.tools, parentId, tool)!!) else message
+                        },
+                    )
+            }
             var index = if (event.messageId != null) messages.indexOfFirst { it.id == event.messageId }
             else messages.indexOfLast { message -> message.tools.any { it.id == tool.id } }
             if (index == -1 && event.messageId == null) index = messages.indexOfLast { it.role == "assistant" }

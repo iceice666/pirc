@@ -27,7 +27,11 @@ function setEnv(name: string, value: string) {
   });
 }
 
-async function session(overrides: Partial<NodeConfig>, agentConfig: Record<string, unknown> = {}) {
+async function session(
+  overrides: Partial<NodeConfig>,
+  agentConfig: Record<string, unknown> = {},
+  workspaceId = 'test',
+) {
   const configDir = mkdtempSync(path.join(tmpdir(), 'pirc-sbx-config-'));
   writeFileSync(path.join(configDir, 'config.json'), JSON.stringify(agentConfig));
   setEnv('PIRC_CONFIG_DIR', configDir);
@@ -41,7 +45,7 @@ async function session(overrides: Partial<NodeConfig>, agentConfig: Record<strin
       method: 'POST',
       url: '/api/sessions',
       headers,
-      payload: { workspaceId: 'test' },
+      payload: { workspaceId },
     })
   ).json().session.id as string;
   const events: Array<{ type: string; payload: any }> = [];
@@ -107,6 +111,20 @@ async function session(overrides: Partial<NodeConfig>, agentConfig: Record<strin
 
 it('starts no agent when the sandbox is unavailable', async () => {
   const s = await session({ sandbox: { srt: path.join(tmpdir(), 'pirc-no-such-srt') } });
+  const response = await s.prompt('env PIRC_SANDBOX');
+  expect(response.statusCode).toBe(503);
+  expect(response.json().error.message).toContain('must run in the sandbox');
+  expect(s.events.some((event) => event.type === 'runner_ready')).toBe(false);
+  expect((await s.snapshot()).sandbox).toBeNull();
+});
+
+it('starts no chat agent either when the sandbox is unavailable', async () => {
+  // Chat agents run ptc scripts too: no sandbox, no agent, so nothing executes.
+  const s = await session(
+    { chat: true, sandbox: { srt: path.join(tmpdir(), 'pirc-no-such-srt') } },
+    {},
+    'chats',
+  );
   const response = await s.prompt('env PIRC_SANDBOX');
   expect(response.statusCode).toBe(503);
   expect(response.json().error.message).toContain('must run in the sandbox');

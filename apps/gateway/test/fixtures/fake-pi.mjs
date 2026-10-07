@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 
@@ -160,6 +161,13 @@ rl.on('line', (raw) => {
   if (command.type === 'prompt') {
     response();
     if (command.message === 'crash') return process.exit(17);
+    // Crash with a process left in the agent's group (like a busy ptc script process).
+    const orphan = /^crash leaving (.+)$/.exec(command.message);
+    if (orphan) {
+      const child = spawn('sleep', ['60'], { stdio: 'ignore' });
+      writeFileSync(orphan[1], String(child.pid));
+      return process.exit(17);
+    }
     line({ type: 'agent_start' });
     const lease = /^(write|hold) (.+)$/.exec(command.message);
     if (lease) {

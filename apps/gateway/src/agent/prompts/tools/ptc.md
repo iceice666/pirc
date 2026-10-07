@@ -1,0 +1,13 @@
+Run a TypeScript async function body that calls capabilities. Every operation (files, shell commands, web, questions to the user, …) is a capability callable from here; the core ones may also be direct tools. Use a script to combine several operations, loop, or filter results before they reach you.
+
+- `await tools.<name>(args)` returns the result data and throws a `PtcError` on failure: `code` is ApprovalDenied, CapabilityUnavailable, InvalidArguments, QuotaExceeded, Cancelled, Timeout or OperationFailed; `outcome` says whether it ran (`not_started`, `failed`, `cancelled`, `unknown`); `data` holds the typed fields of a failed result when there are any. A `bash` command that exits non-zero is not a failure here: check its `exitCode`.
+- Result data is `text` (the formatted output) plus typed fields, e.g. `read` → `content`, `nextOffset`; `bash` → `output`, `exitCode`; `grep` → `matches`. Use the fields instead of parsing `text`.
+- `await tools.call("<name>", args)` returns `{ ok: true, data }` or `{ ok: false, error: { code, message, outcome } }` instead of throwing.
+- Capability names must be literals (`tools.read(…)`, `tools.call("read", …)`); never `tools[name]`. A script using an unavailable capability is rejected before anything runs.
+- `await tools.par(items, async (item, index) => …, { concurrency })` maps with up to 8 at a time and keeps order. At the first failure it starts no more items, cancels the operations its items still have running and throws that failure. Writes and commands still run one at a time. At most 8 operations run at once (more wait their turn), 200 operations and 200 `tools.par` calls per `ptc` call.
+- `return` what you need: strings are shown as is, other values as JSON. `console.log` output is shown too. Both are bounded, so filter large results in the script.
+- Images (e.g. `browser_screenshot`, `read` of a picture) come back as `images: [{ handle, mimeType, bytes }]`. To see one, `await attachments.add(result.images[0])`: it is attached to this `ptc` result (at most 4, together 512 KiB).
+- `store(key, value)` / `load(key)` keep small JSON values across `ptc` calls in this session (kept only when the script completes; `undefined` deletes).
+- The script runs in an isolated interpreter with no filesystem, network, processes, imports or timers: only `tools`, `attachments`, `store` and `load`.
+
+The core signatures in the system prompt are complete; other listed capabilities show their arguments only: use `ptc_docs` for their result fields, or for a capability named without a signature. Default timeout 120 s (`timeout` in seconds, max 3600), not counting time spent waiting for the user. Nothing is retried automatically, and operations that already ran are not undone when a later one fails.

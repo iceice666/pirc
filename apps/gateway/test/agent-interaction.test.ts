@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it } from 'bun:test';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
+import { ptcCall } from './fixtures/fake-llm.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
@@ -20,19 +23,19 @@ describe('queueing and abort', () => {
     const agent = await start();
     agent.llm.push(
       {
-        tool: { id: 's1', name: 'bash', args: { command: 'sleep 0.4; echo slept' } },
-        also: [{ id: 's2', name: 'bash', args: { command: 'echo second' } }],
+        tool: ptcCall('s1', 'bash', { command: 'sleep 0.4; echo slept' }),
+        also: [ptcCall('s2', 'bash', { command: 'echo second' })],
       },
       { text: 'adjusted' },
     );
     await agent.send({ type: 'prompt', message: 'long task' });
-    await agent.waitFor((e) => e.type === 'tool_execution_start');
+    await agent.waitFor((e) => e.type === 'tool_execution_start' && !e.parentToolCallId);
     const steer = await agent.send({ type: 'steer', message: 'actually do X' });
     expect(steer.success).toBe(true);
     const queued = await agent.waitFor((e) => e.type === 'queue_update' && e.steering.length === 1);
     expect(queued.steering).toEqual(['actually do X']);
     await settledAfter(agent, 0);
-    const ends = agent.events.filter((e) => e.type === 'tool_execution_end');
+    const ends = agent.events.filter((e) => e.type === 'tool_execution_end' && !e.parentToolCallId);
     expect(ends.map((e) => e.toolCallId)).toEqual(['s1', 's2']);
     expect(ends[1]!.result.content[0].text).toContain('second');
     const second = agent.llm.requests[1]!.body;
@@ -70,13 +73,13 @@ describe('queueing and abort', () => {
     const agent = await start();
     agent.llm.push(
       {
-        tool: { id: 'n1', name: 'bash', args: { command: 'sleep 30; echo never' } },
-        also: [{ id: 'n2', name: 'bash', args: { command: 'echo should-not-run' } }],
+        tool: ptcCall('n1', 'bash', { command: 'sleep 30; echo never' }),
+        also: [ptcCall('n2', 'bash', { command: 'echo should-not-run' })],
       },
       { text: 'ok' },
     );
     await agent.send({ type: 'prompt', message: 'slow' });
-    await agent.waitFor((e) => e.type === 'tool_execution_start');
+    await agent.waitFor((e) => e.type === 'tool_execution_start' && !e.parentToolCallId);
     await agent.send({ type: 'follow_up', message: 'do this now' });
     await agent.waitFor((e) => e.type === 'queue_update' && e.followUp.length === 1);
     const started = Date.now();
@@ -89,7 +92,7 @@ describe('queueing and abort', () => {
     expect(now.success).toBe(true);
     await settledAfter(agent, 0);
     expect(Date.now() - started).toBeLessThan(3000);
-    const ends = agent.events.filter((e) => e.type === 'tool_execution_end');
+    const ends = agent.events.filter((e) => e.type === 'tool_execution_end' && !e.parentToolCallId);
     expect(ends.map((e) => e.toolCallId)).toEqual(['n1']);
     const second = agent.llm.requests[1]!.body;
     const context = JSON.stringify(second.messages);
@@ -115,12 +118,12 @@ describe('queueing and abort', () => {
   it('runs follow-ups only after the agent would otherwise stop', async () => {
     const agent = await start();
     agent.llm.push(
-      { tool: { id: 'f1', name: 'bash', args: { command: 'sleep 0.3' } } },
+      { tool: ptcCall('f1', 'bash', { command: 'sleep 0.3' }) },
       { text: 'first done' },
       { text: 'second done' },
     );
     await agent.send({ type: 'prompt', message: 'one' });
-    await agent.waitFor((e) => e.type === 'tool_execution_start');
+    await agent.waitFor((e) => e.type === 'tool_execution_start' && !e.parentToolCallId);
     await agent.send({ type: 'follow_up', message: 'two' });
     await settledAfter(agent, 0);
     expect(agent.llm.requests).toHaveLength(3);
@@ -161,16 +164,38 @@ describe('queueing and abort', () => {
   it('kills a running bash process group on abort', async () => {
     const agent = await start();
     agent.llm.push({
-      tool: { id: 'k', name: 'bash', args: { command: 'sleep 30 & sleep 30; echo never' } },
+      tool: ptcCall('k', 'bash', {
+        command: 'sleep 30 & echo $! > bg.pid; sleep 30; echo never',
+      }),
     });
     await agent.send({ type: 'prompt', message: 'sleep' });
-    await agent.waitFor((e) => e.type === 'tool_execution_start');
+    await agent.waitFor((e) => e.type === 'tool_execution_start' && !e.parentToolCallId);
+    // Abort only once the script's bash call is running (and has forked).
+    const pidFile = path.join(agent.workspace, 'bg.pid');
+    for (let i = 0; i < 500 && !readFileSync(pidFile, { flag: 'a+' }).toString().trim(); i++)
+      await Bun.sleep(10);
+    const pid = Number(readFileSync(pidFile, 'utf8').trim());
+    expect(pid).toBeGreaterThan(0);
     const started = Date.now();
     await agent.send({ type: 'abort' });
     await settledAfter(agent, 0);
     expect(Date.now() - started).toBeLessThan(3000);
-    const end = agent.events.find((e) => e.type === 'tool_execution_end');
-    expect(end!.result.content[0].text).toContain('[aborted]');
+    const end = agent.events.find((e) => e.type === 'tool_execution_end' && !e.parentToolCallId);
+    expect(end!.isError).toBe(true);
+    expect(end!.result.content[0].text).toContain('Cancelled');
+    expect(end!.result.content[0].text).not.toContain('never');
+    expect(end!.result.details.operations.map((op: any) => op.capability)).toEqual(['bash']);
+    // The whole process group is gone, including the backgrounded sleep.
+    const alive = () => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    for (let i = 0; i < 200 && alive(); i++) await Bun.sleep(10);
+    expect(alive()).toBe(false);
   });
 });
 
@@ -179,20 +204,16 @@ describe('ask_user_question', () => {
     const agent = await start();
     agent.llm.push(
       {
-        tool: {
-          id: 'q1',
-          name: 'ask_user_question',
-          args: {
-            questions: [
-              {
-                question: 'Which DB?',
-                header: 'DB',
-                options: [{ label: 'sqlite', description: 'embedded' }, { label: 'postgres' }],
-              },
-              { question: 'Anything else?' },
-            ],
-          },
-        },
+        tool: ptcCall('q1', 'ask_user_question', {
+          questions: [
+            {
+              question: 'Which DB?',
+              header: 'DB',
+              options: [{ label: 'sqlite', description: 'embedded' }, { label: 'postgres' }],
+            },
+            { question: 'Anything else?' },
+          ],
+        }),
       },
       { text: 'thanks' },
     );
@@ -209,8 +230,12 @@ describe('ask_user_question', () => {
     );
     agent.raw({ type: 'extension_ui_response', id: input.id, value: '  no  ' });
     await settledAfter(agent, 0);
-    const end = agent.events.find((e) => e.type === 'tool_execution_end');
-    expect(end!.result.details).toEqual({
+    const end = agent.events.find((e) => e.type === 'tool_execution_end' && !e.parentToolCallId);
+
+    expect(end!.toolCallId).toBe('q1');
+    expect(end!.isError).toBe(false);
+    // The script returns the capability's text: the structured answers as JSON.
+    expect(JSON.parse(end!.result.content[0].text)).toEqual({
       status: 'answered',
       answers: [
         { question: 'Which DB?', selected: ['postgres'] },
@@ -223,23 +248,15 @@ describe('ask_user_question', () => {
     const agent = await start();
     agent.llm.push(
       {
-        tool: {
-          id: 'q2',
-          name: 'ask_user_question',
-          args: {
-            questions: [
-              { question: 'Pick', multiSelect: true, options: [{ label: 'a' }, { label: 'b' }] },
-            ],
-          },
-        },
+        tool: ptcCall('q2', 'ask_user_question', {
+          questions: [
+            { question: 'Pick', multiSelect: true, options: [{ label: 'a' }, { label: 'b' }] },
+          ],
+        }),
       },
       { text: 'ok' },
       {
-        tool: {
-          id: 'q3',
-          name: 'ask_user_question',
-          args: { questions: [{ question: 'Wait?' }] },
-        },
+        tool: ptcCall('q3', 'ask_user_question', { questions: [{ question: 'Wait?' }] }),
       },
     );
     await agent.send({ type: 'prompt', message: 'multi' });
@@ -258,8 +275,8 @@ describe('ask_user_question', () => {
     );
     agent.raw({ type: 'extension_ui_response', id: input.id, value: 'c' });
     await settledAfter(agent, 0);
-    const first = agent.events.find((e) => e.type === 'tool_execution_end');
-    expect(first!.result.details.answers[0]).toEqual({
+    const first = agent.events.find((e) => e.type === 'tool_execution_end' && !e.parentToolCallId);
+    expect(JSON.parse(first!.result.content[0].text).answers[0]).toEqual({
       question: 'Pick',
       selected: ['a'],
       customText: 'c',
@@ -279,20 +296,30 @@ describe('ask_user_question', () => {
     );
     expect(cancel.targetId).toBe(pending.id);
     await settledAfter(agent, from);
-    const second = agent.events.findLast((e) => e.type === 'tool_execution_end');
+    const second = agent.events.findLast(
+      (e) => e.type === 'tool_execution_end' && !e.parentToolCallId,
+    );
+    // Aborting while the script waits for the answer cancels the whole ptc run.
+    expect(second!.toolCallId).toBe('q3');
+    expect(second!.isError).toBe(true);
+    expect(second!.result.content[0].text).toContain('Cancelled');
     expect(second!.result.details.status).toBe('cancelled');
   });
 
   it('is unavailable in headless agents', async () => {
     const agent = await start({ args: ['--headless'] });
     agent.llm.push(
-      { tool: { id: 'q4', name: 'ask_user_question', args: { questions: [{ question: 'x' }] } } },
+      { tool: ptcCall('q4', 'ask_user_question', { questions: [{ question: 'x' }] }) },
       { text: 'ok' },
     );
     await agent.send({ type: 'prompt', message: 'go' });
     await settledAfter(agent, 0);
-    const end = agent.events.find((e) => e.type === 'tool_execution_end');
-    expect(end!.result.details.status).toBe('unavailable');
+    const end = agent.events.find((e) => e.type === 'tool_execution_end' && !e.parentToolCallId);
+    expect(end!.toolCallId).toBe('q4');
+    expect(end!.result.content[0].text).toContain('Human UI unavailable in this agent');
+    expect(end!.result.details.operations).toMatchObject([
+      { capability: 'ask_user_question', outcome: 'completed' },
+    ]);
     expect(
       agent.events.some((e) => e.type === 'extension_ui_request' && e.method === 'input'),
     ).toBe(false);
@@ -304,16 +331,12 @@ describe('todo', () => {
     const agent = await start();
     agent.llm.push(
       {
-        tool: {
-          id: 't1',
-          name: 'todo',
-          args: {
-            action: 'add',
-            items: [{ text: 'write code' }, { text: 'test it', blockedBy: [1] }],
-          },
-        },
+        tool: ptcCall('t1', 'todo', {
+          action: 'add',
+          items: [{ text: 'write code' }, { text: 'test it', blockedBy: [1] }],
+        }),
       },
-      { tool: { id: 't2', name: 'todo', args: { action: 'update', id: 1, status: 'completed' } } },
+      { tool: ptcCall('t2', 'todo', { action: 'update', id: 1, status: 'completed' }) },
       { text: 'stopping early' },
       { text: 'still stopping' },
     );
@@ -334,8 +357,8 @@ describe('todo', () => {
   it('restores state in a new process and injects a snapshot on the next run', async () => {
     const first = await start();
     first.llm.push(
-      { tool: { id: 't', name: 'todo', args: { action: 'add', text: 'persist me' } } },
-      { tool: { id: 'u', name: 'todo', args: { action: 'update', id: 1, status: 'completed' } } },
+      { tool: ptcCall('t', 'todo', { action: 'add', text: 'persist me' }) },
+      { tool: ptcCall('u', 'todo', { action: 'update', id: 1, status: 'completed' }) },
       { text: 'done' },
     );
     await first.send({ type: 'prompt', message: 'x' });

@@ -1,0 +1,504 @@
+{
+  "description": "A ptc script mid-run: one finished operation in history, one waiting for an approval (running, from the snapshot's operations, linked by the pending confirm's toolCallId). Then the approval resolves, the script runs another operation live, the ptc call ends and the turn finishes. Operations nest under their ptc call; an operation whose ptc call is unknown stays a tool of its own.",
+  "snapshot": {
+    "session": {
+      "id": "s2",
+      "workspaceId": "m5pro:pirc",
+      "name": "Rename things",
+      "nameSource": "user",
+      "runnerState": "ready",
+      "runStatus": "running",
+      "runnerEpoch": 3,
+      "pinnedAt": null,
+      "settledAt": null,
+      "createdAt": 500,
+      "updatedAt": 9000,
+      "nodeId": "m5pro"
+    },
+    "history": [
+      {
+        "role": "user",
+        "content": "Rename foo to bar",
+        "timestamp": 1000
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Renaming."
+          },
+          {
+            "type": "toolCall",
+            "id": "p1",
+            "name": "ptc",
+            "arguments": {
+              "code": "const r = await tools.read({ path: 'a.ts' });\nawait tools.edit({ path: 'a.ts', oldText: 'foo', newText: 'bar' });\nreturn (await tools.bash({ command: 'bun test' })).exitCode;"
+            }
+          }
+        ],
+        "model": "m1",
+        "stopReason": "toolUse",
+        "timestamp": 2000,
+        "completedAt": 2500
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "p1x:op1",
+        "toolName": "read",
+        "parentToolCallId": "p1",
+        "args": {
+          "path": "a.ts"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "1\tconst foo = 1;"
+          }
+        ],
+        "isError": false,
+        "timestamp": 2600
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "lost:op1",
+        "toolName": "ls",
+        "parentToolCallId": "unknown-ptc",
+        "args": {},
+        "content": [
+          {
+            "type": "text",
+            "text": "a.ts"
+          }
+        ],
+        "isError": false,
+        "timestamp": 2650
+      }
+    ],
+    "partialMessage": null,
+    "operations": [
+      {
+        "toolCallId": "p1x:op2",
+        "parentToolCallId": "p1",
+        "toolName": "edit",
+        "args": {
+          "path": "a.ts",
+          "oldText": "foo",
+          "newText": "bar"
+        }
+      }
+    ],
+    "queue": {
+      "steering": [],
+      "followUp": []
+    },
+    "run": {
+      "id": "run2",
+      "sessionId": "s2",
+      "status": "waiting_input",
+      "startedAt": 1500,
+      "endedAt": null,
+      "failureReason": null
+    },
+    "interactions": [
+      {
+        "id": "i2",
+        "rpcId": "r2",
+        "sessionId": "s2",
+        "runnerEpoch": 3,
+        "kind": "confirm",
+        "status": "pending",
+        "request": {
+          "title": "Allow edit?",
+          "message": "a.ts",
+          "toolCallId": "p1x:op2"
+        },
+        "expiresAt": 99999
+      }
+    ],
+    "notifications": [],
+    "widgets": {},
+    "statuses": {},
+    "agent": {
+      "model": {
+        "provider": "p",
+        "id": "m1"
+      },
+      "thinkingLevel": "medium"
+    },
+    "watermark": {
+      "epoch": 3,
+      "sequence": 20
+    },
+    "partialOutputLost": false
+  },
+  "events": [
+    {
+      "sessionId": "s2",
+      "epoch": 3,
+      "sequence": 21,
+      "type": "pi_event",
+      "timestamp": 3000,
+      "data": {
+        "type": "tool_execution_end",
+        "toolCallId": "p1x:op2",
+        "toolName": "edit",
+        "parentToolCallId": "p1",
+        "isError": false,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Edited a.ts (1 replacement)"
+            }
+          ],
+          "details": {
+            "diff": "--- a.ts\n+++ a.ts\n@@ -1 +1 @@\n-const foo = 1;\n+const bar = 1;"
+          }
+        }
+      }
+    },
+    {
+      "sessionId": "s2",
+      "epoch": 3,
+      "sequence": 22,
+      "type": "pi_event",
+      "timestamp": 3100,
+      "data": {
+        "type": "tool_execution_update",
+        "toolCallId": "p1",
+        "toolName": "ptc",
+        "partialResult": {
+          "content": [
+            {
+              "type": "text",
+              "text": "2 operations: 2 completed"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "s2",
+      "epoch": 3,
+      "sequence": 23,
+      "type": "pi_event",
+      "timestamp": 3200,
+      "data": {
+        "type": "tool_execution_start",
+        "toolCallId": "p1x:op3",
+        "toolName": "bash",
+        "parentToolCallId": "p1",
+        "args": {
+          "command": "bun test"
+        }
+      }
+    },
+    {
+      "sessionId": "s2",
+      "epoch": 3,
+      "sequence": 24,
+      "type": "pi_event",
+      "timestamp": 3300,
+      "data": {
+        "type": "tool_execution_update",
+        "toolCallId": "p1x:op3",
+        "toolName": "bash",
+        "parentToolCallId": "p1",
+        "partialResult": {
+          "content": [
+            {
+              "type": "text",
+              "text": "running tests"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "s2",
+      "epoch": 3,
+      "sequence": 25,
+      "type": "pi_event",
+      "timestamp": 3400,
+      "data": {
+        "type": "tool_execution_end",
+        "toolCallId": "p1x:op3",
+        "toolName": "bash",
+        "parentToolCallId": "p1",
+        "isError": true,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "1 fail\n[exit 1]"
+            }
+          ],
+          "details": {
+            "exitCode": 1,
+            "truncated": false
+          }
+        }
+      }
+    },
+    {
+      "sessionId": "s2",
+      "epoch": 3,
+      "sequence": 26,
+      "type": "pi_event",
+      "timestamp": 3500,
+      "data": {
+        "type": "tool_execution_end",
+        "toolCallId": "p1",
+        "toolName": "ptc",
+        "isError": true,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "[error] OperationFailed: 1 fail"
+            }
+          ],
+          "details": {
+            "status": "failed"
+          }
+        }
+      }
+    },
+    {
+      "sessionId": "s2",
+      "epoch": 3,
+      "sequence": 27,
+      "type": "pi_event",
+      "timestamp": 3500,
+      "data": {
+        "type": "message_end",
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "p1",
+          "toolName": "ptc",
+          "content": [
+            {
+              "type": "text",
+              "text": "[error] OperationFailed: 1 fail"
+            }
+          ],
+          "details": {
+            "status": "failed"
+          },
+          "isError": true,
+          "timestamp": 3500
+        }
+      }
+    },
+    {
+      "sessionId": "s2",
+      "epoch": 3,
+      "sequence": 28,
+      "type": "pi_event",
+      "timestamp": 3600,
+      "data": {
+        "type": "message_end",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Renamed; one test fails."
+            }
+          ],
+          "model": "m1",
+          "stopReason": "stop",
+          "timestamp": 3550,
+          "completedAt": 3600
+        }
+      }
+    }
+  ],
+  "expected": {
+    "afterSnapshot": {
+      "cursor": "3:20",
+      "runnerEpoch": "3",
+      "needsSnapshot": false,
+      "sessionName": "Rename things",
+      "pinned": false,
+      "runStatus": "waiting_input",
+      "runnerStatus": "ready",
+      "selectedModelId": "m1",
+      "thinkingLevel": "medium",
+      "queue": [],
+      "widgets": {},
+      "statuses": {},
+      "interactions": [
+        {
+          "id": "i2",
+          "kind": "confirm",
+          "toolCallId": "p1x:op2",
+          "title": "Allow edit?",
+          "description": "a.ts",
+          "status": "pending"
+        }
+      ],
+      "messages": [
+        {
+          "id": "user-1000",
+          "role": "user",
+          "content": "Rename foo to bar"
+        },
+        {
+          "id": "assistant-2000",
+          "role": "assistant",
+          "content": "Renaming.",
+          "model": "m1",
+          "tools": [
+            {
+              "id": "p1",
+              "name": "ptc",
+              "status": "running",
+              "input": {
+                "code": "const r = await tools.read({ path: 'a.ts' });\nawait tools.edit({ path: 'a.ts', oldText: 'foo', newText: 'bar' });\nreturn (await tools.bash({ command: 'bun test' })).exitCode;"
+              },
+              "operations": [
+                {
+                  "id": "p1x:op1",
+                  "name": "read",
+                  "status": "succeeded",
+                  "input": {
+                    "path": "a.ts"
+                  },
+                  "output": "1\tconst foo = 1;"
+                },
+                {
+                  "id": "p1x:op2",
+                  "name": "edit",
+                  "status": "running",
+                  "input": {
+                    "path": "a.ts",
+                    "oldText": "foo",
+                    "newText": "bar"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "toolResult-2650",
+          "role": "system",
+          "content": "",
+          "systemKind": "custom",
+          "label": "ls result",
+          "tools": [
+            {
+              "id": "lost:op1",
+              "name": "ls",
+              "status": "succeeded",
+              "output": "a.ts"
+            }
+          ]
+        }
+      ]
+    },
+    "afterEvents": {
+      "cursor": "3:28",
+      "runnerEpoch": "3",
+      "needsSnapshot": false,
+      "sessionName": "Rename things",
+      "pinned": false,
+      "runStatus": "waiting_input",
+      "runnerStatus": "ready",
+      "selectedModelId": "m1",
+      "thinkingLevel": "medium",
+      "queue": [],
+      "widgets": {},
+      "statuses": {},
+      "interactions": [
+        {
+          "id": "i2",
+          "kind": "confirm",
+          "toolCallId": "p1x:op2",
+          "title": "Allow edit?",
+          "description": "a.ts",
+          "status": "pending"
+        }
+      ],
+      "messages": [
+        {
+          "id": "user-1000",
+          "role": "user",
+          "content": "Rename foo to bar"
+        },
+        {
+          "id": "assistant-2000",
+          "role": "assistant",
+          "content": "Renaming.",
+          "model": "m1",
+          "tools": [
+            {
+              "id": "p1",
+              "name": "ptc",
+              "status": "failed",
+              "input": {
+                "code": "const r = await tools.read({ path: 'a.ts' });\nawait tools.edit({ path: 'a.ts', oldText: 'foo', newText: 'bar' });\nreturn (await tools.bash({ command: 'bun test' })).exitCode;"
+              },
+              "output": "[error] OperationFailed: 1 fail",
+              "operations": [
+                {
+                  "id": "p1x:op1",
+                  "name": "read",
+                  "status": "succeeded",
+                  "input": {
+                    "path": "a.ts"
+                  },
+                  "output": "1\tconst foo = 1;"
+                },
+                {
+                  "id": "p1x:op2",
+                  "name": "edit",
+                  "status": "succeeded",
+                  "input": {
+                    "path": "a.ts",
+                    "oldText": "foo",
+                    "newText": "bar"
+                  },
+                  "output": "Edited a.ts (1 replacement)",
+                  "diff": "--- a.ts\n+++ a.ts\n@@ -1 +1 @@\n-const foo = 1;\n+const bar = 1;"
+                },
+                {
+                  "id": "p1x:op3",
+                  "name": "bash",
+                  "status": "failed",
+                  "input": {
+                    "command": "bun test"
+                  },
+                  "output": "1 fail\n[exit 1]"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "toolResult-2650",
+          "role": "system",
+          "content": "",
+          "systemKind": "custom",
+          "label": "ls result",
+          "tools": [
+            {
+              "id": "lost:op1",
+              "name": "ls",
+              "status": "succeeded",
+              "output": "a.ts"
+            }
+          ]
+        },
+        {
+          "id": "assistant-3550",
+          "role": "assistant",
+          "content": "Renamed; one test fails.",
+          "model": "m1"
+        }
+      ]
+    }
+  }
+}

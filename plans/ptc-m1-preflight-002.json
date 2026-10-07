@@ -1,0 +1,90 @@
+{
+  "kind": "preflight-not-baseline",
+  "fixture": "single-bash",
+  "baseline": "16c80846da64c07114d8cd43bab68748e5474127",
+  "binaryHash": "164769ca8c6645747eed2c6c47a2e2561a53936a9cf30427069a0ff8fb7f1d80",
+  "protocol": 3,
+  "fixtureHash": "39f59e86faee6ff61d053c62d0e485e0bd2c1d355d7764d3292caa3ac491d106",
+  "success": true,
+  "measured": {
+    "wallMs": 4533.485425999999,
+    "startupMs": 430.284737,
+    "cpuMs": 62.293,
+    "cgroupMemoryPeakBytes": 57769984,
+    "resourceStartLeadMs": 0.0009499999999889042,
+    "resourceEndLagMs": 0.6204920000000129,
+    "memoryWindow": "unit-start-through-post-settled-sample",
+    "cpuWindow": "pre-dispatch-through-post-settled-sample"
+  },
+  "drain": { "waitMs": 3210.3279570000004, "observedChanges": 9 },
+  "mainRounds": 2,
+  "bashCalls": 1,
+  "bashResults": 1,
+  "attempts": [
+    {
+      "schemaBytes": 2,
+      "contextBytes": 708,
+      "requestBytes": 765,
+      "responseBytes": 1501,
+      "durationMs": 2547.2833960000003,
+      "status": 200,
+      "usage": { "input": 309, "output": 16, "cacheWrite": 0, "cacheRead": 0 },
+      "completion": "complete",
+      "evidence": "complete"
+    },
+    {
+      "schemaBytes": 32432,
+      "contextBytes": 2371,
+      "requestBytes": 34938,
+      "responseBytes": 2144,
+      "durationMs": 2818.690475,
+      "status": 200,
+      "usage": { "input": 2, "output": 70, "cacheWrite": 14298, "cacheRead": 0 },
+      "completion": "complete",
+      "evidence": "complete"
+    },
+    {
+      "schemaBytes": 32432,
+      "contextBytes": 2691,
+      "requestBytes": 35258,
+      "responseBytes": 2129,
+      "durationMs": 1681.0036870000004,
+      "status": 200,
+      "usage": { "input": 2, "output": 44, "cacheWrite": 92, "cacheRead": 14298 },
+      "completion": "complete",
+      "evidence": "complete"
+    },
+    {
+      "schemaBytes": 1219,
+      "contextBytes": 11617,
+      "requestBytes": 12968,
+      "responseBytes": 7431,
+      "durationMs": 2406.277648,
+      "status": 200,
+      "usage": { "input": 2, "output": 187, "cacheWrite": 4777, "cacheRead": 0 },
+      "completion": "complete",
+      "evidence": "complete"
+    },
+    {
+      "schemaBytes": 1219,
+      "contextBytes": 12368,
+      "requestBytes": 13719,
+      "responseBytes": 2591,
+      "durationMs": 1484.33975,
+      "status": 200,
+      "usage": { "input": 2, "output": 65, "cacheWrite": 262, "cacheRead": 4777 },
+      "completion": "complete",
+      "evidence": "complete"
+    }
+  ],
+  "budget": {
+    "spentUnits": 43194951,
+    "reservedUnits": 0,
+    "limitUsdEquivalent": 100,
+    "spentUsdEquivalent": 8.6389902,
+    "reservedUsdEquivalent": 0,
+    "unknownAttempts": 0,
+    "admittedAttempts": 5,
+    "halted": false
+  }
+}

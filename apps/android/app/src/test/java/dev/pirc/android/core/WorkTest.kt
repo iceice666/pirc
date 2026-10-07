@@ -206,6 +206,29 @@ class WorkTest {
     }
 
     @Test
+    fun scriptsStandForTheOperationsTheyRan() {
+        val script = ToolCall(
+            id = "p",
+            name = "ptc",
+            status = "succeeded",
+            operations = listOf(
+                tool("o1", "read", path = "src/a.ts"),
+                tool("o2", "edit", path = "src/a.ts"),
+                tool("o3", "edit", path = "b.ts"),
+            ),
+        )
+        val docs = ToolCall(id = "d", name = "ptc_docs", status = "succeeded")
+        assertEquals(listOf("o1", "o2", "o3"), effectiveTools(listOf(docs, script)).map { it.id })
+        assertEquals("read, edit ×2", operationsSummary(script.operations))
+        val run = summarizeRun(listOf(docs, script))
+        assertEquals(3, run.count)
+        assertEquals(listOf("a.ts", "b.ts"), run.files)
+        // A script that has not run anything yet is itself the call.
+        val fresh = ToolCall(id = "q", name = "ptc")
+        assertEquals(listOf(fresh), effectiveTools(listOf(fresh)))
+    }
+
+    @Test
     fun reviewsProposals() = runTest {
         val server = MockWebServer()
         server.start()

@@ -21,7 +21,7 @@ export class RpcUi implements UiApi {
   constructor(private readonly write: (value: unknown) => void) {}
 
   private dialog(request: Json, opts: DialogOptions = {}): Promise<Json> {
-    const { signal, timeoutMs } = opts;
+    const { signal, timeoutMs, toolCallId } = opts;
     const run = () =>
       new Promise<Json>((resolve) => {
         if (signal?.aborted) return resolve({ cancelled: true });
@@ -54,6 +54,8 @@ export class RpcUi implements UiApi {
           id,
           ...request,
           ...(timeoutMs ? { timeout: timeoutMs } : {}),
+          // The ptc operation that asks, so clients can show it waiting there.
+          ...(toolCallId ? { toolCallId } : {}),
         });
       });
     const next = this.chain.then(run, run);

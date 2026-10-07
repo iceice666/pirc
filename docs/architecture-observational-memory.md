@@ -8,7 +8,7 @@ OM replaces the agent's LLM compaction summary with memory that builds up in the
 
 ## 1. Config
 
-Config is read from `features.observationalMemory` in the node's global config (`$PIRC_CONFIG_DIR/config.json`, default `~/.config/.pirc/config.json`); a project's `.pirc/config.json` cannot set features. It is loaded when the agent starts. `PIRC_MEMORY_PASSIVE` overrides `passive` (`1|true|yes|on` turns it on, any other value off). The object is validated as a whole: if any field is invalid (a malformed `fallbackModels` entry included), the **entire** `observationalMemory` config silently falls back to the defaults below; unknown keys are stripped.
+Config is read from `features.observationalMemory` in the node's global config (`$PIRC_CONFIG_DIR/config.json`, default `~/.config/.pirc/config.json`); a project's `.pirc/config.json` cannot set features. It is loaded when the agent starts. `PIRC_MEMORY_PASSIVE` overrides `passive` (`1|true|yes|on` turns it on, any other value off). The object is validated as a whole: if any field is invalid (a malformed `fallbackModels` entry included), the **entire** `observationalMemory` config falls back to the defaults below. The agent emits one startup warning listing invalid field paths and reasons, without the rejected values. This warning explicitly notes that defaults can re-enable memory (`enabled: true`, `workspace.enabled: true`) even when the invalid config tried to disable it. Unknown keys at the top level, in `model` / `fallbackModels` entries, and in `workspace` are reported and stripped; they do not invalidate otherwise valid settings. Validation is cached for the loaded settings object, so turns, background workers and panel refreshes do not repeat the warning. Configuration warnings remain visible even with `showWorkerNotifications: false` or a valid `enabled: false`. Edit the node config and restart the agent to load changes; `PIRC_MEMORY_PASSIVE` still applies after validation.
 
 | Key                            | Default                | Validation                                    | Meaning                                                                                                                                                         |
 | ------------------------------ | ---------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -187,7 +187,7 @@ Each source entry becomes `"[Source entry id: <id>]\n<rendered>"`. Blocks are jo
 
 - user: `[User @ T]: <text blocks joined \n>` (non-text blocks are dropped).
 - assistant: `[Assistant @ T]: <body>`. Body: text blocks; `thinking` as `[thinking: …]` (redacted thinking omitted); toolCall as `[name(<JSON args>)]`; other blocks as `[non-text content omitted]`. Blank lines are removed. If the body is empty, the entry is skipped.
-- toolResult: `[Tool result for <toolName> @ T]: <text>`. The text of a `recall` result is replaced by `[recalled memory omitted: not new evidence]` and the entry still counts as covered: recalled memory replays older evidence, and learning it again would let memory reinforce itself. Recall output that reaches the model through the `code` tool (PTC) is not recognized.
+- toolResult: `[Tool result for <toolName> @ T]: <text>`. The text of a `recall` result is replaced by `[recalled memory omitted: not new evidence]` and the entry still counts as covered: recalled memory replays older evidence, and learning it again would let memory reinforce itself. A `ptc` result whose operations included `recall` is replaced as a whole the same way.
 - custom: `[Custom (<customType>) @ T]: <text>`.
 
 Budget: whole blocks are added while `estimated + ceil(len(sep+block)/4) ≤ maxTokens`. If the **first** block alone exceeds the budget, it becomes a head/tail excerpt: `maxChars = maxTokens*4`, half the remaining space for the head and half for the tail, joined by the marker `"\n\n[… middle omitted: source exceeds observer input budget; original source remains in the session ledger …]\n\n"`. That entry id still counts as covered. Returns `{text, sourceEntryIds, origins, estimatedTokens}`. `origins` maps each source entry id to where it came from, derived by code from the message role, never by a model: `user`, `assistant`, `tool:<toolName>` or `custom:<customType>`.
@@ -268,7 +268,7 @@ When exact source context is needed for precision or traceability, use the recal
 
 ## 6. Recall tool
 
-- `name: "recall"`; it can also be called from the `code` tool (PTC).
+- `name: "recall"`; the model calls it from a `ptc` script like every capability that is not a core tool.
 - **description:** `Recover exact evidence and source context behind a compacted observational-memory observation or reflection id on the current branch, or a workspace-memory id from an earlier session. Use when compressed memory is important and original source context is needed before acting.`, followed by the guidelines below as a bulleted list.
 - **Guidelines** (verbatim):
   1. `Use recall before making an important decision that depends on a compacted observation or reflection whose details are unclear.`

@@ -16,7 +16,24 @@ export type Reply =
   /** Compute the reply from the request body. */
   | { dynamic: (body: any) => Reply };
 
-type ToolSpec = { id: string; name: string; args: Record<string, unknown> };
+/** `rawArgs`: the arguments as sent, verbatim (e.g. malformed JSON); `args` is ignored then. */
+type ToolSpec = { id: string; name: string; args?: Record<string, unknown>; rawArgs?: string };
+
+/**
+ * A `ptc` call that runs one capability and returns its text, or fails with
+ * its error message: what a direct tool call was before the PTC-only surface.
+ */
+export function ptcCall(id: string, name: string, args: Record<string, unknown>): ToolSpec {
+  return {
+    id,
+    name: 'ptc',
+    args: {
+      code: `const r = await tools.call(${JSON.stringify(name)}, ${JSON.stringify(args)});
+if (!r.ok) throw new PtcError(r.error);
+return r.data.text;`,
+    },
+  };
+}
 
 export interface FakeLlm {
   url: string;
@@ -43,7 +60,7 @@ function openai(reply: Reply): string[] {
   }
   if ('tool' in reply) {
     [reply.tool, ...(reply.also ?? [])].forEach((tool, index) => {
-      const args = JSON.stringify(tool.args);
+      const args = tool.rawArgs ?? JSON.stringify(tool.args ?? {});
       out.push(
         chunk({
           tool_calls: [

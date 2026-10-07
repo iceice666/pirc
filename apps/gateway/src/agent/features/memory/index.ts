@@ -3,10 +3,10 @@
  * build an append-only memory ledger; compaction renders it as the summary
  * (no LLM call); `recall` maps memory ids back to raw source entries.
  */
+import { fields, str } from '../../tools/result-schema.js';
 import { z } from 'zod';
 import type { Agent } from '../../agent.js';
 import { contextTokens } from '../../compaction.js';
-import { thinkingLevels } from '../../config.js';
 import type { Feature } from '../../feature.js';
 import type { SessionEntry } from '../../session-store.js';
 import type { Tool } from '../../tools/types.js';
@@ -63,55 +63,11 @@ import {
 } from './workspace.js';
 import { toolPrompt } from '../../prompts/tools.js';
 
-const modelChoice = z.object({
-  provider: z.string().min(1),
-  id: z.string().min(1),
-  // `max` (accepted for configs carried over from Pi) maps to our highest level.
-  thinking: z
-    .enum([...thinkingLevels, 'max'])
-    .transform((level) => (level === 'max' ? 'xhigh' : level))
-    .optional(),
-});
-const positive = z.number().int().positive();
-export const memorySchema = z.object({
-  enabled: z.boolean().default(true),
-  passive: z.boolean().default(false),
-  observeAfterTokens: positive.default(10_000),
-  reflectAfterTokens: positive.default(20_000),
-  observerChunkMaxTokens: positive.optional(),
-  compactAfterTokens: positive.default(81_000),
-  compactAfterTokensMode: z.enum(['calibrated', 'ratio']).default('calibrated'),
-  compactAfterTokensRatio: z.number().gt(0).lt(1).default(0.68),
-  observationsPoolMaxTokens: positive.default(20_000),
-  observationsPoolTargetTokens: positive.optional(),
-  agentMaxTurns: positive.default(16),
-  agentMaxTokens: positive.default(32_000),
-  model: modelChoice.optional(),
-  fallbackModels: z.array(modelChoice).default([]),
-  rateLimitCooldownMs: positive.default(900_000),
-  showWorkerNotifications: z.boolean().default(true),
-  /** Cross-session memory shared by every main session (and worktree) of a repository. */
-  workspace: z
-    .object({
-      enabled: z.boolean().default(true),
-      /** Budget for the notes frozen into a new session's system prompt (and the promoter's target). */
-      maxTokens: positive.default(3_000),
-      shutdownTimeoutMs: positive.default(20_000),
-    })
-    .default({}),
-});
-export type MemoryConfig = z.infer<typeof memorySchema>;
+import { memoryConfigFrom, type MemoryConfig } from './config.js';
+export { memoryConfigFrom, memorySchema, type MemoryConfig } from './config.js';
 
 export function memoryConfig(agent: Agent): MemoryConfig {
   return memoryConfigFrom(agent.config.features);
-}
-
-export function memoryConfigFrom(features: Record<string, unknown>): MemoryConfig {
-  const parsed = memorySchema.safeParse(features.observationalMemory ?? {});
-  const config = parsed.success ? parsed.data : memorySchema.parse({});
-  if (process.env.PIRC_MEMORY_PASSIVE)
-    config.passive = /^(1|true|yes|on)$/i.test(process.env.PIRC_MEMORY_PASSIVE.trim());
-  return config;
 }
 
 export const poolTarget = (config: MemoryConfig) =>
@@ -535,6 +491,12 @@ export function memoryFeature(): Feature {
       required: ['id'],
       additionalProperties: false,
     },
+    resultSchema: fields({
+      id: str(),
+      status: str(
+        'ok, partial (some sources missing), no_source, source_unavailable or forgotten; the evidence itself is in text',
+      ),
+    }),
     async execute(args, ctx) {
       if (ctx.signal.aborted) throw new Error('Aborted');
       const id = String(args.id ?? '');
@@ -558,6 +520,7 @@ export function memoryFeature(): Feature {
       return {
         content: [{ type: 'text', text: result.text }],
         details: { status: result.status, id: args.id },
+        data: { id, status: String(result.status) },
         isError: result.status === 'invalid_id' || result.status === 'not_found',
       };
     },

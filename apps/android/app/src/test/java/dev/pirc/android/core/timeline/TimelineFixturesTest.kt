@@ -43,14 +43,15 @@ class TimelineFixturesTest {
     private fun flag(value: Boolean) = if (value) JsonPrimitive(true) else null
     private fun count(size: Int) = if (size > 0) JsonPrimitive(size) else null
 
-    private fun tool(tool: ToolCall) = JsonObject.of(
-        "id" to str(tool.id),
-        "name" to str(tool.name),
-        "status" to str(tool.status),
-        "input" to tool.input,
-        "output" to str(tool.output),
-        "diff" to str(tool.diff),
-        "images" to count(tool.images.size),
+    private fun tool(item: ToolCall): JsonObject = JsonObject.of(
+        "id" to str(item.id),
+        "name" to str(item.name),
+        "status" to str(item.status),
+        "input" to item.input,
+        "output" to str(item.output),
+        "diff" to str(item.diff),
+        "images" to count(item.images.size),
+        "operations" to item.operations.takeIf { it.isNotEmpty() }?.let { operations -> JsonArray(operations.map(::tool)) },
     )
 
     private fun message(message: Message) = JsonObject.of(
@@ -92,6 +93,7 @@ class TimelineFixturesTest {
                     JsonObject.of(
                         "id" to str(item.id),
                         "kind" to str(item.kind),
+                        "toolCallId" to str(item.toolCallId),
                         "title" to str(item.title),
                         "description" to str(item.description),
                         "status" to str(item.status),

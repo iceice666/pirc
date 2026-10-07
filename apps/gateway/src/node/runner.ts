@@ -21,6 +21,7 @@ import { emptyReducedState, reducePiEvent, type ReducedSessionState } from './re
 import { JsonlParser } from './rpc-framing.js';
 import type { CommandPayload } from '../types.js';
 import { id, now } from '../util.js';
+import { collectRecap } from './recap.js';
 
 interface PendingRequest {
   resolve: (value: Record<string, any>) => void;
@@ -283,6 +284,13 @@ class PiRunner {
       )
         return;
       if (dialogMethods.has(message.method) && typeof message.id === 'string') {
+        // The operation a dialog names is a display link only: keep it only
+        // when it is one of this agent's running ptc operations.
+        if ('toolCallId' in message) {
+          const link = this.runningOperation(message.toolCallId);
+          if (link) message.toolCallId = link;
+          else delete message.toolCallId;
+        }
         const timeout =
           typeof message.timeout === 'number' && message.timeout > 0
             ? message.timeout
@@ -472,6 +480,22 @@ class PiRunner {
       return fail(413, 'payload_too_large', 'Gateway request arguments are too large');
     if (this.gatewayRequests >= MAX_GATEWAY_REQUESTS)
       return fail(429, 'too_many_requests', 'Too many gateway requests are in flight');
+    // Local-only: historical evidence never passes through the gateway transport.
+    // The runner binds identity; the caller cannot supply a workspace or source path.
+    if (op === 'recap.collect') {
+      this.gatewayRequests++;
+      void Promise.resolve()
+        .then(() => collectRecap(this.db, this.session.id, args))
+        .then(
+          (result) => reply({ ok: true, result }),
+          (error: unknown) =>
+            error instanceof ApiError
+              ? fail(error.statusCode, error.code, error.message)
+              : fail(500, 'recap_failed', 'Could not collect workspace recap evidence'),
+        )
+        .finally(() => this.gatewayRequests--);
+      return;
+    }
     this.gatewayRequests++;
     void this.gateway
       .request(this.session.id, op, args)
@@ -543,18 +567,39 @@ class PiRunner {
       .finally(() => this.browserRequests.delete(message.id));
   }
 
+  /** `id` when it names a ptc operation of this agent that is still running, else undefined. */
+  private runningOperation(id: unknown): string | undefined {
+    return typeof id === 'string' &&
+      /^[\w:.-]{1,100}$/.test(id) &&
+      this.state.operations.some((operation) => operation.toolCallId === id)
+      ? id
+      : undefined;
+  }
+
   /**
    * Ask the human, from the node itself: the agent is sandboxed and may be
    * steered by what it reads, so its own dialogs cannot grant anything.
    */
-  private confirmFromNode(title: string, message: string, signal: AbortSignal): Promise<boolean> {
+  private confirmFromNode(
+    title: string,
+    message: string,
+    signal: AbortSignal,
+    toolCallId?: string,
+  ): Promise<boolean> {
     const rpcId = `${NODE_DIALOG_PREFIX}${randomUUID()}`;
     const interaction = this.db.createInteraction(
       this.session.id,
       this.epoch,
       rpcId,
       'confirm',
-      { type: 'extension_ui_request', id: rpcId, method: 'confirm', title, message },
+      {
+        type: 'extension_ui_request',
+        id: rpcId,
+        method: 'confirm',
+        title,
+        message,
+        ...(toolCallId ? { toolCallId } : {}),
+      },
       now() + this.config.interactionTtlMs,
     );
     this.events.publish(this.session.id, this.epoch, 'interaction_created', interaction);
@@ -609,6 +654,8 @@ class PiRunner {
       typeof args.reason === 'string' && args.reason.trim()
         ? args.reason.trim().slice(0, 500)
         : '(no reason given)';
+    // Only a link for the client (the ptc operation asking); it grants nothing.
+    const toolCallId = this.runningOperation(message.toolCallId);
     const controller = new AbortController();
     const start = (work: () => Promise<void>) => {
       this.sandboxRequests.set(requestId, controller);
@@ -643,6 +690,7 @@ class PiRunner {
             'Approving allows these hosts for the rest of this session.',
           ].join('\n\n'),
           controller.signal,
+          toolCallId,
         );
         if (!confirmed) return reply({ ok: true, result: { granted: [], denied: missing } });
         for (const domain of missing) this.approvedDomains.add(domain);
@@ -685,6 +733,7 @@ class PiRunner {
             "It runs with this node account's full access (without the node's own secrets).",
           ].join('\n\n'),
           controller.signal,
+          toolCallId,
         );
         if (!confirmed)
           return fail('denied', 'The user did not approve running this outside the sandbox');
@@ -721,6 +770,13 @@ class PiRunner {
   private exit(code: number | null, signal: NodeJS.Signals | null): void {
     if (this.closed) return;
     this.closed = true;
+    // Whatever the agent left in its group (a busy ptc script process after a
+    // crash, which cannot notice its parent is gone) goes with it.
+    try {
+      if (this.child.pid) process.kill(-this.child.pid, 'SIGKILL');
+    } catch {
+      /* nothing left */
+    }
     const error = new ApiError(
       503,
       'runner_unavailable',

@@ -1,5 +1,15 @@
 import { truncateOutput } from '../sandbox.js';
-import { optionalNumber, requireString, text, type Tool } from './types.js';
+import { optionalNumber, requireString, text, typed, type Tool } from './types.js';
+import { bool, fields, int, nullable, str } from './result-schema.js';
+
+/** Typed result of a shell command (`bash`, `unsandboxed_bash`). */
+export const SHELL_RESULT = fields({
+  output: str('Combined stdout and stderr, cut to the output limit'),
+  exitCode: nullable(int('null when timed out or aborted')),
+  timedOut: bool(),
+  aborted: bool(),
+  truncated: bool('Output was cut'),
+});
 import { toolPrompt } from '../prompts/tools.js';
 
 /** Kill a detached child's whole process group, then the child itself. */
@@ -102,6 +112,8 @@ export const bashTool: Tool = {
     required: ['command'],
     additionalProperties: false,
   },
+  // A non-zero exit fails the operation; the error carries these fields as `data`.
+  resultSchema: SHELL_RESULT,
   async execute(args, ctx) {
     const command = requireString(args, 'command');
     const seconds = optionalNumber(args, 'timeout');
@@ -119,10 +131,19 @@ export const bashTool: Tool = {
         ? '[aborted]'
         : `[exit ${result.exitCode}]`;
     const body = `${result.output}${result.output.endsWith('\n') || !result.output ? '' : '\n'}${status}`;
-    return text(
+    return typed(
       body,
-      { exitCode: result.exitCode, truncated: result.truncated },
-      result.exitCode !== 0,
+      {
+        output: result.output,
+        exitCode: result.exitCode,
+        timedOut: result.timedOut,
+        aborted: result.aborted,
+        truncated: result.truncated,
+      },
+      {
+        details: { exitCode: result.exitCode, truncated: result.truncated },
+        isError: result.exitCode !== 0,
+      },
     );
   },
 };

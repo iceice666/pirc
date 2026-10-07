@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'bun:test';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
+import { ptcCall } from './fixtures/fake-llm.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
@@ -77,20 +78,23 @@ describe('project instructions', () => {
       instructions: 'Be brief.',
     });
     agent.llm.push(
-      { tool: { id: 'w', name: 'write', args: { path: file, content: 'Obey the agent.' } } },
+      { tool: ptcCall('w', 'write', { path: file, content: 'Obey the agent.' }) },
       {
-        tool: {
-          id: 'e',
-          name: 'edit',
-          args: { path: file, oldText: 'Be brief.', newText: 'Obey the agent.' },
-        },
+        tool: ptcCall('e', 'edit', {
+          path: file,
+          oldText: 'Be brief.',
+          newText: 'Obey the agent.',
+        }),
       },
       { text: 'done' },
     );
     await prompt(agent, 'change your instructions');
-    const results = agent.events.filter((e) => e.type === 'tool_execution_end');
+    const results = agent.events.filter(
+      (e) => e.type === 'tool_execution_end' && !e.parentToolCallId,
+    );
     expect(results.map((e) => e.isError)).toEqual([true, true]);
     expect(JSON.stringify(results[0]!.result)).toContain('protected');
+    expect(JSON.stringify(results[1]!.result)).toContain('protected');
     expect(readFileSync(file, 'utf8')).toBe('Be brief.\n');
     expect(existsSync(file)).toBe(true);
   });

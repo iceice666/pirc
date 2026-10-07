@@ -87,6 +87,13 @@ export interface Snapshot {
   session: SessionSummary;
   history: unknown[];
   partialMessage: unknown | null;
+  /** `ptc` operations still running (`node/reducer.ts`); finished ones are in `history`. */
+  operations?: Array<{
+    toolCallId: string;
+    parentToolCallId: string;
+    toolName: string;
+    args: unknown;
+  }>;
   queue: { steering: string[]; followUp: string[] };
   run: Record<string, unknown> | null;
   interactions: unknown[];

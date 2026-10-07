@@ -15,7 +15,7 @@ Chat and coding executables share the node/agent implementation. Their internal 
 | Command                 | Available on             | Purpose                                                                       |
 | ----------------------- | ------------------------ | ----------------------------------------------------------------------------- |
 | `agent`                 | `pirc-chat`, `pirc-node` | Agent loop over JSONL RPC on stdin/stdout, always sandboxed by its node (srt) |
-| `ptc-worker`            | `pirc-chat`, `pirc-node` | Runs the `code` tool's scripts                                                |
+| `ptc-guest`             | `pirc-chat`, `pirc-node` | Runs one `ptc` script in QuickJS for its agent (empty environment, IPC only)  |
 | `oauth-worker`          | `pirc-gateway`           | Runs one subscription login flow in a time-limited subprocess                 |
 | `version` / `--version` | all three                | Prints the version as an install check                                        |
 

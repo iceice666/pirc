@@ -19,6 +19,13 @@ export interface Classification {
   reason: string;
   /** Danger because of the user's deny-list (holds even with auto mode disabled). */
   denied?: true;
+  /**
+   * With verdict `write`: every path the command writes, when the rules know
+   * all of them (`mkdir /tmp/x`, `cmd > out.txt`). Absent when any write has
+   * no known target (`git commit`, `npm install`), so the write lease falls
+   * back to the whole workspace.
+   */
+  writes?: string[];
 }
 
 export interface RuleContext {
@@ -40,6 +47,11 @@ export interface RuleContext {
 const RANK: Record<Verdict, number> = { read: 0, write: 1, unknown: 2, danger: 3 };
 
 function worst(a: Classification, b: Classification): Classification {
+  // Two writes: their targets are known only if both are.
+  if (a.verdict === 'write' && b.verdict === 'write') {
+    if (a.writes && b.writes) return { ...a, writes: [...a.writes, ...b.writes] };
+    return a.writes ? b : a;
+  }
   return RANK[b.verdict] > RANK[a.verdict] ? b : a;
 }
 
@@ -979,16 +991,16 @@ function checkWrites(
   destructive: boolean,
   what: string,
 ): Classification {
-  let wrote = false;
+  const writes: string[] = [];
   for (const target of targets) {
     if (HARMLESS.has(target.text)) continue;
-    wrote = true;
     const absolute = state.paths.resolve(target, state.cwd);
     if (!absolute) return unknown(`${what} a path that cannot be resolved statically`);
     const risk = state.paths.writeRisk(absolute, destructive);
     if (risk) return danger(risk);
+    writes.push(absolute);
   }
-  return wrote ? write(`${what} files in the workspace`) : read();
+  return writes.length ? { ...write(`${what} files in the workspace`), writes } : read();
 }
 
 function classifyGit(args: Word[], state: State): Classification {
@@ -1661,6 +1673,13 @@ function classifyCommand(command: Command, state: State): Classification {
     }
     case 'gh': {
       const [group, action] = operands(args).map((w) => w.text);
+      // `gh`, `gh --version`, `gh --help`, `gh version` only print.
+      if (
+        (group === undefined &&
+          args.every((w) => ['--version', '--help', '-h'].includes(w.text))) ||
+        (group === 'version' && args.length === 1)
+      )
+        return result;
       if (group === 'api') {
         const method = args.findIndex((w) => w.text === '-X' || w.text === '--method');
         const verb = method >= 0 ? args[method + 1]?.text.toUpperCase() : undefined;

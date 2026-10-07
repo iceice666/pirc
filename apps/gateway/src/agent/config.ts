@@ -19,6 +19,7 @@ import type { SessionEntry } from './session-store.js';
 import { skillReadPaths, skillRoots } from './skills.js';
 import { defaultPathPolicy, type PathPolicy } from '../sandbox-policy.js';
 import { readRoles, roleDirs, type RoleDir, type RolePreset } from './roles.js';
+import { validateMemoryConfig } from './features/memory/config.js';
 
 export {
   defaultConfigDir,
@@ -237,6 +238,8 @@ export function loadAgentConfig(
     ? { ...parsed, allowedPaths: [], env: {}, hooks: hooksSchema.parse({}) }
     : parsed;
   const warnings = untrusted && !child ? [UNTRUSTED_PROJECT_WARNING] : [];
+  const memoryWarning = validateMemoryConfig(global.features).warning;
+  if (memoryWarning) warnings.push(memoryWarning);
   const resolvePaths = (items: string[], base: string) =>
     items.map((item) => path.resolve(base, expandHome(item)));
   // Skills are read by the file tools but are configuration, like .pirc/.
@@ -265,6 +268,7 @@ export function loadAgentConfig(
         allowRead: nodePolicy.allowRead,
         allowWrite: sandboxed ? nodePolicy.allowWrite : writable,
         denyWrite: sandboxed ? nodePolicy.denyWrite : [],
+        ...(sandboxed && nodePolicy.sharedWrite ? { sharedWrite: nodePolicy.sharedWrite } : {}),
       }
     : defaultPathPolicy(writable);
   const section = (id: string, title: string, source: string, text: string): PromptSection => ({
@@ -357,12 +361,14 @@ const pathPolicySchema = z.object({
   allowRead: z.array(z.string()),
   allowWrite: z.array(z.string()),
   denyWrite: z.array(z.string()),
+  sharedWrite: z.array(z.string()).optional(),
 });
 
 function parsePathPolicy(value: string | undefined): PathPolicy | undefined {
   if (!value) return undefined;
   try {
-    return pathPolicySchema.parse(JSON.parse(value));
+    const { sharedWrite, ...rest } = pathPolicySchema.parse(JSON.parse(value));
+    return sharedWrite ? { ...rest, sharedWrite } : rest;
   } catch {
     throw new Error('PIRC_SANDBOX_POLICY is not a valid path policy');
   }

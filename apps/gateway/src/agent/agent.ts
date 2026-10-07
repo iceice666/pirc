@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import {
   captureContext,
@@ -48,9 +49,44 @@ import type {
 import { isRetryable, streamFor } from './providers/index.js';
 import type { StreamFn, ToolSpec } from './providers/types.js';
 import { PathGuard } from './sandbox.js';
-import type { SessionStore } from './session-store.js';
+import { OPERATION_ENTRY, type OperationEntry, type SessionStore } from './session-store.js';
 import type { Tool, ToolContext, ToolResult, UiApi } from './tools/types.js';
 import type { AcquireWrite } from './write-lease.js';
+import { WRAPPER_NAMES } from './ptc/contracts.js';
+import { capabilityIndexPrompt, modelTools } from './ptc/index.js';
+import { DIRECT_CAPABILITIES } from './ptc/signatures.js';
+import { CapabilityRegistry } from './ptc/registry.js';
+import { validateSchema } from './ptc/schema.js';
+
+/**
+ * How far one capability call got (see `Agent.invokeOperation`): `executed`
+ * means the tool ran (its result may still be an error); the others mean it
+ * never started.
+ */
+export type OperationStage =
+  | 'unavailable'
+  | 'invalid'
+  | 'denied'
+  /** Held back by its caller (`OperationOptions.withheld`), e.g. after an earlier refusal. */
+  | 'withheld'
+  | 'refused'
+  | 'cancelled'
+  | 'threw'
+  | 'executed';
+
+export interface OperationOptions {
+  /**
+   * Runs once the call has passed every check, with the name and arguments
+   * it will run with, right before the tool executes (a ptc execution takes
+   * its write slot here). Throwing stops the call as cancelled.
+   */
+  beforeExecute?: (name: string, args: Record<string, unknown>) => Promise<void>;
+  /**
+   * Checked before approval is asked and again right before the tool runs: a reason to hold
+   * the call back (a ptc script after one of its operations was refused), or undefined.
+   */
+  withheld?: (name: string, args: Record<string, unknown>) => string | undefined;
+}
 
 export type Emit = (event: Record<string, unknown>) => void;
 
@@ -152,6 +188,83 @@ function interruptedNote(message: AssistantMessage): QueueItem {
   };
 }
 
+/**
+ * How an operation ended. `hookOutput`: what `afterTool` hooks printed (also appended to the
+ * result), so a ptc result can show it to the model even when the script drops the text.
+ */
+export interface OperationOutcome {
+  stage: OperationStage;
+  result: ToolResult;
+  hookOutput?: string;
+}
+
+/**
+ * A direct call's arguments as `main` accepted them before schemas were checked: null for an
+ * optional argument means absent, and a closed schema ignores unknown keys (models often add a
+ * `description`). Scripts keep strict checking.
+ */
+export function lenientArgs(
+  tool: Tool | undefined,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  const schema = tool?.parameters as
+    | { properties?: Record<string, unknown>; required?: unknown; additionalProperties?: unknown }
+    | undefined;
+  if (!schema?.properties || !args || typeof args !== 'object' || Array.isArray(args)) return args;
+  // Malformed JSON stays as parsed, so the model hears that its arguments were cut off.
+  if ('__invalid_json' in args) return args;
+  const required = new Set(Array.isArray(schema.required) ? (schema.required as string[]) : []);
+  return Object.fromEntries(
+    Object.entries(args).filter(
+      ([key, value]) =>
+        !(value === null && !required.has(key)) &&
+        (schema.additionalProperties !== false || Object.hasOwn(schema.properties!, key)),
+    ),
+  );
+}
+
+/** Longest argument string kept in operation events and session entries, and the total. */
+const RECORDED_STRING_CHARS = 16_384;
+const RECORDED_ARGS_CHARS = 65_536;
+
+/** Arguments as recorded for an operation: long strings cut, the whole bounded. */
+export function recordedArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const cut = (value: unknown, depth: number): unknown => {
+    if (typeof value === 'string')
+      return value.length > RECORDED_STRING_CHARS
+        ? `${value.slice(0, 4096)}…[${value.length} characters, truncated]`
+        : value;
+    if (!value || typeof value !== 'object') return value;
+    if (depth >= 4) {
+      const json = JSON.stringify(value) ?? '';
+      return json.length > 1024
+        ? `${json.slice(0, 1024)}…[${json.length} characters, truncated]`
+        : value;
+    }
+    if (Array.isArray(value))
+      return [
+        ...value.slice(0, 200).map((item) => cut(item, depth + 1)),
+        ...(value.length > 200 ? [`…[${value.length - 200} more items]`] : []),
+      ];
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        cut(item, depth + 1),
+      ]),
+    );
+  };
+  const bounded = cut(args, 0) as Record<string, unknown>;
+  const size = JSON.stringify(bounded).length;
+  return size <= RECORDED_ARGS_CHARS ? bounded : { truncated: true, characters: size };
+}
+
+/** A result as observers and the session see it: the script-only `data` stays out. */
+function observed(result: ToolResult): ToolResult {
+  if (result.data === undefined) return result;
+  const { data: _data, ...rest } = result;
+  return rest;
+}
+
 export class Agent {
   capabilities: Capabilities;
   readonly projectInstructions: string | undefined;
@@ -166,7 +279,26 @@ export class Agent {
   readonly hasUI: boolean;
   readonly features: Feature[];
   private readonly emitRaw: Emit;
+  /** Internal capabilities, by name; the model reaches them through `ptc`, core ones also directly. */
   private readonly tools = new Map<string, Tool>();
+  /** The script tools: `ptc` and `ptc_docs` (direct core capabilities are listed separately). */
+  private readonly wrappers = new Map<string, Tool>();
+  readonly capabilityRegistry: CapabilityRegistry;
+  /**
+   * Capabilities started by `ptc` executions still running. Their results
+   * are not in the session yet, so features that judge where content came
+   * from (memory provenance) consult this too.
+   */
+  readonly runningScripts = new Set<Set<string>>();
+  private openDialogs = 0;
+  /** The `ptc` operation running in the current async context, if any. */
+  private readonly operationScope = new AsyncLocalStorage<{ toolCallId: string }>();
+  /**
+   * Operations still running. Work an operation started may outlive it and
+   * keep its async context; only a live operation is named on a dialog.
+   */
+  private readonly activeOperations = new Set<string>();
+  private readonly humanWaitListeners = new Set<(waiting: boolean) => void>();
   private readonly streamOverride: StreamFn | undefined;
   private readonly toolEnv: Record<string, string>;
   private readonly writeLease: AcquireWrite;
@@ -282,7 +414,7 @@ export class Agent {
     this.config = options.config;
     this.store = options.store;
     this.emitRaw = options.emit;
-    this.ui = options.ui;
+    this.ui = this.trackDialogs(options.ui);
     this.hasUI = options.hasUI;
     this.features = options.features ?? [];
     this.streamOverride = options.streamOverride;
@@ -301,9 +433,15 @@ export class Agent {
       (message) => this.ui.notify(message, 'warning'),
     );
     this.autoMode = new AutoMode(this);
-    for (const tool of options.tools) this.tools.set(tool.name, tool);
+    this.capabilityRegistry = new CapabilityRegistry(() => this.toolList, options.store.sessionId);
+    const register = (tool: Tool) => {
+      // The wrappers are never capabilities: no recursive dispatch.
+      if (!WRAPPER_NAMES.has(tool.name)) this.tools.set(tool.name, tool);
+    };
+    for (const tool of options.tools) register(tool);
     for (const feature of this.features)
-      for (const tool of feature.tools?.(this) ?? []) this.tools.set(tool.name, tool);
+      for (const tool of feature.tools?.(this) ?? []) register(tool);
+    for (const tool of modelTools(this)) this.wrappers.set(tool.name, tool);
     if (options.allowedTools) this.restrictTools(options.allowedTools);
     this.restoreSettings();
     // A session started in a role keeps its role (and its tool allowlist) on restart.
@@ -354,8 +492,90 @@ export class Agent {
     });
   }
 
+  /** Available internal capabilities. */
   get toolList(): Tool[] {
     return [...this.tools.values()].filter((tool) => this.getTool(tool.name));
+  }
+
+  /** Core capabilities the model may also call directly (hybrid surface), when available. */
+  get directToolList(): Tool[] {
+    return DIRECT_CAPABILITIES.flatMap((name) => {
+      const tool = this.getTool(name);
+      return tool && this.tools.get(name) === tool ? [tool] : [];
+    });
+  }
+
+  /**
+   * What the provider sees: `ptc` and `ptc_docs` when any capability is
+   * available, then the core capabilities that are also direct tools.
+   */
+  get modelToolList(): Tool[] {
+    return this.toolList.length ? [...this.wrappers.values(), ...this.directToolList] : [];
+  }
+
+  /** Listen for "a human is being asked" (dialogs open); returns an unsubscribe function. */
+  onHumanWait(listener: (waiting: boolean) => void): () => void {
+    this.humanWaitListeners.add(listener);
+    if (this.openDialogs) listener(true);
+    return () => this.humanWaitListeners.delete(listener);
+  }
+
+  private humanWaitChanged(delta: number): void {
+    const before = this.openDialogs > 0;
+    this.openDialogs += delta;
+    const after = this.openDialogs > 0;
+    if (before !== after) for (const listener of this.humanWaitListeners) listener(after);
+  }
+
+  /** Wait for a human (see `ToolContext.humanWait`): a running ptc script's budget pauses. */
+  humanWait<T>(work: Promise<T>): Promise<T> {
+    this.humanWaitChanged(1);
+    return work.finally(() => this.humanWaitChanged(-1));
+  }
+
+  /** The `ptc` operation running in this async context (dialogs are linked to it). */
+  get currentOperation(): string | undefined {
+    const id = this.operationScope.getStore()?.toolCallId;
+    return id && this.activeOperations.has(id) ? id : undefined;
+  }
+
+  /**
+   * Count open dialogs so a ptc execution's active-time budget pauses while a
+   * human answers, and link each dialog to the operation that opened it.
+   */
+  private trackDialogs(ui: UiApi): UiApi {
+    /** Dialog methods and the position of their options argument. */
+    const dialogs = new Map([
+      ['select', 2],
+      ['choose', 3],
+      ['confirm', 2],
+      ['input', 2],
+      ['editor', 2],
+    ]);
+    return new Proxy(ui, {
+      get: (target, key, receiver) => {
+        const value = Reflect.get(target, key, receiver);
+        if (typeof key !== 'string' || typeof value !== 'function') return value;
+        const at = dialogs.get(key);
+        if (at === undefined) return value.bind(target);
+        return (...args: unknown[]) => {
+          const operation = this.currentOperation;
+          if (operation) {
+            const options = (args[at] ?? {}) as Record<string, unknown>;
+            if (options.toolCallId === undefined) args[at] = { ...options, toolCallId: operation };
+          }
+          this.humanWaitChanged(1);
+          let result: unknown;
+          try {
+            result = value.apply(target, args);
+          } catch (error) {
+            this.humanWaitChanged(-1);
+            throw error;
+          }
+          return Promise.resolve(result).finally(() => this.humanWaitChanged(-1));
+        };
+      },
+    });
   }
 
   getTool(name: string): Tool | undefined {
@@ -410,9 +630,26 @@ export class Agent {
     this.store.append({ type: 'model_change', provider, modelId: id });
   }
 
+  /**
+   * Keep only the named capabilities. `code`, `ptc` and `ptc_docs` are
+   * ignored (the wrappers come with any capability); unknown names grant
+   * nothing. Both warn, so a typo does not silently narrow a role.
+   */
   private restrictTools(names: string[]): void {
     const allowed = new Set(names);
+    const ignored = names.filter((name) => WRAPPER_NAMES.has(name));
+    const unknown = names.filter((name) => !WRAPPER_NAMES.has(name) && !this.tools.has(name));
     for (const name of [...this.tools.keys()]) if (!allowed.has(name)) this.tools.delete(name);
+    if (ignored.length)
+      this.ui.notify(
+        `Tool list: ${[...new Set(ignored)].join(', ')} ignored; ptc and ptc_docs come with any capability`,
+        'warning',
+      );
+    if (unknown.length)
+      this.ui.notify(
+        `Tool list: unknown or unavailable capabilities ${[...new Set(unknown)].join(', ')} grant nothing`,
+        'warning',
+      );
   }
 
   private recordedRole(): (AgentRole & { tools?: string[] }) | undefined {
@@ -779,6 +1016,10 @@ export class Agent {
           ]
         : []),
       ...extra,
+      ...((index) =>
+        index
+          ? [{ id: 'capabilities', title: 'Capabilities', source: 'built-in', text: index }]
+          : [])(capabilityIndexPrompt(this)),
       {
         id: 'cwd',
         title: 'Working directory',
@@ -802,7 +1043,7 @@ export class Agent {
   }
 
   toolSpecs(): ToolSpec[] {
-    return this.toolList.map(({ name, description, parameters }) => ({
+    return this.modelToolList.map(({ name, description, parameters }) => ({
       name,
       description,
       parameters,
@@ -996,6 +1237,7 @@ export class Agent {
                 },
               ],
         tools,
+        capabilities: this.capabilityRegistry.summaries(),
         messages,
         memoryTokens,
         model: {
@@ -1269,11 +1511,13 @@ export class Agent {
   }
 
   /**
-   * Obtain the write lease for the allowed root containing `file`. Team
-   * children's requests arrive here too, so they share this session's lease.
+   * Obtain the write lease for the allowed root containing `file` (none for
+   * shared roots such as /tmp). Team children's requests arrive here too, so
+   * they share this session's lease.
    */
   async acquireWrite(file: string, signal?: AbortSignal): Promise<void> {
-    await this.writeLease(this.guard.rootOf(file) ?? file, signal);
+    const root = this.guard.leaseRoot(file);
+    if (root) await this.writeLease(root, signal);
   }
 
   toolContext(
@@ -1292,13 +1536,11 @@ export class Agent {
       env: { ...this.config.env, ...this.toolEnv },
       acquireWrite: (file) => this.acquireWrite(file, signal),
       update: onUpdate ?? (() => undefined),
+      humanWait: (work) => this.humanWait(work),
     };
   }
 
-  /**
-   * Execute one tool with hooks. Used by the main loop and by PTC callbacks
-   * (`emit:false` keeps nested calls out of the event stream).
-   */
+  /** Run one internal capability with the full policy chain; the result only. */
   async invokeTool(
     name: string,
     rawArgs: Record<string, unknown>,
@@ -1306,48 +1548,210 @@ export class Agent {
     toolCallId: string = randomUUID(),
     onUpdate?: (result: ToolResult) => void,
   ): Promise<ToolResult> {
+    return (await this.invokeOperation(name, rawArgs, signal, toolCallId, onUpdate)).result;
+  }
+
+  /**
+   * Run one internal capability (a `ptc` operation): availability, argument
+   * validation, hooks, validation of hook-rewritten arguments, auto mode and
+   * the write lease, then the tool. `stage` tells how far it got.
+   */
+  async invokeOperation(
+    name: string,
+    rawArgs: Record<string, unknown>,
+    signal: AbortSignal,
+    toolCallId: string = randomUUID(),
+    onUpdate?: (result: ToolResult) => void,
+    options: OperationOptions = {},
+  ): Promise<OperationOutcome> {
     const tool = this.getTool(name);
     const capability = capabilityForTool(name);
     if (!tool && capability && this.tools.has(name))
       return {
-        content: [
-          {
-            type: 'text',
-            text: `The ${capability} capability is disabled for this project; ${name} is unavailable. Ask the user to enable it in the project settings if needed.`,
-          },
-        ],
-        isError: true,
+        stage: 'unavailable',
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: `The ${capability} capability is disabled for this project; ${name} is unavailable. Ask the user to enable it in the project settings if needed.`,
+            },
+          ],
+          isError: true,
+        },
       };
-    if (!tool) return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
+    if (!tool)
+      return {
+        stage: 'unavailable',
+        result: { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true },
+      };
+    return this.runTool(tool, rawArgs, signal, toolCallId, onUpdate, options);
+  }
+
+  /**
+   * One `ptc` operation, observable like a direct call (plans/ptc-only.md §6):
+   * `tool_execution_*` events under the capability's name, linked to the
+   * `ptc` call by `parentToolCallId`, and a `ptc.operation` session entry with
+   * the result as the tool returned it (never a `message`: the model sees
+   * only what the script returns). Dialogs it opens carry its id.
+   */
+  async runOperation(
+    parentToolCallId: string,
+    name: string,
+    args: Record<string, unknown>,
+    signal: AbortSignal,
+    operationId: string,
+    options: OperationOptions = {},
+  ): Promise<OperationOutcome> {
+    // What observers and the session see of the arguments: bounded, since a script can pass
+    // large arguments without the model writing them out (the operation gets them in full).
+    const shown = recordedArgs(args);
+    this.emit({
+      type: 'tool_execution_start',
+      toolCallId: operationId,
+      toolName: name,
+      args: shown,
+      parentToolCallId,
+    });
+    let lastUpdate = 0;
+    this.activeOperations.add(operationId);
+    let outcome: OperationOutcome | undefined;
+    let failure: unknown;
+    try {
+      outcome = await this.operationScope.run({ toolCallId: operationId }, () =>
+        this.invokeOperation(
+          name,
+          args,
+          signal,
+          operationId,
+          (partial) => {
+            const now = Date.now();
+            if (now - lastUpdate < 100) return;
+            lastUpdate = now;
+            this.emit({
+              type: 'tool_execution_update',
+              toolCallId: operationId,
+              toolName: name,
+              args: shown,
+              partialResult: observed(partial),
+              parentToolCallId,
+            });
+          },
+          options,
+        ),
+      );
+    } catch (error) {
+      failure = error;
+      throw error;
+    } finally {
+      this.activeOperations.delete(operationId);
+      // Always ended for observers, even if the call itself threw.
+      const result = observed(
+        outcome?.result ?? {
+          content: [
+            {
+              type: 'text',
+              text: signal.aborted
+                ? 'Cancelled'
+                : (failure as Error | undefined)?.message || 'The operation failed unexpectedly',
+            },
+          ],
+          isError: true,
+        },
+      );
+      const entry: OperationEntry = {
+        parentToolCallId,
+        toolCallId: operationId,
+        toolName: name,
+        args: shown,
+        content: result.content.length ? result.content : [{ type: 'text', text: '(no output)' }],
+        ...(result.details === undefined ? {} : { details: result.details }),
+        isError: !!result.isError,
+        timestamp: Date.now(),
+      };
+      // Written before it is announced, like messages: a snapshot is never behind the events.
+      try {
+        this.store.append({ type: 'custom', customType: OPERATION_ENTRY, data: entry });
+      } catch (error) {
+        process.stderr.write(`could not record operation ${operationId}: ${String(error)}\n`);
+      }
+      this.emit({
+        type: 'tool_execution_end',
+        toolCallId: operationId,
+        toolName: name,
+        result,
+        isError: !!result.isError,
+        parentToolCallId,
+      });
+      for (const feature of this.features)
+        try {
+          feature.operationRecorded?.(this, entry);
+        } catch (error) {
+          process.stderr.write(`operationRecorded failed in ${feature.name}: ${String(error)}\n`);
+        }
+    }
+    return outcome;
+  }
+
+  private async runTool(
+    tool: Tool,
+    rawArgs: Record<string, unknown>,
+    signal: AbortSignal,
+    toolCallId: string,
+    onUpdate?: (result: ToolResult) => void,
+    options: OperationOptions = {},
+  ): Promise<OperationOutcome> {
+    const name = tool.name;
+    const cancelled = () => fail('cancelled', 'Cancelled before it started');
+    const fail = (stage: OperationStage, text: string) => ({
+      stage,
+      result: { content: [{ type: 'text' as const, text }], isError: true },
+    });
     if ('__invalid_json' in rawArgs)
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Invalid JSON arguments for ${name}: ${String(rawArgs.__invalid_json).slice(0, 500)}`,
-          },
-        ],
-        isError: true,
-      };
+      return fail(
+        'invalid',
+        `Invalid JSON arguments for ${name}: ${String(rawArgs.__invalid_json).slice(0, 500)}`,
+      );
+    const invalid = (args: Record<string, unknown>, what: string) => {
+      const errors = validateSchema(args, tool.parameters);
+      return errors.length ? `Invalid ${what} for ${name}: ${errors.join('; ')}` : undefined;
+    };
+    const before = invalid(rawArgs, 'arguments');
+    if (before) return fail('invalid', before);
+    if (signal.aborted) return cancelled();
     const gate = await this.hooks.beforeTool(name, rawArgs);
-    if (gate.blocked)
-      return {
-        content: [{ type: 'text', text: `Blocked by hook: ${gate.blocked}` }],
-        isError: true,
-      };
+    if (signal.aborted) return cancelled();
+    if (gate.blocked) return fail('denied', `Blocked by hook: ${gate.blocked}`);
+    // Hook-rewritten arguments are validated again before auto mode judges them.
+    if (gate.args !== rawArgs) {
+      const after = invalid(gate.args, 'hook-rewritten arguments');
+      if (after) return fail('invalid', after);
+    }
+    const held = () => options.withheld?.(name, gate.args);
+    const early = held();
+    if (early) return fail('withheld', early);
     // Auto mode judges the final (hook-rewritten) arguments and takes the write lease.
     let refusal: string | undefined;
     try {
       refusal = await this.autoMode.gate(name, gate.args, signal);
     } catch (error) {
-      return { content: [{ type: 'text', text: (error as Error).message }], isError: true };
+      if (signal.aborted) return cancelled();
+      return fail('refused', (error as Error).message);
     }
-    if (refusal)
-      return {
-        content: [{ type: 'text', text: `Blocked by auto mode: ${refusal}` }],
-        isError: true,
-      };
+    // An approval cancelled with the call is not a denial, and never consent.
+    if (signal.aborted) return cancelled();
+    if (refusal) return fail('denied', `Blocked by auto mode: ${refusal}`);
+    if (options.beforeExecute)
+      try {
+        await options.beforeExecute(name, gate.args);
+      } catch {
+        return cancelled();
+      }
+    // Nothing runs once the call was cancelled, wherever it was waiting.
+    if (signal.aborted) return cancelled();
+    const late = held();
+    if (late) return fail('withheld', late);
     let result: ToolResult;
+    let stage: OperationStage = 'executed';
     try {
       result = await tool.execute(gate.args, this.toolContext(toolCallId, signal, onUpdate));
     } catch (error) {
@@ -1355,6 +1759,7 @@ export class Agent {
       process.stderr.write(
         `tool ${name} threw: ${(error as Error).stack ?? String(error)}\n`.slice(0, 8192),
       );
+      stage = 'threw';
       result = { content: [{ type: 'text', text: (error as Error).message }], isError: true };
     }
     if (this.config.hooks.afterTool.length) {
@@ -1377,13 +1782,66 @@ export class Agent {
         .filter((item) => item.exitCode === 0 && item.stdout.trim())
         .map((item) => item.stdout.trim())
         .join('\n');
-      if (hookOutput)
+      if (hookOutput) {
         result = {
           ...result,
           content: [...result.content, { type: 'text', text: `\n[hook]\n${hookOutput}` }],
         };
+        return { stage, result, hookOutput };
+      }
     }
-    return result;
+    return { stage, result };
+  }
+
+  /** A provider tool call: only the model-facing tools exist at this level. */
+  private async invokeModelTool(
+    call: ToolCall,
+    signal: AbortSignal,
+    onUpdate: (result: ToolResult) => void,
+  ): Promise<ToolResult> {
+    const wrapper = this.wrappers.get(call.name);
+    if (wrapper && this.toolList.length)
+      return (await this.runTool(wrapper, call.arguments, signal, call.id, onUpdate)).result;
+    // A direct core capability: the same policy chain as a ptc operation, in an operation scope
+    // so the dialogs it opens name its call; typed data stays here. A core capability disabled
+    // by policy gets the same explanation as from a script.
+    if (
+      this.directToolList.some((tool) => tool.name === call.name) ||
+      (DIRECT_CAPABILITIES.includes(call.name) &&
+        this.tools.has(call.name) &&
+        capabilityForTool(call.name))
+    ) {
+      this.activeOperations.add(call.id);
+      try {
+        return observed(
+          (
+            await this.operationScope.run({ toolCallId: call.id }, () =>
+              this.invokeOperation(
+                call.name,
+                lenientArgs(this.getTool(call.name), call.arguments),
+                signal,
+                call.id,
+                (partial) => onUpdate(observed(partial)),
+              ),
+            )
+          ).result,
+        );
+      } finally {
+        this.activeOperations.delete(call.id);
+      }
+    }
+    const capability = this.getTool(call.name);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: capability
+            ? `${call.name} is not a direct tool: call it from a ptc script, e.g. ptc({ code: "return await tools.${call.name}({ … })" }). ptc_docs({ names: ["${call.name}"] }) shows its arguments.`
+            : `Unknown tool: ${call.name}. The tools are ${this.modelToolList.map((tool) => tool.name).join(', ') || 'none'}.`,
+        },
+      ],
+      isError: true,
+    };
   }
 
   private async executeTool(call: ToolCall, signal: AbortSignal): Promise<ToolResultMessage> {
@@ -1394,7 +1852,7 @@ export class Agent {
       args: call.arguments,
     });
     let lastUpdate = 0;
-    const result = await this.invokeTool(call.name, call.arguments, signal, call.id, (partial) => {
+    const result = await this.invokeModelTool(call, signal, (partial) => {
       const now = Date.now();
       if (now - lastUpdate < 100) return;
       lastUpdate = now;

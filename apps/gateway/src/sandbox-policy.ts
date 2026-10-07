@@ -183,6 +183,12 @@ export interface PathPolicy {
   allowRead: string[];
   allowWrite: string[];
   denyWrite: string[];
+  /**
+   * Writable roots every session shares (temporary directories, build
+   * caches). Writes there take no write lease: the lease keeps two sessions
+   * from editing the same workspace, not from using the same /tmp.
+   */
+  sharedWrite?: string[];
 }
 
 /** Resolve a path the way the kernel will, following symlinks of the longest existing prefix. */
@@ -364,13 +370,16 @@ export function sessionPolicy(input: SessionPolicyInput): SessionPolicy {
         ])
       : [];
   const { filesystem, network } = input.config;
+  const sharedWrite = unique([
+    ...tmpDirs,
+    ...existing(CACHE_HOME_PATHS.map((item) => realResolve(path.join(home, item)))),
+  ]);
   const allowWrite = unique([
     workspace,
     ...input.allowedPaths.map((item) => realResolve(item)),
     sessionDir,
     memoryDir,
-    ...tmpDirs,
-    ...existing(CACHE_HOME_PATHS.map((item) => realResolve(path.join(home, item)))),
+    ...sharedWrite,
     ...configured(filesystem.allowWrite),
   ]);
   // What a session may write inside the node's private dirs: its own state.
@@ -412,6 +421,7 @@ export function sessionPolicy(input: SessionPolicyInput): SessionPolicy {
         .flatMap((dir) => denyWriteAround(dir, ownState)),
       ...configured(filesystem.denyWrite),
     ]),
+    sharedWrite,
   };
   return {
     paths,

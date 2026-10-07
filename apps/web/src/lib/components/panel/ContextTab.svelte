@@ -162,7 +162,7 @@
         <pre>{section.text}</pre>
       </details>
     {/each}
-    <h4>Tools ({snapshot.tools.length})</h4>
+    <h4>Model tools ({snapshot.tools.length})</h4>
     {#each snapshot.tools as tool (tool.name)}
       <details>
         <summary
@@ -172,10 +172,43 @@
         <pre>{JSON.stringify(tool.parameters, null, 2)}</pre>
       </details>
     {/each}
+    {#if snapshot.capabilities}
+      <h4>Capabilities ({snapshot.capabilities.length})</h4>
+      <p class="meta">
+        Called from ptc scripts; the core ones are also tools above. The others are only named in
+        the system prompt, and ptc_docs returns their schemas on request.
+      </p>
+      <ul class="capabilities">
+        {#each snapshot.capabilities as capability (capability.name)}
+          <li>
+            <code>{capability.name}</code>
+            <span class="meta"
+              >{capability.category} · {capability.effects.join(', ')}{capability.approval !==
+              'none'
+                ? ` · ${capability.approval}`
+                : ''}</span
+            >
+          </li>
+        {/each}
+      </ul>
+    {/if}
   {/if}
 </div>
 
 <style>
+  .capabilities {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .capabilities li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+  }
   .actions {
     display: flex;
     align-items: center;

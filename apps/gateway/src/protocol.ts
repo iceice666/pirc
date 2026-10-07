@@ -4,10 +4,20 @@
  * version: the daemon refuses a registration from any other version, so
  * upgrade the daemon and every node together.
  */
-import type { ModelsConfig } from './models.js';
-import type { InferenceEvent, InferenceRequest } from './inference-wire.js';
-import type { WorkspaceKind } from './types.js';
-import type { RoleBrief } from './agent/roles.js';
+import type { z } from 'zod';
+import type { InferenceEvent } from './inference-wire.js';
+import type {
+  nodeHttpRequestSchema,
+  nodeHttpResponseSchema,
+  registeredWorkspaceSchema,
+  sessionActivitySchema,
+  ParsedRegistration,
+  ParsedNodeMessage,
+  ParsedDaemonMessage,
+} from './protocol-schema.js';
+
+/** Node and workspace IDs carried by registration and configuration. */
+export const NODE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
 
 export const NODE_PROTOCOL_VERSION = 9;
 
@@ -23,33 +33,9 @@ export const PROTOCOL_MISMATCH_CLOSE = 4426;
 export const NODE_USER_HEADER = 'x-pirc-user';
 
 /** An HTTP request the daemon replays on a node's local router. */
-export interface NodeHttpRequest {
-  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
-  /** Path and query on the node, already rewritten to node-local IDs. */
-  url: string;
-  /** Authenticated browser user the daemon acts for. */
-  user: string;
-  /** JSON body. */
-  payload?: unknown;
-  /** Raw body (uploads), base64-encoded, sent with `contentType`. */
-  bodyBase64?: string;
-  contentType?: string;
-}
-
-export interface NodeHttpResponse {
-  status: number;
-  /** Parsed JSON body; absent for an empty (204) response. */
-  body?: unknown;
-}
-
-export interface RegisteredWorkspace {
-  id: string;
-  displayName: string;
-  /** Absent from older nodes: `directory`. */
-  kind?: WorkspaceKind | undefined;
-  /** The roles its agents can start in (agent/roles.ts); absent when unknown. */
-  roles?: RoleBrief[] | undefined;
-}
+export type NodeHttpRequest = z.infer<typeof nodeHttpRequestSchema>;
+export type NodeHttpResponse = z.infer<typeof nodeHttpResponseSchema>;
+export type RegisteredWorkspace = z.infer<typeof registeredWorkspaceSchema>;
 
 /**
  * Agent → gateway channel. An agent asks for an allowlisted operation
@@ -104,66 +90,27 @@ export const agentError = (
 });
 
 /**
- * Messages the daemon sends to a node. `registered` and `models` carry the
- * gateway's secret-free model catalog. Inference credentials stay on the gateway.
+ * Messages the daemon sends to a node. Models are the secret-free catalog.
+ * Reuse envelope shapes, retaining semantic inference payloads and required
+ * opaque fields: Zod's unknown() accepts missing fields on incoming frames.
  */
 export type DaemonToNode =
+  | Exclude<ParsedDaemonMessage, { type: InferenceEvent['type'] | 'terminal_input' }>
   | (InferenceEvent & { requestId: string })
-  | {
-      type: 'registered';
-      nodeId: string;
-      models: ModelsConfig;
-      /** Byte offset of each workspace-memory ledger the gateway already holds, by ledger key. */
-      mirrors?: Record<string, number>;
-    }
-  | { type: 'memory_mirror_ack'; ledgerKey: string; watermark: number }
-  | { type: 'models'; models: ModelsConfig }
-  | { type: 'registration_error'; status: number; code: string; message: string }
-  | { type: 'heartbeat_ack' }
-  | { type: 'request'; requestId: string; data: NodeHttpRequest }
-  | { type: 'agent_response'; requestId: string; status: number; body?: unknown }
-  | {
-      type: 'terminal_open';
-      streamId: string;
-      user: string;
-      sessionId: string;
-      terminalId: string;
-      /** `browser`: the session's browser live view (terminalId unused). Default `terminal`. */
-      kind?: 'terminal' | 'browser';
-    }
-  | { type: 'terminal_input'; streamId: string; message: unknown }
-  | { type: 'terminal_close'; streamId: string };
+  | (Extract<ParsedDaemonMessage, { type: 'terminal_input' }> & { message: unknown });
 
 /** A node session's open run and write lease, by the node's session id. */
-export interface SessionActivity {
-  id: string;
-  run?: 'queued' | 'running' | 'waiting_input' | 'stopping' | undefined;
-  writeLease?: boolean | undefined;
-}
+export type SessionActivity = z.infer<typeof sessionActivitySchema>;
 
-/** Messages a node sends to the daemon. */
+/**
+ * Outgoing messages are stricter than parsed envelopes: nodes always advertise
+ * a protocol and send typed ledger lines. Incoming mirror lines and agent ops
+ * deliberately stay opaque/permissive until their handlers validate them.
+ */
 export type NodeToDaemon =
-  | { type: 'model_start'; requestId: string; request: InferenceRequest }
-  | { type: 'model_cancel'; requestId: string }
-  | { type: 'register'; protocol: number; role: 'chat' | 'node'; workspaces: RegisteredWorkspace[] }
-  | { type: 'heartbeat' }
-  | { type: 'response'; requestId: string; data: NodeHttpResponse }
-  | { type: 'event'; sessionId: string; event: Record<string, unknown> }
-  /**
-   * Every session of this node with an open run or a write lease, sent whole
-   * after registering and on each change (the gateway's session list shows it).
-   */
-  | { type: 'activity'; sessions: SessionActivity[] }
-  | { type: 'agent_request'; requestId: string; sessionId: string; op: string; args?: unknown }
-  | {
-      type: 'memory_mirror';
-      ledgerKey: string;
-      /** Where `lines` start and end in the ledger file. */
-      offset: number;
-      end: number;
-      /** The file shrank (replaced or truncated): start over from `offset` 0. */
-      reset?: boolean;
+  | Exclude<ParsedNodeMessage, { type: 'memory_mirror' | 'terminal_frame' }>
+  | (ParsedRegistration & { protocol: number })
+  | (Omit<Extract<ParsedNodeMessage, { type: 'memory_mirror' }>, 'lines'> & {
       lines: MirroredLine[];
-    }
-  | { type: 'terminal_frame'; streamId: string; frame: unknown }
-  | { type: 'terminal_closed'; streamId: string; code: number; reason: string };
+    })
+  | (Extract<ParsedNodeMessage, { type: 'terminal_frame' }> & { frame: unknown });

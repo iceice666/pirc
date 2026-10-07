@@ -1,0 +1,857 @@
+{
+  "kind": "ptc-m1-openai-baseline",
+  "protocol": {
+    "version": 1,
+    "model": "gpt-6.1-sol",
+    "api": "openai-responses",
+    "endpoint": "https://api.openai.com/v1",
+    "conditions": ["uncached", "warm"],
+    "trialsPerCondition": 10,
+    "mainReasoning": "medium",
+    "maxOutputTokens": 16384,
+    "maxInputTokens": 922000,
+    "serviceTier": "default",
+    "limitUsd": 100,
+    "initialSpentUnits": 0,
+    "unitsPerUsd": 10000000,
+    "longInputThreshold": 272000
+  },
+  "chain": {
+    "openai001": {
+      "trials": "81c35ecbd5cfb5ddae17d8ec5e6124ee7831c9c65f80897c22900f731f87bce5",
+      "budget": "7764043b75aceac62b2c2e1212f6bc353e5930690422e4e9ebe287e3ad365a08",
+      "summary": "f4a0cb66f197cf257be47bb924a05518cef283d2e5459c413cce68e9a000f463",
+      "controller": "7bde20ffe2fe65b21d4bb99593110614d25cdd5c71f7c6602c9fce9c1255e8e6",
+      "fixture": "39f59e86faee6ff61d053c62d0e485e0bd2c1d355d7764d3292caa3ac491d106"
+    },
+    "continuations": [
+      {
+        "name": "openai-003",
+        "trials": "9f859b696ba532ad5713593c9d7029cab9a18bfb901f91ab645cf47371706494",
+        "budget": "ec982b2b3dd79030cf94e31d4d441e19bff8bf2b64f9bb3e32a2b57b6123d8b6",
+        "summary": "1d0cfe5f4d14c1f6fdfc8c68d0610b7c3cc55ddfb5e197b2ccc14a6b3dc9af26",
+        "controller": "e09c91c5670f815c562b5d1cc71ee8e55457b4a472ba887159768c17014f2a98"
+      },
+      {
+        "name": "openai-004",
+        "trials": "5fa1e397cc717c70da373fe0c426bb9169c77df992866e7b5989780ae0fc26da",
+        "budget": "21c1744899ab953f352cee793a1ef774a25ed84a99c3757a235f6d9a8cb39ba0",
+        "summary": "feb2658d0893dc682a14be9ca4bf1b4321b56afc0d9339fcb2964feb78104649",
+        "controller": "92e069378e7f1a3194d7abc9273b443fbeb366f875c7784e4cb75d6154769913"
+      }
+    ]
+  },
+  "supersededAttempts": [
+    {
+      "run": "openai-003",
+      "fixture": "permission-rejection",
+      "phase": "uncached",
+      "index": 0,
+      "reason": "gate"
+    }
+  ],
+  "remeasures": [
+    {
+      "name": "openai-005",
+      "fixtures": ["approval-denial", "permission-rejection", "chat-permission", "schedule"],
+      "reason": "explicit per-trial authorization enforcement evidence for the whole authorization category",
+      "trials": "eb2cae258d2d108d2a9fb998d264b6699de8672290edc52d61725b728c9826a3",
+      "budget": "3d51640302bb8780571df02dbc75f83bc331e6b8fb932b435342a454deabf101",
+      "summary": "f6787277f221bf6d3da65c968ddc3a5f6cabaa2f74bd62b863f8f5809a9c0c55",
+      "controller": "81342b559eb279b8c41b0b7f2baacee2b1d7d06ff18dbfcdeebad62c42d0386e",
+      "supersededMeasured": 80,
+      "supersededAuthorization": {
+        "approval-denial": { "trials": 20, "taskSuccesses": 20, "enforced": 20 },
+        "permission-rejection": { "trials": 20, "taskSuccesses": 0, "enforced": 20 },
+        "chat-permission": { "trials": 20, "taskSuccesses": 14, "enforced": 20 },
+        "schedule": { "trials": 20, "taskSuccesses": 16, "enforced": 19 }
+      },
+      "supersededAggregates": {
+        "coding": {
+          "groups": [
+            {
+              "fixture": "single-bash",
+              "condition": "uncached",
+              "weight": 5,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "single-bash",
+              "condition": "warm",
+              "weight": 5,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "single-read",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "single-read",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "multi-edit",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "multi-edit",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "dependent-edit",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "dependent-edit",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "output-filter",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "output-filter",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "browser-image",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "browser-image",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "user-question",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "user-question",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "approval-denial",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 10,
+              "successes": 10,
+              "meanTokens": 12884.9,
+              "meanWallMs": 4545.625337299984,
+              "meanModelRounds": 2,
+              "meanRequests": 3
+            },
+            {
+              "fixture": "approval-denial",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 10,
+              "successes": 10,
+              "meanTokens": 12910.5,
+              "meanWallMs": 4671.1850573999345,
+              "meanModelRounds": 2,
+              "meanRequests": 3
+            },
+            {
+              "fixture": "background-build",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "background-build",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "team-wait",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "team-wait",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "schedule",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 10,
+              "successes": 9,
+              "meanTokens": 13043.3,
+              "meanWallMs": 6699.77002699998,
+              "meanModelRounds": 2,
+              "meanRequests": 3
+            },
+            {
+              "fixture": "schedule",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 10,
+              "successes": 7,
+              "meanTokens": 13046.1,
+              "meanWallMs": 6823.0304105000105,
+              "meanModelRounds": 2,
+              "meanRequests": 3
+            },
+            {
+              "fixture": "permission-rejection",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 10,
+              "successes": 0,
+              "meanTokens": 12479.6,
+              "meanWallMs": 4526.9897489999985,
+              "meanModelRounds": 2,
+              "meanRequests": 3
+            },
+            {
+              "fixture": "permission-rejection",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 10,
+              "successes": 0,
+              "meanTokens": 12478.1,
+              "meanWallMs": 4513.3756511,
+              "meanModelRounds": 2,
+              "meanRequests": 3
+            },
+            {
+              "fixture": "cancel-wait",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "cancel-wait",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            }
+          ],
+          "aggregates": [
+            {
+              "condition": "uncached",
+              "weightedMeanTokens": null,
+              "unweightedMeanTokens": null,
+              "weightedMeanWallMs": null
+            },
+            {
+              "condition": "warm",
+              "weightedMeanTokens": null,
+              "unweightedMeanTokens": null,
+              "weightedMeanWallMs": null
+            }
+          ]
+        },
+        "chat": {
+          "groups": [
+            {
+              "fixture": "chat-web-search",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "chat-web-search",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 0,
+              "successes": 0,
+              "meanTokens": null,
+              "meanWallMs": null,
+              "meanModelRounds": null,
+              "meanRequests": null
+            },
+            {
+              "fixture": "chat-permission",
+              "condition": "uncached",
+              "weight": 1,
+              "trials": 10,
+              "successes": 5,
+              "meanTokens": 4367.4,
+              "meanWallMs": 3078.3735922000023,
+              "meanModelRounds": 1,
+              "meanRequests": 2
+            },
+            {
+              "fixture": "chat-permission",
+              "condition": "warm",
+              "weight": 1,
+              "trials": 10,
+              "successes": 9,
+              "meanTokens": 4370.1,
+              "meanWallMs": 3472.258715999994,
+              "meanModelRounds": 1,
+              "meanRequests": 2
+            }
+          ],
+          "aggregates": [
+            {
+              "condition": "uncached",
+              "weightedMeanTokens": null,
+              "unweightedMeanTokens": null,
+              "weightedMeanWallMs": null
+            },
+            {
+              "condition": "warm",
+              "weightedMeanTokens": null,
+              "unweightedMeanTokens": null,
+              "weightedMeanWallMs": null
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "teamOracleRevision": 2,
+  "readiness": { "missing": [], "complete": true },
+  "measuredTrials": 300,
+  "primes": 150,
+  "authorization": {
+    "approval-denial/uncached": {
+      "trials": 10,
+      "enforced": 10,
+      "taskSuccesses": 10,
+      "explicitEvidence": 10
+    },
+    "approval-denial/warm": {
+      "trials": 10,
+      "enforced": 10,
+      "taskSuccesses": 10,
+      "explicitEvidence": 10
+    },
+    "schedule/uncached": {
+      "trials": 10,
+      "enforced": 10,
+      "taskSuccesses": 10,
+      "explicitEvidence": 10
+    },
+    "schedule/warm": { "trials": 10, "enforced": 10, "taskSuccesses": 7, "explicitEvidence": 10 },
+    "permission-rejection/uncached": {
+      "trials": 10,
+      "enforced": 10,
+      "taskSuccesses": 0,
+      "explicitEvidence": 10
+    },
+    "permission-rejection/warm": {
+      "trials": 10,
+      "enforced": 10,
+      "taskSuccesses": 0,
+      "explicitEvidence": 10
+    },
+    "chat-permission/uncached": {
+      "trials": 10,
+      "enforced": 10,
+      "taskSuccesses": 8,
+      "explicitEvidence": 10
+    },
+    "chat-permission/warm": {
+      "trials": 10,
+      "enforced": 10,
+      "taskSuccesses": 5,
+      "explicitEvidence": 10
+    }
+  },
+  "aggregates": {
+    "coding": {
+      "groups": [
+        {
+          "fixture": "single-bash",
+          "condition": "uncached",
+          "weight": 5,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 12772.2,
+          "meanWallMs": 4467.104676399979,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "single-bash",
+          "condition": "warm",
+          "weight": 5,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 12773.4,
+          "meanWallMs": 3726.842353400031,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "single-read",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 12752.3,
+          "meanWallMs": 3943.7557906000175,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "single-read",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 12756.4,
+          "meanWallMs": 3992.5787449999943,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "multi-edit",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 9,
+          "meanTokens": 25847.2,
+          "meanWallMs": 11034.655758599984,
+          "meanModelRounds": 3.7,
+          "meanRequests": 5.9
+        },
+        {
+          "fixture": "multi-edit",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 8,
+          "meanTokens": 26396.8,
+          "meanWallMs": 12294.695058600022,
+          "meanModelRounds": 3.7,
+          "meanRequests": 6.1
+        },
+        {
+          "fixture": "dependent-edit",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 31338.1,
+          "meanWallMs": 9133.412334699975,
+          "meanModelRounds": 4.9,
+          "meanRequests": 5.9
+        },
+        {
+          "fixture": "dependent-edit",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 31349.7,
+          "meanWallMs": 10107.968727399968,
+          "meanModelRounds": 4.9,
+          "meanRequests": 5.9
+        },
+        {
+          "fixture": "output-filter",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 12758.4,
+          "meanWallMs": 3753.4386789000127,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "output-filter",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 12762.6,
+          "meanWallMs": 3587.4508921000643,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "browser-image",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 13045.3,
+          "meanWallMs": 7821.821443100087,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "browser-image",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 13039.2,
+          "meanWallMs": 8211.83660109993,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "user-question",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 12806.7,
+          "meanWallMs": 4028.7853515001016,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "user-question",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 12815.6,
+          "meanWallMs": 4329.141853700113,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "approval-denial",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 12886.9,
+          "meanWallMs": 5076.911179899999,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "approval-denial",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 12896,
+          "meanWallMs": 4985.650561399999,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "background-build",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 19366.9,
+          "meanWallMs": 6310.179823500058,
+          "meanModelRounds": 3,
+          "meanRequests": 4
+        },
+        {
+          "fixture": "background-build",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 19371.3,
+          "meanWallMs": 6364.093145499937,
+          "meanModelRounds": 3,
+          "meanRequests": 4
+        },
+        {
+          "fixture": "team-wait",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 0,
+          "meanTokens": 57441.5,
+          "meanWallMs": 26233.539803099964,
+          "meanModelRounds": 4.8,
+          "meanRequests": 13.6
+        },
+        {
+          "fixture": "team-wait",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 3,
+          "meanTokens": 53751.9,
+          "meanWallMs": 25543.972894299997,
+          "meanModelRounds": 4.4,
+          "meanRequests": 13
+        },
+        {
+          "fixture": "schedule",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 13039.6,
+          "meanWallMs": 7285.604542099999,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "schedule",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 7,
+          "meanTokens": 13037.8,
+          "meanWallMs": 6801.087322400004,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "permission-rejection",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 0,
+          "meanTokens": 12476.8,
+          "meanWallMs": 4253.675641399995,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "permission-rejection",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 0,
+          "meanTokens": 12483.3,
+          "meanWallMs": 4491.072372800007,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "cancel-wait",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 6453.4,
+          "meanWallMs": 2432.867565499997,
+          "meanModelRounds": 1,
+          "meanRequests": 2
+        },
+        {
+          "fixture": "cancel-wait",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 6458,
+          "meanWallMs": 2450.0869769999963,
+          "meanModelRounds": 1,
+          "meanRequests": 2
+        }
+      ],
+      "aggregates": [
+        {
+          "condition": "uncached",
+          "weightedMeanTokens": 17298.476470588233,
+          "unweightedMeanTokens": 18691.17692307692,
+          "weightedMeanWallMs": 6684.951252641182
+        },
+        {
+          "condition": "warm",
+          "weightedMeanTokens": 17116.8,
+          "unweightedMeanTokens": 18453.230769230766,
+          "weightedMeanWallMs": 6576.108642252952
+        }
+      ]
+    },
+    "chat": {
+      "groups": [
+        {
+          "fixture": "chat-web-search",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 8609.7,
+          "meanWallMs": 4003.2759693000057,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "chat-web-search",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 10,
+          "meanTokens": 8608.9,
+          "meanWallMs": 4177.360370099998,
+          "meanModelRounds": 2,
+          "meanRequests": 3
+        },
+        {
+          "fixture": "chat-permission",
+          "condition": "uncached",
+          "weight": 1,
+          "trials": 10,
+          "successes": 8,
+          "meanTokens": 4367.2,
+          "meanWallMs": 3336.8051098999917,
+          "meanModelRounds": 1,
+          "meanRequests": 2
+        },
+        {
+          "fixture": "chat-permission",
+          "condition": "warm",
+          "weight": 1,
+          "trials": 10,
+          "successes": 5,
+          "meanTokens": 4374.7,
+          "meanWallMs": 3716.644404199999,
+          "meanModelRounds": 1,
+          "meanRequests": 2
+        }
+      ],
+      "aggregates": [
+        {
+          "condition": "uncached",
+          "weightedMeanTokens": 6488.450000000001,
+          "unweightedMeanTokens": 6488.450000000001,
+          "weightedMeanWallMs": 3670.0405395999987
+        },
+        {
+          "condition": "warm",
+          "weightedMeanTokens": 6491.799999999999,
+          "unweightedMeanTokens": 6491.799999999999,
+          "weightedMeanWallMs": 3947.002387149999
+        }
+      ]
+    }
+  },
+  "budget": { "spentUnits": 107003327, "admittedAttempts": 2153 }
+}

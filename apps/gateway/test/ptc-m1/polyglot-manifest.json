@@ -1,0 +1,466 @@
+{
+  "repository": "https://github.com/Aider-AI/polyglot-benchmark",
+  "commit": "7e0611e77b54e2dea774cdc0aa00cf9f7ed6144f",
+  "path": "python/exercises/practice",
+  "exercises": {
+    "affine-cipher": {
+      "solution": ["affine_cipher.py"],
+      "test": ["affine_cipher_test.py"],
+      "extra": [],
+      "files": {
+        "affine_cipher.py": "d3164dc77d13a429fb14899cd5e74a81d848ed0c7b95b02db3247a75e0bbd72b",
+        "affine_cipher_test.py": "4d9dac99b726068707a37e36145d73f74a52704145fb95bb4acaccdd7cd3ef54",
+        ".docs/instructions.md": "8ca08c38274662d67f1bd6482242161a36a6268851ad1e61acf1bb327b20c729",
+        ".docs/instructions.append.md": "e5dc5300128239b38b82ecfa24ed5e64df264b4a99e3ae8e23f10ab6a5253f1b",
+        ".meta/example.py": "6952153be60d7690e0bfad52c89c4647e9edb4bd068c77f1c15735e00d9216ba"
+      },
+      "testCount": 16,
+      "testModules": ["affine_cipher_test"]
+    },
+    "beer-song": {
+      "solution": ["beer_song.py"],
+      "test": ["beer_song_test.py"],
+      "extra": [],
+      "files": {
+        "beer_song.py": "942234e1d907d3867f9eee8102573a8c398520a28ad1ca10cd23a0d9247134bc",
+        "beer_song_test.py": "91c87daae769e12821ba3526858ca3fd45c3501033669edb6101e486d74eff1f",
+        ".docs/instructions.md": "74f85047feabcf41b1846d5c58ad0133a51e0963567d0afbc5e21541beb37e4f",
+        ".meta/example.py": "b799738d63ff7e375f9bedfb76552eeee9b328ee8c3581f6f48a05ff71690fef"
+      },
+      "testCount": 8,
+      "testModules": ["beer_song_test"]
+    },
+    "book-store": {
+      "solution": ["book_store.py"],
+      "test": ["book_store_test.py"],
+      "extra": [],
+      "files": {
+        "book_store.py": "5c22fe209f90b16dbbacff457199d0b14152b48616c875085c8ff1f6f7188ec2",
+        "book_store_test.py": "fa4109f3378cceaff8bdc389b333bc23c65f8b1345bc907be5c09593be0ee1eb",
+        ".docs/instructions.md": "025999b58db674568be4d2239fc577b749ec40e98593fc3638e21e72915ad4c5",
+        ".meta/example.py": "728655581209a08f392aa2d6a5060bca855f53ea3e96f66a86db738dbf23d751"
+      },
+      "testCount": 20,
+      "testModules": ["book_store_test"]
+    },
+    "bottle-song": {
+      "solution": ["bottle_song.py"],
+      "test": ["bottle_song_test.py"],
+      "extra": [],
+      "files": {
+        "bottle_song.py": "942234e1d907d3867f9eee8102573a8c398520a28ad1ca10cd23a0d9247134bc",
+        "bottle_song_test.py": "c27aadffe3a14df3f04dfa65de1798d1ab7b4bf07126f8978808fbd25302b700",
+        ".docs/instructions.md": "0e4fd6e0e83949fe62ef118036e7b28fb597666ed19a478eca3d3d9018614b11",
+        ".meta/example.py": "202fffe8d02d30f4e4f62c0786e20dfa1f54969890bb01ee39cee874048f4e06"
+      },
+      "testCount": 7,
+      "testModules": ["bottle_song_test"]
+    },
+    "bowling": {
+      "solution": ["bowling.py"],
+      "test": ["bowling_test.py"],
+      "extra": [],
+      "files": {
+        "bowling.py": "a356c0682b6c0c04e9e30a7da603b2014c227426b43bbe37f34cd99913d368b6",
+        "bowling_test.py": "6b9a80b6835828f575ce0aba66876850f75c59f764014ac509fe1df7e3a9ee20",
+        ".docs/instructions.md": "38a7d249928abfaac3e24d47222283a9bc3a6c5c599d9cea1d43bbe55eb8de1c",
+        ".docs/instructions.append.md": "51b23a84cccf816778935b8dce09c0f88fc0deda3bdc896152a2c65ec9d341fc",
+        ".meta/example.py": "7f634589daeb5c2974d3600d8eaf60a8fa157c0ceb37fe7341e47ea0b2e9ca8f"
+      },
+      "testCount": 31,
+      "testModules": ["bowling_test"]
+    },
+    "connect": {
+      "solution": ["connect.py"],
+      "test": ["connect_test.py"],
+      "extra": [],
+      "files": {
+        "connect.py": "2e5d51380a8160d906d2eacc8655eceea5ce87abb7f0783a010a1521cf608216",
+        "connect_test.py": "4de5c414b9a5023754ebdbb9a192b72ad19fdf402179a3020d87727e9946ce2b",
+        ".docs/instructions.md": "3c717817dc88865be3fd9ad5b084d0244602e8bd416a59eca9c3cbea546b70aa",
+        ".meta/example.py": "8664d19c48528035ebd15fc7917d19c40f7c43ad9b95c5f488d2633e01520705"
+      },
+      "testCount": 10,
+      "testModules": ["connect_test"]
+    },
+    "dominoes": {
+      "solution": ["dominoes.py"],
+      "test": ["dominoes_test.py"],
+      "extra": [],
+      "files": {
+        "dominoes.py": "89f1fede34db8dbd73fb7103476080307e769425049014bf60b7d5e632f9743b",
+        "dominoes_test.py": "9645efc873738b9247ced09ccdce782fe2124646d24588d52c23df59e23ab140",
+        ".docs/instructions.md": "4d0e12e178b83a18ea3e4cdc2b108e0a2ae01ae7e66625887d2895672db7fece",
+        ".meta/example.py": "4a51af33d2fed21b11146fb6ef03179771481f27f4c59d53fe442218fc9e2d6a"
+      },
+      "testCount": 13,
+      "testModules": ["dominoes_test"]
+    },
+    "dot-dsl": {
+      "solution": ["dot_dsl.py"],
+      "test": ["dot_dsl_test.py"],
+      "extra": [],
+      "files": {
+        "dot_dsl.py": "e13b484dcf24ab01d5d8c2f9ee259bc725069c69d80a1b9855d81cfd742b386a",
+        "dot_dsl_test.py": "02f801ecff9b041978af4ea77b127bb74dc419edd0e0e420c912bb421db92627",
+        ".docs/instructions.md": "3abc3569b7d33fec5ccfe4bdd38ab43bb82926faaf40656d74a4f9a6d3b520a0",
+        ".docs/instructions.append.md": "b2d4f955bf69cdf98949fc50138c961b51cf3616e617c98a55f146b824742f1d",
+        ".meta/example.py": "7acd5e4ba093036c9b7be98628bf235489910b6996b9928b99fadaaf0f4c858d"
+      },
+      "testCount": 12,
+      "testModules": ["dot_dsl_test"]
+    },
+    "food-chain": {
+      "solution": ["food_chain.py"],
+      "test": ["food_chain_test.py"],
+      "extra": [],
+      "files": {
+        "food_chain.py": "d7c1f854251ec4677ff36fdabbc87ef0ebcff8e8559fdee91b52fdeb8c3dc6b5",
+        "food_chain_test.py": "8ff5c6c45bbcdee64f0e3c9d879d2a08e97c90594d00d15ee0f228b4e7eac548",
+        ".docs/instructions.md": "282ba689e0653e74892e2104962c2ed4ef79fd307a182c343cd72ae807e466f3",
+        ".meta/example.py": "8eea5c1f75e15326ac221952e38c9289cacdabdd9dc1dcc4a5b52b4fb0682640"
+      },
+      "testCount": 10,
+      "testModules": ["food_chain_test"]
+    },
+    "forth": {
+      "solution": ["forth.py"],
+      "test": ["forth_test.py"],
+      "extra": [],
+      "files": {
+        "forth.py": "9acd281e02feff4fc5ae766063a1ce1290b625bb930cc8f54c15a0109610e562",
+        "forth_test.py": "05f78a51ce5b3e18439088442925c7cea5b1fb1703bc10832dd048c057b7639c",
+        ".docs/instructions.md": "06875da79159e3783cde3d006e405f8329e16837b09b0b4b8225efc3d27a6d9c",
+        ".docs/instructions.append.md": "ec3a69fad548faa5f17b2ef73cebfdd06759225c1b0f4ed805c7e0a630cdcd77",
+        ".meta/example.py": "a90f6134d4f24b5abee77880c8eb4f8adf7a88d925c0cd3d9bbfcfba895a320b"
+      },
+      "testCount": 54,
+      "testModules": ["forth_test"]
+    },
+    "go-counting": {
+      "solution": ["go_counting.py"],
+      "test": ["go_counting_test.py"],
+      "extra": [],
+      "files": {
+        "go_counting.py": "93533b48aa59c4b85a8ddd8a6f212f28491dfe6c016a660d0ef7c97192ee18d3",
+        "go_counting_test.py": "66b355989d67c4120e49bf5e7e1d224f0af21dd1eeb30b884c204640e73fe358",
+        ".docs/instructions.md": "f774382c9c34518f382d9ccbdcc3be778037fa44b5eaac4b0caf0d990fcc109b",
+        ".docs/instructions.append.md": "c59b9fc9456cc13a6115badad795891a711d44c825d5ac9ce42f1b58a9913f36",
+        ".meta/example.py": "78f9812eec1107283a9b09362eec1b46150f00ecf651ff6b19b581c6e9dbb91d"
+      },
+      "testCount": 11,
+      "testModules": ["go_counting_test"]
+    },
+    "grade-school": {
+      "solution": ["grade_school.py"],
+      "test": ["grade_school_test.py"],
+      "extra": [],
+      "files": {
+        "grade_school.py": "d2af6e7a288b738c4d98ec1989f5a604809a07abe42d76a7aebe223d7460d53d",
+        "grade_school_test.py": "72827c03772b6cf4256fd2f378ae6ddff2703ccacb6053ba647e973b415e27b9",
+        ".docs/instructions.md": "8dc7133cd5f0564717108757c27ad96ebadf44f03b5fde5c35b826aaeb0b4e0f",
+        ".docs/instructions.append.md": "ccc8c763419ac8712f4e9971b5e70e3ab795f1cfe8aa86ff8da0ce1f2e32dabb",
+        ".meta/example.py": "f6a52a73ebe023737547952d2b27231a0eaa086f2b9804aac4c137b9fd687473"
+      },
+      "testCount": 20,
+      "testModules": ["grade_school_test"]
+    },
+    "grep": {
+      "solution": ["grep.py"],
+      "test": ["grep_test.py"],
+      "extra": [],
+      "files": {
+        "grep.py": "00350df01f0993f6268ba128c4d05a693a7188573fb9fca5275be53738fe829a",
+        "grep_test.py": "30721903a1dea840b7ab33374bb08cb0db84f63f4c80fc0a5515cff3071c0506",
+        ".docs/instructions.md": "c68254de5f7f8eb68527d638595ce53dedfec499cd52cca0ad5bff8b3065e980",
+        ".meta/example.py": "cac7f6c5ee08c8700bad86e30f00e1cb334e85cb6884d072c2577b3eb1a90cf8"
+      },
+      "testCount": 25,
+      "testModules": ["grep_test"]
+    },
+    "hangman": {
+      "solution": ["hangman.py"],
+      "test": ["hangman_test.py"],
+      "extra": [],
+      "files": {
+        "hangman.py": "9ed6db0932276c19a9aaac728211c1bda0d8a143c4ac4c6a3c5c23b941137562",
+        "hangman_test.py": "0eece50307284a914eca79d25ea623d023029f1b173bfbc60293578d3570a11a",
+        ".docs/instructions.md": "ed73c7cbfd96365f12988af95c5369c3e244bb874d3209018e03c42a8b5d5ac0",
+        ".docs/instructions.append.md": "a96e81af1a831a656cbd48705d0a5d5eb0b90b62a783825c04e2bf58b1b40b70",
+        ".meta/example.py": "fde813e1c2871eb8b522dd687b47781c2196375e7c8c37e2ab40ddd7e108e300"
+      },
+      "testCount": 7,
+      "testModules": ["hangman_test"]
+    },
+    "list-ops": {
+      "solution": ["list_ops.py"],
+      "test": ["list_ops_test.py"],
+      "extra": [],
+      "files": {
+        "list_ops.py": "a3ff5742b7a38f4f35d7a9cb0d86f10fa6b7ac31777e9adf3fc06099978e38c8",
+        "list_ops_test.py": "373082dc316d8c4cb1f1c40d9b238e7312d41dcd507aa0d745880670089cde9a",
+        ".docs/instructions.md": "99b119333c4f19ab2563d6205781813f165bcef909c227a206305543d739e74b",
+        ".meta/example.py": "fb206c755414929f90770f4e086f1ab11236a458be1b8edaa2bb0bd974dc8a93"
+      },
+      "testCount": 24,
+      "testModules": ["list_ops_test"]
+    },
+    "paasio": {
+      "solution": ["paasio.py"],
+      "test": ["paasio_test.py", "test_utils.py"],
+      "extra": [],
+      "files": {
+        "paasio.py": "9a6238e652c6289fee1211c8a530563c091b7d386dbe5347a999b28d2a7211e8",
+        "paasio_test.py": "4c9aa14b0fdfea01221d5bdff32b9a5569bbfaf412e0985d82502776c41eb569",
+        "test_utils.py": "9c890fda159fa05e00ee30903d9beb226e0e76eb583d505cd46783bc63546194",
+        ".docs/instructions.md": "4f389a21f0b352607babb959e45bb449ab5d9b9970d1e3aaf5c2423b2ffc0c33",
+        ".meta/example.py": "592790e76ac7e4905cd12fbad3449ad5e4a9257c191f994f5155430892544159"
+      },
+      "testCount": 25,
+      "testModules": ["paasio_test"]
+    },
+    "phone-number": {
+      "solution": ["phone_number.py"],
+      "test": ["phone_number_test.py"],
+      "extra": [],
+      "files": {
+        "phone_number.py": "be4018194beaf2c67df5d95e277d5cf7a7344c03a3c64d283aabcf0a2a0480d7",
+        "phone_number_test.py": "68c6fc5c281f12eb0a0d5f4e9c963e33b5f1a69576cccce2c712bec9788b6c8e",
+        ".docs/instructions.md": "ca1e2c1c43454c151e519a2f784439621c243bb2824715c69a8e0904abc473a5",
+        ".docs/instructions.append.md": "c093e2195d15a182ea018a10043a58945b5238d8f1d9a8d10dade09a7c70e5de",
+        ".meta/example.py": "4724acfb7b22518b9a0b4b3ea031cb614cda2a58225f4aaf1a52416b3225a846"
+      },
+      "testCount": 21,
+      "testModules": ["phone_number_test"]
+    },
+    "pig-latin": {
+      "solution": ["pig_latin.py"],
+      "test": ["pig_latin_test.py"],
+      "extra": [],
+      "files": {
+        "pig_latin.py": "fbef923db1bc51436424e83ca92e8d5d4f2505c5796fee8daf3fe276b2259e63",
+        "pig_latin_test.py": "2a2bec06a0389dad5636c83cc604a418e6f0ed79fbf8768f620c7d1101ec65c2",
+        ".docs/instructions.md": "549115cb33a5a91e8e5c4aeea68cf6e672c84fd8d77669d2eeb2518a2d4d6aa5",
+        ".meta/example.py": "52a698b0db8c23e113b4346b1c41df69b56bbc7d9422dcab9cde942d06721019"
+      },
+      "testCount": 22,
+      "testModules": ["pig_latin_test"]
+    },
+    "poker": {
+      "solution": ["poker.py"],
+      "test": ["poker_test.py"],
+      "extra": [],
+      "files": {
+        "poker.py": "6a4b5adab3ba9261fb4f9e2b09abc549b9ea37bf0774edc3c7759cec9a8b41fe",
+        "poker_test.py": "b39f023208318973e18a341449aa076f7595ff98f07174082a2a1b05c84ad8fd",
+        ".docs/instructions.md": "62427ba25c07f8c57519f93cbfc293dd3eb9e8b74a33aae3645281433b8941ea",
+        ".meta/example.py": "9627361e2566290218239ed64ea4edf610f826e94ae7044d9eef9316d241ec43"
+      },
+      "testCount": 37,
+      "testModules": ["poker_test"]
+    },
+    "pov": {
+      "solution": ["pov.py"],
+      "test": ["pov_test.py"],
+      "extra": [],
+      "files": {
+        "pov.py": "ed7eba5f0b64b69a0a1904dc338ce39039b5de3ea2aa74019d8d494ca46b11ba",
+        "pov_test.py": "a5127ac17db6ad1563a08ba8ee2bbfc25ed8ab81ee56b92a355eb4a4dc2559fe",
+        ".docs/instructions.md": "3276ced63a920fb572cdacbd412ca98c8ab70c2e21c5ef2e22a86a9707d15a9e",
+        ".docs/instructions.append.md": "d33a5d90425010c100c4b798ce1484cb822c6c86787e84bda6e0725126e525ea",
+        ".meta/example.py": "7057cfff3546e55a89e34b20555d4a530a7b0890c6a9de6241645998b3961f7e"
+      },
+      "testCount": 15,
+      "testModules": ["pov_test"]
+    },
+    "proverb": {
+      "solution": ["proverb.py"],
+      "test": ["proverb_test.py"],
+      "extra": [],
+      "files": {
+        "proverb.py": "6ffde7190552cc3a19fdabc7d0624359302e3663a06671b28e1c65b13af61a42",
+        "proverb_test.py": "6792db661176bc5dfd4447b8f68209d441797631a3896b880421ceba98895682",
+        ".docs/instructions.md": "db74a89ac1c983d3cd5c8ade251df98fa4748baa60a6967e323ed42b5ff547f7",
+        ".docs/instructions.append.md": "00a1545be09e9047cdfa45487e0075db4effa19f6143d7939336f2e3c7fa4172",
+        ".meta/example.py": "21defe08a5cbfe2c9c25eed0b70c2b8d1367e575ea5a2c25165eb56208bd0a4e"
+      },
+      "testCount": 8,
+      "testModules": ["proverb_test"]
+    },
+    "react": {
+      "solution": ["react.py"],
+      "test": ["react_test.py"],
+      "extra": [],
+      "files": {
+        "react.py": "49f06798292a5ae593375b8b080f4bee839b85a19827b06dd4c6c25583e5f5ce",
+        "react_test.py": "3017017c1f0830d96ddedac16fb6945a6e7769c62fdc89d8b251082cf9d495aa",
+        ".docs/instructions.md": "2d227f7e0b99585c441704993f1ed93009b946ec1ab46c3e9cde89e4dbee500b",
+        ".meta/example.py": "a1198a835f44b3826e6bb2d6c2d0df81ede7e7541f9f85853aff08f1487039ff"
+      },
+      "testCount": 14,
+      "testModules": ["react_test"]
+    },
+    "rest-api": {
+      "solution": ["rest_api.py"],
+      "test": ["rest_api_test.py"],
+      "extra": [],
+      "files": {
+        "rest_api.py": "249967634165d5b28853c6b7ce2ff83f384b864c2547bcdaf82f93d00df7575a",
+        "rest_api_test.py": "3fae966db6e7935a9338a72f017f764d36c6cbff6c6f9c812d4fe6d9b49af47e",
+        ".docs/instructions.md": "bcbbaeccabfca6fa8e8958c623f2ac972205c94e69e7b6c61310201a9fd131b2",
+        ".meta/example.py": "394374b0b87ac6e2bfa2cf135f101369dea35c3ee01f02fe55b1cbde0df538a6"
+      },
+      "testCount": 9,
+      "testModules": ["rest_api_test"]
+    },
+    "robot-name": {
+      "solution": ["robot_name.py"],
+      "test": ["robot_name_test.py"],
+      "extra": [],
+      "files": {
+        "robot_name.py": "cc89225ac6cb0b5dae3133d02620f6f7ca5831274afa8ea9e462eb5d6b66f21d",
+        "robot_name_test.py": "c9d7b8ad737fe2d13d3053fe8859ac7d8a4493689b26e788ca99374438b91f9a",
+        ".docs/instructions.md": "bbb01d54e892de555eb900b3b93fd3645ad7fcfd09eace353fb6b81e768c4310",
+        ".meta/example.py": "d5c2eecdf7738305ce15bf6f6e5b410835179ca0125450baf43643263e2b7c1c"
+      },
+      "testCount": 4,
+      "testModules": ["robot_name_test"]
+    },
+    "scale-generator": {
+      "solution": ["scale_generator.py"],
+      "test": ["scale_generator_test.py"],
+      "extra": [],
+      "files": {
+        "scale_generator.py": "3dbc77dd439f4f4e1e41c6ec3f07dce2a55cb40f6e203797b66a27f251be8c24",
+        "scale_generator_test.py": "a3252f32d07001e695db35466ec00d8e713063aed8b9da8e20103c9681b90a41",
+        ".docs/instructions.md": "4101835869d2d6376accf0644e51bb216fa0bd252ba93b7102827e43b6342859",
+        ".meta/example.py": "46e23bb615c77f5bebe5beffc3a561ff2df57c36146571e89699935acf8f7cf4"
+      },
+      "testCount": 17,
+      "testModules": ["scale_generator_test"]
+    },
+    "sgf-parsing": {
+      "solution": ["sgf_parsing.py"],
+      "test": ["sgf_parsing_test.py"],
+      "extra": [],
+      "files": {
+        "sgf_parsing.py": "e821e6d68abd9336a222d56049ed9fb89c001b6d8ac62e2d10da44a36f76de9d",
+        "sgf_parsing_test.py": "c8274cd12d6432b18d5f4fd6b15e64bdba6745007ae6c0d275a4fe048d4dba6e",
+        ".docs/instructions.md": "93ae936049168d8532e283a8610f45a06c6d9225e5812a2ece5c2c164d2870d0",
+        ".docs/instructions.append.md": "5bba17d539d0704745375f9967ebaa439667974944ce49d221f09d640e19c997",
+        ".meta/example.py": "2382065cc01d03b7348eb42cfd7db9899565eccd85fcc6cf8199eb2627b5a226"
+      },
+      "testCount": 23,
+      "testModules": ["sgf_parsing_test"]
+    },
+    "simple-linked-list": {
+      "solution": ["simple_linked_list.py"],
+      "test": ["simple_linked_list_test.py"],
+      "extra": [],
+      "files": {
+        "simple_linked_list.py": "99ae2a714c113f895a899f79728ead86001e0a3c2c8042485bea4279269e0101",
+        "simple_linked_list_test.py": "2ac2c242c2348058a7ce1319b2d8dd653a33f1cc39a7df4d1a6552bdff3b4229",
+        ".docs/instructions.md": "ddf0b0d7a6d0a7b39a70a8dac0ae2e5cc4b7d9ad4163f4a103988bb53abeb914",
+        ".docs/instructions.append.md": "487457a2de0c72dbc330020b15d86e664fe6c4d57c218d7660e63261bac1e7f8",
+        ".meta/example.py": "a93a409f17f9904467da3924d47e2c93211038604a41ae27cba4afdc020ce12a"
+      },
+      "testCount": 20,
+      "testModules": ["simple_linked_list_test"]
+    },
+    "transpose": {
+      "solution": ["transpose.py"],
+      "test": ["transpose_test.py"],
+      "extra": [],
+      "files": {
+        "transpose.py": "009152d0e004d0e7ec4de2c7aec36bdfbb0c3dd7061553e9494cabeaae7c4797",
+        "transpose_test.py": "7ac879485ac2de3e925a39b0ebe65788543491625b0931bd08b450293e1f681b",
+        ".docs/instructions.md": "4107fc3ed25cb2106df05774f9e6328663bf96777712df14ab5c3090438c6c66",
+        ".meta/example.py": "33b60c3de3f36df81ab7443a9b51e788364746914e3cb3bbe67952bca5a7e877"
+      },
+      "testCount": 12,
+      "testModules": ["transpose_test"]
+    },
+    "tree-building": {
+      "solution": ["tree_building.py"],
+      "test": ["tree_building_test.py"],
+      "extra": [],
+      "files": {
+        "tree_building.py": "ee9128807b278a39a851ee4df53479dec6d5da7dbb066a86fac810c8f28ba285",
+        "tree_building_test.py": "074179d36fb946588411674c0441328c123c2107737ff419ff3aca8c230744b7",
+        ".docs/instructions.md": "bc6707eaca08a398da9c033e8691e1c655c28a5c80f005458329a6741c209ba2",
+        ".docs/instructions.append.md": "6486f2ae5f94ac89bbd94ae9e3286d0dd3bb1c6007665c4e967974efa90cdb17",
+        ".meta/example.py": "773b1d5388d0518220cbf069410bf7e7a3cb491df30c4dae446c4ceed88adbd9"
+      },
+      "testCount": 13,
+      "testModules": ["tree_building_test"]
+    },
+    "two-bucket": {
+      "solution": ["two_bucket.py"],
+      "test": ["two_bucket_test.py"],
+      "extra": [],
+      "files": {
+        "two_bucket.py": "6ed45b4d895c2e1ff15732719df5c832f1b67a610b069f71c1c0c8c528da1dd4",
+        "two_bucket_test.py": "3dedaa5c25ff1b94112807ee25a488c66fc5f7241e1fd86c19a8be07c7597466",
+        ".docs/instructions.md": "69471472c9db28eda2f841096ae4afd07605949293489b8445142f4cb0cd9ff8",
+        ".docs/instructions.append.md": "4ec58cd7e715e86b7b5c3ca788af5698c9eec941fc81db1a725d39c9530d0677",
+        ".meta/example.py": "bbf49eb2dc84d6a161e07e11d5bee11f224ad3b93a1c9afcf8a1083c405aa269"
+      },
+      "testCount": 9,
+      "testModules": ["two_bucket_test"]
+    },
+    "variable-length-quantity": {
+      "solution": ["variable_length_quantity.py"],
+      "test": ["variable_length_quantity_test.py"],
+      "extra": [],
+      "files": {
+        "variable_length_quantity.py": "c065d92722a1b8b9723bae2de3662583b65287c3fa2a459768f65e667a2ac695",
+        "variable_length_quantity_test.py": "e9ecd83a153958e4ef268faa83df2441ef7deb509e01040dc042af53b7aaf7ef",
+        ".docs/instructions.md": "665731f052d645396f9b7017d27c1ba77c8100f156de4fcad92300bddefb1484",
+        ".docs/instructions.append.md": "e8e1ea605e914f44d798d6ba345b7a16db5fbf52f99cdf8427175afa7d7062d8",
+        ".meta/example.py": "a516b77e06bb9961d956494e5953708510efd37a65ba6996d453ca932f07319d"
+      },
+      "testCount": 26,
+      "testModules": ["variable_length_quantity_test"]
+    },
+    "wordy": {
+      "solution": ["wordy.py"],
+      "test": ["wordy_test.py"],
+      "extra": [],
+      "files": {
+        "wordy.py": "3a8e9cf28b599898ff62c4714ad747b95ec84e8e04034b3dbf14b9f40afe0ee1",
+        "wordy_test.py": "3c8bf5b17e14c8f8953107c0ae9600be0c0d96e578cf442526dbedf0c57889da",
+        ".docs/instructions.md": "b9e24dd95b27fa04f706e4dd9e5c7f430684b1af13a1cfde34faee705300aeee",
+        ".docs/instructions.append.md": "485af0a0036cda1cf3415813f8a8317472b56de1af6d9a3e591d38a1af015e19",
+        ".meta/example.py": "ae46b493f1782fffa932a26b279041c5d2d8083b0858b2289107bacc6161c796"
+      },
+      "testCount": 25,
+      "testModules": ["wordy_test"]
+    },
+    "zebra-puzzle": {
+      "solution": ["zebra_puzzle.py"],
+      "test": ["zebra_puzzle_test.py"],
+      "extra": [],
+      "files": {
+        "zebra_puzzle.py": "6916bddd73997faa6920d6ef41a6a9f593e65bac41252dedc19deb65df844c67",
+        "zebra_puzzle_test.py": "079d65e614c911f7e21ef19a1aa5d0d4bb2c69fba1bd86cb84e0f1f4e39efb90",
+        ".docs/instructions.md": "475239352eed823e34a2677b65d861d58e0ca37a7da9ae399141c0c95758a8e6",
+        ".meta/example.py": "74be8f26867df7ef1946dcfc1c07ce851758dbbf3d2ab795abba19c2213eba7a"
+      },
+      "testCount": 2,
+      "testModules": ["zebra_puzzle_test"]
+    },
+    "zipper": {
+      "solution": ["zipper.py"],
+      "test": ["zipper_test.py"],
+      "extra": [],
+      "files": {
+        "zipper.py": "66276107d448f53a12509da6f503280e0dca4a6bbd9d690a774fb0972a55f926",
+        "zipper_test.py": "a3cf6e5ebcf6b2171bcc80fa0ce81b425af23b522f222e841fa2abd3119e95b2",
+        ".docs/instructions.md": "30c3fa8f9de3afdd691f3ff72e0407581da6676426ad7f175ef1553504df6066",
+        ".meta/example.py": "c1eff987dcc104ad0721087a18b96735f5630d4eb3828532e09adf434f6a06df"
+      },
+      "testCount": 14,
+      "testModules": ["zipper_test"]
+    }
+  }
+}

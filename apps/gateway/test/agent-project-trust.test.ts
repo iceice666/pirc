@@ -22,7 +22,7 @@ import {
   UNTRUSTED_PROJECT_WARNING,
 } from '../src/agent/config.js';
 import { PathGuard } from '../src/agent/sandbox.js';
-import type { Reply } from './fixtures/fake-llm.js';
+import { ptcCall, type Reply } from './fixtures/fake-llm.js';
 import { settledAfter, startAgent, testModels, type AgentProcess } from './agent-harness.js';
 
 const agents: AgentProcess[] = [];
@@ -145,13 +145,15 @@ describe('project config trust (H3)', () => {
     );
     const untrusted = await start({ workspace: root });
     untrusted.llm.push(
-      { tool: { id: 'e', name: 'bash', args: { command: 'echo "[$PROJECT_VAR]"' } } },
+      { tool: ptcCall('e', 'bash', { command: 'echo "[$PROJECT_VAR]"' }) },
       { text: 'k' },
     );
     await untrusted.send({ type: 'prompt', message: 'env' });
     await settledAfter(untrusted, 0);
     expect(existsSync(marker)).toBe(false);
-    const end = untrusted.events.find((event) => event.type === 'tool_execution_end');
+    const end = untrusted.events.find(
+      (event) => event.type === 'tool_execution_end' && !event.parentToolCallId,
+    );
     expect(end!.result.content[0].text).toContain('[]');
     expect(notices(untrusted).map((notice) => notice.message)).toContain(UNTRUSTED_PROJECT_WARNING);
     expect(notices(untrusted)[0]!.notifyType).toBe('warning');
@@ -249,9 +251,9 @@ describe('subagent cwd (H4, M12)', () => {
     const agent = await start({ workspace });
     const child: Reply[] = [{ text: 'child done' }];
     const parent: Reply[] = [
-      { tool: { id: 'p1', name: 'subagent', args: { task: 'look', cwd: 'sub', name: 'inner' } } },
-      { tool: { id: 'p2', name: 'subagent', args: { task: 'look', cwd: outside, name: 'out' } } },
-      { tool: { id: 'p3', name: 'subagent', args: { task: 'look', cwd: '..', name: 'up' } } },
+      { tool: ptcCall('p1', 'subagent', { task: 'look', cwd: 'sub', name: 'inner' }) },
+      { tool: ptcCall('p2', 'subagent', { task: 'look', cwd: outside, name: 'out' }) },
+      { tool: ptcCall('p3', 'subagent', { task: 'look', cwd: '..', name: 'up' }) },
       { text: 'parent done' },
     ];
     agent.llm.route = (body) =>
@@ -259,8 +261,12 @@ describe('subagent cwd (H4, M12)', () => {
     await agent.send({ type: 'prompt', message: 'delegate' });
     await settledAfter(agent, 0);
     const ends = agent.events.filter(
-      (e) => e.type === 'tool_execution_end' && e.toolName === 'subagent',
+      (e) =>
+        e.type === 'tool_execution_end' &&
+        !e.parentToolCallId &&
+        ['p1', 'p2', 'p3'].includes(e.toolCallId),
     );
+    expect(ends.map((end) => end.toolName)).toEqual(['ptc', 'ptc', 'ptc']);
     expect(ends.map((end) => !!end.isError)).toEqual([false, true, true]);
     expect(ends[0]!.result.content[0].text).toContain('child done');
     expect(existsSync(marker)).toBe(false);
@@ -279,14 +285,16 @@ describe('dangling symlinks (M4)', () => {
     writeFileSync(path.join(agent.workspace, 'real.txt'), 'old');
     symlinkSync(path.join(agent.workspace, 'real.txt'), path.join(agent.workspace, 'alias'));
     agent.llm.push(
-      { tool: { id: 'a', name: 'write', args: { path: 'link', content: 'x' } } },
-      { tool: { id: 'b', name: 'edit', args: { path: 'link', oldText: 'a', newText: 'b' } } },
-      { tool: { id: 'c', name: 'write', args: { path: 'alias', content: 'new' } } },
+      { tool: ptcCall('a', 'write', { path: 'link', content: 'x' }) },
+      { tool: ptcCall('b', 'edit', { path: 'link', oldText: 'a', newText: 'b' }) },
+      { tool: ptcCall('c', 'write', { path: 'alias', content: 'new' }) },
       { text: 'done' },
     );
     await agent.send({ type: 'prompt', message: 'go' });
     await settledAfter(agent, 0);
-    const ends = agent.events.filter((event) => event.type === 'tool_execution_end');
+    const ends = agent.events.filter(
+      (event) => event.type === 'tool_execution_end' && !event.parentToolCallId,
+    );
     expect(ends.map((end) => !!end.isError)).toEqual([true, true, false]);
     expect(ends[0]!.result.content[0].text).toContain('symbolic link to a missing target');
     expect(ends[1]!.result.content[0].text).toContain('symbolic link to a missing target');

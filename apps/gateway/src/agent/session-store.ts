@@ -1,7 +1,34 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import type { Message } from './messages.js';
+import type { Message, ToolResultMessage } from './messages.js';
+
+/** Session entry of one `ptc` operation (plans/ptc-only.md §6); never sent to the model. */
+export const OPERATION_ENTRY = 'ptc.operation';
+/** The `ptc` script store after a completed script changed it (`store`/`load`). */
+export const PTC_STORE_ENTRY = 'ptc.store';
+
+/** What a `ptc.operation` entry holds: a direct call's result, linked to its `ptc` call. */
+export interface OperationEntry {
+  parentToolCallId: string;
+  toolCallId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  content: ToolResultMessage['content'];
+  details?: unknown;
+  isError: boolean;
+  timestamp: number;
+}
+
+/**
+ * A `ptc` operation in UI history: a tool result with its arguments and the
+ * `ptc` call it ran in. Clients nest it under that call; it is never model
+ * context.
+ */
+export interface OperationHistoryMessage extends ToolResultMessage {
+  parentToolCallId: string;
+  args: Record<string, unknown>;
+}
 
 /**
  * Append-only JSONL session. Every entry has a stable id and parent id so the
@@ -86,6 +113,41 @@ export function historyOf(branch: SessionEntry[]): Message[] {
         tokensBefore: entry.tokensBefore,
         timestamp: entry.timestamp,
       });
+  }
+  return out;
+}
+
+/**
+ * UI history for clients: `historyOf` plus each `ptc` operation, in session
+ * order, as an `OperationHistoryMessage` (before the `ptc` result it belongs to).
+ */
+export function historyWithOperations(
+  branch: SessionEntry[],
+): Array<Message | OperationHistoryMessage> {
+  const out: Array<Message | OperationHistoryMessage> = [];
+  for (const entry of branch) {
+    if (entry.type === 'custom' && entry.customType === OPERATION_ENTRY) {
+      const data = entry.data as Partial<OperationEntry> | undefined;
+      if (
+        !data ||
+        typeof data.toolCallId !== 'string' ||
+        typeof data.parentToolCallId !== 'string' ||
+        typeof data.toolName !== 'string' ||
+        !Array.isArray(data.content)
+      )
+        continue;
+      out.push({
+        role: 'toolResult',
+        toolCallId: data.toolCallId,
+        toolName: data.toolName,
+        parentToolCallId: data.parentToolCallId,
+        args: data.args && typeof data.args === 'object' ? data.args : {},
+        content: data.content,
+        ...(data.details === undefined ? {} : { details: data.details }),
+        isError: data.isError === true,
+        timestamp: typeof data.timestamp === 'number' ? data.timestamp : entry.timestamp,
+      });
+    } else out.push(...historyOf([entry]));
   }
   return out;
 }

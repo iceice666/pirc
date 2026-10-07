@@ -1,7 +1,10 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import { z } from 'zod';
-import { NODE_ID_PATTERN } from '../config.js';
+import {
+  registrationSchema as registration,
+  nodeMessageSchema as nodeMessage,
+} from '../protocol-schema.js';
 import { ApiError } from '../errors.js';
 import {
   AGENT_OP_MAX_LENGTH,
@@ -26,7 +29,6 @@ import {
   INFERENCE_REQUEST_MAX_BYTES,
   INFERENCE_STREAM_MAX_BYTES,
   INFERENCE_TIMEOUT_MS,
-  inferenceRequestSchema,
   type InferenceRequest,
   type InferenceEvent,
 } from '../inference-wire.js';
@@ -49,93 +51,10 @@ export const RELAY_MESSAGE_MAX_BYTES = { terminal: 1024 * 1024, browser: 64 * 10
  * (uploads) behind a slow node.
  */
 const NODE_SEND_BUFFER_MAX_BYTES = 4 * NODE_FRAME_MAX_BYTES;
+/** Reserve one small detach frame per admitted stream, even behind a congested link. */
+const STREAM_CLOSE_RESERVE_BYTES = MAX_TERMINAL_STREAMS * 256;
 
 type SendFailure = 'too_large' | 'backpressure' | 'failed';
-
-const registration = z.object({
-  type: z.literal('register'),
-  role: z.enum(['chat', 'node']),
-  protocol: z.number().int().optional(),
-  workspaces: z
-    .array(
-      z.object({
-        id: z.string().regex(NODE_ID_PATTERN),
-        displayName: z.string().min(1).max(200),
-        kind: z.enum(['directory', 'chat']).optional(),
-        roles: z
-          .array(
-            z.object({
-              name: z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/),
-              description: z.string().max(500).optional(),
-              models: z.array(z.string().max(200)).max(20).optional(),
-              thinking: z.string().max(20).optional(),
-              tools: z.array(z.string().max(64)).max(64).optional(),
-              /** From the workspace's .pirc/roles, possibly replacing a node or built-in role. */
-              source: z.enum(['workspace']).optional(),
-              overrides: z.enum(['node', 'builtin']).optional(),
-            }),
-          )
-          .max(50)
-          .optional(),
-      }),
-    )
-    .max(100),
-});
-const nodeMessage = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('model_start'),
-    requestId: z.string().min(1).max(100),
-    request: inferenceRequestSchema,
-  }),
-  z.object({ type: z.literal('model_cancel'), requestId: z.string().min(1).max(100) }),
-  z.object({ type: z.literal('heartbeat') }),
-  z.object({
-    type: z.literal('response'),
-    requestId: z.string(),
-    data: z.object({ status: z.number().int(), body: z.unknown() }),
-  }),
-  z.object({
-    type: z.literal('event'),
-    sessionId: z.string(),
-    event: z.record(z.unknown()),
-  }),
-  z.object({
-    type: z.literal('activity'),
-    sessions: z
-      .array(
-        z.object({
-          id: z.string().max(200),
-          run: z.enum(['queued', 'running', 'waiting_input', 'stopping']).optional(),
-          writeLease: z.boolean().optional(),
-        }),
-      )
-      .max(10_000),
-  }),
-  z.object({
-    type: z.literal('memory_mirror'),
-    ledgerKey: z.string().regex(/^[0-9a-f]{16}$/),
-    offset: z.number().int().nonnegative(),
-    end: z.number().int().nonnegative(),
-    reset: z.boolean().optional(),
-    // Lines are checked one by one when stored: bad data is skipped, never fatal to the link.
-    lines: z.array(z.unknown()).max(10_000),
-  }),
-  z.object({
-    type: z.literal('agent_request'),
-    requestId: z.string().min(1).max(100),
-    sessionId: z.string().min(1).max(200),
-    // Checked by the handler: an agent chose it, so a bad one gets an answer, not a closed link.
-    op: z.string().max(1000),
-    args: z.unknown().optional(),
-  }),
-  z.object({ type: z.literal('terminal_frame'), streamId: z.string(), frame: z.unknown() }),
-  z.object({
-    type: z.literal('terminal_closed'),
-    streamId: z.string(),
-    code: z.number().int(),
-    reason: z.string(),
-  }),
-]);
 
 export interface ConnectedNode {
   id: string;
@@ -182,7 +101,7 @@ export class NodeRegistry {
   >();
   private readonly streams = new Map<
     string,
-    { nodeId: string; handlers: TerminalStreamHandlers }
+    { nodeId: string; socket: WebSocket; handlers: TerminalStreamHandlers }
   >();
   private readonly inferences = new Map<
     string,
@@ -246,14 +165,22 @@ export class NodeRegistry {
       onError?.('too_large');
       return false;
     }
-    if (socket.bufferedAmount + bytes > NODE_SEND_BUFFER_MAX_BYTES) {
+    const limit =
+      NODE_SEND_BUFFER_MAX_BYTES +
+      (message.type === 'terminal_close' ? STREAM_CLOSE_RESERVE_BYTES : 0);
+    if (socket.bufferedAmount + bytes > limit) {
       onError?.('backpressure');
       return false;
     }
-    socket.send(frame, (error) => {
-      if (error) onError?.('failed');
-    });
-    return true;
+    try {
+      socket.send(frame, (error) => {
+        if (error) onError?.('failed');
+      });
+      return true;
+    } catch {
+      onError?.('failed');
+      return false;
+    }
   }
 
   /**
@@ -303,35 +230,46 @@ export class NodeRegistry {
     if (this.streams.size >= MAX_TERMINAL_STREAMS)
       throw new ApiError(503, 'node_error', 'Too many open terminal streams');
     const streamId = randomUUID();
-    this.streams.set(streamId, { nodeId, handlers });
+    this.streams.set(streamId, { nodeId, socket, handlers });
     const fail = (failure: SendFailure) =>
-      failure === 'failed'
-        ? this.endStream(streamId, 1011, 'node connection failed')
-        : this.endStream(streamId, 1013, 'node link congested');
+      this.endStream(streamId, {
+        code: failure === 'failed' ? 1011 : 1013,
+        reason: failure === 'failed' ? 'node connection failed' : 'node link congested',
+        detach: true,
+      });
     this.send(socket, { type: 'terminal_open', streamId, ...target }, fail);
     return {
       send: (message) => {
         if (!this.streams.has(streamId)) return;
         const bytes = Buffer.byteLength(JSON.stringify(message ?? null));
         if (bytes > RELAY_MESSAGE_MAX_BYTES[target.kind ?? 'terminal']) {
-          this.endStream(streamId, 1009, 'message too large');
+          this.endStream(streamId, { code: 1009, reason: 'message too large', detach: true });
           return;
         }
         this.send(socket, { type: 'terminal_input', streamId, message }, fail);
       },
-      close: () => {
-        if (!this.streams.delete(streamId)) return;
-        if (socket.readyState === socket.OPEN)
-          this.send(socket, { type: 'terminal_close', streamId });
-      },
+      close: () => this.endStream(streamId, { detach: true }),
     };
   }
 
-  private endStream(streamId: string, code: number, reason: string): void {
+  /** One finalizer for local detach, remote close and link loss. Never kills the shell. */
+  private endStream(
+    streamId: string,
+    end: { detach?: boolean; code?: number; reason?: string },
+  ): void {
     const stream = this.streams.get(streamId);
     if (!stream) return;
+    // Remove first: synchronous send failures and client close callbacks can reenter.
     this.streams.delete(streamId);
-    stream.handlers.onClose(code, reason);
+    if (end.detach && stream.socket.readyState === stream.socket.OPEN) {
+      this.send(stream.socket, { type: 'terminal_close', streamId }, () => {
+        // A tiny reserved control budget normally permits detach under congestion.
+        // If even that fails, close this original link: node link teardown detaches
+        // all subscriptions. Never send an old stream's close on a replacement link.
+        stream.socket.close(1013, 'stream cleanup failed');
+      });
+    }
+    if (end.code !== undefined) stream.handlers.onClose(end.code, end.reason ?? '');
   }
 
   addWorkspace(nodeId: string, workspace: RegisteredWorkspace): void {
@@ -490,7 +428,7 @@ export class NodeRegistry {
         }
         case 'terminal_closed': {
           if (this.streams.get(current.streamId)?.nodeId === nodeId)
-            this.endStream(current.streamId, current.code, current.reason);
+            this.endStream(current.streamId, { code: current.code, reason: current.reason });
           return;
         }
       }
@@ -653,7 +591,7 @@ export class NodeRegistry {
       );
     }
     for (const [id, stream] of this.streams)
-      if (stream.nodeId === nodeId) this.endStream(id, 1012, 'node disconnected');
+      if (stream.nodeId === nodeId) this.endStream(id, { code: 1012, reason: 'node disconnected' });
   }
 
   /** Push the current providers to every node; agents started afterwards use them. */

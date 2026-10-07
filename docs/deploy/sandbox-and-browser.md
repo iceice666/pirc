@@ -4,7 +4,7 @@ Both are node-side concerns: the node starts every agent inside an OS sandbox, a
 
 ## The agent sandbox (srt)
 
-Each `pirc-node agent` or `pirc-chat agent` process runs under [srt](https://github.com/anthropic-experimental/sandbox-runtime) (Anthropic's sandbox-runtime): Seatbelt on macOS, bubblewrap plus a seccomp filter on Linux, with a filtering network proxy on both. Everything the agent starts (tools, `bash`, `code` scripts, hooks, teammates, subagents) is inside. Side-panel terminals are **not**.
+Each `pirc-node agent` or `pirc-chat agent` process runs under [srt](https://github.com/anthropic-experimental/sandbox-runtime) (Anthropic's sandbox-runtime): Seatbelt on macOS, bubblewrap plus a seccomp filter on Linux, with a filtering network proxy on both. Everything the agent starts (tools, `bash`, `ptc` scripts, hooks, teammates, subagents) is inside. A `ptc` script's interpreter process gets an empty environment and talks only to its agent. Side-panel terminals are **not**.
 
 ### srt
 
@@ -27,7 +27,7 @@ The sandbox is mandatory and cannot be turned off. The node probes srt at start-
 - **Reads**: everywhere, except credential stores under the account's home (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`, `~/.netrc`, `~/.config/sops`, keychains, browser profiles, …; the full list is `SENSITIVE_HOME_PATHS` in `apps/gateway/src/sandbox-policy.ts`) and the node's own state (`PIRC_STATE_DIR`, minus the session's own directory and its workspace's memory ledger; the systemd credentials directory on NixOS).
 - **Writes**: the workspace (or the chat's directory), the node config's `allowedPaths`, the session's temporary directory, `/tmp`, and common build caches (`~/.cache`, `~/.npm`, `~/.cargo/registry`, `~/go/pkg/mod`, `~/.gradle/caches`, …). `.pirc/` in the workspace, `.git/hooks`, `.git/config` and shell start-up files stay read-only.
 - **Network**: only through srt's proxy, to `DEFAULT_ALLOWED_DOMAINS` (GitHub, GitLab, Codeberg, npm, PyPI, crates.io, Go proxy, Nix caches, Maven, RubyGems, …) plus what you add. A host the task needs and the list lacks makes the agent call `sandbox_allow_domains`; the **node** asks you in the session, and an approved host stays allowed for that session.
-- **Escape hatch**: for a `nix build`, git over SSH or a system change, the agent calls `unsandboxed_bash`. The node asks you first, then runs the command as the node account, without the node's own secrets.
+- **Escape hatch**: for a `nix build`, a system change, or git over SSH that is not [set up for the sandbox](#git-and-the-github-cli), the agent calls `unsandboxed_bash`. The node asks you first, then runs the command as the node account, without the node's own secrets.
 
 Both approvals are the node's own dialogs; nothing the agent prints counts as your answer. Teammates' and subagents' requests are relayed through their parent and say who is asking.
 
@@ -63,6 +63,82 @@ In the node's `$PIRC_CONFIG_DIR/config.json` (never a project's `.pirc/config.js
 - `allowRead` re-opens a denied path; `denyWrite` closes a writable one. `allowGitConfig` lets `git remote add` write `.git/config` (and with it hooks paths), off by default.
 - An invalid `sandbox` object leaves the defaults in force and shows a warning in every session.
 - Credential stores and the node's own state stay unwritable even inside a writable path (a workspace holding `PIRC_STATE_DIR`, `~` in `allowedPaths`). A workspace that contains, or sits inside, the node's state or a credential store cannot be added.
+
+### Git and the GitHub CLI
+
+Without setup, this is what works inside the sandbox:
+
+| What                              | Result         | Why                                                                                                                                                                                                                       |
+| --------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| git over HTTPS, public repository | Works          | Goes through srt's proxy; `github.com` is in the default domains.                                                                                                                                                         |
+| git over HTTPS, private or push   | No credentials | `~/.git-credentials`, `~/.netrc` and the keychain are unreadable, and `GH_TOKEN`/`GITHUB_TOKEN` are not passed on ([Node](./node.md#agent-process)).                                                                      |
+| `gh`                              | Does not start | `~/.config/gh` is unreadable. On macOS, its TLS check also needs the system trust service, which the sandbox blocks (`x509: OSStatus -26276`).                                                                            |
+| git over SSH                      | Fails          | `~/.ssh` is unreadable. On macOS, srt's own `GIT_SSH_COMMAND` (`nc -X 5`) cannot send the credentials srt's proxy requires: `This proxy requires authentication, and this client did not offer an authentication method`. |
+
+So the agent falls back to `unsandboxed_bash`, and you approve every push. Two setups make it work inside the sandbox: [HTTPS with a token](#https-with-a-token) (recommended) or [SSH with a dedicated key](#ssh-with-a-dedicated-key). Both are `env` entries in the node's `$PIRC_CONFIG_DIR/config.json`, which the agent adds to `bash` and `background_task` (also when called from a `ptc` script), hooks and teammates (not to `unsandboxed_bash`, which runs with the node account's own setup). They apply from the next agent start. Values are literal strings: `~` is not expanded there, except where the SSH command line below expands it itself.
+
+Either way the agent holds the credential: reads are open, so it can read it, and it can use it for everything the credential allows on an allowed host. Use the narrowest credential: a fine-grained personal access token, or deploy keys, limited to the repositories the agent works on.
+
+Tested on macOS with the built-in srt 0.0.78. Not tested on Linux.
+
+#### HTTPS with a token
+
+```json
+{
+  "env": {
+    "GH_TOKEN": "github_pat_…",
+    "GH_CONFIG_DIR": "/Users/you/.cache/pirc/gh",
+    "SSL_CERT_FILE": "/etc/ssl/cert.pem",
+    "GIT_CONFIG_COUNT": "3",
+    "GIT_CONFIG_KEY_0": "credential.helper",
+    "GIT_CONFIG_VALUE_0": "",
+    "GIT_CONFIG_KEY_1": "credential.https://github.com.helper",
+    "GIT_CONFIG_VALUE_1": "!gh auth git-credential",
+    "GIT_CONFIG_KEY_2": "url.https://github.com/.insteadOf",
+    "GIT_CONFIG_VALUE_2": "git@github.com:"
+  }
+}
+```
+
+- `GH_TOKEN`: `gh` uses it instead of `~/.config/gh/hosts.yml`. For a fine-grained token: Contents read/write to push, Pull requests read/write for `gh pr`, Metadata read. To keep it out of `config.json`, put it in the node's environment instead and name it in `PIRC_AGENT_ENV_ALLOW=GH_TOKEN` ([Node](./node.md#agent-process)).
+- `GH_CONFIG_DIR`: the absolute path (with your home in place of `/Users/you`) of a directory the sandbox may write, outside `~/.config/gh`. It may be empty; create it once (`mkdir -p ~/.cache/pirc/gh`).
+- `SSL_CERT_FILE` (macOS only): makes `gh` and other Go programs verify TLS against this bundle, which macOS ships, instead of the system trust service. Other tools honour it too.
+- `GIT_CONFIG_*`: git configuration from the environment, so your `~/.gitconfig` (read-only in the sandbox, and shared with you) stays unchanged.
+  - Key 0 clears inherited credential helpers. For example, Nix's git enables `osxkeychain`, which cannot reach the keychain and prints `failed to store: -60008`.
+  - Key 1 gives git the same token through `gh`.
+  - Key 2 rewrites SSH-style GitHub remotes to HTTPS, so existing clones push without `git remote set-url`; that command needs `.git/config`, which is read-only by default.
+  - `GIT_CONFIG_COUNT` must equal the number of keys.
+
+Check from a session: `gh auth status`, then `git ls-remote` on a private repository.
+
+#### SSH with a dedicated key
+
+As the node account, outside the sandbox (a side-panel terminal works), with a pirc checkout at hand:
+
+```sh
+mkdir -p ~/.local/pirc-ssh ~/.cache/pirc/ssh
+chmod 700 ~/.local/pirc-ssh
+ssh-keygen -t ed25519 -N '' -C pirc-agent -f ~/.local/pirc-ssh/id_ed25519
+cp scripts/sandbox-ssh-proxy.py ~/.local/pirc-ssh/
+```
+
+Add `~/.local/pirc-ssh/id_ed25519.pub` to each repository as a deploy key with write access. GitHub accepts a key as a deploy key on one repository only; for several repositories, use a separate machine account. Then:
+
+```json
+{
+  "env": {
+    "GIT_SSH_COMMAND": "ssh -F /dev/null -o ControlMaster=no -o ControlPath=none -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.cache/pirc/ssh/known_hosts -i ~/.local/pirc-ssh/id_ed25519 -o ProxyCommand='python3 ~/.local/pirc-ssh/sandbox-ssh-proxy.py %h %p'"
+  }
+}
+```
+
+- This replaces the `GIT_SSH_COMMAND` srt sets. `ssh` itself only gets these options through git; run it the same way if you need it directly.
+- `-F /dev/null`: `~/.ssh/config` is unreadable, so every option is given here. Connection sharing stays off, as srt sets it, because its socket could not be created.
+- `UserKnownHostsFile` must be writable; `accept-new` records GitHub's host key on first use. To pin it beforehand, write GitHub's published keys there.
+- [`scripts/sandbox-ssh-proxy.py`](../../scripts/sandbox-ssh-proxy.py) does what srt's `nc -X 5` was meant to do, with the per-session credentials srt puts in `$ALL_PROXY`. The proxy still applies the domain allowlist: `github.com` without a port allows port 22, while hosts outside the list are refused. The script relies on those srt details, so check it again after a pirc upgrade changes srt.
+- An `ssh-agent` instead of a key file: add its socket to `sandbox.network.allowUnixSockets`, put `SSH_AUTH_SOCK` in `env`, and drop `-i` and `IdentitiesOnly`. Agents can then use every key loaded in it. Not tested.
+- Linux: srt's own `GIT_SSH_COMMAND` authenticates there (`socat … proxyauth`), but `~/.ssh` is still unreadable, so the same setup applies. Not tested.
+- `gh` still needs the token setup; to use SSH for git and `gh` for the API, keep `GH_TOKEN`, `GH_CONFIG_DIR` and `SSL_CERT_FILE` from it and leave out `GIT_CONFIG_*`.
 
 ### What it does not cover
 

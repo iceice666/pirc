@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
+import { ptcCall } from './fixtures/fake-llm.js';
+import { CODING_SURFACE } from './fixtures/surface.js';
 
 const agents: AgentProcess[] = [];
 afterEach(async () => {
@@ -41,19 +43,19 @@ describe('goal', () => {
   it('continues in rounds until the model marks the goal complete', async () => {
     const agent = await start();
     agent.llm.push(
-      { tool: { id: 'c1', name: 'create_goal', args: { objective: 'Ship feature X' } } },
+      { tool: ptcCall('c1', 'create_goal', { objective: 'Ship feature X' }) },
       { text: 'first slice done' },
       // Round 1: the model reads the goal and completes it.
-      { tool: { id: 'g1', name: 'get_goal', args: {} } },
+      { tool: ptcCall('g1', 'get_goal', {}) },
       {
         dynamic: (body) => {
           const id = /Goal ([0-9a-f]+) \(revision (\d+)\)/.exec(toolResult(body, 'g1'))!;
           return {
-            tool: {
-              id: 'u1',
-              name: 'update_goal',
-              args: { goal_id: id[1], revision: Number(id[2]), action: 'complete' },
-            },
+            tool: ptcCall('u1', 'update_goal', {
+              goal_id: id[1],
+              revision: Number(id[2]),
+              action: 'complete',
+            }),
           };
         },
       },
@@ -76,11 +78,7 @@ describe('goal', () => {
     const agent = await start();
     agent.llm.push(
       {
-        tool: {
-          id: 'c1',
-          name: 'create_goal',
-          args: { objective: 'Loop', max_goal_rounds: 2 },
-        },
+        tool: ptcCall('c1', 'create_goal', { objective: 'Loop', max_goal_rounds: 2 }),
       },
       { text: 'start' },
       { text: 'round one' },
@@ -113,29 +111,25 @@ describe('goal', () => {
     };
     agent.llm.push(
       {
-        tool: {
-          id: 'c1',
-          name: 'create_goal',
-          args: { objective: 'Hard thing', max_goal_rounds: 1 },
-        },
+        tool: ptcCall('c1', 'create_goal', { objective: 'Hard thing', max_goal_rounds: 1 }),
       },
       { text: 'started' },
       // Round 1: try to pause (human only), then block too early, then create another.
       {
         dynamic: (body) => ({
-          tool: { id: 'p1', name: 'update_goal', args: { ...ref(body, 'c1'), action: 'pause' } },
+          tool: ptcCall('p1', 'update_goal', { ...ref(body, 'c1'), action: 'pause' }),
         }),
       },
       {
         dynamic: (body) => ({
-          tool: {
-            id: 'b1',
-            name: 'update_goal',
-            args: { ...ref(body, 'c1'), action: 'blocked', blocked_reason: 'stuck' },
-          },
+          tool: ptcCall('b1', 'update_goal', {
+            ...ref(body, 'c1'),
+            action: 'blocked',
+            blocked_reason: 'stuck',
+          }),
         }),
       },
-      { tool: { id: 'c2', name: 'create_goal', args: { objective: 'Another' } } },
+      { tool: ptcCall('c2', 'create_goal', { objective: 'Another' }) },
       { text: 'ok' },
     );
     await agent.send({ type: 'prompt', message: 'do the hard thing' });
@@ -151,7 +145,7 @@ describe('goal', () => {
     const first = await start();
     first.llm.push(
       {
-        tool: { id: 'c1', name: 'create_goal', args: { objective: 'Survive', max_goal_rounds: 1 } },
+        tool: ptcCall('c1', 'create_goal', { objective: 'Survive', max_goal_rounds: 1 }),
       },
       { hang: true },
     );
@@ -181,7 +175,7 @@ describe('goal', () => {
   it('pauses when a run is aborted', async () => {
     const agent = await start();
     agent.llm.push(
-      { tool: { id: 'c1', name: 'create_goal', args: { objective: 'Long job' } } },
+      { tool: ptcCall('c1', 'create_goal', { objective: 'Long job' }) },
       { hang: true },
     );
     await agent.send({ type: 'prompt', message: 'long job' });
@@ -199,7 +193,7 @@ describe('goal', () => {
   it('keeps the goal active when send_now interrupts a turn', async () => {
     const agent = await start();
     agent.llm.push(
-      { tool: { id: 'c1', name: 'create_goal', args: { objective: 'Long job' } } },
+      { tool: ptcCall('c1', 'create_goal', { objective: 'Long job' }) },
       { hang: true },
       { text: 'redirected' },
       { hang: true },
@@ -233,7 +227,7 @@ describe('goal', () => {
     const first = await start();
     first.llm.push(
       {
-        tool: { id: 'c1', name: 'create_goal', args: { objective: 'Persist', max_goal_rounds: 1 } },
+        tool: ptcCall('c1', 'create_goal', { objective: 'Persist', max_goal_rounds: 1 }),
       },
       { text: 'started' },
       { text: 'round one' },
@@ -258,9 +252,9 @@ describe('goal', () => {
   it('leaves unfinished-todo nudges to the goal continuation', async () => {
     const agent = await start();
     agent.llm.push(
-      { tool: { id: 't1', name: 'todo', args: { action: 'add', text: 'step' } } },
+      { tool: ptcCall('t1', 'todo', { action: 'add', text: 'step' }) },
       {
-        tool: { id: 'c1', name: 'create_goal', args: { objective: 'Todo', max_goal_rounds: 1 } },
+        tool: ptcCall('c1', 'create_goal', { objective: 'Todo', max_goal_rounds: 1 }),
       },
       { text: 'stopping' },
       { text: 'round one' },
@@ -278,7 +272,7 @@ describe('goal', () => {
 describe('goal commands', () => {
   it('creates a goal with /goal set and starts working', async () => {
     const agent = await start({ config: { features: { goal: { defaultMaxRounds: 1 } } } });
-    agent.llm.push({ tool: { id: 'g', name: 'get_goal', args: {} } }, { text: 'noted' });
+    agent.llm.push({ tool: ptcCall('g', 'get_goal', {}) }, { text: 'noted' });
     await agent.send({ type: 'prompt', message: '/goal set Write the docs' });
     await idleAfter(agent, 2);
     const first = texts(agent.llm.requests[0]!.body);
@@ -292,16 +286,28 @@ describe('goal commands', () => {
     agent.raw({ type: 'extension_ui_response', id: confirm.id, confirmed: true });
     await agent.waitFor((e) => e.method === 'notify' && e.message === 'Goal cleared.');
     expect(goalWidget(agent)).toBeUndefined();
+    // The goal capabilities are offered (the counterpart of the disabled test below).
+    const system = JSON.stringify(agent.llm.requests[0]!.body.messages[0].content);
+    expect(system).toContain('create_goal');
+    expect(system).toContain('update_goal');
     const commands = await agent.send({ type: 'get_commands' });
     expect(commands.data.commands.map((c: any) => c.name)).toContain('goal');
   });
 
   it('is disabled by features.goal.enabled = false', async () => {
     const agent = await start({ config: { features: { goal: { enabled: false } } } });
-    agent.llm.push({ text: 'hi' });
+    agent.llm.push({ tool: ptcCall('c1', 'create_goal', { objective: 'Nope' }) }, { text: 'hi' });
     await agent.send({ type: 'prompt', message: 'hello' });
     await settledAfter(agent, 0);
-    const names = agent.llm.requests[0]!.body.tools.map((t: any) => t.function.name);
-    expect(names).not.toContain('create_goal');
+    const body = agent.llm.requests[0]!.body;
+    expect(body.tools.map((t: any) => t.function.name)).toEqual(CODING_SURFACE);
+    const system = JSON.stringify(body.messages[0].content);
+    expect(system).toContain('## Capabilities');
+    expect(system).not.toContain('create_goal');
+    expect(system).not.toContain('update_goal');
+    const result = toolResult(agent.llm.requests[1]!.body, 'c1');
+    expect(result).toContain('CapabilityUnavailable');
+    expect(result).toContain('Not available in this session: create_goal');
+    expect(goalWidget(agent)).toBeUndefined();
   });
 });

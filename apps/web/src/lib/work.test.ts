@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { ConversationMessage, SessionSummary, ToolCall } from './types';
 import {
   blockingSession,
+  effectiveTools,
+  operationsSummary,
   foldRecent,
   summarizeRun,
   sidebarSessions,
@@ -141,5 +143,27 @@ describe('run cards', () => {
     expect(summary).toEqual({ count: 3, status: 'succeeded', durationMs: 4100, files: ['sw.js'] });
     expect(summarizeRun([tool('1'), tool('2', { status: 'failed' })]).status).toBe('failed');
     expect(summarizeRun([tool('1', { status: 'running' })]).durationMs).toBeUndefined();
+  });
+});
+
+describe('ptc scripts in runs', () => {
+  it('stand for the operations they ran', () => {
+    const script: ToolCall = {
+      id: 'p',
+      name: 'ptc',
+      status: 'succeeded',
+      operations: [
+        { id: 'o1', name: 'read', status: 'succeeded', input: { path: 'src/a.ts' } },
+        { id: 'o2', name: 'edit', status: 'succeeded', input: { path: 'src/a.ts' } },
+        { id: 'o3', name: 'edit', status: 'succeeded', input: { path: 'b.ts' } },
+      ],
+    };
+    const docs: ToolCall = { id: 'd', name: 'ptc_docs', status: 'succeeded' };
+    expect(effectiveTools([docs, script]).map((tool) => tool.id)).toEqual(['o1', 'o2', 'o3']);
+    expect(operationsSummary(script.operations!)).toBe('read, edit ×2');
+    expect(summarizeRun([docs, script])).toMatchObject({ count: 3, files: ['a.ts', 'b.ts'] });
+    // A script that has not run anything yet is itself the call.
+    const fresh: ToolCall = { id: 'q', name: 'ptc', status: 'running' };
+    expect(effectiveTools([fresh])).toEqual([fresh]);
   });
 });

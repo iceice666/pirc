@@ -21,11 +21,20 @@ export interface ContextPanel {
       filePath?: string;
       estimatedTokens: number;
     }>;
+    /** What the provider sees: `ptc`, `ptc_docs` and the direct core capabilities. */
     tools: Array<{
       name: string;
       description: string;
       parameters: Record<string, unknown>;
       estimatedTokens: number;
+    }>;
+    /** Capabilities `ptc` scripts may call; no schemas, they are not in the context. */
+    capabilities?: Array<{
+      name: string;
+      category: string;
+      uiLabel: string;
+      effects: string[];
+      approval: string;
     }>;
     usage: {
       estimatedInput: number;

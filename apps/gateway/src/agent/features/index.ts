@@ -4,7 +4,6 @@ import { assistantFeature } from './assistant/index.js';
 import { backgroundFeature } from './background/index.js';
 import { browserFeature } from './browser.js';
 import { teamFeature } from './team/index.js';
-import { codeFeature } from './code.js';
 import { compactFeature } from './compact.js';
 import { goalFeature } from './goal/index.js';
 import { memoryFeature } from './memory/index.js';
@@ -16,13 +15,13 @@ import { schedulesFeature } from './schedules.js';
 import { todoFeature } from './todo/index.js';
 import { webSearchFeature } from './web-search.js';
 import { sandboxFeature } from './sandbox.js';
+import { recapFeature } from './recap.js';
 
 export function builtinFeatures(): Feature[] {
   return [
     titleFeature(),
     askQuestionFeature(),
     todoFeature(),
-    codeFeature(),
     compactFeature(),
     // Chat sessions only: the project's instructions, before USER/MEMORY.
     projectInstructionsFeature(),
@@ -32,6 +31,7 @@ export function builtinFeatures(): Feature[] {
     // Chat sessions only: the user's memory, held by the gateway.
     assistantFeature(),
     skillsFeature(),
+    recapFeature(),
     // Node agents with a browser only (PIRC_BROWSER=1).
     browserFeature(),
     // Node agents with a gateway only; the gateway holds the search key.

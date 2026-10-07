@@ -3,7 +3,7 @@
   import { untrack } from 'svelte';
   import { Check, ChevronRight, CircleAlert, LoaderCircle, Lock } from '@lucide/svelte';
   import type { ToolCall } from '../types';
-  import { summarizeRun, writeBlock } from '../work';
+  import { effectiveTools, summarizeRun, writeBlock } from '../work';
 
   interface Props {
     /** Every tool call the card stands for (its summary line). */
@@ -15,9 +15,9 @@
   let { tools, children }: Props = $props();
 
   const summary = $derived(summarizeRun(tools));
-  const blocked = $derived(tools.some((tool) => writeBlock(tool)));
+  const blocked = $derived(effectiveTools(tools).some((tool) => writeBlock(tool)));
   const title = $derived.by(() => {
-    const names = new Set(tools.map((tool) => tool.name));
+    const names = new Set(effectiveTools(tools).map((tool) => tool.name));
     if (names.has('edit') || names.has('write')) return 'Made changes';
     if (names.has('bash')) return 'Ran commands';
     if (['read', 'grep', 'find', 'ls'].some((name) => names.has(name))) return 'Explored the code';

@@ -96,6 +96,13 @@ export interface ToolCall {
   recording?: string;
   startedAt?: string;
   endedAt?: string;
+  /**
+   * A `ptc` operation: the id of the `ptc` call it ran in. Live updates carry
+   * it so the reducer can nest the operation under that call.
+   */
+  parentId?: string;
+  /** The operations a `ptc` call ran, in start order (each a capability call). */
+  operations?: ToolCall[];
 }
 
 /**
@@ -153,6 +160,8 @@ export interface Attachment {
 interface InteractionBase {
   id: string;
   runnerEpoch: string;
+  /** The `ptc` operation that asks (shown as waiting on it); absent for anything else. */
+  toolCallId?: string;
   title: string;
   description?: string;
   expiresAt?: string;

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { settledAfter, startAgent, type AgentProcess } from './agent-harness.js';
-import type { Reply } from './fixtures/fake-llm.js';
+import { ptcCall, type Reply } from './fixtures/fake-llm.js';
 
 const agents: AgentProcess[] = [];
 const gates: Array<{ release(): void; stop(): void }> = [];
@@ -57,11 +57,9 @@ function gate() {
     entered: entered.promise,
     release,
     reply: {
-      tool: {
-        id: 'child-gate',
-        name: 'bash',
-        args: { command: `${JSON.stringify(process.execPath)} -e ${JSON.stringify(script)}` },
-      },
+      tool: ptcCall('child-gate', 'bash', {
+        command: `${JSON.stringify(process.execPath)} -e ${JSON.stringify(script)}`,
+      }),
     } satisfies Reply,
   };
 }
@@ -71,8 +69,11 @@ function route(agent: AgentProcess, parent: Reply[], child: Reply[]) {
     (isChild(body) ? child.shift() : parent.shift()) ?? { text: 'unexpected extra turn' };
 }
 const spawn: Reply = {
-  tool: { id: 'spawn', name: 'agent_spawn', args: { name: 'helper', task: 'complete gated work' } },
+  tool: ptcCall('spawn', 'agent_spawn', { name: 'helper', task: 'complete gated work' }),
 };
+// Every provider tool call is a ptc call now: find the spawn by its call id.
+const spawnEnded = (e: any) =>
+  e.type === 'tool_execution_end' && !e.parentToolCallId && e.toolCallId === 'spawn';
 const assertSingleRun = (agent: AgentProcess) => {
   expect(agent.events.filter((e) => e.type === 'agent_start')).toHaveLength(1);
   expect(agent.events.filter((e) => e.type === 'agent_end')).toHaveLength(1);
@@ -86,16 +87,14 @@ describe('team completion barrier', () => {
     route(
       agent,
       [
-        { tool: { id: 'spawn', name: 'subagent', args: { task: 'gated work', background: true } } },
+        { tool: ptcCall('spawn', 'subagent', { task: 'gated work', background: true }) },
         { text: 'interim final' },
         { text: 'integrated background report' },
       ],
       [child.reply, { text: 'gated background report' }],
     );
     await agent.send({ type: 'prompt', message: 'delegate work' });
-    const spawned = await agent.waitFor(
-      (e) => e.type === 'tool_execution_end' && ['agent_spawn', 'subagent'].includes(e.toolName),
-    );
+    const spawned = await agent.waitFor(spawnEnded);
     expect(spawned.result.content, 'spawn must succeed').toBeDefined();
     expect(spawned.isError, JSON.stringify(spawned.result)).toBeFalsy();
     await Promise.all([child.entered, waiting(agent)]);
@@ -125,9 +124,7 @@ describe('team completion barrier', () => {
       [child.reply, { text: 'persistent worker report' }],
     );
     await agent.send({ type: 'prompt', message: 'start helper' });
-    const spawned = await agent.waitFor(
-      (e) => e.type === 'tool_execution_end' && ['agent_spawn', 'subagent'].includes(e.toolName),
-    );
+    const spawned = await agent.waitFor(spawnEnded);
     expect(spawned.result.content, 'spawn must succeed').toBeDefined();
     expect(spawned.isError, JSON.stringify(spawned.result)).toBeFalsy();
     await Promise.all([child.entered, waiting(agent)]);
@@ -162,9 +159,7 @@ describe('team completion barrier', () => {
       [child.reply, { text: 'late worker report' }],
     );
     await agent.send({ type: 'prompt', message: 'start helper' });
-    const spawned = await agent.waitFor(
-      (e) => e.type === 'tool_execution_end' && ['agent_spawn', 'subagent'].includes(e.toolName),
-    );
+    const spawned = await agent.waitFor(spawnEnded);
     expect(spawned.result.content, 'spawn must succeed').toBeDefined();
     expect(spawned.isError, JSON.stringify(spawned.result)).toBeFalsy();
     await Promise.all([child.entered, waiting(agent)]);
@@ -203,13 +198,7 @@ describe('team completion barrier', () => {
     let answered = false;
     const childReplies: Reply[] = [
       child.reply,
-      {
-        tool: {
-          id: 'question',
-          name: 'agent_ask',
-          args: { to: 'parent', question: 'Which format?' },
-        },
-      },
+      { tool: ptcCall('question', 'agent_ask', { to: 'parent', question: 'Which format?' }) },
       { text: 'waiting for format' },
     ];
     agent.llm.route = (body) => {
@@ -223,19 +212,13 @@ describe('team completion barrier', () => {
       if (question && !answered) {
         answered = true;
         return {
-          tool: {
-            id: 'answer',
-            name: 'agent_reply',
-            args: { question_id: question.id, answer: 'Use JSON' },
-          },
+          tool: ptcCall('answer', 'agent_reply', { question_id: question.id, answer: 'Use JSON' }),
         };
       }
       return { text: 'integrated teammate progress' };
     };
     await agent.send({ type: 'prompt', message: 'delegate and answer questions' });
-    const spawned = await agent.waitFor(
-      (e) => e.type === 'tool_execution_end' && ['agent_spawn', 'subagent'].includes(e.toolName),
-    );
+    const spawned = await agent.waitFor(spawnEnded);
     expect(spawned.result.content, 'spawn must succeed').toBeDefined();
     expect(spawned.isError, JSON.stringify(spawned.result)).toBeFalsy();
     await Promise.all([child.entered, waiting(agent)]);
@@ -243,7 +226,7 @@ describe('team completion barrier', () => {
     await settledAfter(agent, 0);
     expect(answered).toBe(true);
     const reply = agent.events.find(
-      (e) => e.type === 'tool_execution_end' && e.toolName === 'agent_reply',
+      (e) => e.type === 'tool_execution_end' && !e.parentToolCallId && e.toolCallId === 'answer',
     );
     expect(reply).toBeDefined();
     expect(reply!.isError).toBeFalsy();

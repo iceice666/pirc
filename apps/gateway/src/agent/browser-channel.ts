@@ -5,7 +5,7 @@
  * here by serveRpc). An aborted tool sends `browser_cancel`. Only a node's
  * main agent drives the browser: team members and subagents have none.
  */
-import { randomUUID } from 'node:crypto';
+import { PendingRequests } from './pending-requests.js';
 import { teamChildName } from './features/team/channel.js';
 
 export class BrowserError extends Error {
@@ -18,10 +18,8 @@ export class BrowserError extends Error {
   }
 }
 
-type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void };
-
 export class NodeBrowser {
-  private readonly pending = new Map<string, Pending>();
+  private readonly pending = new PendingRequests();
   constructor(private readonly write: (value: unknown) => void) {}
 
   /**
@@ -30,24 +28,11 @@ export class NodeBrowser {
    * closing ends them all.
    */
   request(op: string, args: Record<string, unknown> = {}, signal?: AbortSignal): Promise<unknown> {
-    signal?.throwIfAborted();
-    const id = randomUUID();
-    return new Promise((resolve, reject) => {
-      const settle = () => {
-        signal?.removeEventListener('abort', onAbort);
-        this.pending.delete(id);
-      };
-      const onAbort = () => {
-        settle();
-        this.write({ type: 'browser_cancel', id });
-        reject(new BrowserError('aborted', 'Aborted'));
-      };
-      this.pending.set(id, {
-        resolve: (value) => (settle(), resolve(value)),
-        reject: (error) => (settle(), reject(error)),
-      });
-      signal?.addEventListener('abort', onAbort, { once: true });
-      this.write({ type: 'browser_request', id, op, args });
+    return this.pending.request({
+      signal,
+      abortError: () => new BrowserError('aborted', 'Aborted'),
+      cancel: (id) => this.write({ type: 'browser_cancel', id }),
+      send: (id) => this.write({ type: 'browser_request', id, op, args }),
     });
   }
 
@@ -65,8 +50,7 @@ export class NodeBrowser {
   }
 
   closeAll(): void {
-    for (const pending of [...this.pending.values()])
-      pending.reject(new BrowserError('closed', 'The browser channel closed'));
+    this.pending.closeAll(() => new BrowserError('closed', 'The browser channel closed'));
   }
 }
 

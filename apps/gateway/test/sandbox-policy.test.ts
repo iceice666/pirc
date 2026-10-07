@@ -11,6 +11,7 @@ import {
   writeAllowed,
 } from '../src/sandbox-policy.js';
 import { readAgentConfig, srtSettings } from '../src/node/sandbox.js';
+import { PathGuard } from '../src/agent/sandbox.js';
 
 function layout() {
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'pirc-policy-')));
@@ -72,8 +73,25 @@ describe('session policy', () => {
     expect(writeAllowed(paths, path.join(d.home, '.bashrc'))).toBe(false);
     expect(writeAllowed(paths, path.join(d.tmp, 'x'))).toBe(true);
     expect(writeAllowed(paths, path.join(d.state, 'node.sqlite'))).toBe(false);
+    // Temp dirs and build caches are shared by every session: no write lease.
+    expect(paths.sharedWrite).toEqual([d.tmp, path.join(d.home, '.cache')]);
+    expect(paths.sharedWrite).not.toContain(d.workspace);
     expect(network.allowedDomains).toEqual(expect.arrayContaining(DEFAULT_ALLOWED_DOMAINS));
     expect(network.allowUnixSockets).toEqual([d.socket]);
+  });
+
+  it('takes no write lease for shared roots, the innermost root otherwise', () => {
+    const d = layout();
+    const guard = new PathGuard(d.workspace, policyFor(d).paths);
+    expect(guard.leaseRoot(path.join(d.tmp, 'x', 'y'))).toBeUndefined();
+    expect(guard.leaseRoot(path.join(d.home, '.cache', 'bun', 'x'))).toBeUndefined();
+    expect(guard.leaseRoot(path.join(d.workspace, 'src', 'a.ts'))).toBe(d.workspace);
+    // A workspace inside a shared root is still leased.
+    const nested = path.join(d.tmp, 'ws');
+    mkdirSync(nested);
+    const inTmp = new PathGuard(nested, policyFor(d, nested).paths);
+    expect(inTmp.leaseRoot(path.join(nested, 'a.ts'))).toBe(nested);
+    expect(inTmp.leaseRoot(path.join(d.tmp, 'other'))).toBeUndefined();
   });
 
   it("lets a chat session work in its directory inside the node's state", () => {

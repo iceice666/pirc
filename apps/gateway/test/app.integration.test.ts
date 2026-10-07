@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -265,6 +265,21 @@ describe('node router', () => {
     // The next prompt starts a fresh runner that continues the same transcript.
     expect((await prompt('second')).statusCode).toBe(202);
     await waitFor(texts, 'echo:first|echo:second');
+
+    // A crashed agent takes what it left in its process group with it.
+    const pidFile = path.join(mkdtempSync(path.join(tmpdir(), 'pirc-orphan-')), 'pid');
+    await prompt(`crash leaving ${pidFile}`);
+    await waitFor(async () => services.runners.get(sessionId)?.alive ?? false, false);
+    const orphan = Number(readFileSync(pidFile, 'utf8'));
+    const alive = () => {
+      try {
+        process.kill(orphan, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    await waitFor(alive, false);
   });
 
   it('reports the model and thinking level the next agent will use when no runner is live', async () => {
