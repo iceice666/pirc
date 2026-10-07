@@ -4,6 +4,13 @@ User-facing changes are recorded here. See [release policy](docs/releasing.md).
 
 ## [Unreleased]
 
+### Security
+
+- Agents can no longer read more credential stores: `~/.local/pirc-node` (the macOS node's `agent.env`), `~/.config/op`, Cargo, RubyGems and Terraform credentials, Claude Code and Codex login files, shell histories and Microsoft Edge profiles. Auto mode and the sandbox now share one list, so a shell command that touches `~/.npmrc`, `~/.yarnrc.yml` or `~/.bundle/config` also needs approval (builds can still read them).
+- The file tools refuse writes to the workspace's `.git/hooks`, and to `.git/config` unless `sandbox.filesystem.allowGitConfig` is set, as the sandbox already did for shell commands.
+- The gateway database and its WAL files are created with mode 0600, and an existing database is tightened on start.
+- Mermaid diagrams are passed through the same sanitizer as the rest of a message.
+
 ## [0.3.0] - 2026-10-07
 
 ### Added

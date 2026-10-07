@@ -94,7 +94,7 @@ Status (2026-10-02): option C built and tested on macOS; mandatory and fail-clos
 - **Linux sockets**: Unix sockets are allowed wholesale there (`allowAllUnixSockets`), because seccomp cannot filter by path and the agent needs the inference socket. Known host sockets are hidden (M11), but any other socket the account can reach is open. Moving inference off a Unix socket (or bind-mounting only it) would close this.
 - **Workspace memory**: the dir is writable as a whole, so a session could append to another repository's ledger.
 - **Approvals**: they last only for the session. There is no "always allow for this workspace" yet.
-- **launchd nodes** (m5pro, m3air): their env file lives outside `PIRC_STATE_DIR`. Until `sandbox.filesystem.denyRead` includes `~/.local/pirc-node`, an agent there can still read `agent.env`. A hand-copied binary now carries its own srt.
+- **launchd nodes** (m5pro, m3air): their env file lives outside `PIRC_STATE_DIR`; `~/.local/pirc-node` is in `SENSITIVE_HOME_PATHS` (2026-10-07), so agents cannot read `agent.env`. A hand-copied binary now carries its own srt.
 - **Built-in srt on Linux**: not yet run on a real Linux host (bubblewrap finding the extracted `apply-seccomp` inside the namespace, 未確認).
 
 ## Why

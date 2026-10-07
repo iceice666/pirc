@@ -318,6 +318,8 @@ export function loadAgentConfig(
     protectedPaths: [
       projectDir,
       path.join(workspace, '.pirc'),
+      // A hook runs as the user on the next commit.
+      path.join(workspace, '.git', 'hooks'),
       ...skillPaths,
       // The node's role files: only the user writes them.
       path.join(configDir, 'roles'),

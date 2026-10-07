@@ -69,6 +69,15 @@ describe('session policy', () => {
     expect(readAllowed(paths, path.join(d.home, 'notes.md'))).toBe(true);
     expect(writeAllowed(paths, path.join(d.workspace, 'src', 'a.ts'))).toBe(true);
     expect(writeAllowed(paths, path.join(d.workspace, '.pirc', 'config.json'))).toBe(false);
+    expect(writeAllowed(paths, path.join(d.workspace, '.git', 'hooks', 'pre-commit'))).toBe(false);
+    expect(writeAllowed(paths, path.join(d.workspace, '.git', 'config'))).toBe(false);
+    expect(writeAllowed(paths, path.join(d.workspace, '.git', 'index'))).toBe(true);
+    expect(
+      writeAllowed(
+        policyFor(d, d.workspace, { filesystem: { allowGitConfig: true } }).paths,
+        path.join(d.workspace, '.git', 'config'),
+      ),
+    ).toBe(true);
     expect(writeAllowed(paths, path.join(d.home, '.cache', 'bun', 'x'))).toBe(true);
     expect(writeAllowed(paths, path.join(d.home, '.bashrc'))).toBe(false);
     expect(writeAllowed(paths, path.join(d.tmp, 'x'))).toBe(true);

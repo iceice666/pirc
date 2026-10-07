@@ -58,7 +58,10 @@ export const DEFAULT_ALLOWED_DOMAINS = [
   'index.rubygems.org',
 ];
 
-/** Credential stores and private data under $HOME that agents never read. */
+/**
+ * Credential stores and private data under $HOME that agents never read. The
+ * auto-mode rules use the same list (plus {@link BUILD_CREDENTIAL_HOME_PATHS}).
+ */
 export const SENSITIVE_HOME_PATHS = [
   '.ssh',
   '.gnupg',
@@ -68,16 +71,29 @@ export const SENSITIVE_HOME_PATHS = [
   '.kube',
   '.docker/config.json',
   '.config/gh',
+  '.config/op',
   '.netrc',
   '.git-credentials',
   '.password-store',
   '.pypirc',
+  '.cargo/credentials',
+  '.cargo/credentials.toml',
+  '.gem/credentials',
+  '.terraform.d/credentials.tfrc.json',
+  '.claude/.credentials.json',
+  '.codex/auth.json',
   '.config/sops',
   '.local/share/keyrings',
+  // The macOS node layout (docs/deploy/macos-node.md): agent.env holds the node token.
+  '.local/pirc-node',
+  '.bash_history',
+  '.zsh_history',
+  '.local/share/fish/fish_history',
   '.mozilla',
   '.config/google-chrome',
   '.config/chromium',
   '.config/BraveSoftware',
+  '.config/microsoft-edge',
   'Library/Keychains',
   'Library/Cookies',
   'Library/Messages',
@@ -87,7 +103,15 @@ export const SENSITIVE_HOME_PATHS = [
   'Library/Application Support/Firefox',
   'Library/Application Support/BraveSoftware',
   'Library/Application Support/Arc',
+  'Library/Application Support/Microsoft Edge',
 ];
+
+/**
+ * Registry credentials that builds read (`npm install` with a private
+ * registry), so the sandbox leaves them readable; a shell command naming
+ * them still needs a human.
+ */
+export const BUILD_CREDENTIAL_HOME_PATHS = ['.npmrc', '.yarnrc.yml', '.bundle/config'];
 
 /**
  * Linux: sockets that hand out the host (container engines, the system and
@@ -408,6 +432,9 @@ export function sessionPolicy(input: SessionPolicyInput): SessionPolicy {
     // (a workspace holding the state dir, `~` in allowedPaths).
     denyWrite: unique([
       path.join(workspace, '.pirc'),
+      // srt keeps these read-only too; listed so the file tools refuse them alike.
+      path.join(workspace, '.git', 'hooks'),
+      ...(filesystem.allowGitConfig ? [] : [path.join(workspace, '.git', 'config')]),
       // User-managed global configuration must stay read-only even under an allowed root.
       realResolve(input.configDir),
       ...['SOUL.md', 'CHAT.md'].flatMap((name) =>

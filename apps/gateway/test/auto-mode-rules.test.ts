@@ -121,6 +121,10 @@ describe('auto-mode shell rules', () => {
       'cargo publish',
       'echo "export X=1" >> ~/.zshrc',
       'cat ~/.ssh/id_ed25519',
+      // One list with the sandbox's (audit L1).
+      'cat ~/.config/sops/age/keys.txt',
+      'cat ~/.local/pirc-node/agent.env',
+      'cat ~/.yarnrc.yml',
       'cp ~/.ssh/id_rsa ./key',
       'echo x > .pirc/config.json',
       'mkdir -p sub/.pirc; echo x > sub/.pirc/config.json',
