@@ -1,6 +1,6 @@
 # Gateway agent runtime: centralize the agent loop, keep execution environments on nodes
 
-Status: **M0 implementation and preparation through the M1 human review gate are authorized; production behavior changes and deployment cutover are not authorized.** See the [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [M1 contracts/security review candidate](../docs/evaluations/gateway-runtime/m1-contracts.md). Detailed contracts, performance gates and resource budgets still require maintainer review before M2; M1 remains uncompleted until that review.
+Status: **M1 design review accepted with no legacy JSONL migration; M2 implementation, production behavior changes and deployment cutover still require separate authorization.** See the [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [reviewed M1 contracts/security design](../docs/evaluations/gateway-runtime/m1-contracts.md). The maintainer's LGTM accepts the contracts, performance gates and initial resource budgets, with the explicit amendment that this breaking change starts fresh sessions instead of migrating old JSONL. Old data is not deleted; no implementation or deployment is authorized by this review.
 
 Code baseline: `17a91a0`. This investigation used static architecture inspection only, with no latency measurements; the benefits below are hypotheses to validate.
 
@@ -22,6 +22,7 @@ Non-goals:
 - Do not execute workspace bash, project hooks, or arbitrary model-generated native programs on the gateway.
 - Do not also introduce multi-user isolation, automatic cross-node workspace migration, offline model operation, or transparent process checkpointing.
 - Do not promise faster execution for every task or exactly-once semantics for arbitrary external side effects.
+- Do not migrate legacy JSONL transcripts or their derived branches, context snapshots and PTC stores. New gateway sessions start fresh; old data is retained, not automatically deleted. No legacy importer or reverse-export compatibility layer is required.
 - Retain the environment role of `pirc-chat` for now; executable consolidation is a separate decision.
 
 ## 2. Current topology and latency hypotheses
@@ -64,7 +65,7 @@ A single "model → node tool → next model call" cycle already sends the model
 | Area                    | Gateway                                                                                  | Node                                                                                     |
 | ----------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | Agent                   | Loop, steering, retries, compaction, model selection, team/subagent scheduling           | No model loop                                                                            |
-| Conversation            | Authoritative transcripts, branches, context snapshots, runs, and interactions           | Migration sources or explicitly defined read-only replicas only                          |
+| Conversation            | Authoritative transcripts, branches, context snapshots, runs, and interactions           | Retained legacy files or explicitly defined read-only replicas only                      |
 | Environment description | Assemble prompts and tool sets from versioned descriptors                                | Resolve workspaces, cwd, OS, trusted config, AGENTS.md, skills, and role data            |
 | Tools                   | Gateway-native memory, search, schedules, delegation, etc.                               | read/edit/write, find/grep, Git, bash, background processes, browser                     |
 | Security                | Validate session/project policy, authorize central capabilities, enforce resource limits | Final path checks, OS sandbox, local approvals, write leases, hooks, process termination |
@@ -93,13 +94,13 @@ Descriptors carry only necessary, bounded text, metadata, and revisions, not loc
 
 Centralization changes deployment location and ownership; it does not mean placing all execution inside the HTTP process that holds secrets.
 
-The proposed agent runtime uses constrained workers/processes and narrow interfaces. It must not inherit provider secrets or execute arbitrary workspace shells. PTC guests continue to use QuickJS/WASM without ambient authority, not ordinary JavaScript eval. Worker separation alone is not security isolation: M1 must define and test actual filesystem, environment, IPC, and OS permissions rather than claiming isolation merely because a subprocess exists.
+The proposed agent runtime uses constrained workers/processes and narrow interfaces. It must not inherit provider secrets or execute arbitrary workspace shells. PTC guests continue to use QuickJS/WASM without ambient authority, not ordinary JavaScript eval. Worker separation alone is not security isolation: The reviewed M1 contract defines actual filesystem, environment, IPC, and OS permission requirements; M2/M3 must test them rather than claiming isolation merely because a subprocess exists.
 
 Add per-session and global limits for concurrency, context memory, workers, queues, output size, and timeouts so one centralized session cannot overwhelm all nodes. Preserve existing authentication, project capabilities, child-policy intersections, and credential protection.
 
 ## 5. Tool RPC and disconnect recovery
 
-Reuse the authenticated node WebSocket with a versioned environment protocol; do not open another public tool port. The following is a conceptual protocol; M1 finalizes field names:
+Reuse the authenticated node WebSocket with a versioned environment protocol; do not open another public tool port. The following summarizes the logical protocol defined in the reviewed M1 contract; M2 supplies the closed wire schemas:
 
 - `environment.describe`: obtain the descriptor, policy revision, available capabilities, and limits.
 - `execution.start`: include execution ID, session/run/turn/tool-call IDs, node/workspace, epoch, descriptor revision, capability name, arguments, and deadline.
@@ -134,28 +135,28 @@ Use predictable static routing in the initial implementation, without arbitrary 
 
 Routing must follow validated capability metadata/manifests; role/tool allowlists remain unchanged. Inner operations cannot bypass existing hooks, approvals, refusal propagation, concurrency, or cancellation rules. A mixed script must not receive blanket approval.
 
-The gateway owns the authoritative branch-scoped `ptc.store`. Dispatch includes a bounded store snapshot, revision, and untrusted provenance. On completion, preserve existing commit semantics: deduplicate by execution ID, check the branch/revision, then save the store/result. Conflicts or failures must not rerun environment side effects that already occurred. M1 must define consistency rules for partial failure and store commits.
+The gateway owns the authoritative branch-scoped `ptc.store`. Dispatch includes a bounded store snapshot, revision, and untrusted provenance. On completion, preserve existing commit semantics: deduplicate by execution ID, check the branch/revision, then save the store/result. Conflicts or failures must not rerun environment side effects that already occurred. The reviewed M1 contract defines consistency rules for partial failure and store commits.
 
 Every central capability call within mixed PTC must carry stable parent execution and inner-operation IDs. For side-effecting central operations, the gateway broker also persists intent/result, checks argument consistency, and deduplicates calls. Commit database mutations and result records atomically wherever a transaction can cover both. If the gateway commits a schedule/delegation change but the node disconnects before receiving the reply, query and reconcile each operation during recovery without replaying the script. Unverifiable effects involving external systems remain `unknown`. The node-side journal must likewise retain started inner operations and known results, making partial success traceable rather than recording only the outer script's terminal state.
 
 Mixed PTC traces/artifacts, human waits, deadlines, and background ownership all require integration tests. If this approach cannot meet the security or performance gates, return to design review rather than silently falling back to one WAN RPC per tool.
 
-## 7. Session migration and cutover
+## 7. Fresh-session cutover (no legacy JSONL migration)
 
-The proposed rollout is development on a branch followed by a single cutover after acceptance. Tests may retain legacy/new harnesses, but production should not retain switchable dual loops indefinitely.
+The accepted rollout is development on a branch followed by a single cutover after acceptance and separate operator authorization. This is a breaking change: new gateway sessions start fresh, without importing old JSONL, branches, context snapshots or PTC stores. Tests may retain legacy/new harnesses, but production should not retain switchable dual loops indefinitely.
 
-1. **Inventory:** transcripts, branches, context, PTC stores, runs, interactions, team relationships, workspace memory, recaps, uploads/attachments, and scheduled/delegated session references. Distinguish node-local file references from migratable data; preserve provider replay metadata.
-2. **Quiescence:** stop new run/schedule dispatch, finish or explicitly terminate foreground work, and cancel old pending approvals rather than carrying old process authorizations forward. Background jobs need a separately verified handoff; otherwise explicitly stop them before cutover, without implicit restarts.
-3. **Import:** transfer immutable snapshots with manifests/checksums over a controlled channel. Preserve gateway-facing session IDs, node-qualified workspaces, branch/message IDs, signatures, and parent relationships. Repeated imports must be idempotent. Reject cross-node ID conflicts during preflight or create explicit mappings.
-4. **Verification:** compare entry/branch counts, hashes, attachment resolution, context replay, history/recaps, and UI behavior. An offline node or incomplete snapshot is not a completed migration; keep affected sessions migration-pending/read-only until the node returns and import can complete.
-5. **Ownership transfer:** the gateway obtains the sole writer epoch; old node agents must no longer write authoritative transcripts. Start the new sandboxed environment executor and update schedules/delegations and session readers.
-6. **Retention and rollback:** keep old JSONL and backups read-only; do not delete them automatically. Before the first new write, returning to the old version is possible. After new writes, rollback requires downtime and reverse export/compatibility validation. Otherwise, do not restore the old writer or claim lossless one-click rollback.
+1. **Inventory:** identify legacy sessions and schedule/delegation/team/memory references that must not point to fresh sessions. Preserve unrelated gateway records and workspace files; no database reset is authorized. Legacy history/resume is unavailable in the new runtime.
+2. **Quiescence:** stop new run/schedule dispatch, finish or explicitly terminate foreground work, and cancel old pending approvals. Background jobs need a separately verified handoff; otherwise explicitly stop them before cutover, without implicit restarts.
+3. **Fresh state:** create new session/branch/store/context identities. Do not import legacy transcripts, adopt stale context snapshots, or silently retarget legacy schedules/delegations. Reconfiguration is explicit; legacy recall evidence reports unavailable rather than falling back to old files.
+4. **Verification:** verify new history/context/recaps, attachment ownership, provider replay metadata and UI behavior. Confirm old data stays untouched and legacy references cannot activate new work. No snapshot importer or import compatibility test is required.
+5. **Ownership fencing:** the gateway obtains the sole writer generation only after old writers are durably fenced on both ends. Offline nodes remain ineligible for new-runtime environment work until they reconnect and complete fencing/version checks. Start the new sandboxed executor after the relevant ownership checks; old binaries cannot reacquire a lease.
+6. **Retention and rollback:** keep old JSONL and backups read-only; do not delete them automatically. Before new writes, reverting requires revoking the new epoch and verifying no writes occurred. After new writes, no lossless rollback to the old runtime is provided; preserve new data and require a separately reviewed downtime and compatibility/recovery plan. A reverse exporter is out of scope. Never restore a reusable old writer epoch.
 
 Artifacts may remain on nodes. References must identify ownership and show unavailable when the node is offline rather than pretending attachments have moved to the gateway. Update gateway/node backup guidance and private-content retention policies, explicitly documenting that the gateway will now retain complete transcripts long-term.
 
 ## 8. Milestones and acceptance
 
-Checkboxes below track implementation progress only; writing or approving the plan does not complete a milestone.
+Checkboxes below track each milestone's stated deliverables. M1 is a design/human-review gate, now accepted; it does not imply M2–M5 implementation, validation or deployment is complete.
 
 ### M0 — Baseline and performance feasibility
 
@@ -166,14 +167,14 @@ Checkboxes below track implementation progress only; writing or approving the pl
 
 Acceptance: a reproducible baseline report distinguishing streaming presentation from total task time. Document separate manual steps for measurements on real remote deployments. Paid-model runs and private-history evaluation require separate authorization.
 
-### M1 — Finalize contracts, security model, and migration design
+### M1 — Finalize contracts, security model, and fresh-session cutover design
 
-- [ ] Complete the inventory of capabilities (including `sandbox_allow_domains` and `unsandboxed_bash`), feature hooks, config, session readers, and artifact ownership.
-- [ ] Finalize the Environment interface, descriptors, execution protocol, PTC placement/store commits, and disconnect state machine.
-- [ ] Finalize gateway runtime permissions, the node sandbox executor, approval authority, resource quotas, and data retention/reclamation.
-- [ ] Define the test matrix for version incompatibility, unknown execution outcomes, offline nodes, import failure, and rollback.
+- [x] Complete the inventory of capabilities (including `sandbox_allow_domains` and `unsandboxed_bash`), feature hooks, config, session readers, and artifact ownership.
+- [x] Finalize the Environment interface, descriptors, execution protocol, PTC placement/store commits, and disconnect state machine.
+- [x] Finalize gateway runtime permissions, the node sandbox executor, approval authority, resource quotas, and data retention/reclamation.
+- [x] Define the test matrix for version incompatibility, unknown execution outcomes, offline nodes, fresh-session cutover without legacy imports, and rollback restrictions.
 
-Acceptance: human review of the responsibility boundaries, major behavior changes, and §10 choices before behavior-changing implementation begins. Documentation is not a substitute for authorization.
+Acceptance: maintainer LGTM received for the responsibility boundaries, major behavior changes and §10 choices, with legacy JSONL migration explicitly excluded. The reviewed contract is in `docs/evaluations/gateway-runtime/m1-contracts.md`. M2 behavior-changing implementation still requires separate authorization.
 
 ### M2 — Extract environment capabilities and reliable RPC
 
@@ -187,7 +188,7 @@ Acceptance: reject forged workspaces/sessions, symlink escapes, invalid approval
 
 - [ ] Build the constrained gateway agent runtime and connect it to the existing provider service; streaming directly produces gateway session events.
 - [ ] Move transcripts/context/branches, steering, compaction, model fallback, and model-call paths such as titles and memory.
-- [ ] Build the session snapshot importer and writer-epoch fencing; adapt history, recaps, the context panel, and file-reference readers.
+- [ ] Build fresh-session initialization and writer-epoch fencing; adapt history, recaps, the context panel, and file-reference readers without legacy JSONL fallback. Preserve old data and explicitly block legacy-session references.
 - [ ] Verify gateway restarts, offline nodes, reconnection, and multi-session resource limits.
 
 Acceptance: main coding/chat flows work end to end with a fake provider. UI deltas no longer detour through nodes; the node link no longer carries complete inference context every turn; each session has exactly one authoritative writer.
@@ -201,15 +202,15 @@ Acceptance: main coding/chat flows work end to end with a fake provider. UI delt
 
 Acceptance: preserve the existing hybrid model interface and identical direct/PTC permissions. Ten dependent environment-only PTC operations must not create ten cross-node tool round trips. Mixed scripts must neither bypass refusals nor replay after approval denial or disconnection. Cover recovery before/after central inner-operation commits, lost replies, and node crashes. Verify that network/host-exec exceptions require node-owned approval and cannot be obtained through forged interactions or sandbox failure.
 
-### M5 — Comparative evaluation, migration rehearsal, and cutover decision
+### M5 — Comparative evaluation, fresh-session cutover rehearsal, and cutover decision
 
 - [ ] Rerun M0 with identical fixtures, model conditions, and network settings. Report p50/p95, traffic, and success rates rather than selecting a single faster case.
-- [ ] Use fixture backups to rehearse idempotent imports, data conflicts, offline nodes, cutover fencing, and rollback limitations before/after new writes.
-- [ ] Have a fresh reviewer audit security, recovery, PTC, and data migration; run the full checks after fixes.
+- [ ] Use fixture backups to rehearse fresh-session startup, retained legacy files, stale references, offline nodes, cutover fencing, and rollback limitations before/after new writes. No legacy importer is required.
+- [ ] Have a fresh reviewer audit security, recovery, PTC, and fresh-session cutover; run the full checks after fixes.
 - [ ] Update topology, backend auth, sandbox, backup/recovery, upgrades, Nix/role packaging, and version-compatibility documentation.
 - [ ] Present measurements and remaining risks for a human cutover decision. Deployment, stopping existing work, and deleting old data require separate explicit authorization.
 
-Proposed performance gates (confirm with the human after M0 and before implementation; do not relax them after seeing results):
+Performance gates accepted at M1 review (M0 remains a component baseline; do not relax gates after seeing implementation results):
 
 - At 100 ms RTT with a low-load synthetic stream, reduce p50 gateway-delta → UI delivery latency by at least 70 ms, with no p95 regression.
 - Environment-only PTC must not add WAN round trips linearly with its number of dependent inner operations.
@@ -227,20 +228,20 @@ Priority areas for test expansion:
 - `agent-core`, `agent-compaction`, `agent-context`, team/subagent, and gateway/node integration tests.
 - `sandbox-policy`, `sandbox.integration`, `sandbox-srt.integration`, and project trust/capability tests.
 - `ptc-runtime`, `agent-ptc`, PTC lifecycle/continuation, and UI timeline tests.
-- New environment protocol, journal/recovery, session migration, and latency fixtures.
+- New environment protocol, journal/recovery, fresh-session cutover/no-legacy-import, and latency fixtures.
 
 Record real sandbox validation separately for Linux and macOS; passing fake-srt tests does not validate OS isolation. Where Android, manual browser checks, real node restarts, or sandbox environments are unavailable, provide handoff commands and mark them unverified rather than treating skipped tests as success.
 
-Expected changes are concentrated in `apps/gateway/src/agent/`, `node/`, `daemon/`, `protocol*.ts`, `database.ts`, and role entrypoints/build/Nix packaging. M1 determines exact new module names; moving directories is not a substitute for removing local coupling.
+Expected changes are concentrated in `apps/gateway/src/agent/`, `node/`, `daemon/`, `protocol*.ts`, `database.ts`, and role entrypoints/build/Nix packaging. Implementation must follow M1's responsibility boundaries when selecting module names; moving directories is not a substitute for removing local coupling.
 
 ## 10. Key choices and remaining review gates
 
-The maintainer has accepted the plan's direction. The recommendations below record that direction; detailed contracts and post-M0 budgets still require the milestone reviews above.
+The maintainer has accepted M1's contracts, initial budgets and the choices below, with legacy JSONL migration excluded. Implementation and deployment still require their separate authorizations; material design changes return to review.
 
 1. **Overall direction:** should the gateway own both the loop and complete authoritative session state, rather than adding only a lighter streaming shortcut/context cache? Recommend the former; if M0 finds little benefit, stop this migration and evaluate a lighter approach separately.
 2. **PTC placement:** accept fixed routing with environment/mixed scripts on the node and gateway-only scripts on the gateway? Recommend this to avoid fine-grained remote tool RPCs; do not implement automatic script partitioning.
 3. **Offline-node semantics:** accept readable history but no new environment-dependent runs, with existing executions handled under §5? Recommend this conservative behavior initially, without adding a separate tool-free chat mode.
-4. **Cutover:** accept a single cutover after branch validation, backups, and quiescence, with deferred import for offline sessions and no production dual loop? Recommend this approach.
-5. **Performance and resource budgets:** after M0, confirm the §8 performance gates and gateway limits for sessions, workers, and context memory before implementation proceeds.
+4. **Cutover:** accepted a single cutover after branch validation, backups and quiescence, with fresh sessions and no legacy JSONL import or production dual loop. Offline nodes must complete fencing before new-runtime work; old data is retained without automatic deletion.
+5. **Performance and resource budgets:** the §8 performance gates and M1 initial limits for sessions, workers and context memory are accepted design budgets, not measured deployment capacity.
 
 Related documents: [current topology](../docs/deploy/topology.md), [model backend architecture](../docs/architecture/backend-auth.md), [sandbox](../docs/history/sandbox.md), [PTC and hybrid cutover](../docs/evaluations/ptc/ptc-only.md), [project policy](project-isolation.md). This plan does not override their established policies; necessary architecture changes must be explicitly reflected during review and cutover.

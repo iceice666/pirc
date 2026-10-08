@@ -1,12 +1,15 @@
-# Gateway runtime M1: contracts and security review candidate
+# Gateway runtime M1: reviewed contracts and security design
 
-Status: **awaiting maintainer review; not an implementation or cutover authorization**.
-The current request authorizes M0 and preparation through this M1 review gate only.
-No production behavior is changed. M1 is not complete until a human accepts the
-boundaries, budgets and behavior changes below. [Plan](../../../plans/gateway-agent-runtime.md)
+Status: **M1 accepted by the maintainer, with no legacy JSONL migration; M2
+implementation and deployment/cutover still require separate authorization**.
+The maintainer reviewed this design with “LGTM” and clarified that this breaking
+change does not need to migrate old JSONL records. New gateway sessions start fresh;
+legacy transcripts and their derived branch/context/store state are not imported.
+This does not authorize deleting old data or resetting unrelated gateway records.
+No production behavior is changed. [Plan](../../../plans/gateway-agent-runtime.md)
 remains authoritative; [M0](m0-baseline.md) is a component baseline, not proof of
-isolation or feature parity. All numbers here are proposed initial limits, not
-measured deployment capacity. Subsequent adjustments require review.
+isolation or feature parity. The initial limits below are accepted design budgets,
+not measured deployment capacity. Subsequent material adjustments require review.
 
 ## 1. Inventory and responsibility boundary
 
@@ -63,35 +66,34 @@ post-hook. A post-hook failure cannot retroactively erase a committed effect. Bo
 phases are journaled so recovery never replays a hook shell blindly. No hooks means
 no hook RPC, but never infer absence from a stale descriptor.
 
-### Authoritative data and all existing file-backed readers
+### Authoritative data and existing file-backed readers (no legacy JSONL import)
 
-| Data / reader                                             | Current source                                                                                   | Transfer / retention                                                                                                                                                                                                                                        |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JSONL entries, active branch and parent links             | `agent/session-store.ts`, `agent/main.ts`, `agent/agent.ts`                                      | Import all entry variants: session header, message, custom, compaction, model/thinking changes, session info; preserve IDs, timestamps, parent IDs and provider signatures/replay metadata. Unknown custom entries are opaque retained data, not discarded. |
-| History/settings/context panel                            | `node/app.ts`, `node/branch-cache.ts`, `node/panel-routes.ts`                                    | Move authoritative reads to gateway; node readers only read immutable migration sources. Preserve operation trees and branch filtering.                                                                                                                     |
-| Recaps                                                    | `node/recap.ts`, `node/runner.ts`, `agent/features/recap.ts`                                     | Gateway selects authoritative sessions with original owner/workspace/branch filters. Preserve exclusions of recap-marked, changing, malformed and oversized sources. Node-local paths remain reference metadata.                                            |
-| PTC stores and provenance                                 | `agent/ptc/index.ts`, `session-store.ts`                                                         | Import each branch-scoped `ptc.store`, not merely the latest file entry. Revision checked as §5.                                                                                                                                                            |
-| Runs/interactions/team/task/goal/todo state               | `database.ts`, team/todo/goal features, custom session entries                                   | Import/match central records and opaque custom entries with source checksums. Cancel pending old approvals; retain historical interactions.                                                                                                                 |
-| Workspace memories                                        | `agent/features/memory/workspace.ts`, node mirror routes                                         | Node retains filesystem ledger/materialization; gateway retains existing mirror plus authoritative conversation memory. No accidental second writer to workspace files.                                                                                     |
-| Schedules/delegated sessions                              | daemon scheduling/delegation handlers and database                                               | Preserve gateway IDs/references, remap only through explicit node-qualified mappings; dispatch stays paused through writer transfer.                                                                                                                        |
-| Uploads, images, raw outputs, browser recordings/profiles | `node/app.ts` upload route, `node/runner.ts` attachment materialization, `node/sandbox.ts` roots | Files remain node-owned. Model-needed bounded image content may be copied into central message data; retain owner/checksum and privacy classification. Profiles never enter transcript migration.                                                           |
-| UI event/interaction projections, sandbox status          | daemon event services, node runner                                                               | Rebuild from imported authoritative entries and durable runs; do not imply that the gateway loop is inside the node sandbox.                                                                                                                                |
+| Data / reader                                             | Current source                                                                                   | Fresh-session ownership / legacy retention                                                                                                                                                                                                                           |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JSONL entries, active branch and parent links             | `agent/session-store.ts`, `agent/main.ts`, `agent/agent.ts`                                      | Gateway owns all entry variants for new sessions, including provider replay metadata. Do not import legacy JSONL entries, branches or custom state; retain the original files without modification or automatic deletion.                                            |
+| History/settings/context panel                            | `node/app.ts`, `node/branch-cache.ts`, `node/panel-routes.ts`                                    | Read new sessions from gateway authority, preserving operation trees and branch filtering. Do not fall back to legacy JSONL or imply old sessions are resumable in the new runtime.                                                                                  |
+| Recaps                                                    | `node/recap.ts`, `node/runner.ts`, `agent/features/recap.ts`                                     | Gateway selects new authoritative sessions with owner/workspace/branch filters. Preserve recap exclusions; do not ingest legacy JSONL as a recap fallback.                                                                                                           |
+| PTC stores and provenance                                 | `agent/ptc/index.ts`, `session-store.ts`                                                         | Create fresh branch-scoped stores for new sessions; do not import legacy JSONL stores or provenance. Revision checked as §5.                                                                                                                                         |
+| Runs/interactions/team/task/goal/todo state               | `database.ts`, team/todo/goal features, custom session entries                                   | Do not import JSONL-backed custom state. Preserve existing central records; mark legacy-session references inactive/unavailable rather than retargeting them to new sessions. Cancel pending old approvals at authorized cutover; retain historical interactions.    |
+| Workspace memories                                        | `agent/features/memory/workspace.ts`, node mirror routes                                         | Node retains filesystem ledger/materialization; gateway retains existing mirror plus authoritative conversation memory. No accidental second writer to workspace files.                                                                                              |
+| Schedules/delegated sessions                              | daemon scheduling/delegation handlers and database                                               | Preserve existing gateway records, but block dispatch to legacy sessions. Do not silently remap or recreate schedules/delegations against fresh sessions; reconfiguration requires explicit operator action.                                                         |
+| Uploads, images, raw outputs, browser recordings/profiles | `node/app.ts` upload route, `node/runner.ts` attachment materialization, `node/sandbox.ts` roots | Files remain node-owned. Model-needed bounded image content may be copied into central message data; retain owner/checksum and privacy classification. Legacy attachments are not automatically adopted by fresh sessions; browser profiles are not transcript data. |
+| UI event/interaction projections, sandbox status          | daemon event services, node runner                                                               | Build from new authoritative entries and durable runs; legacy records are not active new-runtime sessions. Do not imply that the gateway loop is inside the node sandbox.                                                                                            |
 
 Workspace-memory recall is also a transcript reader: `agent/features/memory/workspace.ts`
 `recallWorkspaceItem` reads source session JSONL, called from `memory/index.ts`;
-`node/memory-mirror.ts` rewrites source references to gateway session IDs. Import
-must preserve the source session/entry mapping and route recall evidence to the
-gateway authoritative transcript with owner/project checks, not to stale node
-`sessionDir` files. Keep immutable old references only as migration provenance;
-unmigrated/offline sources report unavailable, never unrelated local content.
+`node/memory-mirror.ts` rewrites source references to gateway session IDs. Preserve
+existing workspace-memory files and mirrors, but legacy source-session evidence is
+unavailable in the new runtime. Do not fall back to old `sessionDir` files, retarget
+references, or manufacture evidence. New-session references resolve against the
+gateway authoritative transcript with owner/project checks.
 
 The context panel also reads the separate `context.json` snapshot via
-`agent/context.ts` and `node/panel-routes.ts` when no runner is live. Include its
-hash/schema/branch revision in the snapshot manifest. Import only a validated
-snapshot matching the imported branch and descriptor revision; otherwise rebuild
-from authoritative entries plus the versioned descriptor before exposing it. If
-reconstruction inputs are unavailable, show context unavailable, never stale node
-snapshot data as the current context.
+`agent/context.ts` and `node/panel-routes.ts` when no runner is live. Do not import
+legacy snapshots. Build new context from new authoritative entries and a versioned
+descriptor; validate schema/branch/descriptor revisions before exposing a snapshot.
+If reconstruction inputs are unavailable, show context unavailable, never stale
+node snapshot data as the current context.
 
 ## 2. Environment interface and versioned envelope
 
@@ -244,7 +246,7 @@ network grants may persist only for the same healthy executor epoch/policy and
 approved domain set; they do not become host-exec permission. No approval grants
 permission after sandbox failure. Cancellation never implies approval.
 
-### Proposed admission/flow-control budgets (human confirmation required)
+### Accepted initial admission/flow-control budgets
 
 | Resource                  | Initial bound / behavior                                                                                                                                                                                                                                                                            |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -267,7 +269,7 @@ fails new admission; do not delete uncertain/unacked effects to make space.
 
 Gateway transcripts now retain complete private conversation content long-term,
 not only event projections. Default: no automatic transcript deletion. Backups must
-cover transcript DB, runs, stores, epochs, import manifests and artifact references;
+cover transcript DB, runs, stores, epochs, cutover records and artifact references;
 node backups retain workspace artifacts/journals. Explicit user deletion follows
 existing privacy policy and must address backups separately. Redact credentials
 from logs; trace IDs/counters are preferred to prompt text. Retention or deletion
@@ -311,58 +313,64 @@ terminal script completion neither silently kills nor restarts established jobs.
 Attachments/traces retain origin IDs and bounded retention; trace truncation must
 not erase journal facts required for recovery.
 
-## 6. Import, ownership fencing and rollback
+## 6. Fresh-session cutover, ownership fencing and rollback
 
-1. Preflight each node: inventory every session/branch/custom entry and gateway
-   reference, byte/hash counts and node-qualified ID collisions. Reject conflicts
-   unless a reviewed explicit mapping preserves references. Require complete
-   snapshots; offline nodes stay migration-pending/read-only.
+Legacy JSONL migration is explicitly out of scope for this breaking change. There
+is no legacy transcript importer, branch/store/context conversion, or reverse-export
+deliverable. This exception does not relax new-runtime durability or security.
+
+1. Preflight each node: identify legacy sessions and central schedule/delegation/
+   team/memory references that must not resolve to fresh sessions. Preserve existing
+   records and workspace files; do not reset the gateway database. Document legacy
+   history/resume unavailability in the new runtime.
 2. With separate operator authorization, stop new runs/schedules/delegations; settle
    or explicitly stop foreground work. Cancel all old approvals. Stop background
    jobs unless an independently verified handoff exists; no implicit restarts.
-3. Produce immutable checksummed manifests: format/source versions, node/workspace,
-   session IDs, entry/branch IDs, active head, provider replay metadata, custom state,
-   artifact references and file hashes. Transfer through the authenticated controlled
-   channel. Import into staging tables; no live authority until validation succeeds.
-4. Idempotency key is source node + snapshot digest. Repeating identical import
-   changes nothing. Divergent content with the same entry ID fails preflight. Compare
-   counts/hashes, parent closure, active branch/context replay, recaps/history,
-   scheduled/delegated/team references and attachment availability.
-5. Fence old writers durably on the node and gateway, acknowledge fencing, then
-   transactionally publish the new gateway writer epoch. A disconnected node cannot
-   acknowledge fencing and cannot be marked migrated. Old binaries/protocols cannot
-   obtain a new lease. Start the sandbox executor only after ownership transfer.
-6. Preserve old JSONL/backups read-only. Before any new write, rollback can restore
-   the old version only after revoking the new epoch and checking no writes occurred.
-   After new writes, require downtime, reverse export and compatibility validation;
-   otherwise rollback is refused. Never run both writers or promise lossless
-   one-click rollback. Restoring a backup must not restore a reusable old epoch.
+3. Retain old JSONL, snapshots, artifacts and backups without automatic deletion.
+   No legacy transcript transfer/import is required. Block legacy-session dispatch
+   and stale references; reconfiguration is explicit, not automatic recreation.
+4. Fence old writers durably on the node and gateway, acknowledge fencing, then
+   publish the new gateway writer generation. A disconnected node cannot acknowledge
+   fencing and remains ineligible for new-runtime environment work until it rejoins
+   and completes the fence/version checks. Old binaries cannot obtain a new lease.
+5. Create fresh session/branch/store/context state with distinct identities bound to
+   the original node/workspace. Validate new history/context/recall/artifact paths;
+   no legacy-file fallback or old ID reuse. Start the sandbox executor only after
+   the relevant fencing and ownership checks succeed.
+6. Before new writes, reverting requires revoking the new epoch and verifying that
+   no new writes occurred. After new writes, no lossless rollback to the old runtime
+   is provided: preserve new data and require a separately reviewed downtime and
+   compatibility/recovery plan. Do not reopen old writers automatically. Restoring
+   a backup must not restore a reusable old epoch. Data deletion remains separately
+   authorized.
 
 ## 7. Required test matrix and review gates
 
-| Test family       | Required evidence before production cutover                                                                                                                                                                                                                                                                |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Compatibility     | Unsupported versions/unknown schema fields, malformed/oversized frames and unknown capabilities rejected before execution; no legacy fallback.                                                                                                                                                             |
-| Boundary/security | Forged session/workspace/epochs, symlink escapes, role/child escalation, hooks rewriting paths, approval replay/spoofing, missing sandbox and host/network exceptions. Real OS worker/sandbox tests per platform.                                                                                          |
-| Durable execution | Duplicate same/different payload; crashes before acceptance, after acceptance, after effect, before result persistence, before/after gateway transcript commit; lost ACK and tombstone expiry/retired generation; disk-full admission. Assert no automatic replay.                                         |
-| PTC               | Ten dependent environment calls without linear WAN RPC; gateway-only and mixed routing; inner commit/lost reply, node/guest restart, denial/refusal, store conflict/branch change/failed store persistence, partial artifacts/human waits/background ownership.                                            |
-| Offline/reconnect | History available, artifacts unavailable, new runs rejected, active stream saved, old-epoch events quarantined, jobs queried, revoked approvals not resurrected.                                                                                                                                           |
-| Quotas/flow       | Flood one session while control/cancel/approval and other sessions progress; bounded memory/queues/frame parsing, exhausted credit/cancel, slow UI/node, provider rate limits and child budgets.                                                                                                           |
-| Feature parity    | Coding/chat, all inventory tools, titles/memory/compaction, hooks/AGENTS/skills/roles, goals/todos/check commands, team wait/ask/stop, schedules/delegations, Web/Android operation trees and sandbox indicators.                                                                                          |
-| Migration         | Fixture import repeated, malformed/incomplete snapshots, ID collisions, offline nodes, attachment hashes, provider replay, schedule references, old-writer fencing, restore stale backup; rollback before/after first write.                                                                               |
-| Performance       | Same M0 fixtures and synthetic provider; separate full-deployment runs include hooks, provider adapter and all processes. Original ≥70 ms streaming p50 improvement at 100 ms RTT, no p95 regression; task regression ≤max(10%,50 ms); no linear PTC WAN expansion; no repeated full context on node link. |
+| Test family       | Required evidence before production cutover                                                                                                                                                                                                                                                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Compatibility     | Unsupported versions/unknown schema fields, malformed/oversized frames and unknown capabilities rejected before execution; no legacy fallback.                                                                                                                                                                                                           |
+| Boundary/security | Forged session/workspace/epochs, symlink escapes, role/child escalation, hooks rewriting paths, approval replay/spoofing, missing sandbox and host/network exceptions. Real OS worker/sandbox tests per platform.                                                                                                                                        |
+| Durable execution | Duplicate same/different payload; crashes before acceptance, after acceptance, after effect, before result persistence, before/after gateway transcript commit; lost ACK and tombstone expiry/retired generation; disk-full admission. Assert no automatic replay.                                                                                       |
+| PTC               | Ten dependent environment calls without linear WAN RPC; gateway-only and mixed routing; inner commit/lost reply, node/guest restart, denial/refusal, store conflict/branch change/failed store persistence, partial artifacts/human waits/background ownership.                                                                                          |
+| Offline/reconnect | History available, artifacts unavailable, new runs rejected, active stream saved, old-epoch events quarantined, jobs queried, revoked approvals not resurrected.                                                                                                                                                                                         |
+| Quotas/flow       | Flood one session while control/cancel/approval and other sessions progress; bounded memory/queues/frame parsing, exhausted credit/cancel, slow UI/node, provider rate limits and child budgets.                                                                                                                                                         |
+| Feature parity    | Coding/chat, all inventory tools, titles/memory/compaction, hooks/AGENTS/skills/roles, goals/todos/check commands, team wait/ask/stop, schedules/delegations, Web/Android operation trees and sandbox indicators.                                                                                                                                        |
+| Fresh cutover     | Legacy JSONL/snapshots remain untouched and are never loaded as new state; fresh IDs/stores/context, unavailable legacy recall/history, blocked legacy schedule/delegation references, offline-node admission, old-writer fencing, stale backup restore, new-session provider replay/artifact ownership; rollback restrictions before/after first write. |
+| Performance       | Same M0 fixtures and synthetic provider; separate full-deployment runs include hooks, provider adapter and all processes. Original ≥70 ms streaming p50 improvement at 100 ms RTT, no p95 regression; task regression ≤max(10%,50 ms); no linear PTC WAN expansion; no repeated full context on node link.                                               |
 
-### Human approval checklist — intentionally open
+### Human review outcome and remaining authorization
 
-- [ ] Accept gateway loop **and** complete transcript authority; retain node-bound sessions.
-- [ ] Accept static PTC routing, partial-failure/store conflict behavior and no script replay.
-- [ ] Accept offline admission and node-owned hooks/approvals/host-exec rules.
-- [ ] Accept the concrete isolation requirements and fail-closed unsupported-platform behavior.
-- [ ] Confirm original M5 performance gates after reviewing M0 limitations/results.
-- [ ] Confirm or amend proposed quotas, deadlines, journal and private-content retention.
-- [ ] Accept staging/import/fencing and downtime/reverse-export rollback constraints.
+The maintainer's LGTM accepts M1 with the explicit no-legacy-JSONL amendment:
+
+- [x] Accept gateway loop **and** complete transcript authority for new sessions; retain node binding.
+- [x] Accept static PTC routing, partial-failure/store conflict behavior and no script replay.
+- [x] Accept offline admission and node-owned hooks/approvals/host-exec rules.
+- [x] Accept the concrete isolation requirements and fail-closed unsupported-platform behavior.
+- [x] Confirm original M5 performance gates, with M0 remaining a component baseline.
+- [x] Accept initial quotas, deadlines, journal and private-content retention.
+- [x] Exclude legacy JSONL migration; use fresh sessions, retain old data, preserve fencing and do not promise lossless rollback after new writes.
 - [ ] Authorize M2 implementation separately; deployment/cutover/data deletion remain excluded.
 
-M1 documentation and source inventory can be reviewed now. No checkbox here or in
-M1 of the plan is marked complete on behalf of the maintainer. Any materially
-changed choice returns to review rather than being inferred from this document.
+M1 design review is complete; implementation and real-platform validation are not.
+Any materially changed choice returns to review rather than being inferred from
+this document.
