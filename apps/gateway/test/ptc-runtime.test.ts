@@ -734,24 +734,27 @@ describe('crashes, timeouts and cancellation', () => {
     const controller = new AbortController();
     let progressAfterEnd = false;
     let ended = false;
+    let humanWait!: (waiting: boolean) => void;
     const { report } = await run(
       'await tools.ask({});',
       {
         ask: (call) =>
-          new Promise<Result>((resolve) =>
+          new Promise<Result>((resolve) => {
             call.signal.addEventListener('abort', () =>
               setTimeout(() => resolve(ok(call, 'late')), 20),
-            ),
-          ),
+            );
+            // Start the wait when the operation asks, not before guest startup.
+            humanWait(true);
+            setTimeout(() => {
+              controller.abort();
+              ended = true;
+            }, 300);
+          }),
       },
       {
         signal: controller.signal,
         onHumanWait: (listener) => {
-          listener(true);
-          setTimeout(() => {
-            controller.abort();
-            ended = true;
-          }, 300);
+          humanWait = listener;
           return () => undefined;
         },
         onProgress: () => {
