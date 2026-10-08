@@ -19,7 +19,7 @@ import type {
 /** Node and workspace IDs carried by registration and configuration. */
 export const NODE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
 
-export const NODE_PROTOCOL_VERSION = 8;
+export const NODE_PROTOCOL_VERSION = 9;
 
 /** One WebSocket frame on the node link. Uploads (base64) must fit, see MAX_UPLOAD_BYTES. */
 export const NODE_FRAME_MAX_BYTES = 16_777_216;

@@ -97,6 +97,153 @@ describe('browser helpers', () => {
 const executable = findBrowserExecutable(process.env.PIRC_BROWSER_EXECUTABLE);
 const ffmpeg = Bun.which('ffmpeg');
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
+}
+
+function fakeContext() {
+  const stats = { newPageCalls: 0, closeCalls: 0 };
+  const context = {
+    route: async () => {},
+    routeWebSocket: async () => {},
+    on: () => context,
+    pages: () => [],
+    newPage: async () => {
+      stats.newPageCalls++;
+      return {
+        url: () => 'about:blank',
+        on: () => {},
+        mainFrame: () => ({ url: () => 'about:blank' }),
+        close: async () => {},
+      };
+    },
+    close: async () => {
+      stats.closeCalls++;
+    },
+  };
+  return { context, stats };
+}
+
+describe('BrowserManager session lifecycle', () => {
+  const settings = (
+    launch: NonNullable<ConstructorParameters<typeof BrowserManager>[0]['launch']>,
+  ) => ({
+    enabled: true,
+    executable: '/fake/chromium',
+    ffmpeg: 'ffmpeg',
+    profilesDir: mkdtempSync(path.join(tmpdir(), 'pirc-browser-profiles-')),
+    idleMs: 60_000,
+    viewport: { width: 800, height: 600 },
+    launch,
+  });
+
+  it('drains a pending launch before closing and never creates a late tab', async () => {
+    const launchStarted = deferred<void>();
+    const launchGate = deferred<any>();
+    const fake = fakeContext();
+    const manager = new BrowserManager(
+      settings(async () => {
+        launchStarted.resolve();
+        return launchGate.promise;
+      }),
+    );
+    const target: BrowserTarget = {
+      sessionId: 'pending-close',
+      workspaceId: 'launch-drain',
+      root: tmpdir(),
+    };
+    const controller = new AbortController();
+    const request = manager.handle(
+      target,
+      'navigate',
+      { url: 'https://example.com' },
+      controller.signal,
+    );
+    await launchStarted.promise;
+
+    let closeResolved = false;
+    const closing = manager.closeSession(target.sessionId).then(() => (closeResolved = true));
+    controller.abort();
+    await Bun.sleep(0);
+    expect(closeResolved).toBe(false);
+
+    launchGate.resolve(fake.context as never);
+    await closing;
+    await expect(request).rejects.toMatchObject({ code: 'conflict' });
+    expect(fake.stats).toEqual({ newPageCalls: 0, closeCalls: 1 });
+    expect(await manager.handle(target, 'status', {}, new AbortController().signal)).toMatchObject({
+      active: false,
+    });
+    await manager.shutdown();
+  });
+
+  it('keeps a shared workspace context alive for another pending session', async () => {
+    const launchStarted = deferred<void>();
+    const launchGate = deferred<any>();
+    const fake = fakeContext();
+    const manager = new BrowserManager(
+      settings(async () => {
+        launchStarted.resolve();
+        return launchGate.promise;
+      }),
+    );
+    const first: BrowserTarget = {
+      sessionId: 'closing-session',
+      workspaceId: 'shared-launch',
+      root: tmpdir(),
+    };
+    const second: BrowserTarget = { ...first, sessionId: 'active-session' };
+    const signal = new AbortController().signal;
+    const firstRequest = manager.handle(first, 'handoff', { reason: 'close me' }, signal);
+    const secondRequest = manager.handle(second, 'handoff', { reason: 'keep me' }, signal);
+    await launchStarted.promise;
+
+    const closing = manager.closeSession(first.sessionId);
+    launchGate.resolve(fake.context as never);
+    await expect(firstRequest).rejects.toMatchObject({ code: 'conflict' });
+    await expect(secondRequest).resolves.toMatchObject({ active: true });
+    await closing;
+    expect(fake.stats.closeCalls).toBe(0);
+
+    await manager.closeSession(second.sessionId);
+    expect(fake.stats.closeCalls).toBe(1);
+    await manager.shutdown();
+  });
+
+  it('cancels control waits when a session closes or the manager shuts down', async () => {
+    const target: BrowserTarget = {
+      sessionId: 'waiting-session',
+      workspaceId: 'waiting-workspace',
+      root: tmpdir(),
+    };
+    const signal = new AbortController().signal;
+    const closedContext = fakeContext();
+    const closedManager = new BrowserManager(settings(async () => closedContext.context as never));
+    await closedManager.handle(target, 'handoff', { reason: 'user input' }, signal);
+    const closeWait = closedManager.handle(target, 'wait_control', {}, signal);
+    await Bun.sleep(0);
+    const closing = closedManager.closeSession(target.sessionId);
+    await expect(closeWait).rejects.toMatchObject({ code: 'conflict' });
+    await closing;
+    expect(closedContext.stats.closeCalls).toBe(1);
+    await closedManager.shutdown();
+
+    const shutdownContext = fakeContext();
+    const shutdownManager = new BrowserManager(
+      settings(async () => shutdownContext.context as never),
+    );
+    const shutdownTarget = { ...target, sessionId: 'shutdown-waiting-session' };
+    await shutdownManager.handle(shutdownTarget, 'handoff', { reason: 'user input' }, signal);
+    const shutdownWait = shutdownManager.handle(shutdownTarget, 'wait_control', {}, signal);
+    await Bun.sleep(0);
+    await shutdownManager.shutdown();
+    await expect(shutdownWait).rejects.toMatchObject({ code: 'conflict' });
+    expect(shutdownContext.stats.closeCalls).toBe(1);
+  });
+});
+
 describe.skipIf(!executable)('BrowserManager (real Chromium)', () => {
   let server: ReturnType<typeof Bun.serve>;
   let manager: BrowserManager;

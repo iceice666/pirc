@@ -5,7 +5,7 @@
  * who created them, and every session route checks that owner.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
@@ -414,6 +414,46 @@ export async function buildNodeApp(
       request.identity!.user,
     );
     return reply.status(201).send({ session: publicSession(session) });
+  });
+
+  const deletingSessions = new Map<string, Promise<void>>();
+  app.delete('/api/sessions/:id', async (request, reply) => {
+    const { id: sessionId } = parse(sessionParams, request.params);
+    const user = request.identity!.user;
+    const deletion = db.sessionDeletion(sessionId);
+    if (deletion && deletion.owner_user !== user)
+      throw new ApiError(403, 'forbidden', 'Chat belongs to another user');
+    if (deletion?.status === 'deleted') return reply.status(204).send();
+    const session = db.claimSession(sessionId, user, true);
+    const workspace = db.getWorkspace(session.workspaceId);
+    if (workspace.kind !== 'chat')
+      throw new ApiError(400, 'invalid_input', 'Only chats can be deleted');
+    db.beginSessionDeletion(sessionId, user);
+    let task = deletingSessions.get(sessionId);
+    if (!task) {
+      task = (async () => {
+        await runners.stopSession(sessionId);
+        await terminals.disposeSession(sessionId);
+        await browser.closeSession(sessionId);
+        // Both paths are allocated by the node, never supplied by the caller.
+        if (
+          !isInside(session.privateSessionPath, config.sessionsDir) ||
+          path.resolve(session.privateSessionPath) === path.resolve(config.sessionsDir)
+        )
+          throw new Error('Invalid private session path');
+        rmSync(session.privateSessionPath, { recursive: true, force: true });
+        rmSync(path.join(workspace.canonicalPath, 'sessions', path.basename(sessionId)), {
+          recursive: true,
+          force: true,
+        });
+        branches.forget(session.privateSessionPath);
+        db.finishSessionDeletion(sessionId);
+        events.forget(sessionId);
+      })().finally(() => deletingSessions.delete(sessionId));
+      deletingSessions.set(sessionId, task);
+    }
+    await task;
+    return reply.status(204).send();
   });
 
   app.patch('/api/sessions/:id', async (request) => {

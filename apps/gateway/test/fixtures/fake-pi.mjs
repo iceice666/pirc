@@ -299,6 +299,9 @@ rl.on('line', (raw) => {
       line({ type: 'agent_settled' });
       return;
     }
+    // Keep a scheduled run active until deletion aborts the runner.
+    if (pushed.customType === 'scheduled-run' && /hold scheduled run/i.test(String(pushed.content)))
+      return;
     const done = () =>
       reply(
         `done:${pushed.details?.delegationId ?? pushed.details?.runId ?? ''}:${pushed.customType}`,

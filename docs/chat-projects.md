@@ -134,3 +134,19 @@ Open **Context** in a session's side panel (available for chats and coding sessi
 The usage bar estimates system, tool definitions, conversation messages, and observational-memory observations/reflections. Memory is allocated from the messages that contain it, not counted twice. USER/MEMORY and workspace-memory prompt sections remain in the system bucket. When a matching provider response reports usage, the buckets scale to its input tokens including cached input; output is excluded. Both the estimate and the reported figure are shown. The free amount uses the request's model context window, not a later model selection. These are approximate allocations, not a tokenizer-level accounting.
 
 Stopped agents show the last request snapshot and its timestamp, not freshly loaded configuration. The node atomically replaces `<sessionDir>/context.json` with mode `0600`; it does not append this duplicated prompt/tool content to `session.jsonl`. The snapshot contains no raw conversation or provider credentials and is removed when its session directory is removed (there is no additional automatic retention policy). The gateway only relays the inspector response. Existing inference still passes through the gateway; this does not change chat privacy or memory mirroring. No Context inspector is added to the native Android UI in this milestone.
+
+## Approving memories in a chat
+
+A proposed USER change appears in its source chat with **Approve** / **Reject**, its proposed text, the current target text for replace/remove, and the user's exact quote. The browser needs the chat's control lease to answer. Settings → Memory and the chat resolve the same durable proposal, so a decision in either place updates both. A changed target invalidates an older card; refresh and review the current text before approving.
+
+Pending proposals survive node disconnects and gateway restarts. A decision does not start a new agent turn. On its next run, the assistant receives the latest decisions for that chat alongside its existing frozen memory snapshot.
+
+## Deleting a chat
+
+Use the trash action in the chat list or a project's session list. The confirmation warns that deleting the chat also deletes the USER and MEMORY entries **originally created there**, their earlier revisions, and its proposals. Entries created by other chats remain, even if this chat read or edited them. **Settle** still only archives a chat.
+
+Deletion requires the chat node online. It stops the running agent, closes its terminals and browser, removes the private transcript and observational memory, and removes the chat's working files. If the connection fails during deletion, reconnect and use Delete again; retrying is safe. Until cleanup completes the chat remains listed but cannot accept more work. Completed deletion also removes the chat from other connected clients.
+
+The memory store retains only forgotten markers and content hashes to prevent exact re-adds; deleted memory cannot be restored through Settings. Copies already in other chats' frozen snapshots or messages, external files, backups, and original files in the owner-wide upload store are outside this deletion. The confirmation discloses the other-chat copy boundary. Project instructions and separately created schedules are preserved.
+
+API: `DELETE /api/sessions/:id`, authenticated as the owner, returns `204` after both node and gateway cleanup. The same owner can retry a completed deletion. Other owners are refused. This route supports chat sessions only.

@@ -132,10 +132,14 @@ class AppState {
   #controlSyncing: string | undefined;
   /** Bumped per openSession; a slower, superseded open must not apply its result. */
   #openSeq = 0;
-  #snapshotLoading = false;
+  /** Local list changes invalidate session lists fetched before them. */
+  #sessionsVersion = 0;
+  #sessionsRequest = 0;
+  /** Snapshot requests coalesce per open session, so old requests cannot block a new one. */
+  #snapshotLoading = new Set<number>();
   #draftTimer: ReturnType<typeof setTimeout> | undefined;
   #draftPending: { sessionId: string; value: string } | undefined;
-  #snapshotAgain = false;
+  #snapshotAgain = new Set<number>();
   #panelListeners = new Set<(signal: PanelSignal) => void>();
   /** The start could not reach the gateway (e.g. an offline cold start from the cached shell). */
   #bootstrapFailed = false;
@@ -262,6 +266,7 @@ class AppState {
     this.sessions = this.sessions.map((item) =>
       item.id === id ? { ...item, unread: false } : item,
     );
+    this.#sessionsVersion++;
     if (!this.demo) void api.markRead(id).catch(() => undefined);
   }
 
@@ -287,6 +292,7 @@ class AppState {
         api.models(),
         api.nodes(),
       ]);
+      this.#sessionsVersion++;
       this.activeSessionId = this.sessions[0]?.id;
       // A notification or a shared link names what to open.
       const linked = targetFromUrl(new URL(location.href));
@@ -305,6 +311,7 @@ class AppState {
         this.workspaces = demo.demoWorkspaces;
         this.nodes = demo.demoNodes;
         this.sessions = demo.demoSessions;
+        this.#sessionsVersion++;
         this.models = demo.demoModels;
         this.activeSessionId = demo.demoSnapshot.session.id;
       } else {
@@ -340,8 +347,16 @@ class AppState {
   /** Sessions can appear without this client creating them (a delegated task's session). */
   async refreshSessions() {
     if (this.demo) return;
+    const version = this.#sessionsVersion;
+    const request = ++this.#sessionsRequest;
     try {
-      this.sessions = await api.sessions();
+      const sessions = await api.sessions();
+      // A selection or local session change means this response may predate a
+      // session we already know is valid. It must not remove that session or its draft.
+      if (version !== this.#sessionsVersion || request !== this.#sessionsRequest) return;
+      this.sessions = sessions;
+      if (this.activeSessionId && !this.sessions.some((s) => s.id === this.activeSessionId))
+        this.removeSession(this.activeSessionId);
       this.markActiveRead();
     } catch {
       /* keep the last list */
@@ -483,6 +498,7 @@ class AppState {
       this.markActiveRead();
       return;
     }
+    this.#sessionsVersion++;
     this.flushDraft();
     const seq = ++this.#openSeq;
     this.activeSessionId = id;
@@ -544,6 +560,11 @@ class AppState {
             this.#sessionsChanged();
           },
           onEvent: (event) => {
+            if (seq === this.#openSeq && event.event.type === 'session_deleted') {
+              this.removeSession(id);
+              void this.refreshMemory();
+              return;
+            }
             const current = this.sessionState;
             if (seq !== this.#openSeq || current?.session.id !== id) return;
             this.sessionState = reduceEvent(current, event);
@@ -554,6 +575,7 @@ class AppState {
               this.sessions = this.sessions.map((item) =>
                 item.id === id ? { ...item, name } : item,
               );
+              this.#sessionsVersion++;
             }
             if (this.sessionState.needsSnapshot) void this.refreshSnapshot();
           },
@@ -577,29 +599,62 @@ class AppState {
 
   /** Reload the open session. Bursts coalesce into one request plus one follow-up. */
   async refreshSnapshot() {
-    if (!this.activeSessionId || this.demo) return;
-    if (this.#snapshotLoading) {
-      this.#snapshotAgain = true;
+    const id = this.activeSessionId;
+    if (!id || this.demo) return;
+    const seq = this.#openSeq;
+    if (this.#snapshotLoading.has(seq)) {
+      this.#snapshotAgain.add(seq);
       return;
     }
-    this.#snapshotLoading = true;
-    const seq = this.#openSeq;
+    this.#snapshotLoading.add(seq);
     try {
-      const snapshot = await api.snapshot(this.activeSessionId);
-      if (seq !== this.#openSeq) return;
+      const snapshot = await api.snapshot(id);
+      if (seq !== this.#openSeq || id !== this.activeSessionId || this.#snapshotAgain.has(seq))
+        return;
       this.sessionState = fromSnapshot(snapshot);
-      const { id, name } = this.sessionState.session;
-      this.sessions = this.sessions.map((item) => (item.id === id ? { ...item, name } : item));
+      const { id: snapshotSessionId, name } = this.sessionState.session;
+      if (this.sessions.some((item) => item.id === snapshotSessionId && item.name !== name)) {
+        this.sessions = this.sessions.map((item) =>
+          item.id === snapshotSessionId ? { ...item, name } : item,
+        );
+        this.#sessionsVersion++;
+      }
     } catch (error) {
-      if (seq === this.#openSeq)
+      if (seq === this.#openSeq && !this.#snapshotAgain.has(seq))
         this.pageError = errorMessage(error, 'Could not refresh the session.');
     } finally {
-      this.#snapshotLoading = false;
-      if (this.#snapshotAgain) {
-        this.#snapshotAgain = false;
-        if (seq === this.#openSeq) void this.refreshSnapshot();
-      }
+      this.#snapshotLoading.delete(seq);
+      if (this.#snapshotAgain.delete(seq) && seq === this.#openSeq) void this.refreshSnapshot();
     }
+  }
+
+  private removeSession(id: string) {
+    const session =
+      this.sessions.find((s) => s.id === id) ??
+      (this.sessionState?.session.id === id ? this.sessionState.session : undefined);
+    this.sessions = this.sessions.filter((s) => s.id !== id);
+    this.#sessionsVersion++;
+    if (id === this.activeSessionId) {
+      ++this.#openSeq;
+      this.#events?.close();
+      this.#events = undefined;
+      this.sessionState = undefined;
+      this.activeSessionId = undefined;
+      this.#draftPending = undefined;
+      clearTimeout(this.#draftTimer);
+      this.draft = '';
+      this.uploads = [];
+      this.panel.reset('');
+      if (session) this.showWorkspace(session.workspaceId);
+    }
+    removeDraft(id);
+  }
+
+  async deleteSession(id: string) {
+    if (!this.demo) await api.deleteSession(id);
+    this.removeSession(id);
+    this.memoryRevision++;
+    await this.refreshMemory();
   }
 
   /** Rename, pin or settle from the sidebar. Applied at once and rolled back on failure. */
@@ -608,6 +663,7 @@ class AppState {
     if (!previous) return;
     const apply = (patch: Partial<SessionSummary>) => {
       this.sessions = this.sessions.map((item) => (item.id === id ? { ...item, ...patch } : item));
+      this.#sessionsVersion++;
       const state = this.sessionState;
       if (state?.session.id === id && patch.name !== undefined)
         this.sessionState = { ...state, session: { ...state.session, name: patch.name } };
@@ -966,6 +1022,7 @@ class AppState {
           }
         : await api.createSession({ workspaceId });
       this.sessions = [created, ...this.sessions];
+      this.#sessionsVersion++;
       if (demo) {
         this.view = 'session';
         this.activeSessionId = created.id;

@@ -75,6 +75,10 @@ const daemonFrames = [
   { type: 'registration_error', status: 403, code: 'forbidden', message: 'Not allowed' },
   { type: 'heartbeat_ack' },
   request,
+  {
+    ...request,
+    data: { method: 'DELETE', url: '/api/sessions/chat', user: 'user' },
+  },
   { ...request, data: { ...request.data, bodyBase64: 'e30=', contentType: 'application/json' } },
   { type: 'agent_response', requestId: 'request', status: 204 },
   { type: 'agent_response', requestId: 'request', status: 200, body: { result: [] } },
@@ -218,7 +222,7 @@ describe('node link wire envelopes', () => {
 
   test.each([
     { ...request, requestId: '' },
-    { ...request, data: { ...request.data, method: 'DELETE' } },
+    { ...request, data: { ...request.data, method: 'TRACE' } },
     { ...request, data: { ...request.data, url: '/private' } },
     { ...request, data: { ...request.data, url: '/api/' + 'x'.repeat(8192) } },
     { ...request, data: { ...request.data, contentType: 'x'.repeat(201) } },

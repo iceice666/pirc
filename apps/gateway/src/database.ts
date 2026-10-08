@@ -221,6 +221,17 @@ const migrations = [
     project_hash TEXT NOT NULL, trusted_by TEXT NOT NULL, trusted_at INTEGER NOT NULL
   );`,
   `CREATE TABLE assistant_node (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), node_id TEXT NOT NULL);`,
+  // Creation provenance is immutable even when later revisions come from other chats.
+  `ALTER TABLE memory_entries ADD COLUMN created_by_session TEXT;
+   UPDATE memory_entries SET created_by_session=(
+     SELECT json_extract(l.sources_json, '$.sessionId') FROM memory_log l
+     WHERE l.entry_id=memory_entries.id AND l.owner_user=memory_entries.owner_user AND l.op='add'
+     ORDER BY l.seq LIMIT 1
+   );
+   CREATE INDEX memory_entries_creator ON memory_entries(owner_user, created_by_session);
+   CREATE TABLE session_deletions (
+     session_id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL
+   );`,
 ];
 
 const workspaceKind = (value: unknown): WorkspaceKind => (value === 'chat' ? 'chat' : 'directory');
@@ -640,10 +651,11 @@ export class GatewayDatabase {
     );
   }
   /** Every session belongs to the user who created it; nobody else may see or drive it. */
-  claimSession(sessionId: string, user: string): SessionRow {
+  claimSession(sessionId: string, user: string, deleting = false): SessionRow {
     const session = this.getSession(sessionId);
     if (session.ownerUser !== user)
       throw new ApiError(403, 'forbidden', 'Session belongs to another user');
+    if (!deleting) this.requireSessionAvailable(sessionId);
     return session;
   }
 
@@ -680,10 +692,57 @@ export class GatewayDatabase {
     return origins;
   }
 
+  sessionDeletion(sessionId: string): { owner_user: string; status: string } | undefined {
+    return this.raw
+      .query('SELECT owner_user, status FROM session_deletions WHERE session_id=?')
+      .get(sessionId) as { owner_user: string; status: string } | undefined;
+  }
+
+  requireSessionAvailable(sessionId: string): void {
+    if (this.sessionDeletion(sessionId))
+      throw new ApiError(
+        409,
+        'conflict',
+        'This chat is being deleted. Retry Delete to finish cleanup.',
+      );
+  }
+
+  beginSessionDeletion(sessionId: string, user: string): void {
+    this.claimSession(sessionId, user, true);
+    this.raw
+      .query("INSERT OR IGNORE INTO session_deletions VALUES (?, ?, 'deleting', ?)")
+      .run(sessionId, user, now());
+  }
+
+  finishSessionDeletion(sessionId: string): void {
+    this.raw.transaction(() => {
+      if (!this.sessionDeletion(sessionId)) throw new Error('Deletion must be fenced first');
+      for (const table of ['interactions', 'commands', 'leases', 'runs'])
+        this.raw.query(`DELETE FROM ${table} WHERE session_id=?`).run(sessionId);
+      // Deletion fences the final node events, so the scheduler cannot rely on
+      // an agent-stop event to settle a run. Preserve its audit record and the
+      // schedule, but release the open-run guard and remove the dead chat link.
+      this.raw
+        .query(
+          "UPDATE schedule_runs SET status='failed', result='The chat was deleted.', finished_at=? WHERE session_id=? AND status IN ('running','waiting_input')",
+        )
+        .run(now(), sessionId);
+      this.raw.query('UPDATE schedule_runs SET session_id=NULL WHERE session_id=?').run(sessionId);
+      this.raw.query('DELETE FROM schedule_proposals WHERE session_id=?').run(sessionId);
+      this.raw.query('DELETE FROM delegations WHERE assistant_session_id=?').run(sessionId);
+      this.raw.query('DELETE FROM sessions WHERE id=?').run(sessionId);
+      this.raw
+        .query("UPDATE session_deletions SET status='deleted' WHERE session_id=?")
+        .run(sessionId);
+    })();
+  }
+
   resolveRemoteSession(nodeId: string, remoteId: string): string | undefined {
     return (
       this.raw
-        .prepare('SELECT id FROM sessions WHERE node_id=? AND pi_session_id=?')
+        .prepare(
+          'SELECT id FROM sessions WHERE node_id=? AND pi_session_id=? AND id NOT IN (SELECT session_id FROM session_deletions)',
+        )
         .get(nodeId, remoteId) as { id: string } | undefined
     )?.id;
   }

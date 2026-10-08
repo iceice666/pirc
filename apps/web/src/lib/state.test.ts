@@ -215,4 +215,40 @@ describe('session event reducer', () => {
     expect(state.needsSnapshot).toBe(false);
     expect(state.cursor).toBe(wire.cursor);
   });
+
+  it('applies memory interaction events immediately and requests snapshot reconciliation', () => {
+    const requested = normalizeEvent({
+      sessionId: 's1',
+      epoch: 'epoch-a',
+      sequence: 2,
+      type: 'interaction_created',
+      data: {
+        id: 'memory:p1:0',
+        runnerEpoch: 0,
+        kind: 'confirm',
+        status: 'pending',
+        request: {
+          title: 'Add USER memory?',
+          message: 'Proposed memory:\nLikes tea.',
+          confirmLabel: 'Approve',
+          cancelLabel: 'Reject',
+        },
+      },
+    });
+    const answered = normalizeEvent({
+      sessionId: 's1',
+      epoch: 'epoch-a',
+      sequence: 3,
+      type: 'interaction_answered',
+      data: { interactionId: 'memory:p1:0' },
+    });
+
+    let state = reduceEvent(fromSnapshot(snapshot), requested);
+    expect(state.interactions.map((item) => item.id)).toEqual(['memory:p1:0']);
+    expect(state.needsSnapshot).toBe(true);
+
+    state = reduceEvent(state, answered);
+    expect(state.interactions).toEqual([]);
+    expect(state.needsSnapshot).toBe(true);
+  });
 });

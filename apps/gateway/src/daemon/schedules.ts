@@ -1059,7 +1059,11 @@ export class Schedules {
   }
 
   private setRunStatus(run: ScheduleRun, status: RunStatus): void {
-    this.deps.db.raw.prepare('UPDATE schedule_runs SET status=? WHERE id=?').run(status, run.id);
+    // A progress snapshot can arrive after deletion has settled this run.
+    const changed = this.deps.db.raw
+      .prepare('UPDATE schedule_runs SET status=? WHERE id=? AND session_id=? AND status=?')
+      .run(status, run.id, run.sessionId, run.status).changes;
+    if (!changed) return;
     this.deps.changed(run.ownerUser);
     this.announce(run.id);
   }

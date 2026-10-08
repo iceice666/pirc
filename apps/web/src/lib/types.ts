@@ -416,6 +416,7 @@ export interface EventEnvelope<T extends GatewayEvent = GatewayEvent> {
 }
 
 export type GatewayEvent =
+  | { type: 'session_deleted' }
   | { type: 'message_started'; message: ConversationMessage }
   | {
       type: 'message_delta';

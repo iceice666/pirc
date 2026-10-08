@@ -157,7 +157,7 @@
       >
       <textarea class="editor" bind:value rows="8" spellcheck="false" disabled={locked}></textarea>
     </label>
-  {:else if !modelChoice}
+  {:else if !modelChoice && !interaction.id.startsWith('memory:')}
     <p class="confirm-copy">Choose whether the agent should continue with this action.</p>
   {/if}
 

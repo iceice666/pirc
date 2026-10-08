@@ -9,7 +9,7 @@ import { inferenceEventFrames, inferenceRequestSchema } from './inference-wire.j
 import { modelsSchema } from './models.js';
 
 export const nodeHttpRequestSchema = z.object({
-  method: z.enum(['GET', 'POST', 'PATCH', 'PUT']),
+  method: z.enum(['GET', 'POST', 'PATCH', 'PUT', 'DELETE']),
   /** Path and query, already rewritten to node-local IDs. */
   url: z.string().startsWith('/api/').max(8192),
   /** Authenticated browser user the daemon acts for. */

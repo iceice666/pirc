@@ -30,6 +30,7 @@ export function reduceEvent(
   switch (event.type) {
     case 'reset':
       return { ...base, needsSnapshot: true };
+    case 'session_deleted': // The app closes the session and returns to its chat list.
     case 'noop':
     case 'panel_changed':
       return base;
@@ -167,11 +168,16 @@ export function reduceEvent(
               item.id === event.interaction.id ? event.interaction : item,
             )
           : [...state.interactions, event.interaction],
+        // Memory proposals are sent as incremental interaction events, but a
+        // concurrent snapshot may have been captured before this event. Keep
+        // the immediate update and ask the app to reconcile with a fresh view.
+        needsSnapshot: true,
       };
     case 'interaction_removed':
       return {
         ...base,
         interactions: state.interactions.filter((item) => item.id !== event.interactionId),
+        needsSnapshot: true,
       };
     case 'queue_updated':
       return { ...base, queue: event.queue };

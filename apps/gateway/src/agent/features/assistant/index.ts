@@ -56,6 +56,13 @@ interface MemoryContext {
   notes?: Brief[];
   usage?: Record<'user' | 'note', { used: number; max: number }>;
   pendingProposals?: number;
+  proposalDecisions?: Array<{
+    id: string;
+    action: string;
+    status: string;
+    targetId: string | null;
+    decidedAt: number | null;
+  }>;
   /** Where the assistant can delegate tasks. */
   workspaces?: WorkspaceBrief[];
 }
@@ -134,7 +141,7 @@ export function renderMemory(context: MemoryContext): string {
     '',
     'What you remember from earlier chats with this user. It was loaded when this chat started; changes reach new chats only.',
     '',
-    '- USER is what the user told you about themselves, their preferences and standing rules. They approved every entry: follow it unless they say otherwise now. To change it, call memory_propose_user with their exact words; they approve it in Settings → Memory.',
+    '- USER is what the user told you about themselves, their preferences and standing rules. They approved every entry: follow it unless they say otherwise now. To change it, call memory_propose_user with their exact words; they approve it in this chat or Settings → Memory.',
     '- MEMORY holds your own notes from earlier chats. They may be stale: check what can change, and prefer what the user says now. Keep them current with memory_note.',
     ...(pending
       ? [
@@ -162,7 +169,7 @@ export function renderMemory(context: MemoryContext): string {
  * guidance for disabled tools is taken out each time it is shown.
  */
 export function presentSection(section: string, capabilities: Capabilities): string {
-  if (!capabilities.delegation) return section.replace(/\n*## Workspaces\n[\s\S]*$/, '');
+  if (!capabilities.delegation) return section.replace(/\n*## Workspaces\n[\s\S]*?(?=\n## |$)/, '');
   if (!capabilities.memory_search)
     return section.replace(
       / Their coding sessions keep notes there \(workspace memory\)[^\n]*/,
@@ -309,12 +316,16 @@ export function assistantFeature(): Feature {
       return frozen ?? UNAVAILABLE;
     }
     agent.capabilities = capabilities(context.capabilities);
-    if (frozen !== undefined) return frozen;
+    const withDecisions = (text: string) =>
+      context.proposalDecisions?.length
+        ? `${text}\n\n## Memory proposal decisions (current)\n${JSON.stringify(context.proposalDecisions)}\nThese decisions are already applied; do not repeat rejected proposals.`
+        : text;
+    if (frozen !== undefined) return withDecisions(frozen);
     const existing = agent.store
       .branch()
       .findLast((entry) => entry.type === 'custom' && entry.customType === ASSISTANT_SNAPSHOT);
     if (existing?.type === 'custom')
-      return (frozen = String((existing.data as { text?: unknown })?.text ?? ''));
+      return withDecisions((frozen = String((existing.data as { text?: unknown })?.text ?? '')));
     const shown = context.enabled ? [...(context.user ?? []), ...(context.notes ?? [])] : [];
     for (const entry of shown) revisions.set(entry.id, entry.revision);
     const section = context.enabled
@@ -328,7 +339,7 @@ export function assistantFeature(): Feature {
         revisions: Object.fromEntries(shown.map((entry) => [entry.id, entry.revision])),
       },
     });
-    return (frozen = section);
+    return withDecisions((frozen = section));
   }
 
   const failure = (error: unknown, details?: unknown): ToolResult => {
@@ -488,7 +499,9 @@ export function assistantFeature(): Feature {
       additionalProperties: false,
     },
     resultSchema: fields({
-      proposalId: str('Nothing is saved until the user approves it in Settings → Memory'),
+      proposalId: str(
+        'Nothing is saved until the user approves it in this chat or Settings → Memory',
+      ),
       duplicate: bool('The same change was already waiting'),
     }),
     async execute(args, ctx) {
@@ -525,7 +538,7 @@ export function assistantFeature(): Feature {
         return typed(
           result.duplicate
             ? `This change is already waiting for the user's approval (proposal ${result.proposalId}).`
-            : `Proposed (proposal ${result.proposalId}). Nothing is saved until the user approves it in Settings → Memory; tell them what you proposed.`,
+            : `Proposed (proposal ${result.proposalId}). Nothing is saved until the user approves it in this chat or Settings → Memory; tell them what you proposed.`,
           { proposalId: result.proposalId, duplicate: result.duplicate === true },
           { details: { proposalId: result.proposalId } },
         );

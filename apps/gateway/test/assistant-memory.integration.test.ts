@@ -358,3 +358,60 @@ it('remembers across chats end to end: a real agent proposes and notes, the user
   // The first chat keeps the memory it started with: nothing then.
   expect(String(llm.requests[0]!.body.messages[0].content)).toContain('(none yet)');
 }, 30_000);
+
+it('publishes durable chat memory cards and synchronizes lease-checked decisions with Settings', async () => {
+  const { app, services, ask, chatSessionId } = await daemonWithNode();
+  const events: any[] = [];
+  cleanup.push(services.events.subscribe(chatSessionId, (e) => events.push(e)));
+  const proposed = await ask('c1', 'memory.proposeUser', {
+    action: 'add',
+    content: 'Likes jasmine tea.',
+    quote: 'I like jasmine tea',
+    entryIds: ['m1'],
+  });
+  const proposalId = proposed.body.result.proposalId;
+  const card = events.find((e) => e.type === 'interaction_created').data;
+  expect(card.request).toMatchObject({ confirmLabel: 'Approve', cancelLabel: 'Reject' });
+  expect(card.request.message).toContain('I like jasmine tea');
+  expect(card.expiresAt).toBeNull();
+  const route = `/api/sessions/${chatSessionId}/interactions/${card.id}/answer`;
+  expect(
+    (await post(app, route, { clientId: 'browser', generation: 1, answer: { confirmed: true } }))
+      .statusCode,
+  ).toBe(409);
+  const lease = { clientId: 'browser', generation: 1, expiresAt: Date.now() + 60_000 };
+  services.db.mirrorLease(chatSessionId, lease, USER, false);
+  const body = { clientId: 'browser', generation: lease.generation, answer: { confirmed: true } };
+  expect((await post(app, route, body, OTHER)).statusCode).toBe(403);
+  expect((await post(app, route, { ...body, clientId: 'stale' })).statusCode).toBe(409);
+  expect((await post(app, route, body)).statusCode).toBe(200);
+  expect(services.memory.proposal(USER, proposalId).status).toBe('approved');
+  expect(
+    events.some((e) => e.type === 'interaction_answered' && e.data.interactionId === card.id),
+  ).toBe(true);
+  expect((await post(app, `/api/memory/proposals/${proposalId}/reject`)).statusCode).toBe(409);
+  const context = (await ask('c1', 'assistant.context')).body.result;
+  expect(context.proposalDecisions).toEqual([
+    expect.objectContaining({ id: proposalId, status: 'approved' }),
+  ]);
+  expect((await ask('c2', 'assistant.context')).body.result.proposalDecisions).toEqual([]);
+  expect(services.db.raw.query('SELECT count(*) AS n FROM runs').get()).toEqual({ n: 0 });
+
+  const p2 = (
+    await ask('c1', 'memory.proposeUser', {
+      action: 'add',
+      content: 'Likes coffee.',
+      quote: 'I like coffee',
+      entryIds: ['m2'],
+    })
+  ).body.result.proposalId;
+  const secondCard = events.filter((e) => e.type === 'interaction_created').at(-1).data;
+  expect((await post(app, `/api/memory/proposals/${p2}/reject`)).statusCode).toBe(200);
+  expect(
+    events.some((e) => e.type === 'interaction_answered' && e.data.interactionId === secondCard.id),
+  ).toBe(true);
+  expect(
+    (await post(app, `/api/sessions/${chatSessionId}/interactions/${secondCard.id}/answer`, body))
+      .statusCode,
+  ).toBe(409);
+});

@@ -68,6 +68,12 @@ cd ../infra && nix flake update pirc && git commit -am 'bump pirc' # 2. pin
 
 Upgrade the gateway and all nodes together. Chats no longer load any `AGENTS.md`: move chat-relevant rules into the chat node's `$PIRC_CONFIG_DIR/CHAT.md`, and put persona text in global `SOUL.md`. Coding prompts are unchanged. For Nix use `services.pirc.chatPrompt` and `services.pirc.soulPrompt`; the web editor reports these store-managed files as read-only. The first chat node registration is now persistently bound; replacing that node requires releasing the binding in Settings → Assistant after stopping the old node.
 
+## Chat memory approvals and deletion (node protocol 9)
+
+Upgrade the gateway and all nodes together: the node transport now accepts DELETE requests for chat cleanup. Version 8 nodes are refused at registration rather than disconnecting midway through deletion. The database migration adds immutable memory creation provenance (backfilled from the first add log) and durable deletion intent. Back up both gateway and node state before upgrading as usual.
+
+If a deletion was interrupted, keep the same node state and reconnect it, then retry Delete from the chat list. Do not remove deletion-intent rows manually: they fence late writes and make a lost acknowledgement safe to retry.
+
 ## Programmatic tool calling (the `code` tool removed)
 
 Upgrade the gateway (it ships the web bundle) and every chat and coding node from the same release, then reload web clients and update the Android app so operations nest under their scripts in the timeline (older clients show them as separate tool calls). The node protocol is unchanged.
