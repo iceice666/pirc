@@ -1,6 +1,6 @@
 # Gateway agent runtime: centralize the agent loop, keep execution environments on nodes
 
-Status: **Plan reviewed and accepted by the maintainer; implementation and deployment cutover have not been authorized by this documentation-only request.** The maintainer requested a plan first, then approved it for translation and commit. The boundaries, protocols, performance thresholds, and migration approach below describe the proposed implementation; detailed contracts and measurement budgets remain subject to the review gates below. No milestones have started.
+Status: **M0 implementation and preparation through the M1 human review gate are authorized; production behavior changes and deployment cutover are not authorized.** See the [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [M1 contracts/security review candidate](../docs/evaluations/gateway-runtime/m1-contracts.md). Detailed contracts, performance gates and resource budgets still require maintainer review before M2; M1 remains uncompleted until that review.
 
 Code baseline: `17a91a0`. This investigation used static architecture inspection only, with no latency measurements; the benefits below are hypotheses to validate.
 
@@ -159,10 +159,10 @@ Checkboxes below track implementation progress only; writing or approving the pl
 
 ### M0 — Baseline and performance feasibility
 
-- [ ] Build reproducible tests with a synthetic/fake provider and a controlled-latency link, avoiding attribution of provider variability to architecture improvements.
-- [ ] Record node-link RTT, context bytes, time from gateway delta receipt to UI receipt, tool queue/execution time, total traffic, socket backlog, and CPU/RSS.
-- [ ] Cover loopback and simulated 30/100/200 ms RTT; small/large contexts, single tools, PTC with 10 dependent environment operations, mixed PTC, and multiple sessions.
-- [ ] Use monotonic clocks for local spans; measure cross-machine timing through traces/round trips or calibration rather than directly subtracting unsynchronized wall clocks.
+- [x] Build reproducible tests with a synthetic/fake provider and a controlled-latency link, avoiding attribution of provider variability to architecture improvements.
+- [x] Record node-link RTT, context bytes, time from gateway delta receipt to UI receipt, tool queue/execution time, total traffic, socket backlog, and CPU/RSS.
+- [x] Cover loopback and simulated 30/100/200 ms RTT; small/large contexts, single tools, PTC with 10 dependent environment operations, mixed PTC, and multiple sessions.
+- [x] Use monotonic clocks for local spans; measure cross-machine timing through traces/round trips or calibration rather than directly subtracting unsynchronized wall clocks.
 
 Acceptance: a reproducible baseline report distinguishing streaming presentation from total task time. Document separate manual steps for measurements on real remote deployments. Paid-model runs and private-history evaluation require separate authorization.
 
