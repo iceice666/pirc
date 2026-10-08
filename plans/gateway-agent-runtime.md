@@ -1,6 +1,6 @@
 # Gateway agent runtime: centralize the agent loop, keep execution environments on nodes
 
-Status: **M1 design review accepted with no legacy JSONL migration; M2 implementation, production behavior changes and deployment cutover still require separate authorization.** See the [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [reviewed M1 contracts/security design](../docs/evaluations/gateway-runtime/m1-contracts.md). The maintainer's LGTM accepts the contracts, performance gates and initial resource budgets, with the explicit amendment that this breaking change starts fresh sessions instead of migrating old JSONL. Old data is not deleted; no implementation or deployment is authorized by this review.
+Status: **M1 design review accepted with no legacy JSONL migration; the maintainer has authorized the first M2 implementation slice. Remaining M2 work, production RPC activation and deployment cutover are not authorized by that slice.** See the [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [reviewed M1 contracts/security design](../docs/evaluations/gateway-runtime/m1-contracts.md). The maintainer's LGTM accepts the contracts, performance gates and initial resource budgets, with the explicit amendment that this breaking change starts fresh sessions instead of migrating old JSONL. Old data is not deleted. The subsequent M2 request authorizes the bounded foundation work described below, not deployment.
 
 Code baseline: `17a91a0`. This investigation used static architecture inspection only, with no latency measurements; the benefits below are hypotheses to validate.
 
@@ -174,9 +174,11 @@ Acceptance: a reproducible baseline report distinguishing streaming presentation
 - [x] Finalize gateway runtime permissions, the node sandbox executor, approval authority, resource quotas, and data retention/reclamation.
 - [x] Define the test matrix for version incompatibility, unknown execution outcomes, offline nodes, fresh-session cutover without legacy imports, and rollback restrictions.
 
-Acceptance: maintainer LGTM received for the responsibility boundaries, major behavior changes and §10 choices, with legacy JSONL migration explicitly excluded. The reviewed contract is in `docs/evaluations/gateway-runtime/m1-contracts.md`. M2 behavior-changing implementation still requires separate authorization.
+Acceptance: maintainer LGTM received for the responsibility boundaries, major behavior changes and §10 choices, with legacy JSONL migration explicitly excluded. The reviewed contract is in `docs/evaluations/gateway-runtime/m1-contracts.md`. The subsequent M2 request separately authorizes only the first implementation slice below.
 
 ### M2 — Extract environment capabilities and reliable RPC
+
+**In progress, first slice only.** After architecture inspection, the maintainer explicitly chose a staged implementation: extract the existing direct/PTC local operation boundary and add strict logical Environment protocol plus durable execution-journal foundations. Do not enable production RPC or replace the sandboxed agent process in this slice. All M2 acceptance items remain open until the remaining integration is implemented and validated. See [M2 foundation scope and validation](../docs/evaluations/gateway-runtime/m2-foundation.md).
 
 - [ ] Extract local/remote environment adapters and a sandboxed executor without moving the production loop yet.
 - [ ] Implement the execution journal, deduplication, status/cancel, events, approval relay, artifact references, and flow control.
