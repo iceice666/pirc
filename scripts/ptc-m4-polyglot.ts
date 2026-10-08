@@ -1,5 +1,5 @@
 /**
- * M4 public-benchmark evaluation (plans/ptc-m4-evaluation.md, "Public benchmark"): Aider
+ * M4 public-benchmark evaluation (docs/evaluations/ptc/ptc-m4-evaluation.md, "Public benchmark"): Aider
  * polyglot Python exercises. `--dev` measures a branch build on the development split (for
  * tuning; never judged); `--holdout` interleaves the pinned M1 `main` and the pinned branch on
  * the holdout split and is judged. Spend continues the same independent OpenAI budget. Key only

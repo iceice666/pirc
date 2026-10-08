@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Push notifications (plans/cron.md, phase 4): turn them on for this
+   * Push notifications (docs/history/cron.md, phase 4): turn them on for this
    * browser, see every place that gets them (browsers and paired phones),
    * remove one, and send a test.
    */

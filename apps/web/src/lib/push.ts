@@ -1,5 +1,5 @@
 /**
- * Push notifications on this browser (plans/cron.md, phase 4): scheduled
+ * Push notifications on this browser (docs/history/cron.md, phase 4): scheduled
  * runs, sessions waiting for you, delegations and memory proposals. The
  * gateway encrypts each message for this browser's subscription; the
  * service worker (`public/sw.js`) shows it and opens what it points at.

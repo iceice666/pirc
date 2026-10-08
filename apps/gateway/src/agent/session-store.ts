@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { Message, ToolResultMessage } from './messages.js';
 
-/** Session entry of one `ptc` operation (plans/ptc-only.md §6); never sent to the model. */
+/** Session entry of one `ptc` operation (docs/evaluations/ptc/ptc-only.md §6); never sent to the model. */
 export const OPERATION_ENTRY = 'ptc.operation';
 /** The `ptc` script store after a completed script changed it (`store`/`load`). */
 export const PTC_STORE_ENTRY = 'ptc.store';

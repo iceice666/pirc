@@ -1,6 +1,6 @@
 /**
  * Aggregate-only M4 report: the PTC run against the accepted M1 baseline and the M4 bounds
- * (plans/ptc-m4-evaluation.md). No spend; no row content leaves the host.
+ * (docs/evaluations/ptc/ptc-m4-evaluation.md). No spend; no row content leaves the host.
  */
 import { createHash } from 'node:crypto';
 import { closeSync } from 'node:fs';
@@ -39,11 +39,17 @@ const lines = (text: string) =>
     .split('\n')
     .map((line) => JSON.parse(line));
 
-const plansReport = await readFile(path.join(root, 'plans/ptc-m1-openai-baseline.json'), 'utf8');
+const plansReport = await readFile(
+  path.join(root, 'docs/evaluations/ptc/ptc-m1-openai-baseline.json'),
+  'utf8',
+);
 if (sha256(plansReport) !== M4_BASELINE.plansReport) throw new Error('Baseline report pin');
 // The previous M4 run's aggregate report, for an informational comparison.
 const previousRun = M4_COMPLETED.at(-1)!;
-const previousText = await readFile(path.join(root, 'plans/ptc-m4-openai-evaluation.json'), 'utf8');
+const previousText = await readFile(
+  path.join(root, 'docs/evaluations/ptc/ptc-m4-openai-evaluation.json'),
+  'utf8',
+);
 if (sha256(previousText) !== previousRun.plansReport) throw new Error('Previous M4 report pin');
 const previousReport = JSON.parse(previousText);
 const baseline = JSON.parse(plansReport) as BaselineReport & { protocol: unknown };

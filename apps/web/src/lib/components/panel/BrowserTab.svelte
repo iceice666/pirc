@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The session's browser (plans/browser.md): a live JPEG screencast of the
+   * The session's browser (docs/history/browser.md): a live JPEG screencast of the
    * agent's tab, a takeover mode that forwards mouse and keyboard input (for
    * logins and forms), recordings, and a step-by-step replay of what the
    * agent did. Connected only while the tab is shown, since the node only

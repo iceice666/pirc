@@ -60,7 +60,7 @@ Still open, each needing a decision: L3, L5, L6 (subscription cap and throttle; 
 
 `node/sandbox.ts:231-236`, `:172-179`; `node/runner.ts:173`, `:235-245`; `config.ts:338`
 
-If `srt` is missing, broken, or `sandbox.enabled: false`, the agent is spawned directly with the node account's full access; the only result is a UI warning. `PIRC_SANDBOX_SRT` defaults to `Bun.which('srt')`, so a PATH change silently removes every control (denied paths, write allowlist, network allowlist, exec approval). This was a deliberate decision (`plans/sandbox.md` decision 5) but it turns every "unsandboxed" finding below into a live one.
+If `srt` is missing, broken, or `sandbox.enabled: false`, the agent is spawned directly with the node account's full access; the only result is a UI warning. `PIRC_SANDBOX_SRT` defaults to `Bun.which('srt')`, so a PATH change silently removes every control (denied paths, write allowlist, network allowlist, exec approval). This was a deliberate decision (`docs/history/sandbox.md` decision 5) but it turns every "unsandboxed" finding below into a live one.
 
 Fix: add `sandbox.required` (default `true` on NixOS/production) that refuses to start agents when `status.active` is false; keep fail-open only as explicit opt-in.
 
@@ -68,7 +68,7 @@ Fix: add `sandbox.required` (default `true` on NixOS/production) that refuses to
 
 `auto-mode/index.ts:117-133` (gates only `bash` and `background_task`); `ptc/code-tool.ts:83-89` (`Bun.spawn([..., 'ptc-worker', file], { env: { ...process.env, ...ctx.env } })`); `ptc/worker.ts:55` (`await import(file)` of model-written TS).
 
-Only `tools.<name>()` IPC calls go through `agent.invokeTool`. A script using `Bun.$`, `node:fs` or `node:child_process` directly runs with no PathGuard, no verdict, no write lease, no human prompt. Every `danger` rule (force-push, `rm -rf ~`, credential reads, the `just switch` block) is bypassable with `` await Bun.$`just switch` ``. Known (`plans/sandbox.md:108`), not mitigated.
+Only `tools.<name>()` IPC calls go through `agent.invokeTool`. A script using `Bun.$`, `node:fs` or `node:child_process` directly runs with no PathGuard, no verdict, no write lease, no human prompt. Every `danger` rule (force-push, `rm -rf ~`, credential reads, the `just switch` block) is bypassable with `` await Bun.$`just switch` ``. Known (`docs/history/sandbox.md:108`), not mitigated.
 
 Fix: route the whole `code` call through `autoMode.gate` as a model-classified action, or run the worker with a preload that blocks `child_process` / `Bun.spawn` / `fs` writes outside `allowWrite`; at minimum require confirmation when the script references `spawn|exec|\$\`|node:fs|writeFile`.
 
@@ -130,7 +130,7 @@ Fix: a dynamic or globbed operand whose literal prefix is inside a secret root (
 
 **M10. `privateDirs` are deny-read but not deny-write** — `sandbox-policy.ts:265-296` (`denyWrite` = `<ws>/.pirc`, protectedPaths, configured only), `:203-208`; `config.ts:193` (default state dir `process.cwd()/.state`). When the node runs from a directory that is also a registered workspace (dev layout: repo root), `<ws>/.state/gateway.sqlite`, other sessions' `session.jsonl` and `<ws>/.state/sandbox/<other>.json` are inside `allowWrite` and not in `denyWrite` → `writeAllowed` is true (reads stay denied). `test/sandbox-policy.test.ts:19-28` only covers state outside the workspace. Whether srt independently blocks the write is unverified; the agent's own PathGuard (`agent/sandbox.ts:63`) uses this exact function. Fix: add `privateDirs` and `SENSITIVE_HOME_PATHS` to `denyWrite`, re-allow only `sessionDir` / `memoryDir`; refuse to register a workspace that contains or equals `stateDir`.
 
-**M11. Linux: all Unix sockets reachable from the sandbox** — `node/sandbox.ts:84-86` (`allowAllUnixSockets: true`; acknowledged in `plans/sandbox.md:89`). `/var/run/docker.sock`, ssh-agent, systemd/DBus sockets reachable by the node account are open to the agent; if the node account is in `docker`, this is a full host escape. Fix: bind-mount the inference socket to a dedicated path and tighten; at minimum deny common escape sockets on Linux and document the docker-group risk.
+**M11. Linux: all Unix sockets reachable from the sandbox** — `node/sandbox.ts:84-86` (`allowAllUnixSockets: true`; acknowledged in `docs/history/sandbox.md:89`). `/var/run/docker.sock`, ssh-agent, systemd/DBus sockets reachable by the node account are open to the agent; if the node account is in `docker`, this is a full host escape. Fix: bind-mount the inference socket to a dedicated path and tighten; at minimum deny common escape sockets on Linux and document the docker-group risk.
 
 **M12. Team and subagent `cwd` is unrestricted and unconfirmed** — `team/team.ts:527-529` (`resolve(defaults.cwd, args.cwd)` + "must be a directory"); `main.ts:103`, `:108`. Unsandboxed, a child in another repo gets write access there (`agent/config.ts:179`) plus that repo's `.pirc` hooks / env / roles (H3, H4). Under srt the inherited `PIRC_SANDBOX_POLICY` keeps the node's write set. Fix: require `cwd` inside the parent's `allowedRoots`, or confirm with the user.
 
@@ -151,7 +151,7 @@ Fix: a dynamic or globbed operand whose literal prefix is inside a secret root (
 - **L7. Global rather than per-node/per-user limits** — `daemon/nodes.ts:34-35`, `:224-225`, `:256-257`. `MAX_PENDING_REQUESTS = 100` and `MAX_TERMINAL_STREAMS = 64` are global; one stalled node or one user starves everyone.
 - **L8. No rate limiting; 10 MiB `bodyLimit` on JSON routes; `commandBody.passthrough()` stored whole** — `daemon/app.ts:147`, `:623-634`; `database.ts:723-727`.
 - **L9. SQLite created with default permissions; `PIRC_DATABASE_PATH` may leave the 0700 state dir** — `database.ts:249-251`; `config.ts:192-201`. DB holds push `auth` / `p256dh`, device-token hashes, memory, delegation tasks. Fix: `chmodSync(…, 0o600)` on db / `-wal` / `-shm` as `backends/service.ts:175` does.
-- **L10. `schedule pause/resume/delete` take effect without approval** — `features/schedules.ts:105`, `:192-205` (by design per `plans/cron.md`; noted because prompt injection can delete schedules).
+- **L10. `schedule pause/resume/delete` take effect without approval** — `features/schedules.ts:105`, `:192-205` (by design per `docs/history/cron.md`; noted because prompt injection can delete schedules).
 - **L11. Hook stdout and gateway `deliver` are plain `user`-role text** — `agent.ts:728-737`; `rpc.ts:225-242`; `providers/anthropic.ts:48-49`. Team events are prefixed "agent data, not user instructions" (`team/index.ts:223`); these are not.
 - **L12. Project config may silently change the default model** — `agent/config.ts:77`, `:189`.
 - **L13. Skills inject unlabelled text into the system prompt** — `skills.ts:26-32`; `features/skills.ts:13-38`. Cannot change tools / model; repo-provided descriptions are not marked untrusted.

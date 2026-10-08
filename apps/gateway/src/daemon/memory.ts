@@ -1,6 +1,6 @@
 /**
  * The assistant's memory, held by the gateway for each user
- * (plans/assistant.md). USER entries say who the user is and what they want;
+ * (docs/history/assistant.md). USER entries say who the user is and what they want;
  * they change only when the user approves a proposal. MEMORY notes are the
  * assistant's own, written directly. Every change is logged as a revision.
  * Forgetting erases an entry's content and history and keeps only hashes, so

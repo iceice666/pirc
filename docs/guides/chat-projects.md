@@ -1,6 +1,8 @@
 # Chat projects: capabilities and instructions
 
-A chat project is a chat workspace on the chat node (`pirc-chat`): the top-level **Chats** workspace, or one you created with **New project** in the web app (see [`apps/gateway/README.md`](../apps/gateway/README.md)). Each chat project has two settings of its own, both under **Settings → Projects** in the web app:
+[User guides](README.md) · [All documentation](../README.md)
+
+A chat project is a chat workspace on the chat node (`pirc-chat`): the top-level **Chats** workspace, or one you created with **New project** in the web app (see [`apps/gateway/README.md`](../../apps/gateway/README.md)). Each chat project has two settings of its own, both under **Settings → Projects** in the web app:
 
 - **Capabilities** turn off assistant features for every chat in the project. The gateway enforces them.
 - **Instructions** are text that every new chat in the project gets in its system prompt. The node stores them.
@@ -108,14 +110,14 @@ They come after `SOUL.md` (or the built-in identity), the fixed environment desc
 ### Who can change them
 
 - **File tools** (`write`, `edit`, also when called from a `ptc` script) cannot write the file. It is outside every chat's working directory, and it is on the agent's protected paths, so writes are refused even if you add its directory to `allowedPaths`.
-- **In the [agent sandbox](../README.md#agent-sandbox)**, which every agent runs in, the node's state directory can be neither read nor written. The instructions file is also on the sandbox's write-deny list, so bash, `ptc` scripts and hooks cannot change it either, even if your `sandbox.filesystem.allowWrite` includes the state directory.
-- **Agent processes** never run without the sandbox: a chat node where srt cannot work starts no agents. See [Agent sandbox](../README.md#agent-sandbox) for requirements, such as bubblewrap and user namespaces on Linux.
+- **In the [agent sandbox](agent.md#agent-sandbox)**, which every agent runs in, the node's state directory can be neither read nor written. The instructions file is also on the sandbox's write-deny list, so bash, `ptc` scripts and hooks cannot change it either, even if your `sandbox.filesystem.allowWrite` includes the state directory.
+- **Agent processes** never run without the sandbox: a chat node where srt cannot work starts no agents. See [Agent sandbox](agent.md#agent-sandbox) for requirements, such as bubblewrap and user namespaces on Linux.
 
 ## Limits
 
 Capabilities are a **policy on assistant features, not a sandbox**. They control five gateway-backed features and nothing else:
 
-- `bash`, `background_task`, hooks and the file tools keep whatever access the node and its [sandbox](../README.md#agent-sandbox) give them, also when a `ptc` script calls them. A chat with `web_search` off can still reach the network through `web_fetch`, the `browser_*` tools, or `curl` in `bash` where the sandbox allows it.
+- `bash`, `background_task`, hooks and the file tools keep whatever access the node and its [sandbox](agent.md#agent-sandbox) give them, also when a `ptc` script calls them. A chat with `web_search` off can still reach the network through `web_fetch`, the `browser_*` tools, or `curl` in `bash` where the sandbox allows it.
 - The assistant's USER/MEMORY notes and `memory_note`/`memory_propose_user` are not capabilities. Every project still reads and writes the same global memory.
 - Turning a capability off does not remove data that already exists: chat history, delegation results, schedule runs, and memory.
 

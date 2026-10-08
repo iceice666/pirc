@@ -1,5 +1,5 @@
 /**
- * The node side of the agent sandbox (plans/sandbox.md): every agent process
+ * The node side of the agent sandbox (docs/history/sandbox.md): every agent process
  * runs under srt (Anthropic's sandbox-runtime: Seatbelt on macOS, bubblewrap
  * on Linux) with a per-session policy from sandbox-policy.ts. The srt is the
  * one built into this executable (node/srt.ts) unless PIRC_SANDBOX_SRT names

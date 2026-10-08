@@ -1,6 +1,6 @@
 # Changelog
 
-User-facing changes are recorded here. See [release policy](docs/releasing.md).
+User-facing changes are recorded here. See [release policy](docs/development/releasing.md).
 
 ## [Unreleased]
 

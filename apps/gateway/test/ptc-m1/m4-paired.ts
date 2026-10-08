@@ -1,5 +1,5 @@
 /**
- * Round 3 (plans/ptc-m4-evaluation.md): the `main` and branch binaries measured in one session,
+ * Round 3 (docs/evaluations/ptc/ptc-m4-evaluation.md): the `main` and branch binaries measured in one session,
  * interleaved per fixture and index with alternating order, so provider latency drift affects
  * both arms alike. Each arm keeps the M1 cohort shape (uncached, prime, warm) and gates.
  */

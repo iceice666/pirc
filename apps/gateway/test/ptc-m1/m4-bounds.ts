@@ -1,5 +1,5 @@
 /**
- * M4 acceptance bounds (plans/ptc-only.md Milestone 4, plans/ptc-m4-evaluation.md), declared
+ * M4 acceptance bounds (docs/evaluations/ptc/ptc-only.md Milestone 4, docs/evaluations/ptc/ptc-m4-evaluation.md), declared
  * before any PTC data: the PTC rows against the aggregate M1 OpenAI baseline report. Coding and
  * chat are judged separately. Aggregates only; no row content leaves this module.
  */

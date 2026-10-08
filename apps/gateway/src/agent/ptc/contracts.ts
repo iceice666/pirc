@@ -1,5 +1,5 @@
 /**
- * PTC v1 contracts (plans/ptc-m1-contracts.md): budgets, the structured
+ * PTC v1 contracts (docs/evaluations/ptc/ptc-m1-contracts.md): budgets, the structured
  * result envelope the script sees and the typed error codes. Metadata here
  * describes capabilities; it never grants anything.
  */

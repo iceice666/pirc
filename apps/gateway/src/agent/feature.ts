@@ -5,7 +5,7 @@ import type { AssistantMessage, CustomMessage, Message } from './messages.js';
 import type { Tool } from './tools/types.js';
 
 /**
- * Coding-session features a chat leaves out (plans/assistant.md): their tools
+ * Coding-session features a chat leaves out (docs/history/assistant.md): their tools
  * cost context a personal assistant rarely needs, and chats hand real work to
  * a workspace with `delegate`. `features.<key>.enabled: true` in the node's
  * config brings one back.

@@ -1,6 +1,6 @@
 # PTC Milestone 1 contracts
 
-Status: specification and test-only reference types; production registration and dispatch are unchanged. See `apps/gateway/test/ptc-m1/contracts.ts`. This is not a second permission system.
+Status: historical M1 specification and test-only reference snapshot; production registration and dispatch were unchanged at that stage. Later production implementation and hybrid acceptance are recorded in [PTC cutover](ptc-only.md). See `apps/gateway/test/ptc-m1/contracts.ts`. This is not a second permission system.
 
 ## Registry and visibility
 

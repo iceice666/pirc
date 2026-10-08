@@ -31,9 +31,9 @@ The gateway trusts an identity header only when the TCP peer is a listed proxy. 
 
 The peer-address check alone cannot tell the proxy from any other process on the same host: with `PIRC_TRUSTED_PROXIES=127.0.0.1`, anything that can connect to the gateway port from loopback (an agent's shell on a co-located node, a stray script) could set `Host` and `x-pirc-user` and act as any allowed user. Set `PIRC_PROXY_SECRET` and have the proxy add `x-pirc-proxy-secret: <secret>` to every `/api/` request (overwriting whatever a client sent). Requests from a trusted address without the matching header are then refused as if they came from an untrusted address. The comparison is constant-time. Without the variable the gateway logs a startup warning and keeps the address-only check.
 
-The NixOS module generates the secret and wires nginx automatically (`services.pirc.nginx.proxySecret`, on by default). For other proxies see [Reverse proxy](./reverse-proxy.md#proxy-shared-secret). Independently of the secret, do not run a node on the gateway host unless its agents are network-sandboxed: they could otherwise reach the gateway port directly.
+The NixOS module generates the secret and wires nginx automatically (`services.pirc.nginx.proxySecret`, on by default). For other proxies see [Reverse proxy](reverse-proxy.md#proxy-shared-secret). Independently of the secret, do not run a node on the gateway host unless its agents are network-sandboxed: they could otherwise reach the gateway port directly.
 
-Phones use device tokens instead of forward auth; the proxy must route those requests past forward auth and strip the identity header (see [Reverse proxy](./reverse-proxy.md#device-tokens)).
+Phones use device tokens instead of forward auth; the proxy must route those requests past forward auth and strip the identity header (see [Reverse proxy](reverse-proxy.md#device-tokens)).
 
 | Variable                      | Default | Meaning                                                                                  |
 | ----------------------------- | ------- | ---------------------------------------------------------------------------------------- |
@@ -46,7 +46,7 @@ Phones use device tokens instead of forward auth; the proxy must route those req
 | ------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `PIRC_NODE_TOKENS` | yes      | JSON object `{ "<nodeId>": "<secret>" }`. Each secret is at least 32 characters and unique. Node IDs match `[a-zA-Z0-9_-]{1,100}`. At least one entry. |
 
-Generate secrets with `openssl rand -base64 36`. The NixOS module generates the local node's token itself and merges yours in ([NixOS](./nixos.md#remote-nodes)).
+Generate secrets with `openssl rand -base64 36`. The NixOS module generates the local node's token itself and merges yours in ([NixOS](nixos.md#remote-nodes)).
 
 ## Model backends
 

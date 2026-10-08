@@ -1,5 +1,5 @@
 /**
- * M4 round 4, the final round (plans/ptc-m4-evaluation.md): the pinned M1 `main` binaries and
+ * M4 round 4, the final round (docs/evaluations/ptc/ptc-m4-evaluation.md): the pinned M1 `main` binaries and
  * the Pi-codemode-informed branch binaries measured interleaved in one session, as in round 3,
  * with session titles off for both arms. Spend continues the same independent OpenAI budget
  * (limit raised to USD 150) from the end of round 3. Key only via stdin; aggregate-only.
@@ -98,7 +98,10 @@ if (
 const root = path.resolve(import.meta.dir, '..');
 const fixtureHash = sha256(await readFile(path.join(root, 'apps/gateway/test/ptc-m1/fixtures.ts')));
 if (fixtureHash !== APPROVED_OPENAI_001.fixture) throw new Error('Fixture mismatch with M1');
-const plansReport = await readFile(path.join(root, 'plans/ptc-m1-openai-baseline.json'), 'utf8');
+const plansReport = await readFile(
+  path.join(root, 'docs/evaluations/ptc/ptc-m1-openai-baseline.json'),
+  'utf8',
+);
 if (
   sha256(plansReport) !== M4_BASELINE.plansReport ||
   JSON.stringify(OPENAI_PROTOCOL) !== JSON.stringify(JSON.parse(plansReport).protocol)
@@ -150,8 +153,9 @@ const round3 = await validateRound3Chain(read);
 if (
   JSON.stringify(round3.carry) !== JSON.stringify(M4_R4.carry) ||
   sha256(await read('ptc-m4-r3-partial-report.json')) !== M4_ROUND3_END.partialReport ||
-  sha256(await readFile(path.join(root, 'plans/ptc-m4-round3-partial.json'), 'utf8')) !==
-    M4_ROUND3_END.plansReport
+  sha256(
+    await readFile(path.join(root, 'docs/evaluations/ptc/ptc-m4-round3-partial.json'), 'utf8'),
+  ) !== M4_ROUND3_END.plansReport
 )
   throw new Error('Round 3 end mismatch');
 for (const kind of ['trials', 'budget', 'summary'] as const) {

@@ -42,7 +42,7 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
-/** The phone's bottom tabs (plans/ui-redesign.md); the app opens on Chat. */
+/** The phone's bottom tabs (docs/guides/session-ui.md); the app opens on Chat. */
 enum class HomeTab(val label: String) { Chat("Chat"), Work("Work"), Schedules("Schedules"), Settings("Settings") }
 
 /** How often the visible sessions list reloads (run states, node dots). */

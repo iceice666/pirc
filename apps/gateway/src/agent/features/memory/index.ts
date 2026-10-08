@@ -364,7 +364,7 @@ export function memoryFeature(): Feature {
   let ledger: WorkspaceLedger | undefined;
   let promoting: Promise<void> | null = null;
   let snapshotText: string | undefined;
-  // Chats have no repository to hand over; the gateway's MEMORY serves them (plans/assistant.md).
+  // Chats have no repository to hand over; the gateway's MEMORY serves them (docs/history/assistant.md).
   const workspaceOn = (agent: Agent, config = memoryConfig(agent)) =>
     config.enabled &&
     config.workspace.enabled &&
@@ -504,7 +504,7 @@ export function memoryFeature(): Feature {
       if (result.status === 'not_found' && workspaceOn(agent))
         result = recallFromWorkspace(workspaceLedger(agent).fold(), id, recall) ?? result;
       // A chat recalls notes it found with memory_search through the gateway,
-      // which asks the node that holds them (plans/assistant.md).
+      // which asks the node that holds them (docs/history/assistant.md).
       const gateway = agent.config.workspaceKind === 'chat' ? processGateway() : undefined;
       if (result.status === 'not_found' && gateway && agent.capabilities.remote_recall)
         try {

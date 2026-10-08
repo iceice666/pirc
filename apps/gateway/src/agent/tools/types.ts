@@ -8,7 +8,7 @@ export interface ToolResult {
   isError?: boolean;
   /**
    * Typed fields for `ptc` scripts, described by the tool's `resultSchema`
-   * (plans/ptc-m1-contracts.md "SDK v1"). The script receives them next to
+   * (docs/evaluations/ptc/ptc-m1-contracts.md "SDK v1"). The script receives them next to
    * `text`, the output above; never shown to the model or stored by itself.
    */
   data?: Record<string, unknown>;

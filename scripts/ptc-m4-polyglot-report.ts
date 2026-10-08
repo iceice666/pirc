@@ -1,5 +1,5 @@
 /**
- * Aggregate-only report of one pinned public-benchmark run (plans/ptc-m4-evaluation.md,
+ * Aggregate-only report of one pinned public-benchmark run (docs/evaluations/ptc/ptc-m4-evaluation.md,
  * "Public benchmark"): per arm, tests-pass rate, mean tokens, model rounds and wall time, per
  * exercise passes, and how the branch reached its capabilities. No spend; no row content.
  */

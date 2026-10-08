@@ -3,7 +3,7 @@
 The flake exposes:
 
 - `packages.<system>.pirc-gateway`: independently compiled `bin/pirc-gateway` plus the static Web bundle (`share/pirc/web`), with no srt or playwright-core runtime. This is also `packages.<system>.default`.
-- `packages.<system>.pirc-chat` and `packages.<system>.pirc-node`: independently compiled fixed-role executables, with no Web UI. Their wrappers point at [srt](./sandbox-runtime.nix) (`PIRC_SANDBOX_SRT`, preferred over the srt built into the executables because it brings bubblewrap, socat and ripgrep) and on-disk playwright-core (`PIRC_PLAYWRIGHT_CORE`), whose computed file paths cannot be bundled by `bun --compile`. They share the node/agent implementation. No separate Bun installation is needed; srt brings its own Node.js.
+- `packages.<system>.pirc-chat` and `packages.<system>.pirc-node`: independently compiled fixed-role executables, with no Web UI. Their wrappers point at [srt](sandbox-runtime.nix) (`PIRC_SANDBOX_SRT`, preferred over the srt built into the executables because it brings bubblewrap, socat and ripgrep) and on-disk playwright-core (`PIRC_PLAYWRIGHT_CORE`), whose computed file paths cannot be bundled by `bun --compile`. They share the node/agent implementation. No separate Bun installation is needed; srt brings its own Node.js.
 - `overlays.default`: adds `pkgs.pirc-gateway`, `pkgs.pirc-chat` and `pkgs.pirc-node`, built against the consumer's nixpkgs. There is no legacy `pkgs.pirc` alias.
 - `nixosModules.pirc`: unprivileged systemd services for the gateway and a local node, and an optional nginx/forward-auth virtual host.
 - `devShells.<system>.default`: Bun (plus Node 22 for the web app's vitest/svelte-check).
@@ -25,11 +25,11 @@ nix build .#pirc-node -o result-node
 
 A chat/coding node starts one agent subprocess per session by re-executing its own executable with the internal `agent` command; the two talk JSONL RPC over stdin/stdout. Its internal `ptc-worker` command runs code scripts. The gateway alone has the internal `oauth-worker` command. Keep all roles on the same release/protocol version. The executable split does not provide privacy isolation; accounts, filesystem permissions and the agent sandbox still matter.
 
-Dependencies are fetched in a fixed-output derivation (`pirc-gateway.nodeModules`) that covers every OS/CPU, so one `nodeModulesHash` works for all systems. After changing `bun.lock`, set `nodeModulesHash` to `lib.fakeHash`, run `nix build .#pirc-gateway.nodeModules`, and copy the reported hash into [`package.nix`](./package.nix).
+Dependencies are fetched in a fixed-output derivation (`pirc-gateway.nodeModules`) that covers every OS/CPU, so one `nodeModulesHash` works for all systems. After changing `bun.lock`, set `nodeModulesHash` to `lib.fakeHash`, run `nix build .#pirc-gateway.nodeModules`, and copy the reported hash into [`package.nix`](package.nix).
 
 ## NixOS module
 
-Import `nixosModules.default` from the flake and configure `services.pirc`. A complete starting point is in [`example.nix`](./example.nix).
+Import `nixosModules.default` from the flake and configure `services.pirc`. A complete starting point is in [`example.nix`](example.nix).
 
 Minimal service-only example:
 

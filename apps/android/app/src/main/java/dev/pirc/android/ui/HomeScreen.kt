@@ -35,7 +35,7 @@ import dev.pirc.android.core.Session
 internal class SessionActions(val open: (Session) -> Unit, val act: (Session) -> Unit)
 
 /**
- * The phone's home (plans/ui-redesign.md): bottom tabs Chat / Work /
+ * The phone's home (docs/guides/session-ui.md): bottom tabs Chat / Work /
  * Schedules / Settings. Work's badge counts what waits on the user.
  */
 @Composable

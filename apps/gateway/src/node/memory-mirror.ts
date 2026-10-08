@@ -1,5 +1,5 @@
 /**
- * Mirrors this node's workspace memory to the gateway (plans/assistant.md), so
+ * Mirrors this node's workspace memory to the gateway (docs/history/assistant.md), so
  * the assistant can search what coding sessions noted, on every machine. Each
  * ledger is append-only JSON lines. The gateway acknowledges the byte offset
  * it holds, and the node sends the complete lines after it, one frame at a

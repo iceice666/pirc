@@ -3,7 +3,7 @@ package dev.pirc.android.core
 import kotlinx.serialization.Serializable
 
 /**
- * The assistant's memory proposals (plans/assistant.md): changes to the USER
+ * The assistant's memory proposals (docs/history/assistant.md): changes to the USER
  * entries that wait for the user's approval. Mirrors the web's `memory.ts`;
  * the phone only reviews proposals.
  */

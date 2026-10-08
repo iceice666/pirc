@@ -1,7 +1,7 @@
 /**
  * Aggregate-only M4 round 5 report (same judgement as rounds 3 and 4): the hybrid branch arm against the concurrent `main` arm
  * (primary) and against the accepted M1 baseline (secondary), under the M4 bounds
- * (plans/ptc-m4-evaluation.md). No spend; no row content leaves the host.
+ * (docs/evaluations/ptc/ptc-m4-evaluation.md). No spend; no row content leaves the host.
  */
 import { createHash } from 'node:crypto';
 import { closeSync } from 'node:fs';
@@ -52,16 +52,28 @@ const lines = (text: string) =>
     .split('\n')
     .map((line) => JSON.parse(line));
 
-const plansBaseline = await readFile(path.join(root, 'plans/ptc-m1-openai-baseline.json'), 'utf8');
+const plansBaseline = await readFile(
+  path.join(root, 'docs/evaluations/ptc/ptc-m1-openai-baseline.json'),
+  'utf8',
+);
 if (sha256(plansBaseline) !== M4_BASELINE.plansReport) throw new Error('Baseline report pin');
 const m1 = JSON.parse(plansBaseline) as BaselineReport & { protocol: unknown };
-const round2Text = await readFile(path.join(root, 'plans/ptc-m4-round2-evaluation.json'), 'utf8');
+const round2Text = await readFile(
+  path.join(root, 'docs/evaluations/ptc/ptc-m4-round2-evaluation.json'),
+  'utf8',
+);
 if (sha256(round2Text) !== M4_ROUND2_END.plansReport) throw new Error('Round 2 report pin');
 const round2 = JSON.parse(round2Text);
-const round3Text = await readFile(path.join(root, 'plans/ptc-m4-round3-partial.json'), 'utf8');
+const round3Text = await readFile(
+  path.join(root, 'docs/evaluations/ptc/ptc-m4-round3-partial.json'),
+  'utf8',
+);
 if (sha256(round3Text) !== M4_ROUND3_END.plansReport) throw new Error('Round 3 report pin');
 const round3 = JSON.parse(round3Text);
-const round4Text = await readFile(path.join(root, 'plans/ptc-m4-round4-evaluation.json'), 'utf8');
+const round4Text = await readFile(
+  path.join(root, 'docs/evaluations/ptc/ptc-m4-round4-evaluation.json'),
+  'utf8',
+);
 if (sha256(round4Text) !== M4_ROUND4_END.plansReport) throw new Error('Round 4 report pin');
 const round4 = JSON.parse(round4Text);
 

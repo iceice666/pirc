@@ -2,7 +2,7 @@
 
 A Mac is a typical remote node: the repositories live in a user's home, and the node runs as that user under launchd. The gateway stays elsewhere. Everything on this page is the node's concern; the gateway needs only the node's ID and token in `PIRC_NODE_TOKENS` and a `/node/connect` route on the proxy.
 
-Because the node runs as your own account, everything its agents can reach outside the sandbox is what you can reach. Keep the sandbox on ([Sandbox and browser](./sandbox-and-browser.md)).
+Because the node runs as your own account, everything its agents can reach outside the sandbox is what you can reach. Keep the sandbox on ([Sandbox and browser](sandbox-and-browser.md)).
 
 ## 1. The executable
 

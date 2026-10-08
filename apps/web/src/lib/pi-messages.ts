@@ -200,7 +200,7 @@ export function piMessage(
       const delegationUpdate = raw.customType === 'assistant-delegation-update';
       // A skill loaded with /skill:<name>; its content is the skill's instructions.
       const skill = raw.customType === 'skill';
-      // A scheduled task the gateway started this session for (plans/cron.md).
+      // A scheduled task the gateway started this session for (docs/history/cron.md).
       const scheduled = raw.customType === 'scheduled-run';
       const short = (value: unknown) =>
         typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, 100) : '';

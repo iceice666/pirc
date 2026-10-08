@@ -120,7 +120,7 @@ in `send()`; the reducer's duplicate-id handling already keeps the newest copy. 
 | AS5 | Session actions reachable from inside the session (More menu) and via long-press on the list.                      | `SessionScreen.kt:126-148`, `SessionActions.kt:135-157`     | —                                                                    |
 | AS6 | Pull-to-refresh, sticky workspace headers, gateway host under the title.                                           | `SessionsScreen.kt:107-113,138-142,166`                     | —                                                                    |
 
-#### Deferred by plan (`plans/android-client.md`) — does it hurt now?
+#### Deferred by plan (`docs/history/android-client.md`) — does it hurt now?
 
 | ID  | Item                                                                                     | Verdict                                                                                                                                                                                                                                                            | Effort |
 | --- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |

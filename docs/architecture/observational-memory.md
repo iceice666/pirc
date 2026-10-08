@@ -328,7 +328,7 @@ Commands are typed as prompts, e.g. `/om:status`.
 
 Durable session memory is promoted into one ledger per repository and frozen into the system prompt of new main sessions there, as a cross-session handoff. It runs only when `enabled` and `workspace.enabled` are on, and never in team members or subagents.
 
-**Location.** `PIRC_WORKSPACE_MEMORY_DIR` (a node passes its own, default `<stateDir>/workspace-memory`, and mirrors the ledgers there to the gateway for the assistant's search; see `plans/assistant.md`), else `$XDG_STATE_HOME/pirc/workspace-memory`, else `~/.local/state/pirc/workspace-memory`. The ledger is `<key>.jsonl` (mode 0600, directory 0700), with a `<key>.lock` file beside it. The key is the first 16 hex characters of the SHA-256 of the repository root: the directory holding the canonical git common dir (the common dir itself for a bare repository), so every worktree shares one ledger. Outside git it is the canonical working directory.
+**Location.** `PIRC_WORKSPACE_MEMORY_DIR` (a node passes its own, default `<stateDir>/workspace-memory`, and mirrors the ledgers there to the gateway for the assistant's search; see `docs/history/assistant.md`), else `$XDG_STATE_HOME/pirc/workspace-memory`, else `~/.local/state/pirc/workspace-memory`. The ledger is `<key>.jsonl` (mode 0600, directory 0700), with a `<key>.lock` file beside it. The key is the first 16 hex characters of the SHA-256 of the repository root: the directory holding the canonical git common dir (the common dir itself for a bare repository), so every worktree shares one ledger. Outside git it is the canonical working directory.
 
 **Ledger.** Append-only JSON lines; unparsable (torn) lines are ignored.
 

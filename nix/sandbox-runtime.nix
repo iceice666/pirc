@@ -1,5 +1,5 @@
 # Anthropic's sandbox runtime (`srt`), which pirc nodes wrap agents in
-# (plans/sandbox.md). Pinned here rather than taken from nixpkgs, which
+# (docs/history/sandbox.md). Pinned here rather than taken from nixpkgs, which
 # trails the upstream release pace by months.
 {
   lib,

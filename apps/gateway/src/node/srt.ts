@@ -1,6 +1,6 @@
 /**
  * The srt (Anthropic's sandbox-runtime) built into pirc-node and pirc-chat,
- * run as `pirc-node srt …` (plans/sandbox.md). A node uses it unless
+ * run as `pirc-node srt …` (docs/history/sandbox.md). A node uses it unless
  * PIRC_SANDBOX_SRT names an external srt, as the Nix package does.
  *
  * srt's CLI is imported as is (patches/ only makes its manifest bundleable).

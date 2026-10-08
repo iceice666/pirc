@@ -75,7 +75,7 @@ for (const pin of APPROVED_CONTINUATIONS) {
   state = step;
 }
 if (state.rows.length !== openAIOrder().length) throw new Error('Chain does not cover the matrix');
-// The authorization-category re-measure was pre-declared (plans/ptc-m1-openai.md).
+// The authorization-category re-measure was pre-declared (docs/evaluations/ptc/ptc-m1-openai.md).
 if (APPROVED_REMEASURES.length !== 1) throw new Error('Pre-declared re-measure not pinned');
 const remeasures: unknown[] = [];
 for (const pin of APPROVED_REMEASURES) {

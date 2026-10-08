@@ -1,5 +1,5 @@
 /**
- * Aggregate-only partial report of the stopped round 3 (plans/ptc-m4-evaluation.md): the
+ * Aggregate-only partial report of the stopped round 3 (docs/evaluations/ptc/ptc-m4-evaluation.md): the
  * pinned stop chain, the fixtures complete in both arms compared against the concurrent `main`
  * arm, and the M1 baseline for reference. Not a verdict: the matrix is incomplete. No spend.
  */
@@ -29,7 +29,10 @@ const directory = path.join(os.homedir(), 'pirc-ptc-m1-eval');
 const root = path.resolve(import.meta.dir, '..');
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 const read = (name: string) => readFile(path.join(directory, name), 'utf8');
-const m1Text = await readFile(path.join(root, 'plans/ptc-m1-openai-baseline.json'), 'utf8');
+const m1Text = await readFile(
+  path.join(root, 'docs/evaluations/ptc/ptc-m1-openai-baseline.json'),
+  'utf8',
+);
 if (sha256(m1Text) !== M4_BASELINE.plansReport) throw new Error('Baseline report pin');
 const m1 = JSON.parse(m1Text);
 const expected = {

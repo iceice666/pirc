@@ -60,7 +60,7 @@ Follows `plans/assistant.md` §5. A chat project has an instructions text that t
 - It is also in the file tools' `protectedPaths` (`agent/config.ts`, via `PIRC_PROJECT_INSTRUCTIONS`), which refuses writes even inside a writable root. `test/agent-project-instructions.test.ts` checks that `write` and `edit` both fail.
 - Under srt, the node's state directory is `denyRead`, and the path is in `denyWrite` (`sandbox-policy.ts`, `protectedPaths`) even if the user's config allows writing the state directory. `test/sandbox-policy.test.ts` covers this.
 
-**Limit:** an **unsandboxed** agent's bash, PTC or hooks run as the node account and can still write any file that account can write, including this one. This is the same boundary as all other pirc state (`plans/sandbox.md`). The guarantee holds for bash only when srt is active.
+**Limit:** an **unsandboxed** agent's bash, PTC or hooks run as the node account and can still write any file that account can write, including this one. This is the same boundary as all other pirc state (`docs/history/sandbox.md`). The guarantee holds for bash only when srt is active.
 
 **Android:** it needs no change. The instructions are rendered on the node, and `project.instructions` is a custom (non-message) entry that session history (`historyOf`) does not return, the same as `assistant.snapshot`. Editing from Android is deferred.
 

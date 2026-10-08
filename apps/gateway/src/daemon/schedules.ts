@@ -1,5 +1,5 @@
 /**
- * Scheduled agent runs (plans/cron.md). The gateway keeps each user's
+ * Scheduled agent runs (docs/history/cron.md). The gateway keeps each user's
  * schedules and one timer for the earliest due one. When one falls due it
  * starts a new session in the schedule's workspace, delivers the prompt as a
  * `scheduled-run` custom message (never the user's words), and follows the

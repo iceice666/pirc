@@ -1,5 +1,5 @@
 /**
- * One `ptc` execution (plans/ptc-only.md §4–5): the host side.
+ * One `ptc` execution (docs/evaluations/ptc/ptc-only.md §4–5): the host side.
  *
  * The script runs in a QuickJS-WASM realm in a `ptc-guest` child process
  * (guest.ts), started with an empty environment inside the agent's OS

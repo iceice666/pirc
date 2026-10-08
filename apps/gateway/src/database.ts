@@ -163,7 +163,7 @@ const migrations = [
   CREATE INDEX memory_records_owner ON memory_records(owner_user, status);
   CREATE INDEX memory_records_id ON memory_records(id);
   `,
-  // Scheduled agent runs (daemon/schedules.ts, plans/cron.md).
+  // Scheduled agent runs (daemon/schedules.ts, docs/history/cron.md).
   `
   CREATE TABLE schedules (
     id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, workspace_id TEXT NOT NULL,

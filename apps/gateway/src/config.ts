@@ -89,7 +89,7 @@ export interface DaemonConfig extends BrowserAuthConfig {
   /**
    * Characters of the assistant's memory per user: USER entries
    * (PIRC_MEMORY_USER_CHARS, default 2000) and MEMORY notes
-   * (PIRC_MEMORY_NOTE_CHARS, default 8000). See plans/assistant.md.
+   * (PIRC_MEMORY_NOTE_CHARS, default 8000). See docs/history/assistant.md.
    */
   memoryBudgets: { user: number; note: number };
   /** How long a delegation waits for the user's approval (PIRC_DELEGATION_TTL_MS, default 1 h). */
@@ -128,7 +128,7 @@ export interface NodeConfig {
   /** Arguments placed before the agent flags (default: `agent`, or `<entry/node.ts or entry/chat.ts> agent` when unbundled). */
   agentArgs: string[];
   workspaces: ConfigWorkspace[];
-  /** Hosts the assistant's chat workspaces (fixed by the executable role; see plans/assistant.md). */
+  /** Hosts the assistant's chat workspaces (fixed by the executable role; see docs/history/assistant.md). */
   chat: boolean;
   /**
    * Where this node's agents keep workspace memory, one ledger per repository
@@ -145,10 +145,10 @@ export interface NodeConfig {
   terminalsEnabled: boolean;
   /** Shell for side-panel terminals (PIRC_TERMINAL_SHELL, default $SHELL). */
   terminalShell?: string;
-  /** Agent browser tools and the Browser panel (plans/browser.md, node/browser.ts). */
+  /** Agent browser tools and the Browser panel (docs/history/browser.md, node/browser.ts). */
   browser: BrowserSettings;
   /**
-   * The OS sandbox every agent runs in (plans/sandbox.md, node/sandbox.ts).
+   * The OS sandbox every agent runs in (docs/history/sandbox.md, node/sandbox.ts).
    * It cannot be turned off: without a working srt no agent starts.
    * `PIRC_SANDBOX_SRT` names an external srt binary; without it the node runs
    * the srt built into its own executable (`pirc-node srt`).

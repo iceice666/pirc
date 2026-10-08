@@ -31,7 +31,7 @@ import org.unifiedpush.android.connector.UnifiedPush
 import java.io.IOException
 
 /**
- * Push notifications on this phone (plans/cron.md, phase 4), through the
+ * Push notifications on this phone (docs/history/cron.md, phase 4), through the
  * user's UnifiedPush distributor: no Google services.
  */
 @Composable

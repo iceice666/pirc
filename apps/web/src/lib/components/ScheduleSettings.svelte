@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Scheduled tasks (plans/cron.md): prompts that run in a new session at set
+   * Scheduled tasks (docs/history/cron.md): prompts that run in a new session at set
    * times. Make, change, pause and delete them here; see each run and open
    * its session; allow or dismiss runs the gateway could not start on time.
    */

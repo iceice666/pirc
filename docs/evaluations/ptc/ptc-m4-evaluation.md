@@ -1,6 +1,8 @@
 # PTC Milestone 4 evaluation protocol (pre-declared)
 
-Status: **declared before any PTC data** (2026-10-06); run `ptc-m4-001` completed the same day and **fails the bounds** (results in [ptc-only.md](ptc-only.md) Milestone 4 and [ptc-m4-openai-evaluation.json](ptc-m4-openai-evaluation.json); run artifact SHA-256: trials `3dbcfb63…fe0c`, budget `d7ef882c…e908`, summary `db112e3a…d59d`). It extends the M1 OpenAI protocol ([ptc-m1-openai.md](ptc-m1-openai.md)) to the PTC-only branch binaries. Nothing here regrades M1 rows.
+Status: **completed evaluation history, including failed rounds and the passing public holdout**. The maintainer accepted the hybrid surface on 2026-10-07; see [cutover and review](ptc-only.md). Acceptance does not regrade failed rounds or complete the partial third round.
+
+Original round 1 declaration: **declared before any PTC data** (2026-10-06); run `ptc-m4-001` completed the same day and **fails the bounds** (results in [ptc-only.md](ptc-only.md) Milestone 4 and [ptc-m4-openai-evaluation.json](ptc-m4-openai-evaluation.json); run artifact SHA-256: trials `3dbcfb63…fe0c`, budget `d7ef882c…e908`, summary `db112e3a…d59d`). It extends the M1 OpenAI protocol ([ptc-m1-openai.md](ptc-m1-openai.md)) to the PTC-only branch binaries. Nothing here regrades M1 rows.
 
 ## Comparison
 
@@ -31,7 +33,7 @@ Status: **declared before any PTC data** (2026-10-06); run `ptc-m4-001` complete
   - Computed arguments, including a capability referenced without being called (e.g. aliased), are a variant (`nonLiteral`) and fail, like M1's path and content variants.
 - `TEAM_ORACLE_REVISION` stays 2.
 
-## Bounds (from plans/ptc-only.md; refinements decided 2026-10-06)
+## Bounds (from docs/evaluations/ptc/ptc-only.md; refinements decided 2026-10-06)
 
 Judged separately for coding and chat in `apps/gateway/test/ptc-m1/m4-bounds.ts` (`M4_BOUNDS` revision 1):
 
@@ -50,7 +52,7 @@ Judged separately for coding and chat in `apps/gateway/test/ptc-m1/m4-bounds.ts`
    - output-filter was dropped from the batch set before any data: both surfaces need at least two rounds there.
 7. **Total:** per condition, weighted mean tokens (single-bash weight 5) ≤ baseline.
 
-A failed bound blocks the merge; the reason is recorded in plans/ptc-only.md. If coding passes and chat fails, the decision stays open there (abandon both, or a fixed split).
+A failed bound blocks the merge; the reason is recorded in docs/evaluations/ptc/ptc-only.md. If coding passes and chat fails, the decision stays open there (abandon both, or a fixed split).
 
 ## Run policy
 
@@ -107,7 +109,7 @@ Run artifact SHA-256:
 
 - `ptc-m4-002`: trials `c55448b8…dbeb`, budget `cce88151…4eb0`, summary `cae9acdd…f079`.
 - `ptc-m4-003`: trials `4f4ef1da…9224`, budget `4d5b5803…b8d9`, summary `a4435c1f…20d6`.
-- Report: remote `5d23abfb…26bf`; the Prettier-formatted copy in plans/ is `ca541076…fcbd` (same parsed JSON).
+- Report: remote `5d23abfb…26bf`; the Prettier-formatted repository copy (now in this directory) is `ca541076…fcbd` (same parsed JSON).
 - After the run, review hardened the continuation checks: the stopped run's fixtures, oracle mapping and bounds; the full continuation manifest in the report. The hardened scripts validate the same artifacts unchanged. The report was not regenerated, since its file is write-once.
 
 ## Round 3: hybrid surface, measured interleaved with `main` (pre-declared 2026-10-06, before its data)
@@ -221,7 +223,7 @@ The round **fails** against the concurrent `main` arm and against M1, for coding
 Hashes (SHA-256):
 
 - Run artifacts: trials `e2199118…d249`, budget `b2af1787…5bd5`, summary `8c4c7ca5…f4c3`.
-- Report: remote `7fce5b2e…d9bf`; the Prettier copy in plans/ is `2fada345…84a7`.
+- Report: remote `7fce5b2e…d9bf`; the Prettier repository copy (now in this directory) is `2fada345…84a7`.
 
 This was declared the final round.
 
@@ -255,7 +257,7 @@ The combined matrix (`ptc-m4-r5-001` rows 1–582, `-002` none kept, `-003` the 
 - **Summary:** [ptc-only.md](ptc-only.md) Milestone 4. Aggregate report: [ptc-m4-round5-evaluation.json](ptc-m4-round5-evaluation.json).
 - **Hashes (SHA-256):**
   - `ptc-m4-r5-003` artifacts: trials `88d8b4e5…c3c8`, budget `e9b92984…ad2e`, summary `7c59ff1c…a6db`.
-  - Report: remote `f25acfed…f66f`; the Prettier copy in plans/ is `110a81bd…829c`.
+  - Report: remote `f25acfed…f66f`; the Prettier repository copy (now in this directory) is `110a81bd…829c`.
 
 ## Public benchmark: dependent multi-step edits (pre-declared 2026-10-07, before its data)
 

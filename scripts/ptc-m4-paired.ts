@@ -1,5 +1,5 @@
 /**
- * M4 round 3 (plans/ptc-m4-evaluation.md): the pinned M1 `main` binaries and the hybrid branch
+ * M4 round 3 (docs/evaluations/ptc/ptc-m4-evaluation.md): the pinned M1 `main` binaries and the hybrid branch
  * binaries measured interleaved in one session, with the M1 fixtures, oracles (PTC mapping),
  * protocol and readiness function. Spend continues the same independent USD 100 OpenAI budget
  * from the end of round 2. Key only via stdin; exclusive marker; aggregate-only artifacts.
@@ -92,7 +92,10 @@ if (
 const root = path.resolve(import.meta.dir, '..');
 const fixtureHash = sha256(await readFile(path.join(root, 'apps/gateway/test/ptc-m1/fixtures.ts')));
 if (fixtureHash !== APPROVED_OPENAI_001.fixture) throw new Error('Fixture mismatch with M1');
-const plansReport = await readFile(path.join(root, 'plans/ptc-m1-openai-baseline.json'), 'utf8');
+const plansReport = await readFile(
+  path.join(root, 'docs/evaluations/ptc/ptc-m1-openai-baseline.json'),
+  'utf8',
+);
 if (
   sha256(plansReport) !== M4_BASELINE.plansReport ||
   JSON.stringify(OPENAI_PROTOCOL) !== JSON.stringify(JSON.parse(plansReport).protocol)

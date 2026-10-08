@@ -1,5 +1,5 @@
 /**
- * Browser tools (plans/browser.md): `web_fetch` plus interactive page tools,
+ * Browser tools (docs/history/browser.md): `web_fetch` plus interactive page tools,
  * all driving one tab group per session in the node's Chromium
  * (node/browser.ts). The human watches in the side panel's Browser tab and
  * can take over; while they hold control these tools wait.

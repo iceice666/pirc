@@ -1,5 +1,5 @@
 /**
- * The public-benchmark matrix (plans/ptc-m4-evaluation.md, "Public benchmark"): uncached trials
+ * The public-benchmark matrix (docs/evaluations/ptc/ptc-m4-evaluation.md, "Public benchmark"): uncached trials
  * only (cache conditions are not under test here). The holdout run interleaves the arms per
  * exercise and trial, alternating which goes first; a development run measures the branch only.
  */

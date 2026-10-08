@@ -1,6 +1,6 @@
 # PTC M1 OpenAI evaluation revision
 
-Status: **live openai-001 running after approved first-triplet review; M1 incomplete**. The initial implementation/validation sections below are historical snapshots; current paid progress is recorded in the final section. This revision supersedes the Opus-only/cold-warm evaluation requirement for the remaining M1 and future like-for-like M4 comparison. It does not approve M2 or production tool-interface changes. Old Opus artifacts, budgets and one-shot markers remain separate and unchanged.
+Status: **M1 baseline accepted: 300 measured trials and 150 primes, readiness complete** (see [acceptance](#m1-baseline-accepted)). The implementation, live-run and continuation sections below are chronological historical snapshots. Later migration status is recorded in [PTC cutover](ptc-only.md). This revision supersedes the Opus-only/cold-warm evaluation requirement for the remaining M1 and future like-for-like M4 comparison. It does not approve M2 or production tool-interface changes. Old Opus artifacts, budgets and one-shot markers remain separate and unchanged.
 
 ## Explicit maintainer decisions
 
@@ -174,4 +174,4 @@ openai-005 completed all 120 positions with valid lifecycle, cache, accounting a
   - team-wait 3/20: strict oracle versus parent read-only verification and absolute-path helper writes.
   - Partial multi-edit, schedule and chat-permission compliance.
 
-M1 is complete. M2 has not started.
+At this acceptance point, M1 was complete and M2 had not started. Subsequent M2–M4 completion is recorded in [PTC cutover](ptc-only.md).

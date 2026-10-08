@@ -1,8 +1,8 @@
 # PTC Milestone 1 execution checklist
 
-> The Opus run described below is stopped and retained for provenance. New work follows the approved [OpenAI revision](ptc-m1-openai.md): `gpt-6.1-sol`, uncached/warm, independent USD 100 budget. Do not execute the old Opus CLI or reset its marker to start OpenAI evaluation.
+> The Opus run described below is stopped and retained for provenance. M1 subsequently completed under the approved [OpenAI revision](ptc-m1-openai.md#m1-baseline-accepted): `gpt-6.1-sol`, uncached/warm, independent USD 100 budget. Do not execute the old Opus CLI or reset its marker to start OpenAI evaluation.
 
-Status: **M1 open; baseline-001 incomplete and stopped on cold-cache evidence.** Two valid measured trials, one warm-up and one cache-invalid trial are retained; do not restart or reset its marker. This checklist supersedes the earlier unreviewed draft, which misstated fixture count, inference transport and comparison scope. The authoritative protocol/evidence is [ptc-m1-evaluation.md](ptc-m1-evaluation.md).
+Status: **Historical, superseded checklist; baseline-001 remains incomplete and stopped on cold-cache evidence.** The unchecked items below preserve that stopped run's state, not the current M1 backlog. Two valid measured trials, one warm-up and one cache-invalid trial are retained; do not restart or reset its marker. This checklist supersedes the earlier unreviewed draft, which misstated fixture count, inference transport and comparison scope. The authoritative protocol/evidence is [ptc-m1-evaluation.md](ptc-m1-evaluation.md).
 
 ## Scope and authorization
 

@@ -1,5 +1,5 @@
 /**
- * Delegation (plans/assistant.md): the assistant in a chat hands a task to a
+ * Delegation (docs/history/assistant.md): the assistant in a chat hands a task to a
  * new session in one of the user's directory workspaces, or more
  * instructions to a session it started before. The user approves each one
  * in the chat, where it shows as a confirmation. Then the gateway creates

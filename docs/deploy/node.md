@@ -2,7 +2,7 @@
 
 `pirc-node` and `pirc-chat` read their configuration from environment variables (`apps/gateway/src/config.ts`, `loadNodeConfig`) plus a per-node agent config directory. Run one node per machine that has workspaces, as an unprivileged account that owns exactly the repositories, credentials and tools the agents should reach. Never run a node as root.
 
-Sandbox and browser settings have their own page: [Sandbox and browser](./sandbox-and-browser.md).
+Sandbox and browser settings have their own page: [Sandbox and browser](sandbox-and-browser.md).
 
 ## Identity and link
 
@@ -41,11 +41,11 @@ Workspaces are an execution allowlist: sessions only ever run in a listed direct
 
 Run `pirc-chat` for assistant chats/projects, or `pirc-node` for coding workspaces. Both use the same node/agent implementation; their role is fixed by the executable, not an environment switch. `pirc-chat` requires an empty `PIRC_WORKSPACES` and refuses web-added directory workspaces. Run at most one chat node, on an always-on host. On NixOS, `services.pirc.chat = true` selects `pirc-chat` for the local runner.
 
-The chat node keeps every chat workspace under `$STATE/chat/<workspaceId>/` (the top-level `chats`, and each project), including each project's `instructions.md`. See [`docs/chat-projects.md`](../chat-projects.md).
+The chat node keeps every chat workspace under `$STATE/chat/<workspaceId>/` (the top-level `chats`, and each project), including each project's `instructions.md`. See [`docs/guides/chat-projects.md`](../guides/chat-projects.md).
 
 ## Agent process
 
-Both node executables support the internal `agent` and `ptc-guest` commands and re-execute themselves for those workers (`ptc-guest` runs one `ptc` script in the embedded QuickJS WASM interpreter, with an empty environment, inside the agent's sandbox). These are not separately deployed executables. Keep the gateway and both node roles on the same release/protocol version ([Upgrades](./upgrades.md)).
+Both node executables support the internal `agent` and `ptc-guest` commands and re-execute themselves for those workers (`ptc-guest` runs one `ptc` script in the embedded QuickJS WASM interpreter, with an empty environment, inside the agent's sandbox). These are not separately deployed executables. Keep the gateway and both node roles on the same release/protocol version ([Upgrades](upgrades.md)).
 
 | Variable                                          | Default           | Meaning                                                                                               |
 | ------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------- |
@@ -63,7 +63,7 @@ Both node executables support the internal `agent` and `ptc-guest` commands and 
 
 Everything the node starts (agents and their tools, approved host commands, side-panel terminals and git, Chromium, ffmpeg) gets an **allowlisted** environment (`apps/gateway/src/node/secrets.ts`): `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`/`LC_*`, `TERM`/`COLORTERM`/`TERM_PROGRAM*`, `TZ`, `TMPDIR`, `PWD`, `EDITOR`/`VISUAL`/`PAGER`, `XDG_*`, Nix and CA-certificate variables, `LOCALE_ARCHIVE`, display variables, a few toolchain directories (`CARGO_HOME`, `GOPATH`, `JAVA_HOME`, …) and non-secret `PIRC_*`. Everything else is dropped, including `PIRC_NODE_TOKEN` and every `PIRC_*TOKEN*`/`*SECRET*`/`*KEY*`/`*PASSWORD*`, `EXA_API_KEY`, provider keys (`ANTHROPIC_API_KEY`, …), `AWS_*`, `GH_TOKEN`/`GITHUB_TOKEN`, `SSH_AUTH_SOCK`, `GIT_*` and `*_PROXY` (inside srt the sandbox sets its own proxy). Side-panel terminals additionally keep `SSH_AUTH_SOCK`, since only the human types there; their login shell re-reads the user's profile.
 
-To give agents a credential on purpose (a `GITHUB_TOKEN` for the agent's own `gh`), either put it in the agent config's `env`, or keep it in the node's environment and name it in `PIRC_AGENT_ENV_ALLOW=GITHUB_TOKEN`. pirc's own secrets cannot be passed this way. `gh` and git need a few more settings to work inside the sandbox: see [Git and the GitHub CLI](./sandbox-and-browser.md#git-and-the-github-cli).
+To give agents a credential on purpose (a `GITHUB_TOKEN` for the agent's own `gh`), either put it in the agent config's `env`, or keep it in the node's environment and name it in `PIRC_AGENT_ENV_ALLOW=GITHUB_TOKEN`. pirc's own secrets cannot be passed this way. `gh` and git need a few more settings to work inside the sandbox: see [Git and the GitHub CLI](sandbox-and-browser.md#git-and-the-github-cli).
 
 ## The agent config directory
 
@@ -131,8 +131,8 @@ Do not edit files. Cite file:line evidence and mark anything unverified.
 }
 ```
 
-- `providers` and `defaultModel` do **not** belong here any more; they are ignored with a warning (models live on the [gateway](./gateway.md#model-backends)). Legacy `roles` and `features.agentTeam.kinds` JSON settings are also ignored with a startup warning; move them to `$PIRC_CONFIG_DIR/roles/<name>.md`.
-- `features.*` is documented in the [top-level README](../../README.md#agent); `features.observationalMemory` in [`docs/architecture-observational-memory.md`](../architecture-observational-memory.md). Each feature object is validated as a whole: an invalid value resets that feature to its defaults.
+- `providers` and `defaultModel` do **not** belong here any more; they are ignored with a warning (models live on the [gateway](gateway.md#model-backends)). Legacy `roles` and `features.agentTeam.kinds` JSON settings are also ignored with a startup warning; move them to `$PIRC_CONFIG_DIR/roles/<name>.md`.
+- `features.*` is documented in the [tools and workflows guide](../guides/tools.md); `features.observationalMemory` in [`docs/architecture/observational-memory.md`](../architecture/observational-memory.md). Each feature object is validated as a whole: an invalid value resets that feature to its defaults.
 - Hooks (`sessionStart`, `beforePrompt`, `beforeTool`, `afterTool`, `agentSettled`) receive JSON on stdin; a `beforeTool` hook exits `2` to block a call. They run inside the sandbox.
 - `features.autoMode.deny`: regular expressions (or `/re/flags`) for commands you never want run without asking. A match makes the action dangerous: the agent must ask you, and teammates and subagents are refused. It is checked before anything else, also when auto mode is off, against the raw command, each unquoted command, the package.json scripts, Makefile/justfile recipes and shell scripts a command runs, tty input to background tasks and `ptc` scripts (an operation inside a script is checked like the same direct call). An invalid pattern is matched as literal text and the session shows a warning.
 - `allowedPaths` widens the file tools' write roots and the sandbox's writable paths (node config only; a project's `allowedPaths` never widens the sandbox).
@@ -144,7 +144,7 @@ Workspaces may add `<workspace>/.pirc/config.json` with only `allowedPaths`, `en
 
 - `SIGTERM`: closes the link, gives agents `PIRC_SHUTDOWN_GRACE_MS` to exit, then exits. Runs in progress become `interrupted` on the next start.
 - On reconnect after a gateway restart, the node re-registers its workspaces, and the gateway bumps the event epoch so clients refetch snapshots.
-- A node whose protocol version differs from the gateway's is closed with code `4426` and logs `daemon rejected this node protocol version`; see [Upgrades](./upgrades.md).
+- A node whose protocol version differs from the gateway's is closed with code `4426` and logs `daemon rejected this node protocol version`; see [Upgrades](upgrades.md).
 
 ## Minimal environment file
 
@@ -158,6 +158,6 @@ PIRC_CONFIG_DIR=/etc/pirc/agent
 PIRC_WORKSPACES=[]
 ```
 
-Keep the file readable by the node account only (`0600`), and list its directory in `sandbox.filesystem.denyRead` when it sits outside `PIRC_STATE_DIR` ([Sandbox and browser](./sandbox-and-browser.md)).
+Keep the file readable by the node account only (`0600`), and list its directory in `sandbox.filesystem.denyRead` when it sits outside `PIRC_STATE_DIR` ([Sandbox and browser](sandbox-and-browser.md)).
 
 Chat nodes read global `SOUL.md` (persona) then the fixed environment description and `CHAT.md` (rules), never `AGENTS.md`. Coding nodes never read SOUL/CHAT. Each chat file is capped at 8000 characters. Settings → Assistant edits these same node-local files when writable; symlinks and Nix store files are read-only. Empty Soul falls back to the built-in identity. Changes apply at the next agent start. The gateway persistently binds one chat node ID; stop the old node and release its binding in Settings → Assistant before replacing it.

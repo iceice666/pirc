@@ -8,7 +8,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Push notifications (plans/cron.md, phase 4). The gateway sends the same
+ * Push notifications (docs/history/cron.md, phase 4). The gateway sends the same
  * encrypted Web Push message to browsers and, through the user's UnifiedPush
  * distributor, to this app: a title, a short line, a tag (same tag, same
  * notification) and what to open.

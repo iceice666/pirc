@@ -6,7 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /*
- * The Chat and Work tabs (plans/ui-redesign.md): chats and projects of the
+ * The Chat and Work tabs (docs/guides/session-ui.md): chats and projects of the
  * assistant's chat workspaces; every other session grouped by what it needs
  * (Needs you, Running, Recent), with repeated runs of one schedule folded
  * into one row. Ported from the web's `work.ts`; pure, so it is unit tested.

@@ -1,5 +1,5 @@
 /**
- * Image attachments of one `ptc` execution (plans/ptc-m1-contracts.md
+ * Image attachments of one `ptc` execution (docs/evaluations/ptc/ptc-m1-contracts.md
  * "Attachments"). An operation's images stay on the host; the script sees
  * descriptors with an opaque, unguessable handle and may queue them for the
  * outer `ptc` result with `attachments.add(handle)`. No bytes, paths or URLs

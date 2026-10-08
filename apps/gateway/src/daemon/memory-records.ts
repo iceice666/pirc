@@ -1,6 +1,6 @@
 /**
  * Workspace memory from every node, held by the gateway for the assistant's
- * search (plans/assistant.md). Nodes mirror their ledgers (`memory_mirror`);
+ * search (docs/history/assistant.md). Nodes mirror their ledgers (`memory_mirror`);
  * this applies the lines the way the ledger fold does, and finds each item's
  * owner and workspace through the session that wrote it. Items whose session
  * the gateway does not know have no owner and are never found.

@@ -125,7 +125,7 @@ for (const entry of readdirSync(path.join(root, 'node_modules/.bun'))) {
 }
 writeFileSync(
   path.join(stage, 'RELEASE.txt'),
-  `pirc ${version}\nCommit: ${commit}\nmacOS ARM64; not Developer ID signed/notarized.\nAdd this archive's bin directory to PATH; do not symlink wrappers outside it.\nSee docs/releasing.md and docs/deploy/ before use.\nChromium/Chrome and optional ffmpeg are external dependencies.\nWeb assets: share/pirc/web (serve through your authenticated reverse proxy).\n`,
+  `pirc ${version}\nCommit: ${commit}\nmacOS ARM64; not Developer ID signed/notarized.\nAdd this archive's bin directory to PATH; do not symlink wrappers outside it.\nSee docs/development/releasing.md and docs/deploy/ before use.\nChromium/Chrome and optional ffmpeg are external dependencies.\nWeb assets: share/pirc/web (serve through your authenticated reverse proxy).\n`,
 );
 const bunLicense = process.env.PIRC_RELEASE_BUN_LICENSE;
 if (!bunLicense || !path.isAbsolute(bunLicense))

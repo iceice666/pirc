@@ -1,4 +1,4 @@
-/** M4 run identity (plans/ptc-m4-evaluation.md); pins are part of the controller source hash. */
+/** M4 run identity (docs/evaluations/ptc/ptc-m4-evaluation.md); pins are part of the controller source hash. */
 
 /** The accepted M1 baseline: pinned last chain run and aggregate reports. */
 export const M4_BASELINE = {
@@ -20,7 +20,7 @@ export const M4_COMPLETED = [
     trials: '3dbcfb63088b28a18c2206f4931c5c134a992d2a0534f3e81862595e6bc2fe0c',
     budget: 'd7ef882c09076a7efe921480e163a03131d6480527588a8b841c509d6b31e908',
     summary: 'db112e3a90191e17c9c5bc7071a49ff0953529cd0782af894cf1dfd2fba1d59d',
-    /** Remote report and its Prettier-formatted copy in plans/. */
+    /** Remote report and its Prettier-formatted copy in docs/evaluations/ptc/. */
     report: '387280ad0e085f00277839ed7a1234151ad093b6ea6a98284d790f5aa3c6d995',
     plansReport: '6ae97e8d81bd1adf0cfb541c5c9a623947d6c548fcd60c6ec4ed4189043f74c8',
     carry: { spentUnits: 173299750, admittedAttempts: 4294 },
@@ -63,7 +63,7 @@ export const M4_ROUND2_END = {
 } as const;
 
 /**
- * Round 3 (plans/ptc-m4-evaluation.md): the hybrid surface, measured interleaved with the
+ * Round 3 (docs/evaluations/ptc/ptc-m4-evaluation.md): the hybrid surface, measured interleaved with the
  * pinned M1 `main` binaries in the same session. Branch pins are set from the deployed builds.
  */
 export const M4_R3 = {
@@ -158,7 +158,7 @@ export const M4_ROUND3_END = {
 } as const;
 
 /**
- * Round 4 (plans/ptc-m4-evaluation.md, final round): Pi-codemode-informed changes on the hybrid
+ * Round 4 (docs/evaluations/ptc/ptc-m4-evaluation.md, final round): Pi-codemode-informed changes on the hybrid
  * surface, measured interleaved with the same pinned `main` binaries. Branch pins are set from
  * the deployed builds before the run.
  */
@@ -201,7 +201,7 @@ export const M4_ROUND4_END = {
 } as const;
 
 /**
- * Round 5 (plans/ptc-m4-evaluation.md, final optimization): compact signatures for non-core
+ * Round 5 (docs/evaluations/ptc/ptc-m4-evaluation.md, final optimization): compact signatures for non-core
  * capabilities, a complete-list statement and stronger routing, measured as round 4 was.
  */
 export const M4_R5 = {
@@ -263,7 +263,7 @@ export const M4_ROUND5_END = {
 } as const;
 
 /**
- * Public-benchmark runs (plans/ptc-m4-evaluation.md, "Public benchmark"), in order. Each ends
+ * Public-benchmark runs (docs/evaluations/ptc/ptc-m4-evaluation.md, "Public benchmark"), in order. Each ends
  * where the next one's budget starts (an uncertain reservation left at a stop counts as spent).
  */
 export const M4_POLY_RUNS: ReadonlyArray<{

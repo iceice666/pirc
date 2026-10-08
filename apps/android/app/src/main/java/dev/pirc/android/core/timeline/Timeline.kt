@@ -124,5 +124,5 @@ data class SessionState(
     val needsSnapshot: Boolean = false,
 )
 
-/** Whether an agent runs inside its node's OS sandbox, and why not (plans/sandbox.md). */
+/** Whether an agent runs inside its node's OS sandbox, and why not (docs/history/sandbox.md). */
 data class SandboxStatus(val active: Boolean, val reason: String? = null)

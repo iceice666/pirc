@@ -1,5 +1,7 @@
 # Native Android client
 
+> Historical design and implementation record. Use the [current guide](../../apps/android/README.md) for operation and the [backlog](../../plans/backlog.md#android) for unresolved follow-ups. Original proposals and dated validation limits below are preserved, not new authorization.
+
 Status: milestones 1 (gateway device tokens, web pairing), 2 (Android skeleton: pairing, session list), 3 (read-only chat), 4 (interactive chat) and 5 (files panel) implemented, plus session management and the Git, tasks, memory and terminal panels.
 
 ## Why

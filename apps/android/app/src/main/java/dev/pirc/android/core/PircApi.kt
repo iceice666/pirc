@@ -166,7 +166,7 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
     internal fun terminalRequest(sessionId: String, terminalId: String) =
         request("${session(sessionId)}/terminals/${terminalId.urlSegment()}/stream").build()
 
-    /** The session's browser live view (plans/browser.md), bearer-authenticated like terminals. */
+    /** The session's browser live view (docs/history/browser.md), bearer-authenticated like terminals. */
     internal fun browserRequest(sessionId: String) =
         request("${session(sessionId)}/browser/stream").build()
 
@@ -259,7 +259,7 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
         }
     }
 
-    // ---- push notifications (plans/cron.md, phase 4) ----
+    // ---- push notifications (docs/history/cron.md, phase 4) ----
 
     open suspend fun pushInfo(): PushInfo = get("/api/push")
 
@@ -288,7 +288,7 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
     open suspend fun testPush(): Int =
         readingReply { PircJson.decodeFromJsonElement(PushTested.serializer(), send("POST", "/api/push/test", buildJsonObject {}) ?: error("empty reply")).delivered }
 
-    // ---- schedules (plans/cron.md) ----
+    // ---- schedules (docs/history/cron.md) ----
 
     /** Every model the gateway offers, for a schedule's own choice. */
     open suspend fun allModels(): List<ModelOption> = get<ModelsResponse>("/api/models").models.map { it.option() }
@@ -319,7 +319,7 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
     open suspend fun dismissRun(id: String, runId: String): ScheduleRun =
         decodeRun(send("POST", "/api/schedules/${id.urlSegment()}/runs/${runId.urlSegment()}/dismiss", buildJsonObject {}))
 
-    // ---- the assistant's memory (plans/assistant.md): proposals only ----
+    // ---- the assistant's memory (docs/history/assistant.md): proposals only ----
 
     open suspend fun memory(): MemoryView = get("/api/memory")
 

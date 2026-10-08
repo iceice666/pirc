@@ -46,14 +46,14 @@ interface AgentOp {
   run(context: AgentOpContext, args: any): unknown;
 }
 
-/** Memory belongs to the assistant, which lives in chat workspaces (plans/assistant.md). */
+/** Memory belongs to the assistant, which lives in chat workspaces (docs/history/assistant.md). */
 function requireChat({ workspace }: AgentOpContext): void {
   if (workspace.kind !== 'chat')
     throw new ApiError(403, 'forbidden', 'Only chat sessions have the assistant memory');
 }
 
 /**
- * Where a session's agent may schedule (plans/cron.md): an assistant chat in
+ * Where a session's agent may schedule (docs/history/cron.md): an assistant chat in
  * its own chat or any directory workspace it may delegate to; any other
  * session only in its own workspace.
  */

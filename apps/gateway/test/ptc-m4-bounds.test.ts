@@ -7,7 +7,10 @@ import { matrix } from './ptc-m1/synthetic-matrix.js';
 import type { OpenAICohortResult } from './ptc-m1/openai-cohort.js';
 
 const baseline = JSON.parse(
-  readFileSync(path.join(import.meta.dir, '../../../plans/ptc-m1-openai-baseline.json'), 'utf8'),
+  readFileSync(
+    path.join(import.meta.dir, '../../../docs/evaluations/ptc/ptc-m1-openai-baseline.json'),
+    'utf8',
+  ),
 ) as BaselineReport;
 const groupOf = (kind: 'coding' | 'chat', fixture: string, condition: string) =>
   baseline.aggregates[kind].groups.find((g) => g.fixture === fixture && g.condition === condition)!;

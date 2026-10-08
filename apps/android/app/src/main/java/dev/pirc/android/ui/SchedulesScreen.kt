@@ -90,7 +90,7 @@ import java.time.ZoneOffset
 private const val NEW = "new"
 
 /**
- * Scheduled tasks (plans/cron.md): the list, one schedule with its runs, and
+ * Scheduled tasks (docs/history/cron.md): the list, one schedule with its runs, and
  * the form, as one screen (Back steps out of the form, then the detail).
  */
 @OptIn(ExperimentalMaterial3Api::class)

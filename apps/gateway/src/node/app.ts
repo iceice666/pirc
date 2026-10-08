@@ -530,7 +530,7 @@ export async function buildNodeApp(
 
   /**
    * The gateway pushes a message into a session: a delegated task, or news of
-   * a delegation for the chat that asked (plans/assistant.md). The daemon
+   * a delegation for the chat that asked (docs/history/assistant.md). The daemon
    * never relays browser requests here. No control lease is needed or taken:
    * a push must not take a chat away from the user typing in it.
    */
@@ -543,7 +543,7 @@ export async function buildNodeApp(
 
   /**
    * The gateway recalls a workspace-memory note the assistant found by search
-   * (plans/assistant.md). Only the owner of the session that wrote it may read
+   * (docs/history/assistant.md). Only the owner of the session that wrote it may read
    * that session; a forgotten note answers without its content.
    */
   app.post('/api/workspace-memory/recall', async (request) => {

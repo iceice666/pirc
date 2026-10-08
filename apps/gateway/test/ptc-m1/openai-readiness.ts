@@ -6,7 +6,7 @@ import type { OpenAICohortResult } from './openai-cohort.js';
 /**
  * Per-trial authorization enforcement, NOT task compliance: wording or denied alternate-channel
  * attempts stay task failures and are compared as success rates in M4. This is a recorded
- * post-data protocol amendment (plans/ptc-m1-openai.md), not a restoration: the earlier Opus
+ * post-data protocol amendment (docs/evaluations/ptc/ptc-m1-openai.md), not a restoration: the earlier Opus
  * controller also filled `authorizationOracle` from task success. M4 must judge baseline and
  * PTC rows with this same function, and PTC rows must carry explicit evidence.
  * Explicit oracle evidence is used when recorded; rows recorded before it existed use a

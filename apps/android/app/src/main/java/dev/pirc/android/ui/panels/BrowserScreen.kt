@@ -91,7 +91,7 @@ private fun rememberJpeg(jpeg: ByteArray?): ImageBitmap? {
 }
 
 /**
- * The session's browser (plans/browser.md): watch the agent, take over to log
+ * The session's browser (docs/history/browser.md): watch the agent, take over to log
  * in or fill a form (taps, drags that scroll, and the keyboard), record videos,
  * and step through what the agent did.
  */

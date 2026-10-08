@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The assistant's memory (plans/assistant.md): approve or reject what it
+   * The assistant's memory (docs/history/assistant.md): approve or reject what it
    * proposes to remember about you, review its notes and their history,
    * restore earlier versions, and forget entries for good.
    */

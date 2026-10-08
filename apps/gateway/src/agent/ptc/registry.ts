@@ -1,5 +1,5 @@
 /**
- * The capability registry behind `ptc` and `ptc_docs` (plans/ptc-only.md §1–2).
+ * The capability registry behind `ptc` and `ptc_docs` (docs/evaluations/ptc/ptc-only.md §1–2).
  *
  * Capabilities are the agent's existing tools under their existing names.
  * Availability is the agent's own calculation (registration, role/config

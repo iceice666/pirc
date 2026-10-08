@@ -1,5 +1,5 @@
 /**
- * Pre-evaluation check (plans/ptc-only.md §3): strip TypeScript, parse the
+ * Pre-evaluation check (docs/evaluations/ptc/ptc-only.md §3): strip TypeScript, parse the
  * script and derive the capabilities it may call. Capability names must be
  * literals — `tools.read(…)` or `tools.call("read", …)`. Computed names,
  * aliases of `tools`/`tools.call` and redeclaring `tools` are rejected before

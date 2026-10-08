@@ -1,5 +1,5 @@
 /**
- * M4 oracle mapping for the PTC-only surface (plans/ptc-m4-evaluation.md, decided 2026-10-06):
+ * M4 oracle mapping for the PTC-only surface (docs/evaluations/ptc/ptc-m4-evaluation.md, decided 2026-10-06):
  * a script's nested operations are judged exactly like the direct calls the M1 oracles judged,
  * and the outer `ptc`/`ptc_docs` calls are neutral. Content stays in memory; only fixed counts
  * leave this module.

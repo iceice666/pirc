@@ -209,7 +209,7 @@ if (!remeasure && tip && !tip.next)
   throw new Error('Matrix already complete; use the report script');
 const carry = remeasureCarry ?? tip?.carry ?? chained?.carry ?? resumed?.carry;
 const previousRows = remeasure ? undefined : (tip?.rows ?? chained?.rows ?? resumed?.rows);
-// Prospective policy for the chained continuation only; see plans/ptc-m1-openai.md.
+// Prospective policy for the chained continuation only; see docs/evaluations/ptc/ptc-m1-openai.md.
 const primeOutcome = chained ? ('record' as const) : ('gate' as const);
 // Fixed location and exclusive creation: never delete to restart with a zero budget.
 const marker = createArtifact(

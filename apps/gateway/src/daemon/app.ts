@@ -128,7 +128,7 @@ export interface DaemonServices {
   delegations: Delegations;
   /** Workspace memory mirrored from the nodes, for the assistant's search. */
   records: MemoryRecords;
-  /** Scheduled agent runs (plans/cron.md). */
+  /** Scheduled agent runs (docs/history/cron.md). */
   schedules: Schedules;
   /** Push notifications to browsers and phones. */
   push: Push;

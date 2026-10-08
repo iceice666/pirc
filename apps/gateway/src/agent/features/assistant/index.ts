@@ -1,5 +1,5 @@
 /**
- * The assistant's memory in chat sessions (plans/assistant.md). The gateway
+ * The assistant's memory in chat sessions (docs/history/assistant.md). The gateway
  * holds, per user, USER entries (who the user is; changed only with their
  * approval) and MEMORY notes (the assistant's own). A chat starts with both
  * frozen into its system prompt. `memory_note` writes notes directly and

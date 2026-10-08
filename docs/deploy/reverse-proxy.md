@@ -1,6 +1,6 @@
 # Reverse proxy and forward auth
 
-The gateway has no login of its own. It trusts an identity header **only** from the peer addresses in `PIRC_TRUSTED_PROXIES`, so the proxy is part of the security boundary. This page lists what the proxy must do and gives nginx and Traefik examples. The [NixOS module](./nixos.md) generates the nginx part.
+The gateway has no login of its own. It trusts an identity header **only** from the peer addresses in `PIRC_TRUSTED_PROXIES`, so the proxy is part of the security boundary. This page lists what the proxy must do and gives nginx and Traefik examples. The [NixOS module](nixos.md) generates the nginx part.
 
 ## Routes
 
@@ -116,7 +116,7 @@ proxy_set_header X-Pirc-Proxy-Secret "<secret>";
 
 Traefik: add a `headers` middleware with `customRequestHeaders: { X-Pirc-Proxy-Secret: '<secret>' }` to both `pirc-api` and `pirc-device`, defined in a file-provider file that only Traefik can read (not in container labels or a world-readable file).
 
-The [NixOS module](./nixos.md) does this for its nginx virtual host: it generates the secret at first start into the gateway's state directory and writes the nginx snippet to `/run/pirc-nginx` (root and the nginx group only); nothing reaches the Nix store.
+The [NixOS module](nixos.md) does this for its nginx virtual host: it generates the secret at first start into the gateway's state directory and writes the nginx snippet to `/run/pirc-nginx` (root and the nginx group only); nothing reaches the Nix store.
 
 Even with the secret, a node on the gateway host should run its agents network-sandboxed: they must not be able to talk to the gateway port at all.
 

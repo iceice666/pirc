@@ -1,5 +1,7 @@
 # Browser tools (Playwright): web_fetch, interaction, live view, takeover, recording
 
+> Historical design and implementation record. Use the [current guide](../guides/browser.md) for operation and the [backlog](../../plans/backlog.md#browser) for unresolved follow-ups. Original proposals and dated validation limits below are preserved, not new authorization.
+
 Status (2026-09-29): phases 1–6 implemented and tested (committed in 22699b8). The design below is as built, apart from the corrections in "As built". Open follow-ups are at the end.
 
 ## As built

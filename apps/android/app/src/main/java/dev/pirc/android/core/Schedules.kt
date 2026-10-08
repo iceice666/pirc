@@ -8,7 +8,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * Scheduled tasks, held by the gateway (plans/cron.md): a prompt that runs in
+ * Scheduled tasks, held by the gateway (docs/history/cron.md): a prompt that runs in
  * a new session at set times. Runs the gateway could not start on time are
  * `missed` and wait for the user to allow them. Mirrors the web's `schedules.ts`.
  */

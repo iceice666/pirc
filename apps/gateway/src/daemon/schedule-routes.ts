@@ -1,5 +1,5 @@
 /**
- * Schedules in the web and Android apps (plans/cron.md). The user's own
+ * Schedules in the web and Android apps (docs/history/cron.md). The user's own
  * changes need no approval; only an agent's do (daemon/schedules.ts).
  */
 import type { FastifyInstance } from 'fastify';

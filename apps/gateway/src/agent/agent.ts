@@ -1588,7 +1588,7 @@ export class Agent {
   }
 
   /**
-   * One `ptc` operation, observable like a direct call (plans/ptc-only.md §6):
+   * One `ptc` operation, observable like a direct call (docs/evaluations/ptc/ptc-only.md §6):
    * `tool_execution_*` events under the capability's name, linked to the
    * `ptc` call by `parentToolCallId`, and a `ptc.operation` session entry with
    * the result as the tool returned it (never a `message`: the model sees

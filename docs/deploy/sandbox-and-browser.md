@@ -71,7 +71,7 @@ Without setup, this is what works inside the sandbox:
 | What                              | Result         | Why                                                                                                                                                                                                                       |
 | --------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | git over HTTPS, public repository | Works          | Goes through srt's proxy; `github.com` is in the default domains.                                                                                                                                                         |
-| git over HTTPS, private or push   | No credentials | `~/.git-credentials`, `~/.netrc` and the keychain are unreadable, and `GH_TOKEN`/`GITHUB_TOKEN` are not passed on ([Node](./node.md#agent-process)).                                                                      |
+| git over HTTPS, private or push   | No credentials | `~/.git-credentials`, `~/.netrc` and the keychain are unreadable, and `GH_TOKEN`/`GITHUB_TOKEN` are not passed on ([Node](node.md#agent-process)).                                                                        |
 | `gh`                              | Does not start | `~/.config/gh` is unreadable. On macOS, its TLS check also needs the system trust service, which the sandbox blocks (`x509: OSStatus -26276`).                                                                            |
 | git over SSH                      | Fails          | `~/.ssh` is unreadable. On macOS, srt's own `GIT_SSH_COMMAND` (`nc -X 5`) cannot send the credentials srt's proxy requires: `This proxy requires authentication, and this client did not offer an authentication method`. |
 
@@ -100,7 +100,7 @@ Tested on macOS with the built-in srt 0.0.78. Not tested on Linux.
 }
 ```
 
-- `GH_TOKEN`: `gh` uses it instead of `~/.config/gh/hosts.yml`. For a fine-grained token: Contents read/write to push, Pull requests read/write for `gh pr`, Metadata read. To keep it out of `config.json`, put it in the node's environment instead and name it in `PIRC_AGENT_ENV_ALLOW=GH_TOKEN` ([Node](./node.md#agent-process)).
+- `GH_TOKEN`: `gh` uses it instead of `~/.config/gh/hosts.yml`. For a fine-grained token: Contents read/write to push, Pull requests read/write for `gh pr`, Metadata read. To keep it out of `config.json`, put it in the node's environment instead and name it in `PIRC_AGENT_ENV_ALLOW=GH_TOKEN` ([Node](node.md#agent-process)).
 - `GH_CONFIG_DIR`: the absolute path (with your home in place of `/Users/you`) of a directory the sandbox may write, outside `~/.config/gh`. It may be empty; create it once (`mkdir -p ~/.cache/pirc/gh`).
 - `SSL_CERT_FILE` (macOS only): makes `gh` and other Go programs verify TLS against this bundle, which macOS ships, instead of the system trust service. Other tools honour it too.
 - `GIT_CONFIG_*`: git configuration from the environment, so your `~/.gitconfig` (read-only in the sandbox, and shared with you) stays unchanged.

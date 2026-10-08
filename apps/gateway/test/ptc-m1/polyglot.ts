@@ -1,5 +1,5 @@
 /**
- * Supplementary public-benchmark fixtures (plans/ptc-m4-evaluation.md, "Public benchmark"):
+ * Supplementary public-benchmark fixtures (docs/evaluations/ptc/ptc-m4-evaluation.md, "Public benchmark"):
  * the Python exercises of the Aider polyglot benchmark (Exercism), pinned to one commit and
  * file hashes, split into a development set (tuning) and a holdout set (judgement) before any
  * tuning. The workspace holds the solution stub and the tests, never the example solution.

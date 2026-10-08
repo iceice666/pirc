@@ -201,7 +201,7 @@ const basePrompt = `You are pirc, a coding agent operating inside a user's works
 Work carefully: read before editing, keep changes minimal and verified, and report blockers honestly.
 File tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.`;
 
-/** For chats (plans/assistant.md): the working directory is the chat's own, not a project. */
+/** For chats (docs/history/assistant.md): the working directory is the chat's own, not a project. */
 const chatIdentity = `You are pirc, the user's personal assistant, chatting with them on one of their machines.
 Answer directly; use tools when they help, and report what you did and any blockers honestly.`;
 const chatEnvironment = `This chat has its own private working directory; file tools write only to it and explicitly allowed paths, and read anywhere except credential stores and pirc's private state.`;

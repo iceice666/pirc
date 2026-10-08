@@ -1,5 +1,5 @@
 /**
- * A real `pirc-node agent` under the real srt (plans/sandbox.md). Runs only where
+ * A real `pirc-node agent` under the real srt (docs/history/sandbox.md). Runs only where
  * srt works (not inside another sandbox: macOS sandboxes do not nest): set
  * PIRC_TEST_SRT to `embedded` for the srt built into pirc (node/srt.ts), or to
  * the path of an external one.

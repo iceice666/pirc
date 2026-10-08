@@ -11,7 +11,7 @@ Build and deploy `pirc-gateway`, `pirc-chat` and `pirc-node` from the same relea
 | `src/daemon/`, `src/backends/`                            | The gateway only.                                                                                                                                                                                             |
 | `apps/web/`                                               | The static bundle only. Browsers pick it up on reload; a waiting service worker shows an update prompt.                                                                                                       |
 | `apps/android/`                                           | The phone. The API is versioned by behaviour, not a header; keep the app and gateway from the same era.                                                                                                       |
-| `bun.lock`                                                | `nodeModulesHash` in `nix/package.nix` ([NixOS](./nixos.md#updating-nodemoduleshash)).                                                                                                                        |
+| `bun.lock`                                                | `nodeModulesHash` in `nix/package.nix` ([NixOS](nixos.md#updating-nodemoduleshash)).                                                                                                                          |
 
 The gateway's SQLite schema migrates forward automatically at start (`PRAGMA user_version`); nodes do the same for their own database. There are no down-migrations: restoring an older binary over a newer database is not supported (see rollback).
 
@@ -19,7 +19,7 @@ The gateway's SQLite schema migrates forward automatically at start (`PRAGMA use
 
 The old `pirc gateway` / `pirc node` dispatcher and `PIRC_CHAT` role switch are removed; there is no compatibility `pirc` executable.
 
-1. Back up the gateway and each node's state ([Backup and recovery](./backup-and-recovery.md)). Build the three role executables from the same release.
+1. Back up the gateway and each node's state ([Backup and recovery](backup-and-recovery.md)). Build the three role executables from the same release.
 2. Remove hand-installed legacy `pirc` executables (the Bun role builds remove only their old `dist/pirc` and `dist/pirc.map` artifacts). Replace gateway launch commands with `pirc-gateway`, coding-node commands with `pirc-node`, and former chat-node commands with `pirc-chat`. Do not append `gateway` or `node`; no arguments starts the fixed server role.
 3. Delete `PIRC_CHAT` from environment files and service definitions. Keep existing node IDs, matching tokens and state/config directories when replacing each process; `pirc-chat` still requires empty `PIRC_WORKSPACES`. If a host runs chat and coding nodes together, give them distinct IDs, tokens and state directories.
 4. Update Nix references: `pkgs.pirc` / `packages.<system>.pirc` become the appropriate `pirc-gateway`, `pirc-chat` or `pirc-node` package. Replace `services.pirc.package` overrides with `gatewayPackage`, `chatPackage` and/or `nodePackage`. `services.pirc.chat` remains a declarative choice of local executable; systemd names remain `pirc` and `pirc-node`.
@@ -52,7 +52,7 @@ While the gateway restarts, nodes reconnect on their own (they retry the link); 
 ## Rollback
 
 - **Binary**: keep the previous binary (Nix generations do this; for hand-copied builds keep `pirc-gateway.prev`, `pirc-chat.prev` and/or `pirc-node.prev`). Roll the gateway and the nodes back together if the protocol version changed.
-- **Database**: a rolled-back binary may refuse or misread a database migrated by the newer one. Restore the state directory from the backup taken before the upgrade ([Backup and recovery](./backup-and-recovery.md)); sessions created in between are lost from the index (their transcripts stay on the node's disk).
+- **Database**: a rolled-back binary may refuse or misread a database migrated by the newer one. Restore the state directory from the backup taken before the upgrade ([Backup and recovery](backup-and-recovery.md)); sessions created in between are lost from the index (their transcripts stay on the node's disk).
 - **Web bundle**: redeploy the previous `dist`; ask browsers to reload (or clear the service worker at `/sw.js` in DevTools if a stale shell persists).
 
 ## Release procedure for a Nix-based fleet

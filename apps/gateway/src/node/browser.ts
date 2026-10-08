@@ -1,5 +1,5 @@
 /**
- * Browsers for the agent's web tools (plans/browser.md). The node owns one
+ * Browsers for the agent's web tools (docs/history/browser.md). The node owns one
  * Chromium per workspace, with a persistent profile, so a login made once
  * serves every session of the workspace (Chromium locks a profile to one
  * process, and agents come and go). Each session gets its own tab group.

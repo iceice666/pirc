@@ -44,7 +44,7 @@ data class SchedulesState(
 }
 
 /**
- * Scheduled tasks (plans/cron.md): list, open with their runs, make, change,
+ * Scheduled tasks (docs/history/cron.md): list, open with their runs, make, change,
  * pause, run now, delete; allow or dismiss missed runs. A device gets no push
  * about schedules, so the shown screen polls.
  */

@@ -1,5 +1,5 @@
 /**
- * The OS sandbox policy for agents (plans/sandbox.md), shared by the node,
+ * The OS sandbox policy for agents (docs/history/sandbox.md), shared by the node,
  * which wraps each agent process in srt with it, and the agent, whose file
  * tools (PathGuard) apply the same rules so both give the same answer.
  *

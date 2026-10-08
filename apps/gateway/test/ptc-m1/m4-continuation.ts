@@ -1,5 +1,5 @@
 /**
- * Continuation of a stopped M4 run (plans/ptc-m4-evaluation.md, round 2 amendment): validates
+ * Continuation of a stopped M4 run (docs/evaluations/ptc/ptc-m4-evaluation.md, round 2 amendment): validates
  * the stopped run's pinned artifacts, recomputes its spend, charges every attempt without usage
  * at its full worst-case reservation, supersedes the stopping row (charged, never measured) and
  * returns the rows to reuse and where to resume. No recorded row is dispatched again.

@@ -14,7 +14,7 @@ export type InteractionStatus = 'pending' | 'answered' | 'cancelled' | 'expired'
 /**
  * `directory`: a real directory on the node (a repository or folder).
  * `chat`: the assistant's chats, in a directory the node manages and hides
- * (plans/assistant.md, chat workspaces).
+ * (docs/history/assistant.md, chat workspaces).
  */
 export type WorkspaceKind = 'directory' | 'chat';
 
@@ -101,7 +101,7 @@ export interface Snapshot {
   watermark: EventCursor;
   partialOutputLost: boolean;
   /**
-   * Whether the running agent is inside the node's OS sandbox (plans/sandbox.md);
+   * Whether the running agent is inside the node's OS sandbox (docs/history/sandbox.md);
    * null with no runner. Clients show a lasting badge when it is not.
    */
   sandbox?: { active: boolean; reason?: string } | null;

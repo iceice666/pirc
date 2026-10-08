@@ -46,7 +46,7 @@ pirc-chat ──stdio JSONL──▶ pirc-chat agent ──unix socket──▶ 
 
 ### Single host
 
-Gateway, one node, the proxy and the web bundle on the same machine. The node uses `PIRC_DAEMON_URL=ws://127.0.0.1:8787` (plain `ws://` is accepted on loopback). This is what the [NixOS module](./nixos.md) sets up by default.
+Gateway, one node, the proxy and the web bundle on the same machine. The node uses `PIRC_DAEMON_URL=ws://127.0.0.1:8787` (plain `ws://` is accepted on loopback). This is what the [NixOS module](nixos.md) sets up by default.
 
 ### Central gateway, several nodes
 
@@ -76,7 +76,7 @@ Run at most one `pirc-chat` process (NixOS: `services.pirc.chat = true` selects 
 | Agent config, global `AGENTS.md`, skills                                   | node      | `$PIRC_CONFIG_DIR` (default `~/.config/.pirc`)                              |
 | Node ↔ agent inference socket (random per start)                          | node      | `$PIRC_STATE_DIR/i-*/socket` (0600)                                         |
 
-Both state directories are created with mode `0700`. See [Backup and recovery](./backup-and-recovery.md) for what to copy.
+Both state directories are created with mode `0700`. See [Backup and recovery](backup-and-recovery.md) for what to copy.
 
 ## Ports and addresses to decide up front
 

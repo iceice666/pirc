@@ -5,7 +5,7 @@
   makeBinaryWrapper,
   callPackage,
   role ? "gateway",
-  # The OS sandbox nodes wrap agents in (plans/sandbox.md).
+  # The OS sandbox nodes wrap agents in (docs/history/sandbox.md).
   # Not named `srt`: callPackage would inject nixpkgs' unrelated `srt`
   # (a video streaming library) instead of this default.
   sandboxRuntime ? callPackage ./sandbox-runtime.nix { },

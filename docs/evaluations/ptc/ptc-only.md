@@ -1,6 +1,6 @@
 # PTC-only agent interface: `ptc` and `ptc_docs`
 
-Status: Milestone 1 complete on `feat/ptc-only`: offline contracts, inventory, isolation spike, reproducible fixtures and the real-model `main` baseline (OpenAI Responses `gpt-6.1-sol`, maintainer-approved replacement for Opus; readiness passes, see [OpenAI baseline](ptc-m1-openai.md)). Milestone 2 complete on the branch: the model sees only `ptc` and `ptc_docs` (see the Milestone 2 notes); `main` is unchanged. Milestone 3 complete on the branch (typed capability results, image attachments, observable operations in web and Android; see the Milestone 3 notes). Milestone 4 not started. Evidence: [inventory](ptc-m1-inventory.md), [contracts](ptc-m1-contracts.md), [evaluation](ptc-m1-evaluation.md). Baseline: `main@2530bd2` (code references and statistics, refreshed 2026-10-03). Decided 2026-10-03: the script runtime is QuickJS compiled to WASM (option B, §4) and the TempestMiku `tm` security model is adopted where it fits (see "Prior art"). Decided 2026-10-03: no runtime mode switch; the change is all-or-nothing, developed on a branch and either cut over or abandoned on the Milestone 4 evaluation (§7).
+Status: **Milestones 1–4 complete; hybrid cutover accepted and merged (2026-10-07)**, as recorded in the Milestone 4 acceptance and review below. The accepted surface exposes core tools directly and through `ptc`, with other capabilities through `ptc`; it replaces the original PTC-only target. The [OpenAI baseline](ptc-m1-openai.md#m1-baseline-accepted) is accepted. Failed evaluation rounds remain failed; the later public holdout passed its own bounds, and the maintainer accepted the recorded chat limitations. This document preserves the original design and chronological evidence, not a new implementation queue. Outstanding accepted risks and manual release checks are indexed in the [backlog](../../../plans/backlog.md#accepted-ptc-follow-ups-and-release-checks). Evidence: [inventory](ptc-m1-inventory.md), [contracts](ptc-m1-contracts.md), [evaluation](ptc-m1-evaluation.md). Baseline: `main@2530bd2` (code references and statistics, refreshed 2026-10-03). Decided 2026-10-03: the script runtime is QuickJS compiled to WASM (option B, §4) and the TempestMiku `tm` security model is adopted where it fits (see "Prior art"). Decided 2026-10-03: no runtime mode switch; the change is all-or-nothing, developed on a branch and either cut over or abandoned on the Milestone 4 evaluation (§7).
 
 ## Direction and scope
 
@@ -421,7 +421,7 @@ Cutover status (2026-10-07, maintainer):
   - On the 19-exercise holdout, the tuned hybrid build matched `main`'s tests-pass count (38/38 each).
   - It used 32% fewer tokens and 43% fewer model rounds (3.16 against 5.55). Its mean wall time was 28% lower (reported, not judged).
   - It passed every declared bound.
-- Remaining before merge: the fresh independent security/design review with repo checks, then docs and release notes.
+- At this decision point, review, checks, docs and release notes remained before merge. They were subsequently completed as recorded in the Milestone 4 acceptance checklist and review below; the listed manual real-runtime release checks remain outstanding.
 
 Milestone 4 review (2026-10-07; whole branch against `main` 16c80846, hybrid surface):
 

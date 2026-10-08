@@ -1,5 +1,5 @@
 /**
- * Scheduled runs (plans/cron.md): the gateway keeps the user's schedules and
+ * Scheduled runs (docs/history/cron.md): the gateway keeps the user's schedules and
  * starts each run in a new session. The `schedule` tool lists them and
  * proposes new ones or changes, which the user approves in the chat; pausing
  * and deleting take effect at once. `/cron` gives the user the same

@@ -1,5 +1,5 @@
 /**
- * Push notifications (plans/cron.md, phase 4): Web Push to browsers, and the
+ * Push notifications (docs/history/cron.md, phase 4): Web Push to browsers, and the
  * same protocol to phones through UnifiedPush (the app's distributor, e.g.
  * ntfy, gives it a Web Push endpoint). Payloads are encrypted for the
  * subscriber (RFC 8291) and signed with the gateway's VAPID key, so the push

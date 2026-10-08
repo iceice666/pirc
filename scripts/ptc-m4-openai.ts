@@ -1,5 +1,5 @@
 /**
- * M4 OpenAI evaluation of the PTC-only binaries (plans/ptc-m4-evaluation.md): the M1 fixtures,
+ * M4 OpenAI evaluation of the PTC-only binaries (docs/evaluations/ptc/ptc-m4-evaluation.md): the M1 fixtures,
  * oracles (PTC mapping), protocol and readiness function, one fresh 300-trial matrix. Spend
  * continues the same independent USD 100 OpenAI budget from the pinned M1 chain end. Key only
  * via stdin; exclusive marker; aggregate-only artifacts.
@@ -146,7 +146,10 @@ const report = await readFile(
   path.join(directory, `openai-baseline-report-${last.name}.json`),
   'utf8',
 );
-const plansReport = await readFile(path.join(root, 'plans/ptc-m1-openai-baseline.json'), 'utf8');
+const plansReport = await readFile(
+  path.join(root, 'docs/evaluations/ptc/ptc-m1-openai-baseline.json'),
+  'utf8',
+);
 if (sha256(report) !== M4_BASELINE.report || sha256(plansReport) !== M4_BASELINE.plansReport)
   throw new Error('Baseline report pin mismatch');
 // Same protocol as the baseline (model, tier, reasoning, caps, budget limit, conditions).
