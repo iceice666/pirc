@@ -31,6 +31,10 @@
 import path from 'node:path';
 import { z } from 'zod';
 import type { Agent } from '../agent.js';
+import type { AgentConfig } from '../config.js';
+import type { PathGuard } from '../sandbox.js';
+import type { UiApi } from '../tools/types.js';
+import type { ClassifyResult } from './classifier.js';
 import { thinkingLevels } from '../config.js';
 import { classifyWithModel, type ModelChoice, type ShellAction } from './classifier.js';
 import { classifyShell, compileDeny, denyMatch, type Classification } from './rules.js';
@@ -132,6 +136,28 @@ interface PendingLine {
   truncated: boolean;
 }
 
+export interface AutoModeHost {
+  config: AgentConfig;
+  guard: PathGuard;
+  hasUI: boolean;
+  ui: Pick<UiApi, 'notify' | 'confirm'>;
+  acquireWrite(file: string, signal: AbortSignal): Promise<void>;
+  /** Executor broker uses full final action, never truncated dialog text, as authority. */
+  approveAction?(
+    action: ShellAction,
+    reason: string,
+    signal: AbortSignal,
+  ): Promise<boolean | undefined>;
+}
+export type ClassifierBroker = (
+  action: ShellAction,
+  hint: string,
+  choices: ModelChoice[],
+  signal: AbortSignal,
+  timeoutMs: number,
+  useMemory: boolean,
+) => Promise<ClassifyResult>;
+
 export class AutoMode {
   /** Model verdicts that need no human (read/write), by kind + cwd + action. */
   private readonly cache = new Map<string, AutoModeDecision>();
@@ -143,7 +169,15 @@ export class AutoMode {
   private warnedRulesFailure = false;
   private warnedDeny = '';
 
-  constructor(private readonly agent: Agent) {}
+  private readonly classifyModel: ClassifierBroker;
+  constructor(agent: Agent);
+  constructor(agent: AutoModeHost, classifier: ClassifierBroker);
+  constructor(
+    private readonly agent: AutoModeHost,
+    classifier?: ClassifierBroker,
+  ) {
+    this.classifyModel = classifier ?? ((...args) => classifyWithModel(agent as Agent, ...args));
+  }
 
   private deny(): RegExp[] {
     const { deny, invalid } = compileDeny(autoModeDeny(this.agent.config.features));
@@ -283,8 +317,7 @@ export class AutoMode {
     const key = `${action.kind}\0${action.cwd}\0${action.text}`;
     const cached = this.cache.get(key);
     if (cached) return cached;
-    const result = await classifyWithModel(
-      this.agent,
+    const result = await this.classifyModel(
       action,
       rules.reason,
       classifierChoices(this.agent.config.features),
@@ -396,11 +429,13 @@ export class AutoMode {
       return `${reason}. Dangerous actions need a human and this agent has no UI. ${advice}`;
     const label =
       action.kind === 'input' ? 'Input' : action.kind === 'script' ? 'Script' : 'Command';
-    const answer = await this.agent.ui.confirm(
-      'Auto mode: allow a potentially dangerous action?',
-      `${label} (${action.tool}, in ${action.cwd}):\n\n${action.text.slice(0, 4_000)}\n\nReason: ${reason}`,
-      { signal },
-    );
+    const answer = this.agent.approveAction
+      ? await this.agent.approveAction(action, reason, signal)
+      : await this.agent.ui.confirm(
+          'Auto mode: allow a potentially dangerous action?',
+          `${label} (${action.tool}, in ${action.cwd}):\n\n${action.text.slice(0, 4_000)}\n\nReason: ${reason}`,
+          { signal },
+        );
     if (answer === true) return undefined;
     return `${reason}. The user ${answer === false ? 'declined' : 'did not approve'} it. ${advice}`;
   }

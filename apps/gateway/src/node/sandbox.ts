@@ -241,6 +241,8 @@ export class NodeSandbox {
     sessionDir: string;
     inferenceSocket?: string | undefined;
     protectedPaths?: string[];
+    /** Supervisor-selected shipped role, never a model-supplied command. */
+    environmentExecutor?: boolean;
   }): Promise<PreparedSandbox> {
     const agentConfig = readAgentConfig(this.env);
     const warnings: string[] = [];
@@ -291,7 +293,10 @@ export class NodeSandbox {
         `Agents on this node must run in the sandbox, and it is unavailable: ${status.reason}`,
       );
     }
-    const agent = { command: this.config.agentCommand, args: [...this.config.agentArgs] };
+    const shipped = input.environmentExecutor ? selfCommand() : undefined;
+    const agent = shipped
+      ? { command: shipped[0]!, args: [...shipped.slice(1), 'environment-executor'] }
+      : { command: this.config.agentCommand, args: [...this.config.agentArgs] };
     const dir = path.join(this.config.stateDir, 'sandbox');
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     const settingsFile = path.join(dir, `${path.basename(input.sessionId)}.json`);

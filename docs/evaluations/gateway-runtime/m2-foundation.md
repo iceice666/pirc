@@ -44,7 +44,11 @@ node journal. A successful `claim` is permission to proceed only after that futu
 supervisor has completed its sandbox/policy/lease checks; a returned expired record
 is not permission to run. Recovery requires stopping/fencing the previous executor.
 
-## Explicitly deferred M2 requirements
+## Requirements deferred by this first slice
+
+The subsequent [integration continuation](m2-integration.md) implements some of
+these foundations and records remaining gaps. The list below describes the scope
+at the first-slice commit, not the latest integration status.
 
 - Authenticated node WebSocket integration and both-end version negotiation;
   local/remote Environment adapters and descriptor generation from real config.

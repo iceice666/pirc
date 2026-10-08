@@ -76,7 +76,7 @@ export async function executeLocalOperation(
   const before = invalid(rawArgs, 'arguments');
   if (before) return fail('invalid', before);
   if (signal.aborted) return cancelled();
-  const gate = await host.hooks.beforeTool(name, rawArgs);
+  const gate = await host.hooks.beforeTool(name, rawArgs, signal);
   if (signal.aborted) return cancelled();
   if (gate.blocked) return fail('denied', `Blocked by hook: ${gate.blocked}`);
   if (gate.args !== rawArgs) {
@@ -128,6 +128,7 @@ export async function executeLocalOperation(
             .slice(0, 65_536),
         },
         name,
+        signal,
       )
     )
       .filter((item) => item.exitCode === 0 && item.stdout.trim())

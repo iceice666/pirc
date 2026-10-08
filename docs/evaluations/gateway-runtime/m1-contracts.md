@@ -1,9 +1,10 @@
 # Gateway runtime M1: reviewed contracts and security design
 
 Status: **M1 accepted by the maintainer, with no legacy JSONL migration. The
-subsequent M2 request authorizes only its first foundation slice; remaining
-implementation, production RPC activation and deployment/cutover require further
-authorization**. See [M2 scope and validation](m2-foundation.md).
+subsequent M2 requests authorize foundation and remaining integration work with
+harness-only activation; production session routing, M3 writer transfer and
+deployment/cutover remain excluded**. See [M2 foundation](m2-foundation.md) and
+[integration continuation](m2-integration.md).
 The maintainer reviewed this design with “LGTM” and clarified that this breaking
 change does not need to migrate old JSONL records. New gateway sessions start fresh;
 legacy transcripts and their derived branch/context/store state are not imported.
@@ -372,7 +373,8 @@ The maintainer's LGTM accepts M1 with the explicit no-legacy-JSONL amendment:
 - [x] Accept initial quotas, deadlines, journal and private-content retention.
 - [x] Exclude legacy JSONL migration; use fresh sessions, retain old data, preserve fencing and do not promise lossless rollback after new writes.
 - [x] Separately authorize the first M2 foundation slice (local operation extraction, logical protocol and journal); M2 as a whole remains incomplete.
-- [ ] Authorize remaining M2 integration separately; production RPC activation, deployment/cutover/data deletion remain excluded.
+- [x] Separately authorize remaining M2 integration with harness-only activation; this authorization does not mark M2 complete.
+- [ ] Authorize production session activation, deployment/cutover/data deletion separately.
 
 M1 design review is complete; implementation and real-platform validation are not.
 Any materially changed choice returns to review rather than being inferred from

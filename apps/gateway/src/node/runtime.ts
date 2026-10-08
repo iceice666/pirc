@@ -33,7 +33,16 @@ const ACTIVITY_COALESCE_MS = 100;
 /** Browser live-view frames are skipped while this much is queued on the daemon link. */
 const BROWSER_FRAME_BACKLOG_BYTES = 4 * 1024 * 1024;
 
-export async function startNode(config: NodeConfig): Promise<{ close: () => Promise<void> }> {
+export interface NodeEnvironmentHarness {
+  connect(send: (raw: string) => Promise<void>): void;
+  receive(raw: string): Promise<void>;
+  disconnect(): void;
+}
+
+export async function startNode(
+  config: NodeConfig,
+  environment?: NodeEnvironmentHarness,
+): Promise<{ close: () => Promise<void> }> {
   const gateway = new DaemonAgentGateway();
   const { app, services } = await buildNodeApp(config, { gateway });
   const mirror = new MemoryMirror(config.workspaceMemoryDir, services.db, config.memoryMirrorMs);
@@ -231,7 +240,26 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       if (connection !== socket) return;
       let parsed: ReturnType<typeof daemonMessageSchema.safeParse>;
       try {
-        parsed = daemonMessageSchema.safeParse(JSON.parse(raw.toString()));
+        const text = raw.toString();
+        const envelope = JSON.parse(text);
+        if (envelope?.type === 'environment.frame') {
+          if (!registered || !environment) {
+            connection.close(1008, 'environment not enabled');
+            return;
+          }
+          void environment
+            .receive(text)
+            .catch(() => connection.close(1008, 'invalid environment frame'));
+          return;
+        }
+        if (
+          envelope?.type === 'registered' &&
+          (envelope.protocol !== NODE_PROTOCOL_VERSION || envelope.nodeId !== config.nodeId)
+        ) {
+          connection.close(PROTOCOL_MISMATCH_CLOSE, 'gateway protocol or node identity mismatch');
+          return;
+        }
+        parsed = daemonMessageSchema.safeParse(envelope);
       } catch {
         connection.close(1007, 'invalid JSON');
         return;
@@ -244,6 +272,19 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       }
       if (message.type === 'registered') {
         registered = true;
+        environment?.connect((raw) => {
+          if (
+            connection !== socket ||
+            !registered ||
+            connection.readyState !== WebSocket.OPEN ||
+            Buffer.byteLength(raw) > 65_536 ||
+            connection.bufferedAmount > 256 * 1024
+          )
+            return Promise.reject(new Error('Environment link unavailable or congested'));
+          return new Promise((resolve, reject) =>
+            connection.send(raw, (error) => (error ? reject(error) : resolve())),
+          );
+        });
         gateway.connect(sendAgentFrame);
         mirror.connect(sendAgentFrame, message.mirrors ?? {});
         sendActivity();
@@ -301,6 +342,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
     connection.on('close', (code, reason) => {
       if (socket !== connection) return;
       registered = false;
+      environment?.disconnect();
       gateway.disconnect();
       mirror.disconnect();
       inference.disconnect();
@@ -325,6 +367,7 @@ export async function startNode(config: NodeConfig): Promise<{ close: () => Prom
       services.db.onRunsChanged = undefined;
       clearTimeout(activityTimer);
       closeTerminals();
+      environment?.disconnect();
       gateway.disconnect();
       mirror.disconnect();
       await inference.close();

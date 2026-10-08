@@ -69,7 +69,13 @@ const nodeFrames = [
   { type: 'terminal_closed', streamId: 'stream', code: 1000, reason: 'done' },
 ] satisfies NodeToDaemon[];
 const daemonFrames = [
-  { type: 'registered', nodeId: 'node', models: { providers: {} }, mirrors: { [ledgerKey]: 10 } },
+  {
+    type: 'registered',
+    protocol: NODE_PROTOCOL_VERSION,
+    nodeId: 'node',
+    models: { providers: {} },
+    mirrors: { [ledgerKey]: 10 },
+  },
   { type: 'models', models: { providers: {} } },
   { type: 'memory_mirror_ack', ledgerKey, watermark: 10 },
   { type: 'registration_error', status: 403, code: 'forbidden', message: 'Not allowed' },
@@ -230,7 +236,13 @@ describe('node link wire envelopes', () => {
     { ...terminal, kind: 'other' },
     { ...terminal, streamId: '' },
     { type: 'memory_mirror_ack', ledgerKey, watermark: -1 },
-    { type: 'registered', nodeId: 'node', models: {}, mirrors: { [ledgerKey]: 1.5 } },
+    {
+      type: 'registered',
+      protocol: NODE_PROTOCOL_VERSION,
+      nodeId: 'node',
+      models: {},
+      mirrors: { [ledgerKey]: 1.5 },
+    },
     { type: 'agent_response', requestId: 'r', status: 200.5 },
     { type: 'model_error', requestId: 'r', code: 'unknown' },
     {

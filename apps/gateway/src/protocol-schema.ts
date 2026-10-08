@@ -122,6 +122,7 @@ export const daemonMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('registered'),
+    protocol: z.number().int(),
     nodeId: z.string(),
     models: modelsSchema,
     /** Acknowledged workspace-memory ledger offsets, by ledger key. */

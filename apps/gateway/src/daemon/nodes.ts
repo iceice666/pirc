@@ -140,6 +140,18 @@ export class NodeRegistry {
     },
   ) => number;
 
+  /** Opt-in M2 harness only; ordinary sessions do not provision an Environment. */
+  onEnvironmentFrame?: (nodeId: string, raw: string) => Promise<void>;
+
+  sendEnvironmentFrame(nodeId: string, raw: string): Promise<void> {
+    const socket = this.socketFor(nodeId);
+    if (Buffer.byteLength(raw) > 65_536 || socket.bufferedAmount > 256 * 1024)
+      return Promise.reject(new Error('Environment link congested'));
+    return new Promise((resolve, reject) =>
+      socket.send(raw, (error) => (error ? reject(error) : resolve())),
+    );
+  }
+
   constructor(private readonly models: ModelStore) {}
 
   private socketFor(nodeId: string): WebSocket {
@@ -367,6 +379,7 @@ export class NodeRegistry {
         this.onRegister?.(node);
         this.send(socket, {
           type: 'registered',
+          protocol: NODE_PROTOCOL_VERSION,
           nodeId,
           models: publicModels(this.models.current),
           mirrors: this.mirrorWatermarks?.(nodeId) ?? {},
@@ -375,6 +388,14 @@ export class NodeRegistry {
       }
       if (this.connections.get(nodeId)?.socket !== socket)
         return socket.close(4000, 'replaced by new connection');
+      if ((message as { type?: unknown } | null)?.type === 'environment.frame') {
+        if (!this.onEnvironmentFrame) return socket.close(1008, 'environment not enabled');
+        // Pass the original text, not JSON.parse output: duplicate keys must fail.
+        void this.onEnvironmentFrame(nodeId, text).catch(() =>
+          socket.close(1008, 'invalid environment frame'),
+        );
+        return;
+      }
       const parsed = nodeMessage.safeParse(message);
       if (!parsed.success) return socket.close(1008, 'unsupported message');
       const current = parsed.data;
