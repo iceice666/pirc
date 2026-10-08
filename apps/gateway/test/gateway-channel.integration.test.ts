@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import WebSocket from 'ws';
+import { sharedTestNode } from './fixtures/shared-node.js';
+const peers = new WeakMap<WebSocket, ReturnType<typeof sharedTestNode>>();
 import { buildDaemonApp } from '../src/daemon/app.js';
 import { buildNodeApp } from '../src/node/app.js';
 import { NODE_PROTOCOL_VERSION } from '../src/protocol.js';
@@ -130,6 +132,7 @@ it('answers only for sessions of the asking node whose owner is still allowed', 
         headers: { 'x-pirc-node-id': nodeId, authorization: `Bearer ${nodeId.repeat(32)}` },
       });
       sockets.push(socket);
+      peers.set(socket, sharedTestNode(socket));
       socket.once('error', reject);
       socket.once('open', () =>
         socket.send(
@@ -137,6 +140,7 @@ it('answers only for sessions of the asking node whose owner is still allowed', 
             type: 'register',
             role: 'node',
             protocol: NODE_PROTOCOL_VERSION,
+            sharedLink: 1,
             workspaces: [{ id: 'w', displayName: 'W' }],
           }),
         ),
@@ -151,14 +155,13 @@ it('answers only for sessions of the asking node whose owner is still allowed', 
   const ask = (socket: WebSocket, sessionId: string, op: string, args: unknown = {}) =>
     new Promise<any>((resolve) => {
       const requestId = randomUUID();
-      const onMessage = (raw: WebSocket.RawData) => {
-        const message = JSON.parse(raw.toString());
+      const peer = peers.get(socket)!;
+      const off = peer.onMessage((message) => {
         if (message.type !== 'agent_response' || message.requestId !== requestId) return;
-        socket.off('message', onMessage);
+        off();
         resolve(message);
-      };
-      socket.on('message', onMessage);
-      socket.send(JSON.stringify({ type: 'agent_request', requestId, sessionId, op, args }));
+      });
+      void peer.send({ type: 'agent_request', requestId, sessionId, op, args });
     });
   expect(await ask(a, 's1', 'assistant.context')).toMatchObject({
     status: 200,

@@ -284,6 +284,24 @@ export const messageSchema = z.discriminatedUnion('type', [
   z.object({ ...header, type: z.literal('execution.result'), record: recordSchema }).strict(),
   z.object({ ...header, type: z.literal('execution.reply'), record: recordSchema }).strict(),
   z.object({ ...header, type: z.literal('execution.acknowledged') }).strict(),
+  z
+    .object({
+      ...header,
+      type: z.literal('artifact.fetch'),
+      binding: bindingSchema,
+      artifact: artifactSchema,
+      offset: z.number().int().nonnegative(),
+      limit: z.number().int().positive().max(32768),
+    })
+    .strict(),
+  z
+    .object({
+      ...header,
+      type: z.literal('artifact.chunk'),
+      offset: z.number().int().nonnegative(),
+      data: z.string().max(43692),
+    })
+    .strict(),
   z.object({ ...header, type: z.literal('environment.error'), error: errorSchema }).strict(),
 ]);
 export type EnvironmentMessage = z.infer<typeof messageSchema>;

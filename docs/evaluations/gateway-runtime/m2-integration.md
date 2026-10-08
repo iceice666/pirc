@@ -42,6 +42,10 @@ No M3 writer transfer, deployment, legacy import or data deletion is authorized.
 
 ## Still required before marking M2 complete
 
+The list below records gaps at this continuation's commit. The subsequent
+[M2 implementation and Linux validation](m2-completion.md) implements additional
+pieces and records the current remaining acceptance gates; it does not mark M2 done.
+
 1. Extract background/browser/sandbox-exception tool factories into the executor;
    current executable supports core tools only. Preserve their cancellation, job
    ownership, human handoff and approved host/network exception semantics.

@@ -141,15 +141,12 @@ export function pageData(result: Record<string, any>): Record<string, unknown> {
   };
 }
 
-export function browserFeature(): Feature {
-  let lifetime = new AbortController();
-  const channel = (): NodeBrowser => {
-    const browser = processBrowser();
-    if (!browser) throw new BrowserError('unavailable', 'No browser on this node');
-    return browser;
-  };
+export function createBrowserTools(
+  channel: () => Pick<NodeBrowser, 'request'>,
+  lifetime: AbortSignal,
+): Tool[] {
   const call = (op: string, args: Record<string, unknown>, ctx: ToolContext) =>
-    channel().request(op, args, AbortSignal.any([ctx.signal, lifetime.signal])) as Promise<
+    channel().request(op, args, AbortSignal.any([ctx.signal, lifetime])) as Promise<
       Record<string, any>
     >;
 
@@ -395,7 +392,7 @@ export function browserFeature(): Feature {
           );
         await call('handoff', { reason }, ctx);
         const local = new AbortController();
-        const signal = AbortSignal.any([ctx.signal, lifetime.signal, local.signal]);
+        const signal = AbortSignal.any([ctx.signal, lifetime, local.signal]);
         const panel = channel()
           .request('wait_control', {}, signal)
           .then((summary) => ({ kind: 'panel' as const, summary: summary as Record<string, any> }));
@@ -420,7 +417,7 @@ export function browserFeature(): Feature {
           dialog.catch(() => undefined);
         }
         if (outcome.kind !== 'panel')
-          await channel().request('release', {}, AbortSignal.any([ctx.signal, lifetime.signal]));
+          await channel().request('release', {}, AbortSignal.any([ctx.signal, lifetime]));
         if (outcome.kind === 'cancelled')
           return {
             ...text(
@@ -514,9 +511,20 @@ export function browserFeature(): Feature {
     },
   }));
 
+  return wrapped;
+}
+
+export function browserFeature(): Feature {
+  let lifetime = new AbortController();
+  const channel = (): NodeBrowser => {
+    const browser = processBrowser();
+    if (!browser) throw new BrowserError('unavailable', 'No browser on this node');
+    return browser;
+  };
   return {
     name: 'browser',
-    tools: (agent) => (processBrowser() && enabled(agent) ? wrapped : []),
+    tools: (agent) =>
+      processBrowser() && enabled(agent) ? createBrowserTools(channel, lifetime.signal) : [],
     async beforeAgentStart(agent) {
       return processBrowser() && enabled(agent) ? { systemPrompt: BROWSER_PROMPT } : undefined;
     },

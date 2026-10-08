@@ -17,7 +17,7 @@ export const approvalSchema = z
     action: z.enum(['danger', 'network', 'host_exec']),
     expiresAtLocal: z.number().finite(),
     title: z.string().max(1024),
-    message: z.string().max(8192),
+    message: z.string().max(24_000),
   })
   .strict();
 export type EnvironmentApproval = z.infer<typeof approvalSchema>;
@@ -35,6 +35,13 @@ export class ApprovalAuthority {
     }
   >();
   private connected = true;
+  private settled = new Set<(id: string) => void>();
+  onSettled(callback: (id: string) => void): () => void {
+    this.settled.add(callback);
+    return () => {
+      this.settled.delete(callback);
+    };
+  }
   constructor(
     file: string,
     private readonly notify: (approval: EnvironmentApproval) => void,
@@ -54,11 +61,13 @@ export class ApprovalAuthority {
       message: string;
     },
     signal: AbortSignal,
+    remainingAbsoluteMs = intent.budgetMs,
   ): Promise<boolean> {
     signal.throwIfAborted();
     if (!this.connected) return Promise.resolve(false);
     if (this.live.size >= 128) throw new Error('Approval quota exceeded');
-    const lifetime = Math.min(intent.budgetMs, 300_000);
+    const lifetime = Math.min(remainingAbsoluteMs, 300_000);
+    if (lifetime <= 0) return Promise.resolve(false);
     const approval = approvalSchema.parse({
       ...input,
       interactionId: `node-environment-${randomUUID()}`,
@@ -104,6 +113,7 @@ export class ApprovalAuthority {
     this.live.delete(id);
     clearTimeout(entry.timer);
     entry.resolve(approved);
+    for (const callback of this.settled) callback(id);
     return true;
   }
   /**

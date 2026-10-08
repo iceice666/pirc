@@ -51,6 +51,7 @@ import { SENSITIVE_HOME_PATHS, isInside, realResolve } from '../sandbox-policy.j
 import type { TerminalManager } from './terminals.js';
 import { BrowserManager } from './browser.js';
 import { loadRoles, roleBriefs } from '../agent/roles.js';
+import type { EnvironmentInteractions } from './environment-interactions.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
 const createWorkspaceBody = z.union([
@@ -173,7 +174,11 @@ export interface NodeServices {
 export async function buildNodeApp(
   config: NodeConfig,
   /** The daemon link agents reach the gateway through; offline without one. */
-  options: { gateway?: AgentGateway } = {},
+  options: {
+    gateway?: AgentGateway;
+    /** Explicit M2 harness provisioning only; no executor or new loop is started here. */
+    environmentInteractions?: (db: GatewayDatabase, events: EventHub) => EnvironmentInteractions;
+  } = {},
 ): Promise<{ app: FastifyInstance; services: NodeServices }> {
   const app = Fastify({ logger: true, bodyLimit: config.uploadMaxBytes });
   registerImageParsers(app, config.uploadMaxBytes);
@@ -196,6 +201,7 @@ export async function buildNodeApp(
   const recovery = db.recoverStartup();
   app.log.info({ recovery }, 'node startup recovery complete');
   const events = new EventHub(config.eventBufferSize);
+  const environmentInteractions = options.environmentInteractions?.(db, events);
   const writes = new WriteBroker();
   // Filled by the daemon on registration; agents started before that get no providers.
   const models = new ModelStore();
@@ -620,6 +626,24 @@ export async function buildNodeApp(
     const session = claim(request, params.id);
     const body = parse(answerBody, request.body);
     db.validateLease(session.id, body.clientId, body.generation);
+    const candidate = db.getInteraction(params.interactionId);
+    const environment = environmentInteractions;
+    if (environment?.handles(candidate)) {
+      // The gateway authenticates the human owner and control lease before relaying.
+      const interaction = db.claimInteraction(
+        params.interactionId,
+        session.id,
+        session.runnerEpoch,
+        body.answer,
+      );
+      environment.answer(session.id, interaction, {
+        confirmed: 'confirmed' in body.answer && body.answer.confirmed === true,
+      });
+      events.publish(session.id, interaction.runnerEpoch, 'interaction_answered', {
+        interactionId: interaction.id,
+      });
+      return { interactionId: interaction.id, status: 'answered' };
+    }
     const active = runners.get(session.id);
     if (!active || active.epoch !== session.runnerEpoch)
       throw new ApiError(409, 'stale_interaction', 'Interaction belongs to an inactive runner');

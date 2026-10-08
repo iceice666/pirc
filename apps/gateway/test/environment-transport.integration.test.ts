@@ -7,6 +7,8 @@ import { buildDaemonApp } from '../src/daemon/app.js';
 import { startNode } from '../src/node/runtime.js';
 import { EnvironmentFlow } from '../src/environment/flow.js';
 import { ChunkStore } from '../src/environment/chunks.js';
+import { EnvironmentArtifacts } from '../src/environment/artifacts.js';
+import { ArtifactTransfer, modelArtifactImage } from '../src/environment/artifact-transfer.js';
 import { LocalEnvironment, dispatchEnvironment } from '../src/environment/service.js';
 import { RemoteEnvironment } from '../src/environment/remote.js';
 import { ExecutionJournal } from '../src/environment/journal.js';
@@ -18,6 +20,7 @@ test('opt-in environment harness crosses authenticated node WebSocket with indep
   const { app, services } = await buildDaemonApp(daemonConfig());
   const nodeJournal = new ExecutionJournal(path.join(root, 'node.sqlite'));
   const gatewayJournal = new ExecutionJournal(path.join(root, 'gateway.sqlite'));
+  const artifacts = new EnvironmentArtifacts(path.join(root, 'artifacts'));
   let node: Awaited<ReturnType<typeof startNode>> | undefined;
   let nodeFlow: EnvironmentFlow | undefined;
   let gatewayFlow: EnvironmentFlow | undefined;
@@ -68,6 +71,8 @@ test('opt-in environment harness crosses authenticated node WebSocket with indep
           throw new Error('unprovisioned fixture binding');
       }
     };
+    const artifact = await artifacts.put(binding, Buffer.from('image-wire'), 'image/png');
+    const transfer = new ArtifactTransfer({ storage: artifacts, authorize, online: () => true });
     const local = new LocalEnvironment({ nodeId: 'test', journal: nodeJournal, authorize });
     let effects = 0;
     local.provision(descriptor, {
@@ -108,13 +113,15 @@ test('opt-in environment harness crosses authenticated node WebSocket with indep
       testConfig({ nodeId: 'test', nodeToken: 't'.repeat(32), daemonUrl: url }),
       {
         connect: (send) => {
+          local.reconnect();
+          remote!.reconnect();
           nodeFlow = new EnvironmentFlow({
             send,
             append: (...args) => outgoing.append(...args),
             take: (id) => outgoing.take(id),
             discard: (id) => outgoing.discard(id),
             receive: async (message) => {
-              await nodeFlow!.send(await dispatchEnvironment(local, message));
+              await nodeFlow!.send(await dispatchEnvironment(local, message, transfer));
             },
             failed: () => local.disconnect(),
           });
@@ -128,6 +135,13 @@ test('opt-in environment harness crosses authenticated node WebSocket with indep
     );
     await waitFor(() => services.nodes.list().length, 1);
     expect(await remote.describe(binding)).toEqual(descriptor);
+    expect(
+      (
+        await modelArtifactImage(binding, artifact, (request) =>
+          remote!.fetchArtifact(request.binding, request.artifact, request.offset, request.limit),
+        )
+      ).data,
+    ).toBe(Buffer.from('image-wire').toString('base64'));
     const value = {
       binding,
       executionId: randomUUID(),
@@ -148,7 +162,19 @@ test('opt-in environment harness crosses authenticated node WebSocket with indep
     );
     await remote.start(intent);
     expect(effects).toBe(1);
-    expect(gatewayJournal.receipt(binding, intent.executionId)?.terminal?.output).toBe('fixture');
+    const receipt = gatewayJournal.receipt(binding, intent.executionId)!;
+    expect(receipt.terminal?.output).toBe('fixture');
+    // Drop the first terminal ACK: reconnect/status reconciles the original ID,
+    // never a replacement start or repeated side effect.
+    nodeJournal.ack(binding, intent.executionId, receipt.resultDigest!);
+    remote.disconnect();
+    services.nodes.disconnect('test');
+    await waitFor(() => services.nodes.list().length, 0);
+    await waitFor(() => services.nodes.list().length, 1, 7000);
+    expect((await remote.status(binding, intent.executionId)).acknowledged).toBe(true);
+    await remote.start(intent);
+    expect(effects).toBe(1);
+    await remote.ack(binding, intent.executionId, receipt.resultDigest!);
     await local.close();
   } finally {
     remote?.disconnect();
@@ -156,6 +182,7 @@ test('opt-in environment harness crosses authenticated node WebSocket with indep
     nodeFlow?.close();
     await node?.close();
     await app.close();
+    artifacts.close();
     nodeJournal.close();
     gatewayJournal.close();
     rmSync(root, { recursive: true, force: true });

@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import { chmodSync } from 'node:fs';
+import { chmodSync, statSync } from 'node:fs';
 import { canonicalJson, digest, parseJson } from './json.js';
 import {
   bindingSchema,
@@ -47,8 +47,9 @@ interface Grant {
 export class ExecutionJournal {
   private readonly db: Database;
   constructor(
-    file: string,
+    private readonly file: string,
     private readonly now = Date.now,
+    private readonly softCap = 1024 * 1024 * 1024,
   ) {
     this.db = new Database(file, { create: true });
     if (file !== ':memory:') chmodSync(file, 0o600);
@@ -73,6 +74,76 @@ export class ExecutionJournal {
   }
   close(): void {
     this.db.close();
+  }
+  usage(): number {
+    if (this.file === ':memory:')
+      return (
+        Number((this.db.query('PRAGMA page_count').get() as { page_count: number }).page_count) *
+        4096
+      );
+    return [this.file, `${this.file}-wal`].reduce((sum, file) => {
+      try {
+        return sum + statSync(file).size;
+      } catch {
+        return sum;
+      }
+    }, 0);
+  }
+  assertAdmissionCapacity(bytes: number): void {
+    // Reserve terminal-write headroom for every active record, not just intent bytes.
+    const active = (
+      this.db
+        .query(
+          "SELECT count(*) AS n FROM env_executions WHERE json_extract(record,'$.state') IN ('accepted','running')",
+        )
+        .get() as { n: number }
+    ).n;
+    if (this.usage() + bytes + (active + 1) * RESULT_BYTES > this.softCap)
+      throw new Error('Journal soft cap exceeded');
+  }
+  bindings(): Binding[] {
+    return (this.db.query('SELECT binding FROM env_bindings').all() as { binding: string }[]).map(
+      (row) => bindingSchema.parse(parseJson(row.binding, CONTROL_BYTES)),
+    );
+  }
+  refresh(binding: Binding, descriptor: string, policy: string): void {
+    if (![descriptor, policy].every((hash) => /^[a-f0-9]{64}$/.test(hash)))
+      throw new Error('Invalid revision');
+    const grant = this.grant(binding);
+    if (grant.retired) throw new Error('Retired generation');
+    this.db
+      .query('UPDATE env_bindings SET descriptor=?,policy=? WHERE binding=?')
+      .run(descriptor, policy, grant.binding);
+  }
+  expire(binding: Binding, id: string): ExecutionRecord {
+    const record = this.status(binding, id);
+    if (record.state !== 'accepted') return record;
+    return this.finishRecord(record, {
+      state: 'failed',
+      effect: 'not_started',
+      artifacts: [],
+      truncated: false,
+      error: { code: 'expired', message: 'Admission deadline expired' },
+    });
+  }
+  compactRetired(binding: Binding): number {
+    const grant = this.grant(binding);
+    if (!grant.retired) throw new Error('Generation is not fenced');
+    return this.db
+      .transaction(() => {
+        const rows = this.db
+          .query('SELECT * FROM env_executions WHERE binding=?')
+          .all(grant.binding) as Row[];
+        let count = 0;
+        for (const row of rows) {
+          this.reclaim(binding, row.id);
+          if (!this.status(binding, row.id).reclaimed) continue;
+          this.db.query('DELETE FROM env_executions WHERE id=?').run(row.id);
+          count++;
+        }
+        return count;
+      })
+      .immediate();
   }
   private key(binding: Binding): string {
     canonicalJson(binding, CONTROL_BYTES);
@@ -148,11 +219,14 @@ export class ExecutionJournal {
         if (previous) {
           if (
             previous.binding !== grant.binding ||
-            previous.intent !== canonicalJson(intent, REQUEST_BYTES)
+            (previous.intent.startsWith('sha256:')
+              ? previous.intent !== `sha256:${digest(intent, REQUEST_BYTES)}`
+              : previous.intent !== canonicalJson(intent, REQUEST_BYTES))
           )
             throw new Error('Execution ID conflict');
           return { fresh: false, record: this.record(previous) };
         }
+        this.assertAdmissionCapacity(Buffer.byteLength(canonicalJson(intent, REQUEST_BYTES)));
         const now = this.now();
         const record: ExecutionRecord = {
           binding: intent.binding,
@@ -421,6 +495,9 @@ export class ExecutionJournal {
         record.reclaimed = true;
         this.save(record);
         this.db.query('DELETE FROM env_events WHERE id=?').run(id);
+        this.db
+          .query('UPDATE env_executions SET intent=? WHERE id=?')
+          .run(`sha256:${digest(parseJson(row.intent, REQUEST_BYTES), REQUEST_BYTES)}`, id);
         return true;
       })
       .immediate();
@@ -441,6 +518,7 @@ export class ExecutionJournal {
           if (previous.intent !== encoded) throw new Error('Execution ID conflict');
           return;
         }
+        this.assertAdmissionCapacity(Buffer.byteLength(encoded));
         this.db
           .query('INSERT INTO env_outbox(id,binding,intent) VALUES (?,?,?)')
           .run(intent.executionId, grant.binding, encoded);

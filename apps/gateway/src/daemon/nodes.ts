@@ -1,4 +1,5 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { SharedNodeLink } from '../shared-node-link.js';
 import type { WebSocket } from 'ws';
 import { z } from 'zod';
 import {
@@ -143,16 +144,20 @@ export class NodeRegistry {
   /** Opt-in M2 harness only; ordinary sessions do not provision an Environment. */
   onEnvironmentFrame?: (nodeId: string, raw: string) => Promise<void>;
 
+  private links = new Map<WebSocket, SharedNodeLink>();
   sendEnvironmentFrame(nodeId: string, raw: string): Promise<void> {
     const socket = this.socketFor(nodeId);
-    if (Buffer.byteLength(raw) > 65_536 || socket.bufferedAmount > 256 * 1024)
-      return Promise.reject(new Error('Environment link congested'));
-    return new Promise((resolve, reject) =>
-      socket.send(raw, (error) => (error ? reject(error) : resolve())),
-    );
+    if (Buffer.byteLength(raw) > 65_536)
+      return Promise.reject(new Error('Environment frame too large'));
+    const link = this.links.get(socket);
+    if (!link) return Promise.reject(new Error('Node shared link unavailable'));
+    return link.send(raw);
   }
 
-  constructor(private readonly models: ModelStore) {}
+  constructor(
+    private readonly models: ModelStore,
+    private readonly requireSharedLink = false,
+  ) {}
 
   private socketFor(nodeId: string): WebSocket {
     const connection = this.connections.get(nodeId);
@@ -185,9 +190,17 @@ export class NodeRegistry {
       return false;
     }
     try {
-      socket.send(frame, (error) => {
-        if (error) onError?.('failed');
-      });
+      const link = this.links.get(socket);
+      if (link) {
+        if (link.queuedBytes + bytes > NODE_SEND_BUFFER_MAX_BYTES) {
+          onError?.('backpressure');
+          return false;
+        }
+        void link.send(frame).catch(() => onError?.('failed'));
+      } else
+        socket.send(frame, (error) => {
+          if (error) onError?.('failed');
+        });
       return true;
     } catch {
       onError?.('failed');
@@ -314,8 +327,7 @@ export class NodeRegistry {
         socket.close(4001, 'heartbeat timeout');
     }, 5_000);
     deadline.unref();
-    socket.on('message', (raw) => {
-      const text = raw.toString();
+    const dispatch = (text: string) => {
       if (Buffer.byteLength(text) > NODE_FRAME_MAX_BYTES)
         return socket.close(1009, 'message too large');
       let message: unknown;
@@ -339,6 +351,8 @@ export class NodeRegistry {
           new Set(parsed.data.workspaces.map((w) => w.id)).size !== parsed.data.workspaces.length
         )
           return socket.close(1008, 'invalid registration');
+        if (this.requireSharedLink && parsed.data.sharedLink !== 1)
+          return socket.close(PROTOCOL_MISMATCH_CLOSE, 'Shared framing required');
         if (parsed.data.protocol !== NODE_PROTOCOL_VERSION)
           return socket.close(
             PROTOCOL_MISMATCH_CLOSE,
@@ -380,10 +394,25 @@ export class NodeRegistry {
         this.send(socket, {
           type: 'registered',
           protocol: NODE_PROTOCOL_VERSION,
+          ...(parsed.data.sharedLink ? { sharedLink: 1 as const } : {}),
           nodeId,
           models: publicModels(this.models.current),
           mirrors: this.mirrorWatermarks?.(nodeId) ?? {},
         });
+        if (parsed.data.sharedLink)
+          this.links.set(
+            socket,
+            new SharedNodeLink({
+              send: (raw) =>
+                new Promise((resolve, reject) =>
+                  socket.send(raw, (error) => (error ? reject(error) : resolve())),
+                ),
+              receive: (raw) => {
+                if (this.connections.get(nodeId)?.socket === socket) dispatch(raw);
+              },
+              fail: () => socket.close(1008, 'node shared link closed'),
+            }),
+          );
         return;
       }
       if (this.connections.get(nodeId)?.socket !== socket)
@@ -453,8 +482,18 @@ export class NodeRegistry {
           return;
         }
       }
+    };
+    socket.on('message', (raw) => {
+      const text = raw.toString();
+      const link = this.links.get(socket);
+      if (link) {
+        void link.receive(text).catch(() => socket.close(1008, 'invalid node shared frame'));
+      } else dispatch(text);
     });
     socket.on('close', () => {
+      const link = this.links.get(socket);
+      this.links.delete(socket);
+      link?.close();
       this.pending.delete(socket);
       clearInterval(deadline);
       if (this.connections.get(nodeId)?.socket === socket) {
@@ -546,9 +585,14 @@ export class NodeRegistry {
         socket.bufferedAmount + Buffer.byteLength(frame) > INFERENCE_BUFFER_MAX_BYTES
       )
         return false;
-      socket.send(frame, (error) => {
-        if (error) this.cancelInference(nodeId, requestId);
-      });
+      const link = this.links.get(socket);
+      if (link) {
+        if (link.queuedBytes + Buffer.byteLength(frame) > INFERENCE_BUFFER_MAX_BYTES) return false;
+        void link.send(frame).catch(() => this.cancelInference(nodeId, requestId));
+      } else
+        socket.send(frame, (error) => {
+          if (error) this.cancelInference(nodeId, requestId);
+        });
       return true;
     };
     if (!this.onInference) {

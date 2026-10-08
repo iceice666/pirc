@@ -5,6 +5,7 @@
  * `app.inject`; terminal streams are multiplexed on the same connection.
  */
 import { WebSocket } from 'ws';
+import { SharedNodeLink } from '../shared-node-link.js';
 import type { NodeConfig } from '../config.js';
 import { ApiError } from '../errors.js';
 import { legacyModelKeys, legacyRoleConfig } from '../agent/config.js';
@@ -82,12 +83,17 @@ export async function startNode(
   let stopped = false;
   let socket: WebSocket | undefined;
   let registered = false;
+  let sharedLink: SharedNodeLink | undefined;
   let retry: NodeJS.Timeout | undefined;
   let heartbeat: NodeJS.Timeout | undefined;
   const terminals = new Map<string, TerminalConnection>();
 
   const send = (message: NodeToDaemon) => {
-    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+    if (socket?.readyState === WebSocket.OPEN) {
+      const raw = JSON.stringify(message);
+      if (sharedLink) void sharedLink.send(raw).catch(() => socket?.close(1013, 'node send quota'));
+      else socket.send(raw);
+    }
   };
   /**
    * Frames that need a registered link (agent requests, mirrored memory);
@@ -97,7 +103,8 @@ export async function startNode(
     if (!registered || socket?.readyState !== WebSocket.OPEN) return false;
     const frame = JSON.stringify(message);
     if (Buffer.byteLength(frame) > NODE_FRAME_MAX_BYTES) return false;
-    socket.send(frame);
+    if (!sharedLink) return false;
+    void sharedLink.send(frame).catch(() => gateway.disconnect());
     return true;
   };
   const inference = await startNodeInference({
@@ -111,9 +118,12 @@ export async function startNode(
         socket.bufferedAmount + Buffer.byteLength(frame) > INFERENCE_BUFFER_MAX_BYTES
       )
         return false;
-      socket.send(frame, (error) => {
-        if (error) inference.disconnect();
-      });
+      if (
+        !sharedLink ||
+        sharedLink.queuedBytes + Buffer.byteLength(frame) > INFERENCE_BUFFER_MAX_BYTES
+      )
+        return false;
+      void sharedLink.send(frame).catch(() => inference.disconnect());
       return true;
     },
   });
@@ -231,16 +241,16 @@ export async function startNode(
       send({
         type: 'register',
         protocol: NODE_PROTOCOL_VERSION,
+        sharedLink: 1,
         role: config.chat ? 'chat' : 'node',
         workspaces: registeredWorkspaces(),
       });
       heartbeat = setInterval(() => send({ type: 'heartbeat' }), HEARTBEAT_MS);
     });
-    connection.on('message', (raw) => {
+    const dispatch = (text: string) => {
       if (connection !== socket) return;
       let parsed: ReturnType<typeof daemonMessageSchema.safeParse>;
       try {
-        const text = raw.toString();
         const envelope = JSON.parse(text);
         if (envelope?.type === 'environment.frame') {
           if (!registered || !environment) {
@@ -271,19 +281,31 @@ export async function startNode(
         return;
       }
       if (message.type === 'registered') {
+        if (message.sharedLink !== 1) {
+          connection.close(PROTOCOL_MISMATCH_CLOSE, 'Shared framing required');
+          return;
+        }
         registered = true;
+        sharedLink = new SharedNodeLink({
+          send: (raw) =>
+            new Promise((resolve, reject) =>
+              connection.send(raw, (error) => (error ? reject(error) : resolve())),
+            ),
+          receive: (raw) => {
+            if (connection === socket) dispatch(raw);
+          },
+          fail: () => connection.close(1008, 'node shared link closed'),
+        });
         environment?.connect((raw) => {
           if (
             connection !== socket ||
             !registered ||
             connection.readyState !== WebSocket.OPEN ||
             Buffer.byteLength(raw) > 65_536 ||
-            connection.bufferedAmount > 256 * 1024
+            !sharedLink
           )
             return Promise.reject(new Error('Environment link unavailable or congested'));
-          return new Promise((resolve, reject) =>
-            connection.send(raw, (error) => (error ? reject(error) : resolve())),
-          );
+          return sharedLink.send(raw);
         });
         gateway.connect(sendAgentFrame);
         mirror.connect(sendAgentFrame, message.mirrors ?? {});
@@ -337,11 +359,21 @@ export async function startNode(
           mirror.receive(message);
           return;
       }
+    };
+    connection.on('message', (raw) => {
+      if (connection !== socket) return;
+      if (sharedLink)
+        void sharedLink
+          .receive(raw.toString())
+          .catch(() => connection.close(1008, 'invalid node shared frame'));
+      else dispatch(raw.toString());
     });
     connection.on('error', (error) => app.log.warn({ error }, 'node transport failure'));
     connection.on('close', (code, reason) => {
       if (socket !== connection) return;
       registered = false;
+      sharedLink?.close();
+      sharedLink = undefined;
       environment?.disconnect();
       gateway.disconnect();
       mirror.disconnect();
@@ -371,6 +403,8 @@ export async function startNode(
       gateway.disconnect();
       mirror.disconnect();
       await inference.close();
+      sharedLink?.close();
+      sharedLink = undefined;
       socket?.terminate();
       await app.close();
     },

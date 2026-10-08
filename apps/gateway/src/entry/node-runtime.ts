@@ -2,10 +2,19 @@ import { commandFor } from './common.js';
 
 /** Both node roles retain the same agent, team and PTC runtime, and the srt their agents run in. */
 export async function runNodeEntry(role: 'chat' | 'node'): Promise<void> {
-  const command = commandFor(`pirc-${role}`, ['agent', 'ptc-guest', 'srt', 'environment-executor']);
+  const command = commandFor(`pirc-${role}`, [
+    'agent',
+    'ptc-guest',
+    'srt',
+    'environment-executor',
+    'environment-job',
+  ]);
   switch (command) {
     case 'agent':
       await (await import('../agent/main.js')).runAgent(process.argv.slice(2));
+      break;
+    case 'environment-job':
+      await (await import('../environment/job-watchdog.js')).runJobWatchdog();
       break;
     case 'environment-executor':
       await (await import('../environment/executor-main.js')).runEnvironmentExecutor();

@@ -47,6 +47,8 @@ const control = (message: EnvironmentMessage) =>
     'execution.result',
     'execution.reply',
     'execution.event',
+    'artifact.fetch',
+    'artifact.chunk',
   ].includes(message.type);
 
 interface Outgoing {

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Database } from 'bun:sqlite';
 import { chmodSync, mkdirSync } from 'node:fs';
-import { open, readFile, rm } from 'node:fs/promises';
+import { open, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { artifactSchema, bindingSchema, CONTROL_BYTES, type Binding } from './protocol.js';
 import { canonicalJson } from './json.js';
@@ -13,6 +13,7 @@ const SESSION_LIMIT = 256 * 1024 * 1024;
 /** Node-owned opaque artifacts; the directory must be outside executor read/write roots. */
 export class EnvironmentArtifacts {
   private db: Database;
+  private verified = new Map<string, string>();
   constructor(private readonly directory: string) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     const file = path.join(directory, 'index.sqlite');
@@ -113,13 +114,40 @@ export class EnvironmentArtifacts {
       limit > 32 * 1024
     )
       throw new Error('Invalid artifact range');
-    const bytes = await readFile(path.join(this.directory, artifact.artifactId));
-    if (
-      bytes.byteLength !== artifact.bytes ||
-      createHash('sha256').update(bytes).digest('hex') !== artifact.digest
-    )
-      throw new Error('Artifact content mismatch');
-    return bytes.subarray(offset, offset + limit);
+    const file = await open(path.join(this.directory, artifact.artifactId), 'r');
+    try {
+      const stat = await file.stat();
+      if (stat.size !== artifact.bytes) throw new Error('Artifact content mismatch');
+      const revision = `${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
+      if (this.verified.get(artifact.artifactId) !== revision) {
+        const hash = createHash('sha256');
+        const block = Buffer.alloc(32768);
+        for (let cursor = 0; cursor < stat.size; ) {
+          const read = await file.read(
+            block,
+            0,
+            Math.min(block.length, stat.size - cursor),
+            cursor,
+          );
+          if (!read.bytesRead) throw new Error('Artifact content mismatch');
+          hash.update(block.subarray(0, read.bytesRead));
+          cursor += read.bytesRead;
+        }
+        if (hash.digest('hex') !== artifact.digest) throw new Error('Artifact content mismatch');
+        this.verified.set(artifact.artifactId, revision);
+      }
+      const bytes = Buffer.alloc(Math.min(limit, artifact.bytes - offset));
+      let position = 0;
+      while (position < bytes.length) {
+        const read = await file.read(bytes, position, bytes.length - position, offset + position);
+        if (!read.bytesRead) throw new Error('Artifact content mismatch');
+        position += read.bytesRead;
+      }
+      // Whole-transfer consumers verify the digest once, not once per range.
+      return bytes;
+    } finally {
+      await file.close();
+    }
   }
   pin(binding: Binding, artifact: Artifact): void {
     this.lookup(binding, artifact);
@@ -129,6 +157,7 @@ export class EnvironmentArtifacts {
     const row = this.lookup(binding, artifact);
     if (row.pinned) throw new Error('Artifact referenced by transcript');
     // Mark unavailable before unlink so concurrent readers never adopt missing data.
+    this.verified.delete(artifact.artifactId);
     this.db.query('UPDATE artifacts SET ready=0 WHERE id=? AND pinned=0').run(artifact.artifactId);
     await rm(path.join(this.directory, artifact.artifactId), { force: true });
     this.db.query('DELETE FROM artifacts WHERE id=? AND pinned=0').run(artifact.artifactId);

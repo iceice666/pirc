@@ -279,8 +279,12 @@ class PiRunner {
     if (message.type === 'extension_ui_request') {
       // Only the node opens or cancels its own dialogs.
       if (
-        (typeof message.id === 'string' && message.id.startsWith(NODE_DIALOG_PREFIX)) ||
-        (typeof message.targetId === 'string' && message.targetId.startsWith(NODE_DIALOG_PREFIX))
+        (typeof message.id === 'string' &&
+          (message.id.startsWith(NODE_DIALOG_PREFIX) ||
+            message.id.startsWith('node-environment-'))) ||
+        (typeof message.targetId === 'string' &&
+          (message.targetId.startsWith(NODE_DIALOG_PREFIX) ||
+            message.targetId.startsWith('node-environment-')))
       )
         return;
       if (dialogMethods.has(message.method) && typeof message.id === 'string') {

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { canonicalJson } from './json.js';
 import { ExecutionJournal } from './journal.js';
+import type { ArtifactReference } from './artifact-transfer.js';
 import {
   CONTROL_BYTES,
   validateIntent,
@@ -169,6 +170,26 @@ export class RemoteEnvironment implements Environment {
       binding,
       executionId,
     );
+  }
+  async fetchArtifact(
+    binding: Binding,
+    artifact: ArtifactReference,
+    offset: number,
+    limit: number,
+  ): Promise<{ offset: number; data: string }> {
+    this.authorize(binding);
+    const reply = await this.request({
+      version: 1,
+      requestId: randomUUID(),
+      type: 'artifact.fetch',
+      binding,
+      artifact,
+      offset,
+      limit,
+    });
+    if (reply.type !== 'artifact.chunk' || reply.offset !== offset)
+      throw new Error('Invalid artifact reply');
+    return { offset: reply.offset, data: reply.data };
   }
   /** Explicit caller decision AFTER its durable completion sink; never automatic on receipt. */
   async ack(binding: Binding, executionId: string, resultDigest: string): Promise<void> {

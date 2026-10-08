@@ -7,7 +7,11 @@
  */
 import type { Agent } from '../agent.js';
 import type { Feature } from '../feature.js';
-import { processSandboxChannel, SandboxRequestError } from '../sandbox-channel.js';
+import {
+  processSandboxChannel,
+  SandboxRequestError,
+  type SandboxRequester,
+} from '../sandbox-channel.js';
 import { truncateOutput } from '../sandbox.js';
 import { text, typed, type Tool } from '../tools/types.js';
 import { SHELL_RESULT } from '../tools/bash.js';
@@ -31,7 +35,7 @@ When the sandbox blocks something the task needs:
 const unavailable = () =>
   new SandboxRequestError('unavailable', 'This agent is not running inside a node sandbox');
 
-function tools(): Tool[] {
+export function createSandboxTools(channel: () => SandboxRequester | undefined): Tool[] {
   return [
     {
       name: 'sandbox_allow_domains',
@@ -58,11 +62,11 @@ function tools(): Tool[] {
         unrestricted: bool('This agent is not sandboxed at all'),
       }),
       async execute(args, ctx) {
-        const channel = processSandboxChannel();
-        if (!channel) throw unavailable();
+        const requester = channel();
+        if (!requester) throw unavailable();
         // The node asks the human; a ptc script's budget pauses meanwhile.
         const result = await ctx.humanWait(
-          channel.request(
+          requester.request(
             'network',
             { domains: args.domains, reason: args.reason },
             ctx.signal,
@@ -109,8 +113,8 @@ function tools(): Tool[] {
       },
       resultSchema: SHELL_RESULT,
       async execute(args, ctx) {
-        const channel = processSandboxChannel();
-        if (!channel) throw unavailable();
+        const requester = channel();
+        if (!requester) throw unavailable();
         // It may write anywhere; hold the workspace's write lease like bash does.
         await ctx.acquireWrite(ctx.cwd);
         let result: Record<string, any>;
@@ -118,7 +122,7 @@ function tools(): Tool[] {
           // The whole request counts as waiting for the human: the node asks
           // first, and the command it then runs is bounded by its own timeout.
           result = await ctx.humanWait(
-            channel.request(
+            requester.request(
               'exec',
               {
                 command: args.command,
@@ -167,7 +171,7 @@ function tools(): Tool[] {
 }
 
 export function sandboxFeature(): Feature {
-  const list = tools();
+  const list = createSandboxTools(processSandboxChannel);
   const active = (agent: Agent) => agent.config.sandboxed && Boolean(processSandboxChannel());
   return {
     name: 'sandbox',
