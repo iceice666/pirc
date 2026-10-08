@@ -48,6 +48,8 @@ export class LocalEnvironment implements Environment {
     }
   >();
   private queued = new Map<string, Binding>();
+  /** Fenced generations from before a restart: status and ACK only, never start. */
+  private retired = new Set<string>();
   private online = true;
   private faulted = false;
   constructor(
@@ -80,6 +82,25 @@ export class LocalEnvironment implements Environment {
       descriptor.policyRevision,
     );
     this.sessions.set(key, { descriptor: structuredClone(descriptor), executor });
+  }
+  /**
+   * Trusted supervisor only, after a node restart: expose a generation that was
+   * fenced and recovered before the restart so the gateway can reconcile its
+   * outcomes. Nothing can start, cancel or describe through it.
+   */
+  adoptRetired(binding: Binding): void {
+    this.options.authorize(binding);
+    if (binding.nodeId !== this.options.nodeId) throw new Error('Invalid transport node');
+    const key = this.key(binding);
+    if (this.sessions.has(key)) throw new Error('Environment already provisioned');
+    if (!this.options.journal.isRetired(binding)) throw new Error('Generation is not fenced');
+    this.retired.add(key);
+  }
+  /** Bindings whose durable records may be read: live sessions and adopted fenced generations. */
+  private readable(binding: Binding): void {
+    this.options.authorize(binding);
+    if (binding.nodeId !== this.options.nodeId) throw new Error('Invalid transport node');
+    if (!this.retired.has(this.key(binding))) this.session(binding);
   }
   private session(binding: Binding): SessionEnvironment {
     this.options.authorize(binding);
@@ -254,7 +275,7 @@ export class LocalEnvironment implements Environment {
       throw new Error('Policy refresh requires fenced executor-generation replacement');
   }
   async status(binding: Binding, executionId: string): Promise<ExecutionRecord> {
-    this.session(binding);
+    this.readable(binding);
     return this.options.journal.status(binding, executionId);
   }
   async cancel(binding: Binding, executionId: string): Promise<ExecutionRecord> {
@@ -266,7 +287,7 @@ export class LocalEnvironment implements Environment {
     return record;
   }
   async ack(binding: Binding, executionId: string, resultDigest: string): Promise<void> {
-    this.session(binding);
+    this.readable(binding);
     this.options.journal.ack(binding, executionId, resultDigest);
   }
   disconnect(): void {

@@ -20,6 +20,9 @@ import type { Descriptor } from '../environment/protocol.js';
 import { ExecutionBudget } from '../environment/budget.js';
 import { EnvironmentCgroup } from './environment-cgroup.js';
 
+/** IPC and broker work are drained, but descendant cleanup is not independently proven. */
+export class EnvironmentCleanupUnverified extends Error {}
+
 /** Supervisor launches only a PreparedSandbox selected with environmentExecutor:true. */
 export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
   private child: ChildProcessWithoutNullStreams;
@@ -396,7 +399,9 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
     // Abrupt loss with owned jobs is quarantined until independently verified
     // aggregate cleanup; eventual watchdog EOF is not a regrant proof.
     if (this.backgroundOutstanding && !this.backgroundCleaned)
-      throw new Error('Background cleanup unverified; keep binding and write leases quarantined');
+      throw new EnvironmentCleanupUnverified(
+        'Background cleanup unverified; keep binding and write leases quarantined',
+      );
   }
   close(): void {
     if (this.closed) return;

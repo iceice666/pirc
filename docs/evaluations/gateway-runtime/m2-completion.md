@@ -1,8 +1,8 @@
-# Gateway runtime M2: remaining implementation and Linux validation
+# Gateway runtime M2: remaining implementation and platform validation
 
-Status: **additional harness-only implementation verified; M2 is not marked complete**.
-The maintainer authorized the remaining implementation and selected Linux validation
-now, with macOS validation handed off to them. Production loop/runner selection,
+Status: **additional harness-only implementation and macOS sandbox validation verified; M2 is not marked complete**.
+The maintainer authorized the remaining implementation, then handed off the macOS
+validation and recovery decision to the continuation below. Production loop/runner selection,
 M3 session authority, deployment, legacy imports and deletion remain excluded.
 
 ## Added implementation
@@ -50,8 +50,9 @@ M3 session authority, deployment, legacy imports and deletion remain excluded.
 
 ## Remaining acceptance gaps (not optional polish)
 
-1. **macOS real sandbox validation**: no macOS environment was available here. The
-   maintainer chose the handoff below. Linux success is not macOS evidence.
+1. **macOS real sandbox validation**: closed by the 2026-10-08 takeover below.
+   The exact handoff suite ran outside an outer Seatbelt sandbox; Linux results
+   were not used as macOS evidence.
 2. **Platform-specific aggregate background fencing**: an explicitly delegated
    Linux cgroup path now provides a verified aggregate barrier. A trusted bootstrap
    stops before executing any executor code, the supervisor admits its own host PID,
@@ -61,20 +62,153 @@ M3 session authority, deployment, legacy imports and deletion remain excluded.
    any generation that dispatched executor code quarantines the binding
    and retains write leases on shutdown, even if child cleanup was reported; no
    automatic replacement/regrant is permitted without independent aggregate proof. macOS
-   still needs equivalent independent aggregate fencing evidence. Watchdog EOF
+   uses durable quarantine instead of automatic replacement/regrant (the decision
+   below). Automatic macOS aggregate fencing remains unimplemented. Watchdog EOF
    alone establishes eventual cleanup, not permission to regrant.
-3. **Broader full-stack recovery fixtures**: real child death after an effect,
-   duplicate starts, lost result ACK, approval invalidation, and WebSocket/artifact
-   integration are covered individually. A single combined both-end subprocess
-   reconnect/restart/approval-loss scenario and disk-exhaustion OS test remain
-   needed. Disk cap/in-memory fault tests do not prove power-loss behavior.
+3. **Broader full-stack recovery fixtures**: closed by the continuation below,
+   except power loss: the disk-exhaustion test covers a real out-of-space
+   filesystem, not a power cut.
 4. **Descriptor/attachment product lifecycle**: bounded builders, authenticated
    artifact transport and consumer adapters exist; M3/M4 must connect their refresh
    and projections to the authoritative turn/UI lifecycle. This patch does not
    construct production bindings or activate the gateway loop.
 
-These gaps keep all M2 milestone checkboxes open. No paid provider, private history,
-production service, operator cutover or legacy state was used or modified.
+The remaining product lifecycle in gap 4 and unimplemented automatic macOS
+aggregate fencing keep the milestone checkboxes open. The conservative macOS
+recovery policy is implemented, without claiming automatic cleanup evidence.
+No paid provider, private history, production service, operator cutover or legacy
+state was used or modified.
+
+## Continuation (2026-10-08): both-end recovery and disk exhaustion
+
+- **Gap found by the combined fixture:** without aggregate fencing (macOS, or
+  Linux without a delegated cgroup) every generation that dispatched executor
+  code is quarantined on shutdown, and `fenceEnvironment` threw before it
+  recorded unfinished work or retired the generation. A node restart therefore
+  left those executions `running` forever, and the gateway could not reconcile
+  them. Once executor IPC and supervisor broker work are drained, recovery marks
+  unfinished work `unknown` and retires the generation even under quarantine;
+  both only narrow what the old generation may do. The takeover below rejects
+  other shutdown failures instead of treating them as proof that IPC has closed. Write leases stay held, because releasing them is a regrant
+  that still needs aggregate proof. The result reports `quarantined`.
+- `LocalEnvironment.adoptRetired` (supervisor-only, after a restart) exposes a
+  generation that was fenced before the restart for `status` and `ack` only;
+  start, cancel and describe still fail. `ExecutionJournal.isRetired` backs it.
+- `environment-recovery.integration.test.ts` runs one scenario across the
+  authenticated WebSocket with a real executor subprocess (fake srt) and
+  node-owned approvals: an acknowledged effect; a host execution whose pending
+  approval is lost with the link (refused, never run, old interaction
+  unanswerable after reconnect and after the approval store restarts); an effect
+  whose executor dies before reporting; then both the gateway and the node
+  restart from the same journals. Generation 1 is reconciled by status only
+  (`unknown` for the lost result, the earlier ACK survives), every retried
+  generation-1 start is refused, no effect repeats, the write lease stays held
+  under quarantine. The takeover below prevents replacement on that workspace;
+  an unrelated workspace can still run. A tool-level refusal is
+  recorded `failed`/`unknown`, not `not_started`, by design; the absent file is
+  the evidence.
+- `environment-disk-full.test.ts` (opt-in, `PIRC_TEST_ENV_SMALLFS` pointing at
+  a small filesystem the operator mounted) fills the real filesystem after an
+  effect: the terminal write fails, the node faults, no result leaves it, new
+  starts and `reconnect` are refused, and after space is freed and the journal
+  reopens, recovery reports `unknown` and the ID is never admitted again. It
+  passed 4/4 on macOS 15.7.7 against an 8 MiB HFS+ disk image
+  (`hdiutil create -size 8m -fs HFS+`, attached with `-nobrowse`).
+- **macOS run of the handoff tests (not clean evidence):**
+  `PIRC_TEST_SRT=embedded bun test test/environment-*.test.ts test/sandbox-srt.integration.test.ts`
+  passed 66, skipped 2 (Linux cgroup and opt-in disk), on macOS 15.7.7 / Bun
+  1.4.2. That shell itself ran inside another Seatbelt sandbox, which the
+  handoff below rules out, so gap 1 stays open until it is repeated outside one.
+- **macOS aggregate fencing (gap 2), candidate for review, not implemented:**
+  a Seatbelt sandbox cannot be removed and is inherited across `fork`,
+  `setsid` and reparenting. Each generation's srt profile could deny reading
+  one unique marker path; `sandbox_check(pid, "file-read-data", path)` then
+  identifies every process of that generation among the node account's PIDs,
+  which the supervisor stops and kills until none remain. Calling it from Bun
+  FFI works on arm64 only by padding the variadic path to the ninth argument;
+  membership detection of escaped descendants was not verified (the probe
+  needed to run outside the outer sandbox). Kill-by-PID keeps a small PID-reuse
+  race that Linux `cgroup.kill` does not have.
+- Checks: environment suite 66 pass / 2 skip; full gateway suite 1041 pass /
+  113 skip / 0 fail. One earlier full run had timing failures in
+  `relay.integration`, `browser.integration` and
+  `environment-transport.integration` that pass alone (3/3) and in the next full
+  run; `relay.integration` also fails intermittently on the unchanged baseline.
+  The 17 web failures in this environment (`localStorage` undefined in jsdom)
+  are the same on the baseline.
+
+## macOS takeover (2026-10-08): persistent quarantine and clean sandbox evidence
+
+The continuation selects the conservative macOS policy: keep a dispatched
+executor's binding and leased paths quarantined until independent aggregate cleanup
+is established. Do not automatically replace it or release its write leases.
+The marker/`sandbox_check` PID-scanning candidate is not implemented or counted as
+cleanup evidence. No user approval endpoint can clear quarantine.
+
+Two recovery problems were corrected:
+
+- `fenceEnvironment` previously caught every `closeAndWait` error as if IPC and
+  supervisor broker work had drained. Only the explicit
+  `EnvironmentCleanupUnverified` outcome now permits recovery/retirement with an
+  `unknown` result. Descriptor-close/cgroup failures persist a deny fence and
+  propagate their error without classifying unfinished work as recovered.
+- Keeping a session-owned lease in memory allowed the same session's replacement
+  executor to reuse it, and an actual supervisor restart lost the lease entirely.
+  The journal now persists quarantines and their canonical lease roots. New
+  generations on the same session or workspace are refused. WriteBroker denies
+  reacquisition by the quarantined session and ordinary release cannot clear the
+  fence. Trusted startup calls `restoreEnvironmentQuarantines` before provisioning
+  any executor, restoring overlapping-path protection for other sessions as well.
+  Policy refresh uses the same fence and never constructs a replacement on
+  quarantine. This startup integration is exercised by the harness; M3 must use
+  it when adding production supervisor construction.
+
+The combined fixture now creates a fresh WriteBroker after restart, verifies both
+same-session and different-session replacement denial, reconciles the original
+results through status/ACK only, and continues execution only on an unrelated
+workspace. Four supervisor regressions cover drained quarantine, undrained failure,
+independently verified cleanup, and denied policy refresh.
+
+Clean macOS evidence: macOS **15.7.7 (24G720)**, arm64, Bun **1.4.2** and the
+repository's embedded `@anthropic-ai/sandbox-runtime` **0.0.78**. Tests used a
+disposable checkout with isolated dependencies. The ordinary restricted tool
+shell reported `sandbox_check(self, NULL, 0) = 1`; the unrestricted validation
+shell reported **0**, checked before running the real srt tests.
+
+```sh
+cd apps/gateway
+PIRC_TEST_SRT=embedded bun test test/environment-*.test.ts test/sandbox-srt.integration.test.ts
+```
+
+The handed-off changes passed **66 / 0 failed / 2 skipped** (exit 0) outside the
+outer sandbox. After the quarantine fixes, the same suite passed **69 / 0 failed /
+2 skipped** (exit 0); the fourth supervisor regression then passed separately.
+The skipped tests were Linux cgroup fencing and the opt-in disk-exhaustion fixture.
+The disk-exhaustion fixture separately passed **1 / 0 failed** (exit 0) on a newly
+created 8 MiB HFS+ disk image; the image was detached and deleted afterward. This
+establishes ENOSPC recovery, not power-loss safety. Linux cgroup evidence remains
+the earlier Linux run; it was not repeated on macOS.
+
+Final verification with fixed source files passed (exit 0):
+
+```sh
+PIRC_TEST_SRT=embedded NODE_OPTIONS=--no-experimental-webstorage bun run check
+```
+
+Version checks, repository formatting, gateway/web typechecks and all builds
+passed; **1047 gateway tests passed / 111 skipped / 0 failed**, **284 web tests
+passed**, and **121 compiled-role tests passed**. Node **26.8.1** provides a
+built-in `localStorage` stub that interferes with jsdom; the explicit Node option
+lets tests use jsdom's browser storage without changing application code.
+A preliminary full run encountered the existing relay live-view timeout;
+`bun test test/relay.integration.test.ts` then passed **11 / 0 failed**, and the
+final full run above passed. The final checks include all four supervisor
+regressions and the real-srt Environment isolation tests. Skips are not counted as
+verified, and no paid provider was called.
+
+M2 remains harness-only. Descriptor refresh and attachment projections still need
+M3/M4's authoritative turn/UI wiring; the production loop, live deployments,
+legacy histories and user workspaces were not activated or migrated.
 
 ## Validation and review
 

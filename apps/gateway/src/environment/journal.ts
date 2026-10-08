@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { chmodSync, statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import { canonicalJson, digest, parseJson } from './json.js';
 import {
   bindingSchema,
@@ -70,6 +71,9 @@ export class ExecutionJournal {
       CREATE TABLE IF NOT EXISTS env_outbox (
         id TEXT PRIMARY KEY, binding TEXT NOT NULL REFERENCES env_bindings(binding),
         intent TEXT NOT NULL, receipt TEXT
+      );
+      CREATE TABLE IF NOT EXISTS env_quarantines (
+        binding TEXT PRIMARY KEY REFERENCES env_bindings(binding), paths TEXT NOT NULL
       );`);
   }
   close(): void {
@@ -164,6 +168,7 @@ export class ExecutionJournal {
       throw new Error('Invalid revision');
     this.db
       .transaction(() => {
+        this.assertNotQuarantined(binding);
         const old = this.db
           .query('SELECT * FROM env_bindings WHERE binding=?')
           .get(key) as Grant | null;
@@ -178,6 +183,55 @@ export class ExecutionJournal {
           .run(key, descriptor, policy);
       })
       .immediate();
+  }
+  isRetired(binding: Binding): boolean {
+    return Boolean(this.grant(binding).retired);
+  }
+  /** Node supervisor only: persist the fence and retained lease roots before reconciliation. */
+  quarantine(binding: Binding, paths: string[]): void {
+    if (!paths.every((root) => typeof root === 'string' && isAbsolute(root)))
+      throw new Error('Invalid quarantine lease root');
+    const grant = this.grant(binding);
+    this.db
+      .transaction(() => {
+        const previous = this.quarantines().find(
+          (entry) => this.key(entry.binding) === grant.binding,
+        );
+        const roots = [...new Set([...(previous?.paths ?? []), ...paths])];
+        this.db
+          .query('INSERT OR REPLACE INTO env_quarantines(binding,paths) VALUES (?,?)')
+          .run(grant.binding, canonicalJson(roots, CONTROL_BYTES));
+        this.retire(binding);
+      })
+      .immediate();
+  }
+  /** Trusted startup restores these roots before provisioning or admitting any executor. */
+  quarantines(): Array<{ binding: Binding; paths: string[] }> {
+    return (
+      this.db.query('SELECT binding,paths FROM env_quarantines').all() as Array<{
+        binding: string;
+        paths: string;
+      }>
+    ).map((row) => {
+      const paths = parseJson(row.paths, CONTROL_BYTES);
+      if (
+        !Array.isArray(paths) ||
+        !paths.every((root): root is string => typeof root === 'string' && isAbsolute(root))
+      )
+        throw new Error('Invalid persisted quarantine lease roots');
+      return { binding: bindingSchema.parse(parseJson(row.binding, CONTROL_BYTES)), paths };
+    });
+  }
+  private assertNotQuarantined(binding: Binding): void {
+    if (
+      this.quarantines().some(
+        (entry) =>
+          entry.binding.nodeId === binding.nodeId &&
+          (entry.binding.sessionId === binding.sessionId ||
+            entry.binding.workspaceId === binding.workspaceId),
+      )
+    )
+      throw new Error('Environment binding quarantined; aggregate cleanup unverified');
   }
   /** Permanent fence: records remain queryable, but no old starts are admitted. */
   retire(binding: Binding): void {
@@ -213,6 +267,7 @@ export class ExecutionJournal {
       .transaction(() => {
         const grant = this.grant(intent.binding);
         if (grant.retired) throw new Error('Retired generation');
+        this.assertNotQuarantined(intent.binding);
         const previous = this.db
           .query('SELECT * FROM env_executions WHERE id=?')
           .get(intent.executionId) as Row | null;

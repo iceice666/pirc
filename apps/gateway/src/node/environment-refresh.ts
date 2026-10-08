@@ -6,6 +6,8 @@ import type { ExecutionJournal } from '../environment/journal.js';
 import type { SandboxedEnvironmentExecutor } from './environment-executor.js';
 import type { EnvironmentAuthority } from './environment-authority.js';
 import type { WriteBroker } from './write-broker.js';
+import { fenceEnvironment } from './environment-supervisor.js';
+import { EnvironmentCleanupUnverified } from './environment-executor.js';
 
 /** Policy/config refresh is a fenced executor-generation replacement, never a partial setter. */
 export async function replaceEnvironment(options: {
@@ -37,10 +39,8 @@ export async function replaceEnvironment(options: {
   options.authority.invalidate();
   options.approvals.invalidate(options.previous.binding);
   options.receipts.invalidate(options.previous.binding);
-  await options.executor.closeAndWait();
-  options.journal.recover(options.previous.binding);
-  options.journal.retire(options.previous.binding);
-  options.writes.release(options.previous.binding.sessionId);
+  const fenced = await fenceEnvironment({ ...options, binding: options.previous.binding });
+  if (fenced.quarantined) throw new EnvironmentCleanupUnverified(fenced.quarantined);
   const executor = await options.create();
   await executor.started;
   options.environment.provision(options.next, executor);
