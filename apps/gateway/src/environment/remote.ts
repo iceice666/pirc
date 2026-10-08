@@ -171,6 +171,17 @@ export class RemoteEnvironment implements Environment {
       executionId,
     );
   }
+  async pinArtifact(binding: Binding, artifact: ArtifactReference): Promise<void> {
+    this.authorize(binding);
+    const reply = await this.request({
+      version: 1,
+      requestId: randomUUID(),
+      type: 'artifact.pin',
+      binding,
+      artifact,
+    });
+    if (reply.type !== 'artifact.pinned') throw new Error('Invalid artifact pin reply');
+  }
   async fetchArtifact(
     binding: Binding,
     artifact: ArtifactReference,

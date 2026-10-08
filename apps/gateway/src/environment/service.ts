@@ -341,6 +341,11 @@ export async function dispatchEnvironment(
 ): Promise<EnvironmentMessage> {
   const header = { version: 1 as const, requestId: request.requestId };
   switch (request.type) {
+    case 'artifact.pin': {
+      if (!artifacts) throw new Error('Artifact transfer unavailable');
+      artifacts.pin({ binding: request.binding, artifact: request.artifact });
+      return { ...header, type: 'artifact.pinned' };
+    }
     case 'artifact.fetch': {
       if (!artifacts) throw new Error('Artifact transfer unavailable');
       const { version: _version, requestId: _requestId, type: _type, ...input } = request;

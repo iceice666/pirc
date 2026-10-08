@@ -1,5 +1,13 @@
 import { Database } from 'bun:sqlite';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  validateTurnDescriptor,
+  validateTurnInput,
+  type AuthorityTurn,
+  type TurnInput,
+} from './turn-contracts.js';
+import type { Descriptor } from '../environment/protocol.js';
+import type { ImageContent } from '../agent/messages.js';
 import { chmodSync } from 'node:fs';
 import { z } from 'zod';
 import { canonicalJson, digest, parseJson } from '../environment/json.js';
@@ -80,6 +88,14 @@ export class GatewaySessionAuthority {
       CREATE TABLE IF NOT EXISTS runtime_executions (
         id TEXT PRIMARY KEY, session TEXT NOT NULL REFERENCES runtime_sessions(id),
         branch TEXT NOT NULL REFERENCES runtime_branches(id), intent TEXT NOT NULL, receipt TEXT
+      );
+      CREATE TABLE IF NOT EXISTS runtime_turn_sessions (
+        session TEXT PRIMARY KEY REFERENCES runtime_sessions(id)
+      );
+      CREATE TABLE IF NOT EXISTS runtime_turns (
+        id TEXT PRIMARY KEY, session TEXT NOT NULL REFERENCES runtime_sessions(id),
+        branch TEXT NOT NULL REFERENCES runtime_branches(id), input TEXT NOT NULL,
+        descriptor TEXT NOT NULL, entry TEXT NOT NULL
       );
       CREATE UNIQUE INDEX IF NOT EXISTS runtime_tool_identity ON runtime_executions(
         session, json_extract(intent,'$.runId'), json_extract(intent,'$.turnId'),
@@ -299,6 +315,150 @@ export class GatewaySessionAuthority {
       })
       .immediate();
   }
+  /** Durable opt-in before the first async preparation, including failed attempts. */
+  enrollTurns(lease: WriterLease): void {
+    this.db
+      .transaction(() => {
+        const session = this.writable(lease);
+        if (
+          this.db.query('SELECT session FROM runtime_turn_sessions WHERE session=?').get(session.id)
+        )
+          return;
+        if (
+          this.db.query('SELECT id FROM runtime_executions WHERE session=? LIMIT 1').get(session.id)
+        )
+          throw new Error('Cannot enroll a foundation session with executions');
+        this.db.query('INSERT INTO runtime_turn_sessions VALUES (?)').run(session.id);
+      })
+      .immediate();
+  }
+  /** Trusted turn admission; changed configuration requires a separately fenced handoff. */
+  checkTurn(
+    lease: WriterLease,
+    value: TurnInput,
+    descriptor?: Descriptor,
+  ): AuthorityTurn | undefined {
+    const session = this.writable(lease);
+    const input = validateTurnInput(value, lease.binding);
+    const encoded = canonicalJson(input, ENTRY_BYTES);
+    const row = this.db.query('SELECT * FROM runtime_turns WHERE id=?').get(input.turnId) as {
+      session: string;
+      branch: string;
+      input: string;
+      descriptor: string;
+      entry: string;
+    } | null;
+    if (
+      row &&
+      (row.session !== session.id || row.branch !== lease.branchId || row.input !== encoded)
+    )
+      throw new Error('Turn ID conflict');
+    if (descriptor) {
+      descriptor = validateTurnDescriptor(descriptor, lease.binding);
+      const previous = this.db
+        .query('SELECT descriptor FROM runtime_turns WHERE session=? LIMIT 1')
+        .get(session.id) as { descriptor: string } | null;
+      if (
+        previous &&
+        (parseJson(previous.descriptor, ENTRY_BYTES) as unknown as Descriptor).revision !==
+          descriptor.revision
+      )
+        throw new Error('Descriptor changed; fenced generation handoff required');
+    }
+    return row
+      ? {
+          input: validateTurnInput(
+            parseJson(row.input, ENTRY_BYTES) as unknown as TurnInput,
+            lease.binding,
+          ),
+          descriptor: validateTurnDescriptor(parseJson(row.descriptor, ENTRY_BYTES), lease.binding),
+          entry: parseJson(row.entry, ENTRY_BYTES) as unknown as AuthorityEntry,
+          branchId: row.branch,
+        }
+      : undefined;
+  }
+  /** Pins must already be durable on the node. Images and provenance commit with the user entry. */
+  commitTurn(
+    lease: WriterLease,
+    value: TurnInput,
+    descriptor: Descriptor,
+    images: ImageContent[],
+  ): AuthorityTurn {
+    return this.db
+      .transaction(() => {
+        this.enrollTurns(lease);
+        const prior = this.checkTurn(lease, value, descriptor);
+        if (prior) return prior;
+        const input = validateTurnInput(value, lease.binding);
+        descriptor = validateTurnDescriptor(descriptor, lease.binding);
+        if (images.length !== input.attachments.length) throw new Error('Missing turn images');
+        images.forEach((image, index) => {
+          const ref = input.attachments[index]!;
+          const bytes = Buffer.from(image.data, 'base64');
+          if (
+            image.type !== 'image' ||
+            image.mimeType !== ref.mimeType ||
+            bytes.length !== ref.bytes ||
+            bytes.toString('base64') !== image.data ||
+            createHash('sha256').update(bytes).digest('hex') !== ref.digest
+          )
+            throw new Error('Turn image evidence mismatch');
+        });
+        const entry = this.appendTo(lease.binding.sessionId, lease.branchId, {
+          type: 'message',
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: input.text }, ...images],
+            timestamp: this.now(),
+          },
+        });
+        this.db
+          .query('INSERT INTO runtime_turns VALUES (?,?,?,?,?,?)')
+          .run(
+            input.turnId,
+            lease.binding.sessionId,
+            lease.branchId,
+            canonicalJson(input, ENTRY_BYTES),
+            canonicalJson(descriptor, ENTRY_BYTES),
+            canonicalJson(entry, ENTRY_BYTES),
+          );
+        return { input, descriptor, entry, branchId: lease.branchId };
+      })
+      .immediate();
+  }
+  /** Owner-checked ancestry projection, 16 turns/page; never materializes image entries. */
+  turns(sessionId: string, owner: string, branchId?: string, offset = 0) {
+    const session = this.session(sessionId);
+    if (session.owner !== owner) throw new Error('Session owner mismatch');
+    if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Invalid turn page');
+    const branch = this.db
+      .query('SELECT leaf FROM runtime_branches WHERE id=? AND session=?')
+      .get(branchId ?? session.branch, sessionId) as { leaf: string | null } | null;
+    if (!branch) throw new Error('Invalid branch');
+    const rows = this.db
+      .query(
+        `WITH RECURSIVE ancestry(id,parent,depth) AS (
+      SELECT id,json_extract(payload,'$.parentId'),0 FROM runtime_entries WHERE id=? AND session=?
+      UNION ALL
+      SELECT e.id,json_extract(e.payload,'$.parentId'),a.depth+1 FROM runtime_entries e
+      JOIN ancestry a ON e.id=a.parent WHERE e.session=?
+    ) SELECT t.input,t.descriptor,t.branch,a.id AS entryId FROM ancestry a
+      JOIN runtime_turns t ON json_extract(t.entry,'$.id')=a.id AND t.session=?
+      ORDER BY a.depth DESC LIMIT 16 OFFSET ?`,
+      )
+      .all(branch.leaf, sessionId, sessionId, sessionId, offset) as {
+      input: string;
+      descriptor: string;
+      branch: string;
+      entryId: string;
+    }[];
+    return rows.map((row) => ({
+      input: parseJson(row.input, ENTRY_BYTES) as unknown as TurnInput,
+      descriptor: parseJson(row.descriptor, ENTRY_BYTES) as unknown as Descriptor,
+      entryId: row.entryId,
+      branchId: row.branch,
+    }));
+  }
   /** Persist intent/branch before dispatch. Offline admission remains supervisor-owned. */
   persistExecution(lease: WriterLease, value: ExecutionIntent): void {
     const intent = validateIntent(value);
@@ -308,6 +468,32 @@ export class GatewaySessionAuthority {
     this.db
       .transaction(() => {
         const session = this.writable(lease);
+        const turn = this.db
+          .query('SELECT input,descriptor,branch FROM runtime_turns WHERE id=?')
+          .get(intent.turnId) as { input: string; descriptor: string; branch: string } | null;
+        if (
+          !turn &&
+          this.db.query('SELECT session FROM runtime_turn_sessions WHERE session=?').get(session.id)
+        )
+          throw new Error('No authoritative turn');
+        if (turn) {
+          const input = parseJson(turn.input, ENTRY_BYTES) as unknown as TurnInput;
+          const descriptor = validateTurnDescriptor(
+            parseJson(turn.descriptor, ENTRY_BYTES),
+            lease.binding,
+          );
+          if (
+            turn.branch !== lease.branchId ||
+            input.runId !== intent.runId ||
+            descriptor.revision !== intent.descriptorRevision ||
+            descriptor.policyRevision !== intent.policyRevision ||
+            !descriptor.capabilityCatalog.some(
+              (capability) => capability.name === intent.capability,
+            ) ||
+            intent.budgetMs > descriptor.limits.maxBudgetMs
+          )
+            throw new Error('Execution does not match authoritative turn');
+        }
         const old = this.db
           .query('SELECT intent,branch FROM runtime_executions WHERE id=?')
           .get(intent.executionId) as { intent: string; branch: string } | null;

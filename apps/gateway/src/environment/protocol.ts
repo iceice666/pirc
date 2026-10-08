@@ -287,6 +287,15 @@ export const messageSchema = z.discriminatedUnion('type', [
   z
     .object({
       ...header,
+      type: z.literal('artifact.pin'),
+      binding: bindingSchema,
+      artifact: artifactSchema,
+    })
+    .strict(),
+  z.object({ ...header, type: z.literal('artifact.pinned') }).strict(),
+  z
+    .object({
+      ...header,
       type: z.literal('artifact.fetch'),
       binding: bindingSchema,
       artifact: artifactSchema,

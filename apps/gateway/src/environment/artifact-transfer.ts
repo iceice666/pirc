@@ -4,6 +4,10 @@ import { artifactSchema, bindingSchema, type Binding } from './protocol.js';
 import type { EnvironmentArtifacts } from './artifacts.js';
 import type { ImageContent } from '../agent/messages.js';
 
+export const artifactPinSchema = z
+  .object({ binding: bindingSchema, artifact: artifactSchema })
+  .strict();
+
 export const artifactRequestSchema = z
   .object({
     binding: bindingSchema,
@@ -22,6 +26,12 @@ export class ArtifactTransfer {
       online(): boolean;
     },
   ) {}
+  pin(value: unknown): void {
+    const request = artifactPinSchema.parse(value);
+    this.options.authorize(request.binding);
+    if (!this.options.online()) throw new Error('Artifact node offline');
+    this.options.storage.pin(request.binding, request.artifact);
+  }
   async fetch(value: unknown): Promise<{ data: string; offset: number }> {
     const request = artifactRequestSchema.parse(value);
     this.options.authorize(request.binding);

@@ -188,7 +188,9 @@ Acceptance: reject forged workspaces/sessions, symlink escapes, invalid approval
 
 ### M3 — Gateway loop and session authority
 
-**In progress; harness-only authority foundation authorized.** The maintainer selected a first slice for fresh-session authority, writer-generation fencing and transcript/result/ACK coupling, with Linux-first validation and macOS handoff. [M3 authority foundation](../docs/evaluations/gateway-runtime/m3-authority-foundation.md) records scope and evidence. No production routing, existing writer termination, deployment/cutover, legacy import or deletion is authorized; M3 checkboxes remain open until full acceptance.
+**In progress; harness-only authority foundation authorized.** The maintainer selected a first slice for fresh-session authority, writer-generation fencing and transcript/result/ACK coupling, with Linux-first validation and macOS handoff. [M3 authority foundation](../docs/evaluations/gateway-runtime/m3-authority-foundation.md) records scope and evidence. No production routing, existing writer termination, deployment/cutover, legacy import or deletion is authorized; M3 checkboxes remain open until full acceptance. The maintainer subsequently selected the [descriptor/attachment turn lifecycle slice](../docs/evaluations/gateway-runtime/m3-turn-lifecycle.md), explicitly accepting fail-closed descriptor/generation changes while safe generation handoff remains deferred.
+
+- [x] Harness slice: persist validated per-turn descriptors and user image attachments with node pins, restart-safe deduplication and owner-checked offline projections; reject descriptor/generation changes (not full M3 completion).
 
 - [ ] Build the constrained gateway agent runtime and connect it to the existing provider service; streaming directly produces gateway session events.
 - [ ] Move transcripts/context/branches, steering, compaction, model fallback, and model-call paths such as titles and memory.
