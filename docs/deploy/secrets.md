@@ -30,7 +30,7 @@ The gateway rejects tokens shorter than 32 characters and duplicated tokens. The
 - **Never in the Nix store**: not in `services.pirc.models` as a literal `apiKey`, not in `services.pirc.environment`, not in `agentConfig.env`, not in a workspace's `defaults`. Use `environmentFile` (systemd `KEY=value`), `apiKeyFile`, or `apiKeyCommand`.
 - **Never in Git**: `.env`, `DEPLOY.md`-style host notes with tokens, `agent.env`. The repository's `.gitignore` covers `.env*` and `DEPLOY.md`; check yours.
 - **Gateway secrets are the gateway account's**: on NixOS the gateway runs as `pirc-gateway` and the node as `pirc`, so an `apiKeyFile` must be readable by `pirc-gateway` (sops-nix: `owner = "pirc-gateway"`), and the node never receives the gateway's `environmentFile`.
-- **Node secrets stay out of agents' reads**: the sandbox denies `PIRC_STATE_DIR` and the systemd credentials directory by default; if the node's env file lives elsewhere (macOS: `~/.local/pirc-node/agent.env`), add that directory to `sandbox.filesystem.denyRead`.
+- **Node secrets stay out of agents' reads**: the sandbox denies `PIRC_STATE_DIR` and the systemd credentials directory by default; so does `~/.local/pirc-node` (the macOS layout). If the node's env file lives anywhere else, add that directory to `sandbox.filesystem.denyRead`.
 - **Logs**: the gateway logs classification only for provider errors, never bodies or tokens. Do not raise the log level of a proxy so that it logs `Authorization` headers.
 
 ## Rotation

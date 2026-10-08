@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite';
+import { chmodSync, existsSync } from 'node:fs';
 import { z } from 'zod';
 
 export const workspaceCapabilitiesSchema = z
@@ -255,11 +256,21 @@ export interface InteractionRow {
   expiresAt: number;
 }
 
+function restrictMode(file: string): void {
+  if (file.startsWith(':memory:') || !existsSync(file)) return;
+  chmodSync(file, 0o600);
+}
+
 export class GatewayDatabase {
   readonly raw: Database;
   constructor(databasePath: string) {
     this.raw = new Database(databasePath, { create: true });
+    // Push keys, device-token hashes and memory live here. SQLite gives the
+    // WAL and shm files the main file's mode, so this also covers them.
+    restrictMode(databasePath);
     this.raw.exec('PRAGMA journal_mode = WAL');
+    restrictMode(`${databasePath}-wal`);
+    restrictMode(`${databasePath}-shm`);
     this.raw.exec('PRAGMA foreign_keys = ON');
     this.migrate();
   }

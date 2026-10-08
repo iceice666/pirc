@@ -1,9 +1,22 @@
 import { describe, expect, it } from 'bun:test';
+import { chmodSync, statSync, writeFileSync } from 'node:fs';
 import { GatewayDatabase } from '../src/database.js';
 import { payloadHash } from '../src/util.js';
 import { testConfig } from './helpers.js';
 
 describe('GatewayDatabase', () => {
+  it('keeps the database and its WAL files private to the account', () => {
+    const config = testConfig();
+    // A file left world-readable by an earlier version is tightened too.
+    writeFileSync(config.databasePath, '');
+    chmodSync(config.databasePath, 0o644);
+    const db = new GatewayDatabase(config.databasePath);
+    db.syncWorkspaces(config.nodeId, config.workspaces);
+    for (const file of [config.databasePath, `${config.databasePath}-wal`])
+      expect(statSync(file).mode & 0o777).toBe(0o600);
+    db.close();
+  });
+
   it('deduplicates commands, generations leases, and answers interactions once', () => {
     const config = testConfig();
     const db = new GatewayDatabase(config.databasePath);

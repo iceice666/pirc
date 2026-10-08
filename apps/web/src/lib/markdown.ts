@@ -421,7 +421,12 @@ async function renderMermaidBlocks(root: HTMLElement) {
       if (!block.isConnected) continue;
       const figure = document.createElement('div');
       figure.className = 'mermaid-figure';
-      figure.innerHTML = svg;
+      // Mermaid's strict mode sanitizes labels; this also covers the SVG it builds around them.
+      figure.innerHTML = purifier().sanitize(svg, {
+        USE_PROFILES: { html: true, svg: true, svgFilters: true },
+        // HTML labels sit in foreignObject.
+        ADD_TAGS: ['foreignObject'],
+      });
       block.prepend(figure);
       block.dataset.rendered = 'ok';
     } catch (error) {

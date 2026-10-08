@@ -46,10 +46,10 @@ PIRC_STATE_DIR=/Users/alice/.local/pirc-node/state
 PIRC_WORKSPACES=[]                     # add workspaces from the web; they must be under the home
 ```
 
-Because `agent.env` sits outside `PIRC_STATE_DIR`, the sandbox does not hide it by itself. In `~/.config/.pirc/config.json`:
+`agent.env` sits outside `PIRC_STATE_DIR`; the sandbox hides `~/.local/pirc-node` from agents by default. If you keep the env file elsewhere, add its directory to `sandbox.filesystem.denyRead` in `~/.config/.pirc/config.json`:
 
 ```json
-{ "sandbox": { "filesystem": { "denyRead": ["~/.local/pirc-node"] } } }
+{ "sandbox": { "filesystem": { "denyRead": ["~/path/to/env-dir"] } } }
 ```
 
 ## 3. The launchd job

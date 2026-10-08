@@ -11,6 +11,7 @@ import { readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { realResolve } from '../sandbox.js';
+import { BUILD_CREDENTIAL_HOME_PATHS, SENSITIVE_HOME_PATHS } from '../../sandbox-policy.js';
 
 export type Verdict = 'read' | 'write' | 'danger' | 'unknown';
 
@@ -245,21 +246,7 @@ const SCRATCH = [...new Set(['/tmp', '/private/tmp', '/var/tmp', os.tmpdir()])].
 const HARMLESS = new Set(['/dev/null', '/dev/stdout', '/dev/stderr', '/dev/tty']);
 
 /** Credential stores under $HOME; touching them (even reading) needs a human. */
-const SECRET_HOME_PATHS = [
-  '.ssh',
-  '.aws',
-  '.gnupg',
-  '.netrc',
-  '.docker/config.json',
-  '.kube',
-  '.config/gh',
-  '.config/gcloud',
-  '.azure',
-  '.npmrc',
-  '.pypirc',
-  '.git-credentials',
-  '.password-store',
-];
+const SECRET_HOME_PATHS = [...SENSITIVE_HOME_PATHS, ...BUILD_CREDENTIAL_HOME_PATHS];
 const SECRET_SYSTEM_PATHS = ['/etc/shadow', '/etc/sudoers', '/etc/master.passwd'];
 
 class Paths {
