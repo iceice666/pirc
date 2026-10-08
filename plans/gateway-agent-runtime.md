@@ -1,6 +1,6 @@
 # Gateway agent runtime: centralize the agent loop, keep execution environments on nodes
 
-Status: **M1 design review accepted with no legacy JSONL migration; the maintainer has authorized remaining M2 implementation with harness-only activation. Production session routing, M3 writer transfer and deployment cutover remain excluded.** See the [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [reviewed M1 contracts/security design](../docs/evaluations/gateway-runtime/m1-contracts.md). The maintainer's LGTM accepts the contracts, performance gates and initial resource budgets, with the explicit amendment that this breaking change starts fresh sessions instead of migrating old JSONL. Old data is not deleted. The subsequent M2 continuation request authorizes integration work described below, not deployment.
+Status: **M1 design review accepted with no legacy JSONL migration; the maintainer has authorized M2 implementation and the first M3 authority-foundation slice with harness-only activation. Production session routing, live writer transfer and deployment cutover remain excluded.** See the [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [reviewed M1 contracts/security design](../docs/evaluations/gateway-runtime/m1-contracts.md). The maintainer's LGTM accepts the contracts, performance gates and initial resource budgets, with the explicit amendment that this breaking change starts fresh sessions instead of migrating old JSONL. Old data is not deleted. The subsequent M2 continuation request authorizes integration work described below, not deployment.
 
 Code baseline: `17a91a0`. This investigation used static architecture inspection only, with no latency measurements; the benefits below are hypotheses to validate.
 
@@ -187,6 +187,8 @@ Acceptance: maintainer LGTM received for the responsibility boundaries, major be
 Acceptance: reject forged workspaces/sessions, symlink escapes, invalid approvals, and unavailable sandboxes. Test duplicate starts, disconnects, restarts at both ends, lost result acknowledgments, and crashes after side effects, without automatically rerunning side effects.
 
 ### M3 — Gateway loop and session authority
+
+**In progress; harness-only authority foundation authorized.** The maintainer selected a first slice for fresh-session authority, writer-generation fencing and transcript/result/ACK coupling, with Linux-first validation and macOS handoff. [M3 authority foundation](../docs/evaluations/gateway-runtime/m3-authority-foundation.md) records scope and evidence. No production routing, existing writer termination, deployment/cutover, legacy import or deletion is authorized; M3 checkboxes remain open until full acceptance.
 
 - [ ] Build the constrained gateway agent runtime and connect it to the existing provider service; streaming directly produces gateway session events.
 - [ ] Move transcripts/context/branches, steering, compaction, model fallback, and model-call paths such as titles and memory.
