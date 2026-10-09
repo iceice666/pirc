@@ -1,10 +1,23 @@
 import { dlopen, FFIType, ptr } from 'bun:ffi';
 import { workerExecSeccomp } from './seccomp.js';
+import { MacosWorkerInspection, macosWorkerInspectionLibrary } from './macos-worker.js';
 
 let sealed = false;
 /** Initial exec is required by bwrap. Deny all subsequent exec/memfd before any IPC is read. */
 export function sealGatewayWorker(): void {
   if (sealed) return;
+  if (process.platform === 'darwin') {
+    // The trusted native launch hook has already sealed before application entry.
+    // This is a secondary assertion, not supervisor admission authority.
+    const inspection = new MacosWorkerInspection(macosWorkerInspectionLibrary(process.execPath));
+    try {
+      inspection.verify(process.pid, process.execPath);
+      sealed = true;
+      return;
+    } finally {
+      inspection.close();
+    }
+  }
   if (process.platform !== 'linux') throw new Error('Unsupported gateway worker isolation');
   const filter = workerExecSeccomp(process.arch);
   const program = Buffer.alloc(16); // 64-bit Linux sock_fprog: unsigned short len; struct sock_filter *filter

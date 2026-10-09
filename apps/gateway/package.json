@@ -16,7 +16,7 @@
     "test": "bun test",
     "dev:chat": "bun --watch src/entry/chat.ts",
     "build:gateway": "bun run build:clean-legacy && bun build --compile --minify --sourcemap --external chromium-bidi src/entry/gateway.ts --outfile dist/pirc-gateway && bun run build:runtime-worker",
-    "build:runtime-worker": "bun build --compile --minify src/entry/runtime-worker.ts --outfile dist/pirc-runtime-worker",
+    "build:runtime-worker": "bun ../../scripts/build-gateway-worker.ts",
     "build:chat": "bun run build:clean-legacy && bun build --compile --minify --sourcemap --external chromium-bidi src/entry/chat.ts --outfile dist/pirc-chat",
     "build:node": "bun run build:clean-legacy && bun build --compile --minify --sourcemap --external chromium-bidi src/entry/node.ts --outfile dist/pirc-node",
     "start:chat": "bun src/entry/chat.ts",

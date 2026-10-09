@@ -720,7 +720,7 @@ test('opt-in authenticated history/context/recap and artifact routes use fresh a
 });
 
 test.skipIf(!process.env.PIRC_TEST_GATEWAY_WORKER)(
-  'real Linux constrained worker drives the fake-provider coding flow',
+  'real OS-constrained worker drives the fake-provider coding flow',
   async () => {
     const f = await fixture({ realWorker: process.env.PIRC_TEST_GATEWAY_WORKER! });
     expect((await f.runtime.run(f.lease, 'alice', f.input())).state).toBe('completed');

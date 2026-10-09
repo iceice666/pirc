@@ -2,6 +2,7 @@
   lib,
   stdenvNoCC,
   bun,
+  clang,
   makeBinaryWrapper,
   callPackage,
   role ? "gateway",
@@ -75,7 +76,11 @@ in
 stdenvNoCC.mkDerivation {
   pname = executable;
   inherit version src;
-  nativeBuildInputs = [ bun ] ++ lib.optional runsAgents makeBinaryWrapper;
+  nativeBuildInputs = [
+    bun
+  ]
+  ++ lib.optional runsAgents makeBinaryWrapper
+  ++ lib.optional (!runsAgents && stdenvNoCC.hostPlatform.isDarwin) clang;
 
   configurePhase = ''
     runHook preConfigure
@@ -99,7 +104,7 @@ stdenvNoCC.mkDerivation {
     bun build --compile --minify --sourcemap --external chromium-bidi \
       src/entry/${role}.ts --outfile dist/${executable}
     ${lib.optionalString (!runsAgents) ''
-      bun build --compile --minify src/entry/runtime-worker.ts --outfile dist/pirc-runtime-worker
+      bun ../../scripts/build-gateway-worker.ts
     ''}
     cd ../..
     runHook postBuild
@@ -130,6 +135,11 @@ stdenvNoCC.mkDerivation {
       ''
         install -Dm755 apps/gateway/dist/${executable} $out/bin/${executable}
         install -Dm755 apps/gateway/dist/pirc-runtime-worker $out/libexec/pirc/pirc-runtime-worker
+        ${lib.optionalString stdenvNoCC.hostPlatform.isDarwin ''
+          install -Dm755 apps/gateway/dist/pirc-worker-bootstrap.dylib $out/libexec/pirc/pirc-worker-bootstrap.dylib
+          install -Dm755 apps/gateway/dist/pirc-worker-inspection.dylib $out/libexec/pirc/pirc-worker-inspection.dylib
+          install -Dm755 apps/gateway/dist/pirc-worker-watchdog $out/libexec/pirc/pirc-worker-watchdog
+        ''}
         mkdir -p $out/share/pirc/web
         cp -r apps/web/dist/. $out/share/pirc/web/
       ''

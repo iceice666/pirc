@@ -21,7 +21,7 @@ import {
   type SessionActivity,
 } from '../protocol.js';
 import { DaemonAgentGateway } from './agent-gateway.js';
-import { buildNodeApp } from './app.js';
+import { buildNodeApp, type NodeServices } from './app.js';
 import { MemoryMirror } from './memory-mirror.js';
 import { startNodeInference } from './inference.js';
 import { inferenceEventSchema, INFERENCE_BUFFER_MAX_BYTES } from '../inference-wire.js';
@@ -35,6 +35,9 @@ const ACTIVITY_COALESCE_MS = 100;
 const BROWSER_FRAME_BACKLOG_BYTES = 4 * 1024 * 1024;
 
 export interface NodeEnvironmentHarness {
+  /** Trusted opt-in initialization after durable startup fences, before connecting. */
+  initialize?(services: NodeServices): void | Promise<void>;
+  interactions?: NonNullable<Parameters<typeof buildNodeApp>[1]>['environmentInteractions'];
   connect(send: (raw: string) => Promise<void>): void;
   receive(raw: string): Promise<void>;
   disconnect(): void;
@@ -45,7 +48,16 @@ export async function startNode(
   environment?: NodeEnvironmentHarness,
 ): Promise<{ close: () => Promise<void> }> {
   const gateway = new DaemonAgentGateway();
-  const { app, services } = await buildNodeApp(config, { gateway });
+  const { app, services } = await buildNodeApp(config, {
+    gateway,
+    ...(environment?.interactions ? { environmentInteractions: environment.interactions } : {}),
+  });
+  try {
+    await environment?.initialize?.(services);
+  } catch (error) {
+    await app.close();
+    throw error;
+  }
   const mirror = new MemoryMirror(config.workspaceMemoryDir, services.db, config.memoryMirrorMs);
   try {
     const legacy = legacyModelKeys();

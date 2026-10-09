@@ -32,8 +32,12 @@ Dependencies are fetched in a fixed-output derivation (`pirc-gateway.nodeModules
 The fresh-session gateway runtime is currently opt-in and does not replace daemon
 routing. Its Linux launcher needs bubblewrap and ldd in the trusted service
 environment and an explicit worker executable path; unsupported sandbox/platform
-startup fails closed. macOS worker isolation/validation remains pending. See the
-[M2/M3 implementation record](../docs/evaluations/gateway-runtime/m3-linux-runtime.md).
+startup fails closed. Darwin builds the equivalent finite native phase driver plus
+adjacent bootstrap/inspection dylibs and a trusted process-exit watchdog; all four
+assets must stay together. macOS arm64 isolation and resource/lifecycle checks are
+recorded in [M2/M3 platform completion](../docs/evaluations/gateway-runtime/m2-m3-platform-completion.md).
+This does not enable production routing or establish a Darwin Nix build on every
+architecture; other releases must still pass the mandatory kernel admission guards.
 
 Import `nixosModules.default` from the flake and configure `services.pirc`. A complete starting point is in [`example.nix`](example.nix).
 

@@ -9,6 +9,12 @@ and [turn lifecycle](m3-turn-lifecycle.md), retaining their historical platform
 evidence. [The plan](../../../plans/gateway-agent-runtime.md) keeps M4 product
 parity and M5 evaluation/cutover separate.
 
+Continuation: [M2/M3 platform completion](m2-m3-platform-completion.md) closes the
+remaining macOS arm64 worker and combined real-srt recovery implementation gates.
+The earlier [macOS regression validation](m3-macos-validation.md), Linux evidence
+and original handoff below are retained as historical records, not current open
+implementation lists. M4/M5 and production activation remain separate.
+
 ## Runtime and authority
 
 `gateway-runtime/runtime.ts` joins the existing provider service, Environment
@@ -174,15 +180,21 @@ worker isolation suite also passed from a UID 1000/capability-free test namespac
 (**4 tests / 26 assertions**); this is an additional launcher check, not separate
 host-account isolation evidence. No existing timeout/security gate was relaxed.
 
-## Open platform and activation gates
+## Original platform handoff and activation gates
+
+The macOS worker and regression requirements below were subsequently satisfied on
+macOS arm64 in the [platform completion record](m2-m3-platform-completion.md).
+Other architectures/releases and skipped checks are not automatically verified.
 
 - **macOS worker**: currently explicitly unsupported. Equivalent enforced
   filesystem/network/process isolation, resource supervision and real adversarial
   tests must be implemented/validated on macOS before support is claimed.
-- **macOS regression**: run `bun run check` and the new authority, lifecycle,
-  runtime, node-fence and Environment transport suites in a disposable checkout.
-  Revalidate quarantine across a real node restart and approvals/artifacts against
-  real srt. Linux probe flags are not a substitute for a macOS isolation fixture.
+- **macOS regression**: full checks and the new authority, lifecycle, runtime,
+  node-fence and Environment transport suites passed in a disposable macOS checkout;
+  see the [separate platform record](m3-macos-validation.md). Real node-sandbox
+  containment also passed, but combined real-srt approval/artifact recovery and
+  quarantine across node restart remains unverified. Linux probe flags are not a
+  substitute for a macOS worker isolation fixture.
 - **M4/M5**: complete hybrid PTC routing, central capabilities, lifecycle feature
   hooks, teams, memory features and Web/Android presentation remain M4. Performance
   comparisons, backups, operational writer transfer/version negotiation, production

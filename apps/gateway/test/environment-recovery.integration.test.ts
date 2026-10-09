@@ -224,7 +224,7 @@ async function terminal(
   return record;
 }
 
-test('both ends restart around a real executor: effects never replay and lost approvals stay denied', async () => {
+test('fake-srt subprocess recovery across both-end restart: effects never replay and lost approvals stay denied', async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'pirc-env-recovery-'));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
   const cwd = path.join(root, 'workspace');

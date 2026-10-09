@@ -19,6 +19,8 @@ import { validateBroker, type BrokerKind, brokerSchemas } from '../environment/b
 import type { Descriptor } from '../environment/protocol.js';
 import { ExecutionBudget } from '../environment/budget.js';
 import { EnvironmentCgroup } from './environment-cgroup.js';
+import type { EnvironmentArtifacts } from '../environment/artifacts.js';
+import { persistExecutorArtifacts } from './environment-result-artifacts.js';
 
 /** IPC and broker work are drained, but descendant cleanup is not independently proven. */
 export class EnvironmentCleanupUnverified extends Error {}
@@ -31,6 +33,7 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
   private active:
     | {
         intent: ExecutionIntent;
+        terminalReceived?: boolean;
         resolve(value: Terminal): void;
         reject(error: Error): void;
         event(kind: ExecutionEvent['kind'], payload: ExecutionEvent['payload']): void;
@@ -57,6 +60,8 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
       /** Node-resolved trusted config hash, never supplied by a remote intent. */
       projectTrust?: string;
       descriptor?: Descriptor;
+      /** Trusted node-owned storage, outside executor read/write roots. */
+      artifacts?: EnvironmentArtifacts;
       /** Explicit delegated Linux cgroup parent; no automatic system configuration. */
       delegatedCgroup?: string;
       background?(
@@ -142,7 +147,11 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
           return;
         }
         const active = this.active;
-        if (!active || message?.executionId !== active.intent.executionId) {
+        if (
+          !active ||
+          active.terminalReceived ||
+          message?.executionId !== active.intent.executionId
+        ) {
           fail(new Error('Invalid executor reply'));
           return;
         }
@@ -165,9 +174,40 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
             return;
           }
           const terminal = terminalSchema.parse(message.terminal);
-          this.active = undefined;
-          active.cleanup();
-          active.resolve(terminal);
+          if (terminal.artifacts.length)
+            throw new Error('Executor cannot manufacture artifact references');
+          active.terminalReceived = true;
+          // Keep the execution active until returned bytes are durably stored. A
+          // cancellation/crash during ingestion must not publish a terminal result.
+          const storageWork = (
+            options.artifacts
+              ? persistExecutorArtifacts(
+                  terminal,
+                  active.intent.binding,
+                  options.artifacts,
+                  this.operationController?.signal,
+                )
+              : Promise.resolve(terminal)
+          )
+            .then(async (stored) => {
+              if (this.active !== active || !this.healthy) {
+                if (options.artifacts)
+                  await Promise.all(
+                    stored.artifacts.map((artifact) =>
+                      options.artifacts!.removeUnreferenced(active.intent.binding, artifact),
+                    ),
+                  );
+                return;
+              }
+              // A tool may intentionally finish a cancelled wait. Preserve its
+              // terminal semantics; ingestion itself observes cancellation above.
+              this.active = undefined;
+              active.cleanup();
+              active.resolve(stored);
+            })
+            .catch(fail)
+            .finally(() => this.brokerWork.delete(storageWork));
+          this.brokerWork.add(storageWork);
         } else if (message.type === 'executor.progress') {
           active.event('progress', message.output);
         } else if (message.type === 'executor.request') {
