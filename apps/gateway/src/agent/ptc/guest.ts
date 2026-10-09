@@ -38,7 +38,7 @@ let post: (message: GuestMessage) => void = () => undefined;
 let onHostMessage: (message: HostMessage) => void = () => undefined;
 
 /** The guest SDK; `__ptc` is captured and removed before the script runs. */
-const PRELUDE = `(() => {
+export const PTC_GUEST_PRELUDE = `(() => {
   const host = globalThis.__ptc;
   delete globalThis.__ptc;
   const MANIFEST = JSON.parse(host.manifest);
@@ -320,10 +320,10 @@ async function run(start: Extract<HostMessage, { type: 'start' }>): Promise<void
     // Tracked outside the realm, so a script cannot claim it never read the store.
     if (!loaded) outcome.loaded = false;
     else delete outcome.loaded;
-    post({ type: 'done', outcome });
+    post({ type: 'done', outcome, received });
   };
 
-  vm.unwrapResult(vm.evalCode(PRELUDE, 'ptc-sdk.js')).dispose();
+  vm.unwrapResult(vm.evalCode(PTC_GUEST_PRELUDE, 'ptc-sdk.js')).dispose();
   const evaluated = vm.evalCode(`${start.code}\n;__ptc_finish(__ptc_main());`, 'ptc.js');
   if (evaluated.error) {
     const dumped = vm.dump(evaluated.error) as { message?: unknown } | undefined;

@@ -29,6 +29,7 @@ export interface RuntimeWorker {
   close(): Promise<void>;
 }
 
+const liveWorkers = new Set<GatewayWorkerProcess>();
 const requestSchema = z
   .object({ seq: z.number().int().positive(), action: z.enum(['model', 'tools', 'done']) })
   .strict();
@@ -43,6 +44,9 @@ export class GatewayWorkerProcess implements RuntimeWorker {
   private readonly failed = new AbortController();
   private ended = false;
   private driving = false;
+  private readonly guestFrames: unknown[] = [];
+  private guestQueueBytes = 0;
+  private readonly guest: boolean;
   private expectedSeq = 1;
   private sandboxPid: number | undefined;
   private readonly root: string;
@@ -56,7 +60,11 @@ export class GatewayWorkerProcess implements RuntimeWorker {
     bubblewrap?: string;
     macosBootstrap?: string;
     maxRssBytes?: number;
+    /** Trusted launcher selection only, never a model-controlled setting. */
+    protocol?: 'phase' | 'ptc';
   }) {
+    if (liveWorkers.size >= 8) throw new Error('Global worker quota exceeded');
+    this.guest = options.protocol === 'ptc';
     if (process.platform !== 'linux' && process.platform !== 'darwin')
       throw new Error(
         'Gateway runtime isolation unsupported on this platform; no unsandboxed fallback',
@@ -197,7 +205,15 @@ export class GatewayWorkerProcess implements RuntimeWorker {
       this.child.kill(this.macos ? 'SIGTERM' : 'SIGKILL');
       this.wake?.();
     };
-    const parser = new JsonlParser(WORKER_FRAME_BYTES, (value) => {
+    const parser = new JsonlParser(this.guest ? 32 * 1024 * 1024 : WORKER_FRAME_BYTES, (value) => {
+      if (this.guest) {
+        this.guestQueueBytes += Buffer.byteLength(canonicalJson(value, 32 * 1024 * 1024));
+        if (this.guestFrames.length >= 256 || this.guestQueueBytes > 32 * 1024 * 1024)
+          throw new Error('PTC guest queue quota exceeded');
+        this.guestFrames.push(value);
+        this.wake?.();
+        return;
+      }
       const request = requestSchema.parse(value);
       if (request.seq !== this.expectedSeq++ || this.requests.length >= 1)
         throw new Error('Worker IPC sequence/queue violation');
@@ -321,6 +337,8 @@ export class GatewayWorkerProcess implements RuntimeWorker {
         resolve();
       });
     });
+    liveWorkers.add(this);
+    this.child.once('close', () => liveWorkers.delete(this));
     this.monitor = setInterval(() => {
       try {
         if (this.ended) return;
@@ -352,7 +370,63 @@ export class GatewayWorkerProcess implements RuntimeWorker {
     }, 100);
   }
 
+  /** Bounded duplex guest channel using the same kernel admission and lifecycle as phase workers. */
+  async guestChannel(
+    signal: AbortSignal,
+  ): Promise<{ send(message: unknown): Promise<void>; receive(): Promise<unknown> }> {
+    if (!this.guest || this.driving) throw new Error('Invalid guest channel lifecycle');
+    this.driving = true;
+    const abort = () => {
+      this.failure ??= new Error('PTC guest cancelled');
+      this.child.kill(this.macos ? 'SIGTERM' : 'SIGKILL');
+      this.wake?.();
+    };
+    signal.addEventListener('abort', abort, { once: true });
+    this.child.once('close', () => signal.removeEventListener('abort', abort));
+    if (signal.aborted) abort();
+    while (!this.sandboxPid && !this.failure && !this.ended)
+      await new Promise<void>((resolve) => (this.wake = resolve));
+    this.wake = undefined;
+    if (this.failure || this.ended)
+      throw this.failure ?? new Error('PTC guest exited before admission');
+    let writing = false,
+      reading = false;
+    return {
+      send: async (message) => {
+        if (writing || this.failure || this.ended)
+          throw this.failure ?? new Error('PTC guest write unavailable');
+        signal.throwIfAborted();
+        const frame = canonicalJson(message, 32 * 1024 * 1024) + '\n';
+        writing = true;
+        try {
+          await new Promise<void>((resolve, reject) =>
+            this.child.stdin.write(frame, (error) => (error ? reject(error) : resolve())),
+          );
+        } finally {
+          writing = false;
+        }
+      },
+      receive: async () => {
+        if (reading) throw new Error('Concurrent PTC guest read');
+        reading = true;
+        try {
+          while (!this.guestFrames.length && !this.failure && !this.ended)
+            await new Promise<void>((resolve) => (this.wake = resolve));
+          this.wake = undefined;
+          if (this.failure) throw this.failure;
+          if (!this.guestFrames.length) throw new Error('PTC guest exited');
+          const value = this.guestFrames.shift();
+          this.guestQueueBytes -= Buffer.byteLength(canonicalJson(value, 32 * 1024 * 1024));
+          return value;
+        } finally {
+          reading = false;
+        }
+      },
+    };
+  }
+
   async drive(step: (action: WorkerAction) => Promise<WorkerAction>, signal: AbortSignal) {
+    if (this.guest) throw new Error('PTC guest cannot drive phases');
     if (this.driving) throw new Error('Gateway worker already active');
     this.driving = true;
     let expected: WorkerAction = 'model';

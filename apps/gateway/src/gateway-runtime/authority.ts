@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite';
+import { InnerJournal } from '../environment/inner-journal.js';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   validateTurnDescriptor,
@@ -18,6 +19,7 @@ import {
   REQUEST_BYTES,
   RESULT_BYTES,
   validateIntent,
+  intentDigest,
   validateRecordDelivery,
   recordSchema,
   artifactSchema,
@@ -26,7 +28,19 @@ import {
   type ExecutionRecord,
   type Environment,
 } from '../environment/protocol.js';
-import { contextEntriesOf, historyWithOperations } from '../agent/session-store.js';
+import {
+  contextEntriesOf,
+  historyWithOperations,
+  PTC_STORE_ENTRY,
+  OPERATION_ENTRY,
+} from '../agent/session-store.js';
+import {
+  planPtc,
+  validatePtcStore,
+  validatePtcProvenance,
+  type PtcStoreSnapshot,
+  type PtcPlan,
+} from './ptc-contracts.js';
 import {
   ENTRY_BYTES,
   entrySchema,
@@ -54,6 +68,7 @@ interface ExecutionRow {
   branch: string;
   receipt: string | null;
 }
+const recoveredDatabases = new WeakSet<Database>();
 const uuid = z.string().uuid();
 const sameBinding = (a: Binding, b: Binding) =>
   canonicalJson(a, CONTROL_BYTES) === canonicalJson(b, CONTROL_BYTES);
@@ -65,12 +80,16 @@ const sameBinding = (a: Binding, b: Binding) =>
  */
 export class GatewaySessionAuthority {
   private readonly db: Database;
+  private readonly ownsDatabase: boolean;
+  private runtimeRecovered = false;
+  readonly inner: InnerJournal;
   constructor(
-    file: string,
+    file: string | Database,
     private readonly now = Date.now,
   ) {
-    this.db = new Database(file, { create: true });
-    if (file !== ':memory:') chmodSync(file, 0o600);
+    this.ownsDatabase = typeof file === 'string';
+    this.db = typeof file === 'string' ? new Database(file, { create: true }) : file;
+    if (typeof file === 'string' && file !== ':memory:') chmodSync(file, 0o600);
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;
       CREATE TABLE IF NOT EXISTS runtime_sessions (
         id TEXT PRIMARY KEY, owner TEXT NOT NULL, binding TEXT NOT NULL,
@@ -91,6 +110,7 @@ export class GatewaySessionAuthority {
         id TEXT PRIMARY KEY, session TEXT NOT NULL REFERENCES runtime_sessions(id),
         branch TEXT NOT NULL REFERENCES runtime_branches(id), intent TEXT NOT NULL, receipt TEXT
       );
+      CREATE TABLE IF NOT EXISTS runtime_service_turns(id TEXT PRIMARY KEY,session TEXT NOT NULL,branch TEXT NOT NULL,input TEXT NOT NULL,custom_type TEXT NOT NULL,details TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS runtime_turn_sessions (
         session TEXT PRIMARY KEY REFERENCES runtime_sessions(id)
       );
@@ -111,6 +131,11 @@ export class GatewaySessionAuthority {
         execution TEXT PRIMARY KEY, model_tool TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS runtime_acks (execution TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS runtime_ptc_dispatch (
+        execution TEXT PRIMARY KEY REFERENCES runtime_executions(id),
+        snapshot TEXT NOT NULL, plan TEXT NOT NULL, completion TEXT, outcome TEXT
+      );
+      CREATE TABLE IF NOT EXISTS runtime_lifecycle (id TEXT PRIMARY KEY,session TEXT NOT NULL,branch TEXT NOT NULL,intent TEXT NOT NULL,receipt TEXT,acked INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS runtime_contexts (
         branch TEXT PRIMARY KEY, session TEXT NOT NULL, payload TEXT NOT NULL
       );
@@ -129,9 +154,10 @@ export class GatewaySessionAuthority {
         session, json_extract(intent,'$.runId'), json_extract(intent,'$.turnId'),
         json_extract(intent,'$.toolCallId')
       );`);
+    this.inner = new InnerJournal(this.db);
   }
   close(): void {
-    this.db.close();
+    if (this.ownsDatabase) this.db.close();
   }
   /** Explicit legacy inventory, never reads a legacy transcript. */
   blockLegacy(ids: string[]): void {
@@ -270,8 +296,73 @@ export class GatewaySessionAuthority {
     const entries = this.chain(sessionId, branchId ?? session.branch);
     return { entries, history: historyWithOperations(entries), context: contextEntriesOf(entries) };
   }
+  /** Bounded branch custom-state reader; never loads image-bearing history. */
+  customEntries(
+    sessionId: string,
+    owner: string,
+    branchId: string,
+    customType: string,
+    limit = 256,
+    latestOnly = false,
+  ): AuthorityEntry[] {
+    this.assertOwner(sessionId, owner);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10_000)
+      throw new Error('Invalid custom entry limit');
+    const branch = this.db
+      .query('SELECT leaf FROM runtime_branches WHERE id=? AND session=?')
+      .get(branchId, sessionId) as { leaf: string | null } | null;
+    if (!branch) throw new Error('Invalid branch');
+    const rows = this.db
+      .query(
+        `WITH RECURSIVE ancestry(id,parent,depth) AS (
+      SELECT id,json_extract(payload,'$.parentId'),0 FROM runtime_entries WHERE id=? AND session=?
+      UNION ALL SELECT e.id,json_extract(e.payload,'$.parentId'),a.depth+1 FROM runtime_entries e JOIN ancestry a ON e.id=a.parent WHERE e.session=?
+    ) SELECT e.id,length(CAST(e.payload AS BLOB)) AS bytes FROM ancestry a JOIN runtime_entries e ON e.id=a.id WHERE json_extract(e.payload,'$.type')='custom' AND json_extract(e.payload,'$.customType')=? ORDER BY a.depth LIMIT ?`,
+      )
+      .all(branch.leaf, sessionId, sessionId, customType, latestOnly ? 1 : limit + 1) as {
+      id: string;
+      bytes: number;
+    }[];
+    if (rows.length > limit || rows.reduce((total, row) => total + row.bytes, 0) > ENTRY_BYTES)
+      throw new Error('Custom state history quota exceeded');
+    return rows.reverse().map(
+      (row) =>
+        parseJson(
+          (
+            this.db.query('SELECT payload FROM runtime_entries WHERE id=?').get(row.id) as {
+              payload: string;
+            }
+          ).payload,
+          ENTRY_BYTES,
+        ) as unknown as AuthorityEntry,
+    );
+  }
+  sessionOwner(sessionId: string): string {
+    return this.session(sessionId).owner;
+  }
   assertOwner(sessionId: string, owner: string): void {
     if (this.session(sessionId).owner !== owner) throw new Error('Session owner mismatch');
+  }
+  /** OM inputs are bounded text-only branch entries; model image data never materializes here. */
+  memoryBranch(sessionId: string, owner: string, branchId: string): AuthorityEntry[] {
+    this.assertOwner(sessionId, owner);
+    const branch = this.db
+      .query('SELECT leaf FROM runtime_branches WHERE id=? AND session=?')
+      .get(branchId, sessionId) as { leaf: string | null } | null;
+    if (!branch) throw new Error('Invalid branch');
+    const rows = this.db
+      .query(
+        `WITH RECURSIVE ancestry(id,parent,depth) AS (SELECT id,json_extract(payload,'$.parentId'),0 FROM runtime_entries WHERE id=? AND session=? UNION ALL SELECT e.id,json_extract(e.payload,'$.parentId'),a.depth+1 FROM runtime_entries e JOIN ancestry a ON e.id=a.parent WHERE e.session=?) SELECT CASE WHEN json_extract(e.payload,'$.type')='message' AND json_type(e.payload,'$.message.content')='array' THEN json_set(e.payload,'$.message.content',json((SELECT json_group_array(json(value)) FROM json_each(e.payload,'$.message.content') WHERE json_extract(value,'$.type')!='image'))) ELSE e.payload END AS payload FROM ancestry a JOIN runtime_entries e ON e.id=a.id ORDER BY a.depth LIMIT 513`,
+      )
+      .all(branch.leaf, sessionId, sessionId) as { payload: string }[];
+    if (
+      rows.length > 512 ||
+      rows.reduce((sum, row) => sum + Buffer.byteLength(row.payload), 0) > ENTRY_BYTES
+    )
+      throw new Error('OM branch input quota exceeded');
+    return rows
+      .reverse()
+      .map((row) => parseJson(row.payload, ENTRY_BYTES) as unknown as AuthorityEntry);
   }
   /** Latest branch-inherited settings without loading image-bearing history. */
   settings(sessionId: string, owner: string, branchId?: string) {
@@ -307,6 +398,242 @@ export class GatewaySessionAuthority {
       model: model ? { provider: model.provider!, id: model.modelId! } : undefined,
       thinking: rows.find((row) => row.type === 'thinking_level_change')?.thinking ?? undefined,
       title: rows.find((row) => row.type === 'session_info')?.title ?? undefined,
+    };
+  }
+  repositorySource(
+    sessionId: string,
+    owner: string,
+    branchId: string,
+  ): { nodeId: string; repositoryKey: string | undefined } {
+    this.assertOwner(sessionId, owner);
+    const session = this.session(sessionId),
+      branch = this.db
+        .query('SELECT leaf FROM runtime_branches WHERE id=? AND session=?')
+        .get(branchId, sessionId) as { leaf: string | null } | null;
+    if (!branch) throw new Error('Invalid source branch');
+    const row = this.db
+      .query(
+        `WITH RECURSIVE ancestry(id,parent,depth) AS (SELECT id,json_extract(payload,'$.parentId'),0 FROM runtime_entries WHERE id=? AND session=? UNION ALL SELECT e.id,json_extract(e.payload,'$.parentId'),a.depth+1 FROM runtime_entries e JOIN ancestry a ON e.id=a.parent WHERE e.session=?) SELECT t.descriptor FROM ancestry a JOIN runtime_turns t ON json_extract(t.entry,'$.id')=a.id AND t.session=? ORDER BY a.depth LIMIT 1`,
+      )
+      .get(branch.leaf, sessionId, sessionId, sessionId) as { descriptor: string } | null;
+    const binding = bindingSchema.parse(parseJson(session.binding, CONTROL_BYTES));
+    return {
+      nodeId: binding.nodeId,
+      repositoryKey: row
+        ? validateTurnDescriptor(parseJson(row.descriptor, ENTRY_BYTES), binding).repositoryKey
+        : undefined,
+    };
+  }
+  recallEntries(
+    sessionId: string,
+    owner: string,
+    branchId: string,
+    ids: readonly string[],
+  ): AuthorityEntry[] {
+    this.assertOwner(sessionId, owner);
+    if (ids.length > 64) throw new Error('Recall quota exceeded');
+    const out: AuthorityEntry[] = [];
+    let bytes = 0;
+    for (const id of ids) {
+      uuid.parse(id);
+      if (!this.contains(sessionId, branchId, id, 'message')) continue;
+      const row = this.db
+        .query(
+          "SELECT CASE WHEN json_type(payload,'$.message.content')='array' THEN json_set(payload,'$.message.content',json((SELECT json_group_array(json(value)) FROM json_each(payload,'$.message.content') WHERE json_extract(value,'$.type')!='image'))) ELSE payload END AS payload FROM runtime_entries WHERE id=? AND session=?",
+        )
+        .get(id, sessionId) as { payload: string };
+      bytes += Buffer.byteLength(row.payload);
+      if (bytes > 512 * 1024) throw new Error('Recall byte quota exceeded');
+      out.push(parseJson(row.payload, ENTRY_BYTES) as unknown as AuthorityEntry);
+    }
+    return out;
+  }
+  userEvidence(
+    sessionId: string,
+    owner: string,
+    entryIds: readonly string[],
+    quote: string,
+  ): string[] {
+    this.assertOwner(sessionId, owner);
+    if (entryIds.length < 1 || entryIds.length > 64 || quote.length > 1000)
+      throw new Error('User evidence quota exceeded');
+    const session = this.session(sessionId),
+      ids: string[] = [];
+    for (const id of entryIds) {
+      uuid.parse(id);
+      if (!this.contains(sessionId, session.branch, id, 'message')) continue;
+      const row = this.db
+        .query(
+          `SELECT json_extract(payload,'$.message.role') AS role,
+        CASE WHEN json_type(payload,'$.message.content')='text' THEN substr(json_extract(payload,'$.message.content'),1,1048576)
+        ELSE substr((SELECT group_concat(json_extract(value,'$.text'),'') FROM json_each(payload,'$.message.content') WHERE json_extract(value,'$.type')='text'),1,1048576) END AS text
+        FROM runtime_entries WHERE id=? AND session=?`,
+        )
+        .get(id, sessionId) as { role: string; text: string | null } | null;
+      if (row?.role !== 'user') continue;
+      if (row.text?.includes(quote)) ids.push(id);
+    }
+    return ids;
+  }
+  humanTurn(intent: ExecutionIntent): boolean {
+    this.bound(intent.binding);
+    const row = this.db
+      .query(
+        "SELECT json_extract(entry,'$.message.role') AS role FROM runtime_turns WHERE id=? AND session=?",
+      )
+      .get(intent.turnId, intent.binding.sessionId) as { role: string } | null;
+    return row?.role === 'user';
+  }
+  serviceTurnRun(sessionId: string, owner: string, turnId: string): RuntimeRun | undefined {
+    this.assertOwner(sessionId, owner);
+    uuid.parse(turnId);
+    return (
+      (this.db
+        .query(
+          'SELECT r.* FROM runtime_runs r JOIN runtime_service_turns t ON t.id=r.turn AND t.session=r.session WHERE r.session=? AND t.id=?',
+        )
+        .get(sessionId, turnId) as RuntimeRun | null) ?? undefined
+    );
+  }
+  serviceMessages(
+    sessionId: string,
+    owner: string,
+  ): Array<{ customType: string; details: unknown; turnId: string }> {
+    this.assertOwner(sessionId, owner);
+    const rows = this.db
+      .query(
+        'SELECT id,custom_type,details FROM runtime_service_turns WHERE session=? ORDER BY rowid DESC LIMIT 256',
+      )
+      .all(sessionId) as { id: string; custom_type: string; details: string }[];
+    if (rows.reduce((sum, row) => sum + Buffer.byteLength(row.details), 0) > ENTRY_BYTES)
+      throw new Error('Service state projection quota exceeded');
+    return rows.map((row) => ({
+      customType: row.custom_type,
+      details: parseJson(row.details, 65536),
+      turnId: row.id,
+    }));
+  }
+  runAnswer(sessionId: string, owner: string, runId: string): string {
+    this.assertOwner(sessionId, owner);
+    const row = this.db
+      .query(
+        "SELECT substr((SELECT group_concat(json_extract(value,'$.text'),'') FROM json_each(e.payload,'$.message.content') WHERE json_extract(value,'$.type')='text'),1,80000) AS text FROM runtime_model_calls m JOIN runtime_runs r ON r.id=m.run JOIN runtime_entries e ON e.id=m.entry WHERE r.session=? AND r.id=? AND m.state='completed' AND json_extract(e.payload,'$.message.stopReason') NOT IN ('toolUse','error','aborted') ORDER BY m.rowid DESC LIMIT 1",
+      )
+      .get(sessionId, runId) as { text: string | null } | null;
+    return row?.text ?? '';
+  }
+  serviceRun(
+    sessionId: string,
+    owner: string,
+    customType: string,
+    details: unknown,
+  ): RuntimeRun | undefined {
+    this.assertOwner(sessionId, owner);
+    const metadata = canonicalJson(details, 65536);
+    const row = this.db
+      .query(
+        'SELECT r.* FROM runtime_service_turns s JOIN runtime_runs r ON r.turn=s.id WHERE s.session=? AND s.custom_type=? AND s.details=? ORDER BY r.rowid DESC LIMIT 1',
+      )
+      .get(sessionId, customType, metadata) as RuntimeRun | null;
+    return row ?? undefined;
+  }
+  latestRun(sessionId: string, owner: string, branchId?: string): RuntimeRun | undefined {
+    this.assertOwner(sessionId, owner);
+    const session = this.session(sessionId);
+    return (
+      (this.db
+        .query(
+          'SELECT * FROM runtime_runs WHERE session=? AND branch=? ORDER BY rowid DESC LIMIT 1',
+        )
+        .get(sessionId, branchId ?? session.branch) as RuntimeRun | null) ?? undefined
+    );
+  }
+  watermark(sessionId: string, owner: string, branchId?: string): number {
+    this.assertOwner(sessionId, owner);
+    const session = this.session(sessionId);
+    return (
+      this.db
+        .query(
+          'SELECT COALESCE(MAX(seq),0) AS seq FROM runtime_outbox WHERE session=? AND branch=?',
+        )
+        .get(sessionId, branchId ?? session.branch) as { seq: number }
+    ).seq;
+  }
+  /** Newest bounded page for client snapshots; old history remains explicitly paginated. */
+  recentHistory(sessionId: string, owner: string, branchId?: string) {
+    this.assertOwner(sessionId, owner);
+    const session = this.session(sessionId),
+      branch = branchId ?? session.branch;
+    const row = this.db
+      .query('SELECT leaf FROM runtime_branches WHERE id=? AND session=?')
+      .get(branch, sessionId) as { leaf: string | null } | null;
+    if (!row) throw new Error('Invalid branch');
+    const headers = this.db
+      .query(
+        `WITH RECURSIVE ancestry(id,parent,depth) AS (SELECT id,json_extract(payload,'$.parentId'),0 FROM runtime_entries WHERE id=? AND session=? UNION ALL SELECT e.id,json_extract(e.payload,'$.parentId'),a.depth+1 FROM runtime_entries e JOIN ancestry a ON e.id=a.parent WHERE e.session=?) SELECT e.id,length(CAST(e.payload AS BLOB)) AS bytes FROM ancestry a JOIN runtime_entries e ON e.id=a.id ORDER BY a.depth LIMIT 33`,
+      )
+      .all(row.leaf, sessionId, sessionId) as { id: string; bytes: number }[];
+    let bytes = 0;
+    const entries: AuthorityEntry[] = [];
+    for (const header of headers.slice(0, 32)) {
+      if (bytes + header.bytes > ENTRY_BYTES) break;
+      bytes += header.bytes;
+      entries.push(
+        parseJson(
+          (
+            this.db.query('SELECT payload FROM runtime_entries WHERE id=?').get(header.id) as {
+              payload: string;
+            }
+          ).payload,
+          ENTRY_BYTES,
+        ) as unknown as AuthorityEntry,
+      );
+    }
+    return {
+      history: historyWithOperations(entries.reverse()),
+      historyPage: {
+        truncated: headers.length > entries.length,
+        loadedEntries: entries.length,
+        olderAvailable: headers.length > entries.length,
+        olderCursor: headers.length > entries.length ? (entries[0]?.id ?? null) : null,
+      },
+    };
+  }
+  olderHistory(sessionId: string, owner: string, branchId: string, before: string) {
+    this.assertOwner(sessionId, owner);
+    uuid.parse(before);
+    if (!this.contains(sessionId, branchId, before))
+      throw new Error('History cursor outside branch');
+    const current = this.db
+      .query(
+        "SELECT json_extract(payload,'$.parentId') AS parent FROM runtime_entries WHERE id=? AND session=?",
+      )
+      .get(before, sessionId) as { parent: string | null };
+    const rows = this.db
+      .query(
+        `WITH RECURSIVE ancestry(id,parent,depth) AS (SELECT id,json_extract(payload,'$.parentId'),0 FROM runtime_entries WHERE id=? AND session=? UNION ALL SELECT e.id,json_extract(e.payload,'$.parentId'),a.depth+1 FROM runtime_entries e JOIN ancestry a ON e.id=a.parent WHERE e.session=?) SELECT e.id,length(CAST(e.payload AS BLOB)) AS bytes FROM ancestry a JOIN runtime_entries e ON e.id=a.id ORDER BY a.depth LIMIT 33`,
+      )
+      .all(current.parent, sessionId, sessionId) as { id: string; bytes: number }[];
+    let bytes = 0;
+    const entries: AuthorityEntry[] = [];
+    for (const row of rows.slice(0, 32)) {
+      if (bytes + row.bytes > ENTRY_BYTES) break;
+      bytes += row.bytes;
+      entries.push(
+        parseJson(
+          (
+            this.db.query('SELECT payload FROM runtime_entries WHERE id=?').get(row.id) as {
+              payload: string;
+            }
+          ).payload,
+          ENTRY_BYTES,
+        ) as unknown as AuthorityEntry,
+      );
+    }
+    const cursor = rows.length > entries.length ? (entries.at(-1)?.id ?? null) : null;
+    return {
+      history: historyWithOperations(entries.reverse()),
+      historyPage: { olderAvailable: cursor !== null, olderCursor: cursor },
     };
   }
   /** At most 32 entries/8 MiB per history page, measured before fetching payloads. */
@@ -529,6 +856,58 @@ export class GatewaySessionAuthority {
         }
       : undefined;
   }
+  /** Trusted supervisor ingress only; public TurnInput schema carries no origin fields. */
+  enrollServiceTurn(
+    lease: WriterLease,
+    value: TurnInput,
+    customType: string,
+    details: unknown,
+  ): void {
+    const input = validateTurnInput(value, lease.binding);
+    if (input.attachments.length || !customType || customType.length > 100)
+      throw new Error('Invalid service turn');
+    const encoded = canonicalJson(input, ENTRY_BYTES),
+      metadata = canonicalJson(details, 65536);
+    this.db
+      .transaction(() => {
+        this.writable(lease);
+        const old = this.db
+          .query(
+            'SELECT session,branch,input,custom_type,details FROM runtime_service_turns WHERE id=?',
+          )
+          .get(input.turnId) as {
+          session: string;
+          branch: string;
+          input: string;
+          custom_type: string;
+          details: string;
+        } | null;
+        if (old) {
+          if (
+            old.session !== lease.binding.sessionId ||
+            old.branch !== lease.branchId ||
+            old.input !== encoded ||
+            old.custom_type !== customType ||
+            old.details !== metadata
+          )
+            throw new Error('Service turn identity conflict');
+          return;
+        }
+        if (this.db.query('SELECT id FROM runtime_turns WHERE id=?').get(input.turnId))
+          throw new Error('Turn already admitted');
+        this.db
+          .query('INSERT INTO runtime_service_turns VALUES (?,?,?,?,?,?)')
+          .run(
+            input.turnId,
+            lease.binding.sessionId,
+            lease.branchId,
+            encoded,
+            customType,
+            metadata,
+          );
+      })
+      .immediate();
+  }
   /** Pins must already be durable on the node. Images and provenance commit with the user entry. */
   commitTurn(
     lease: WriterLease,
@@ -556,13 +935,33 @@ export class GatewaySessionAuthority {
           )
             throw new Error('Turn image evidence mismatch');
         });
+        const service = this.db
+          .query(
+            'SELECT input,custom_type,details FROM runtime_service_turns WHERE id=? AND session=? AND branch=?',
+          )
+          .get(input.turnId, lease.binding.sessionId, lease.branchId) as {
+          input: string;
+          custom_type: string;
+          details: string;
+        } | null;
+        if (service && service.input !== canonicalJson(input, ENTRY_BYTES))
+          throw new Error('Service turn arguments conflict');
         const entry = this.appendTo(lease.binding.sessionId, lease.branchId, {
           type: 'message',
-          message: {
-            role: 'user',
-            content: [{ type: 'text', text: input.text }, ...images],
-            timestamp: this.now(),
-          },
+          message: service
+            ? {
+                role: 'custom',
+                customType: service.custom_type,
+                content: input.text,
+                display: true,
+                details: parseJson(service.details, 65536),
+                timestamp: this.now(),
+              }
+            : {
+                role: 'user',
+                content: [{ type: 'text', text: input.text }, ...images],
+                timestamp: this.now(),
+              },
         });
         this.db
           .query('INSERT INTO runtime_turns VALUES (?,?,?,?,?,?)')
@@ -612,6 +1011,250 @@ export class GatewaySessionAuthority {
       branchId: row.branch,
     }));
   }
+  /** Branch ancestry is authoritative, including at an explicitly selected fork boundary. */
+  ptcStore(sessionId: string, owner: string, branchId?: string): PtcStoreSnapshot {
+    const session = this.session(sessionId);
+    if (session.owner !== owner) throw new Error('Session owner mismatch');
+    return this.storeSnapshot(sessionId, branchId ?? session.branch);
+  }
+  private storeSnapshot(sessionId: string, branchId: string): PtcStoreSnapshot {
+    const branch = this.db
+      .query('SELECT leaf FROM runtime_branches WHERE id=? AND session=?')
+      .get(branchId, sessionId) as { leaf: string | null } | null;
+    if (!branch) throw new Error('Invalid branch');
+    // Walk IDs in SQLite, stopping at the nearest store. Never materialize old images,
+    // messages or previous multi-megabyte snapshots in the trusted supervisor.
+    const row = this.db
+      .query(
+        `WITH RECURSIVE ancestry(id,parent,store) AS (
+      SELECT id,json_extract(payload,'$.parentId'),COALESCE(json_extract(payload,'$.type')='custom' AND json_extract(payload,'$.customType')=?,0)
+        FROM runtime_entries WHERE id=? AND session=?
+      UNION ALL
+      SELECT e.id,json_extract(e.payload,'$.parentId'),COALESCE(json_extract(e.payload,'$.type')='custom' AND json_extract(e.payload,'$.customType')=?,0)
+        FROM runtime_entries e JOIN ancestry a ON e.id=a.parent WHERE e.session=? AND a.store=0
+    ) SELECT e.payload FROM ancestry a JOIN runtime_entries e ON e.id=a.id WHERE a.store=1 LIMIT 1`,
+      )
+      .get(PTC_STORE_ENTRY, branch.leaf, sessionId, PTC_STORE_ENTRY, sessionId) as {
+      payload: string;
+    } | null;
+    const entry = row
+      ? (parseJson(row.payload, ENTRY_BYTES) as unknown as AuthorityEntry)
+      : undefined;
+    if (!entry || entry.type !== 'custom')
+      return { branchId, revision: branchId, store: '{}', untrusted: [] };
+    const data = entry.data as { store?: unknown; untrusted?: unknown };
+    return {
+      branchId,
+      revision: entry.id,
+      store: validatePtcStore(data.store),
+      untrusted: validatePtcProvenance(data.untrusted),
+    };
+  }
+  /** Capture placement/store once, before dispatch; duplicate preparation cannot refresh it. */
+  preparePtc(
+    lease: WriterLease,
+    executionId: string,
+    images = false,
+  ): { snapshot: PtcStoreSnapshot; plan: PtcPlan } {
+    uuid.parse(executionId);
+    return this.db
+      .transaction(() => {
+        this.writable(lease);
+        const row = this.db
+          .query('SELECT intent,branch,receipt FROM runtime_executions WHERE id=? AND session=?')
+          .get(executionId, lease.binding.sessionId) as ExecutionRow | null;
+        if (!row || row.branch !== lease.branchId) throw new Error('Unknown PTC execution');
+        const intent = validateIntent(parseJson(row.intent, REQUEST_BYTES));
+        if (intent.capability !== 'ptc' || intent.parentExecutionId)
+          throw new Error('Expected outer PTC execution');
+        const old = this.db
+          .query('SELECT snapshot,plan FROM runtime_ptc_dispatch WHERE execution=?')
+          .get(executionId) as { snapshot: string; plan: string } | null;
+        if (old)
+          return {
+            snapshot: parseJson(old.snapshot, ENTRY_BYTES) as unknown as PtcStoreSnapshot,
+            plan: parseJson(old.plan, ENTRY_BYTES) as unknown as PtcPlan,
+          };
+        if (row.receipt) throw new Error('PTC execution already completed');
+        const turn = this.db
+          .query('SELECT descriptor FROM runtime_turns WHERE id=?')
+          .get(intent.turnId) as { descriptor: string } | null;
+        if (!turn) throw new Error('PTC requires authoritative turn');
+        const descriptor = validateTurnDescriptor(
+          parseJson(turn.descriptor, ENTRY_BYTES),
+          lease.binding,
+        );
+        const plan = planPtc(intent.arguments, descriptor.capabilityCatalog);
+        const snapshot = this.storeSnapshot(lease.binding.sessionId, lease.branchId);
+        if (
+          intent.ptc &&
+          canonicalJson(
+            {
+              branchId: intent.ptc.branchId,
+              revision: intent.ptc.revision,
+              store: intent.ptc.store,
+              untrusted: intent.ptc.untrusted,
+            },
+            ENTRY_BYTES,
+          ) !== canonicalJson(snapshot, ENTRY_BYTES)
+        )
+          throw new Error('PTC dispatch store snapshot mismatch');
+        const final = { ...intent, ptc: { ...snapshot, ...(images ? { images: true } : {}) } };
+        final.argumentDigest = intentDigest(final);
+        this.db
+          .query('UPDATE runtime_executions SET intent=? WHERE id=?')
+          .run(canonicalJson(final, REQUEST_BYTES), executionId);
+        this.inner.register(final, plan.manifest);
+        this.db
+          .query('INSERT INTO runtime_ptc_dispatch(execution,snapshot,plan) VALUES (?,?,?)')
+          .run(executionId, canonicalJson(snapshot, ENTRY_BYTES), canonicalJson(plan, ENTRY_BYTES));
+        return { snapshot, plan };
+      })
+      .immediate();
+  }
+  /** Recovery of an obligation that provably never reached dispatch finalization. */
+  rejectUndispatchedPtc(intent: ExecutionIntent): ExecutionRecord {
+    return this.db
+      .transaction(() => {
+        const current = this.executionIntent(intent.binding, intent.executionId);
+        if (
+          current.capability !== 'ptc' ||
+          current.ptc ||
+          this.db
+            .query('SELECT execution FROM runtime_ptc_dispatch WHERE execution=?')
+            .get(intent.executionId)
+        )
+          throw new Error('PTC may have been dispatched');
+        const terminal = {
+          state: 'rejected' as const,
+          effect: 'not_started' as const,
+          artifacts: [],
+          truncated: false,
+          error: {
+            code: 'cancelled' as const,
+            message: 'Gateway stopped before PTC dispatch; script was not started',
+          },
+        };
+        const record: ExecutionRecord = {
+          binding: current.binding,
+          executionId: current.executionId,
+          argumentDigest: current.argumentDigest,
+          state: terminal.state,
+          effect: terminal.effect,
+          finalSeq: 0,
+          cancelRequested: false,
+          acknowledged: false,
+          reclaimed: false,
+          terminal,
+          resultDigest: digest(
+            {
+              binding: current.binding,
+              executionId: current.executionId,
+              argumentDigest: current.argumentDigest,
+              finalSeq: 0,
+              terminal,
+            },
+            RESULT_BYTES,
+          ),
+        };
+        this.commitExecutionResult(record, true);
+        this.db.query('INSERT OR IGNORE INTO runtime_acks VALUES (?)').run(intent.executionId);
+        return record;
+      })
+      .immediate();
+  }
+  /** Store proposal, terminal transcript and dedup receipt share the authority transaction.
+   * A branch switch conflicts rather than writing the newly active branch or replaying effects.
+   * The original execution result remains intact; store conflict is separate durable evidence.
+   */
+  commitPtcResult(
+    value: ExecutionRecord,
+    proposal?: { store: string; untrusted: string[] },
+  ): 'unchanged' | 'committed' | 'conflict' {
+    canonicalJson(value, RESULT_BYTES);
+    const record = recordSchema.parse(value);
+    const checked =
+      proposal === undefined
+        ? null
+        : {
+            store: validatePtcStore(proposal.store),
+            untrusted: validatePtcProvenance(proposal.untrusted),
+          };
+    if (checked && record.state !== 'completed')
+      throw new Error('Failed PTC cannot commit a store');
+    const completion = canonicalJson(
+      { resultDigest: record.resultDigest, proposal: checked },
+      ENTRY_BYTES,
+    );
+    return this.db
+      .transaction(() => {
+        const session = this.bound(record.binding);
+        const dispatch = this.db
+          .query('SELECT snapshot,completion,outcome FROM runtime_ptc_dispatch WHERE execution=?')
+          .get(record.executionId) as {
+          snapshot: string;
+          completion: string | null;
+          outcome: 'unchanged' | 'committed' | 'conflict' | null;
+        } | null;
+        if (!dispatch) throw new Error('No PTC dispatch snapshot');
+        if (dispatch.completion) {
+          if (dispatch.completion !== completion) {
+            const previous = this.db
+              .query('SELECT receipt FROM runtime_executions WHERE id=?')
+              .get(record.executionId) as { receipt: string | null };
+            const old =
+              previous.receipt && recordSchema.parse(parseJson(previous.receipt, RESULT_BYTES));
+            // Refinement adds verified effect evidence, never a late store commit or script replay.
+            if (!old || old.state !== 'unknown' || checked !== null)
+              throw new Error('PTC completion conflict');
+            this.commitExecutionResult(record, true);
+            this.db
+              .query('UPDATE runtime_ptc_dispatch SET completion=? WHERE execution=?')
+              .run(completion, record.executionId);
+          } else {
+            this.commitExecutionResult(record, true);
+          }
+          return dispatch.outcome!;
+        }
+        const snapshot = parseJson(dispatch.snapshot, ENTRY_BYTES) as unknown as PtcStoreSnapshot;
+        let outcome: 'unchanged' | 'committed' | 'conflict' = 'unchanged';
+        if (checked && checked.store !== snapshot.store) {
+          const current = this.storeSnapshot(session.id, snapshot.branchId);
+          if (
+            session.state !== 'active' ||
+            session.branch !== snapshot.branchId ||
+            current.revision !== snapshot.revision
+          ) {
+            outcome = 'conflict';
+            this.appendTo(session.id, snapshot.branchId, {
+              type: 'custom',
+              customType: 'runtime.ptc.store_conflict',
+              data: {
+                executionId: record.executionId,
+                expectedRevision: snapshot.revision,
+                actualRevision: current.revision,
+              },
+            });
+          } else {
+            const untrusted = validatePtcProvenance([
+              ...new Set([...snapshot.untrusted, ...checked.untrusted]),
+            ]);
+            this.appendTo(session.id, snapshot.branchId, {
+              type: 'custom',
+              customType: PTC_STORE_ENTRY,
+              data: { store: checked.store, untrusted },
+            });
+            outcome = 'committed';
+          }
+        }
+        this.commitExecutionResult(record, true);
+        this.db
+          .query('UPDATE runtime_ptc_dispatch SET completion=?,outcome=? WHERE execution=?')
+          .run(completion, outcome, record.executionId);
+        return outcome;
+      })
+      .immediate();
+  }
   /** Persist intent/branch before dispatch. Offline admission remains supervisor-owned. */
   persistExecution(lease: WriterLease, value: ExecutionIntent): void {
     const intent = validateIntent(value);
@@ -640,12 +1283,16 @@ export class GatewaySessionAuthority {
             input.runId !== intent.runId ||
             descriptor.revision !== intent.descriptorRevision ||
             descriptor.policyRevision !== intent.policyRevision ||
-            !descriptor.capabilityCatalog.some(
-              (capability) => capability.name === intent.capability,
-            ) ||
+            (intent.capability !== 'ptc' &&
+              !descriptor.capabilityCatalog.some(
+                (capability) => capability.name === intent.capability,
+              )) ||
             intent.budgetMs > descriptor.limits.maxBudgetMs
           )
             throw new Error('Execution does not match authoritative turn');
+          if (intent.capability === 'ptc') planPtc(intent.arguments, descriptor.capabilityCatalog);
+        } else if (intent.capability === 'ptc') {
+          throw new Error('PTC requires authoritative turn');
         }
         const old = this.db
           .query('SELECT intent,branch FROM runtime_executions WHERE id=?')
@@ -663,6 +1310,9 @@ export class GatewaySessionAuthority {
   }
   /** Terminal transcript + dedup receipt commit atomically; old epochs reconcile original branch only. */
   commitResult(value: ExecutionRecord): void {
+    this.commitExecutionResult(value, false);
+  }
+  private commitExecutionResult(value: ExecutionRecord, ptc: boolean): void {
     canonicalJson(value, RESULT_BYTES);
     const record = recordSchema.parse(value);
     validateRecordDelivery(record);
@@ -690,6 +1340,8 @@ export class GatewaySessionAuthority {
           .get(record.executionId, record.binding.sessionId) as ExecutionRow | null;
         if (!row) throw new Error('No authoritative execution intent');
         const intent = validateIntent(parseJson(row.intent, REQUEST_BYTES));
+        if (intent.capability === 'ptc' && !ptc)
+          throw new Error('PTC requires atomic store/result commit');
         if (
           intent.argumentDigest !== record.argumentDigest ||
           !sameBinding(intent.binding, record.binding)
@@ -721,6 +1373,47 @@ export class GatewaySessionAuthority {
           const output = terminal.output as
             | { content?: unknown; details?: unknown; isError?: unknown }
             | undefined;
+          const parentToolCallId =
+            (
+              this.db
+                .query('SELECT model_tool FROM runtime_tool_aliases WHERE execution=?')
+                .get(intent.executionId) as { model_tool: string } | null
+            )?.model_tool ?? intent.toolCallId;
+          if (intent.capability === 'ptc') {
+            const operations = (output?.details as { operations?: unknown } | undefined)
+              ?.operations;
+            if (Array.isArray(operations))
+              for (const operation of operations.slice(0, 220)) {
+                if (
+                  !operation ||
+                  typeof operation !== 'object' ||
+                  typeof operation.operationId !== 'string' ||
+                  typeof operation.capability !== 'string'
+                )
+                  continue;
+                if (!operation.operationId.startsWith(`${intent.executionId}:op`))
+                  throw new Error('PTC operation origin mismatch');
+                this.appendTo(record.binding.sessionId, row.branch, {
+                  type: 'custom',
+                  customType: OPERATION_ENTRY,
+                  data: {
+                    toolCallId: operation.operationId,
+                    parentToolCallId,
+                    toolName: operation.capability,
+                    args: {},
+                    content: [
+                      {
+                        type: 'text',
+                        text: `${operation.outcome}${operation.delivered ? '' : '; result delivery unverified'}`,
+                      },
+                    ],
+                    details: operation,
+                    isError: operation.outcome !== 'completed',
+                    timestamp: this.now(),
+                  },
+                });
+              }
+          }
           const input = entrySchema.parse({
             type: 'message',
             message: {
@@ -765,6 +1458,192 @@ export class GatewaySessionAuthority {
       })
       .immediate();
   }
+  persistLifecycle(lease: WriterLease, intent: ExecutionIntent, descriptor: Descriptor): void {
+    validateIntent(intent);
+    validateTurnDescriptor(descriptor, lease.binding);
+    if (
+      !sameBinding(lease.binding, intent.binding) ||
+      !descriptor.lifecycleHooks?.some((phase) => intent.capability === `lifecycle.${phase}`) ||
+      intent.descriptorRevision !== descriptor.revision ||
+      intent.policyRevision !== descriptor.policyRevision
+    )
+      throw new Error('Lifecycle intent mismatch');
+    this.db
+      .transaction(() => {
+        this.writable(lease);
+        const encoded = canonicalJson(intent, REQUEST_BYTES);
+        const old = this.db
+          .query('SELECT intent FROM runtime_lifecycle WHERE id=?')
+          .get(intent.executionId) as { intent: string } | null;
+        if (old) {
+          if (old.intent !== encoded) throw new Error('Lifecycle phase conflict');
+          return;
+        }
+        this.db
+          .query('INSERT INTO runtime_lifecycle(id,session,branch,intent) VALUES (?,?,?,?)')
+          .run(intent.executionId, lease.binding.sessionId, lease.branchId, encoded);
+      })
+      .immediate();
+  }
+  commitLifecycle(record: ExecutionRecord): void {
+    canonicalJson(record, RESULT_BYTES);
+    record = recordSchema.parse(record);
+    if (
+      !record.terminal ||
+      record.reclaimed ||
+      record.resultDigest !==
+        digest(
+          {
+            binding: record.binding,
+            executionId: record.executionId,
+            argumentDigest: record.argumentDigest,
+            finalSeq: record.finalSeq,
+            terminal: record.terminal,
+          },
+          RESULT_BYTES,
+        )
+    )
+      throw new Error('Invalid lifecycle terminal');
+    this.db
+      .transaction(() => {
+        this.bound(record.binding);
+        const row = this.db
+          .query('SELECT intent,branch,receipt FROM runtime_lifecycle WHERE id=? AND session=?')
+          .get(record.executionId, record.binding.sessionId) as ExecutionRow | null;
+        if (!row) throw new Error('Lifecycle obligation missing');
+        const intent = validateIntent(parseJson(row.intent, REQUEST_BYTES));
+        if (intent.argumentDigest !== record.argumentDigest)
+          throw new Error('Lifecycle result mismatch');
+        if (row.receipt) {
+          const previous = recordSchema.parse(parseJson(row.receipt, RESULT_BYTES));
+          if (previous.resultDigest === record.resultDigest) return;
+          if (
+            previous.effect !== 'unknown' ||
+            record.state === 'unknown' ||
+            record.state === 'rejected' ||
+            record.effect === 'unknown' ||
+            previous.finalSeq !== record.finalSeq ||
+            previous.cancelRequested !== record.cancelRequested
+          )
+            throw new Error('Lifecycle result conflict');
+          this.appendTo(record.binding.sessionId, row.branch, {
+            type: 'custom',
+            customType: 'runtime.lifecycle.reconciled',
+            data: {
+              executionId: record.executionId,
+              result: parseJson(canonicalJson(record, RESULT_BYTES), RESULT_BYTES),
+            },
+          });
+          this.db
+            .query('UPDATE runtime_lifecycle SET receipt=?,acked=0 WHERE id=?')
+            .run(canonicalJson(record, RESULT_BYTES), record.executionId);
+          return;
+        }
+        this.appendTo(record.binding.sessionId, row.branch, {
+          type: 'custom',
+          customType: 'runtime.lifecycle.result',
+          data: {
+            executionId: record.executionId,
+            phase: intent.capability,
+            result: parseJson(canonicalJson(record, RESULT_BYTES), RESULT_BYTES),
+          },
+        });
+        this.db
+          .query('UPDATE runtime_lifecycle SET receipt=? WHERE id=?')
+          .run(canonicalJson(record, RESULT_BYTES), record.executionId);
+      })
+      .immediate();
+  }
+  lifecycleReceipt(binding: Binding, id: string): ExecutionRecord | undefined {
+    this.bound(binding);
+    const row = this.db
+      .query('SELECT receipt FROM runtime_lifecycle WHERE id=? AND session=?')
+      .get(id, binding.sessionId) as { receipt: string | null } | null;
+    return row?.receipt ? recordSchema.parse(parseJson(row.receipt, RESULT_BYTES)) : undefined;
+  }
+  lifecycleRecovery(
+    sessionId: string,
+    owner: string,
+  ): Array<{ intent: ExecutionIntent; receipt: ExecutionRecord | undefined }> {
+    this.assertOwner(sessionId, owner);
+    return (
+      this.db
+        .query(
+          "SELECT intent,receipt FROM runtime_lifecycle WHERE session=? AND (acked=0 OR json_extract(receipt,'$.effect')='unknown') ORDER BY rowid LIMIT 32",
+        )
+        .all(sessionId) as { intent: string; receipt: string | null }[]
+    ).map((row) => ({
+      intent: validateIntent(parseJson(row.intent, REQUEST_BYTES)),
+      receipt: row.receipt ? recordSchema.parse(parseJson(row.receipt, RESULT_BYTES)) : undefined,
+    }));
+  }
+  markLifecycleAck(binding: Binding, id: string): void {
+    this.bound(binding);
+    this.db
+      .query(
+        'UPDATE runtime_lifecycle SET acked=1 WHERE id=? AND session=? AND receipt IS NOT NULL',
+      )
+      .run(id, binding.sessionId);
+  }
+  executionDescriptor(intent: ExecutionIntent): Descriptor {
+    const current = this.executionIntent(intent.binding, intent.executionId);
+    if (current.argumentDigest !== intent.argumentDigest)
+      throw new Error('Execution intent conflict');
+    const row = this.db
+      .query('SELECT descriptor FROM runtime_turns WHERE id=? AND session=?')
+      .get(intent.turnId, intent.binding.sessionId) as { descriptor: string } | null;
+    if (!row) throw new Error('Authoritative turn unavailable');
+    return validateTurnDescriptor(parseJson(row.descriptor, ENTRY_BYTES), intent.binding);
+  }
+  executionBranch(intent: ExecutionIntent): string {
+    this.bound(intent.binding);
+    const id = intent.parentExecutionId ?? intent.executionId;
+    const row = this.db
+      .query('SELECT branch,intent FROM runtime_executions WHERE id=? AND session=?')
+      .get(id, intent.binding.sessionId) as { branch: string; intent: string } | null;
+    if (!row) throw new Error('Authoritative execution missing');
+    return row.branch;
+  }
+  featureState(intent: ExecutionIntent, name: string): unknown {
+    const owner = this.session(intent.binding.sessionId).owner;
+    const entry = this.customEntries(
+      intent.binding.sessionId,
+      owner,
+      this.executionBranch(intent),
+      `runtime.feature.${name}`,
+      1,
+      true,
+    ).at(-1);
+    return entry?.type === 'custom' ? entry.data : undefined;
+  }
+  saveFeatureState(db: Database, intent: ExecutionIntent, name: string, value: unknown): void {
+    if (db !== this.db) throw new Error('Feature mutation requires authority transaction');
+    const branch = this.executionBranch(intent);
+    this.bound(intent.binding);
+    this.appendTo(intent.binding.sessionId, branch, {
+      type: 'custom',
+      customType: `runtime.feature.${name}`,
+      data: parseJson(canonicalJson(value, ENTRY_BYTES), ENTRY_BYTES),
+    });
+  }
+  modelToolId(binding: Binding, executionId: string): string {
+    const intent = this.executionIntent(binding, executionId);
+    return (
+      (
+        this.db
+          .query('SELECT model_tool FROM runtime_tool_aliases WHERE execution=?')
+          .get(executionId) as { model_tool: string } | null
+      )?.model_tool ?? intent.toolCallId
+    );
+  }
+  executionIntent(binding: Binding, executionId: string): ExecutionIntent {
+    this.bound(binding);
+    const row = this.db
+      .query('SELECT intent FROM runtime_executions WHERE id=? AND session=?')
+      .get(executionId, binding.sessionId) as { intent: string } | null;
+    if (!row) throw new Error('Unknown execution');
+    return validateIntent(parseJson(row.intent, REQUEST_BYTES));
+  }
   /** Retry safe after restart/lost ACK; never ACK from a mere transport receipt. */
   async acknowledge(
     environment: Pick<Environment, 'ack'>,
@@ -786,6 +1665,14 @@ export class GatewaySessionAuthority {
   }
   hasUnresolvedExecutions(sessionId: string, owner: string): boolean {
     this.assertOwner(sessionId, owner);
+    if (
+      this.db
+        .query(
+          "SELECT id FROM runtime_lifecycle WHERE session=? AND (receipt IS NULL OR json_extract(receipt,'$.effect')='unknown') LIMIT 1",
+        )
+        .get(sessionId)
+    )
+      return true;
     return !!this.db
       .query('SELECT id FROM runtime_executions WHERE session=? AND receipt IS NULL LIMIT 1')
       .get(sessionId);
@@ -973,6 +1860,13 @@ export class GatewaySessionAuthority {
       })
       .immediate();
   }
+  /** Once per authority startup, not once per child runtime instance. */
+  recoverRuntimeOnce(): void {
+    if (this.runtimeRecovered || recoveredDatabases.has(this.db)) return;
+    this.recoverRuns();
+    this.runtimeRecovered = true;
+    recoveredDatabases.add(this.db);
+  }
   /** Single trusted supervisor startup. Interrupted model calls/stacks are never replayed. */
   recoverRuns(): void {
     this.db
@@ -1077,6 +1971,17 @@ export class GatewaySessionAuthority {
         return entry;
       })
       .immediate();
+  }
+  failAuxiliary(lease: WriterLease, callId: string): void {
+    this.writable(lease);
+    const call = this.db.query('SELECT run FROM runtime_model_calls WHERE id=?').get(callId) as {
+      run: string;
+    } | null;
+    if (!call || !this.run(call.run, lease.binding.sessionId))
+      throw new Error('Invalid auxiliary failure');
+    this.db
+      .query("UPDATE runtime_model_calls SET state='interrupted' WHERE id=? AND state='pending'")
+      .run(callId);
   }
   /** Title/memory/compaction responses retain replay metadata without entering ordinary history. */
   commitAuxiliary(

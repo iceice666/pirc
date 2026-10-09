@@ -43,12 +43,18 @@ export type EnvironmentFrame = z.infer<typeof frameSchema>;
 const control = (message: EnvironmentMessage) =>
   ![
     'execution.start',
+    'ptc.central',
+    'ptc.central.status',
+    'ptc.central.result',
     'environment.descriptor',
     'execution.result',
     'execution.reply',
     'execution.event',
     'artifact.fetch',
     'artifact.chunk',
+    'workspace.append',
+    'workspace.append.result',
+    'workspace.snapshot.result',
   ].includes(message.type);
 
 interface Outgoing {

@@ -21,9 +21,11 @@ export interface NodeHookRoute {
 /** Central durable intent/result boundary. Callback DB mutations use this exact SQLite transaction. */
 export class GatewayOperations {
   readonly db: Database;
-  constructor(file: string) {
-    this.db = new Database(file, { create: true });
-    if (file !== ':memory:') chmodSync(file, 0o600);
+  private readonly ownsDatabase: boolean;
+  constructor(file: string | Database) {
+    this.ownsDatabase = typeof file === 'string';
+    this.db = typeof file === 'string' ? new Database(file, { create: true }) : file;
+    if (typeof file === 'string' && file !== ':memory:') chmodSync(file, 0o600);
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
       CREATE TABLE IF NOT EXISTS central_operations(id TEXT PRIMARY KEY, digest TEXT NOT NULL, state TEXT NOT NULL, result TEXT, receipt TEXT, post_state TEXT NOT NULL DEFAULT 'pending');
       UPDATE central_operations SET state='unknown' WHERE state='running';
@@ -35,11 +37,17 @@ export class GatewayOperations {
       hooks?: NodeHookRoute;
       schema: Record<string, unknown>;
       authorize(intent: ExecutionIntent, args: Json): void;
+      beforeExecute?(args: Json): Promise<void>;
+      committed?(args: Json): void;
       /** Synchronous DB-covered effects only. External effects use a separately recoverable service. */
-      mutate(db: Database, args: Json): Terminal;
+      mutate?(db: Database, args: Json): Terminal;
+      /** External handler must preserve original IDs; running recovery stays unknown. */
+      execute?(args: Json): Promise<Terminal>;
       signal: AbortSignal;
     },
-  ): Promise<{ terminal: Terminal; post: string }> {
+  ): Promise<{ terminal: Terminal; post: string; fresh: boolean }> {
+    if (Number(!!options.mutate) + Number(!!options.execute) !== 1)
+      throw new Error('Central operation requires one effect handler');
     const hash = digest(intent, REQUEST_BYTES);
     let row = this.db
       .query('SELECT * FROM central_operations WHERE id=?')
@@ -56,6 +64,7 @@ export class GatewayOperations {
         return {
           terminal: parseJson(row.result, RESULT_BYTES) as unknown as Terminal,
           post: row.post_state,
+          fresh: false,
         };
       // A consumed receipt or lost hook reply is not proof that its shell/effect did not run.
       return {
@@ -70,6 +79,7 @@ export class GatewayOperations {
           },
         },
         post: row.post_state,
+        fresh: false,
       };
     }
     this.db
@@ -89,16 +99,19 @@ export class GatewayOperations {
       throw new Error(`Invalid central hook-final arguments: ${errors.join('; ')}`);
     options.signal.throwIfAborted();
     options.authorize(intent, args);
-    const terminal = this.db
-      .transaction(() => {
-        const result = options.mutate(this.db, args);
-        const encoded = canonicalJson(result, RESULT_BYTES);
-        this.db
-          .query("UPDATE central_operations SET state='completed',result=? WHERE id=?")
-          .run(encoded, intent.executionId);
-        return result;
-      })
-      .immediate();
+    await options.beforeExecute?.(args);
+    options.signal.throwIfAborted();
+    const save = (result: Terminal) => {
+      const encoded = canonicalJson(result, RESULT_BYTES);
+      this.db
+        .query("UPDATE central_operations SET state='completed',result=? WHERE id=?")
+        .run(encoded, intent.executionId);
+      return result;
+    };
+    const terminal = options.mutate
+      ? this.db.transaction(() => save(options.mutate!(this.db, args))).immediate()
+      : save(await options.execute!(args));
+    if (terminal.state === 'completed') options.committed?.(args);
     let post = 'none';
     if (!options.hooks)
       this.db
@@ -118,9 +131,9 @@ export class GatewayOperations {
         .query('UPDATE central_operations SET post_state=? WHERE id=?')
         .run(post, intent.executionId);
     }
-    return { terminal, post };
+    return { terminal, post, fresh: true };
   }
   close(): void {
-    this.db.close();
+    if (this.ownsDatabase) this.db.close();
   }
 }

@@ -44,7 +44,19 @@ export function textOf(message: any): string {
     .trim();
 }
 
+export interface RuntimeDispatch {
+  start(workspace: Workspace, user: string, title: string): Promise<SessionRow>;
+  deliver(session: SessionRow, user: string, message: DeliveredMessage): Promise<void>;
+  progress(
+    session: SessionRow,
+    user: string,
+    deliveredAt: number,
+    isOurs: (message: any) => boolean,
+  ): Promise<SessionProgress>;
+}
 export interface DispatchDeps {
+  /** Explicit opt-in fresh-runtime adapter; absent preserves legacy production routing. */
+  runtimeDispatch?: RuntimeDispatch;
   db: GatewayDatabase;
   events: EventHub;
   nodes: NodeRegistry;
@@ -89,6 +101,7 @@ export async function startSession(
   user: string,
   title: string,
 ): Promise<SessionRow> {
+  if (deps.runtimeDispatch) return deps.runtimeDispatch.start(workspace, user, title);
   const { db, events, nodes } = deps;
   const nodeId = workspace.hostId;
   const created = await nodeRequest(nodes, nodeId, user, 'POST', '/api/sessions', {

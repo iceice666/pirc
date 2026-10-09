@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { canonicalJson, digest } from './json.js';
-import { REQUEST_BYTES, type ExecutionIntent } from './protocol.js';
+import { REQUEST_BYTES, intentSchema, type ExecutionIntent } from './protocol.js';
 import { validateSchema } from '../agent/ptc/schema.js';
 
 const args = z.record(z.unknown());
@@ -14,6 +14,14 @@ const action = z
   .strict();
 const final = { arguments: args, finalArgumentDigest: z.string().regex(/^[a-f0-9]{64}$/) };
 export const brokerSchemas = {
+  ptc_inner_start: z.object({ intent: intentSchema }).strict(),
+  ptc_inner_result: z.object({ intent: intentSchema, result: z.unknown() }).strict(),
+  ptc_inner_delivered: z.object({ innerOperationId: z.string().uuid() }).strict(),
+  ptc_preflight: z.object({ intent: intentSchema }).strict(),
+  ptc_preflight_done: z.object({ intent: intentSchema, arguments: args }).strict(),
+  ptc_post: z.object({ intent: intentSchema }).strict(),
+  ptc_post_done: z.object({ intent: intentSchema }).strict(),
+  ptc_central: z.object({ intent: intentSchema, arguments: args }).strict(),
   lease: z.object({ root: z.string().min(1).max(4096) }).strict(),
   approval: z.object({ action, reason: z.string().max(8192), ...final }).strict(),
   classify: z

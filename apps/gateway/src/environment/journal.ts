@@ -2,6 +2,7 @@ import { Database } from 'bun:sqlite';
 import { chmodSync, statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import { canonicalJson, digest, parseJson } from './json.js';
+import { InnerJournal } from './inner-journal.js';
 import {
   bindingSchema,
   eventSchema,
@@ -47,6 +48,7 @@ interface Grant {
  */
 export class ExecutionJournal {
   private readonly db: Database;
+  readonly inner: InnerJournal;
   constructor(
     private readonly file: string,
     private readonly now = Date.now,
@@ -75,6 +77,7 @@ export class ExecutionJournal {
       CREATE TABLE IF NOT EXISTS env_quarantines (
         binding TEXT PRIMARY KEY REFERENCES env_bindings(binding), paths TEXT NOT NULL
       );`);
+    this.inner = new InnerJournal(this.db);
   }
   close(): void {
     this.db.close();
@@ -499,6 +502,15 @@ export class ExecutionJournal {
         const recovered: ExecutionRecord[] = [];
         for (const row of rows) {
           const record = this.record(row);
+          if (
+            !row.intent.startsWith('sha256:') &&
+            validateIntent(parseJson(row.intent, REQUEST_BYTES)).capability === 'ptc'
+          ) {
+            // Registration may not have happened before the crash. Missing parent is
+            // safe; any registered inner operations must be sealed before recovery.
+            const parent = this.db.query('SELECT id FROM ptc_parents WHERE id=?').get(row.id);
+            if (parent) this.inner.seal(binding, row.id);
+          }
           if (record.state === 'running' || record.state === 'accepted')
             recovered.push(
               this.finishRecord(record, {

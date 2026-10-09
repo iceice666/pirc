@@ -180,7 +180,15 @@ test('opt-in environment harness crosses authenticated node WebSocket with indep
     services.nodes.disconnect('test');
     await waitFor(() => services.nodes.list().length, 0);
     await waitFor(() => services.nodes.list().length, 1, 7000);
-    expect((await remote.status(binding, intent.executionId)).acknowledged).toBe(true);
+    // Directory registration precedes the node's environment-connect callback.
+    // Wait for this subchannel too, rather than racing its reconnect handshake.
+    await waitFor(async () => {
+      try {
+        return (await remote!.status(binding, intent.executionId)).acknowledged;
+      } catch {
+        return false;
+      }
+    }, true);
     await remote.start(intent);
     expect(effects).toBe(1);
     await remote.ack(binding, intent.executionId, receipt.resultDigest!);

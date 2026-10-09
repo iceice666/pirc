@@ -59,4 +59,4 @@ export type GuestMessage =
    * `received` counts the results it had been given by then.
    */
   | { type: 'idle'; received: number }
-  | { type: 'done'; outcome: ScriptOutcome };
+  | { type: 'done'; outcome: ScriptOutcome; received?: number };

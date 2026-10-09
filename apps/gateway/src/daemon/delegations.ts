@@ -169,6 +169,7 @@ ${delegation.task}
 Work on it here. When you are done, end with a short summary of what you did and anything left over: the assistant receives your final message.`;
 
 export interface DelegationDeps {
+  runtimeDispatch?: import('./session-dispatch.js').RuntimeDispatch;
   db: GatewayDatabase;
   events: EventHub;
   nodes: NodeRegistry;
@@ -458,6 +459,9 @@ export class Delegations {
 
   /** Lapse approvals nobody gave in time. */
   sweep(): void {
+    if (this.deps.runtimeDispatch)
+      for (const delegation of this.rows("status IN ('running','waiting_input')"))
+        this.schedule(delegation.id);
     for (const delegation of this.rows("status='pending_approval' AND expires_at<=?", now())) {
       const changed = this.deps.db.raw
         .prepare(
@@ -496,14 +500,17 @@ export class Delegations {
         )
         .run(target.id, now(), now(), delegation.id);
       db.requireSessionCapability(delegation.assistantSessionId, 'delegation');
-      await deliver(this.deps.nodes, target, delegation.ownerUser, {
+      const message = {
         customType: 'assistant-delegation',
         content: taskMessage(delegation),
         details: { delegationId: delegation.id, title: delegation.title },
         ...(delegation.role && !previous ? { role: delegation.role } : {}),
         ...(delegation.model ? { model: delegation.model } : {}),
         ...(delegation.thinking ? { thinking: delegation.thinking } : {}),
-      });
+      };
+      if (this.deps.runtimeDispatch)
+        await this.deps.runtimeDispatch.deliver(target, delegation.ownerUser, message);
+      else await deliver(this.deps.nodes, target, delegation.ownerUser, message);
     } catch (error) {
       this.finish(delegation.id, 'failed', `Could not start the task: ${(error as Error).message}`);
     }
@@ -546,13 +553,20 @@ export class Delegations {
       delegation.dispatchedAt === null
     )
       return;
-    const progress = await readProgress(
-      this.deps.nodes,
-      this.deps.db.getSession(delegation.targetSessionId),
-      delegation.ownerUser,
-      delegation.dispatchedAt,
-      (message) => message.details?.delegationId === delegation.id,
-    );
+    const progress = this.deps.runtimeDispatch
+      ? await this.deps.runtimeDispatch.progress(
+          this.deps.db.getSession(delegation.targetSessionId),
+          delegation.ownerUser,
+          delegation.dispatchedAt,
+          (message) => message.details?.delegationId === delegation.id,
+        )
+      : await readProgress(
+          this.deps.nodes,
+          this.deps.db.getSession(delegation.targetSessionId),
+          delegation.ownerUser,
+          delegation.dispatchedAt,
+          (message) => message.details?.delegationId === delegation.id,
+        );
     switch (progress.state) {
       case 'dropped':
         return this.finish(id, 'failed', 'The agent stopped before it took the task');
@@ -585,7 +599,7 @@ export class Delegations {
   private update(id: string, status: DelegationStatus, forgetReport = false): void {
     this.deps.db.raw
       .prepare(
-        `UPDATE delegations SET status=?, updated_at=?${forgetReport ? ', notified_status=NULL' : ''} WHERE id=?`,
+        `UPDATE delegations SET status=?, updated_at=${this.deps.runtimeDispatch ? 'MAX(?,updated_at+1)' : '?'}${forgetReport ? ', notified_status=NULL' : ''} WHERE id=?`,
       )
       .run(status, now(), id);
   }
@@ -593,7 +607,7 @@ export class Delegations {
   private finish(id: string, status: 'completed' | 'failed', result: string): void {
     const changed = this.deps.db.raw
       .prepare(
-        "UPDATE delegations SET status=?, result=?, updated_at=? WHERE id=? AND status IN ('running','waiting_input')",
+        `UPDATE delegations SET status=?, result=?, updated_at=${this.deps.runtimeDispatch ? 'MAX(?,updated_at+1)' : '?'} WHERE id=? AND status IN ('running','waiting_input')`,
       )
       .run(status, clip(redactSecrets(result), RESULT_MAX_CHARS), now(), id).changes;
     if (!changed) return;
@@ -610,7 +624,7 @@ export class Delegations {
       delegation.notifiedStatus === delegation.status
     )
       return;
-    const key = `${delegation.id}:${delegation.status}`;
+    const key = `${delegation.id}:${delegation.status}${this.deps.runtimeDispatch ? `:${delegation.updatedAt}` : ''}`;
     if (this.reporting.has(key)) return;
     let chat: SessionRow;
     try {
@@ -621,14 +635,28 @@ export class Delegations {
     if (!chat.nodeId || !chat.piSessionId || !this.deps.nodes.get(chat.nodeId)) return;
     this.reporting.add(key);
     try {
-      await deliver(this.deps.nodes, chat, delegation.ownerUser, {
+      const message = {
         customType: 'assistant-delegation-update',
         content: this.updateMessage(delegation),
-        details: { delegationId: delegation.id, status: delegation.status },
-      });
-      this.deps.db.raw
-        .prepare('UPDATE delegations SET notified_status=? WHERE id=? AND status=?')
-        .run(delegation.status, delegation.id, delegation.status);
+        details: {
+          delegationId: delegation.id,
+          status: delegation.status,
+          ...(this.deps.runtimeDispatch ? { deliveryRevision: delegation.updatedAt } : {}),
+        },
+      };
+      if (this.deps.runtimeDispatch)
+        await this.deps.runtimeDispatch.deliver(chat, delegation.ownerUser, message);
+      else await deliver(this.deps.nodes, chat, delegation.ownerUser, message);
+      if (this.deps.runtimeDispatch)
+        this.deps.db.raw
+          .prepare(
+            'UPDATE delegations SET notified_status=? WHERE id=? AND status=? AND updated_at=?',
+          )
+          .run(delegation.status, delegation.id, delegation.status, delegation.updatedAt);
+      else
+        this.deps.db.raw
+          .prepare('UPDATE delegations SET notified_status=? WHERE id=? AND status=?')
+          .run(delegation.status, delegation.id, delegation.status);
     } catch (error) {
       this.deps.warn(`delegation ${delegation.id}: could not tell the chat`, error);
     } finally {

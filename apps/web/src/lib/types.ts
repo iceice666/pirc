@@ -243,7 +243,7 @@ export interface SessionSnapshot {
   /** Extension panels (e.g. the todo list), keyed by extension. */
   widgets?: Record<string, string[]>;
   statuses?: Record<string, string>;
-  /** The running agent's OS sandbox; absent with no runner. */
+  /** Node execution environment sandbox, not the gateway model loop; absent when unavailable. */
   sandbox?: { active: boolean; reason?: string };
 }
 

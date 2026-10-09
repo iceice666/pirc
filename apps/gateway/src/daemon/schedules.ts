@@ -201,6 +201,7 @@ ${schedule.prompt}
 Do it here. End with a short summary of what you did and anything that needs the user: they read it in the schedule's run history.`;
 
 export interface ScheduleDeps {
+  runtimeDispatch?: import('./session-dispatch.js').RuntimeDispatch;
   db: GatewayDatabase;
   events: EventHub;
   nodes: NodeRegistry;
@@ -730,6 +731,12 @@ export class Schedules {
   }
 
   private sweep(): void {
+    if (this.deps.runtimeDispatch) {
+      const runs = this.deps.db.raw
+        .prepare(`SELECT id FROM schedule_runs WHERE status IN ${OPEN_RUNS}`)
+        .all() as { id: string }[];
+      for (const run of runs) this.scheduleCheck(run.id);
+    }
     for (const proposal of this.proposalRows("status='pending' AND expires_at<=?", now()))
       this.closeProposal(proposal, 'expired');
   }
@@ -992,13 +999,16 @@ export class Schedules {
         .prepare('UPDATE schedule_runs SET session_id=? WHERE id=?')
         .run(session.id, run.id);
       this.requireCapability(schedule);
-      await deliver(this.deps.nodes, session, schedule.ownerUser, {
+      const message = {
         customType: 'scheduled-run',
         content: runMessage(schedule, run),
         details: { scheduleId: schedule.id, runId: run.id, title: schedule.title },
         ...(schedule.model ? { model: schedule.model } : {}),
         ...(schedule.thinking ? { thinking: schedule.thinking } : {}),
-      });
+      };
+      if (this.deps.runtimeDispatch)
+        await this.deps.runtimeDispatch.deliver(session, schedule.ownerUser, message);
+      else await deliver(this.deps.nodes, session, schedule.ownerUser, message);
       this.deps.changed(schedule.ownerUser);
     } catch (error) {
       this.finish(run.id, 'failed', `Could not start the run: ${(error as Error).message}`);
@@ -1026,13 +1036,20 @@ export class Schedules {
   private async check(id: string): Promise<void> {
     const run = this.runRow(id);
     if (!run || !['running', 'waiting_input'].includes(run.status) || !run.sessionId) return;
-    const progress = await readProgress(
-      this.deps.nodes,
-      this.deps.db.getSession(run.sessionId),
-      run.ownerUser,
-      run.startedAt ?? run.createdAt,
-      (message) => message.details?.runId === run.id,
-    );
+    const progress = this.deps.runtimeDispatch
+      ? await this.deps.runtimeDispatch.progress(
+          this.deps.db.getSession(run.sessionId),
+          run.ownerUser,
+          run.startedAt ?? run.createdAt,
+          (message) => message.details?.runId === run.id,
+        )
+      : await readProgress(
+          this.deps.nodes,
+          this.deps.db.getSession(run.sessionId),
+          run.ownerUser,
+          run.startedAt ?? run.createdAt,
+          (message) => message.details?.runId === run.id,
+        );
     switch (progress.state) {
       case 'dropped':
         return this.finish(id, 'failed', 'The agent stopped before it took the task');

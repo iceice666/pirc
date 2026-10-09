@@ -1,5 +1,10 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { builtinTools } from '../agent/tools/index.js';
+import type { InnerJournal } from '../environment/inner-journal.js';
+import { planPtc } from '../gateway-runtime/ptc-contracts.js';
+import { validateSchema } from '../agent/ptc/schema.js';
+import { validatePtcResult, ptcTerminal, aliasPtcResult } from '../environment/ptc-result.js';
+import { validateIntent } from '../environment/protocol.js';
 import type { Writable } from 'node:stream';
 import { killGroup } from '../agent/tools/bash.js';
 import { JsonlParser } from './rpc-framing.js';
@@ -14,7 +19,7 @@ import {
   type ExecutionEvent,
   type Terminal,
 } from '../environment/protocol.js';
-import { canonicalJson } from '../environment/json.js';
+import { canonicalJson, digest } from '../environment/json.js';
 import { validateBroker, type BrokerKind, brokerSchemas } from '../environment/broker.js';
 import type { Descriptor } from '../environment/protocol.js';
 import { ExecutionBudget } from '../environment/budget.js';
@@ -51,6 +56,7 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
   private orderlyStop = false;
   private backgroundCleaned = false;
   private brokerWork = new Set<Promise<unknown>>();
+  private readonly centralDispatched = new Set<string>();
   private cgroup: EnvironmentCgroup | undefined;
   private admitted = Promise.resolve();
   constructor(
@@ -62,6 +68,9 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
       descriptor?: Descriptor;
       /** Trusted node-owned storage, outside executor read/write roots. */
       artifacts?: EnvironmentArtifacts;
+      /** Same trusted node journal; inner facts never live only in the sandbox child. */
+      inner?: InnerJournal;
+      ptcSnapshot?(intent: ExecutionIntent): { store: string; untrusted: string[] };
       /** Explicit delegated Linux cgroup parent; no automatic system configuration. */
       delegatedCgroup?: string;
       background?(
@@ -201,6 +210,8 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
               }
               // A tool may intentionally finish a cancelled wait. Preserve its
               // terminal semantics; ingestion itself observes cancellation above.
+              if (active.intent.capability === 'ptc')
+                options.inner?.seal(active.intent.binding, active.intent.executionId);
               this.active = undefined;
               active.cleanup();
               active.resolve(stored);
@@ -222,27 +233,211 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
           });
           this.brokerRequests.set(message.id, requestController);
           const kind = message.kind as BrokerKind;
-          const schema = options.descriptor?.capabilityCatalog.find(
-            (entry) => entry.name === active.intent.capability,
-          )?.argumentSchema;
+          let operation = active.intent;
+          if (message.innerIntent) {
+            if (active.intent.capability !== 'ptc' || !options.inner)
+              throw new Error('Unexpected inner operation');
+            operation = validateIntent(message.innerIntent);
+            if (operation.parentExecutionId !== active.intent.executionId)
+              throw new Error('Inner parent mismatch');
+            const known = options.inner.status(
+              operation.binding,
+              active.intent.executionId,
+              operation.innerOperationId!,
+            );
+            if (
+              canonicalJson(known.intent, REQUEST_BYTES) !==
+                canonicalJson(operation, REQUEST_BYTES) ||
+              known.state !== 'running'
+            )
+              throw new Error('Inner operation unavailable');
+          }
+          const schema =
+            operation.capability === 'ptc'
+              ? {
+                  type: 'object',
+                  properties: { code: { type: 'string' }, timeout: { type: 'number' } },
+                  required: ['code'],
+                  additionalProperties: false,
+                }
+              : options.descriptor?.capabilityCatalog.find(
+                  (entry) => entry.name === operation.capability,
+                )?.argumentSchema;
           // Existing core-only harnesses may omit a descriptor, but approval arguments
           // still validate against the shipped registry, never a child-supplied schema.
           const payload = validateBroker(
             kind,
             message.payload,
-            active.intent,
+            operation,
             (schema as Record<string, unknown> | undefined) ??
-              this.coreSchema(active.intent.capability),
+              this.coreSchema(operation.capability),
           );
           const controller = this.operationController!;
           const requestSignal = AbortSignal.any([controller.signal, requestController.signal]);
-          const work = () => options.request(kind, payload, active.intent, requestSignal);
+          const work = async () => {
+            if (kind === 'ptc_inner_delivered') {
+              if (active.intent.capability !== 'ptc' || !options.inner)
+                throw new Error('No PTC journal');
+              const operation = options.inner.status(
+                active.intent.binding,
+                active.intent.executionId,
+                payload.innerOperationId,
+              );
+              if (!operation.result) throw new Error('Inner result not committed');
+              options.inner.delivered(
+                active.intent.binding,
+                active.intent.executionId,
+                payload.innerOperationId,
+                digest(operation.result, RESULT_BYTES),
+              );
+              return null;
+            }
+            if (
+              kind === 'ptc_preflight' ||
+              kind === 'ptc_preflight_done' ||
+              kind === 'ptc_post' ||
+              kind === 'ptc_post_done'
+            ) {
+              if (active.intent.capability !== 'ptc' || !options.inner || !options.descriptor)
+                throw new Error('PTC journal unavailable');
+              const inner = validateIntent(payload.intent);
+              if (inner.parentExecutionId !== active.intent.executionId)
+                throw new Error('Inner parent mismatch');
+              const cap = options.descriptor.capabilityCatalog.find(
+                (cap) => cap.name === inner.capability && cap.placement === 'gateway',
+              );
+              if (!cap) throw new Error('Central capability unavailable');
+              if (kind === 'ptc_preflight' || kind === 'ptc_post')
+                options.inner.beginPhase(inner, kind === 'ptc_preflight' ? 'preflight' : 'post');
+              else {
+                if (
+                  kind === 'ptc_preflight_done' &&
+                  validateSchema(payload.arguments, cap.argumentSchema as Record<string, unknown>)
+                    .length
+                )
+                  throw new Error('Invalid hook-final central arguments');
+                options.inner.finishPhase(
+                  inner,
+                  kind === 'ptc_preflight_done' ? 'preflight' : 'post',
+                  kind === 'ptc_preflight_done' ? payload.arguments : null,
+                );
+              }
+              return null;
+            }
+            if (
+              kind === 'ptc_inner_start' ||
+              kind === 'ptc_inner_result' ||
+              kind === 'ptc_central'
+            ) {
+              if (active.intent.capability !== 'ptc' || !options.inner || !options.descriptor)
+                throw new Error('PTC journal unavailable');
+              const inner = validateIntent(payload.intent);
+              if (inner.parentExecutionId !== active.intent.executionId)
+                throw new Error('Inner parent mismatch');
+              if (kind === 'ptc_inner_start') {
+                const accepted = options.inner.accept(inner);
+                if (!accepted.fresh)
+                  throw new Error('Inner operation already recorded; never replay');
+                options.inner.claim(
+                  inner.binding,
+                  inner.parentExecutionId!,
+                  inner.innerOperationId!,
+                );
+                return null;
+              }
+              const recorded = this.options.inner!.status(
+                inner.binding,
+                active.intent.executionId,
+                inner.innerOperationId!,
+              );
+              if (
+                recorded.state !== 'running' ||
+                canonicalJson(recorded.intent, REQUEST_BYTES) !==
+                  canonicalJson(inner, REQUEST_BYTES)
+              )
+                throw new Error('Unclaimed or conflicting inner operation');
+              if (kind === 'ptc_inner_result') {
+                const result = validatePtcResult(payload.result);
+                const cap = options.descriptor.capabilityCatalog.find(
+                  (cap) => cap.name === inner.capability,
+                );
+                if (cap?.placement === 'gateway') {
+                  let phase: ReturnType<InnerJournal['phase']> | undefined;
+                  try {
+                    phase = options.inner.phase(inner, 'central');
+                  } catch {}
+                  if (phase?.state === 'completed') {
+                    const trusted = validatePtcResult(phase.result, inner.innerOperationId);
+                    if (
+                      canonicalJson(
+                        aliasPtcResult(result, inner.innerOperationId!),
+                        RESULT_BYTES,
+                      ) !==
+                      canonicalJson(aliasPtcResult(trusted, inner.innerOperationId!), RESULT_BYTES)
+                    )
+                      throw new Error('Central result differs from supervisor evidence');
+                  } else if (phase) {
+                    this.fail(
+                      new Error('Central operation still draining; executor fencing required'),
+                    );
+                    throw new Error('Central drain unverified; no guest continuation');
+                  } else if (result.ok || result.error.outcome !== 'not_started')
+                    throw new Error('Central effect never dispatched');
+                }
+                const terminal = ptcTerminal(result);
+                options.inner.finish(
+                  inner.binding,
+                  inner.parentExecutionId!,
+                  inner.innerOperationId!,
+                  terminal,
+                );
+                return null;
+              }
+              const capability = options.descriptor.capabilityCatalog.find(
+                (entry) => entry.name === inner.capability,
+              );
+              if (capability?.placement !== 'gateway') throw new Error('Not a central capability');
+              const phase = options.inner.phase(inner, 'preflight');
+              if (
+                phase.state !== 'completed' ||
+                canonicalJson(phase.result, REQUEST_BYTES) !==
+                  canonicalJson(payload.arguments, REQUEST_BYTES)
+              )
+                throw new Error('Missing central preflight evidence');
+              if (
+                validateSchema(
+                  payload.arguments,
+                  capability.argumentSchema as Record<string, unknown>,
+                ).length
+              )
+                throw new Error('Invalid central final arguments');
+              options.inner.beginPhase(inner, 'central');
+              if (this.centralDispatched.has(inner.executionId))
+                throw new Error('Central inner already dispatched; reconcile original ID');
+              this.centralDispatched.add(inner.executionId);
+              let result;
+              try {
+                result = validatePtcResult(
+                  await options.request(kind, payload, inner, requestSignal),
+                  inner.innerOperationId,
+                );
+              } catch (error) {
+                // A lost central reply is not evidence that the remote effect drained.
+                // Stop this executor before the guest can release its slot and continue.
+                this.fail(new Error('Central outcome/drain unknown; executor fencing required'));
+                throw error;
+              }
+              options.inner.finishPhase(inner, 'central', result);
+              return result;
+            }
+            return options.request(kind, payload, operation, requestSignal);
+          };
           const human =
             kind === 'approval' ||
             kind === 'ui' ||
-            (active.intent.capability === 'sandbox_allow_domains' && kind === 'sandbox') ||
-            (active.intent.capability === 'unsandboxed_bash' && kind === 'sandbox') ||
-            (active.intent.capability === 'browser_handoff' &&
+            (operation.capability === 'sandbox_allow_domains' && kind === 'sandbox') ||
+            (operation.capability === 'unsandboxed_bash' && kind === 'sandbox') ||
+            (operation.capability === 'browser_handoff' &&
               kind === 'browser' &&
               payload.op === 'wait_control');
           const brokerWork = (human ? this.budget!.humanWait(work()) : work())
@@ -385,7 +580,29 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
         },
       };
       try {
-        this.send({ type: 'executor.start', intent, ...(hook ? { hook } : {}) });
+        let ptc;
+        if (intent.capability === 'ptc') {
+          if (
+            !this.options.descriptor ||
+            !this.options.inner ||
+            (!this.options.ptcSnapshot && !intent.ptc)
+          )
+            throw new Error('PTC executor dependencies unavailable');
+          const plan = planPtc(intent.arguments, this.options.descriptor.capabilityCatalog);
+          if (plan.placement !== 'node') throw new Error('Gateway-only PTC cannot run on node');
+          this.options.inner.register(intent, plan.manifest);
+          ptc = {
+            ...(intent.ptc ?? this.options.ptcSnapshot!(intent)),
+            capabilities: plan.manifest,
+            catalog: this.options.descriptor.capabilityCatalog,
+          };
+        }
+        this.send({
+          type: 'executor.start',
+          intent,
+          ...(hook ? { hook } : {}),
+          ...(ptc ? { ptc } : {}),
+        });
       } catch (error) {
         this.fail(error as Error);
       }

@@ -14,13 +14,23 @@ import { intentDigest, type ExecutionIntent } from '../src/environment/protocol.
 import { ExecutionJournal } from '../src/environment/journal.js';
 import type { Json } from '../src/environment/json.js';
 import { testConfig, waitFor } from './helpers.js';
+import type { Tool } from '../src/agent/tools/types.js';
 
 const cleanups: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
   for (const fn of cleanups.splice(0).reverse()) await fn();
 });
 const real = process.env.PIRC_TEST_SRT;
-async function fixture(realSandbox = false, panelReturn = false, delegatedCgroup?: string) {
+async function fixture(
+  realSandbox = false,
+  panelReturn = false,
+  delegatedCgroup?: string,
+  hooks?: Record<string, unknown>,
+  central?: {
+    tool: Tool;
+    execute(args: Record<string, unknown>, intent: ExecutionIntent): Promise<unknown>;
+  },
+) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'pirc-env-process-'));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
   const cwd = path.join(root, 'workspace'),
@@ -29,7 +39,7 @@ async function fixture(realSandbox = false, panelReturn = false, delegatedCgroup
   for (const dir of [cwd, configDir, sessionDir]) mkdirSync(dir);
   writeFileSync(
     path.join(configDir, 'config.json'),
-    JSON.stringify({ features: { autoMode: { enabled: false } } }),
+    JSON.stringify({ features: { autoMode: { enabled: false } }, ...(hooks ? { hooks } : {}) }),
   );
   const previous = process.env.PIRC_CONFIG_DIR;
   process.env.PIRC_CONFIG_DIR = configDir;
@@ -64,6 +74,7 @@ async function fixture(realSandbox = false, panelReturn = false, delegatedCgroup
     background.tool,
     ...createBrowserTools(() => ({ request: async () => ({}) }), new AbortController().signal),
     ...createSandboxTools(() => undefined),
+    ...(central ? [central.tool] : []),
   ];
   const descriptor = generateDescriptor({
     binding,
@@ -76,16 +87,25 @@ async function fixture(realSandbox = false, panelReturn = false, delegatedCgroup
       PIRC_SANDBOX_POLICY: JSON.stringify(prepared.policy.paths),
     },
   });
+  const journal = new ExecutionJournal(path.join(root, 'ptc.sqlite'));
+  cleanups.push(() => journal.close());
   const jobs: Array<{ id: string; pid?: number | undefined; status: string }> = [];
   const executor = new SandboxedEnvironmentExecutor({
     sandbox: prepared,
     cwd,
     descriptor,
+    inner: journal.inner,
+    ptcSnapshot: () => ({ store: '{}', untrusted: [] }),
     ...(delegatedCgroup ? { delegatedCgroup } : {}),
     background: (tasks) => {
       jobs.splice(0, jobs.length, ...tasks);
     },
-    request: async (kind, payload) => {
+    request: async (kind, payload, intent) => {
+      if (kind === 'ptc_central' && central)
+        return central.execute(
+          (payload as { arguments: Record<string, unknown> }).arguments,
+          intent,
+        );
       if (kind === 'lease') return null;
       if (kind === 'browser')
         return payload && { url: 'https://example.com', title: 'Fixture', snapshot: 'page' };
@@ -123,8 +143,151 @@ async function fixture(realSandbox = false, panelReturn = false, delegatedCgroup
     args: Record<string, Json>,
     signal = new AbortController().signal,
   ) => executor.execute(make(capability, args), signal, () => {});
-  return { root, cwd, config, binding, descriptor, executor, make, run, jobs };
+  return { root, cwd, config, binding, descriptor, executor, make, run, jobs, journal };
 }
+
+test('node-local PTC executes ten dependent environment calls and journals each without node-link RPC', async () => {
+  const f = await fixture(!!real);
+  writeFileSync(path.join(f.cwd, 'value.txt'), 'hello');
+  const intent = f.make('ptc', {
+    code: 'let value="";for(let i=0;i<10;i++)value=(await tools.read({path:"value.txt"})).text;store("last",value);return value;',
+  });
+  const result = await f.executor.execute(intent, new AbortController().signal, () => {});
+  expect(result.state).toBe('completed');
+  expect(JSON.stringify(result.output)).toContain('hello');
+  const inner = f.journal.inner.list(f.binding, intent.executionId);
+  expect(inner).toHaveLength(10);
+  expect(inner.every((operation) => operation.state === 'terminal')).toBe(true);
+  expect(inner.every((operation) => operation.delivered)).toBe(true);
+}, 15000);
+
+test('mixed PTC applies node hooks to central final arguments and preserves refusal latch', async () => {
+  const calls: unknown[] = [];
+  const f = await fixture(
+    false,
+    false,
+    undefined,
+    {
+      beforeTool: [{ matcher: 'schedule', command: `echo '{"args":{"action":"create"}}'` }],
+      afterTool: [{ matcher: 'schedule', command: 'echo central-hook-output' }],
+    },
+    {
+      tool: {
+        name: 'schedule',
+        description: 'fixture',
+        parameters: {
+          type: 'object',
+          properties: { action: { type: 'string' } },
+          required: ['action'],
+        },
+        resultSchema: { type: 'object' },
+        execute: async () => {
+          throw new Error('Must execute on gateway');
+        },
+      },
+      execute: async (args, intent) => {
+        calls.push(args);
+        return {
+          ok: false,
+          contractVersion: 1,
+          operationId: intent.innerOperationId,
+          error: { code: 'ApprovalDenied', message: 'human denied', outcome: 'not_started' },
+        };
+      },
+    },
+  );
+  writeFileSync(path.join(f.cwd, 'input.txt'), 'input');
+  const result = await f.run('ptc', {
+    code: 'await tools.read({path:"input.txt"});try{await tools.schedule({action:"list"});}catch{}try{await tools.write({path:"should-not-exist",content:"bad"});}catch{}return "finished";',
+  });
+  expect(result.state).toBe('completed');
+  expect(calls).toEqual([{ action: 'create' }]);
+  expect(existsSync(path.join(f.cwd, 'should-not-exist'))).toBe(false);
+  expect(JSON.stringify(result.output)).toContain('[declined]');
+  expect(JSON.stringify(result.output)).toContain('central-hook-output');
+}, 15000);
+
+test('cancelled mixed central work fences executor before caught script continues writing', async () => {
+  let finish!: () => void, started!: () => void;
+  const held = new Promise<void>((resolve) => (finish = resolve)),
+    entered = new Promise<void>((resolve) => (started = resolve));
+  const f = await fixture(false, false, undefined, undefined, {
+    tool: {
+      name: 'schedule',
+      description: 'held central',
+      parameters: { type: 'object' },
+      resultSchema: { type: 'object' },
+      execute: async () => {
+        throw new Error('central only');
+      },
+    },
+    execute: async (_args, intent) => {
+      started();
+      await held;
+      return {
+        ok: true,
+        contractVersion: 1,
+        operationId: intent.innerOperationId,
+        data: { text: 'done' },
+        attachments: [],
+        truncated: false,
+      };
+    },
+  });
+  writeFileSync(path.join(f.cwd, 'input.txt'), 'input');
+  const controller = new AbortController();
+  const running = f
+    .run(
+      'ptc',
+      {
+        code: 'await tools.read({path:"input.txt"});try{await tools.schedule({});}catch{}await tools.write({path:"after-cancel",content:"bad"});',
+      },
+      controller.signal,
+    )
+    .catch((error) => error);
+  await entered;
+  controller.abort();
+  await f.executor.stopped;
+  expect(f.executor.healthy).toBe(false);
+  expect(existsSync(path.join(f.cwd, 'after-cancel'))).toBe(false);
+  finish();
+  await running;
+}, 15000);
+
+test('lifecycle hooks run on the node executor and return bounded prompt context', async () => {
+  const f = await fixture(false, false, undefined, {
+    sessionStart: [{ command: 'echo session-context' }],
+    beforePrompt: [{ command: 'echo prompt-context' }],
+    agentSettled: [{ command: 'echo settled' }],
+  });
+  expect(f.descriptor.lifecycleHooks).toEqual(['sessionStart', 'beforePrompt', 'agentSettled']);
+  expect((await f.run('lifecycle.sessionStart', {})).output).toEqual({ text: 'session-context' });
+  expect((await f.run('lifecycle.beforePrompt', { prompt: 'hello' })).output).toEqual({
+    text: 'prompt-context',
+  });
+  expect((await f.run('lifecycle.agentSettled', {})).state).toBe('completed');
+}, 15000);
+
+test('outer PTC before hook can deny the entire script before any inner operation', async () => {
+  const f = await fixture(false, false, undefined, {
+    beforeTool: [{ command: 'echo outer-denied >&2; exit 2', matcher: 'ptc' }],
+  });
+  const intent = f.make('ptc', { code: 'await tools.write({path:"denied.txt",content:"bad"});' });
+  const result = await f.executor.execute(intent, new AbortController().signal, () => {});
+  expect(result.state).toBe('failed');
+  expect(existsSync(path.join(f.cwd, 'denied.txt'))).toBe(false);
+  expect(f.journal.inner.list(f.binding, intent.executionId)).toHaveLength(0);
+}, 15000);
+
+test('node PTC preserves browser provenance even when script drops tool warning text', async () => {
+  const f = await fixture();
+  const result = await f.run('ptc', {
+    code: 'const page=await tools.browser_snapshot({});store("page",page);return "derived page text";',
+  });
+  expect(result.state).toBe('completed');
+  expect(JSON.stringify(result.output)).toContain('untrusted web content');
+  expect((result.output as any).ptcUntrusted).toContain('browser_snapshot');
+}, 15000);
 
 test('subprocess background jobs survive foreground completion and cancelled waits, then shutdown', async () => {
   const f = await fixture();

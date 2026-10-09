@@ -55,11 +55,25 @@ export const intentSchema = z
     arguments: object,
     argumentDigest: hash,
     budgetMs: z.number().int().positive().max(3_600_000),
+    ptc: z
+      .object({
+        branchId: id,
+        revision: id,
+        store: z.string().max(1_048_578),
+        untrusted: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/)).max(64),
+        images: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .refine(
     (value) => !!value.parentExecutionId === !!value.innerOperationId,
     'Inner operation requires parent and inner IDs',
+  )
+  .refine(
+    (value) => !value.ptc || (value.capability === 'ptc' && !value.parentExecutionId),
+    'Only outer PTC carries a store snapshot',
   );
 export type ExecutionIntent = z.infer<typeof intentSchema>;
 
@@ -217,6 +231,14 @@ export const descriptorSchema = z
     skills: z
       .array(z.object({ name: z.string().max(256), description: z.string().max(4096) }).strict())
       .max(256),
+    repositoryKey: z
+      .string()
+      .regex(/^[a-f0-9]{16}$/)
+      .optional(),
+    lifecycleHooks: z
+      .array(z.enum(['sessionStart', 'beforePrompt', 'agentSettled']))
+      .max(3)
+      .optional(),
     role: z.string().max(256),
     platform: z.enum(['linux', 'darwin']),
     cwdDisplay: z.string().max(4096),
@@ -255,6 +277,75 @@ export const messageSchema = z.discriminatedUnion('type', [
     .object({ ...header, type: z.literal('environment.descriptor'), descriptor: descriptorSchema })
     .strict(),
   z.object({ ...header, type: z.literal('execution.start'), intent: intentSchema }).strict(),
+  z.object({ ...header, type: z.literal('workspace.snapshot'), binding: bindingSchema }).strict(),
+  z
+    .object({
+      ...header,
+      type: z.literal('workspace.snapshot.result'),
+      binding: bindingSchema,
+      repositoryKey: z.string().regex(/^[a-f0-9]{16}$/),
+      items: json,
+    })
+    .strict(),
+  z
+    .object({
+      ...header,
+      type: z.literal('workspace.append'),
+      binding: bindingSchema,
+      input: object,
+    })
+    .strict(),
+  z
+    .object({
+      ...header,
+      type: z.literal('workspace.append.result'),
+      binding: bindingSchema,
+      item: json,
+    })
+    .strict(),
+  z
+    .object({
+      ...header,
+      type: z.literal('ptc.central'),
+      intent: intentSchema,
+      finalArguments: object.optional(),
+    })
+    .strict(),
+  z.object({ ...header, type: z.literal('ptc.central.status'), intent: intentSchema }).strict(),
+  z
+    .object({
+      ...header,
+      type: z.literal('ptc.central.cancel'),
+      binding: bindingSchema,
+      executionId: id,
+    })
+    .strict(),
+  z
+    .object({
+      ...header,
+      type: z.literal('ptc.central.cancelled'),
+      binding: bindingSchema,
+      executionId: id,
+    })
+    .strict(),
+  z
+    .object({
+      ...header,
+      type: z.literal('ptc.central.error'),
+      binding: bindingSchema,
+      executionId: id,
+      error: errorSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...header,
+      type: z.literal('ptc.central.result'),
+      binding: bindingSchema,
+      executionId: id,
+      result: json,
+    })
+    .strict(),
   z
     .object({
       ...header,
@@ -346,15 +437,27 @@ export function descriptorDigest(value: Omit<Descriptor, 'revision'> | Descripto
 export function decodeMessage(source: string): EnvironmentMessage {
   const message = messageSchema.parse(parseJson(source, RESULT_BYTES));
   const limit =
-    message.type === 'execution.start'
+    message.type === 'execution.start' ||
+    message.type === 'ptc.central' ||
+    message.type === 'ptc.central.status' ||
+    message.type === 'workspace.append'
       ? REQUEST_BYTES
       : message.type === 'environment.descriptor'
         ? DESCRIPTOR_BYTES
-        : message.type === 'execution.result' || message.type === 'execution.reply'
+        : message.type === 'execution.result' ||
+            message.type === 'execution.reply' ||
+            message.type === 'ptc.central.result' ||
+            message.type === 'workspace.snapshot.result' ||
+            message.type === 'workspace.append.result'
           ? RESULT_BYTES
           : CONTROL_BYTES;
   if (Buffer.byteLength(source) > limit) throw new Error('Message exceeds byte limit');
-  if (message.type === 'execution.start') validateIntent(message.intent);
+  if (
+    message.type === 'execution.start' ||
+    message.type === 'ptc.central' ||
+    message.type === 'ptc.central.status'
+  )
+    validateIntent(message.intent);
   if (
     message.type === 'environment.descriptor' &&
     message.descriptor.revision !== descriptorDigest(message.descriptor)

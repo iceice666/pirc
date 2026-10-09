@@ -45,8 +45,16 @@ export class GatewayTurnLifecycle {
     const input = validateTurnInput(value, lease.binding);
     this.options.authority.checkTurn(lease, input);
     const session = lease.binding.sessionId;
-    if (this.preparing.has(session) || this.preparing.size >= 4)
-      throw new Error('Turn preparation quota exceeded');
+    if (this.preparing.has(session)) throw new Error('Turn preparation quota exceeded');
+    // Recheck after every wait and reserve synchronously before any await. Multiple
+    // service admissions must not all pass a separate asynchronous preflight.
+    const waitingDeadline = Date.now() + 60000;
+    while (this.preparing.size >= 4) {
+      signal?.throwIfAborted();
+      if (Date.now() >= waitingDeadline) throw new Error('Turn preparation deadline exceeded');
+      await Bun.sleep(25);
+    }
+    signal?.throwIfAborted();
     this.options.authority.enrollTurns(lease);
     this.preparing.add(session);
     const deadline = new AbortController();

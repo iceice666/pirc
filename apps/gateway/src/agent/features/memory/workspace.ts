@@ -9,6 +9,7 @@ import {
   appendFileSync,
   closeSync,
   existsSync,
+  fsyncSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -52,6 +53,14 @@ export interface WorkspaceItem {
   timestamp: string;
   sessionId: string;
   sessionDir: string;
+  /** Fresh gateway evidence has no local JSONL path; legacy items remain preserved. */
+  source?: {
+    authority: 'gateway';
+    nodeId: string;
+    repositoryKey: string;
+    sessionId: string;
+    branchId: string;
+  };
   /** Session observation/reflection ids this item was distilled from (recallable). */
   sourceMemoryIds: string[];
   /** Union of the cited session memory's origins (`messageOrigin`); absent on older items. */
@@ -59,8 +68,26 @@ export interface WorkspaceItem {
   git?: GitState;
   tokenCount: number;
 }
+export interface WorkspaceSuppression {
+  status: 'suppressed';
+  operationId: string;
+  reason: 'forgotten' | 'cleared' | 'legacy';
+}
+export type FreshWorkspaceAppendResult = WorkspaceItem | WorkspaceSuppression;
+export interface FreshWorkspaceReceipt {
+  operationId: string;
+  digest: string;
+  itemId: string;
+  resultDigest: string;
+  suppressed?: 'forgotten' | 'cleared' | 'legacy';
+}
 export type WorkspaceLine =
-  | { type: 'recorded'; at: number; items: WorkspaceItem[] }
+  | {
+      type: 'recorded';
+      at: number;
+      items: WorkspaceItem[];
+      freshReceipts?: FreshWorkspaceReceipt[];
+    }
   | { type: 'retired'; at: number; ids: string[]; reason: 'superseded' | 'forgotten' }
   | { type: 'cleared'; at: number };
 
@@ -132,7 +159,7 @@ const isItem = (value: any): value is WorkspaceItem =>
   typeof value.content === 'string' &&
   RELEVANCES.includes(value.relevance) &&
   typeof value.timestamp === 'string' &&
-  typeof value.sessionDir === 'string' &&
+  (typeof value.sessionDir === 'string' || value.source?.authority === 'gateway') &&
   Array.isArray(value.sourceMemoryIds);
 
 export function parseWorkspaceLines(text: string): WorkspaceLine[] {
@@ -213,6 +240,18 @@ export class WorkspaceLedger {
   append(line: WorkspaceLine): void {
     mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     appendFileSync(this.file, `${JSON.stringify(line)}\n`, { mode: 0o600 });
+  }
+  /** Fresh node effects and their receipts share one recoverable, flushed ledger line.
+   * Leading newline prevents an earlier torn tail from swallowing this record. */
+  appendDurable(line: WorkspaceLine): void {
+    mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+    const fd = openSync(this.file, 'a', 0o600);
+    try {
+      appendFileSync(fd, `\n${JSON.stringify(line)}\n`);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
   }
   /** Exclusive cross-process lock; returns undefined when another holder is active. */
   async withLock<T>(fn: () => Promise<T>, staleMs = 10 * 60_000): Promise<T | undefined> {
@@ -499,6 +538,11 @@ export function recallWorkspaceItem(
   recallInBranch: (branch: SessionEntry[], id: string) => { text: string; status: string },
 ): { text: string; status: string } {
   const header = `Workspace memory:\n${workspaceItemLine(item)}\nFrom session ${item.sessionId}${item.git ? ` at ${gitLabel(item.git)} in ${item.git.worktree}` : ''}.`;
+  if (item.source?.authority === 'gateway')
+    return {
+      text: `${header}\n\nGateway-authoritative evidence must be resolved by the gateway; no legacy JSONL fallback.`,
+      status: 'source_unavailable',
+    };
   const branch = readSessionBranch(item.sessionDir);
   if (!branch.length)
     return {

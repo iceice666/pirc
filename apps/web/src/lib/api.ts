@@ -344,10 +344,28 @@ export const api = {
         })
       ).session,
     ),
-  snapshot: async (sessionId: string) =>
-    normalizeSnapshot(
-      await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot`),
-    ),
+  snapshot: async (sessionId: string) => {
+    const prefix = `/api/sessions/${encodeURIComponent(sessionId)}`;
+    const raw = await request<any>(`${prefix}/snapshot`);
+    if (raw.authority === 'gateway' && raw.session) {
+      const cursors = new Set<string>();
+      let bytes = JSON.stringify(raw.history ?? []).length;
+      while (raw.historyPage?.olderAvailable) {
+        const before = raw.historyPage.olderCursor;
+        if (typeof before !== 'string' || cursors.has(before) || cursors.size >= 256)
+          throw new Error('Gateway history pagination is invalid or exceeds client limit');
+        cursors.add(before);
+        const page = await request<any>(`${prefix}/history?before=${encodeURIComponent(before)}`);
+        if (!Array.isArray(page.history)) throw new Error('Invalid gateway history page');
+        bytes += JSON.stringify(page.history).length;
+        if (bytes > 32 * 1024 * 1024)
+          throw new Error('Gateway history exceeds client memory budget');
+        raw.history = [...page.history, ...(raw.history ?? [])];
+        raw.historyPage = page.historyPage;
+      }
+    }
+    return normalizeSnapshot(raw);
+  },
   command: async (sessionId: string, input: SessionCommandInput): Promise<CommandReceipt> => {
     // A selection can be made before this browser acquires control, while a new
     // session has no runner yet. Apply the visible settings before the prompt;

@@ -3,6 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { DirectCentral } from '../src/gateway-runtime/direct-central.js';
+import { GatewayCapabilities } from '../src/gateway-runtime/capabilities.js';
+import { capabilityMetadata } from '../src/environment/catalog.js';
+import { GatewayPtcService } from '../src/gateway-runtime/ptc-service.js';
 import { GatewayAgentRuntime } from '../src/gateway-runtime/runtime.js';
 import { GatewaySessionAuthority } from '../src/gateway-runtime/authority.js';
 import { GatewayInference } from '../src/backends/inference.js';
@@ -71,6 +75,8 @@ async function fixture(
     fallback?: boolean;
     contextWindow?: number;
     toolArtifact?: boolean;
+    ptcWorker?: string;
+    directCentral?: boolean;
   } = {},
 ) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'pirc-runtime-'));
@@ -127,8 +133,16 @@ async function fixture(
     platform: 'linux',
     cwdDisplay: '/node-only/workspace',
     sandboxStatus: { active: true },
-    limits: { maxActive: 1, maxBudgetMs: 1000 },
+    limits: { maxActive: 1, maxBudgetMs: options.ptcWorker ? 120_000 : 1000 },
   };
+  if (options.directCentral)
+    descriptor.capabilityCatalog.push({
+      name: 'web_search',
+      ...capabilityMetadata('web_search'),
+      argumentSchema: { type: 'object' },
+      resultSchema: { type: 'object' },
+      hookRevision: 'b'.repeat(64),
+    });
   descriptor.revision = descriptorDigest(descriptor);
   const authorize = (binding: typeof lease.binding) => {
     if (JSON.stringify(binding) !== JSON.stringify(lease.binding))
@@ -226,10 +240,45 @@ async function fixture(
       ],
       authorizeModel() {},
       systemPrompt: 'Gateway system prompt',
-      tools: [{ name: 'read', description: 'Read a node file', parameters: {} }],
+      tools: [
+        { name: 'read', description: 'Read a node file', parameters: {} },
+        ...(options.directCentral
+          ? [{ name: 'web_search', description: 'Central search', parameters: {} }]
+          : []),
+      ],
+      ...(options.directCentral
+        ? {
+            central: new DirectCentral({
+              authority,
+              authorize: () => {},
+              capabilities: new GatewayCapabilities({
+                inner: authority.inner,
+                descriptor: () => descriptor,
+                authorize: () => {},
+                capabilities: new Map([
+                  ['web_search', { execute: async () => ({ text: 'central search answer' }) }],
+                ]),
+              }),
+            }),
+          }
+        : {}),
       workerExecutable: options.realWorker ?? '/unused-in-synthetic-fixture',
       ...(options.realWorker ? {} : { workerFactory: fakeWorker }),
       ...(options.auxiliary ? { auxiliary: options.auxiliary } : {}),
+      ...(options.ptcWorker
+        ? {
+            ptc: new GatewayPtcService({
+              environment: remote,
+              journal: gatewayJournal,
+              inner: authority.inner,
+              workerExecutable: options.ptcWorker,
+              online: () => online,
+              central: async () => {
+                throw new Error('No central tools in fixture');
+              },
+            }),
+          }
+        : {}),
       event: (event) => events.push(event),
     });
   let runtime = create();
@@ -276,6 +325,73 @@ async function fixture(
     },
   };
 }
+
+test.skipIf(!process.env.PIRC_TEST_NATIVE_PTC)(
+  'gateway loop sequential PTC calls finalize fresh stores and never send model context to node',
+  async () => {
+    let rounds = 0;
+    const f = await fixture({
+      ptcWorker: process.env.PIRC_TEST_NATIVE_PTC!,
+      stream: async () => {
+        if (rounds++ > 0) return answer('done');
+        return {
+          ...answer(''),
+          stopReason: 'toolUse',
+          content: [
+            {
+              type: 'toolCall',
+              id: 'store-one',
+              name: 'ptc',
+              arguments: { code: 'store("n",1);return 1;' },
+            },
+            {
+              type: 'toolCall',
+              id: 'store-two',
+              name: 'ptc',
+              arguments: { code: 'store("n",load("n")+1);return load("n");' },
+            },
+          ],
+        };
+      },
+    });
+    const input = { runId: randomUUID(), turnId: randomUUID(), text: 'batch', attachments: [] };
+    const run = await f.runtime.run(f.lease, 'alice', input);
+    expect(run.state).toBe('completed');
+    expect(f.authority.ptcStore(f.lease.binding.sessionId, 'alice').store).toBe('{"n":2}');
+    expect(f.effects).toBe(0);
+    expect(f.requests[0]!.tools?.some((tool) => tool.name === 'ptc_docs')).toBe(true);
+  },
+  35000,
+);
+
+test('hybrid direct gateway tool uses central authority without a node execution', async () => {
+  let calls = 0;
+  const f = await fixture({
+    directCentral: true,
+    stream: async () => {
+      if (calls++) return answer('done');
+      return {
+        ...answer(''),
+        stopReason: 'toolUse',
+        content: [
+          {
+            type: 'toolCall',
+            id: 'search-provider-id',
+            name: 'web_search',
+            arguments: { query: 'fixture' },
+          },
+        ],
+      };
+    },
+  });
+  expect((await f.runtime.run(f.lease, 'alice', f.input())).state).toBe('completed');
+  expect(f.effects).toBe(0);
+  expect(f.requests[0]!.tools?.some((tool) => tool.name === 'web_search')).toBe(true);
+  const history = f.authority.read(f.lease.binding.sessionId, 'alice').history;
+  expect(
+    history.some((message) => message.role === 'toolResult' && message.toolName === 'web_search'),
+  ).toBe(true);
+});
 
 test('fresh gateway coding loop streams directly, keeps context off node wire, and preserves provider tool IDs', async () => {
   const f = await fixture();

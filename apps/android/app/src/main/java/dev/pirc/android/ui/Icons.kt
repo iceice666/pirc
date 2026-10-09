@@ -93,7 +93,7 @@ object PircIcons {
         moveTo(20f, 11f); lineTo(10f, 11f); quadTo(4f, 11f, 4f, 17f); lineTo(4f, 19f)
     }
 
-    /** The session's agent runs outside the node's OS sandbox. */
+    /** The session's node execution environment is not OS-sandboxed. */
     val ShieldOff = stroke("shield-off") {
         moveTo(12f, 3f); lineTo(19f, 6f); lineTo(19f, 11f); quadTo(19f, 18f, 12f, 21f); quadTo(5f, 18f, 5f, 11f); lineTo(5f, 6f); close()
         moveTo(4f, 4f); lineTo(20f, 20f)

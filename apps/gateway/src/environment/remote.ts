@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { canonicalJson } from './json.js';
 import { ExecutionJournal } from './journal.js';
+import type { CentralLink } from './central-link.js';
 import type { ArtifactReference } from './artifact-transfer.js';
 import {
   CONTROL_BYTES,
@@ -34,6 +35,7 @@ export class RemoteEnvironment implements Environment {
       send(message: EnvironmentMessage): Promise<void>;
       event?(event: ExecutionEvent): Promise<void>;
       timeoutMs?: number;
+      central?: CentralLink;
     },
   ) {}
   private authorize(binding: Binding): void {
@@ -63,6 +65,7 @@ export class RemoteEnvironment implements Environment {
   /** Called only by the authenticated node subchannel after strict wire decoding. */
   async receive(message: EnvironmentMessage): Promise<void> {
     if (!this.online) return;
+    if (await this.options.central?.receive(message)) return;
     if (message.type === 'execution.event') {
       this.authorize(message.event.binding);
       await this.options.event?.(message.event);
@@ -83,6 +86,7 @@ export class RemoteEnvironment implements Environment {
   }
   disconnect(): void {
     this.online = false;
+    this.options.central?.disconnect();
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
       pending.reject(new Error('Node offline; query original execution on reconnect'));
@@ -90,6 +94,7 @@ export class RemoteEnvironment implements Environment {
     this.pending.clear();
   }
   reconnect(): void {
+    this.options.central?.reconnect();
     this.online = true;
   }
   async describe(binding: Binding): Promise<Descriptor> {
@@ -107,6 +112,37 @@ export class RemoteEnvironment implements Environment {
     )
       throw new Error('Unexpected descriptor reply');
     return reply.descriptor;
+  }
+  async workspaceSnapshot(binding: Binding) {
+    this.authorize(binding);
+    const reply = await this.request({
+      version: 1,
+      requestId: randomUUID(),
+      type: 'workspace.snapshot',
+      binding,
+    });
+    if (
+      reply.type !== 'workspace.snapshot.result' ||
+      canonicalJson(reply.binding, CONTROL_BYTES) !== canonicalJson(binding, CONTROL_BYTES)
+    )
+      throw new Error('Workspace snapshot reply mismatch');
+    return { repositoryKey: reply.repositoryKey, items: reply.items };
+  }
+  async workspaceAppend(binding: Binding, input: Record<string, unknown>) {
+    this.authorize(binding);
+    const reply = await this.request({
+      version: 1,
+      requestId: randomUUID(),
+      type: 'workspace.append',
+      binding,
+      input: JSON.parse(canonicalJson(input, 1024 * 1024)),
+    });
+    if (
+      reply.type !== 'workspace.append.result' ||
+      canonicalJson(reply.binding, CONTROL_BYTES) !== canonicalJson(binding, CONTROL_BYTES)
+    )
+      throw new Error('Workspace append reply mismatch');
+    return reply.item;
   }
   private result(
     reply: EnvironmentMessage,

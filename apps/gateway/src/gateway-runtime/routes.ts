@@ -6,6 +6,7 @@ import type { GatewayAgentRuntime } from './runtime.js';
 import type { GatewaySessionAuthority } from './authority.js';
 import type { WriterLease } from './contracts.js';
 import { turnInputSchema } from './turn-contracts.js';
+import type { GatewayInteractions } from './interactions.js';
 import { thinkingLevels } from '../models.js';
 
 /**
@@ -20,6 +21,12 @@ export function registerGatewayRuntimeRoutes(
     authority: GatewaySessionAuthority;
     authenticate(request: FastifyRequest, mutation: boolean): void;
     writer(sessionId: string, owner: string): WriterLease;
+    /** Experimental compatibility projection; host must supply complete live interaction state before activation. */
+    clientProjection?: boolean;
+    interactions?: GatewayInteractions;
+    control?(sessionId: string, owner: string, clientId: string, generation: number): void;
+    /** Live node executor status, not gateway phase-worker status. */
+    sandbox?(lease: WriterLease): { active: boolean; reason?: string };
   },
 ) {
   const session = (request: FastifyRequest, mutation = false) => {
@@ -40,7 +47,70 @@ export function registerGatewayRuntimeRoutes(
       z.object({ offset: z.coerce.number().int().nonnegative().default(0) }).strict(),
       request.query,
     );
-    return { authority: 'gateway', ...options.runtime.project(id, owner, undefined, offset) };
+    if (offset || !options.clientProjection)
+      return { authority: 'gateway', ...options.runtime.project(id, owner, undefined, offset) };
+    const lease = options.writer(id, owner);
+    if (lease.binding.sessionId !== id) throw new ApiError(403, 'forbidden', 'Writer mismatch');
+    const snapshot = options.runtime.clientSnapshot(lease, owner, options.sandbox?.(lease));
+    return {
+      ...snapshot,
+      ...(options.interactions ? { interactions: options.interactions.list(id, owner) } : {}),
+    };
+  });
+  app.post('/api/sessions/:id/interactions/:interactionId/answer', async (request) => {
+    options.authenticate(request, true);
+    const owner = request.identity?.user;
+    if (!owner) throw new ApiError(401, 'unauthenticated', 'Authentication required');
+    const { id, interactionId } = parse(
+      z
+        .object({
+          id: z.string().uuid(),
+          interactionId: z.string().regex(/^gateway-question-[a-f0-9-]{36}$/),
+        })
+        .strict(),
+      request.params,
+    );
+    if (!options.interactions)
+      throw new ApiError(404, 'not_found', 'Gateway questions unavailable');
+    const lease = options.writer(id, owner);
+    if (lease.binding.sessionId !== id) throw new ApiError(403, 'forbidden', 'Writer mismatch');
+    const payload = parse(
+      z
+        .object({
+          clientId: z.string().min(1).max(200),
+          generation: z.number().int().nonnegative(),
+          answer: z
+            .object({
+              cancelled: z.boolean().optional(),
+              value: z.string().max(12000).optional(),
+              values: z.array(z.string().max(1000)).max(12).optional(),
+            })
+            .strict(),
+        })
+        .strict(),
+      request.body,
+    );
+    if (!options.control)
+      throw new ApiError(403, 'forbidden', 'Question control lease verification unavailable');
+    options.control(id, owner, payload.clientId, payload.generation);
+    const pending = options.interactions.list(id, owner).find((item) => item.id === interactionId);
+    const value = payload.answer.value;
+    const selected =
+      payload.answer.values ??
+      (value && pending?.question.options?.some((option) => option.label === value) ? [value] : []);
+    options.interactions.answer(lease, owner, interactionId, {
+      cancelled: payload.answer.cancelled ?? false,
+      selected,
+      ...(value && selected.length === 0 ? { custom: value } : {}),
+    });
+    return { answered: true };
+  });
+  app.get('/api/sessions/:id/history', async (request) => {
+    const { id, owner } = session(request);
+    const { before } = parse(z.object({ before: z.string().uuid() }).strict(), request.query);
+    const lease = options.writer(id, owner);
+    if (lease.binding.sessionId !== id) throw new ApiError(403, 'forbidden', 'Writer mismatch');
+    return options.authority.olderHistory(id, owner, lease.branchId, before);
   });
   app.get('/api/sessions/:id/panel/context', async (request) => {
     const { id, owner } = session(request);

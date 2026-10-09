@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { checkVersions } from './version.js';
+import { assertAppleDependencies } from './release-portability.js';
 
 const repo = path.resolve(import.meta.dir, '..');
 let root = repo;
@@ -29,6 +30,15 @@ if (!compiler || !path.isAbsolute(compiler))
   throw new Error('Set PIRC_RELEASE_BUN to the official Bun executable (absolute path)');
 if (run(['otool', '-L', compiler]).includes('/nix/store'))
   throw new Error('Use a portable official Bun compiler');
+const wasm3Archive = process.env.PIRC_WASM3_ARCHIVE;
+if (!wasm3Archive || !path.isAbsolute(wasm3Archive))
+  throw new Error('Set PIRC_WASM3_ARCHIVE to the absolute pinned offline archive path');
+const nativeCompiler = process.env.CC ?? '/usr/bin/clang';
+if (!path.isAbsolute(nativeCompiler))
+  throw new Error('Release CC must be an absolute portable compiler path');
+if (run(['otool', '-L', nativeCompiler]).includes('/nix/store'))
+  throw new Error('Use a portable native release compiler');
+process.env.CC = nativeCompiler;
 const commit = run(['git', 'rev-parse', 'HEAD']);
 const epoch = Number(run(['git', 'show', '-s', '--format=%ct', 'HEAD']));
 mkdirSync(out, { recursive: true });
@@ -57,15 +67,30 @@ for (const role of roles)
     ],
     path.join(root, 'apps/gateway'),
   );
+run([compiler, 'scripts/build-gateway-worker.ts']);
+run([compiler, 'scripts/build-native-ptc-worker.ts']);
+const workerAssets = [
+  'pirc-runtime-worker',
+  'pirc-ptc-worker',
+  'pirc-worker-bootstrap.dylib',
+  'pirc-worker-inspection.dylib',
+  'pirc-worker-watchdog',
+];
+for (const asset of workerAssets) {
+  const file = path.join(root, 'apps/gateway/dist', asset);
+  if (!run(['file', file]).includes('arm64'))
+    throw new Error(`Expected ARM64 worker asset: ${asset}`);
+  const ownInstallName = asset.endsWith('.dylib')
+    ? run(['otool', '-D', file]).split('\n')[1]?.trim()
+    : undefined;
+  assertAppleDependencies(run(['otool', '-L', file]), ownInstallName);
+}
 for (const role of roles) {
   const binary = path.join(root, 'apps/gateway/dist', `pirc-${role}`);
   if (run([binary, '--version']) !== version)
     throw new Error(`Rebuild pirc-${role} for ${version}`);
   if (!run(['file', binary]).includes('arm64')) throw new Error('Expected ARM64 executable');
-  if (run(['otool', '-L', binary]).includes('/nix/store'))
-    throw new Error(
-      'Nonportable Nix-linked binary: rebuild with official Bun --compile-executable-path',
-    );
+  assertAppleDependencies(run(['otool', '-L', binary]));
 }
 if (!existsSync(path.join(root, 'apps/web/dist/index.html')))
   throw new Error('Build the web client first');
@@ -86,6 +111,18 @@ for (const role of roles) {
     `exec "$root/libexec/pirc/pirc-${role}" "$@"\n`;
   writeFileSync(path.join(stage, 'bin', `pirc-${role}`), wrapper, { mode: 0o755 });
 }
+for (const asset of workerAssets)
+  cpSync(path.join(root, 'apps/gateway/dist', asset), path.join(stage, 'libexec/pirc', asset));
+mkdirSync(path.join(stage, 'share/licenses/pirc'), { recursive: true });
+cpSync(
+  path.join(root, 'apps/gateway/dist/pirc-ptc-worker.LICENSE'),
+  path.join(stage, 'share/licenses/pirc/wasm3.LICENSE'),
+);
+mkdirSync(path.join(stage, 'share/pirc'), { recursive: true });
+cpSync(
+  path.join(root, 'apps/gateway/dist/pirc-ptc-worker.provenance.json'),
+  path.join(stage, 'share/pirc/ptc-worker-provenance.json'),
+);
 cpSync(
   realpathSync(path.join(root, 'apps/gateway/node_modules/playwright-core')),
   path.join(stage, 'lib/pirc/playwright-core'),
@@ -140,6 +177,11 @@ writeFileSync(
       epoch,
       compiler: run([compiler, '--version']),
       compilerSha256: createHash('sha256').update(readFileSync(compiler)).digest('hex'),
+      nativeCompilerVersion: run([nativeCompiler, '--version']).split('\n')[0],
+      nativeCompilerSha256: createHash('sha256').update(readFileSync(nativeCompiler)).digest('hex'),
+      ptcWorker: JSON.parse(
+        readFileSync(path.join(root, 'apps/gateway/dist/pirc-ptc-worker.provenance.json'), 'utf8'),
+      ),
       platform: process.platform,
       arch: process.arch,
     },

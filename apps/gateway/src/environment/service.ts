@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { planPtc } from '../gateway-runtime/ptc-contracts.js';
 import { EnvironmentAdmission } from './admission.js';
 import type { ArtifactTransfer } from './artifact-transfer.js';
 const sharedAdmission = new EnvironmentAdmission();
@@ -128,9 +129,15 @@ export class LocalEnvironment implements Environment {
     if (!session.executor.healthy || !session.descriptor.sandboxStatus.active)
       throw new Error('Sandbox unavailable');
     if (
-      !session.descriptor.capabilityCatalog.some(
-        (item) => item.name === intent.capability && item.placement === 'node',
-      )
+      intent.capability.startsWith('lifecycle.')
+        ? !(session.descriptor.lifecycleHooks ?? []).includes(
+            intent.capability.slice(10) as 'sessionStart' | 'beforePrompt' | 'agentSettled',
+          )
+        : intent.capability === 'ptc'
+          ? planPtc(intent.arguments, session.descriptor.capabilityCatalog).placement !== 'node'
+          : !session.descriptor.capabilityCatalog.some(
+              (item) => item.name === intent.capability && item.placement === 'node',
+            )
     )
       throw new Error('Unavailable environment capability');
     if (intent.budgetMs > session.descriptor.limits.maxBudgetMs)

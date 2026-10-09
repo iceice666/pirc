@@ -2,6 +2,7 @@ import { loadAgentConfig, configRoles, type AgentConfig } from '../agent/config.
 import { capabilityForTool, capabilities, type Capabilities } from '../agent/capabilities.js';
 import { discoverSkills, skillRoots } from '../agent/skills.js';
 import { skillsPrompt } from '../agent/features/skills.js';
+import { resolveWorkspace } from '../agent/features/memory/workspace.js';
 import { renderRole } from '../agent/roles.js';
 import type { Tool } from '../agent/tools/types.js';
 import { catalogEntry } from './catalog.js';
@@ -101,6 +102,10 @@ export function describeConfig(config: AgentConfig, options: DescriptorOptions):
     instructions,
     skills: skills.map(({ name, description }) => ({ name, description })),
     role: roleName,
+    repositoryKey: resolveWorkspace(options.cwd).key,
+    lifecycleHooks: (['sessionStart', 'beforePrompt', 'agentSettled'] as const).filter(
+      (phase) => config.hooks[phase].length > 0,
+    ),
     platform,
     cwdDisplay: options.cwd,
     sandboxStatus: options.sandboxStatus,
