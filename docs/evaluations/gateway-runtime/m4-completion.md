@@ -142,9 +142,12 @@ Hostile phase-worker fixtures additionally use the three existing
 `PIRC_TEST_GATEWAY_PROBE`, `PIRC_TEST_GATEWAY_FORGED` and
 `PIRC_TEST_GATEWAY_MEMORY_PROBE` variables with compiled fixture executables.
 
-macOS real-worker/build/release tests are skipped in this Linux continuation,
-as requested by the maintainer. Previous Darwin evidence remains historical and
-does not validate this continuation's changes. Android compilation/APK/device
+macOS real-worker/build tests were skipped in this Linux continuation, as
+requested by the maintainer. They were subsequently run against this record's
+commit `8bb2718399d8` on macOS arm64. Native PTC, team, worker containment,
+real-srt and the full opt-in `bun run check` passed without source changes; see
+[m4-macos-validation.md](m4-macos-validation.md). macOS release archives and
+Darwin Nix builds remain unverified. Android compilation/APK/device
 acceptance remains the maintainer's separate handoff from the earlier record:
 
 ```sh
