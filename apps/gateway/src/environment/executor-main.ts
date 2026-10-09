@@ -548,6 +548,12 @@ export async function runEnvironmentExecutor(): Promise<void> {
                   },
                   signal: controller.signal,
                   timeoutMs: intent.budgetMs,
+                  onOperation: (operation) =>
+                    write({
+                      type: 'executor.operation',
+                      executionId: intent.executionId,
+                      operation,
+                    }),
                   onDelivered: (operationId) => {
                     const id = delivered.get(operationId);
                     if (id)

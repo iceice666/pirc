@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { planPtc } from './ptc-contracts.js';
-import { runtimeClientSnapshot } from './client-projection.js';
+import { runtimeClientSnapshot, GatewayClientProjection } from './client-projection.js';
+import { selectWorkspaceMemory } from './workspace-selection.js';
 import type { GatewayGoals } from './goals.js';
 import type { GatewayWorkspaceMemory } from './workspace-memory.js';
 import { GatewayObservationalMemory } from './observational-memory.js';
@@ -82,6 +83,7 @@ export type RuntimeEvent = {
       isError: boolean;
     }
   | { type: 'agent_start' | 'agent_settled' }
+  | { type: 'queue_update'; steering: string[]; followUp: string[] }
 );
 interface ActiveRun {
   lease: WriterLease;
@@ -92,6 +94,7 @@ interface ActiveRun {
   execution?: ExecutionIntent;
   hookContext?: string;
   workspaceContext?: string;
+  queueSequence?: number;
   settled: Promise<void>;
   settle(): void;
 }
@@ -103,6 +106,7 @@ interface ActiveRun {
  */
 export class GatewayAgentRuntime {
   private readonly lifecycle: GatewayTurnLifecycle;
+  readonly clients: GatewayClientProjection;
   private readonly active = new Map<string, ActiveRun>();
   private readonly docs = new Map<string, { revision: string; registry: CapabilityRegistry }>();
   private closed = false;
@@ -125,6 +129,7 @@ export class GatewayAgentRuntime {
       event?(event: RuntimeEvent): void;
       auxiliary?: readonly ('title' | 'memory')[];
       workspaceMemory?: GatewayWorkspaceMemory;
+      assistantContext?(lease: WriterLease, owner: string, descriptor: Descriptor): string;
       goals?: GatewayGoals;
       observationalMemory?: {
         observeAfterTokens: number;
@@ -201,6 +206,7 @@ export class GatewayAgentRuntime {
       models: structuredClone(options.models),
       tools: structuredClone(options.tools),
     };
+    this.clients = new GatewayClientProjection(options.authority);
     this.lifecycle = new GatewayTurnLifecycle(options);
     options.authority.recoverRuntimeOnce();
   }
@@ -283,6 +289,14 @@ export class GatewayAgentRuntime {
         source: 'node',
         text: run.workspaceContext,
       });
+    const assistant = this.options.assistantContext?.(run.lease, run.owner, turn.descriptor);
+    if (assistant)
+      sections.push({
+        id: 'assistant-memory',
+        title: 'Assistant memory',
+        source: 'gateway',
+        text: assistant,
+      });
     if (this.options.observationalMemory) {
       try {
         const memory = fullProjection(
@@ -350,7 +364,7 @@ export class GatewayAgentRuntime {
         | { type: 'message_start' | 'message_end'; message: AssistantMessage },
     ) => {
       try {
-        this.options.event?.({
+        this.emit(run.lease, {
           sessionId: run.lease.binding.sessionId,
           runId: run.input.runId,
           callId,
@@ -490,7 +504,7 @@ export class GatewayAgentRuntime {
     let eventSequence = 0;
     const emit = (value: Record<string, unknown>) => {
       try {
-        this.options.event?.({
+        this.emit(run.lease, {
           sessionId: run.lease.binding.sessionId,
           runId: run.input.runId,
           callId: intent.executionId,
@@ -585,6 +599,7 @@ export class GatewayAgentRuntime {
       );
       run.hookContext = [run.hookContext ?? '', extra].filter(Boolean).join('\n\n');
       this.options.authority.consumeSteering(run.lease, input);
+      this.publishQueue(run);
     }
     return turn;
   }
@@ -712,7 +727,7 @@ export class GatewayAgentRuntime {
       this.options.authority.startRun(lease, turn);
       started = true;
       try {
-        this.options.event?.({
+        this.emit(run.lease, {
           sessionId: lease.binding.sessionId,
           runId: input.runId,
           callId: input.runId,
@@ -913,6 +928,14 @@ export class GatewayAgentRuntime {
             owner,
             turn.descriptor,
             run.controller.signal,
+            (candidates, signal, context) =>
+              selectWorkspaceMemory(
+                candidates,
+                (system, prompt, tool) =>
+                  this.memoryWorker(run, turn, selectedModel(), system, prompt, tool, signal),
+                signal,
+                context,
+              ),
           );
         } catch {
           run.controller.signal.throwIfAborted();
@@ -926,7 +949,7 @@ export class GatewayAgentRuntime {
       await hooks.run(lease, input, turn.descriptor, 'agentSettled', run.controller.signal);
       this.options.authority.finishRun(lease.binding, input.runId, state);
       try {
-        this.options.event?.({
+        this.emit(run.lease, {
           sessionId: lease.binding.sessionId,
           runId: input.runId,
           callId: input.runId,
@@ -967,6 +990,20 @@ export class GatewayAgentRuntime {
     if (!run || canonicalJson(run.lease, 65_536) !== canonicalJson(lease, 65_536))
       throw new Error('No active writer run');
     this.options.authority.steer(lease, input);
+    this.publishQueue(run);
+  }
+  private publishQueue(run: ActiveRun): void {
+    this.emit(run.lease, {
+      sessionId: run.lease.binding.sessionId,
+      runId: run.input.runId,
+      callId: `${run.input.runId}:queue`,
+      seq: (run.queueSequence = (run.queueSequence ?? 0) + 1),
+      type: 'queue_update',
+      steering: this.options.authority
+        .queuedSteering(run.lease, run.input.runId)
+        .map((input) => (input.text.length > 4096 ? `${input.text.slice(0, 4095)}…` : input.text)),
+      followUp: [],
+    });
   }
   selectModel(lease: WriterLease, owner: string, provider: string, modelId: string): void {
     this.options.authority.assertOwner(lease.binding.sessionId, owner);
@@ -1148,6 +1185,14 @@ export class GatewayAgentRuntime {
       turns: this.lifecycle.project(sessionId, owner, branchId),
     };
   }
+  private emit(lease: WriterLease, event: RuntimeEvent): void {
+    this.clients.runtime(lease, event);
+    try {
+      this.options.event?.(event);
+    } catch {
+      /* A lost UI sink cannot undo durable state. */
+    }
+  }
   clientSnapshot(
     lease: WriterLease,
     owner: string,
@@ -1158,6 +1203,8 @@ export class GatewayAgentRuntime {
       lease,
       owner,
       running: this.active.has(lease.binding.sessionId),
+      live: this.clients.snapshot(lease, owner),
+      goalArmed: this.options.goals?.isArmed(lease) ?? false,
       ...(sandbox ? { sandbox } : {}),
     });
   }
@@ -1270,7 +1317,12 @@ export class GatewayAgentRuntime {
     tool: WorkerTool,
     signal: AbortSignal,
   ): Promise<void> {
-    const config = this.options.observationalMemory!;
+    const config = this.options.observationalMemory ?? {
+      maxTurns: 4,
+      maxTokens: 4096,
+      model: undefined,
+      fallbackModels: [],
+    };
     const choices = [
       ...(config.model
         ? [config.model]

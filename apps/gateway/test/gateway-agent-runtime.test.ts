@@ -537,8 +537,10 @@ test('steering is durably admitted at a tool/model boundary and duplicate steeri
   const steering = { ...f.input('Use the correction'), runId: input.runId };
   f.runtime.steer(f.lease, 'alice', steering);
   f.runtime.steer(f.lease, 'alice', steering);
+  expect(f.runtime.clientSnapshot(f.lease, 'alice').queue.steering).toEqual(['Use the correction']);
   release();
   expect((await running).state).toBe('completed');
+  expect(f.runtime.clientSnapshot(f.lease, 'alice').queue.steering).toEqual([]);
   expect(f.requests).toHaveLength(2);
   expect(f.requests[1]!.messages.filter((message) => message.role === 'user')).toHaveLength(2);
   expect(

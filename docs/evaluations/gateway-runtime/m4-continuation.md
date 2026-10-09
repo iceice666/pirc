@@ -1,5 +1,8 @@
 # Gateway runtime M4 continuation: mixed transport and lifecycle recovery
 
+Historical checkpoint. See [M4 product completion and Linux validation](m4-completion.md)
+for the subsequent implementation and current platform handoffs.
+
 Status: **M4 remains in progress, not accepted for cutover.** This continuation
 builds on [the WIP record](m4-in-progress.md); it does not turn scaffolding or
 skipped checks into completed product parity. All changes remain opt-in.

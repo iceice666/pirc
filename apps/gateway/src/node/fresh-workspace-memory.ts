@@ -24,6 +24,8 @@ export class FreshWorkspaceMemory {
       descriptor: Descriptor;
       cwd: string;
       authorize(binding: Binding): void;
+      /** Required for retiring another fresh session's item; checks the same owner on the node. */
+      authorizeSource?(binding: Binding, source: NonNullable<WorkspaceItem['source']>): void;
       ledger: WorkspaceLedger;
     },
   ) {}
@@ -39,17 +41,108 @@ export class FreshWorkspaceMemory {
   }
   snapshot(binding: Binding) {
     this.check(binding);
-    const fresh = this.options.ledger
-      .fold()
-      .active.filter(
-        (item) =>
-          item.source?.authority === 'gateway' &&
-          item.source.nodeId === binding.nodeId &&
-          item.source.repositoryKey === this.options.ledger.key,
-      );
-    if (fresh.length > 256) throw new Error('Workspace snapshot item quota exceeded');
-    canonicalJson(fresh, 1024 * 1024);
-    return { repositoryKey: this.options.ledger.key, items: fresh };
+    const fold = this.options.ledger.fold();
+    const eligible = (item: WorkspaceItem) =>
+      item.source?.authority === 'gateway' &&
+      item.source.nodeId === binding.nodeId &&
+      item.source.repositoryKey === this.options.ledger.key;
+    const fresh = fold.active.filter(eligible);
+    // Only fresh recorded sources can expose forgotten text to their owner's promoter.
+    const forgotten = new Map<string, WorkspaceItem>();
+    for (const line of this.options.ledger.lines())
+      if (line.type === 'recorded')
+        for (const item of line.items)
+          if (eligible(item) && fold.forgotten.has(item.id)) forgotten.set(item.id, item);
+    if (fresh.length > 256 || forgotten.size > 256)
+      throw new Error('Workspace snapshot item quota exceeded');
+    const snapshot = {
+      repositoryKey: this.options.ledger.key,
+      items: fresh,
+      forgotten: [...forgotten.values()],
+    };
+    canonicalJson(snapshot, 1024 * 1024);
+    return snapshot;
+  }
+  async retire(
+    binding: Binding,
+    input: {
+      operationId: string;
+      items: Array<{ id: string; source: NonNullable<WorkspaceItem['source']> }>;
+    },
+  ) {
+    this.check(binding);
+    input = z
+      .object({
+        operationId: z.string().uuid(),
+        items: z
+          .array(
+            z
+              .object({
+                id: z.string().regex(/^[a-f0-9]{12}$/),
+                source: z
+                  .object({
+                    authority: z.literal('gateway'),
+                    nodeId: z.string(),
+                    repositoryKey: z.string().regex(/^[a-f0-9]{16}$/),
+                    sessionId: z.string().uuid(),
+                    branchId: z.string().uuid(),
+                  })
+                  .strict(),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(16),
+      })
+      .strict()
+      .parse(input);
+    const digest = createHash('sha256')
+      .update(canonicalJson({ binding, input }, CONTROL_BYTES))
+      .digest('hex');
+    const result = await this.options.ledger.withLock(async () => {
+      const previous = this.options.ledger
+        .lines()
+        .find(
+          (line) => line.type === 'retired' && line.freshReceipt?.operationId === input.operationId,
+        );
+      if (previous?.type === 'retired') {
+        if (previous.freshReceipt!.digest !== digest)
+          throw Error('Workspace retirement identity conflict');
+        return { operationId: input.operationId, retired: previous.ids };
+      }
+      const fold = this.options.ledger.fold();
+      const ids: string[] = [];
+      for (const item of input.items) {
+        if (
+          item.source.nodeId !== binding.nodeId ||
+          item.source.repositoryKey !== this.options.ledger.key
+        )
+          throw Error('Workspace retirement source mismatch');
+        if (item.source.sessionId !== binding.sessionId) {
+          if (!this.options.authorizeSource)
+            throw Error('Workspace retirement source authorization unavailable');
+          this.options.authorizeSource(binding, item.source);
+        }
+        const saved = fold.items.get(item.id);
+        if (!saved) continue; // Clear/forget always wins; never reintroduce content.
+        if (
+          !saved.source ||
+          canonicalJson(saved.source, CONTROL_BYTES) !== canonicalJson(item.source, CONTROL_BYTES)
+        )
+          throw Error('Workspace retirement source mismatch');
+        if (!ids.includes(item.id)) ids.push(item.id);
+      }
+      this.options.ledger.appendDurable({
+        type: 'retired',
+        at: Date.now(),
+        ids,
+        reason: 'superseded',
+        freshReceipt: { operationId: input.operationId, digest },
+      });
+      return { operationId: input.operationId, retired: ids };
+    });
+    if (!result) throw Error('Workspace memory is locked');
+    return result;
   }
   async append(
     binding: Binding,

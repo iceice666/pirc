@@ -455,7 +455,7 @@ export class GatewaySessionAuthority {
     quote: string,
   ): string[] {
     this.assertOwner(sessionId, owner);
-    if (entryIds.length < 1 || entryIds.length > 64 || quote.length > 1000)
+    if (entryIds.length < 1 || entryIds.length > 64 || quote.length > 4000)
       throw new Error('User evidence quota exceeded');
     const session = this.session(sessionId),
       ids: string[] = [];
@@ -474,6 +474,25 @@ export class GatewaySessionAuthority {
       if (row.text?.includes(quote)) ids.push(id);
     }
     return ids;
+  }
+  /** Resolve model-facing quotes from authoritative user text; no invented entry IDs needed. */
+  findUserEvidence(sessionId: string, owner: string, quote: string): string[] {
+    this.assertOwner(sessionId, owner);
+    if (!quote.trim() || quote.length > 4000) throw Error('User evidence quota exceeded');
+    const rows = this.db
+      .query(
+        `SELECT id FROM runtime_entries WHERE session=? AND json_extract(payload,'$.message.role')='user'
+      AND instr(CASE WHEN json_type(payload,'$.message.content')='text' THEN json_extract(payload,'$.message.content')
+      ELSE (SELECT group_concat(json_extract(value,'$.text'),'') FROM json_each(payload,'$.message.content') WHERE json_extract(value,'$.type')='text') END,?)>0
+      ORDER BY rowid DESC LIMIT 256`,
+      )
+      .all(sessionId, quote) as { id: string }[];
+    const branch = this.session(sessionId).branch,
+      ids = rows
+        .filter((row) => this.contains(sessionId, branch, row.id, 'message'))
+        .slice(0, 64)
+        .map((row) => row.id);
+    return ids.length ? this.userEvidence(sessionId, owner, ids, quote) : [];
   }
   humanTurn(intent: ExecutionIntent): boolean {
     this.bound(intent.binding);
@@ -1777,6 +1796,11 @@ export class GatewaySessionAuthority {
     this.db
       .query('INSERT INTO runtime_outbox(session,branch,payload) VALUES (?,?,?)')
       .run(session, branch, canonicalJson(payload, CONTROL_BYTES));
+  }
+  /** Trusted client projector only; append the bounded compatibility event atomically with state. */
+  publishClientEvent(lease: WriterLease, event: unknown): void {
+    this.writable(lease);
+    this.publish(lease.binding.sessionId, lease.branchId, { type: 'client.event', event });
   }
   /** Durable event cursor, owner and branch scoped; contains references, never image bytes. */
   events(sessionId: string, owner: string, after = 0, branchId?: string) {

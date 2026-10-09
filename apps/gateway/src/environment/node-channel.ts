@@ -15,7 +15,11 @@ export function nodeEnvironmentReceiver(options: {
   send(message: EnvironmentMessage): Promise<void>;
 }) {
   return async (message: EnvironmentMessage): Promise<void> => {
-    if (message.type === 'workspace.snapshot' || message.type === 'workspace.append') {
+    if (
+      message.type === 'workspace.snapshot' ||
+      message.type === 'workspace.append' ||
+      message.type === 'workspace.retire'
+    ) {
       if (!options.workspace) throw new Error('Workspace memory service unavailable');
       if (message.type === 'workspace.snapshot') {
         const value = options.workspace.snapshot(message.binding);
@@ -26,6 +30,19 @@ export function nodeEnvironmentReceiver(options: {
           binding: message.binding,
           repositoryKey: value.repositoryKey,
           items: JSON.parse(JSON.stringify(value.items)),
+          forgotten: JSON.parse(JSON.stringify(value.forgotten)),
+        });
+      } else if (message.type === 'workspace.retire') {
+        const result = await options.workspace.retire(
+          message.binding,
+          message.input as unknown as Parameters<FreshWorkspaceMemory['retire']>[1],
+        );
+        await options.send({
+          version: 1,
+          requestId: message.requestId,
+          type: 'workspace.retire.result',
+          binding: message.binding,
+          ...result,
         });
       } else {
         const input = message.input as unknown as Parameters<FreshWorkspaceMemory['append']>[1];

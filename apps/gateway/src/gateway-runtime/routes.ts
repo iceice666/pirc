@@ -7,6 +7,7 @@ import type { GatewaySessionAuthority } from './authority.js';
 import type { WriterLease } from './contracts.js';
 import { turnInputSchema } from './turn-contracts.js';
 import type { GatewayInteractions } from './interactions.js';
+import type { GatewayEnvironmentInteractions } from './environment-interactions.js';
 import { thinkingLevels } from '../models.js';
 
 /**
@@ -21,9 +22,10 @@ export function registerGatewayRuntimeRoutes(
     authority: GatewaySessionAuthority;
     authenticate(request: FastifyRequest, mutation: boolean): void;
     writer(sessionId: string, owner: string): WriterLease;
-    /** Experimental compatibility projection; host must supply complete live interaction state before activation. */
+    /** Explicit compatibility projection for an opt-in fresh-runtime host. */
     clientProjection?: boolean;
     interactions?: GatewayInteractions;
+    environmentInteractions?: GatewayEnvironmentInteractions;
     control?(sessionId: string, owner: string, clientId: string, generation: number): void;
     /** Live node executor status, not gateway phase-worker status. */
     sandbox?(lease: WriterLease): { active: boolean; reason?: string };
@@ -54,7 +56,10 @@ export function registerGatewayRuntimeRoutes(
     const snapshot = options.runtime.clientSnapshot(lease, owner, options.sandbox?.(lease));
     return {
       ...snapshot,
-      ...(options.interactions ? { interactions: options.interactions.list(id, owner) } : {}),
+      interactions: [
+        ...(options.interactions?.list(id, owner) ?? []),
+        ...(options.environmentInteractions?.list(lease, owner) ?? []),
+      ],
     };
   });
   app.post('/api/sessions/:id/interactions/:interactionId/answer', async (request) => {
@@ -65,13 +70,11 @@ export function registerGatewayRuntimeRoutes(
       z
         .object({
           id: z.string().uuid(),
-          interactionId: z.string().regex(/^gateway-question-[a-f0-9-]{36}$/),
+          interactionId: z.string().regex(/^(gateway-question|node-environment)-[a-f0-9-]{36}$/),
         })
         .strict(),
       request.params,
     );
-    if (!options.interactions)
-      throw new ApiError(404, 'not_found', 'Gateway questions unavailable');
     const lease = options.writer(id, owner);
     if (lease.binding.sessionId !== id) throw new ApiError(403, 'forbidden', 'Writer mismatch');
     const payload = parse(
@@ -82,6 +85,7 @@ export function registerGatewayRuntimeRoutes(
           answer: z
             .object({
               cancelled: z.boolean().optional(),
+              confirmed: z.boolean().optional(),
               value: z.string().max(12000).optional(),
               values: z.array(z.string().max(1000)).max(12).optional(),
             })
@@ -93,6 +97,21 @@ export function registerGatewayRuntimeRoutes(
     if (!options.control)
       throw new ApiError(403, 'forbidden', 'Question control lease verification unavailable');
     options.control(id, owner, payload.clientId, payload.generation);
+    if (interactionId.startsWith('node-environment-')) {
+      if (!options.environmentInteractions)
+        throw new ApiError(404, 'not_found', 'Node approvals unavailable');
+      await options.environmentInteractions.answer(
+        lease,
+        owner,
+        interactionId,
+        payload.answer.confirmed === true && payload.answer.cancelled !== true,
+      );
+      return { answered: true };
+    }
+    if (!options.interactions)
+      throw new ApiError(404, 'not_found', 'Gateway questions unavailable');
+    if (payload.answer.confirmed !== undefined)
+      throw new ApiError(400, 'invalid_input', 'Confirmation belongs to node approvals');
     const pending = options.interactions.list(id, owner).find((item) => item.id === interactionId);
     const value = payload.answer.value;
     const selected =
@@ -125,7 +144,13 @@ export function registerGatewayRuntimeRoutes(
       z.object({ after: z.coerce.number().int().nonnegative().default(0) }).strict(),
       request.query,
     );
-    return { events: options.authority.events(id, owner, after) };
+    const lease = options.writer(id, owner);
+    if (lease.binding.sessionId !== id) throw new ApiError(403, 'forbidden', 'Writer mismatch');
+    return {
+      events: options.clientProjection
+        ? options.runtime.clients.events(lease, owner, after)
+        : options.authority.events(id, owner, after),
+    };
   });
   app.get('/api/sessions/:id/recap', async (request) => {
     const { id, owner } = session(request);

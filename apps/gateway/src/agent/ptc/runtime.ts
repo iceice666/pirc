@@ -84,6 +84,8 @@ export interface ExecutionOptions {
   attach?: (handle: string) => { queued: number };
   /** Progress for observers (not the model); never called after the execution ended. */
   onProgress?: (summary: OperationSummary) => void;
+  /** Host-created operation lifecycle; observers cannot grant execution authority. */
+  onOperation?: (event: Record<string, unknown>) => void;
   /** The session's script store (JSON object) for `load()`. */
   store?: string;
   /** Test seam: the pid of the script's process once started. */
@@ -562,6 +564,12 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
       delivered: false,
     };
     records.push(record);
+    options.onOperation?.({
+      type: 'tool_execution_start',
+      toolCallId: operationId,
+      toolName: name,
+      args: values,
+    });
     node({
       nodeId: operationId,
       parentNodeId: nodeIdOf(scope),
@@ -622,6 +630,13 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
         outcome: record.outcome,
         durationMs: record.durationMs,
         ...(envelope.ok ? {} : { errorCode: envelope.error.code }),
+      });
+      options.onOperation?.({
+        type: 'tool_execution_end',
+        toolCallId: operationId,
+        toolName: name,
+        result: { content: [{ type: 'text', text: record.outcome }], details: { ...record } },
+        isError: !envelope.ok,
       });
       progress();
       try {

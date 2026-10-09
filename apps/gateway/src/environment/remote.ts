@@ -126,7 +126,7 @@ export class RemoteEnvironment implements Environment {
       canonicalJson(reply.binding, CONTROL_BYTES) !== canonicalJson(binding, CONTROL_BYTES)
     )
       throw new Error('Workspace snapshot reply mismatch');
-    return { repositoryKey: reply.repositoryKey, items: reply.items };
+    return { repositoryKey: reply.repositoryKey, items: reply.items, forgotten: reply.forgotten };
   }
   async workspaceAppend(binding: Binding, input: Record<string, unknown>) {
     this.authorize(binding);
@@ -143,6 +143,28 @@ export class RemoteEnvironment implements Environment {
     )
       throw new Error('Workspace append reply mismatch');
     return reply.item;
+  }
+  async workspaceRetire(
+    binding: Binding,
+    input: Parameters<
+      import('../node/fresh-workspace-memory.js').FreshWorkspaceMemory['retire']
+    >[1],
+  ) {
+    this.authorize(binding);
+    const reply = await this.request({
+      version: 1,
+      requestId: randomUUID(),
+      type: 'workspace.retire',
+      binding,
+      input,
+    });
+    if (
+      reply.type !== 'workspace.retire.result' ||
+      canonicalJson(reply.binding, CONTROL_BYTES) !== canonicalJson(binding, CONTROL_BYTES) ||
+      reply.operationId !== input.operationId
+    )
+      throw Error('Workspace retirement reply mismatch');
+    return { operationId: reply.operationId, retired: reply.retired };
   }
   private result(
     reply: EnvironmentMessage,

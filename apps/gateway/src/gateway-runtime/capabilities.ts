@@ -6,6 +6,7 @@ import type { InnerJournal } from '../environment/inner-journal.js';
 import type { NodeHookRoute } from '../environment/gateway-operation.js';
 import { ptcTerminal } from '../environment/ptc-result.js';
 import { canonicalJson } from '../environment/json.js';
+import { ApiError } from '../errors.js';
 
 export interface CentralCapability {
   /** Runs only after the operation's mutation/result transaction committed. */
@@ -55,6 +56,35 @@ export class GatewayCapabilities {
       canonicalJson(descriptor.binding, 65536) !== canonicalJson(intent.binding, 65536)
     )
       throw new Error('Stale central capability');
+    const mutation = (db: Database, args: Record<string, unknown>, operationId: string): Result => {
+      try {
+        // A savepoint rolls back all covered writes before recording a domain refusal.
+        return db
+          .transaction(() => ({
+            ok: true as const,
+            contractVersion: CONTRACT_VERSION,
+            operationId,
+            data: JSON.parse(canonicalJson(handler.mutate!(db, args, intent), 16 * 1024 * 1024)),
+            attachments: [],
+            truncated: false,
+          }))
+          .immediate();
+      } catch (error) {
+        if (
+          !(error instanceof PtcError && error.outcome === 'not_started') &&
+          !(error instanceof ApiError && error.statusCode >= 400 && error.statusCode < 500)
+        )
+          throw error;
+        const typed =
+          error instanceof PtcError ? error : new PtcError('InvalidArguments', error.message);
+        return {
+          ok: false,
+          contractVersion: CONTRACT_VERSION,
+          operationId,
+          error: typed.toJSON(operationId),
+        };
+      }
+    };
     if (direct) {
       const hooks = this.options.hooks?.(intent);
       const effect = async (final: Record<string, unknown>) => {
@@ -93,19 +123,7 @@ export class GatewayCapabilities {
         ...(handler.mutate
           ? {
               mutate: (db, args) =>
-                ptcTerminal({
-                  ok: true,
-                  contractVersion: CONTRACT_VERSION,
-                  operationId: intent.executionId,
-                  data: JSON.parse(
-                    canonicalJson(
-                      handler.mutate!(db, args as Record<string, unknown>, intent),
-                      16 * 1024 * 1024,
-                    ),
-                  ),
-                  attachments: [],
-                  truncated: false,
-                }),
+                ptcTerminal(mutation(db, args as Record<string, unknown>, intent.executionId)),
             }
           : { execute: (args) => effect(args as Record<string, unknown>) }),
         signal,
@@ -162,7 +180,7 @@ export class GatewayCapabilities {
             this.options.authorize(intent, final as Record<string, unknown>),
           beforeExecute: (final) => beforeExecute!(final as Record<string, unknown>),
           mutate: (db, final) =>
-            terminal(envelope(handler.mutate!(db, final as Record<string, unknown>, intent))),
+            ptcTerminal(mutation(db, final as Record<string, unknown>, innerId)),
           signal,
           ...(handler.committed
             ? {
@@ -179,7 +197,7 @@ export class GatewayCapabilities {
         await beforeExecute?.(args);
         signal.throwIfAborted();
         const committed = this.options.inner.transact(intent.binding, parentId, innerId, (db) =>
-          terminal(envelope(handler.mutate!(db, args, intent))),
+          ptcTerminal(mutation(db, args, innerId)),
         );
         result = committed.output as unknown as Result;
       }

@@ -1,6 +1,6 @@
 # Gateway agent runtime: centralize the agent loop, keep execution environments on nodes
 
-Status: **M2/M3 implementation and Linux/macOS arm64 acceptance completed for the opt-in fresh-session runtime. M4 product parity and M5 evaluation/cutover remain open.** The maintainer authorized completing the remaining M2/M3 work. The [platform completion record](../docs/evaluations/gateway-runtime/m2-m3-platform-completion.md) documents enforced macOS native-worker isolation and real-sandbox approval/artifact/restart recovery, with skipped/non-run checks and retention limits kept explicit. Production session routing, live writer transfer and deployment cutover remain excluded. See the [initial macOS regression evidence](../docs/evaluations/gateway-runtime/m3-macos-validation.md), [current implementation/validation and macOS handoff](../docs/evaluations/gateway-runtime/m3-linux-runtime.md), [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [reviewed M1 contracts/security design](../docs/evaluations/gateway-runtime/m1-contracts.md). M1's accepted amendment starts fresh sessions without importing legacy JSONL; old data is retained. M4 product parity and M5 evaluation/cutover remain separate milestones.
+Status: **M4 implementation and Linux automated acceptance completed for the opt-in fresh-session runtime. M5 evaluation/cutover remains open.** The [M4 completion record](../docs/evaluations/gateway-runtime/m4-completion.md) documents product parity, host wiring and validation limits. This continuation uses `9a997802ae98`; macOS validation is skipped as requested, and Android APK/device acceptance remains a separate maintainer handoff. The earlier [M2/M3 platform completion record](../docs/evaluations/gateway-runtime/m2-m3-platform-completion.md) retains its Linux/macOS arm64 evidence. Production session routing, live writer transfer and deployment cutover remain excluded. See the [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [reviewed M1 contracts/security design](../docs/evaluations/gateway-runtime/m1-contracts.md). M1's accepted amendment starts fresh sessions without importing legacy JSONL; old data is retained.
 
 Code baseline: `17a91a0`. This investigation used static architecture inspection only, with no latency measurements; the benefits below are hypotheses to validate.
 
@@ -204,10 +204,12 @@ Acceptance: main coding/chat flows work end to end with a fake provider. UI delt
 
 ### M4 — PTC, teams, and product feature parity
 
-- [ ] Implement §6 PTC routing, branch stores, consistent inner-operation events, attachments, and partial failure.
-- [ ] Convert teams/subagents to gateway runtime instances. Nodes still validate cwd and environment access; preserve policy inheritance and parent/child stop/wait/ask semantics.
-- [ ] Verify background jobs, browsers, project instructions/skills/roles, hooks, workspace memory, recaps, schedules, delegation, and chat-project behavior.
-- [ ] Preserve Web/Android operation trees, approvals, sandbox status, interrupts, and reconnection presentation. Do not show a misleading badge equating the gateway loop itself with the environment sandbox.
+The checked items describe opt-in implementation and Linux automated verification. See the [completion record](../docs/evaluations/gateway-runtime/m4-completion.md) for host integration, skipped macOS checks and unverified Android/manual/release acceptance.
+
+- [x] Implement §6 PTC routing, branch stores, consistent inner-operation events, attachments, and partial failure.
+- [x] Convert teams/subagents to gateway runtime instances. Nodes still validate cwd and environment access; preserve policy inheritance and parent/child stop/wait/ask semantics.
+- [x] Verify background jobs, browsers, project instructions/skills/roles, hooks, workspace memory, recaps, schedules, delegation, and chat-project behavior through Linux automated suites.
+- [x] Preserve Web/Android shared operation-tree, approval, sandbox-status, interrupt and reconnection projections. Android APK/device validation remains a separate handoff. Do not show a misleading badge equating the gateway loop itself with the environment sandbox.
 
 Acceptance: preserve the existing hybrid model interface and identical direct/PTC permissions. Ten dependent environment-only PTC operations must not create ten cross-node tool round trips. Mixed scripts must neither bypass refusals nor replay after approval denial or disconnection. Cover recovery before/after central inner-operation commits, lost replies, and node crashes. Verify that network/host-exec exceptions require node-owned approval and cannot be obtained through forged interactions or sandbox failure.
 

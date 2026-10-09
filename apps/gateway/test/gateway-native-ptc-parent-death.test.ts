@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import path from 'node:path';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 const executable = process.env.PIRC_TEST_NATIVE_PTC;
 const nativeTest = executable ? test : test.skip;
 const alive = (pid: number) => {
@@ -105,11 +105,28 @@ nativeTest(
       let hostPid = identities.workerPid;
       if (process.platform === 'linux') {
         const descendants = (pid: number): number[] => {
-          const children = readFileSync(`/proc/${pid}/task/${pid}/children`, 'utf8')
-            .trim()
-            .split(/\s+/)
-            .filter(Boolean)
-            .map(Number);
+          // Some Linux kernels omit CONFIG_CHECKPOINT_RESTORE's children file.
+          // Kernel PPid records prove the same subtree without trusting guest PIDs.
+          let children: number[];
+          try {
+            children = readFileSync(`/proc/${pid}/task/${pid}/children`, 'utf8')
+              .trim()
+              .split(/\s+/)
+              .filter(Boolean)
+              .map(Number);
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+            children = readdirSync('/proc')
+              .filter((name) => /^\d+$/.test(name))
+              .flatMap((name) => {
+                try {
+                  const status = readFileSync(`/proc/${name}/status`, 'utf8');
+                  return Number(status.match(/^PPid:\s+(\d+)/m)?.[1]) === pid ? [Number(name)] : [];
+                } catch {
+                  return [];
+                } // A concurrently exited process is not a live descendant.
+              });
+          }
           return children.flatMap((child) => [child, ...descendants(child)]);
         };
         const native = descendants(identities.wrapperPid).find((pid) => {

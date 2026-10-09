@@ -139,7 +139,7 @@ export const eventSchema = z
     binding: bindingSchema,
     executionId: id,
     seq: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-    kind: z.enum(['progress', 'approval_requested', 'output', 'artifact']),
+    kind: z.enum(['progress', 'operation', 'approval_requested', 'output', 'artifact']),
     payload: json,
   })
   .strict();
@@ -228,6 +228,7 @@ export const descriptorSchema = z
     instructions: z
       .string()
       .refine((value) => Buffer.byteLength(value) <= 512 * 1024, 'Instructions too large'),
+    projectInstructions: z.string().max(32000).optional(),
     skills: z
       .array(z.object({ name: z.string().max(256), description: z.string().max(4096) }).strict())
       .max(256),
@@ -285,6 +286,7 @@ export const messageSchema = z.discriminatedUnion('type', [
       binding: bindingSchema,
       repositoryKey: z.string().regex(/^[a-f0-9]{16}$/),
       items: json,
+      forgotten: json.optional(),
     })
     .strict(),
   z
@@ -301,6 +303,23 @@ export const messageSchema = z.discriminatedUnion('type', [
       type: z.literal('workspace.append.result'),
       binding: bindingSchema,
       item: json,
+    })
+    .strict(),
+  z
+    .object({
+      ...header,
+      type: z.literal('workspace.retire'),
+      binding: bindingSchema,
+      input: object,
+    })
+    .strict(),
+  z
+    .object({
+      ...header,
+      type: z.literal('workspace.retire.result'),
+      binding: bindingSchema,
+      operationId: id,
+      retired: z.array(z.string().regex(/^[a-f0-9]{12}$/)).max(16),
     })
     .strict(),
   z

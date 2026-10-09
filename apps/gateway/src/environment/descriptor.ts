@@ -26,6 +26,8 @@ export interface DescriptorOptions {
   /** Already intersected parent/child allowlist; absence adds no restrictions. */
   allowedTools?: string[];
   capabilities?: Capabilities;
+  /** Trusted node chat/project service text, never a model-supplied file path. */
+  projectInstructions?: string;
   sandboxStatus: Descriptor['sandboxStatus'];
 }
 
@@ -100,6 +102,9 @@ export function describeConfig(config: AgentConfig, options: DescriptorOptions):
     policyRevision,
     capabilityCatalog: tools.map((tool) => catalogEntry(tool, hookRevision)),
     instructions,
+    ...(options.projectInstructions !== undefined
+      ? { projectInstructions: options.projectInstructions }
+      : {}),
     skills: skills.map(({ name, description }) => ({ name, description })),
     role: roleName,
     repositoryKey: resolveWorkspace(options.cwd).key,

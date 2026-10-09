@@ -19,7 +19,7 @@ import {
   type ExecutionEvent,
   type Terminal,
 } from '../environment/protocol.js';
-import { canonicalJson, digest } from '../environment/json.js';
+import { canonicalJson, digest, parseJson } from '../environment/json.js';
 import { validateBroker, type BrokerKind, brokerSchemas } from '../environment/broker.js';
 import type { Descriptor } from '../environment/protocol.js';
 import { ExecutionBudget } from '../environment/budget.js';
@@ -39,6 +39,7 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
     | {
         intent: ExecutionIntent;
         terminalReceived?: boolean;
+        operations: Map<string, { name: string; settled: boolean }>;
         resolve(value: Terminal): void;
         reject(error: Error): void;
         event(kind: ExecutionEvent['kind'], payload: ExecutionEvent['payload']): void;
@@ -219,6 +220,60 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
             .catch(fail)
             .finally(() => this.brokerWork.delete(storageWork));
           this.brokerWork.add(storageWork);
+        } else if (message.type === 'executor.operation') {
+          const operation = message.operation as Record<string, unknown>;
+          const suffix =
+            typeof operation?.toolCallId === 'string'
+              ? operation.toolCallId.slice(active.intent.executionId.length + 1)
+              : '';
+          if (
+            active.intent.capability !== 'ptc' ||
+            !String(operation?.toolCallId).startsWith(`${active.intent.executionId}:`) ||
+            !/^op[1-9][0-9]{0,2}$/.test(suffix) ||
+            Number(suffix.slice(2)) > 200 ||
+            !['tool_execution_start', 'tool_execution_end'].includes(String(operation?.type)) ||
+            !options.descriptor?.capabilityCatalog.some((cap) => cap.name === operation.toolName)
+          )
+            throw new Error('Invalid executor operation projection');
+          const id = String(operation.toolCallId),
+            known = active.operations.get(id);
+          if (operation.type === 'tool_execution_start') {
+            if (known || active.operations.size >= 200)
+              throw new Error('Executor operation quota or duplicate ID');
+            active.operations.set(id, { name: String(operation.toolName), settled: false });
+          } else {
+            if (!known || known.settled || known.name !== operation.toolName)
+              throw new Error('Invalid executor operation settlement');
+            known.settled = true;
+          }
+          // Bound display arguments and result; child output is never an approval receipt.
+          const args =
+            operation.args && typeof operation.args === 'object'
+              ? Object.fromEntries(
+                  Object.entries(operation.args).map(([key, value]) => [
+                    key,
+                    typeof value === 'string' ? value.slice(0, 1000) : value,
+                  ]),
+                )
+              : {};
+          const projected =
+            operation.type === 'tool_execution_start'
+              ? {
+                  type: operation.type,
+                  toolCallId: operation.toolCallId,
+                  toolName: operation.toolName,
+                  args: canonicalJson(args, RESULT_BYTES).length <= 4096 ? args : {},
+                }
+              : {
+                  type: operation.type,
+                  toolCallId: operation.toolCallId,
+                  toolName: operation.toolName,
+                  result: {
+                    content: [{ type: 'text', text: 'Operation settled; durable result follows' }],
+                  },
+                  isError: operation.isError === true,
+                };
+          active.event('operation', parseJson(canonicalJson(projected, 65536), 65536));
         } else if (message.type === 'executor.progress') {
           active.event('progress', message.output);
         } else if (message.type === 'executor.request') {
@@ -564,6 +619,7 @@ export class SandboxedEnvironmentExecutor implements EnvironmentExecutor {
       this.budget.controller.signal.addEventListener('abort', abort, { once: true });
       this.active = {
         intent,
+        operations: new Map(),
         resolve,
         reject,
         event,

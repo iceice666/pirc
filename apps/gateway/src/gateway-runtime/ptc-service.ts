@@ -35,6 +35,7 @@ export class GatewayPtcService {
         beforeExecute: (args: Record<string, unknown>) => Promise<void>,
       ): Promise<Result>;
       onHumanWait?(intent: ExecutionIntent, listener: (waiting: boolean) => void): () => void;
+      operation?(intent: ExecutionIntent, event: Record<string, unknown>, seq: number): void;
     },
   ) {}
   async start(
@@ -83,6 +84,7 @@ export class GatewayPtcService {
   ): Promise<ExecutionRecord> {
     let declined = false;
     const untrusted = new Set(intent.ptc!.untrusted);
+    let operationSequence = 0;
     const deliveries = new Map<string, ExecutionIntent>();
     try {
       const report = await execute({
@@ -98,6 +100,7 @@ export class GatewayPtcService {
         turnId: intent.toolCallId,
         executionId: intent.executionId,
         store: intent.ptc!.store,
+        onOperation: (event) => this.options.operation?.(intent, event, ++operationSequence),
         onDelivered: (id) => {
           const inner = deliveries.get(id);
           if (!inner) return;

@@ -74,6 +74,11 @@ export interface WorkspaceSuppression {
   reason: 'forgotten' | 'cleared' | 'legacy';
 }
 export type FreshWorkspaceAppendResult = WorkspaceItem | WorkspaceSuppression;
+export interface FreshWorkspaceSnapshot {
+  repositoryKey: string;
+  items: WorkspaceItem[];
+  forgotten?: WorkspaceItem[];
+}
 export interface FreshWorkspaceReceipt {
   operationId: string;
   digest: string;
@@ -88,7 +93,13 @@ export type WorkspaceLine =
       items: WorkspaceItem[];
       freshReceipts?: FreshWorkspaceReceipt[];
     }
-  | { type: 'retired'; at: number; ids: string[]; reason: 'superseded' | 'forgotten' }
+  | {
+      type: 'retired';
+      at: number;
+      ids: string[];
+      reason: 'superseded' | 'forgotten';
+      freshReceipt?: { operationId: string; digest: string };
+    }
   | { type: 'cleared'; at: number };
 
 export interface Candidate {

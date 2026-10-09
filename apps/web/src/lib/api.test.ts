@@ -3,6 +3,38 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { api, normalizeEvent } from './api';
 import type { SessionCommandInput } from './types';
 
+it('projects gateway questions and node approvals through separate reconnect event IDs', () => {
+  for (const prefix of ['gateway-question-', 'node-environment-']) {
+    const id = `${prefix}00000000-0000-4000-8000-000000000001`;
+    const created = normalizeEvent({
+      sessionId: 's',
+      epoch: 'writer',
+      sequence: 2,
+      type: 'interaction_created',
+      data: {
+        id,
+        runnerEpoch: 'writer',
+        kind: prefix === 'node-environment-' ? 'confirm' : 'input',
+        status: 'pending',
+        request: { title: 'Review', message: 'Review this request' },
+      },
+    });
+    expect(created.event).toMatchObject({
+      type: 'interaction_updated',
+      interaction: { id, title: 'Review' },
+    });
+    expect(
+      normalizeEvent({
+        sessionId: 's',
+        epoch: 'writer',
+        sequence: 3,
+        type: 'interaction_answered',
+        data: { interactionId: id },
+      }).event,
+    ).toEqual({ type: 'interaction_removed', interactionId: id });
+  }
+});
+
 const input: SessionCommandInput = {
   commandId: 'first-message',
   kind: 'prompt',

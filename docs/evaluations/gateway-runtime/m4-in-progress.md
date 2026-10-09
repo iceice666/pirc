@@ -1,5 +1,8 @@
 # Gateway runtime M4: in-progress implementation and native guest feasibility
 
+Historical checkpoint. See [M4 product completion and Linux validation](m4-completion.md)
+for the subsequent implementation and current platform handoffs.
+
 Status: **M4 is not complete.** The maintainer requested the entire milestone,
 not a foundation-only delivery. Production routing, cutover, legacy imports and
 policy relaxation remain excluded. No M4 checkbox has been marked complete.

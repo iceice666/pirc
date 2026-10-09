@@ -62,6 +62,8 @@ export function gatewayTeam(options: {
         return requested;
       },
       launch: async (member, event, signal) => {
+        options.authority.assertOwner(options.parent.binding.sessionId, options.owner);
+        options.authority.assertWriter(options.parent);
         const child = await options.provision(
           {
             name: member.name,
@@ -75,6 +77,11 @@ export function gatewayTeam(options: {
           },
           signal,
         );
+        options.authority.assertWriter(options.parent);
+        options.authority.assertOwner(child.lease.binding.sessionId, options.owner);
+        options.authority.assertWriter(child.lease);
+        if (child.lease.binding.sessionId === options.parent.binding.sessionId)
+          throw new Error('Child requires a fresh session');
         if (
           child.lease.binding.nodeId !== options.parent.binding.nodeId ||
           child.lease.binding.workspaceId !== options.parent.binding.workspaceId

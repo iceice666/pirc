@@ -73,7 +73,7 @@ export const TODO_MARKS = { completed: '✓', in_progress: '▶', pending: '☐'
  * task in list order as `<mark> [category] label (blocked)`. In-progress tasks
  * show their activity label.
  */
-function panel(state: State): string[] {
+export function panel(state: State): string[] {
   const done = state.todos.filter((t) => t.status === 'completed');
   const lines = [`TODO · ${done.length}/${state.todos.length}`];
   for (const item of state.todos) {

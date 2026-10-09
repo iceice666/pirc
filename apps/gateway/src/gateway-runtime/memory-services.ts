@@ -2,6 +2,7 @@ import { MemoryStore, type MemoryBudgets, type MemoryAction } from '../daemon/me
 import type { GatewaySessionAuthority } from './authority.js';
 import type { CentralCapability } from './capabilities.js';
 import type { ExecutionIntent } from '../environment/protocol.js';
+import { PtcError } from '../agent/ptc/contracts.js';
 
 /** Reuses existing central memory tables on the operation transaction connection.
  * Caller installs the authority on GatewayDatabase.raw; unrelated records are retained.
@@ -12,6 +13,8 @@ export function memoryCapabilities(options: {
   owner(intent: ExecutionIntent): string;
   budgets: MemoryBudgets;
   chat(intent: ExecutionIntent): boolean;
+  revisions?(intent: ExecutionIntent): Record<string, number>;
+  recordRevision?(intent: ExecutionIntent, id: string, revision: number): void;
 }): ReadonlyMap<string, CentralCapability> {
   const owner = (intent: ExecutionIntent) => {
     if (!options.chat(intent)) throw new Error('Only chat sessions have assistant memory');
@@ -28,22 +31,34 @@ export function memoryCapabilities(options: {
             throw new Error('Memory mutation requires shared authority transaction');
           const user = owner(intent),
             memory = new MemoryStore(db, options.budgets);
+          const quote = typeof args.quote === 'string' ? args.quote.trim() : '';
+          const evidence = quote
+            ? options.authority.findUserEvidence(intent.binding.sessionId, user, quote)
+            : [];
+          if (quote && !evidence.length)
+            throw new PtcError('InvalidArguments', 'Quote is not authoritative user evidence');
           const result = memory.writeNote(
             user,
             {
               action: args.action as MemoryAction,
               ...(typeof args.id === 'string' ? { id: args.id } : {}),
               ...(typeof args.content === 'string' ? { content: args.content } : {}),
-              ...(typeof args.baseRevision === 'number' || args.baseRevision === null
-                ? { baseRevision: args.baseRevision }
-                : {}),
+              ...(options.revisions && args.action !== 'add'
+                ? { baseRevision: options.revisions(intent)[String(args.id)] ?? null }
+                : typeof args.baseRevision === 'number' || args.baseRevision === null
+                  ? { baseRevision: args.baseRevision }
+                  : {}),
             },
             {
               actor: `session:${intent.binding.sessionId}`,
-              origins: ['assistant', `tool:${intent.capability}`],
-              sources: { sessionId: intent.binding.sessionId },
+              origins: ['assistant', `tool:${intent.capability}`, ...(quote ? ['user'] : [])],
+              sources: {
+                sessionId: intent.binding.sessionId,
+                ...(quote ? { entryIds: evidence, quote } : {}),
+              },
             },
           );
+          options.recordRevision?.(intent, result.entry.id, result.entry.revision);
           return {
             text: JSON.stringify(result),
             id: result.entry.id,
@@ -64,18 +79,16 @@ export function memoryCapabilities(options: {
           const user = owner(intent),
             memory = new MemoryStore(db, options.budgets);
           if (typeof args.quote !== 'string' || !args.quote.trim())
-            throw new Error('User quote required');
+            throw new PtcError('InvalidArguments', 'User quote required');
           const ids =
             Array.isArray(args.entryIds) && args.entryIds.every((id) => typeof id === 'string')
               ? (args.entryIds as string[])
               : [];
-          const evidence = options.authority.userEvidence(
-            intent.binding.sessionId,
-            user,
-            ids,
-            args.quote,
-          );
-          if (!evidence.length) throw new Error('Quote is not authoritative user evidence');
+          const evidence = ids.length
+            ? options.authority.userEvidence(intent.binding.sessionId, user, ids, args.quote)
+            : options.authority.findUserEvidence(intent.binding.sessionId, user, args.quote);
+          if (!evidence.length)
+            throw new PtcError('InvalidArguments', 'Quote is not authoritative user evidence');
           const result = memory.propose(
             user,
             intent.binding.sessionId,
@@ -84,9 +97,11 @@ export function memoryCapabilities(options: {
               quote: args.quote,
               ...(typeof args.id === 'string' ? { id: args.id } : {}),
               ...(typeof args.content === 'string' ? { content: args.content } : {}),
-              ...(typeof args.baseRevision === 'number' || args.baseRevision === null
-                ? { baseRevision: args.baseRevision }
-                : {}),
+              ...(options.revisions && args.action !== 'add'
+                ? { baseRevision: options.revisions(intent)[String(args.id)] ?? null }
+                : typeof args.baseRevision === 'number' || args.baseRevision === null
+                  ? { baseRevision: args.baseRevision }
+                  : {}),
             },
             {
               sessionId: intent.binding.sessionId,

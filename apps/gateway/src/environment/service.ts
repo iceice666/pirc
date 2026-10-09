@@ -209,12 +209,15 @@ export class LocalEnvironment implements Environment {
       let terminal: Terminal;
       let progressEvents = 0;
       let progressBytes = 0;
+      let operationEvents = 0;
       let lastProgress = -Infinity;
       try {
         terminal = await session.executor.execute(
           intent,
           controller.signal,
           (kind, payload) => {
+            if (kind === 'operation' && ++operationEvents > 400)
+              throw new Error('Environment operation event quota exceeded');
             if (kind === 'progress' || kind === 'output') {
               const now = performance.now();
               const bytes = Buffer.byteLength(canonicalJson(payload, CONTROL_BYTES / 2));

@@ -61,6 +61,13 @@ export class GatewayInteractions {
       });
       for (const entry of this.waiters)
         if (entry.sessionId === lease.binding.sessionId) entry.listener(true);
+      const projection = this.list(lease.binding.sessionId, owner).find((item) => item.id === id)!;
+      try {
+        this.authority.publishClientEvent(lease, { type: 'interaction_created', data: projection });
+      } catch (error) {
+        this.settle(id, { status: 'cancelled', answers: [] });
+        throw error;
+      }
       signal.addEventListener('abort', abort, { once: true });
       if (signal.aborted) abort();
     });
@@ -118,6 +125,14 @@ export class GatewayInteractions {
       // A failed durable append cannot manufacture a human-origin answer.
       result = { status: 'cancelled', answers: [] };
     } finally {
+      try {
+        this.authority.publishClientEvent(pending.lease, {
+          type: 'interaction_answered',
+          data: { interactionId: id },
+        });
+      } catch {
+        /* Revoked writers cannot publish. */
+      }
       this.pending.delete(id);
       pending.cleanup();
       pending.resolve(result);
@@ -133,8 +148,14 @@ export class GatewayInteractions {
   }
   list(sessionId: string, owner: string) {
     this.authority.assertOwner(sessionId, owner);
+    const branchId = this.authority.identities(sessionId, owner).branchId;
     return [...this.pending]
-      .filter(([, entry]) => entry.lease.binding.sessionId === sessionId && entry.owner === owner)
+      .filter(
+        ([, entry]) =>
+          entry.lease.binding.sessionId === sessionId &&
+          entry.owner === owner &&
+          entry.lease.branchId === branchId,
+      )
       .map(([id, entry]) => ({
         id,
         type: 'question',

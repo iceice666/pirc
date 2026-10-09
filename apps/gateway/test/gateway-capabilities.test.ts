@@ -5,6 +5,7 @@ import { GatewayCapabilities } from '../src/gateway-runtime/capabilities.js';
 import { InnerJournal } from '../src/environment/inner-journal.js';
 import { capabilityMetadata } from '../src/environment/catalog.js';
 import { innerIntent } from '../src/environment/ptc-operation.js';
+import { ApiError } from '../src/errors.js';
 import {
   descriptorDigest,
   intentDigest,
@@ -71,10 +72,15 @@ test('central DB mutation and original-ID result commit together on the same con
       [
         'schedule',
         {
-          mutate: (transaction: Database) => {
+          mutate: (
+            transaction: Database,
+            args: Record<string, unknown>,
+            intent: ExecutionIntent,
+          ) => {
             expect(transaction).toBe(db);
             mutations++;
-            transaction.query('INSERT INTO effects VALUES (?)').run(call.executionId);
+            transaction.query('INSERT INTO effects VALUES (?)').run(intent.executionId);
+            if (args.fail) throw new ApiError(409, 'conflict', 'Expected domain refusal');
             return { text: 'created' };
           },
         },
@@ -86,6 +92,25 @@ test('central DB mutation and original-ID result commit together on the same con
     expect((await capabilities.execute(call, new AbortController().signal)).ok).toBe(true);
     expect(mutations).toBe(1);
     expect(db.query('SELECT * FROM effects').all()).toHaveLength(1);
+    const failed = innerIntent(parent, `${parent.executionId}:op2`, 'schedule', { fail: true });
+    inner.accept(failed);
+    const failure = await capabilities.execute(failed, new AbortController().signal);
+    expect(failure.ok).toBe(false);
+    if (!failure.ok) expect(failure.error.outcome).toBe('not_started');
+    expect(await capabilities.execute(failed, new AbortController().signal)).toEqual(failure);
+    const raw = {
+      ...value,
+      executionId: randomUUID(),
+      capability: 'schedule',
+      arguments: { fail: true },
+    };
+    const direct = { ...raw, argumentDigest: intentDigest(raw) };
+    const refused = await capabilities.execute(direct, new AbortController().signal);
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.error.outcome).toBe('not_started');
+    expect(await capabilities.execute(direct, new AbortController().signal)).toEqual(refused);
+    expect(db.query('SELECT * FROM effects').all()).toHaveLength(1);
+    expect(mutations).toBe(3);
   } finally {
     db.close();
   }

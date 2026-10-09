@@ -10,11 +10,13 @@ import {
   promotionCandidates,
   type WorkspaceItem,
   type FreshWorkspaceAppendResult,
+  type FreshWorkspaceSnapshot,
 } from '../agent/features/memory/workspace.js';
 import { untilCancelled } from './cancellation.js';
 import { canonicalJson } from '../environment/json.js';
 import { z } from 'zod';
 import { redactSecrets } from '../agent/features/memory/redact.js';
+import type { WorkspaceSelection, WorkspaceSelectionContext } from './workspace-selection.js';
 
 const PREPARED = 'runtime.workspace.prepared';
 const preparedSchema = z
@@ -24,6 +26,35 @@ const preparedSchema = z
     repositoryKey: z.string().regex(/^[a-f0-9]{16}$/),
     completionId: z.string().uuid(),
     consideredMemoryIds: z.array(z.string().regex(/^[a-f0-9]{12}$/)).max(16),
+    retire: z
+      .array(
+        z
+          .object({
+            operationId: z.string().uuid(),
+            items: z
+              .array(
+                z
+                  .object({
+                    id: z.string().regex(/^[a-f0-9]{12}$/),
+                    source: z
+                      .object({
+                        authority: z.literal('gateway'),
+                        nodeId: z.string(),
+                        repositoryKey: z.string().regex(/^[a-f0-9]{16}$/),
+                        sessionId: z.string().uuid(),
+                        branchId: z.string().uuid(),
+                      })
+                      .strict(),
+                  })
+                  .strict(),
+              )
+              .min(1)
+              .max(16),
+          })
+          .strict(),
+      )
+      .max(1)
+      .default([]),
     proposals: z
       .array(
         z
@@ -56,7 +87,7 @@ export class GatewayWorkspaceMemory {
   constructor(
     private readonly options: {
       authority: GatewaySessionAuthority;
-      snapshot(binding: Binding): Promise<{ repositoryKey: string; items: WorkspaceItem[] }>;
+      snapshot(binding: Binding): Promise<FreshWorkspaceSnapshot>;
       append(
         binding: Binding,
         input: {
@@ -69,11 +100,24 @@ export class GatewayWorkspaceMemory {
         },
       ): Promise<FreshWorkspaceAppendResult>;
       maxTokens: number;
-      select(
+      retire?(
+        binding: Binding,
+        input: Parameters<
+          import('../node/fresh-workspace-memory.js').FreshWorkspaceMemory['retire']
+        >[1],
+      ): Promise<{ operationId: string; retired: string[] }>;
+      select?(
         candidates: ReturnType<typeof promotionCandidates>,
         signal: AbortSignal,
+        context?: WorkspaceSelectionContext,
       ): Promise<
-        Array<{ content: string; relevance: string; sourceMemoryIds: string[]; origins: string[] }>
+        | WorkspaceSelection
+        | Array<{
+            content: string;
+            relevance: string;
+            sourceMemoryIds: string[];
+            origins: string[];
+          }>
       >;
     },
   ) {}
@@ -195,6 +239,7 @@ export class GatewayWorkspaceMemory {
     owner: string,
     descriptor: Descriptor,
     signal: AbortSignal,
+    select?: NonNullable<GatewayWorkspaceMemory['options']['select']>,
   ): Promise<void> {
     signal.throwIfAborted();
     this.checkSource(lease, owner, descriptor);
@@ -215,8 +260,55 @@ export class GatewayWorkspaceMemory {
         .filter((candidate) => !considered.has(candidate.id))
         .slice(0, 16);
     if (!candidates.length) return;
-    const proposals = await untilCancelled(this.options.select(candidates, signal), signal),
+    const selector = this.options.select ?? select;
+    if (!selector) throw new Error('Workspace selection model unavailable');
+    const snapshot = await untilCancelled(this.options.snapshot(lease.binding), signal);
+    if (snapshot.repositoryKey !== descriptor.repositoryKey)
+      throw Error('Workspace promotion repository mismatch');
+    canonicalJson(snapshot, 1024 * 1024);
+    if (snapshot.items.length > 256) throw Error('Workspace promotion item quota exceeded');
+    const eligible = (item: WorkspaceItem) => {
+      if (
+        item.source?.authority !== 'gateway' ||
+        item.source.nodeId !== lease.binding.nodeId ||
+        item.source.repositoryKey !== descriptor.repositoryKey
+      )
+        return false;
+      try {
+        this.options.authority.assertOwner(item.source.sessionId, owner);
+        const source = this.options.authority.repositorySource(
+          item.source.sessionId,
+          owner,
+          item.source.branchId,
+        );
+        return (
+          source.nodeId === lease.binding.nodeId &&
+          source.repositoryKey === descriptor.repositoryKey
+        );
+      } catch {
+        return false;
+      }
+    };
+    const items = snapshot.items.filter(eligible),
+      forgotten = (snapshot.forgotten ?? []).filter(eligible);
+    const selected = await untilCancelled(
+      selector(candidates, signal, {
+        items,
+        forgotten,
+        allowRetire: !!this.options.retire,
+        maxTokens: this.options.maxTokens,
+      }),
+      signal,
+    );
+    const proposals = Array.isArray(selected) ? selected : selected.add,
       allowed = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+    const retire = Array.isArray(selected) ? [] : [...new Set(selected.retire)];
+    if (
+      retire.length > 16 ||
+      retire.some((id) => !items.some((item) => item.id === id)) ||
+      (retire.length && !this.options.retire)
+    )
+      throw Error('Invalid workspace retirement source');
     if (proposals.length > 16) throw new Error('Workspace promotion quota exceeded');
     const prepared = preparedSchema.parse({
       branchId: lease.branchId,
@@ -224,6 +316,17 @@ export class GatewayWorkspaceMemory {
       repositoryKey: descriptor.repositoryKey,
       completionId: randomUUID(),
       consideredMemoryIds: candidates.map((candidate) => candidate.id),
+      retire: retire.length
+        ? [
+            {
+              operationId: randomUUID(),
+              items: retire.map((id) => ({
+                id,
+                source: items.find((item) => item.id === id)!.source!,
+              })),
+            },
+          ]
+        : [],
       proposals: proposals.map((proposal) => {
         if (
           !proposal.sourceMemoryIds.length ||
@@ -376,6 +479,34 @@ export class GatewayWorkspaceMemory {
       }
       signal.throwIfAborted();
       this.checkSource(lease, owner, descriptor);
+      // Keep old facts available until every replacement append has a durable receipt.
+      for (const retirement of batch.retire) {
+        if (done.has(retirement.operationId)) continue;
+        if (!this.options.retire) throw Error('Workspace retirement service unavailable');
+        signal.throwIfAborted();
+        this.checkSource(lease, owner, descriptor);
+        for (const item of retirement.items)
+          this.options.authority.assertOwner(item.source.sessionId, owner);
+        const result = await untilCancelled(this.options.retire(lease.binding, retirement), signal);
+        signal.throwIfAborted();
+        this.checkSource(lease, owner, descriptor);
+        if (
+          result.operationId !== retirement.operationId ||
+          result.retired.some((id) => !retirement.items.some((item) => item.id === id))
+        )
+          throw Error('Workspace retirement receipt mismatch');
+        this.options.authority.append(lease, retirement.operationId, {
+          type: 'custom',
+          customType: WS_PROMOTED,
+          data: {
+            operationId: retirement.operationId,
+            memoryIds: [],
+            consideredMemoryIds: [],
+            retired: result.retired,
+          },
+        });
+        done.add(retirement.operationId);
+      }
       this.options.authority.append(lease, batch.completionId, {
         type: 'custom',
         customType: WS_PROMOTED,
