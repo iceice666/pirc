@@ -8,9 +8,10 @@ import {
 } from './turn-contracts.js';
 import type { Descriptor } from '../environment/protocol.js';
 import type { ImageContent } from '../agent/messages.js';
+import { redactSecrets } from '../agent/features/memory/redact.js';
 import { chmodSync } from 'node:fs';
 import { z } from 'zod';
-import { canonicalJson, digest, parseJson } from '../environment/json.js';
+import { canonicalJson, digest, parseJson, type Json } from '../environment/json.js';
 import {
   bindingSchema,
   CONTROL_BYTES,
@@ -19,6 +20,7 @@ import {
   validateIntent,
   validateRecordDelivery,
   recordSchema,
+  artifactSchema,
   type Binding,
   type ExecutionIntent,
   type ExecutionRecord,
@@ -96,6 +98,32 @@ export class GatewaySessionAuthority {
         id TEXT PRIMARY KEY, session TEXT NOT NULL REFERENCES runtime_sessions(id),
         branch TEXT NOT NULL REFERENCES runtime_branches(id), input TEXT NOT NULL,
         descriptor TEXT NOT NULL, entry TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS runtime_runs (
+        id TEXT PRIMARY KEY, session TEXT NOT NULL, branch TEXT NOT NULL,
+        turn TEXT NOT NULL UNIQUE, state TEXT NOT NULL, reason TEXT
+      );
+      CREATE TABLE IF NOT EXISTS runtime_model_calls (
+        id TEXT PRIMARY KEY, run TEXT NOT NULL, digest TEXT NOT NULL,
+        state TEXT NOT NULL, entry TEXT
+      );
+      CREATE TABLE IF NOT EXISTS runtime_tool_aliases (
+        execution TEXT PRIMARY KEY, model_tool TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS runtime_acks (execution TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS runtime_contexts (
+        branch TEXT PRIMARY KEY, session TEXT NOT NULL, payload TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS runtime_outbox (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT, session TEXT NOT NULL,
+        branch TEXT NOT NULL, payload TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS runtime_steering (
+        id TEXT PRIMARY KEY, run TEXT NOT NULL, input TEXT NOT NULL, consumed INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS runtime_artifact_refs (
+        session TEXT NOT NULL, id TEXT NOT NULL, binding TEXT NOT NULL,
+        payload TEXT NOT NULL, PRIMARY KEY(session,id)
       );
       CREATE UNIQUE INDEX IF NOT EXISTS runtime_tool_identity ON runtime_executions(
         session, json_extract(intent,'$.runId'), json_extract(intent,'$.turnId'),
@@ -242,6 +270,123 @@ export class GatewaySessionAuthority {
     const entries = this.chain(sessionId, branchId ?? session.branch);
     return { entries, history: historyWithOperations(entries), context: contextEntriesOf(entries) };
   }
+  assertOwner(sessionId: string, owner: string): void {
+    if (this.session(sessionId).owner !== owner) throw new Error('Session owner mismatch');
+  }
+  /** Latest branch-inherited settings without loading image-bearing history. */
+  settings(sessionId: string, owner: string, branchId?: string) {
+    const session = this.session(sessionId);
+    this.assertOwner(sessionId, owner);
+    const branch = this.db
+      .query('SELECT leaf FROM runtime_branches WHERE id=? AND session=?')
+      .get(branchId ?? session.branch, sessionId) as { leaf: string | null } | null;
+    if (!branch) throw new Error('Invalid branch');
+    const rows = this.db
+      .query(
+        `WITH RECURSIVE ancestry(id,parent,depth) AS (
+        SELECT id,json_extract(payload,'$.parentId'),0 FROM runtime_entries WHERE id=? AND session=?
+        UNION ALL SELECT e.id,json_extract(e.payload,'$.parentId'),a.depth+1 FROM runtime_entries e JOIN ancestry a ON e.id=a.parent WHERE e.session=?
+      ) SELECT json_extract(e.payload,'$.type') AS type,
+        json_extract(e.payload,'$.provider') AS provider,
+        json_extract(e.payload,'$.modelId') AS modelId,
+        json_extract(e.payload,'$.thinkingLevel') AS thinking,
+        json_extract(e.payload,'$.name') AS title
+        FROM ancestry a JOIN runtime_entries e ON e.id=a.id
+        WHERE type IN ('model_change','thinking_level_change','session_info')
+        GROUP BY type HAVING a.depth=MIN(a.depth)`,
+      )
+      .all(branch.leaf, sessionId, sessionId) as {
+      type: string;
+      provider: string | null;
+      modelId: string | null;
+      thinking: string | null;
+      title: string | null;
+    }[];
+    const model = rows.find((row) => row.type === 'model_change');
+    return {
+      model: model ? { provider: model.provider!, id: model.modelId! } : undefined,
+      thinking: rows.find((row) => row.type === 'thinking_level_change')?.thinking ?? undefined,
+      title: rows.find((row) => row.type === 'session_info')?.title ?? undefined,
+    };
+  }
+  /** At most 32 entries/8 MiB per history page, measured before fetching payloads. */
+  historyPage(sessionId: string, owner: string, branchId?: string, offset = 0) {
+    const session = this.session(sessionId);
+    this.assertOwner(sessionId, owner);
+    if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Invalid history cursor');
+    const branch = this.db
+      .query('SELECT leaf FROM runtime_branches WHERE id=? AND session=?')
+      .get(branchId ?? session.branch, sessionId) as { leaf: string | null } | null;
+    if (!branch) throw new Error('Invalid branch');
+    const headers = this.db
+      .query(
+        `WITH RECURSIVE ancestry(id,parent,depth) AS (
+      SELECT id,json_extract(payload,'$.parentId'),0 FROM runtime_entries WHERE id=? AND session=?
+      UNION ALL SELECT e.id,json_extract(e.payload,'$.parentId'),a.depth+1 FROM runtime_entries e JOIN ancestry a ON e.id=a.parent WHERE e.session=?
+    ) SELECT e.id,length(CAST(e.payload AS BLOB)) AS bytes FROM ancestry a JOIN runtime_entries e ON e.id=a.id ORDER BY a.depth DESC LIMIT 33 OFFSET ?`,
+      )
+      .all(branch.leaf, sessionId, sessionId, offset) as { id: string; bytes: number }[];
+    let bytes = 0;
+    const entries: AuthorityEntry[] = [];
+    for (const header of headers.slice(0, 32)) {
+      if (bytes + header.bytes > ENTRY_BYTES) break;
+      bytes += header.bytes;
+      const row = this.db
+        .query('SELECT payload FROM runtime_entries WHERE id=? AND session=?')
+        .get(header.id, sessionId) as { payload: string };
+      entries.push(parseJson(row.payload, ENTRY_BYTES) as unknown as AuthorityEntry);
+    }
+    return {
+      history: historyWithOperations(entries),
+      offset,
+      nextOffset: headers.length > entries.length ? offset + entries.length : null,
+    };
+  }
+  /** Bound the live context before materializing image-bearing transcript payloads. */
+  modelContext(sessionId: string, owner: string, branchId?: string) {
+    const session = this.session(sessionId);
+    this.assertOwner(sessionId, owner);
+    const branch = this.db
+      .query('SELECT leaf FROM runtime_branches WHERE id=? AND session=?')
+      .get(branchId ?? session.branch, sessionId) as { leaf: string | null } | null;
+    if (!branch) throw new Error('Invalid branch');
+    const ancestry = `WITH RECURSIVE ancestry(id,parent,depth) AS (
+      SELECT id,json_extract(payload,'$.parentId'),0 FROM runtime_entries WHERE id=? AND session=?
+      UNION ALL SELECT e.id,json_extract(e.payload,'$.parentId'),a.depth+1 FROM runtime_entries e
+      JOIN ancestry a ON e.id=a.parent WHERE e.session=?
+    )`;
+    const parameters = [branch.leaf, sessionId, sessionId] as const;
+    const compact = this.db
+      .query(
+        `${ancestry} SELECT e.payload FROM ancestry a JOIN runtime_entries e ON e.id=a.id WHERE json_extract(e.payload,'$.type')='compaction' ORDER BY a.depth LIMIT 1`,
+      )
+      .get(...parameters) as { payload: string } | null;
+    const compaction = compact
+      ? (parseJson(compact.payload, ENTRY_BYTES) as unknown as AuthorityEntry)
+      : undefined;
+    const boundary =
+      compaction?.type === 'compaction'
+        ? (this.db
+            .query(`${ancestry} SELECT depth FROM ancestry WHERE id=?`)
+            .get(...parameters, compaction.firstKeptEntryId) as { depth: number } | null)
+        : null;
+    if (compaction && !boundary) throw new Error('Invalid persisted compaction boundary');
+    const depth = boundary?.depth ?? Number.MAX_SAFE_INTEGER;
+    const select = `${ancestry} SELECT e.payload FROM ancestry a JOIN runtime_entries e ON e.id=a.id WHERE a.depth<=? AND json_extract(e.payload,'$.type')='message'`;
+    const size = this.db
+      .query(`SELECT COALESCE(SUM(length(CAST(payload AS BLOB))),0) AS bytes FROM (${select})`)
+      .get(...parameters, depth) as { bytes: number };
+    if (size.bytes + Buffer.byteLength(compact?.payload ?? '') > REQUEST_BYTES)
+      throw new Error('Runtime context byte limit exceeded');
+    const rows = this.db.query(`${select} ORDER BY a.depth DESC`).all(...parameters, depth) as {
+      payload: string;
+    }[];
+    const entries = rows.map(
+      (row) => parseJson(row.payload, ENTRY_BYTES) as unknown as AuthorityEntry,
+    );
+    if (compaction) entries.push(compaction);
+    return contextEntriesOf(entries);
+  }
   private appendTo(sessionId: string, branchId: string, input: EntryInput): AuthorityEntry {
     canonicalJson(input, ENTRY_BYTES);
     input = entrySchema.parse(input);
@@ -251,9 +396,7 @@ export class GatewaySessionAuthority {
     if (!branch) throw new Error('Invalid branch');
     if (
       input.type === 'compaction' &&
-      !this.chain(sessionId, branchId).some(
-        (entry) => entry.id === input.firstKeptEntryId && entry.type === 'message',
-      )
+      !this.contains(sessionId, branchId, input.firstKeptEntryId, 'message')
     )
       throw new Error('Invalid compaction boundary');
     const entry = {
@@ -266,7 +409,19 @@ export class GatewaySessionAuthority {
       .query('INSERT INTO runtime_entries VALUES (?,?,?)')
       .run(entry.id, sessionId, canonicalJson(entry, ENTRY_BYTES));
     this.db.query('UPDATE runtime_branches SET leaf=? WHERE id=?').run(entry.id, branchId);
+    this.publish(sessionId, branchId, { type: 'entry.committed', entryId: entry.id });
     return entry;
+  }
+  private contains(sessionId: string, branchId: string, entryId: string, type?: string): boolean {
+    return !!this.db
+      .query(
+        `WITH RECURSIVE ancestry(id,parent) AS (
+      SELECT e.id,json_extract(e.payload,'$.parentId') FROM runtime_entries e JOIN runtime_branches b ON e.id=b.leaf WHERE b.id=? AND b.session=?
+      UNION ALL SELECT e.id,json_extract(e.payload,'$.parentId') FROM runtime_entries e JOIN ancestry a ON e.id=a.parent WHERE e.session=?
+    ) SELECT e.id FROM ancestry a JOIN runtime_entries e ON e.id=a.id
+      WHERE e.id=? AND (? IS NULL OR json_extract(e.payload,'$.type')=?) LIMIT 1`,
+      )
+      .get(branchId, sessionId, sessionId, entryId, type ?? null, type ?? null);
   }
   append(lease: WriterLease, operationId: string, input: EntryInput): AuthorityEntry {
     uuid.parse(operationId);
@@ -299,10 +454,7 @@ export class GatewaySessionAuthority {
     return this.db
       .transaction(() => {
         const session = this.writable(lease);
-        if (
-          atEntryId &&
-          !this.chain(session.id, lease.branchId).some((entry) => entry.id === atEntryId)
-        )
+        if (atEntryId && !this.contains(session.id, lease.branchId, atEntryId))
           throw new Error('Invalid fork boundary');
         const branchId = randomUUID();
         this.db
@@ -422,6 +574,7 @@ export class GatewaySessionAuthority {
             canonicalJson(descriptor, ENTRY_BYTES),
             canonicalJson(entry, ENTRY_BYTES),
           );
+        for (const artifact of input.attachments) this.registerArtifact(lease.binding, artifact);
         return { input, descriptor, entry, branchId: lease.branchId };
       })
       .immediate();
@@ -572,7 +725,12 @@ export class GatewaySessionAuthority {
             type: 'message',
             message: {
               role: 'toolResult',
-              toolCallId: intent.toolCallId,
+              toolCallId:
+                (
+                  this.db
+                    .query('SELECT model_tool FROM runtime_tool_aliases WHERE execution=?')
+                    .get(intent.executionId) as { model_tool: string } | null
+                )?.model_tool ?? intent.toolCallId,
               toolName: intent.capability,
               content:
                 output && Array.isArray(output.content)
@@ -599,6 +757,8 @@ export class GatewaySessionAuthority {
           });
           this.appendTo(record.binding.sessionId, row.branch, input);
         }
+        for (const artifact of record.terminal!.artifacts)
+          this.registerArtifact(record.binding, artifact);
         this.db
           .query('UPDATE runtime_executions SET receipt=? WHERE id=?')
           .run(canonicalJson(record, RESULT_BYTES), record.executionId);
@@ -618,5 +778,444 @@ export class GatewaySessionAuthority {
     if (!row?.receipt) throw new Error('No committed transcript result');
     const record = recordSchema.parse(parseJson(row.receipt, RESULT_BYTES));
     await environment.ack(binding, executionId, record.resultDigest!);
+    this.db.query('INSERT OR IGNORE INTO runtime_acks VALUES (?)').run(executionId);
   }
+
+  assertWriter(lease: WriterLease): void {
+    this.writable(lease);
+  }
+  hasUnresolvedExecutions(sessionId: string, owner: string): boolean {
+    this.assertOwner(sessionId, owner);
+    return !!this.db
+      .query('SELECT id FROM runtime_executions WHERE session=? AND receipt IS NULL LIMIT 1')
+      .get(sessionId);
+  }
+  private registerArtifact(binding: Binding, value: unknown): void {
+    const artifact = artifactSchema.parse(value);
+    if (
+      artifact.sessionId !== binding.sessionId ||
+      artifact.nodeId !== binding.nodeId ||
+      artifact.workspaceId !== binding.workspaceId
+    )
+      throw new Error('Artifact owner mismatch');
+    const payload = canonicalJson(artifact, CONTROL_BYTES);
+    const previous = this.db
+      .query('SELECT payload,binding FROM runtime_artifact_refs WHERE session=? AND id=?')
+      .get(binding.sessionId, artifact.artifactId) as { payload: string; binding: string } | null;
+    const encodedBinding = canonicalJson(binding, CONTROL_BYTES);
+    if (previous && (previous.payload !== payload || previous.binding !== encodedBinding))
+      throw new Error('Artifact reference conflict');
+    this.db
+      .query('INSERT OR IGNORE INTO runtime_artifact_refs VALUES (?,?,?,?)')
+      .run(binding.sessionId, artifact.artifactId, encodedBinding, payload);
+  }
+  artifact(sessionId: string, owner: string, artifactId: string) {
+    this.assertOwner(sessionId, owner);
+    uuid.parse(artifactId);
+    const row = this.db
+      .query('SELECT binding,payload FROM runtime_artifact_refs WHERE session=? AND id=?')
+      .get(sessionId, artifactId) as { binding: string; payload: string } | null;
+    if (!row) throw new Error('Artifact is not referenced by this session');
+    return {
+      binding: bindingSchema.parse(parseJson(row.binding, CONTROL_BYTES)),
+      reference: artifactSchema.parse(parseJson(row.payload, CONTROL_BYTES)),
+    };
+  }
+  /** Owner/workspace-scoped fresh evidence. Image bodies and legacy files are never read. */
+  recap(workspaceId: string, owner: string, days = 14) {
+    if (!Number.isSafeInteger(days) || days < 1 || days > 90)
+      throw new Error('Invalid recap window');
+    const until = this.now(),
+      since = until - days * 86_400_000;
+    const sessions = this.db
+      .query(
+        "SELECT id,branch FROM runtime_sessions WHERE owner=? AND json_extract(binding,'$.workspaceId')=? ORDER BY rowid DESC LIMIT 16",
+      )
+      .all(owner, workspaceId) as { id: string; branch: string }[];
+    let remaining = 80_000;
+    let truncated = false;
+    const evidence = sessions.map((session) => {
+      const rows = this.db
+        .query(
+          `WITH RECURSIVE ancestry(id,parent,depth) AS (
+        SELECT e.id,json_extract(e.payload,'$.parentId'),0 FROM runtime_entries e JOIN runtime_branches b ON e.id=b.leaf WHERE b.id=? AND b.session=?
+        UNION ALL SELECT e.id,json_extract(e.payload,'$.parentId'),a.depth+1 FROM runtime_entries e JOIN ancestry a ON e.id=a.parent WHERE e.session=?
+      ) SELECT e.id,json_extract(e.payload,'$.message.timestamp') AS timestamp,
+        json_extract(e.payload,'$.message.role') AS role,
+        json_extract(e.payload,'$.message.toolName') AS toolName,
+        json_extract(e.payload,'$.message.isError') AS isError,
+        CASE WHEN json_type(e.payload,'$.message.content')='text' THEN substr(json_extract(e.payload,'$.message.content'),1,4000)
+        ELSE substr((SELECT group_concat(json_extract(value,'$.text'),'') FROM json_each(e.payload,'$.message.content') WHERE json_extract(value,'$.type')='text'),1,4000) END AS text
+        FROM ancestry a JOIN runtime_entries e ON e.id=a.id WHERE json_extract(e.payload,'$.message.role') IN ('user','assistant','toolResult') AND timestamp BETWEEN ? AND ? ORDER BY a.depth LIMIT 32`,
+        )
+        .all(session.branch, session.id, session.id, since, until) as {
+        id: string;
+        timestamp: number;
+        role: string;
+        toolName: string | null;
+        isError: number | null;
+        text: string | null;
+      }[];
+      const result = rows.reverse().flatMap((row) => {
+        if (!remaining) {
+          truncated = true;
+          return [];
+        }
+        const text = redactSecrets(row.text ?? '').slice(0, remaining);
+        remaining -= text.length;
+        return [
+          {
+            entryId: row.id,
+            timestamp: row.timestamp,
+            role: row.role === 'toolResult' ? 'tool' : row.role,
+            text,
+            ...(row.toolName ? { toolName: row.toolName, isError: !!row.isError } : {}),
+          },
+        ];
+      });
+      return { sessionId: session.id, evidence: result, truncated: rows.length === 32 };
+    });
+    return {
+      version: 1 as const,
+      scope: { workspaceId, days, since, until },
+      sampling:
+        'Up to 16 fresh sessions and 32 recent messages per session; 80,000 characters total',
+      sessions: evidence,
+      skipped: [],
+      truncated:
+        truncated || sessions.length === 16 || evidence.some((session) => session.truncated),
+    };
+  }
+  private publish(session: string, branch: string, payload: unknown): void {
+    this.db
+      .query('INSERT INTO runtime_outbox(session,branch,payload) VALUES (?,?,?)')
+      .run(session, branch, canonicalJson(payload, CONTROL_BYTES));
+  }
+  /** Durable event cursor, owner and branch scoped; contains references, never image bytes. */
+  events(sessionId: string, owner: string, after = 0, branchId?: string) {
+    const session = this.session(sessionId);
+    if (session.owner !== owner) throw new Error('Session owner mismatch');
+    if (!Number.isSafeInteger(after) || after < 0) throw new Error('Invalid event cursor');
+    const branch = branchId ?? session.branch;
+    if (
+      !this.db
+        .query('SELECT id FROM runtime_branches WHERE id=? AND session=?')
+        .get(branch, sessionId)
+    )
+      throw new Error('Invalid branch');
+    return (
+      this.db
+        .query(
+          'SELECT seq,payload FROM runtime_outbox WHERE session=? AND branch=? AND seq>? ORDER BY seq LIMIT 128',
+        )
+        .all(sessionId, branch, after) as { seq: number; payload: string }[]
+    ).map((row) => ({ seq: row.seq, event: parseJson(row.payload, CONTROL_BYTES) }));
+  }
+  /** Starts a single durable run. Reusing an ID never repeats a provider request or tools. */
+  startRun(lease: WriterLease, turn: AuthorityTurn): RuntimeRun {
+    return this.db
+      .transaction(() => {
+        this.writable(lease);
+        const prior = this.run(turn.input.runId, lease.binding.sessionId);
+        if (prior) {
+          if (prior.branch !== lease.branchId || prior.turn !== turn.input.turnId)
+            throw new Error('Run ID conflict');
+          return prior;
+        }
+        if (!this.checkTurn(lease, turn.input, turn.descriptor))
+          throw new Error('Turn is not committed');
+        if (
+          this.db
+            .query("SELECT id FROM runtime_runs WHERE session=? AND state='running'")
+            .get(lease.binding.sessionId)
+        )
+          throw new Error('Session run already active');
+        this.db
+          .query("INSERT INTO runtime_runs VALUES (?,?,?,?,'running',NULL)")
+          .run(turn.input.runId, lease.binding.sessionId, lease.branchId, turn.input.turnId);
+        this.publish(lease.binding.sessionId, lease.branchId, {
+          type: 'run.started',
+          runId: turn.input.runId,
+        });
+        return this.run(turn.input.runId, lease.binding.sessionId)!;
+      })
+      .immediate();
+  }
+  private run(id: string, session: string): RuntimeRun | undefined {
+    uuid.parse(id);
+    return (
+      (this.db
+        .query('SELECT * FROM runtime_runs WHERE id=? AND session=?')
+        .get(id, session) as RuntimeRun | null) ?? undefined
+    );
+  }
+  runState(sessionId: string, owner: string, runId: string): RuntimeRun | undefined {
+    const session = this.session(sessionId);
+    if (session.owner !== owner) throw new Error('Session owner mismatch');
+    return this.run(runId, sessionId);
+  }
+  finishRun(
+    binding: Binding,
+    runId: string,
+    state: Exclude<RuntimeRun['state'], 'running'>,
+    reason?: string,
+  ): void {
+    this.db
+      .transaction(() => {
+        this.bound(binding);
+        const run = this.run(runId, binding.sessionId);
+        if (!run) throw new Error('Unknown run');
+        if (run.state !== 'running') return;
+        this.db
+          .query('UPDATE runtime_runs SET state=?,reason=? WHERE id=?')
+          .run(state, reason?.slice(0, 8192) ?? null, runId);
+        this.publish(binding.sessionId, run.branch, { type: 'run.finished', runId, state });
+      })
+      .immediate();
+  }
+  /** Single trusted supervisor startup. Interrupted model calls/stacks are never replayed. */
+  recoverRuns(): void {
+    this.db
+      .transaction(() => {
+        const runs = this.db
+          .query("SELECT * FROM runtime_runs WHERE state='running'")
+          .all() as RuntimeRun[];
+        for (const run of runs) {
+          this.db
+            .query(
+              "UPDATE runtime_runs SET state='interrupted',reason='Gateway restarted; reconcile original executions' WHERE id=?",
+            )
+            .run(run.id);
+          this.publish(run.session, run.branch, {
+            type: 'run.finished',
+            runId: run.id,
+            state: 'interrupted',
+          });
+        }
+        this.db
+          .query("UPDATE runtime_model_calls SET state='interrupted' WHERE state='pending'")
+          .run();
+      })
+      .immediate();
+  }
+  beginModel(lease: WriterLease, runId: string, request: unknown, snapshot?: unknown): string {
+    return this.db
+      .transaction(() => {
+        this.writable(lease);
+        const run = this.run(runId, lease.binding.sessionId);
+        if (!run || run.state !== 'running' || run.branch !== lease.branchId)
+          throw new Error('Inactive run');
+        const id = randomUUID();
+        this.db
+          .query("INSERT INTO runtime_model_calls VALUES (?,?,?,'pending',NULL)")
+          .run(id, runId, digest(request, REQUEST_BYTES));
+        if (snapshot !== undefined)
+          this.db
+            .query('INSERT OR REPLACE INTO runtime_contexts VALUES (?,?,?)')
+            .run(lease.branchId, lease.binding.sessionId, canonicalJson(snapshot, ENTRY_BYTES));
+        return id;
+      })
+      .immediate();
+  }
+  /** Assistant, provider metadata, tool mappings and dispatch intents share one transaction. */
+  commitModel(
+    lease: WriterLease,
+    callId: string,
+    input: EntryInput,
+    executions: Array<{ intent: ExecutionIntent; modelToolCallId: string }> = [],
+  ): AuthorityEntry {
+    return this.db
+      .transaction(() => {
+        this.writable(lease);
+        const call = this.db.query('SELECT * FROM runtime_model_calls WHERE id=?').get(callId) as {
+          run: string;
+          state: string;
+          entry: string | null;
+        } | null;
+        const run = call && this.run(call.run, lease.binding.sessionId);
+        if (
+          !call ||
+          !run ||
+          run.state !== 'running' ||
+          run.branch !== lease.branchId ||
+          call.state !== 'pending'
+        )
+          throw new Error('Invalid model completion');
+        const parsed = entrySchema.parse(input);
+        if (parsed.type !== 'message' || parsed.message.role !== 'assistant')
+          throw new Error('Expected assistant completion');
+        const tools = parsed.message.content.filter((part) => part.type === 'toolCall');
+        if (new Set(tools.map((tool) => tool.id)).size !== tools.length)
+          throw new Error('Duplicate model tool call');
+        if (
+          executions.length &&
+          (executions.length > tools.length ||
+            new Set(executions.map((execution) => execution.modelToolCallId)).size !==
+              executions.length ||
+            parsed.message.stopReason !== 'toolUse')
+        )
+          throw new Error('Model execution mismatch');
+        const entry = this.appendTo(lease.binding.sessionId, lease.branchId, parsed);
+        for (const execution of executions) {
+          const tool = tools.find((tool) => tool.id === execution.modelToolCallId);
+          if (
+            !tool ||
+            tool.name !== execution.intent.capability ||
+            canonicalJson(tool.arguments, REQUEST_BYTES) !==
+              canonicalJson(execution.intent.arguments, REQUEST_BYTES) ||
+            execution.intent.runId !== run.id
+          )
+            throw new Error('Model execution arguments mismatch');
+          this.persistExecution(lease, execution.intent);
+          this.db
+            .query('INSERT INTO runtime_tool_aliases VALUES (?,?)')
+            .run(execution.intent.executionId, execution.modelToolCallId);
+        }
+        this.db
+          .query("UPDATE runtime_model_calls SET state='completed',entry=? WHERE id=?")
+          .run(entry.id, callId);
+        return entry;
+      })
+      .immediate();
+  }
+  /** Title/memory/compaction responses retain replay metadata without entering ordinary history. */
+  commitAuxiliary(
+    lease: WriterLease,
+    callId: string,
+    purpose: 'title' | 'memory' | 'compaction',
+    message: unknown,
+    projection?: EntryInput,
+  ): void {
+    this.db
+      .transaction(() => {
+        this.writable(lease);
+        const call = this.db
+          .query('SELECT run,state FROM runtime_model_calls WHERE id=?')
+          .get(callId) as { run: string; state: string } | null;
+        const run = call && this.run(call.run, lease.binding.sessionId);
+        if (
+          !call ||
+          !run ||
+          run.state !== 'running' ||
+          run.branch !== lease.branchId ||
+          call.state !== 'pending'
+        )
+          throw new Error('Invalid auxiliary model completion');
+        const input = entrySchema.parse({ type: 'message', message });
+        if (input.type !== 'message' || input.message.role !== 'assistant')
+          throw new Error('Expected assistant completion');
+        const entry = this.appendTo(lease.binding.sessionId, lease.branchId, {
+          type: 'custom',
+          customType: `runtime.model.${purpose}`,
+          data: parseJson(canonicalJson(input.message, ENTRY_BYTES), ENTRY_BYTES),
+        });
+        if (projection) this.appendTo(lease.binding.sessionId, lease.branchId, projection);
+        this.db
+          .query("UPDATE runtime_model_calls SET state='completed',entry=? WHERE id=?")
+          .run(entry.id, callId);
+      })
+      .immediate();
+  }
+  executions(sessionId: string, owner: string, runId?: string) {
+    const session = this.session(sessionId);
+    if (session.owner !== owner) throw new Error('Session owner mismatch');
+    if (runId) uuid.parse(runId);
+    const rows = this.db
+      .query(
+        "SELECT e.*,a.execution AS ack FROM runtime_executions e LEFT JOIN runtime_acks a ON a.execution=e.id WHERE e.session=? AND (? IS NULL OR json_extract(e.intent,'$.runId')=?) ORDER BY e.rowid",
+      )
+      .all(sessionId, runId ?? null, runId ?? null) as (ExecutionRow & { ack: string | null })[];
+    return rows.map((row) => ({
+      intent: validateIntent(parseJson(row.intent, REQUEST_BYTES)),
+      receipt: row.receipt ? recordSchema.parse(parseJson(row.receipt, RESULT_BYTES)) : undefined,
+      acknowledged: !!row.ack,
+      branchId: row.branch,
+    }));
+  }
+  /** Recovery page measured before parsing; completed acknowledged work is excluded. */
+  recoveryPage(sessionId: string, owner: string, after = 0) {
+    this.assertOwner(sessionId, owner);
+    if (!Number.isSafeInteger(after) || after < 0) throw new Error('Invalid recovery cursor');
+    const headers = this.db
+      .query(
+        `SELECT e.id,e.rowid AS cursor,
+      length(CAST(e.intent AS BLOB))+COALESCE(length(CAST(e.receipt AS BLOB)),0) AS bytes
+      FROM runtime_executions e LEFT JOIN runtime_acks a ON a.execution=e.id
+      WHERE e.session=? AND e.rowid>? AND (a.execution IS NULL OR json_extract(e.receipt,'$.state')='unknown')
+      ORDER BY e.rowid LIMIT 33`,
+      )
+      .all(sessionId, after) as { id: string; cursor: number; bytes: number }[];
+    let bytes = 0;
+    let cursor = after;
+    const executions: ExecutionIntent[] = [];
+    for (const header of headers.slice(0, 32)) {
+      if (bytes + header.bytes > REQUEST_BYTES + RESULT_BYTES) break;
+      bytes += header.bytes;
+      const row = this.db
+        .query('SELECT intent FROM runtime_executions WHERE id=? AND session=?')
+        .get(header.id, sessionId) as { intent: string };
+      executions.push(validateIntent(parseJson(row.intent, REQUEST_BYTES)));
+      cursor = header.cursor;
+    }
+    return { executions, nextCursor: headers.length > executions.length ? cursor : null };
+  }
+  contextSnapshot(sessionId: string, owner: string, branchId?: string): Json | undefined {
+    const session = this.session(sessionId);
+    if (session.owner !== owner) throw new Error('Session owner mismatch');
+    const row = this.db
+      .query('SELECT payload FROM runtime_contexts WHERE session=? AND branch=?')
+      .get(sessionId, branchId ?? session.branch) as { payload: string } | null;
+    return row ? parseJson(row.payload, ENTRY_BYTES) : undefined;
+  }
+  steer(lease: WriterLease, input: TurnInput): void {
+    input = validateTurnInput(input, lease.binding);
+    this.writable(lease);
+    const run = this.run(input.runId, lease.binding.sessionId);
+    if (!run || run.state !== 'running' || run.branch !== lease.branchId)
+      throw new Error('Inactive steering run');
+    const encoded = canonicalJson(input, ENTRY_BYTES);
+    const previous = this.db
+      .query('SELECT input FROM runtime_steering WHERE id=?')
+      .get(input.turnId) as { input: string } | null;
+    if (previous) {
+      if (previous.input !== encoded) throw new Error('Steering ID conflict');
+      return;
+    }
+    const count = this.db
+      .query('SELECT COUNT(*) AS count FROM runtime_steering WHERE run=? AND consumed=0')
+      .get(run.id) as { count: number };
+    if (count.count >= 16) throw new Error('Steering queue exceeded');
+    this.db
+      .query('INSERT INTO runtime_steering VALUES (?,?,?,0)')
+      .run(input.turnId, run.id, encoded);
+  }
+  queuedSteering(lease: WriterLease, runId: string): TurnInput[] {
+    this.writable(lease);
+    const run = this.run(runId, lease.binding.sessionId);
+    if (!run || run.state !== 'running' || run.branch !== lease.branchId)
+      throw new Error('Inactive run');
+    return (
+      this.db
+        .query('SELECT input FROM runtime_steering WHERE run=? AND consumed=0 ORDER BY rowid')
+        .all(runId) as { input: string }[]
+    ).map((row) =>
+      validateTurnInput(parseJson(row.input, ENTRY_BYTES) as unknown as TurnInput, lease.binding),
+    );
+  }
+  consumeSteering(lease: WriterLease, input: TurnInput): void {
+    this.writable(lease);
+    if (!this.checkTurn(lease, input)) throw new Error('Steering turn not committed');
+    this.db
+      .query('UPDATE runtime_steering SET consumed=1 WHERE id=? AND run=?')
+      .run(input.turnId, input.runId);
+  }
+}
+
+export interface RuntimeRun {
+  id: string;
+  session: string;
+  branch: string;
+  turn: string;
+  state: 'running' | 'completed' | 'interrupted' | 'unknown' | 'failed';
+  reason: string | null;
 }

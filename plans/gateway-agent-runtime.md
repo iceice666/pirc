@@ -1,6 +1,6 @@
 # Gateway agent runtime: centralize the agent loop, keep execution environments on nodes
 
-Status: **M1 design review accepted with no legacy JSONL migration; the maintainer has authorized M2 implementation and the first M3 authority-foundation slice with harness-only activation. Production session routing, live writer transfer and deployment cutover remain excluded.** See the [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [reviewed M1 contracts/security design](../docs/evaluations/gateway-runtime/m1-contracts.md). The maintainer's LGTM accepts the contracts, performance gates and initial resource budgets, with the explicit amendment that this breaking change starts fresh sessions instead of migrating old JSONL. Old data is not deleted. The subsequent M2 continuation request authorizes integration work described below, not deployment.
+Status: **M2/M3 implementation completed for the opt-in Linux fresh-session runtime; macOS continuation and full platform acceptance remain open.** The maintainer authorized finishing feasible M2/M3 work while leaving macOS validation pending. Production session routing, live writer transfer and deployment cutover remain excluded. See the [current implementation/validation and macOS handoff](../docs/evaluations/gateway-runtime/m3-linux-runtime.md), [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [reviewed M1 contracts/security design](../docs/evaluations/gateway-runtime/m1-contracts.md). M1's accepted amendment starts fresh sessions without importing legacy JSONL; old data is retained. M4 product parity and M5 evaluation/cutover remain separate milestones.
 
 Code baseline: `17a91a0`. This investigation used static architecture inspection only, with no latency measurements; the benefits below are hypotheses to validate.
 
@@ -178,24 +178,27 @@ Acceptance: maintainer LGTM received for the responsibility boundaries, major be
 
 ### M2 — Extract environment capabilities and reliable RPC
 
-**In progress; not complete.** Foundation and integration slices are committed. The maintainer authorized the remaining implementation with harness-only activation and initially selected Linux validation, followed by the authorized macOS takeover. The additional work covers tool factories, node authorization/UI ingress, descriptors, journaled hooks, artifact transfer, shared-link scheduling, quotas and recovery primitives. [M2 implementation and platform validation](../docs/evaluations/gateway-runtime/m2-completion.md) records the current evidence: macOS real-sandbox validation outside any outer sandbox and real disk exhaustion pass. macOS recovery retains durable quarantine instead of automatically regranting writes; same-session/workspace replacements are denied, leased roots survive restart, and only drained IPC/broker work can reconcile. Automatic aggregate fencing is still unimplemented, and M3/M4 must connect the descriptor/attachment product lifecycle. The combined both-end recovery fixture now proves that unrelated workspaces can continue while the old workspace stays quarantined. Production sessions retain the old loop/runner until M3. No M2 checkbox is marked complete until all integration and validation requirements pass. Earlier slice records remain in [integration continuation](../docs/evaluations/gateway-runtime/m2-integration.md) and [foundation](../docs/evaluations/gateway-runtime/m2-foundation.md).
+**Implementation complete in the opt-in path; macOS continuation regression pending.** The [latest continuation](../docs/evaluations/gateway-runtime/m3-linux-runtime.md) connects descriptors, user/tool artifact pins, authoritative result/ACK recovery and authenticated node transport. Node startup restores quarantine before granting leases, and legacy runner launch/delivery checks durable deny fences. Checked items below describe implementation and Linux verification, not deployment or new macOS acceptance. The [earlier M2 platform record](../docs/evaluations/gateway-runtime/m2-completion.md) retains its real macOS sandbox/disk results and accepted durable-quarantine policy. Automatic macOS aggregate regrant remains unavailable; an old workspace stays quarantined while unrelated workspaces can continue. Earlier slices remain in [integration continuation](../docs/evaluations/gateway-runtime/m2-integration.md) and [foundation](../docs/evaluations/gateway-runtime/m2-foundation.md).
 
-- [ ] Extract local/remote environment adapters and a sandboxed executor without moving the production loop yet.
-- [ ] Implement the execution journal, deduplication, status/cancel, events, approval relay, artifact references, and flow control.
-- [ ] Share the same policy/execution entry points between direct tools and PTC inner operations; give gateway-native hooks an explicit route.
+- [x] Extract local/remote environment adapters and a sandboxed executor without moving the production loop yet.
+- [x] Implement the execution journal, deduplication, status/cancel, events, approval relay, artifact references, and flow control.
+- [x] Share the same policy/execution entry points between direct tools and PTC inner operations; give gateway-native hooks an explicit route. Full new-runtime PTC dispatch remains M4.
+- [ ] macOS continuation: revalidate node startup quarantine, writer fences and attachment/result recovery against a real sandbox after these integrations.
 
 Acceptance: reject forged workspaces/sessions, symlink escapes, invalid approvals, and unavailable sandboxes. Test duplicate starts, disconnects, restarts at both ends, lost result acknowledgments, and crashes after side effects, without automatically rerunning side effects.
 
 ### M3 — Gateway loop and session authority
 
-**In progress; harness-only authority foundation authorized.** The maintainer selected a first slice for fresh-session authority, writer-generation fencing and transcript/result/ACK coupling, with Linux-first validation and macOS handoff. [M3 authority foundation](../docs/evaluations/gateway-runtime/m3-authority-foundation.md) records scope and evidence. No production routing, existing writer termination, deployment/cutover, legacy import or deletion is authorized; M3 checkboxes remain open until full acceptance. The maintainer subsequently selected the [descriptor/attachment turn lifecycle slice](../docs/evaluations/gateway-runtime/m3-turn-lifecycle.md), explicitly accepting fail-closed descriptor/generation changes while safe generation handoff remains deferred.
+**Core implementation and Linux acceptance fixtures complete; macOS gate open.** The [new runtime record](../docs/evaluations/gateway-runtime/m3-linux-runtime.md) covers the constrained worker, existing provider service, durable turns/runs/model metadata, direct UI deltas, readers and recovery/resource tests. The [authority foundation](../docs/evaluations/gateway-runtime/m3-authority-foundation.md) and [turn lifecycle](../docs/evaluations/gateway-runtime/m3-turn-lifecycle.md) retain earlier evidence. Checked items describe the opt-in runtime, not replacement of production endpoints or complete Agent feature parity. No production routing, existing writer termination, cutover, legacy import or deletion is performed. Descriptor/generation changes still fail closed; operational handoff remains gated.
 
 - [x] Harness slice: persist validated per-turn descriptors and user image attachments with node pins, restart-safe deduplication and owner-checked offline projections; reject descriptor/generation changes (not full M3 completion).
 
-- [ ] Build the constrained gateway agent runtime and connect it to the existing provider service; streaming directly produces gateway session events.
-- [ ] Move transcripts/context/branches, steering, compaction, model fallback, and model-call paths such as titles and memory.
-- [ ] Build fresh-session initialization and writer-epoch fencing; adapt history, recaps, the context panel, and file-reference readers without legacy JSONL fallback. Preserve old data and explicitly block legacy-session references.
-- [ ] Verify gateway restarts, offline nodes, reconnection, and multi-session resource limits.
+- [x] Build the constrained gateway agent runtime and connect it to the existing provider service; streaming directly produces gateway session events. Linux isolation is tested; macOS launcher explicitly refuses support.
+- [x] Move transcripts/context/branches, steering, compaction, model selection/fallback, and model-call paths such as titles and memory. Complete memory features remain M4.
+- [x] Build fresh-session initialization and writer-epoch fencing; adapt history, recaps, the context panel, and file-reference readers without legacy JSONL fallback. Preserve old data and explicitly block legacy-session references. Reader routes are opt-in; operational cutover is M5.
+- [x] Verify gateway restarts, offline nodes, reconnection, and multi-session resource limits with Linux/fake-provider and authenticated node WebSocket fixtures.
+- [ ] macOS gateway worker: implement/validate equivalent enforced isolation and resource supervision with real adversarial tests; remain unsupported until then.
+- [ ] macOS continuation: run full checks and new authority/runtime/transport/fence suites on macOS, retaining separate platform evidence.
 
 Acceptance: main coding/chat flows work end to end with a fake provider. UI deltas no longer detour through nodes; the node link no longer carries complete inference context every turn; each session has exactly one authoritative writer.
 
@@ -226,7 +229,7 @@ Performance gates accepted at M1 review (M0 remains a component baseline; do not
 
 ## 9. Validation and implementation scope
 
-During implementation, run the narrowest relevant tests first, then the repository's `bun run check` (version, format, typecheck, test, build, compiled-role tests). This documentation-only plan requires document checks, not paid-model runs or the full runtime test suite.
+During implementation, run the narrowest relevant tests first, then the repository's `bun run check` (version, format, typecheck, test, build, compiled-role tests). Use fake providers; paid-model evaluation is not part of M2/M3 implementation.
 
 Priority areas for test expansion:
 
@@ -242,7 +245,7 @@ Expected changes are concentrated in `apps/gateway/src/agent/`, `node/`, `daemon
 
 ## 10. Key choices and remaining review gates
 
-The maintainer has accepted M1's contracts, initial budgets and the choices below, with legacy JSONL migration excluded. Implementation and deployment still require their separate authorizations; material design changes return to review.
+The maintainer has accepted M1's contracts, initial budgets and the choices below, with legacy JSONL migration excluded, and subsequently authorized feasible M2/M3 implementation. Deployment/cutover still requires separate authorization; material design changes return to review.
 
 1. **Overall direction:** should the gateway own both the loop and complete authoritative session state, rather than adding only a lighter streaming shortcut/context cache? Recommend the former; if M0 finds little benefit, stop this migration and evaluate a lighter approach separately.
 2. **PTC placement:** accept fixed routing with environment/mixed scripts on the node and gateway-only scripts on the gateway? Recommend this to avoid fine-grained remote tool RPCs; do not implement automatic script partitioning.

@@ -8,7 +8,7 @@ This directory is the work queue, not a description of everything already shippe
 
 | Plan                                              | Recorded status and scope                                                                                                                              |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Gateway agent runtime](gateway-agent-runtime.md) | Plan reviewed and accepted; no milestones started, implementation and deployment cutover not authorized                                                |
+| [Gateway agent runtime](gateway-agent-runtime.md) | M2/M3 Linux opt-in implementation verified; macOS continuation pending; M4/M5 and production cutover remain open                                       |
 | [Assistant roadmap](assistant.md)                 | v1 and in-chat USER approval/source-chat deletion shipped; remaining roadmap, decisions and watch items retain their own gates                         |
 | [Project isolation](project-isolation.md)         | Capability policy/instructions implemented; B, D, E1 and E3 are proposals, not privacy guarantees; E2 locally verified pending recorded review/release |
 | [Cross-feature backlog](backlog.md)               | Unresolved browser, schedules, Android, sandbox and accepted PTC follow-ups/manual checks extracted from completed designs                             |

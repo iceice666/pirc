@@ -1,5 +1,10 @@
 # Gateway runtime M3: fresh-session authority foundation
 
+Current continuation: [M2/M3 Linux runtime and macOS handoff](m3-linux-runtime.md)
+implements the core model loop, reader routes, restart/recovery limits and node
+startup/legacy fences. The scope and deferred list below describe this earlier
+foundation slice, not the latest implementation status.
+
 Status: **harness-only first slice; M3 remains incomplete**. The maintainer selected
 an authority foundation before the constrained loop and production integrations,
 with Linux-first validation and macOS handoff. This authorizes implementation and

@@ -14,6 +14,11 @@ import { RemoteEnvironment } from '../src/environment/remote.js';
 import { ExecutionJournal } from '../src/environment/journal.js';
 import { descriptorDigest, intentDigest, type Descriptor } from '../src/environment/protocol.js';
 import { daemonConfig, testConfig, waitFor } from './helpers.js';
+import { GatewaySessionAuthority } from '../src/gateway-runtime/authority.js';
+import { NodeWriterFence } from '../src/gateway-runtime/node-writer-fence.js';
+import { GatewayAgentRuntime } from '../src/gateway-runtime/runtime.js';
+import { emptyUsage, type AssistantMessage } from '../src/agent/messages.js';
+import type { WorkerAction } from '../src/gateway-runtime/worker.js';
 
 test('opt-in environment harness crosses authenticated node WebSocket with independent bindings', async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'pirc-env-wire-'));
@@ -21,6 +26,9 @@ test('opt-in environment harness crosses authenticated node WebSocket with indep
   const nodeJournal = new ExecutionJournal(path.join(root, 'node.sqlite'));
   const gatewayJournal = new ExecutionJournal(path.join(root, 'gateway.sqlite'));
   const artifacts = new EnvironmentArtifacts(path.join(root, 'artifacts'));
+  const authority = new GatewaySessionAuthority(path.join(root, 'authority.sqlite'));
+  const writers = new NodeWriterFence(path.join(root, 'writers.sqlite'), 'test');
+  let runtime: GatewayAgentRuntime | undefined;
   let node: Awaited<ReturnType<typeof startNode>> | undefined;
   let nodeFlow: EnvironmentFlow | undefined;
   let gatewayFlow: EnvironmentFlow | undefined;
@@ -28,13 +36,14 @@ test('opt-in environment harness crosses authenticated node WebSocket with indep
   try {
     await app.listen({ host: '127.0.0.1', port: 0 });
     const url = `ws://127.0.0.1:${(app.server.address() as { port: number }).port}`;
-    const binding = {
+    const pending = authority.prepare({
+      owner: 'alice',
       nodeId: 'test',
       workspaceId: 'test:test',
-      sessionId: randomUUID(),
-      writerEpoch: randomUUID(),
-      executorEpoch: randomUUID(),
-    };
+      legacySessionIds: [],
+    });
+    const lease = authority.activate(await writers.fence(pending, async () => {}));
+    const binding = lease.binding;
     const content: Omit<Descriptor, 'revision'> = {
       binding,
       version: 1,
@@ -175,8 +184,74 @@ test('opt-in environment harness crosses authenticated node WebSocket with indep
     await remote.start(intent);
     expect(effects).toBe(1);
     await remote.ack(binding, intent.executionId, receipt.resultDigest!);
+    let modelCalls = 0;
+    let deltas = 0;
+    runtime = new GatewayAgentRuntime({
+      authority,
+      environment: remote,
+      online: () => services.nodes.list().some((node) => node.id === 'test'),
+      inference: {
+        async run(request, _signal, emit) {
+          modelCalls++;
+          const message: AssistantMessage = {
+            role: 'assistant',
+            api: 'openai-chat',
+            provider: 'fake',
+            model: 'fake',
+            usage: emptyUsage(),
+            timestamp: Date.now(),
+            content:
+              modelCalls === 1
+                ? [{ type: 'toolCall', id: 'provider-wire-call', name: 'read', arguments: {} }]
+                : [{ type: 'text', text: 'gateway answer' }],
+            stopReason: modelCalls === 1 ? 'toolUse' : 'stop',
+          };
+          expect(request.messages.some((message) => message.role === 'user')).toBe(true);
+          emit({ type: 'text_delta', contentIndex: 0, delta: 'direct' }, message);
+          return message;
+        },
+      },
+      models: [{ provider: 'fake', id: 'fake', thinking: 'off', contextWindow: 100_000 }],
+      authorizeModel() {},
+      systemPrompt: 'Gateway-only context',
+      tools: [{ name: 'read', description: 'Read a node file', parameters: {} }],
+      workerExecutable: process.env.PIRC_TEST_GATEWAY_WORKER ?? '/unused-synthetic-worker',
+      ...(process.env.PIRC_TEST_GATEWAY_WORKER
+        ? {}
+        : {
+            workerFactory: () => ({
+              async drive(step: (action: WorkerAction) => Promise<WorkerAction>) {
+                let action: WorkerAction = 'model';
+                for (;;) {
+                  const next = await step(action);
+                  if (action === 'done') return;
+                  action = next;
+                }
+              },
+              async close() {},
+            }),
+          }),
+      event: (event) => {
+        if (event.type === 'message_update') deltas++;
+      },
+    });
+    expect(
+      (
+        await runtime.run(lease, 'alice', {
+          runId: randomUUID(),
+          turnId: randomUUID(),
+          text: 'Read with image',
+          attachments: [artifact],
+        })
+      ).state,
+    ).toBe('completed');
+    expect(effects).toBe(2);
+    expect(modelCalls).toBe(2);
+    expect(deltas).toBe(2);
+    expect(authority.executions(binding.sessionId, 'alice')[0]!.acknowledged).toBe(true);
     await local.close();
   } finally {
+    await runtime?.close();
     remote?.disconnect();
     gatewayFlow?.close();
     nodeFlow?.close();
@@ -185,6 +260,8 @@ test('opt-in environment harness crosses authenticated node WebSocket with indep
     artifacts.close();
     nodeJournal.close();
     gatewayJournal.close();
+    authority.close();
+    writers.close();
     rmSync(root, { recursive: true, force: true });
   }
 }, 15_000);

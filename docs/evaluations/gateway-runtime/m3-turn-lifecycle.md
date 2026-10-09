@@ -1,5 +1,10 @@
 # Gateway runtime M3: descriptor and attachment turn lifecycle
 
+Current continuation: [M2/M3 Linux runtime and macOS handoff](m3-linux-runtime.md)
+connects this lifecycle to the opt-in model loop, tool-result artifact pins,
+durable event references and authenticated readers. The status/deferred list below
+records this earlier slice; full product parity and macOS continuation remain open.
+
 Status: **harness-only slice; M2 and M3 remain incomplete**. The maintainer selected
 this slice instead of the constrained model worker and explicitly accepted
 fail-closed descriptor/generation changes: generation handoff remains separate.

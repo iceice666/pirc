@@ -86,8 +86,14 @@ export class HookRunner {
     try {
       // Pump output and enforce cancellation even if a hook never reads stdin.
       const input = (async () => {
-        child.stdin.write(JSON.stringify(payload));
-        await child.stdin.end();
+        try {
+          child.stdin.write(JSON.stringify(payload));
+          await child.stdin.end();
+        } catch (error) {
+          // A hook may intentionally use only its configured command and not
+          // consume stdin. Its exit status/output still determine the decision.
+          if ((error as NodeJS.ErrnoException).code !== 'EPIPE') throw error;
+        }
       })();
       const [stdout, stderr, exitCode] = await Promise.all([
         bounded(child.stdout, 65_536),

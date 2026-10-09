@@ -1,5 +1,10 @@
 # Gateway runtime M2: remaining implementation and platform validation
 
+Current continuation: [M2/M3 Linux runtime and macOS handoff](m3-linux-runtime.md)
+connects the fresh turn/result/artifact lifecycle, restores quarantine on node
+startup and enforces durable legacy runner fences. The status/gap list below is
+the historical M2 takeover record; new macOS regression validation remains open.
+
 Status: **additional harness-only implementation and macOS sandbox validation verified; M2 is not marked complete**.
 The maintainer authorized the remaining implementation, then handed off the macOS
 validation and recovery decision to the continuation below. Production loop/runner selection,

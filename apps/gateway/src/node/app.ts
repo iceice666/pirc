@@ -52,6 +52,9 @@ import type { TerminalManager } from './terminals.js';
 import { BrowserManager } from './browser.js';
 import { loadRoles, roleBriefs } from '../agent/roles.js';
 import type { EnvironmentInteractions } from './environment-interactions.js';
+import { ExecutionJournal } from '../environment/journal.js';
+import { NodeWriterFence } from '../gateway-runtime/node-writer-fence.js';
+import { restoreEnvironmentQuarantines } from './environment-supervisor.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
 const createWorkspaceBody = z.union([
@@ -163,6 +166,8 @@ export interface NodeServices {
   events: EventHub;
   runners: RunnerManager;
   writes: WriteBroker;
+  environmentJournal: ExecutionJournal;
+  writerFence: NodeWriterFence;
   /** Providers from the daemon, used for agents started from now on. */
   models: ModelStore;
   terminals: TerminalManager;
@@ -203,6 +208,16 @@ export async function buildNodeApp(
   const events = new EventHub(config.eventBufferSize);
   const environmentInteractions = options.environmentInteractions?.(db, events);
   const writes = new WriteBroker();
+  // Restore durable deny fences before any runner can acquire a workspace lease.
+  // This never provisions an executor or transfers an existing writer.
+  const environmentJournal = new ExecutionJournal(
+    path.join(config.stateDir, 'environment-journal.sqlite'),
+  );
+  const writerFence = new NodeWriterFence(
+    path.join(config.stateDir, 'writer-fences.sqlite'),
+    config.nodeId,
+  );
+  restoreEnvironmentQuarantines(environmentJournal, writes);
   // Filled by the daemon on registration; agents started before that get no providers.
   const models = new ModelStore();
   const browser = new BrowserManager(config.browser);
@@ -224,6 +239,7 @@ export async function buildNodeApp(
     options.gateway ?? offlineGateway,
     browser,
     sandbox,
+    writerFence,
   );
   const branches = new BranchCache();
   const claim = (request: FastifyRequest, sessionId = parse(sessionParams, request.params).id) =>
@@ -726,6 +742,8 @@ export async function buildNodeApp(
     terminals.shutdown();
     await runners.shutdown();
     await browser.shutdown();
+    writerFence.close();
+    environmentJournal.close();
     db.close();
   });
   return {
@@ -735,6 +753,8 @@ export async function buildNodeApp(
       events,
       runners,
       writes,
+      environmentJournal,
+      writerFence,
       models,
       terminals,
       terminalStreams,

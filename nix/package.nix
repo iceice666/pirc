@@ -39,6 +39,7 @@ let
         ".state"
         "result"
         "plans"
+        "work"
       ];
   };
 
@@ -97,6 +98,9 @@ stdenvNoCC.mkDerivation {
     cd apps/gateway
     bun build --compile --minify --sourcemap --external chromium-bidi \
       src/entry/${role}.ts --outfile dist/${executable}
+    ${lib.optionalString (!runsAgents) ''
+      bun build --compile --minify src/entry/runtime-worker.ts --outfile dist/pirc-runtime-worker
+    ''}
     cd ../..
     runHook postBuild
   '';
@@ -125,6 +129,7 @@ stdenvNoCC.mkDerivation {
     else
       ''
         install -Dm755 apps/gateway/dist/${executable} $out/bin/${executable}
+        install -Dm755 apps/gateway/dist/pirc-runtime-worker $out/libexec/pirc/pirc-runtime-worker
         mkdir -p $out/share/pirc/web
         cp -r apps/web/dist/. $out/share/pirc/web/
       ''

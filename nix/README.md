@@ -2,7 +2,7 @@
 
 The flake exposes:
 
-- `packages.<system>.pirc-gateway`: independently compiled `bin/pirc-gateway` plus the static Web bundle (`share/pirc/web`), with no srt or playwright-core runtime. This is also `packages.<system>.default`.
+- `packages.<system>.pirc-gateway`: independently compiled `bin/pirc-gateway`, the static Web bundle (`share/pirc/web`), and internal `libexec/pirc/pirc-runtime-worker` asset, with no srt or playwright-core runtime. This is also `packages.<system>.default`.
 - `packages.<system>.pirc-chat` and `packages.<system>.pirc-node`: independently compiled fixed-role executables, with no Web UI. Their wrappers point at [srt](sandbox-runtime.nix) (`PIRC_SANDBOX_SRT`, preferred over the srt built into the executables because it brings bubblewrap, socat and ripgrep) and on-disk playwright-core (`PIRC_PLAYWRIGHT_CORE`), whose computed file paths cannot be bundled by `bun --compile`. They share the node/agent implementation. No separate Bun installation is needed; srt brings its own Node.js.
 - `overlays.default`: adds `pkgs.pirc-gateway`, `pkgs.pirc-chat` and `pkgs.pirc-node`, built against the consumer's nixpkgs. There is no legacy `pkgs.pirc` alias.
 - `nixosModules.pirc`: unprivileged systemd services for the gateway and a local node, and an optional nginx/forward-auth virtual host.
@@ -28,6 +28,12 @@ A chat/coding node starts one agent subprocess per session by re-executing its o
 Dependencies are fetched in a fixed-output derivation (`pirc-gateway.nodeModules`) that covers every OS/CPU, so one `nodeModulesHash` works for all systems. After changing `bun.lock`, set `nodeModulesHash` to `lib.fakeHash`, run `nix build .#pirc-gateway.nodeModules`, and copy the reported hash into [`package.nix`](package.nix).
 
 ## NixOS module
+
+The fresh-session gateway runtime is currently opt-in and does not replace daemon
+routing. Its Linux launcher needs bubblewrap and ldd in the trusted service
+environment and an explicit worker executable path; unsupported sandbox/platform
+startup fails closed. macOS worker isolation/validation remains pending. See the
+[M2/M3 implementation record](../docs/evaluations/gateway-runtime/m3-linux-runtime.md).
 
 Import `nixosModules.default` from the flake and configure `services.pirc`. A complete starting point is in [`example.nix`](example.nix).
 
