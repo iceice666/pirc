@@ -15,6 +15,7 @@
  * here (so the completion summary survives a crashed, cancelled or killed
  * script), and a stopped execution never resumes from a late result.
  */
+import type { Subprocess } from 'bun';
 import { selfCommand } from '../../self.js';
 import {
   BUDGETS,
@@ -57,19 +58,7 @@ export interface Broker {
   invoke(call: BrokerCall): Promise<Result>;
 }
 
-export interface PtcGuestProcess {
-  send(message: HostMessage): void | Promise<void>;
-  kill(): void;
-  exited: Promise<unknown>;
-  pid?: number;
-}
-
 export interface ExecutionOptions {
-  /** Trusted supervisor supplies an actually isolated gateway guest, never model arguments. */
-  launchGuest?: (
-    onMessage: (message: GuestMessage) => void,
-    signal: AbortSignal,
-  ) => Promise<PtcGuestProcess>;
   /** Preflighted JavaScript defining `async function __ptc_main()`. */
   code: string;
   broker: Broker;
@@ -84,14 +73,10 @@ export interface ExecutionOptions {
   attach?: (handle: string) => { queued: number };
   /** Progress for observers (not the model); never called after the execution ended. */
   onProgress?: (summary: OperationSummary) => void;
-  /** Host-created operation lifecycle; observers cannot grant execution authority. */
-  onOperation?: (event: Record<string, unknown>) => void;
   /** The session's script store (JSON object) for `load()`. */
   store?: string;
   /** Test seam: the pid of the script's process once started. */
   onProcess?: (pid: number) => void;
-  /** Host-received ordered guest acknowledgement, not mere pipe-write completion. */
-  onDelivered?: (operationId: string) => void;
 }
 
 export interface OperationRecord {
@@ -274,11 +259,11 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
   let stopReason: StopReason | undefined;
   let finish: (() => void) | undefined;
   const finished = new Promise<void>((resolve) => (finish = resolve));
-  let child: PtcGuestProcess | undefined;
+  let child: Subprocess | undefined;
   let outcome: ScriptOutcome | undefined;
   /** End the script process, whatever it is doing. */
   const halt = () => {
-    child?.kill();
+    if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
   };
   const stop = (reason: StopReason) => {
     if (outcome || stopReason) return;
@@ -288,8 +273,6 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
     finish?.();
   };
   const budget = new Budget(options.timeoutMs, () => stop('timed_out'));
-  // Independent lifetime cap: human waits cannot retain a centralized guest forever.
-  const absoluteDeadline = setTimeout(() => stop('timed_out'), options.timeoutMs + 30 * 60_000);
   const onAbort = () => stop('cancelled');
   options.signal.addEventListener('abort', onAbort);
   // The budget pauses while a human is asked, but only while the script
@@ -298,22 +281,6 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
   let guestBusy = true;
   /** Results sent; an `idle` counts only once the guest has received all of them. */
   let resultsSent = 0;
-  let resultsReceived = 0;
-  const deliveryIds = new Map<number, string>();
-  const received = (count: unknown) => {
-    if (
-      !Number.isSafeInteger(count) ||
-      Number(count) < resultsReceived ||
-      Number(count) > resultsSent
-    )
-      return;
-    for (let index = resultsReceived + 1; index <= Number(count); index++) {
-      const id = deliveryIds.get(index);
-      if (id) options.onDelivered?.(id);
-      deliveryIds.delete(index);
-    }
-    resultsReceived = Number(count);
-  };
   const updateBudget = () => (humanWaiting && !guestBusy ? budget.pause() : budget.resume());
   const unsubscribe = options.onHumanWait?.((waiting) => {
     humanWaiting = waiting;
@@ -438,21 +405,18 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
     else writeBusy = false;
   };
 
-  const send = async (message: HostMessage) => {
+  const send = (message: HostMessage) => {
     if (ended || stopReason || !child) return;
+    try {
+      child.send(message);
+    } catch {
+      /* the process is gone; its exit is handled below */
+    }
     if (message.type === 'result') {
-      // Reserve before the async write: the guest may receive and answer before
-      // the local drain callback, and a blocked write still spends active time.
       resultsSent++;
       guestBusy = true;
       updateBudget();
     }
-    try {
-      await child.send(message);
-    } catch {
-      return false; /* process exit terminates the script; never claim delivery */
-    }
-    return true;
   };
 
   /** One operation, entirely on this side; the envelope goes back to the script. */
@@ -468,7 +432,7 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
     const scope = rawScope === ROOT_SCOPE || scopes.has(rawScope) ? rawScope : ROOT_SCOPE;
     const operationId = `${options.executionId}:op${index}`;
     const name = rawName.slice(0, 64);
-    const deliver = async (envelope: Result, record?: OperationRecord) => {
+    const deliver = (envelope: Result, record?: OperationRecord) => {
       if (ended || stopReason) return;
       let json = JSON.stringify(envelope);
       if (Buffer.byteLength(json) > BUDGETS.resultBytes)
@@ -483,9 +447,8 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
             outcome: record?.outcome ?? 'not_started',
           },
         });
-      deliveryIds.set(resultsSent + 1, operationId);
-      const delivered = await send({ type: 'result', id, json });
-      if (record && delivered) record.delivered = true;
+      send({ type: 'result', id, json });
+      if (record) record.delivered = true;
     };
     const refuse = (error: PtcError) => {
       const envelope: Result = {
@@ -564,12 +527,6 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
       delivered: false,
     };
     records.push(record);
-    options.onOperation?.({
-      type: 'tool_execution_start',
-      toolCallId: operationId,
-      toolName: name,
-      args: values,
-    });
     node({
       nodeId: operationId,
       parentNodeId: nodeIdOf(scope),
@@ -606,8 +563,8 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
         };
       } finally {
         if (held) releaseWrite();
-        // Keep the operation slot while its bounded IPC result drains.
-        // Otherwise fast replies can build an unbounded transport backlog.
+        if (slot) releaseSlot();
+        pending--;
       }
       record.durationMs = Math.round(performance.now() - started);
       if (envelope.ok) record.outcome = 'completed';
@@ -631,20 +588,8 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
         durationMs: record.durationMs,
         ...(envelope.ok ? {} : { errorCode: envelope.error.code }),
       });
-      options.onOperation?.({
-        type: 'tool_execution_end',
-        toolCallId: operationId,
-        toolName: name,
-        result: { content: [{ type: 'text', text: record.outcome }], details: { ...record } },
-        isError: !envelope.ok,
-      });
       progress();
-      try {
-        await deliver(envelope, record);
-      } finally {
-        if (slot) releaseSlot();
-        pending--;
-      }
+      deliver(envelope, record);
     })();
   };
 
@@ -676,13 +621,12 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
               : new PtcError('OperationFailed', (error as Error)?.message ?? String(error));
           reply = { ok: false, error: typed.toJSON() };
         }
-        void send({ type: 'result', id: message.id, json: JSON.stringify(reply) });
+        send({ type: 'result', id: message.id, json: JSON.stringify(reply) });
         return;
       }
       case 'idle':
         // An idle sent before the latest result arrived is stale: the script may be busy again.
         if (message.received !== resultsSent) return;
-        received(message.received);
         guestBusy = false;
         updateBudget();
         return;
@@ -734,7 +678,6 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
         return;
       }
       case 'done':
-        received(message.received);
         outcome = checkedOutcome(message.outcome);
         finish?.();
         return;
@@ -745,39 +688,26 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
     if (options.signal.aborted) stop('cancelled');
     if (!stopReason) {
       let stderr = '';
-      const started = options.launchGuest
-        ? undefined
-        : Bun.spawn([...selfCommand(), 'ptc-guest'], {
-            // No environment at all: nothing of the agent's reaches the script's process.
-            env: {},
-            // Not the workspace: Bun would load a `.env` and run a `bunfig.toml`
-            // preload from its working directory. Sandboxed agents cannot write to `/`.
-            cwd: '/',
-            stdin: 'ignore',
-            stdout: 'ignore',
-            stderr: 'pipe',
-            serialization: 'json',
-            ipc: (message: GuestMessage) => onMessage(message),
-          });
-      child = options.launchGuest
-        ? await options.launchGuest(onMessage, execution.signal)
-        : {
-            send: (message) => started!.send(message),
-            kill: () => {
-              if (started!.exitCode === null && started!.signalCode === null)
-                started!.kill('SIGKILL');
-            },
-            exited: started!.exited,
-            pid: started!.pid,
-          };
-      if (child.pid !== undefined) options.onProcess?.(child.pid);
-      if (started)
-        void (async () => {
-          const decoder = new TextDecoder();
-          for await (const chunk of started.stderr as ReadableStream<Uint8Array>)
-            stderr = (stderr + decoder.decode(chunk, { stream: true })).slice(-2000);
-        })().catch(() => undefined);
-      void child.exited.then(() => {
+      const started = Bun.spawn([...selfCommand(), 'ptc-guest'], {
+        // No environment at all: nothing of the agent's reaches the script's process.
+        env: {},
+        // Not the workspace: Bun would load a `.env` and run a `bunfig.toml`
+        // preload from its working directory. Sandboxed agents cannot write to `/`.
+        cwd: '/',
+        stdin: 'ignore',
+        stdout: 'ignore',
+        stderr: 'pipe',
+        serialization: 'json',
+        ipc: (message: GuestMessage) => onMessage(message),
+      });
+      child = started;
+      options.onProcess?.(started.pid);
+      void (async () => {
+        const decoder = new TextDecoder();
+        for await (const chunk of started.stderr as ReadableStream<Uint8Array>)
+          stderr = (stderr + decoder.decode(chunk, { stream: true })).slice(-2000);
+      })().catch(() => undefined);
+      void started.exited.then(() => {
         if (outcome || stopReason) return;
         outcome = {
           ok: false,
@@ -788,15 +718,12 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
         };
         finish?.();
       });
-      if (stopReason || execution.signal.aborted) {
-        child.kill();
-      } else
-        child.send({
-          type: 'start',
-          code: options.code,
-          manifest: [...broker.manifest],
-          store: options.store ?? '{}',
-        } satisfies HostMessage);
+      started.send({
+        type: 'start',
+        code: options.code,
+        manifest: [...broker.manifest],
+        store: options.store ?? '{}',
+      } satisfies HostMessage);
       await finished;
     }
   } catch (error) {
@@ -815,7 +742,6 @@ export async function execute(options: ExecutionOptions): Promise<ExecutionRepor
     // then give it a bounded time to report what actually happened.
     execution.abort();
     budget.stop();
-    clearTimeout(absoluteDeadline);
     unsubscribe?.();
     options.signal.removeEventListener('abort', onAbort);
     let grace: ReturnType<typeof setTimeout> | undefined;

@@ -279,7 +279,7 @@ interface Member {
   lastError?: string;
   pid?: number;
   stateRevision: number;
-  rpc?: TeamChild;
+  rpc?: ChildProcess;
   inflight: Map<string, AbortController>;
   /** Outcome of the latest final assistant message; reported once when the child settles. */
   lastOutcome?: { kind: 'result' | 'error'; body: string } | undefined;
@@ -302,28 +302,7 @@ const NAME = /^[a-z][a-z0-9_-]*$/;
 const SUBAGENT_PREAMBLE =
   'You are a one-shot subagent started by a parent agent. Complete the task below on your own; you cannot talk to the parent or the user. Your run ends as soon as you stop calling tools, and your final message is returned to the parent as your result, so make it a self-contained report. Stop any background jobs you start before finishing.';
 
-export interface TeamChild {
-  proc: { pid: number };
-  exited: Promise<number>;
-  stderr: string;
-  write(value: Json): void;
-  request(type: string, args?: Json): Promise<any>;
-  stop(): Promise<void>;
-}
-
 export interface TeamOptions {
-  /** Gateway adapter owns durable storage and node-validated cwd/runtime child launch. */
-  runtime?: {
-    record(entry: Json): void;
-    tasks(tasks: TeamTask[]): void;
-    snapshot(state: unknown): void;
-    cwd(defaultCwd: string, requested: string): string;
-    launch(
-      member: Readonly<Member>,
-      onEvent: (event: Json) => void,
-      signal?: AbortSignal,
-    ): Promise<TeamChild>;
-  };
   directory: string;
   /** Command prefix that runs the current role executable (e.g. `[execPath]` or `[bun, entry/node.ts]`). */
   command: string[];
@@ -373,42 +352,9 @@ export class Team {
 
   constructor(private readonly options: TeamOptions) {
     this.directory = options.directory;
-    if (!options.runtime) mkdirSync(this.directory, { recursive: true, mode: 0o700 });
+    mkdirSync(this.directory, { recursive: true, mode: 0o700 });
   }
 
-  /** Restore gateway-owned facts only; no child process/model run is restarted. */
-  restoreStopped(value: { records: Json[]; tasks: TeamTask[]; agents: Json[] }): void {
-    if (!this.options.runtime || this.records.length || this.agents.size || this.tasks.size)
-      throw new Error('Team already initialized');
-    if (
-      value.records.length > 10_000 ||
-      value.tasks.length > TASK_LIMIT ||
-      value.agents.length > 256
-    )
-      throw new Error('Team restore quota exceeded');
-    this.records.push(...structuredClone(value.records));
-    for (const task of value.tasks) {
-      const restored = structuredClone(task);
-      delete restored.owner;
-      if (restored.status === 'in_progress') restored.status = 'pending';
-      this.tasks.set(restored.id, restored);
-      const number = Number(restored.id.replace(/^t/, ''));
-      if (Number.isSafeInteger(number)) this.taskCounter = Math.max(this.taskCounter, number);
-    }
-    for (const saved of value.agents) {
-      if (typeof saved.name !== 'string' || !NAME.test(saved.name) || this.agents.has(saved.name))
-        throw new Error('Invalid persisted team member');
-      this.agents.set(saved.name, {
-        ...saved,
-        status: 'stopped',
-        activity: 'Gateway restarted; no automatic child replay',
-        lastError: 'Runtime restarted; original child history retained',
-        stateRevision: Number(saved.stateRevision ?? 0) + 1,
-        inflight: new Map(),
-      } as Member);
-    }
-    this.options.runtime.snapshot(this.list());
-  }
   private roles(): Record<string, RolePreset> {
     return this.options.roles?.() ?? DEFAULT_ROLES;
   }
@@ -430,11 +376,9 @@ export class Team {
 
   record(kind: string, data: Json): Json {
     const entry = { id: randomUUID(), time: new Date().toISOString(), kind, ...data };
-    if (this.options.runtime) this.options.runtime.record(entry);
-    else
-      appendFileSync(join(this.directory, 'events.jsonl'), `${JSON.stringify(entry)}\n`, {
-        mode: 0o600,
-      });
+    appendFileSync(join(this.directory, 'events.jsonl'), `${JSON.stringify(entry)}\n`, {
+      mode: 0o600,
+    });
     this.records.push(entry);
     this.notifyWaiters();
     this.options.onRecord?.();
@@ -491,7 +435,6 @@ export class Team {
     member.lastActivity = new Date().toISOString();
     member.stateRevision++;
     if (!live(member)) this.releaseTasks(member.name);
-    this.options.runtime?.snapshot(this.list());
     this.notifyWaiters();
     this.options.onChange?.(this.list());
   }
@@ -603,13 +546,11 @@ export class Team {
     const task = text(args.task, 'task');
     if (args.cwd !== undefined && typeof args.cwd !== 'string')
       throw new Error('cwd must be a path');
-    const cwd = this.options.runtime
-      ? this.options.runtime.cwd(defaults.cwd, args.cwd ?? '.')
-      : resolve(defaults.cwd, args.cwd ?? '.');
-    if (!this.options.runtime && !statSync(cwd, { throwIfNoEntry: false })?.isDirectory())
+    const cwd = resolve(defaults.cwd, args.cwd ?? '.');
+    if (!statSync(cwd, { throwIfNoEntry: false })?.isDirectory())
       throw new Error('cwd must be a directory');
     const roots = this.options.allowedRoots?.();
-    if (roots && !this.options.runtime) {
+    if (roots) {
       const real = realpathSync(cwd);
       if (!roots.some((root) => isInside(real, realResolve(root))))
         throw new Error(
@@ -664,7 +605,7 @@ export class Team {
   private async launch(member: Member, signal?: AbortSignal): Promise<void> {
     const { name } = member;
     const dir = join(this.directory, name);
-    if (!this.options.runtime) mkdirSync(dir, { mode: 0o700 });
+    mkdirSync(dir, { mode: 0o700 });
     const abort = () => {
       if (member.rpc) void this.stop(name);
     };
@@ -672,43 +613,39 @@ export class Team {
     try {
       signal?.throwIfAborted();
       this.change(member, 'starting');
-      member.rpc = this.options.runtime
-        ? await this.options.runtime.launch(member, (event) => this.event(member, event), signal)
-        : new ChildProcess(
-            [
-              ...this.options.command,
-              'agent',
-              '--headless',
-              '--session-dir',
-              dir,
-              '--model',
-              member.model,
-              '--thinking',
-              member.thinking === 'max' ? 'xhigh' : member.thinking,
-              '--name',
-              `${member.mode === 'subagent' ? 'subagent' : 'team'}:${name}`,
-              ...(member.tools ? ['--tools', member.tools.join(',')] : []),
-            ],
-            {
-              cwd: member.cwd,
-              env: {
-                ...(this.options.env ?? process.env),
-                // The parent's project config, never one in the child's cwd (H4).
-                ...(this.options.project
-                  ? {
-                      PIRC_PROJECT_ROOT: this.options.project.root,
-                      PIRC_PROJECT_TRUST: this.options.project.trust ?? '',
-                    }
-                  : {}),
-                PIRC_TEAM_AGENT: name,
-                PIRC_TEAM_MODE: member.mode,
-                PIRC_TEAM_PARENT_PID: String(process.pid),
-              },
-            },
-            (event) => this.event(member, event),
-          );
-      signal?.throwIfAborted();
-      if (this.closing || !live(member)) throw new Error('Agent stopped during provisioning');
+      member.rpc = new ChildProcess(
+        [
+          ...this.options.command,
+          'agent',
+          '--headless',
+          '--session-dir',
+          dir,
+          '--model',
+          member.model,
+          '--thinking',
+          member.thinking === 'max' ? 'xhigh' : member.thinking,
+          '--name',
+          `${member.mode === 'subagent' ? 'subagent' : 'team'}:${name}`,
+          ...(member.tools ? ['--tools', member.tools.join(',')] : []),
+        ],
+        {
+          cwd: member.cwd,
+          env: {
+            ...(this.options.env ?? process.env),
+            // The parent's project config, never one in the child's cwd (H4).
+            ...(this.options.project
+              ? {
+                  PIRC_PROJECT_ROOT: this.options.project.root,
+                  PIRC_PROJECT_TRUST: this.options.project.trust ?? '',
+                }
+              : {}),
+            PIRC_TEAM_AGENT: name,
+            PIRC_TEAM_MODE: member.mode,
+            PIRC_TEAM_PARENT_PID: String(process.pid),
+          },
+        },
+        (event) => this.event(member, event),
+      );
       member.rpc.write({
         type: 'configure',
         models: this.options.models,
@@ -1090,10 +1027,6 @@ export class Team {
   }
 
   private saveTasks(): void {
-    if (this.options.runtime) {
-      this.options.runtime.tasks([...this.tasks.values()]);
-      return;
-    }
     writeFileSync(
       join(this.directory, 'tasks.json'),
       JSON.stringify([...this.tasks.values()], null, 2),
@@ -1443,10 +1376,6 @@ export class Team {
         await member.rpc?.stop();
       }),
     );
-    if (this.options.runtime) {
-      this.options.runtime.snapshot(this.list());
-      return;
-    }
     writeFileSync(join(this.directory, 'team.json'), JSON.stringify(this.list(), null, 2), {
       mode: 0o600,
     });

@@ -51,14 +51,6 @@ import { SENSITIVE_HOME_PATHS, isInside, realResolve } from '../sandbox-policy.j
 import type { TerminalManager } from './terminals.js';
 import { BrowserManager } from './browser.js';
 import { loadRoles, roleBriefs } from '../agent/roles.js';
-import type { EnvironmentInteractions } from './environment-interactions.js';
-import { ExecutionJournal } from '../environment/journal.js';
-import { NodeWriterFence } from '../gateway-runtime/node-writer-fence.js';
-import {
-  restoreEnvironmentQuarantines,
-  sweepEnvironmentGenerations,
-} from './environment-supervisor.js';
-import type { Binding } from '../environment/protocol.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
 const createWorkspaceBody = z.union([
@@ -170,18 +162,6 @@ export interface NodeServices {
   events: EventHub;
   runners: RunnerManager;
   writes: WriteBroker;
-  environmentJournal: ExecutionJournal;
-  /**
-   * Durable writer fence; revoke() and supersession retire the journal generations.
-   * A production LocalEnvironment composition MUST pass `fence: writerFence` (provisioning
-   * then requires the newest fenced, unrevoked generation of the session; LocalEnvironment
-   * refuses to construct without a fence unless `unfencedHarness` is set, which is for
-   * tests only) and MUST call adoptRetiredGenerations() after this startup sweep, before
-   * serving the gateway, so swept/fenced generations stay reconcilable after a restart.
-   */
-  writerFence: NodeWriterFence;
-  /** Generations recovered and retired by this startup's sweep (never replayed). */
-  sweptGenerations: Binding[];
   /** Providers from the daemon, used for agents started from now on. */
   models: ModelStore;
   terminals: TerminalManager;
@@ -193,11 +173,7 @@ export interface NodeServices {
 export async function buildNodeApp(
   config: NodeConfig,
   /** The daemon link agents reach the gateway through; offline without one. */
-  options: {
-    gateway?: AgentGateway;
-    /** Explicit M2 harness provisioning only; no executor or new loop is started here. */
-    environmentInteractions?: (db: GatewayDatabase, events: EventHub) => EnvironmentInteractions;
-  } = {},
+  options: { gateway?: AgentGateway } = {},
 ): Promise<{ app: FastifyInstance; services: NodeServices }> {
   const app = Fastify({ logger: true, bodyLimit: config.uploadMaxBytes });
   registerImageParsers(app, config.uploadMaxBytes);
@@ -220,30 +196,7 @@ export async function buildNodeApp(
   const recovery = db.recoverStartup();
   app.log.info({ recovery }, 'node startup recovery complete');
   const events = new EventHub(config.eventBufferSize);
-  const environmentInteractions = options.environmentInteractions?.(db, events);
   const writes = new WriteBroker();
-  // Restore durable deny fences before any runner can acquire a workspace lease.
-  // This never provisions an executor or transfers an existing writer.
-  const environmentJournal = new ExecutionJournal(
-    path.join(config.stateDir, 'environment-journal.sqlite'),
-  );
-  const writerFence = new NodeWriterFence(
-    path.join(config.stateDir, 'writer-fences.sqlite'),
-    config.nodeId,
-    environmentJournal,
-  );
-  restoreEnvironmentQuarantines(environmentJournal, writes);
-  // No executor exists yet: generations an abrupt stop left active or unfinished are
-  // recovered and retired atomically before any lease, grant or admission. No replay.
-  const swept = sweepEnvironmentGenerations(environmentJournal);
-  if (swept.length)
-    app.log.warn(
-      {
-        generations: swept.length,
-        recovered: swept.reduce((sum, entry) => sum + entry.recovered.length, 0),
-      },
-      'environment startup sweep retired unfenced generations',
-    );
   // Filled by the daemon on registration; agents started before that get no providers.
   const models = new ModelStore();
   const browser = new BrowserManager(config.browser);
@@ -265,7 +218,6 @@ export async function buildNodeApp(
     options.gateway ?? offlineGateway,
     browser,
     sandbox,
-    writerFence,
   );
   const branches = new BranchCache();
   const claim = (request: FastifyRequest, sessionId = parse(sessionParams, request.params).id) =>
@@ -668,24 +620,6 @@ export async function buildNodeApp(
     const session = claim(request, params.id);
     const body = parse(answerBody, request.body);
     db.validateLease(session.id, body.clientId, body.generation);
-    const candidate = db.getInteraction(params.interactionId);
-    const environment = environmentInteractions;
-    if (environment?.handles(candidate)) {
-      // The gateway authenticates the human owner and control lease before relaying.
-      const interaction = db.claimInteraction(
-        params.interactionId,
-        session.id,
-        session.runnerEpoch,
-        body.answer,
-      );
-      environment.answer(session.id, interaction, {
-        confirmed: 'confirmed' in body.answer && body.answer.confirmed === true,
-      });
-      events.publish(session.id, interaction.runnerEpoch, 'interaction_answered', {
-        interactionId: interaction.id,
-      });
-      return { interactionId: interaction.id, status: 'answered' };
-    }
     const active = runners.get(session.id);
     if (!active || active.epoch !== session.runnerEpoch)
       throw new ApiError(409, 'stale_interaction', 'Interaction belongs to an inactive runner');
@@ -768,8 +702,6 @@ export async function buildNodeApp(
     terminals.shutdown();
     await runners.shutdown();
     await browser.shutdown();
-    writerFence.close();
-    environmentJournal.close();
     db.close();
   });
   return {
@@ -779,9 +711,6 @@ export async function buildNodeApp(
       events,
       runners,
       writes,
-      environmentJournal,
-      writerFence,
-      sweptGenerations: swept.map((entry) => entry.binding),
       models,
       terminals,
       terminalStreams,

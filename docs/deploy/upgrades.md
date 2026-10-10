@@ -55,19 +55,6 @@ While the gateway restarts, nodes reconnect on their own (they retry the link); 
 - **Database**: a rolled-back binary may refuse or misread a database migrated by the newer one. Restore the state directory from the backup taken before the upgrade ([Backup and recovery](backup-and-recovery.md)); sessions created in between are lost from the index (their transcripts stay on the node's disk).
 - **Web bundle**: redeploy the previous `dist`; ask browsers to reload (or clear the service worker at `/sw.js` in DevTools if a stale shell persists).
 
-## Gateway agent runtime cutover (not authorized)
-
-The [opt-in gateway runtime](topology.md#opt-in-gateway-agent-runtime-evaluated-not-deployed) has **not** been cut over, and the [M5 evaluation](../evaluations/gateway-runtime/m5-evaluation.md) does not recommend it yet. Deployment, stopping existing work and any data deletion each need separate explicit authorization. The steps below are the reviewed procedure ([plan §7](../../plans/gateway-agent-runtime.md#7-fresh-session-cutover-no-legacy-jsonl-migration)), rehearsed only on fixtures (`apps/gateway/test/gateway-cutover-rehearsal.test.ts`); no operational coordinator exists, so an operator must sequence them.
-
-**Version compatibility.** `NODE_PROTOCOL_VERSION` (11) and `ENVIRONMENT_PROTOCOL_VERSION` (1) are unchanged by the opt-in variants, so the numbers alone do not prove a peer supports them. Every connected node and the gateway must run the same release; `bun scripts/version.ts` synchronizes product versions only and does not check protocol compatibility. The gateway also needs its worker assets from the same build (`pirc-runtime-worker`, `pirc-ptc-worker`, and on macOS the adjacent dylibs and watchdog).
-
-1. **Inventory.** List legacy session IDs referenced by sessions, schedules, schedule runs/proposals, delegations and memory records; fresh sessions block them. Unrelated records stay.
-2. **Quiesce, then back up.** Stop new run and schedule dispatch, finish or explicitly stop foreground work, cancel pending approvals, and stop background jobs unless a verified handoff exists. Then back up the gateway and every node at that one quiesced point.
-3. **Fresh identities.** Prepare new session/branch/store/context identities. Legacy schedules and delegations are not retargeted; reconfigure them explicitly.
-4. **Fence both ends.** Each node must reconnect at the current protocol, durably deny its legacy writers and verify they stopped before the gateway activates the generation. Offline nodes stay ineligible until they do.
-5. **Verify.** New history/context/recaps, attachments and UI work; legacy files are byte-identical; legacy references report unavailable.
-6. **Rollback limits.** Before the first fresh write: revoke the new generation on gateway and node, verify it wrote nothing, then restore the pre-cutover backups on both ends. After a fresh write there is **no lossless rollback** to the legacy runtime: keep the new data and plan a separately reviewed recovery. A revoked generation can never be reactivated.
-
 ## Release procedure for a Nix-based fleet
 
 ```sh

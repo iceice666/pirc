@@ -157,7 +157,6 @@ it('rejects another chat node with 409 without replacing the first, and permits 
         type: 'register',
         role: 'chat',
         protocol: NODE_PROTOCOL_VERSION,
-        sharedLink: 1,
         workspaces: [],
       }),
     );

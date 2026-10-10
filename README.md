@@ -60,13 +60,7 @@ The node's first workspace can point to this repository. See [`apps/gateway/READ
 
 ## Role-specific executables
 
-Gateway builds require a C compiler and the separately supplied, pinned wasm3
-source archive (no automatic download or unisolated fallback):
-
 ```sh
-# Download/provision the approved archive separately, then verify it at build time.
-export PIRC_WASM3_ARCHIVE=/absolute/path/to/wasm3-ac3c1dd1386e83be7de548211efd02805eb1dcee.tar.gz
-export CC=clang          # or a supported local C compiler
 bun run build            # web bundle plus all three independent executables
 ./apps/gateway/dist/pirc-gateway  # browser API and routing
 ./apps/gateway/dist/pirc-chat     # assistant chats and projects
@@ -74,16 +68,6 @@ bun run build            # web bundle plus all three independent executables
 ```
 
 To compile only one role, run `bun run build:gateway`, `bun run build:chat` or `bun run build:node` from `apps/gateway/` (from the repository root, prefix with `bun run --filter @pirc/gateway`). Build the Web UI separately with `bun run --filter @pirc/web build` when needed.
-
-The gateway build also emits `pirc-runtime-worker` and `pirc-ptc-worker` beside the
-gateway binary, with `pirc-ptc-worker.LICENSE` and `.provenance.json`. Keep these
-assets together (plus the bootstrap/inspection libraries and watchdog on macOS).
-The native build checks wasm3 SHA256
-`c3ee044f23da31055e1c31b3a350dac240c93f0eed8e281739574bf754573c37` and the exact
-QuickJS WASM checksum; missing or mismatched inputs fail closed. To run focused
-native acceptance, use `bun run --filter @pirc/gateway test:native-ptc` with the
-required OS sandbox available. `bun run check` also requires these build inputs;
-skipped native tests in that command are not isolation acceptance.
 
 Each executable embeds Bun and SQLite. Chat and coding nodes share the same node/agent implementation, but their executable fixes the role; no environment variable switches between them. Both support the internal `agent` and `ptc-guest` commands; only the gateway supports `oauth-worker`. These worker commands are started by the runtime, not separate services.
 

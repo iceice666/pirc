@@ -56,12 +56,37 @@ import { WRAPPER_NAMES } from './ptc/contracts.js';
 import { capabilityIndexPrompt, modelTools } from './ptc/index.js';
 import { DIRECT_CAPABILITIES } from './ptc/signatures.js';
 import { CapabilityRegistry } from './ptc/registry.js';
-import {
-  executeLocalOperation,
-  type OperationOptions,
-  type OperationOutcome,
-} from '../environment/local.js';
-export type { OperationStage, OperationOptions, OperationOutcome } from '../environment/local.js';
+import { validateSchema } from './ptc/schema.js';
+
+/**
+ * How far one capability call got (see `Agent.invokeOperation`): `executed`
+ * means the tool ran (its result may still be an error); the others mean it
+ * never started.
+ */
+export type OperationStage =
+  | 'unavailable'
+  | 'invalid'
+  | 'denied'
+  /** Held back by its caller (`OperationOptions.withheld`), e.g. after an earlier refusal. */
+  | 'withheld'
+  | 'refused'
+  | 'cancelled'
+  | 'threw'
+  | 'executed';
+
+export interface OperationOptions {
+  /**
+   * Runs once the call has passed every check, with the name and arguments
+   * it will run with, right before the tool executes (a ptc execution takes
+   * its write slot here). Throwing stops the call as cancelled.
+   */
+  beforeExecute?: (name: string, args: Record<string, unknown>) => Promise<void>;
+  /**
+   * Checked before approval is asked and again right before the tool runs: a reason to hold
+   * the call back (a ptc script after one of its operations was refused), or undefined.
+   */
+  withheld?: (name: string, args: Record<string, unknown>) => string | undefined;
+}
 
 export type Emit = (event: Record<string, unknown>) => void;
 
@@ -161,6 +186,16 @@ function interruptedNote(message: AssistantMessage): QueueItem {
         : '[Your previous response was interrupted by the user before it produced any text.]',
     },
   };
+}
+
+/**
+ * How an operation ended. `hookOutput`: what `afterTool` hooks printed (also appended to the
+ * result), so a ptc result can show it to the model even when the script drops the text.
+ */
+export interface OperationOutcome {
+  stage: OperationStage;
+  result: ToolResult;
+  hookOutput?: string;
 }
 
 /**
@@ -1665,23 +1700,97 @@ export class Agent {
     onUpdate?: (result: ToolResult) => void,
     options: OperationOptions = {},
   ): Promise<OperationOutcome> {
-    return executeLocalOperation(
-      {
-        hooks: this.hooks,
-        hasAfterHooks: () => !!this.config.hooks.afterTool.length,
-        gate: (name, args, callSignal) => this.autoMode.gate(name, args, callSignal),
-        context: (id, callSignal, update) => this.toolContext(id, callSignal, update),
-        log: (message) => {
-          process.stderr.write(message);
-        },
-      },
-      tool,
-      rawArgs,
-      signal,
-      toolCallId,
-      onUpdate,
-      options,
-    );
+    const name = tool.name;
+    const cancelled = () => fail('cancelled', 'Cancelled before it started');
+    const fail = (stage: OperationStage, text: string) => ({
+      stage,
+      result: { content: [{ type: 'text' as const, text }], isError: true },
+    });
+    if ('__invalid_json' in rawArgs)
+      return fail(
+        'invalid',
+        `Invalid JSON arguments for ${name}: ${String(rawArgs.__invalid_json).slice(0, 500)}`,
+      );
+    const invalid = (args: Record<string, unknown>, what: string) => {
+      const errors = validateSchema(args, tool.parameters);
+      return errors.length ? `Invalid ${what} for ${name}: ${errors.join('; ')}` : undefined;
+    };
+    const before = invalid(rawArgs, 'arguments');
+    if (before) return fail('invalid', before);
+    if (signal.aborted) return cancelled();
+    const gate = await this.hooks.beforeTool(name, rawArgs);
+    if (signal.aborted) return cancelled();
+    if (gate.blocked) return fail('denied', `Blocked by hook: ${gate.blocked}`);
+    // Hook-rewritten arguments are validated again before auto mode judges them.
+    if (gate.args !== rawArgs) {
+      const after = invalid(gate.args, 'hook-rewritten arguments');
+      if (after) return fail('invalid', after);
+    }
+    const held = () => options.withheld?.(name, gate.args);
+    const early = held();
+    if (early) return fail('withheld', early);
+    // Auto mode judges the final (hook-rewritten) arguments and takes the write lease.
+    let refusal: string | undefined;
+    try {
+      refusal = await this.autoMode.gate(name, gate.args, signal);
+    } catch (error) {
+      if (signal.aborted) return cancelled();
+      return fail('refused', (error as Error).message);
+    }
+    // An approval cancelled with the call is not a denial, and never consent.
+    if (signal.aborted) return cancelled();
+    if (refusal) return fail('denied', `Blocked by auto mode: ${refusal}`);
+    if (options.beforeExecute)
+      try {
+        await options.beforeExecute(name, gate.args);
+      } catch {
+        return cancelled();
+      }
+    // Nothing runs once the call was cancelled, wherever it was waiting.
+    if (signal.aborted) return cancelled();
+    const late = held();
+    if (late) return fail('withheld', late);
+    let result: ToolResult;
+    let stage: OperationStage = 'executed';
+    try {
+      result = await tool.execute(gate.args, this.toolContext(toolCallId, signal, onUpdate));
+    } catch (error) {
+      // The model only sees the message; keep the stack for diagnosis (`runner_stderr`).
+      process.stderr.write(
+        `tool ${name} threw: ${(error as Error).stack ?? String(error)}\n`.slice(0, 8192),
+      );
+      stage = 'threw';
+      result = { content: [{ type: 'text', text: (error as Error).message }], isError: true };
+    }
+    if (this.config.hooks.afterTool.length) {
+      const hookOutput = (
+        await this.hooks.run(
+          'afterTool',
+          {
+            tool: name,
+            args: gate.args,
+            isError: !!result.isError,
+            output: result.content
+              .filter((part) => part.type === 'text')
+              .map((part) => (part as { text: string }).text)
+              .join('')
+              .slice(0, 65_536),
+          },
+          name,
+        )
+      )
+        .filter((item) => item.exitCode === 0 && item.stdout.trim())
+        .map((item) => item.stdout.trim())
+        .join('\n');
+      if (hookOutput) {
+        result = {
+          ...result,
+          content: [...result.content, { type: 'text', text: `\n[hook]\n${hookOutput}` }],
+        };
+        return { stage, result, hookOutput };
+      }
+    }
+    return { stage, result };
   }
 
   /** A provider tool call: only the model-facing tools exist at this level. */

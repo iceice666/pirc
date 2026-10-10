@@ -4,8 +4,6 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import WebSocket from 'ws';
-import { sharedTestNode } from './fixtures/shared-node.js';
-const peers = new WeakMap<WebSocket, ReturnType<typeof sharedTestNode>>();
 import { buildDaemonApp } from '../src/daemon/app.js';
 import { NODE_PROTOCOL_VERSION } from '../src/protocol.js';
 import { daemonConfig, headers, waitFor } from './helpers.js';
@@ -23,17 +21,13 @@ function open(url: string, nodeId: string, token: string): Promise<WebSocket> {
       headers: { 'x-pirc-node-id': nodeId, authorization: `Bearer ${token}` },
     });
     sockets.push(socket);
-    peers.set(socket, sharedTestNode(socket));
     socket.once('open', () => resolve(socket));
     socket.once('error', reject);
   });
 }
 function receive(socket: WebSocket): Promise<any> {
   return new Promise((resolve, reject) => {
-    const off = peers.get(socket)!.onMessage((value) => {
-      off();
-      resolve(value);
-    });
+    socket.once('message', (raw) => resolve(JSON.parse(raw.toString())));
     socket.once('close', () => reject(new Error('socket closed before response')));
   });
 }
@@ -90,7 +84,6 @@ describe('node registrations', () => {
         type: 'register',
         role: 'node',
         protocol: NODE_PROTOCOL_VERSION,
-        sharedLink: 1,
         workspaces: [{ id: 'project', displayName: 'A' }],
       }),
     );
@@ -101,7 +94,6 @@ describe('node registrations', () => {
         type: 'register',
         role: 'node',
         protocol: NODE_PROTOCOL_VERSION,
-        sharedLink: 1,
         workspaces: [{ id: 'project', displayName: 'B' }],
       }),
     );
@@ -113,7 +105,7 @@ describe('node registrations', () => {
         .sort(),
     ).toEqual(['node-a', 'node-b']);
     const pong = receive(a);
-    void peers.get(a)!.send({ type: 'heartbeat' });
+    a.send(JSON.stringify({ type: 'heartbeat' }));
     expect((await pong).type).toBe('heartbeat_ack');
     const closed = new Promise<void>((resolve) => a.once('close', () => resolve()));
     a.close();
@@ -134,7 +126,6 @@ describe('node registrations', () => {
         type: 'register',
         role: 'node',
         protocol: NODE_PROTOCOL_VERSION,
-        sharedLink: 1,
         workspaces: [{ id: 'other', displayName: 'Updated' }],
       }),
     );
@@ -195,7 +186,6 @@ describe('node registrations', () => {
         type: 'register',
         role: 'node',
         protocol: NODE_PROTOCOL_VERSION,
-        sharedLink: 1,
         workspaces: [],
       }),
     );

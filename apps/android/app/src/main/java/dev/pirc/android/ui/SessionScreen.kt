@@ -262,7 +262,7 @@ private fun OriginChip(origin: SessionOrigin, onOpenSchedule: (String) -> Unit, 
     )
 }
 
-/** Node environment warning, not a claim about gateway-loop isolation; tap for details. */
+/** Stays while the agent runs outside the sandbox (the timeline warning scrolls away); tap for why. */
 @Composable
 private fun UnsandboxedChip(sandbox: SandboxStatus) {
     var open by remember { mutableStateOf(false) }
@@ -281,7 +281,7 @@ private fun UnsandboxedChip(sandbox: SandboxStatus) {
     if (open) AlertDialog(
         onDismissRequest = { open = false },
         title = { Text("Not sandboxed") },
-        text = { Text((sandbox.reason?.let { "$it.\n\n" } ?: "") + "Environment commands run with the node account's full access. This status describes node execution, not the gateway model loop.") },
+        text = { Text((sandbox.reason?.let { "$it.\n\n" } ?: "") + "This agent's commands run with the node account's full access.") },
         confirmButton = { TextButton(onClick = { open = false }) { Text("OK") } },
     )
 }

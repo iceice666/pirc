@@ -5,8 +5,6 @@ import path from 'node:path';
 import { afterEach, expect, it } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import WebSocket from 'ws';
-import { sharedTestNode } from './fixtures/shared-node.js';
-const peers = new WeakMap<WebSocket, ReturnType<typeof sharedTestNode>>();
 import { defaultAgentCommand } from '../src/config.js';
 import { buildDaemonApp } from '../src/daemon/app.js';
 import { NODE_PROTOCOL_VERSION } from '../src/protocol.js';
@@ -38,7 +36,6 @@ async function daemonWithNode() {
       headers: { 'x-pirc-node-id': 'a', authorization: `Bearer ${'a'.repeat(32)}` },
     });
     cleanup.push(() => socket.terminate());
-    peers.set(socket, sharedTestNode(socket));
     socket.once('error', reject);
     socket.once('open', () =>
       socket.send(
@@ -46,7 +43,6 @@ async function daemonWithNode() {
           type: 'register',
           role: 'chat',
           protocol: NODE_PROTOCOL_VERSION,
-          sharedLink: 1,
           workspaces: [{ id: 'chats', displayName: 'Chats', kind: 'chat' }],
         }),
       ),
@@ -62,13 +58,14 @@ async function daemonWithNode() {
   const ask = (sessionId: string, op: string, args: unknown = {}) =>
     new Promise<any>((resolve) => {
       const requestId = randomUUID();
-      const peer = peers.get(node)!;
-      const off = peer.onMessage((message) => {
+      const onMessage = (raw: WebSocket.RawData) => {
+        const message = JSON.parse(raw.toString());
         if (message.type !== 'agent_response' || message.requestId !== requestId) return;
-        off();
+        node.off('message', onMessage);
         resolve(message);
-      });
-      void peer.send({ type: 'agent_request', requestId, sessionId, op, args });
+      };
+      node.on('message', onMessage);
+      node.send(JSON.stringify({ type: 'agent_request', requestId, sessionId, op, args }));
     });
   return { app, services, url, ask, chatSessionId: chat.id };
 }

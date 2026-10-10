@@ -54,8 +54,6 @@ export const registrationSchema = z.object({
   role: z.enum(['chat', 'node']),
   protocol: z.number().int().optional(),
   workspaces: z.array(registeredWorkspaceSchema).max(100),
-  /** Shipped peers require shared framing; component-only test peers may omit it. */
-  sharedLink: z.literal(1).optional(),
 });
 
 /** A node session's open run and write lease, sent whole after registration/on change. */
@@ -124,8 +122,6 @@ export const daemonMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('registered'),
-    sharedLink: z.literal(1).optional(),
-    protocol: z.number().int(),
     nodeId: z.string(),
     models: modelsSchema,
     /** Acknowledged workspace-memory ledger offsets, by ledger key. */

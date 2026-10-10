@@ -153,7 +153,7 @@ const SCHEDULE_RESULT = byAction({
   },
 });
 
-export function scheduleTool(gateway: Pick<NodeGateway, 'request'>): Tool {
+function scheduleTool(gateway: NodeGateway): Tool {
   return {
     name: SCHEDULE_TOOL,
     description: toolPrompt('schedule', { today: new Date().toISOString().slice(0, 10) }),

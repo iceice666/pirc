@@ -134,36 +134,6 @@ it('resumes where the gateway is, starts over when the ledger shrank, and retrie
   expect(frames[1]).toMatchObject({ offset: frames[0]!.end, lines: [{ type: 'cleared' }] });
 });
 
-it('skips fresh authority evidence without crashing scans or stalling legacy offsets', () => {
-  const { file, frames, mirror, connect, sessionDir } = setup();
-  const fresh = {
-    ...item('private fresh evidence', ''),
-    source: {
-      authority: 'gateway',
-      nodeId: 'n',
-      repositoryKey: KEY,
-      sessionId: 'fresh-session',
-      branchId: 'fresh-branch',
-    },
-  };
-  const recorded = line({
-    type: 'recorded',
-    at: 1,
-    items: [fresh, item('legacy evidence', sessionDir)],
-  });
-  writeFileSync(file, recorded);
-  expect(() => connect()).not.toThrow();
-  expect(frames[0]!.end).toBe(Buffer.byteLength(recorded));
-  expect(JSON.stringify(frames)).not.toContain('private fresh');
-  expect(frames[0]!.lines).toMatchObject([
-    { type: 'recorded', items: [{ content: 'legacy evidence' }] },
-  ]);
-  mirror.receive({ ledgerKey: KEY, watermark: frames[0]!.end });
-  appendFileSync(file, line({ type: 'cleared', at: 2 }));
-  expect(() => mirror.scan()).not.toThrow();
-  expect(frames[1]!.offset).toBe(Buffer.byteLength(recorded));
-});
-
 it('does not mirror context snapshots or recurse into session directories', () => {
   const { file, frames, connect, sessionDir } = setup();
   mkdirSync(sessionDir, { recursive: true });

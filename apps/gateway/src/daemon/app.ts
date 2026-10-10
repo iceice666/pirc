@@ -158,7 +158,7 @@ export async function buildDaemonApp(
   const models = new ModelStore();
   // Invalid baseline/state at startup is fatal. Never log raw key-command output.
   const baseline = loadModelsFile(config.modelsFile) ?? { providers: {} };
-  const nodes = new NodeRegistry(models, true);
+  const nodes = new NodeRegistry(models);
   let inference: GatewayInference | undefined;
   const backends = new BackendService({
     stateDir: config.stateDir,

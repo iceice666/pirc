@@ -545,14 +545,13 @@
             >
           {/if}
           {#if sessionState.sandbox && !sessionState.sandbox.active}
-            <!-- Environment warning, not a claim about gateway model-loop isolation. -->
+            <!-- Stays while this agent runs: the timeline warning scrolls away. -->
             <span
               class="origin-chip unsandboxed"
               role="status"
               title={sessionState.sandbox.reason
-                ? `Node environment not sandboxed: ${sessionState.sandbox.reason}`
-                : 'Node environment not sandboxed; this does not describe the gateway model loop'}
-              ><ShieldOff size={13} /><span>Not sandboxed</span></span
+                ? `Not sandboxed: ${sessionState.sandbox.reason}`
+                : 'Not sandboxed'}><ShieldOff size={13} /><span>Not sandboxed</span></span
             >
           {/if}
         </div>

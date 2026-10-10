@@ -4,14 +4,6 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
-### Added
-
-- Experimental, opt-in gateway runtime work for isolated PTC, durable mixed-tool recovery, teams and product-service adapters. M4 remains incomplete: this checkpoint does not enable production session routing, import legacy transcripts or authorize cutover.
-
-### Changed
-
-- Gateway builds now require a local C compiler and an explicitly supplied pinned wasm3 archive (`PIRC_WASM3_ARCHIVE`); builds verify native dependencies and ship the PTC worker with its license notices and provenance. See the build instructions in the README. Full Nix installation and portable release archive acceptance remain pending.
-
 ### Security
 
 - Agents can no longer read more credential stores: `~/.local/pirc-node` (the macOS node's `agent.env`), `~/.config/op`, Cargo, RubyGems and Terraform credentials, Claude Code and Codex login files, shell histories and Microsoft Edge profiles. Auto mode and the sandbox now share one list, so a shell command that touches `~/.npmrc`, `~/.yarnrc.yml` or `~/.bundle/config` also needs approval (builds can still read them).

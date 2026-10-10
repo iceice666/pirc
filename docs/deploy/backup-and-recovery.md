@@ -26,20 +26,6 @@ Two kinds of state exist, and they are not interchangeable.
 
 Workspaces (repositories) are not pirc state; back them up as you already do. `<workspace>/.pirc/` holds project config, uploads copied for the agent and recordings.
 
-Every node also keeps `environment-journal.sqlite` (environment execution journal and durable workspace quarantines) and `writer-fences.sqlite` (legacy-writer deny fences and writer transfers). The node reloads their quarantines and fences before any runner or lease starts; never delete them to unblock a workspace.
-
-### Opt-in gateway agent runtime
-
-The [opt-in gateway runtime](topology.md#opt-in-gateway-agent-runtime-evaluated-not-deployed) is not deployed. If it is composed, the authority model changes and backups must follow it:
-
-- Fresh sessions' **complete transcripts**, branches, turns, runs, executions, context snapshots, outbox, PTC store and central inner operations live in the gateway's `gateway.sqlite` (`runtime_*` and inner-journal tables). The gateway is then the source of truth for those conversations and retains them long-term; back it up and protect it like node transcripts.
-- The gateway-side execution journal (Environment transport receipts, gateway-placed PTC outer records) is a separate SQLite file whose path the host's composer chooses; back it up together with `gateway.sqlite`.
-- Node `environment-journal.sqlite` holds accepted/terminal executions, results awaiting gateway ACK and tombstones for IDs the node was asked about but never accepted; `writer-fences.sqlite` holds the fences that keep old writers from running. Back up gateway and node state from the **same quiesced point**, and never restore a node journal without the matching gateway state: a node answers "never accepted" from its journal, so an older journal could make the gateway record work as not started that actually ran.
-- Legacy JSONL, branch caches and PTC stores stay on nodes untouched; they are not imported and are not a fallback.
-- Restore never replays: interrupted runs and unacknowledged executions reconcile by original execution ID; unknown outcomes stay unknown.
-- Client projection/outbox commits and node progress/operation events use WAL `synchronous=NORMAL`: a process crash loses nothing, but power or OS loss can drop a trailing suffix of them. After such a gateway restart, clients should reload from a snapshot (outbox cursor numbers may be reissued); a node may report a lower final event sequence for an execution recovered as unknown. Execution, transcript and result records stay fully synchronous.
-- Restoring an older node `writer-fences.sqlite` removes legacy deny fences and re-enables old writers. That is only acceptable as the documented pre-write cutover rollback (see [Upgrades](upgrades.md#gateway-agent-runtime-cutover-not-authorized)), after revoking the fresh generation on both ends and verifying it has no writes. After the first fresh write there is no lossless rollback; never restore a reusable fresh writer generation.
-
 ## Taking a backup
 
 SQLite runs in WAL mode; copy it with `sqlite3`'s backup API or after stopping the service, not with a bare `cp` of a live file.

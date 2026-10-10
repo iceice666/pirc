@@ -12,10 +12,6 @@ import dev.pirc.android.core.timeline.text
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
@@ -81,29 +77,8 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
     open suspend fun nodes(): List<NodeSummary> = get<NodesResponse>("/api/nodes").nodes
 
     /** The raw snapshot; see `snapshotState` in `core.timeline`. */
-    open suspend fun snapshot(sessionId: String): JsonElement {
-        val prefix = "/api/sessions/${sessionId.urlSegment()}"
-        var raw = get<JsonElement>("$prefix/snapshot")
-        if ((raw["authority"] as? JsonPrimitive)?.contentOrNull != "gateway" || raw["session"] !is JsonObject) return raw
-        val cursors = mutableSetOf<String>()
-        var history = (raw["history"] as? JsonArray)?.toList().orEmpty()
-        var bytes = history.sumOf { it.toString().toByteArray(Charsets.UTF_8).size }
-        var page = raw["historyPage"]
-        while ((page["olderAvailable"] as? JsonPrimitive)?.booleanOrNull == true) {
-            val before = (page["olderCursor"] as? JsonPrimitive)?.contentOrNull
-                ?: throw ApiException(200, "bad_reply", "Missing gateway history cursor")
-            if (!cursors.add(before) || cursors.size > 256) throw ApiException(200, "bad_reply", "Gateway history pagination limit exceeded")
-            val older = get<JsonElement>("$prefix/history?before=${before.urlSegment()}")
-            val messages = older["history"] as? JsonArray
-                ?: throw ApiException(200, "bad_reply", "Invalid gateway history page")
-            bytes += messages.sumOf { it.toString().toByteArray(Charsets.UTF_8).size }
-            if (bytes > 32 * 1024 * 1024) throw ApiException(200, "bad_reply", "Gateway history memory limit exceeded")
-            history = messages.toList() + history
-            page = older["historyPage"]
-        }
-        raw = JsonObject((raw as JsonObject).toMutableMap().apply { put("history", JsonArray(history)); put("historyPage", page ?: JsonNull) })
-        return raw
-    }
+    open suspend fun snapshot(sessionId: String): JsonElement =
+        get<JsonElement>("/api/sessions/${sessionId.urlSegment()}/snapshot")
 
     /** The live event stream of one session; see [EventStream]. */
     open fun events(sessionId: String, cursor: String?) = EventStream(this).open(sessionId, cursor)

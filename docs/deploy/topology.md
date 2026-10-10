@@ -21,7 +21,7 @@ Chat and coding executables share the node/agent implementation. Their internal 
 
 The Nix gateway package includes the Web UI, but not sandbox/browser runtime. Chat/node packages include srt/playwright-core, but not the Web UI. Keep every role on the same release/protocol version. The executable split is **not privacy isolation**: OS accounts, filesystem permissions and sandboxing define the protection boundaries.
 
-In the deployed topology described here, the gateway never runs agents, shells or tools, and never learns real workspace paths. A node never listens on a port; agents reach their node through a Unix socket in the node's state directory. The [opt-in gateway agent runtime](#opt-in-gateway-agent-runtime-evaluated-not-deployed) below changes the loop's location and is not enabled by any shipped service.
+The gateway never runs agents, shells or tools, and never learns real workspace paths. A node never listens on a port; agents reach their node through a Unix socket in the node's state directory.
 
 ## Who talks to whom
 
@@ -77,36 +77,6 @@ Run at most one `pirc-chat` process (NixOS: `services.pirc.chat = true` selects 
 | Node ↔ agent inference socket (random per start)                          | node      | `$PIRC_STATE_DIR/i-*/socket` (0600)                                         |
 
 Both state directories are created with mode `0700`. See [Backup and recovery](backup-and-recovery.md) for what to copy.
-
-## Opt-in gateway agent runtime (evaluated, not deployed)
-
-The [gateway agent runtime plan](../../plans/gateway-agent-runtime.md) implements a fresh-session runtime (M2–M4) that moves the agent loop, context and authoritative transcripts to the gateway while nodes keep every workspace capability. It is a library composition (`createGatewayRuntimeHost`, `registerGatewayRuntimeRoutes`); no daemon route, NixOS option or environment variable enables it. The [M5 evaluation](../evaluations/gateway-runtime/m5-evaluation.md) found that model deltas reach clients without the node detour, but task-time gates fail; cutover needs a separate human decision and authorization.
-
-```
-browser/phone ──▶ gateway: runtime host (loop, context, transcripts, model calls, central tools)
-                     ├── constrained phase worker per run   (libexec/pirc/pirc-runtime-worker)
-                     ├── native PTC guest, gateway-only scripts (libexec/pirc/pirc-ptc-worker)
-                     ├──▶ model provider
-                     └── Environment protocol over the existing /node/connect link
-                           └──▶ node: sandboxed environment executor (srt), hooks, approvals,
-                                      environment-only and mixed PTC scripts, artifacts
-```
-
-- Model streams go provider → gateway → client; nodes receive tool intents, never inference context.
-- Environment frames use the authenticated node WebSocket and its shared framing; there is no new port. Each tool call is a journaled `execution.start`, a node-pushed `execution.result` (with `status` as fallback) and an `ack` after the gateway commit; a node offline leaves history readable but starts no environment-dependent work. A host composition must wire the node's result and event callbacks to those frames, or the runtime falls back to polling; it must also pass the node writer fence, adopt generations retired by the node's startup sweep, and supply the client control-lease verifier.
-- The phase worker holds no credentials, workspace, database or network: Linux uses bubblewrap + seccomp (needs `bwrap` and `ldd` in the trusted environment), macOS arm64 a native finite driver with adjacent assets. Unsupported platforms refuse to start; there is no unsandboxed fallback.
-- New sessions start fresh. Legacy JSONL, branches, context snapshots and PTC stores are retained, never imported and never used as fallback.
-
-Additional state when composed:
-
-| Data                                                                                                                 | Process | Location                                                              |
-| -------------------------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------- |
-| Fresh transcripts, branches, turns, runs, executions, context snapshots, outbox, PTC store, central inner operations | gateway | `runtime_*` and inner-journal tables in the shared `gateway.sqlite`   |
-| Gateway-side Environment transport receipts and gateway-placed PTC outer records                                     | gateway | a separate execution-journal file chosen by whoever composes the host |
-| Execution journal, results awaiting ACK, workspace quarantines, inner PTC operations                                 | node    | `$PIRC_STATE_DIR/environment-journal.sqlite`                          |
-| Legacy-writer deny fences, writer transfers, revoked gateway generations                                             | node    | `$PIRC_STATE_DIR/writer-fences.sqlite`                                |
-
-The gateway then keeps **complete private transcripts long-term** with no automatic deletion; node-owned artifacts stay on the node and show as unavailable while it is offline.
 
 ## Ports and addresses to decide up front
 

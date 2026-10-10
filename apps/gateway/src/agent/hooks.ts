@@ -1,5 +1,4 @@
 import type { HookConfig, HooksConfig } from './config.js';
-import { killGroup } from './tools/bash.js';
 
 export interface HookResult {
   exitCode: number | null;
@@ -52,62 +51,33 @@ export class HookRunner {
     });
   }
 
-  private async execute(
-    hook: HookConfig,
-    payload: unknown,
-    signal?: AbortSignal,
-  ): Promise<HookResult> {
-    signal?.throwIfAborted();
+  private async execute(hook: HookConfig, payload: unknown): Promise<HookResult> {
     const child = Bun.spawn(['/bin/sh', '-c', hook.command], {
       cwd: this.cwd,
       env: { ...process.env, ...this.env, PIRC_HOOK: '1' },
       stdin: 'pipe',
       stdout: 'pipe',
       stderr: 'pipe',
-      detached: true,
     });
+    child.stdin.write(JSON.stringify(payload));
+    await child.stdin.end();
     let timedOut = false;
-    const stop = () => killGroup(child.pid, 'SIGKILL');
     const timer = setTimeout(() => {
       timedOut = true;
-      stop();
+      child.kill('SIGKILL');
     }, hook.timeoutMs);
-    signal?.addEventListener('abort', stop, { once: true });
-    if (signal?.aborted) stop();
-    const bounded = async (stream: ReadableStream<Uint8Array>, limit: number) => {
-      const decoder = new TextDecoder();
-      let value = '';
-      for await (const chunk of stream) {
-        const text = decoder.decode(chunk, { stream: true });
-        if (value.length < limit) value += text.slice(0, limit - value.length);
-      }
-      return value;
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    clearTimeout(timer);
+    return {
+      exitCode,
+      stdout: stdout.slice(0, 65_536),
+      stderr: stderr.slice(0, 16_384),
+      timedOut,
     };
-    try {
-      // Pump output and enforce cancellation even if a hook never reads stdin.
-      const input = (async () => {
-        try {
-          child.stdin.write(JSON.stringify(payload));
-          await child.stdin.end();
-        } catch (error) {
-          // A hook may intentionally use only its configured command and not
-          // consume stdin. Its exit status/output still determine the decision.
-          if ((error as NodeJS.ErrnoException).code !== 'EPIPE') throw error;
-        }
-      })();
-      const [stdout, stderr, exitCode] = await Promise.all([
-        bounded(child.stdout, 65_536),
-        bounded(child.stderr, 16_384),
-        child.exited,
-        input,
-      ]);
-      signal?.throwIfAborted();
-      return { exitCode, stdout, stderr, timedOut };
-    } finally {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', stop);
-      stop();
-    }
   }
 
   /** Run every matching hook in order; failures produce a warning but never throw. */
@@ -115,13 +85,11 @@ export class HookRunner {
     name: HookName,
     data: Record<string, unknown>,
     subject?: string,
-    signal?: AbortSignal,
   ): Promise<Array<HookResult & { command: string }>> {
     const results: Array<HookResult & { command: string }> = [];
     for (const hook of this.matching(name, subject)) {
       try {
-        signal?.throwIfAborted();
-        const result = await this.execute(hook, { hook: name, ...this.base, ...data }, signal);
+        const result = await this.execute(hook, { hook: name, ...this.base, ...data });
         if (result.timedOut) this.warn(`Hook ${name} timed out: ${hook.command}`);
         else if (result.exitCode !== 0 && !(name === 'beforeTool' && result.exitCode === 2))
           this.warn(
@@ -129,7 +97,6 @@ export class HookRunner {
           );
         results.push({ ...result, command: hook.command });
       } catch (error) {
-        if (signal?.aborted) throw error;
         this.warn(`Hook ${name} failed to start: ${(error as Error).message}`);
         results.push({
           exitCode: null,
@@ -159,22 +126,17 @@ export class HookRunner {
   async beforeTool(
     tool: string,
     args: Record<string, unknown>,
-    signal?: AbortSignal,
   ): Promise<{ blocked?: string; args: Record<string, unknown> }> {
     let current = args;
     for (const hook of this.matching('beforeTool', tool)) {
       let result: HookResult;
       try {
-        result = await this.execute(
-          hook,
-          {
-            hook: 'beforeTool',
-            ...this.base,
-            tool,
-            args: current,
-          },
-          signal,
-        );
+        result = await this.execute(hook, {
+          hook: 'beforeTool',
+          ...this.base,
+          tool,
+          args: current,
+        });
       } catch (error) {
         return { blocked: `beforeTool hook failed: ${(error as Error).message}`, args: current };
       }

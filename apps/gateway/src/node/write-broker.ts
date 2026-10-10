@@ -10,12 +10,9 @@ export type WriteGrant = { granted: true } | { granted: false; holder: string; p
  */
 export class WriteBroker {
   private readonly held = new Map<string, Set<string>>();
-  private readonly quarantined = new Set<string>();
   private readonly listeners = new Set<(holders: string[]) => void>();
 
   acquire(sessionId: string, canonicalPath: string): WriteGrant {
-    if (this.quarantined.has(sessionId))
-      return { granted: false, holder: sessionId, path: canonicalPath };
     for (const [owner, paths] of this.held) {
       if (owner === sessionId) continue;
       for (const heldPath of paths)
@@ -40,17 +37,7 @@ export class WriteBroker {
   }
 
   release(sessionId: string): void {
-    if (this.quarantined.has(sessionId)) return;
     if (this.held.delete(sessionId)) this.changed();
-  }
-
-  /** Supervisor-only: retain roots and deny even the same session after an unverified fence. */
-  quarantine(sessionId: string, canonicalPaths = this.leases(sessionId)): void {
-    this.quarantined.add(sessionId);
-    const paths = this.held.get(sessionId) ?? new Set<string>();
-    for (const root of canonicalPaths) paths.add(root);
-    this.held.set(sessionId, paths);
-    this.changed();
   }
 
   /** Called with every holder whenever a session gains its first lease or loses them all. */

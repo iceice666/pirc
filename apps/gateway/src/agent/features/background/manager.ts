@@ -9,7 +9,6 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import type { Subprocess, Terminal } from 'bun';
 import { killGroup } from '../../tools/bash.js';
-import { selfCommand } from '../../../self.js';
 
 export type TaskStatus = 'running' | 'stopping' | 'completed' | 'failed' | 'stopped' | 'timed_out';
 export interface TaskInfo {
@@ -40,7 +39,6 @@ interface RecordState {
   child: Subprocess;
   terminal?: Terminal;
   fd: number | undefined;
-  livenessFd?: number | undefined;
   monitor?: { pattern: RegExp; decoder: TextDecoder; partial: string } | undefined;
   tail: Buffer;
   bytes: number;
@@ -78,8 +76,6 @@ export function compileMonitor(pattern: unknown): RegExp {
 export interface TaskManagerHooks {
   /** A monitored task printed a line that matches its pattern. */
   onMatch?(task: TaskInfo, line: string): void;
-  /** Executor jobs use a liveness watchdog so abrupt parent death fences every group. */
-  watchdog?: boolean;
 }
 
 export class TaskManager {
@@ -152,33 +148,21 @@ export class TaskManager {
             else buffered.push(chunk);
           },
         });
-        child = Bun.spawn(
-          this.hooks.watchdog
-            ? [...selfCommand(), 'environment-job', options.command, options.cwd]
-            : ['bash', '-c', options.command],
-          {
-            cwd: this.hooks.watchdog ? '/' : options.cwd,
-            env: { ...this.env(), TERM: 'xterm-256color' },
-            terminal,
-            detached: true,
-            ...(this.hooks.watchdog ? { stdio: ['ignore', 'pipe', 'pipe', 'pipe'] as const } : {}),
-          },
-        );
+        child = Bun.spawn(['bash', '-c', options.command], {
+          cwd: options.cwd,
+          env: { ...this.env(), TERM: 'xterm-256color' },
+          terminal,
+          detached: true,
+        });
       } else
-        child = Bun.spawn(
-          this.hooks.watchdog
-            ? [...selfCommand(), 'environment-job', options.command, options.cwd]
-            : ['bash', '-c', options.command],
-          {
-            cwd: this.hooks.watchdog ? '/' : options.cwd,
-            env: this.env(),
-            stdin: 'ignore',
-            stdout: 'pipe',
-            stderr: 'pipe',
-            detached: true,
-            ...(this.hooks.watchdog ? { stdio: ['ignore', 'pipe', 'pipe', 'pipe'] as const } : {}),
-          },
-        );
+        child = Bun.spawn(['bash', '-c', options.command], {
+          cwd: options.cwd,
+          env: this.env(),
+          stdin: 'ignore',
+          stdout: 'pipe',
+          stderr: 'pipe',
+          detached: true,
+        });
     } catch (error) {
       closeSync(fd);
       terminal?.close();
@@ -204,7 +188,6 @@ export class TaskManager {
       ...(terminal ? { terminal } : {}),
       ...(pattern ? { monitor: { pattern, decoder: new TextDecoder(), partial: '' } } : {}),
       fd,
-      ...(this.hooks.watchdog ? { livenessFd: child.stdio[3] as number } : {}),
       tail: Buffer.alloc(0),
       bytes: 0,
       tailTruncated: false,
@@ -463,14 +446,6 @@ export class TaskManager {
     if (record.finished) return;
     this.scan(record, Buffer.alloc(0), true);
     record.finished = true;
-    if (record.livenessFd !== undefined) {
-      try {
-        closeSync(record.livenessFd);
-      } catch {
-        /* already closed */
-      }
-      record.livenessFd = undefined;
-    }
     if (record.terminal && !record.terminal.closed)
       try {
         record.terminal.close();

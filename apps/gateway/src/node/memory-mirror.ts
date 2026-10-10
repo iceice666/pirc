@@ -117,14 +117,7 @@ export class MemoryMirror {
 
   private convert(line: WorkspaceLine): MirroredLine {
     if (line.type === 'recorded')
-      // This is the legacy mirror. Fresh evidence must not leak through its ownerless
-      // projection or crash the periodic scanner; preserve byte-offset progress.
-      return {
-        type: 'recorded',
-        items: line.items
-          .filter((item) => item.source?.authority !== 'gateway')
-          .map((item) => this.item(item)),
-      };
+      return { type: 'recorded', items: line.items.map((item) => this.item(item)) };
     if (line.type === 'retired')
       return {
         type: 'retired',
@@ -135,8 +128,6 @@ export class MemoryMirror {
   }
 
   private item(item: WorkspaceItem): MirroredItem {
-    if (item.source?.authority === 'gateway')
-      throw new Error('Fresh workspace evidence requires explicit owner/source mirroring');
     const sessionId = this.nodeSession(item.sessionDir);
     return {
       id: item.id,

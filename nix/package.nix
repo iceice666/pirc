@@ -2,8 +2,6 @@
   lib,
   stdenvNoCC,
   bun,
-  clang,
-  fetchurl,
   makeBinaryWrapper,
   callPackage,
   role ? "gateway",
@@ -24,10 +22,6 @@ let
   version = (builtins.fromJSON (builtins.readFile ../package.json)).version;
   executable = "pirc-${role}";
   runsAgents = role != "gateway";
-  wasm3Archive = fetchurl {
-    url = "https://codeload.github.com/wasm3/wasm3/tar.gz/ac3c1dd1386e83be7de548211efd02805eb1dcee";
-    hash = "sha256-w+4ETyPaMQVeHDGzo1DawkDJPw7tjigXOVdL91RXPDc=";
-  };
 
   src = lib.cleanSourceWith {
     src = ../.;
@@ -45,7 +39,6 @@ let
         ".state"
         "result"
         "plans"
-        "work"
       ];
   };
 
@@ -81,11 +74,7 @@ in
 stdenvNoCC.mkDerivation {
   pname = executable;
   inherit version src;
-  nativeBuildInputs = [
-    bun
-  ]
-  ++ lib.optional runsAgents makeBinaryWrapper
-  ++ lib.optional (!runsAgents) clang;
+  nativeBuildInputs = [ bun ] ++ lib.optional runsAgents makeBinaryWrapper;
 
   configurePhase = ''
     runHook preConfigure
@@ -108,10 +97,6 @@ stdenvNoCC.mkDerivation {
     cd apps/gateway
     bun build --compile --minify --sourcemap --external chromium-bidi \
       src/entry/${role}.ts --outfile dist/${executable}
-    ${lib.optionalString (!runsAgents) ''
-      bun ../../scripts/build-gateway-worker.ts
-      PIRC_WASM3_ARCHIVE=${wasm3Archive} bun ../../scripts/build-native-ptc-worker.ts
-    ''}
     cd ../..
     runHook postBuild
   '';
@@ -140,15 +125,6 @@ stdenvNoCC.mkDerivation {
     else
       ''
         install -Dm755 apps/gateway/dist/${executable} $out/bin/${executable}
-        install -Dm755 apps/gateway/dist/pirc-runtime-worker $out/libexec/pirc/pirc-runtime-worker
-        install -Dm755 apps/gateway/dist/pirc-ptc-worker $out/libexec/pirc/pirc-ptc-worker
-        install -Dm644 apps/gateway/dist/pirc-ptc-worker.LICENSE $out/share/licenses/pirc/wasm3.LICENSE
-        install -Dm644 apps/gateway/dist/pirc-ptc-worker.provenance.json $out/share/pirc/ptc-worker-provenance.json
-        ${lib.optionalString stdenvNoCC.hostPlatform.isDarwin ''
-          install -Dm755 apps/gateway/dist/pirc-worker-bootstrap.dylib $out/libexec/pirc/pirc-worker-bootstrap.dylib
-          install -Dm755 apps/gateway/dist/pirc-worker-inspection.dylib $out/libexec/pirc/pirc-worker-inspection.dylib
-          install -Dm755 apps/gateway/dist/pirc-worker-watchdog $out/libexec/pirc/pirc-worker-watchdog
-        ''}
         mkdir -p $out/share/pirc/web
         cp -r apps/web/dist/. $out/share/pirc/web/
       ''
@@ -160,12 +136,6 @@ stdenvNoCC.mkDerivation {
   doInstallCheck = true;
   installCheckPhase = ''
     $out/bin/${executable} version
-    ${lib.optionalString (!runsAgents) ''
-      test -x $out/libexec/pirc/pirc-runtime-worker
-      test -x $out/libexec/pirc/pirc-ptc-worker
-      test -s $out/share/licenses/pirc/wasm3.LICENSE
-      test -s $out/share/pirc/ptc-worker-provenance.json
-    ''}
   '';
 
   passthru = {

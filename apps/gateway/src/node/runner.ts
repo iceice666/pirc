@@ -279,12 +279,8 @@ class PiRunner {
     if (message.type === 'extension_ui_request') {
       // Only the node opens or cancels its own dialogs.
       if (
-        (typeof message.id === 'string' &&
-          (message.id.startsWith(NODE_DIALOG_PREFIX) ||
-            message.id.startsWith('node-environment-'))) ||
-        (typeof message.targetId === 'string' &&
-          (message.targetId.startsWith(NODE_DIALOG_PREFIX) ||
-            message.targetId.startsWith('node-environment-')))
+        (typeof message.id === 'string' && message.id.startsWith(NODE_DIALOG_PREFIX)) ||
+        (typeof message.targetId === 'string' && message.targetId.startsWith(NODE_DIALOG_PREFIX))
       )
         return;
       if (dialogMethods.has(message.method) && typeof message.id === 'string') {
@@ -843,7 +839,6 @@ export class RunnerManager {
     private readonly gateway: AgentGateway,
     private readonly browser?: BrowserManager,
     private readonly sandbox: NodeSandbox = new NodeSandbox(config),
-    private readonly writerFence?: { assertLegacyAllowed(sessionId: string): void },
   ) {}
 
   /**
@@ -851,7 +846,6 @@ export class RunnerManager {
    * Writers are serialized per path by the {@link WriteBroker}.
    */
   private ensure(sessionId: string): Promise<PiRunner> {
-    this.writerFence?.assertLegacyAllowed(sessionId);
     this.db.requireSessionAvailable(sessionId);
     const existing = this.runners.get(sessionId);
     if (existing?.alive) return Promise.resolve(existing);
@@ -877,8 +871,6 @@ export class RunnerManager {
         // The user's project instructions: never writable from the session.
         protectedPaths: [projectInstructionsPath(workspace)].filter((item) => item !== undefined),
       });
-      // A transfer may have installed its durable deny fence during sandbox startup.
-      this.writerFence?.assertLegacyAllowed(sessionId);
       const runner = new PiRunner(
         session,
         this.config,
@@ -966,7 +958,6 @@ export class RunnerManager {
     user: string,
   ): Promise<Record<string, any>> {
     const runner = await this.ensure(sessionId);
-    this.writerFence?.assertLegacyAllowed(sessionId);
     this.db.requireSessionAvailable(sessionId);
     let rpc: Record<string, unknown>;
     let runId: string | null = null;
@@ -1047,7 +1038,6 @@ export class RunnerManager {
     },
   ): Promise<void> {
     const runner = await this.ensure(sessionId);
-    this.writerFence?.assertLegacyAllowed(sessionId);
     this.db.requireSessionAvailable(sessionId);
     const { role, model, thinking, ...message } = delivery;
     // The role first: the user's model and thinking level override the role's.

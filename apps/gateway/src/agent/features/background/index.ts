@@ -103,15 +103,7 @@ const unescapeInput = (value: string) =>
     return String.fromCharCode(parseInt(code.slice(1), 16));
   });
 
-export function createBackgroundRuntime(
-  options: {
-    env?: () => NodeJS.ProcessEnv;
-    changed?: (tasks: TaskInfo[]) => void;
-    finished?: (task: TaskInfo) => void;
-    match?: (task: TaskInfo, line: string) => void;
-    watchdog?: boolean;
-  } = {},
-) {
+export function backgroundFeature(): Feature {
   let agentRef: Agent | undefined;
   let closed = false;
   let noticePending = false;
@@ -120,9 +112,7 @@ export function createBackgroundRuntime(
   const matched = new Map<string, { task: TaskInfo; lines: string[]; dropped: number }>();
 
   const refresh = () => {
-    if (closed) return;
-    options.changed?.(manager.list());
-    if (!agentRef) return;
+    if (!agentRef || closed) return;
     agentRef.panelChanged('background');
     if (!agentRef.hasUI) return;
     const running = manager.list().filter((t) => t.status === 'running' || t.status === 'stopping');
@@ -173,19 +163,16 @@ export function createBackgroundRuntime(
       if (closed) return;
       refresh();
       completed.push(task);
-      options.finished?.(task);
       agentRef?.ui.notify(
         `Background task: ${summary(task)}`,
         task.status === 'failed' || task.status === 'timed_out' ? 'warning' : 'info',
       );
       flush();
     },
-    () => options.env?.() ?? { ...process.env, ...(agentRef?.config.env ?? {}) },
+    () => ({ ...process.env, ...(agentRef?.config.env ?? {}) }),
     {
-      watchdog: options.watchdog ?? false,
       onMatch(task, line) {
         if (closed) return;
-        options.match?.(task, clean(line).slice(0, MATCH_CHARS));
         const entry = matched.get(task.id) ?? { task, lines: [], dropped: 0 };
         entry.task = task;
         if (entry.lines.length < PENDING_MATCHES)
@@ -218,7 +205,7 @@ export function createBackgroundRuntime(
     if (closed) throw new Error('Background task runtime has shut down.');
   };
 
-  const tool = (agent?: Agent): Tool => ({
+  const tool = (agent: Agent): Tool => ({
     name: 'background_task',
     ptc: true,
     description: toolPrompt('background_task'),
@@ -266,7 +253,7 @@ export function createBackgroundRuntime(
     async execute(params, ctx) {
       ctx.signal.throwIfAborted();
       requireOpen();
-      if (agent) agentRef = agent;
+      agentRef = agent;
       let text: string;
       let data: Record<string, unknown>;
       let wait: WaitResult | undefined;
@@ -348,7 +335,7 @@ export function createBackgroundRuntime(
     },
   });
 
-  const feature: Feature = {
+  return {
     name: 'background-task',
     tools: (agent) => (offInChat(agent, 'background') ? [] : [tool(agent)]),
     init(agent) {
@@ -448,17 +435,4 @@ export function createBackgroundRuntime(
       },
     },
   };
-  return {
-    tool: tool(),
-    list: () => manager.list(),
-    shutdown: async () => {
-      closed = true;
-      await manager.shutdown();
-    },
-    feature,
-  };
-}
-
-export function backgroundFeature(): Feature {
-  return createBackgroundRuntime().feature;
 }

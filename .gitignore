@@ -17,7 +17,6 @@ data/
 .DS_Store
 playwright-report/
 test-results/
-work/
 
 # Git worktrees for parallel branches
 .worktrees/
