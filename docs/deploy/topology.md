@@ -93,7 +93,7 @@ browser/phone ──▶ gateway: runtime host (loop, context, transcripts, model
 ```
 
 - Model streams go provider → gateway → client; nodes receive tool intents, never inference context.
-- Environment frames use the authenticated node WebSocket and its shared framing; there is no new port. Each tool call is a journaled `execution.start`/`status`/`ack` exchange; a node offline leaves history readable but starts no environment-dependent work.
+- Environment frames use the authenticated node WebSocket and its shared framing; there is no new port. Each tool call is a journaled `execution.start`, a node-pushed `execution.result` (with `status` as fallback) and an `ack` after the gateway commit; a node offline leaves history readable but starts no environment-dependent work. A host composition must wire the node's result and event callbacks to those frames, or the runtime falls back to polling.
 - The phase worker holds no credentials, workspace, database or network: Linux uses bubblewrap + seccomp (needs `bwrap` and `ldd` in the trusted environment), macOS arm64 a native finite driver with adjacent assets. Unsupported platforms refuse to start; there is no unsandboxed fallback.
 - New sessions start fresh. Legacy JSONL, branches, context snapshots and PTC stores are retained, never imported and never used as fallback.
 

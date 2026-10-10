@@ -37,6 +37,7 @@ The [opt-in gateway runtime](topology.md#opt-in-gateway-agent-runtime-evaluated-
 - Node `environment-journal.sqlite` holds accepted/terminal executions and results awaiting gateway ACK; `writer-fences.sqlite` holds the fences that keep old writers from running. Back up gateway and node state from the **same quiesced point**.
 - Legacy JSONL, branch caches and PTC stores stay on nodes untouched; they are not imported and are not a fallback.
 - Restore never replays: interrupted runs and unacknowledged executions reconcile by original execution ID; unknown outcomes stay unknown.
+- Client projection/outbox commits and node progress/operation events use WAL `synchronous=NORMAL`: a process crash loses nothing, but power or OS loss can drop a trailing suffix of them. After such a gateway restart, clients should reload from a snapshot (outbox cursor numbers may be reissued); a node may report a lower final event sequence for an execution recovered as unknown. Execution, transcript and result records stay fully synchronous.
 - Restoring an older node `writer-fences.sqlite` removes legacy deny fences and re-enables old writers. That is only acceptable as the documented pre-write cutover rollback (see [Upgrades](upgrades.md#gateway-agent-runtime-cutover-not-authorized)), after revoking the fresh generation on both ends and verifying it has no writes. After the first fresh write there is no lossless rollback; never restore a reusable fresh writer generation.
 
 ## Taking a backup

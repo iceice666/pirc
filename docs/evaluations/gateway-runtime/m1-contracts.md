@@ -379,3 +379,28 @@ The maintainer's LGTM accepts M1 with the explicit no-legacy-JSONL amendment:
 M1 design review is complete; implementation and real-platform validation are not.
 Any materially changed choice returns to review rather than being inferred from
 this document.
+
+## Amendment: M5 optimization pass
+
+Accepted by the maintainer after the [M5 evaluation](m5-evaluation.md#optimization-pass-2026-10-10).
+These refine, not replace, §2–§3:
+
+- **Descriptor refresh.** One `environment.describe` before each turn still applies.
+  A second attestation is required only when the turn loads attachments (an awaited
+  window between attestation and commit); otherwise the admitted descriptor is current.
+- **Result delivery.** Nodes push `execution.result` once the terminal record is
+  durable. The gateway verifies and persists it before use; `execution.status` remains
+  the fallback and the recovery path and never starts work.
+- **ACK timing.** The ACK still follows the durable transcript/result commit, but need
+  not block the next model call. A run's ACKs finish before `run()`/shutdown completes;
+  a lost ACK still only retains data.
+- **Observational durability.** Client projection/outbox commits and node
+  progress/operation event appends may commit with WAL `synchronous=NORMAL`: durable
+  against process crashes, with only a trailing suffix after the last FULL commit at
+  risk on power or OS loss. Acceptance, claims, inner operations, terminal results,
+  intents, transcripts and every commit preceding a side effect or an ACK remain FULL
+  (fsync). After an unclean gateway restart clients must resynchronize from a snapshot;
+  a recovered node terminal record may report a lower `finalSeq` than events already
+  shown.
+
+Production activation, deployment and cutover remain separately unauthorized.

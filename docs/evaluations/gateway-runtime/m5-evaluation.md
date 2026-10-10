@@ -1,15 +1,17 @@
 # Gateway runtime M5: comparative evaluation, cutover rehearsal and decision record
 
-Status: **evaluation complete; cutover not recommended.** The opt-in gateway runtime
-removes the node detour from model streaming and keeps long histories off the node
-link, but it fails the accepted task-time gate in all 52 covered cohorts, and the
-fresh audit found cutover-blocking defects. Per the plan, this returns the design to
-review; no gate was relaxed. Deployment, stopping existing work and deleting data
-were not performed and still need separate explicit authorization.
+Status: **evaluation complete; cutover still not recommended.** The first evaluation
+(below, retained as recorded) failed the task-time gate in all 52 covered cohorts. A
+follow-up [optimization pass](#optimization-pass-2026-10-10) reduced that to 18/52:
+every 200 ms cohort and every chat cohort now passes, and the candidate beats the
+baseline at 100–200 ms for one-session chat and single-tool. Loopback PTC, four-session loopback
+and mixed-PTC cohorts still fail, and the audit's cutover blockers are unchanged.
+No gate was relaxed. Deployment, stopping existing work and deleting data were not
+performed and still need separate explicit authorization.
 
 Related: [plan](../../../plans/gateway-agent-runtime.md), [M0 baseline](m0-baseline.md),
 [M1 contracts](m1-contracts.md), [M4 completion](m4-completion.md),
-[results summary](m5-results.json).
+[first results](m5-results.json), [optimization results](m5-optimization-results.json).
 
 ## Decision summary
 
@@ -25,6 +27,136 @@ Recommendation: keep the existing production topology, do not schedule cutover, 
 take the attribution and audit findings below into a design review. The streaming
 and context-traffic goals are met; the task-time cost of the current turn/tool
 protocol is not acceptable under the accepted budget.
+
+## Optimization pass (2026-10-10)
+
+At the maintainer's request the turn/tool path was optimized after the evaluation,
+then the full matrix was re-run with the same gates, fixtures, host and method
+(interleaved baseline, constrained worker, fake srt; references: synthetic worker and
+embedded srt). Load average was 0.9–1.8, lower than in the first run.
+
+| Gate                                   | First run  | After optimization                                                                                                                          |
+| -------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Delta→UI at 100 ms                     | Pass       | **Pass**: p50 0.28–0.34 ms, p95 2.2–2.8 ms (baseline ≈100.4 / 100.8)                                                                        |
+| Environment-only PTC, no linear RTTs   | Pass       | **Pass**: PTC ×10 adds no extra RTT over a single read (all 8 cohorts)                                                                      |
+| Task time ≤ baseline + max(10%, 50 ms) | 52/52 fail | **Fail, 18/52**: loopback PTC/mixed and four-session single-tool; at 30 ms mixed and four-session single-tool; at 100 ms four-session mixed |
+| Long context not retransmitted         | Pass\*     | **Pass\***: no node-link message carries the 256 KiB history; 0.26–0.53 MB saved per session                                                |
+| Correctness                            | Pass       | **Pass**: 1,280 runs and 128 warmups, 0 failures                                                                                            |
+
+\* The long-context gate was re-encoded twice after results were known; both
+re-encodings await maintainer acceptance (see [below](#long-context-gate-encodings)).
+
+One session, 1 KiB history, task p50/p95 (ms):
+
+| RTT | Fixture     | Baseline      | First run       | Optimized     | Synthetic worker p50 | Embedded srt p50 | Node bytes first → optimized |
+| --- | ----------- | ------------- | --------------- | ------------- | -------------------- | ---------------- | ---------------------------- |
+| 0   | chat        | 25.5 / 27.1   | 106.5 / 122.0   | 48.1 / 53.7   | 35.1                 | 44.7             | 23,778 → 11,889              |
+| 0   | single tool | 50.9 / 53.1   | 202.8 / 217.9   | 86.5 / 98.9   | 79.5                 | 87.1             | 30,613 → 18,213              |
+| 0   | PTC ×10     | 88.7 / 95.3   | 469.0 / 486.6   | 202.3 / 237.3 | 186.0                | 192.6            | 84,013 → 67,671              |
+| 0   | mixed PTC   | 89.0 / 95.2   | 356.6 / 394.0   | 160.0 / 178.0 | 147.5                | 155.8            | 57,329 → 41,007              |
+| 30  | chat        | 67.5 / 68.0   | 161.8 / 174.3   | 73.0 / 76.7   | 64.1                 | 73.6             | 23,778 → 11,889              |
+| 30  | single tool | 120.0 / 120.8 | 345.1 / 350.9   | 142.2 / 148.3 | 134.3                | 142.9            | 30,613 → 18,213              |
+| 30  | PTC ×10     | 155.7 / 169.8 | 572.8 / 592.8   | 237.5 / 250.9 | 227.6                | 237.4            | 80,095 → 65,708              |
+| 30  | mixed PTC   | 195.8 / 201.6 | 485.5 / 545.5   | 265.0 / 279.1 | 237.0                | 239.8            | 53,411 → 47,698              |
+| 100 | chat        | 173.0 / 173.6 | 314.6 / 320.6   | 145.4 / 149.3 | 139.0                | 146.0            | 23,778 → 11,889              |
+| 100 | single tool | 295.7 / 297.3 | 751.1 / 820.8   | 286.5 / 291.0 | 278.4                | 287.6            | 30,613 → 17,995              |
+| 100 | PTC ×10     | 336.0 / 344.0 | 922.9 / 982.3   | 379.9 / 393.4 | 371.7                | 382.6            | 78,128 → 81,824              |
+| 100 | mixed PTC   | 433.9 / 443.3 | 863.8 / 894.5   | 457.8 / 467.9 | 450.6                | 455.0            | 51,460 → 39,345              |
+| 200 | chat        | 322.8 / 323.5 | 512.9 / 538.9   | 249.9 / 274.1 | 239.0                | 248.1            | 23,778 → 11,889              |
+| 200 | single tool | 546.3 / 547.2 | 1226.4 / 1273.0 | 488.1 / 499.8 | 480.5                | 488.0            | 30,613 → 17,995              |
+| 200 | PTC ×10     | 588.3 / 593.4 | 1286.7 / 1458.8 | 591.0 / 600.2 | 573.2                | 582.5            | 76,165 → 81,824              |
+| 200 | mixed PTC   | 790.2 / 794.1 | 1482.5 / 1494.5 | 768.2 / 819.2 | 752.4                | 764.1            | 51,460 → 39,345              |
+
+The baseline column is from the new interleaved run; the first-run column is the
+candidate from the first evaluation (its own baseline was slightly slower under higher
+load). Across the 52 task cohorts the candidate's p50 is now 0.77–3.7× the baseline's
+(was 1.6–7.3×). The 18 failures exceed their limits by 2–339 ms; the largest are the
+four-session loopback PTC cohorts, which are CPU-bound because the harness runs
+gateway, node and executor bookkeeping on one event loop (four-session, 256 KiB,
+100 ms parent user CPU: 40–247 ms vs the baseline's 14–44 ms).
+
+### What changed
+
+All within the M1 contract (one descriptor refresh before each model turn,
+`execution.result` as a pushed wire kind, commit before ACK, no replay):
+
+1. **One `describe` per turn without attachments.** The second attestation only
+   guarded the attachment-loading window; with no attachments nothing awaits between
+   attestation and commit. Attachment turns still re-attest. (−1 RTT per turn)
+2. **Pushed results.** The node sends `execution.result` as soon as the terminal record
+   is durable; the gateway journal verifies and persists it, and `awaitResult` wakes the
+   runtime. Status queries remain the fallback (20 ms doubling to 250 ms) and race the
+   push; without a push channel the old 20 ms poll is unchanged. (−20 ms poll and
+   −1 RTT status per tool)
+3. **ACK off the critical path.** The ACK is sent after the durable commit while the
+   next model call proceeds; the run slot is released at settlement, `run()` and
+   `close()` still wait for the ACKs. A lost ACK still only retains data. (−1 RTT per tool)
+4. **Worker spawn overlaps turn preparation** (same launcher; closed if preparation fails).
+5. **CPU:** memoized validation of exact stored text (intents, turn descriptors, PTC
+   plans; SHA-256 keys, 64 KiB per-text and 8 MiB total caps, copies returned), faster
+   strict JSON parsing/encoding with identical semantics, and a detached cache of the
+   last committed client-projection state.
+6. **Relaxed durability for observational writes (maintainer-approved).** Client
+   projection/outbox commits and node progress/operation event appends use WAL
+   `synchronous=NORMAL` (`environment/durability.ts`). Every other commit stays FULL:
+   node acceptance, claims, inner operations, terminal results, gateway intents,
+   transcripts and results before ACK. Measured cost of FULL here: 0.44 ms per
+   transaction against 0.013 ms for NORMAL.
+
+Per-turn attribution at 100 ms now: one `describe` (107 ms), worker spawn hidden
+under it, `start` (110 ms); results and ACKs no longer add sequential round trips.
+
+### Consequences of relaxed durability
+
+NORMAL commits survive a gateway or node **process** crash. On power loss or an OS
+crash, only a trailing suffix of projection/outbox or event writes after the last FULL
+commit can be lost, never reordered, because the next FULL commit fsyncs the shared WAL.
+Known effects: (a) a restarted gateway may reissue client outbox cursor numbers a client
+has already seen, so clients should resynchronize from a snapshot after an unclean
+gateway restart; (b) node events are pushed before they are fsynced, so after node power
+loss the recovered `unknown` terminal record can carry a `finalSeq` lower than events the
+gateway already displayed. Neither affects execution, replay or transcript integrity.
+The [M1 contract amendment](m1-contracts.md#amendment-m5-optimization-pass) and
+[backup guide](../../deploy/backup-and-recovery.md) record this.
+
+### Long-context gate encodings
+
+1. Original: aggregate node-link p95 below one 256 KiB history. Fails four-session PTC
+   cohorts on control traffic alone (4/32 in both full runs).
+2. First revision (pending acceptance): per-session bytes below one history and
+   p50/p95 growth versus the 1 KiB cohort below 1%. With pushed results the number of
+   fallback status replies varies by a few KB per run, so this failed 2/32 cohorts
+   whose growth was negative or within status-reply noise.
+3. Current (pending acceptance): deterministic. No decoded node-link message in any
+   measured run contains the synthetic history (a 4,096-character marker only the
+   256 KiB history has), and per-session p95 bytes stay below one history. Growth is
+   still reported (−4.1 to +4.6 KB per session). The marker cannot see base64 artifact
+   chunks; the per-session byte bound covers those.
+
+All three agree that no history is retransmitted; only the first two are sensitive
+to unrelated control traffic. The maintainer should confirm which encoding governs.
+
+### Residual gaps and caveats
+
+- One-session loopback PTC/mixed remain 19–92 ms over their p50/p95 limits, and
+  four-session loopback single-tool/PTC/mixed fail by more; the remaining cost is per-operation
+  durable journaling (four FULL commits per inner PTC operation on the node, required
+  by the contract) and validation work on a shared event loop. The inner-operation
+  `delivered` marker is informational and could also be relaxed; it was left FULL
+  because it was outside the approved scope.
+- Mixed PTC exceeds its limits by 7–27 ms at 30 ms with one session, 95–146 ms at 30 ms
+  with four sessions and 39–63 ms at 100 ms with four sessions; four-session
+  single-tool at 30 ms by 3–27 ms.
+- The harness shares one process: validation memos can be hit by the "other side" of
+  the link, and node and gateway CPU serialize. Separate hosts would avoid the second
+  effect but lose the first; neither changes a gate verdict here.
+- No production composition exists yet; a host must wire the node's `LocalEnvironment`
+  `result` and `event` callbacks to `execution.result`/`execution.event` frames (the
+  harness does), or the runtime falls back to polling.
+- The decisional run started before two P3 hygiene fixes (cache-key encoding and
+  `close()` waiting for late ACKs); the reference runs include them.
+- The audit's cutover blockers (R1–R5, T1, T2, T5, S2) were not part of this pass and
+  remain open.
 
 ## Reproduce
 
@@ -286,19 +418,29 @@ state, and the gateway's long-term transcript retention.
 
 ## Remaining risks and decision request
 
-- Task time regresses 1.6–7.3× at p50 across the covered cohorts; the streaming and
-  context-traffic gains do not offset it under the accepted budget.
+- Task time regressed 1.6–7.3× at p50 in the first run; after the optimization pass it
+  is 0.77–3.7× and 18/52 cohorts still fail (loopback PTC/mixed, four-session
+  loopback and 30 ms single-tool, mixed at 30 ms and four-session mixed at 100 ms).
 - Nine auditor-rated cutover blockers (R1–R5, T1, T2, T5, S2), and no production
   composition, coordinator, quiescence or no-write enforcement.
 - Not verified here: an idle controlled host, real remote deployments, macOS runs of
   the M5 harness, Android/manual clients, real paid models and Darwin Nix builds.
 
-Requested human decision: **do not cut over.** Return the turn/tool protocol
-(descriptor validation, result delivery, ACK, worker lifecycle) to design review, and
-fix the audit blockers in a new milestone before re-running this evaluation with the
-same gates.
+Requested human decision: **do not cut over yet.** The protocol round trips are now
+within budget; the remaining work is per-operation CPU/durability cost in PTC paths
+and the audit blockers, to be addressed in a new milestone before re-running this
+evaluation with the same gates. The maintainer should also confirm the long-context
+gate encoding.
 
 ## Validation
+
+Optimization pass: `bun run check` passed again with the same opt-ins and namespace:
+**1,159 gateway tests passed / 177 skipped / 0 failed** (including new latency,
+push and durability tests), **285 Web tests**, all builds and **121 compiled-role
+tests**. A fresh reviewer audited the optimization diff in two rounds (final verdict:
+correct; all P2 findings fixed, P3 hygiene items fixed or documented above).
+
+First evaluation:
 
 Final `bun run check` on the committed tree (with `CC` and the pinned
 `PIRC_WASM3_ARCHIVE`) passed: version, Prettier, gateway/Web typechecks, **1,154
