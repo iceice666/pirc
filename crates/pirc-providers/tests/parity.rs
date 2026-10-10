@@ -1,6 +1,8 @@
 //! Replays the scenarios recorded from the TS gateway
-//! (`tests/parity/record.ts`) against the Rust port: same HTTP requests,
-//! same deltas, same final message.
+//! (`tests/parity/record.ts`, one `fixtures/<group>.json` per group) against
+//! the Rust port: same HTTP requests, same deltas, same final message.
+//!
+//! `PARITY_GROUP=<group>` and `PARITY_SCENARIO=<name>` narrow a run.
 
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
@@ -15,8 +17,6 @@ use pirc_protocol::{AssistantDelta, InferenceRequest, Models};
 use pirc_providers::Inference;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
-
-const FIXTURES: &str = include_str!("parity/fixtures.json");
 
 #[derive(Default)]
 struct Server {
@@ -45,11 +45,12 @@ async fn handle(
                 )
             })
             .collect();
+        let text = String::from_utf8_lossy(&body).into_owned();
         server.requests.push(json!({
             "method": method.as_str(),
-            "path": uri.path(),
+            "path": uri.path_and_query().map_or(uri.path(), |p| p.as_str()),
             "headers": headers,
-            "body": serde_json::from_slice::<Value>(&body).unwrap_or(Value::Null),
+            "body": serde_json::from_str::<Value>(&text).unwrap_or(Value::String(text)),
         }));
         let index = server.next;
         server.next += 1;
@@ -65,6 +66,14 @@ async fn handle(
         if let Some(content_type) = response.get("contentType").and_then(Value::as_str) {
             out.headers_mut()
                 .insert(header::CONTENT_TYPE, content_type.parse().unwrap());
+        }
+        if let Some(headers) = response.get("headers").and_then(Value::as_object) {
+            for (name, value) in headers {
+                out.headers_mut().insert(
+                    axum::http::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+                    value.as_str().unwrap().parse().unwrap(),
+                );
+            }
         }
         return out;
     }
@@ -135,7 +144,22 @@ fn object_arguments(value: &mut Value) {
 async fn run_scenario(scenario: &Value) -> Result<(), String> {
     let name = scenario["name"].as_str().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let base = format!("http://{}/v1", listener.local_addr().unwrap());
+    let root = format!("http://{}", listener.local_addr().unwrap());
+    let base = format!("{root}/v1");
+    let substitute = |value: &Value| {
+        let text = value
+            .to_string()
+            .replace("{BASE}", &base)
+            .replace("{ROOT}", &root);
+        serde_json::from_str::<Value>(&text).unwrap()
+    };
+    let unsubstitute = |value: &Value| {
+        let text = value
+            .to_string()
+            .replace(&base, "{BASE}")
+            .replace(&root, "{ROOT}");
+        serde_json::from_str::<Value>(&text).unwrap()
+    };
     let server: Shared = Arc::new(Mutex::new(Server {
         responses: scenario["responses"].as_array().unwrap().clone(),
         ..Server::default()
@@ -145,10 +169,10 @@ async fn run_scenario(scenario: &Value) -> Result<(), String> {
         let _ = axum::serve(listener, app).await;
     });
 
-    let models_text = scenario["models"].to_string().replace("{BASE}", &base);
-    let models: Models = serde_json::from_str(&models_text).map_err(|e| e.to_string())?;
+    let models: Models =
+        serde_json::from_value(substitute(&scenario["models"])).map_err(|e| e.to_string())?;
     let request: InferenceRequest =
-        serde_json::from_value(scenario["request"].clone()).map_err(|e| e.to_string())?;
+        serde_json::from_value(substitute(&scenario["request"])).map_err(|e| e.to_string())?;
     let node_id = scenario
         .get("nodeId")
         .and_then(Value::as_str)
@@ -176,7 +200,7 @@ async fn run_scenario(scenario: &Value) -> Result<(), String> {
 
     let expected = &scenario["expected"];
     let mut problems = Vec::new();
-    let mut actual_message = serde_json::to_value(&message).unwrap();
+    let mut actual_message = unsubstitute(&serde_json::to_value(&message).unwrap());
     actual_message["timestamp"] = json!(0);
     let mut expected_message = expected["message"].clone();
     // The wire's `role` tag belongs to `Message`, not `AssistantMessage`.
@@ -187,7 +211,7 @@ async fn run_scenario(scenario: &Value) -> Result<(), String> {
             "message:\n  actual   {actual_message}\n  expected {expected_message}"
         ));
     }
-    let actual_deltas = serde_json::to_value(&deltas).unwrap();
+    let actual_deltas = unsubstitute(&serde_json::to_value(&deltas).unwrap());
     let mut expected_deltas = expected["deltas"].clone();
     object_arguments(&mut expected_deltas);
     if actual_deltas != expected_deltas {
@@ -195,7 +219,10 @@ async fn run_scenario(scenario: &Value) -> Result<(), String> {
             "deltas:\n  actual   {actual_deltas}\n  expected {expected_deltas}"
         ));
     }
-    let requests = server.lock().unwrap().requests.clone();
+    let requests = unsubstitute(&json!(server.lock().unwrap().requests))
+        .as_array()
+        .unwrap()
+        .clone();
     let expected_requests = expected["requests"].as_array().unwrap();
     if requests.len() != expected_requests.len() {
         problems.push(format!(
@@ -233,21 +260,48 @@ async fn run_scenario(scenario: &Value) -> Result<(), String> {
     }
 }
 
+/// Every recorded group, by name, narrowed by `PARITY_GROUP`.
+fn groups() -> Vec<(String, Vec<Value>)> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/parity/fixtures");
+    let wanted = std::env::var("PARITY_GROUP").ok();
+    let mut groups: Vec<(String, Vec<Value>)> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|error| panic!("{}: {error}", dir.display()))
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
+        .map(|path| {
+            let name = path.file_stem().unwrap().to_string_lossy().into_owned();
+            let text = std::fs::read_to_string(&path).unwrap();
+            (name, serde_json::from_str(&text).unwrap())
+        })
+        .filter(|(name, _)| wanted.as_ref().is_none_or(|wanted| wanted == name))
+        .collect();
+    groups.sort_by(|a, b| a.0.cmp(&b.0));
+    groups
+}
+
 #[tokio::test]
 async fn matches_the_ts_gateway() {
-    let scenarios: Vec<Value> = serde_json::from_str(FIXTURES).unwrap();
-    assert!(scenarios.len() > 30);
+    let groups = groups();
+    assert!(!groups.is_empty(), "no parity fixtures");
+    let only = std::env::var("PARITY_SCENARIO").ok();
     let mut failures = Vec::new();
-    for scenario in &scenarios {
-        if let Err(problem) = run_scenario(scenario).await {
-            failures.push(problem);
+    let mut count = 0;
+    for (group, scenarios) in &groups {
+        assert!(!scenarios.is_empty(), "{group}: no scenarios");
+        for scenario in scenarios {
+            if only.as_deref().is_some_and(|only| scenario["name"] != only) {
+                continue;
+            }
+            count += 1;
+            if let Err(problem) = run_scenario(scenario).await {
+                failures.push(format!("[{group}] {problem}"));
+            }
         }
     }
     assert!(
         failures.is_empty(),
-        "{} of {} scenarios differ:\n\n{}",
+        "{} of {count} scenarios differ:\n\n{}",
         failures.len(),
-        scenarios.len(),
         failures.join("\n\n")
     );
 }

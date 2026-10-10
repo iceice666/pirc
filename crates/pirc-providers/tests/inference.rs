@@ -226,30 +226,6 @@ async fn dropping_the_run_closes_the_connection() {
 }
 
 #[tokio::test]
-async fn apis_of_later_milestones_fail_without_a_request() {
-    for api in [
-        "openai-responses",
-        "openai-codex-responses",
-        "anthropic-messages",
-    ] {
-        let (base, shared) = server(Mode::Text).await;
-        let models = models(&base, api);
-        let inference = Inference::with_cache_retention(false);
-        let mut on_delta = ignore;
-        let message = inference
-            .run(&models, &request(), "node-1", &mut on_delta)
-            .await;
-        assert_eq!(message.stop_reason, StopReason::Error, "{api}");
-        assert_eq!(message.api, api);
-        assert_eq!(
-            message.error_message.as_deref(),
-            Some("Model provider request failed.")
-        );
-        assert_eq!(shared.requests.load(Ordering::SeqCst), 0);
-    }
-}
-
-#[tokio::test]
 async fn connection_failures_are_classified() {
     // Nothing listens on a port that was just released.
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();

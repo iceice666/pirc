@@ -3,14 +3,18 @@
 //! `agent/providers/openai-chat.ts`) and the parts of pi-ai 0.73.1 and the
 //! `openai` SDK they use.
 //!
-//! Wire APIs so far: `openai-completions` (pi-ai's transport, also used for
-//! `openai-chat` providers routed through Pi) and the native `openai-chat`
-//! transport. Other APIs answer with an error message until the M3
-//! transports land. [`backends`] is the backend settings store.
+//! Transports: pi-ai's `openai-completions` (also used for `openai-chat`
+//! providers routed through Pi), `anthropic-messages`, `openai-responses`
+//! and `openai-codex-responses`, and the native `openai-chat` and
+//! `anthropic-messages` transports ([`Inference::run`] picks one as
+//! `GatewayInference` did). [`backends`] is the backend settings store.
 
+mod anthropic;
+mod anthropic_native;
 pub mod backends;
 mod catalog;
 mod chat;
+mod codex;
 mod completions;
 mod errors;
 mod http;
@@ -18,6 +22,8 @@ mod inference;
 mod js;
 mod json_parse;
 mod models_file;
+mod pi;
+mod responses;
 mod sse;
 mod stream;
 

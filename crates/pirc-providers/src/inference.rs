@@ -9,9 +9,14 @@ use pirc_protocol::{
 };
 use tokio::sync::watch;
 
+use crate::anthropic::AnthropicRun;
+use crate::anthropic_native::NativeAnthropicRun;
 use crate::chat::ChatRun;
-use crate::completions::{PiRun, api_name, pi_api};
+use crate::codex::CodexRun;
+use crate::completions::PiRun;
 use crate::errors::safe_inference_error;
+use crate::pi::api_name;
+use crate::responses::ResponsesRun;
 use crate::stream::{Emitter, StreamRequest, assistant};
 
 const CANCELLED: &str = "Model request cancelled";
@@ -71,14 +76,20 @@ impl Default for Inference {
     }
 }
 
-/// The transport a request uses.
+/// The transport a request uses (`usePi` in `GatewayInference.run`).
 enum Route {
     /// pi-ai's `openai-completions`.
     Completions,
+    /// pi-ai's `anthropic-messages`.
+    Anthropic,
+    /// pi-ai's `openai-responses`.
+    Responses,
+    /// pi-ai's `openai-codex-responses`.
+    Codex,
     /// The native `openai-chat` transport.
     Chat,
-    /// Not ported yet (M3): pi-ai's other APIs, native Anthropic.
-    Unsupported,
+    /// The native `anthropic-messages` transport.
+    NativeAnthropic,
 }
 
 impl Inference {
@@ -165,10 +176,13 @@ impl Inference {
                 provider.api,
                 ModelApi::OpenaiChat | ModelApi::AnthropicMessages
             );
-        let route = match (use_pi, pi_api(api_name(api))) {
-            (true, "openai-completions") => Route::Completions,
+        let route = match (use_pi, api) {
             (false, _) if provider.api == ModelApi::OpenaiChat => Route::Chat,
-            _ => Route::Unsupported,
+            (false, _) => Route::NativeAnthropic,
+            (true, ModelApi::OpenaiChat | ModelApi::OpenaiCompletions) => Route::Completions,
+            (true, ModelApi::AnthropicMessages) => Route::Anthropic,
+            (true, ModelApi::OpenaiResponses) => Route::Responses,
+            (true, ModelApi::OpenaiCodexResponses) => Route::Codex,
         };
         let session_id = serde_json::to_string(&[
             node_id,
@@ -197,18 +211,22 @@ impl Inference {
             cancel: cancel.clone(),
             on_delta,
         };
-        let outcome = match route {
-            Route::Completions => {
-                let mut run = PiRun::new(&stream_request);
+        // A pi-ai transport's run, cancelled when `cancel_all` is called.
+        macro_rules! pi {
+            ($run:ty) => {{
+                let mut run = <$run>::new(&stream_request);
                 let result = tokio::select! {
                     biased;
                     result = run.run(&self.client, &stream_request, self.long_cache_retention, &mut emitter) => result.ok(),
                     _ = cancel.changed() => None,
                 };
                 result.ok_or_else(|| run.aborted())
-            }
-            Route::Chat => {
-                let mut run = ChatRun::new(&stream_request);
+            }};
+        }
+        // A native transport's run; its errors may embed upstream bodies.
+        macro_rules! native {
+            ($run:ty) => {{
+                let mut run = <$run>::new(&stream_request);
                 let result = tokio::select! {
                     biased;
                     result = run.run(&self.client, &stream_request, &mut emitter) => result.ok(),
@@ -216,18 +234,21 @@ impl Inference {
                 };
                 result
                     .map(|mut message| {
-                        // Native adapters may embed upstream bodies.
                         if let Some(error) = &message.error_message {
                             message.error_message = Some(safe_inference_error(error));
                         }
                         message
                     })
                     .ok_or_else(|| run.aborted())
-            }
-            Route::Unsupported => {
-                Ok(PiRun::new(&stream_request)
-                    .error_without_request("Model provider request failed."))
-            }
+            }};
+        }
+        let outcome = match route {
+            Route::Completions => pi!(PiRun),
+            Route::Anthropic => pi!(AnthropicRun),
+            Route::Responses => pi!(ResponsesRun),
+            Route::Codex => pi!(CodexRun),
+            Route::Chat => native!(ChatRun),
+            Route::NativeAnthropic => native!(NativeAnthropicRun),
         };
         let mut message = outcome.unwrap_or_else(|aborted| aborted);
         if emitter.cancelled() || message.stop_reason == StopReason::Aborted {

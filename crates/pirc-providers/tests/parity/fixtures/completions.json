@@ -48,7 +48,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -78,7 +80,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -122,7 +124,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -226,7 +230,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -259,7 +265,7 @@
             "connection": "keep-alive",
             "content-length": "489",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -303,7 +309,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -684,7 +692,7 @@
             "connection": "keep-alive",
             "content-length": "1393",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -869,7 +877,10 @@
               "reasoning": true,
               "contextWindow": 100000,
               "maxTokens": 1000,
-              "input": ["text", "image"],
+              "input": [
+                "text",
+                "image"
+              ],
               "compat": {
                 "requiresReasoningContentOnAssistantMessages": true
               }
@@ -1153,7 +1164,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -1184,7 +1197,7 @@
             "connection": "keep-alive",
             "content-length": "2277",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -1381,7 +1394,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   }
                 }
               }
@@ -1489,7 +1504,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -1524,7 +1541,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -1568,7 +1585,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -1739,7 +1758,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -1769,7 +1790,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -1813,7 +1834,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -1920,7 +1943,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -1950,7 +1975,7 @@
             "connection": "keep-alive",
             "content-length": "470",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -1994,7 +2019,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -2098,7 +2125,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -2128,7 +2157,7 @@
             "connection": "keep-alive",
             "content-length": "389",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -2168,7 +2197,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -2274,7 +2305,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -2304,7 +2337,7 @@
             "connection": "keep-alive",
             "content-length": "502",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -2348,7 +2381,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -2456,7 +2491,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -2486,7 +2523,7 @@
             "connection": "keep-alive",
             "content-length": "641",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -2546,7 +2583,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 },
@@ -2658,7 +2697,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -2688,7 +2729,7 @@
             "connection": "keep-alive",
             "content-length": "517",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -2732,7 +2773,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -2843,7 +2886,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -2873,7 +2918,7 @@
             "connection": "keep-alive",
             "content-length": "487",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -2917,7 +2962,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -3035,7 +3082,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -3065,7 +3114,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "session_id": "[\"node-7\",\"session-1\",\"fake\"]",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-client-request-id": "[\"node-7\",\"session-1\",\"fake\"]",
@@ -3114,7 +3163,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -3466,7 +3517,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -3497,7 +3550,7 @@
             "connection": "keep-alive",
             "content-length": "1882",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -3644,7 +3697,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 },
@@ -3755,7 +3810,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -3786,7 +3843,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -3830,7 +3887,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -3935,7 +3994,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -3965,7 +4026,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "pirc/0.3.0",
             "x-opencode-session": "[\"node-1\",\"session-1\",\"fake\"]",
             "x-stainless-arch": "x64",
@@ -4010,7 +4071,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -4114,7 +4177,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -4193,7 +4258,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -4218,7 +4285,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -4262,7 +4329,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -4342,7 +4411,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -4368,7 +4439,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -4412,7 +4483,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -4492,7 +4565,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -4517,7 +4592,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -4561,7 +4636,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -4641,7 +4718,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -4667,7 +4746,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -4711,7 +4790,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -4791,7 +4872,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -4816,7 +4899,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -4860,7 +4943,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -4940,7 +5025,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -4968,7 +5055,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -5012,7 +5099,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -5107,7 +5196,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -5116,7 +5207,9 @@
     },
     "responses": [
       {
-        "chunks": ["data: {\"error\":{\"message\":\"prompt is too long\"}}\n\n"]
+        "chunks": [
+          "data: {\"error\":{\"message\":\"prompt is too long\"}}\n\n"
+        ]
       }
     ],
     "expected": {
@@ -5131,7 +5224,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -5175,7 +5268,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -5255,7 +5350,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -5283,7 +5380,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -5327,7 +5424,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -5427,7 +5526,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -5454,7 +5555,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -5498,7 +5599,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -5597,7 +5700,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -5624,7 +5729,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -5668,7 +5773,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -5772,7 +5879,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -5799,7 +5908,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -5843,7 +5952,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -5938,7 +6049,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -5968,7 +6081,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -6012,7 +6125,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -6078,7 +6193,9 @@
             "type": "toolCall",
             "id": "c1",
             "name": "read",
-            "arguments": [1]
+            "arguments": [
+              1
+            ]
           }
         },
         {
@@ -6111,7 +6228,9 @@
             "type": "toolCall",
             "id": "c1",
             "name": "read",
-            "arguments": [1]
+            "arguments": [
+              1
+            ]
           },
           {
             "type": "toolCall",
@@ -6183,7 +6302,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -6212,7 +6333,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -6256,7 +6377,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -6351,7 +6474,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -6380,7 +6505,7 @@
             "connection": "keep-alive",
             "content-length": "469",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -6424,7 +6549,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
@@ -6533,7 +6660,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -6612,7 +6741,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -6691,7 +6822,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -6722,7 +6855,7 @@
             "connection": "keep-alive",
             "content-length": "458",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "Bun/1.4.2"
           },
           "body": {
@@ -6758,7 +6891,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   }
                 }
               }
@@ -6864,7 +6999,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -6896,7 +7033,7 @@
             "connection": "keep-alive",
             "content-length": "438",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "Bun/1.4.2"
           },
           "body": {
@@ -6932,7 +7069,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   }
                 }
               }
@@ -7312,7 +7451,7 @@
             "connection": "keep-alive",
             "content-length": "1876",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "session_id": "[\"node-1\",\"session-1\",\"fake\"]",
             "user-agent": "Bun/1.4.2",
             "x-provider": "p"
@@ -7563,7 +7702,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -7597,7 +7738,7 @@
             "connection": "keep-alive",
             "content-length": "412",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "Bun/1.4.2"
           },
           "body": {
@@ -7633,7 +7774,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   }
                 }
               }
@@ -7850,7 +7993,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -7875,7 +8020,7 @@
             "connection": "keep-alive",
             "content-length": "437",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "Bun/1.4.2"
           },
           "body": {
@@ -7911,7 +8056,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   }
                 }
               }
@@ -7989,7 +8136,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -8014,7 +8163,7 @@
             "connection": "keep-alive",
             "content-length": "437",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "Bun/1.4.2"
           },
           "body": {
@@ -8050,7 +8199,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   }
                 }
               }
@@ -8128,7 +8279,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -8156,7 +8309,7 @@
             "connection": "keep-alive",
             "content-length": "437",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "Bun/1.4.2"
           },
           "body": {
@@ -8192,7 +8345,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   }
                 }
               }
@@ -8301,7 +8456,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -8328,7 +8485,7 @@
             "connection": "keep-alive",
             "content-length": "437",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "Bun/1.4.2"
           },
           "body": {
@@ -8364,7 +8521,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   }
                 }
               }
@@ -8461,7 +8620,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -8490,7 +8651,7 @@
             "connection": "keep-alive",
             "content-length": "437",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "Bun/1.4.2"
           },
           "body": {
@@ -8526,7 +8687,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   }
                 }
               }
@@ -8650,7 +8813,9 @@
                 "type": "number"
               }
             },
-            "required": ["path"]
+            "required": [
+              "path"
+            ]
           }
         }
       ],
@@ -8680,7 +8845,7 @@
             "connection": "keep-alive",
             "content-length": "698",
             "content-type": "application/json",
-            "host": "127.0.0.1:44043",
+            "host": "127.0.0.1:33397",
             "user-agent": "OpenAI/JS 6.26.0",
             "x-stainless-arch": "x64",
             "x-stainless-lang": "js",
@@ -8739,7 +8904,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["path"]
+                    "required": [
+                      "path"
+                    ]
                   },
                   "strict": false
                 }
