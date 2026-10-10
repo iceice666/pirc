@@ -2,6 +2,8 @@
 //! (`getOAuthProviders`) and how a signed-in account becomes a provider
 //! (`oauthProvider` in `service.ts`, with each provider's `modifyModels`).
 
+pub mod flows;
+
 use indexmap::IndexMap;
 use pirc_protocol::{Model, Provider};
 use serde_json::{Map, Value};

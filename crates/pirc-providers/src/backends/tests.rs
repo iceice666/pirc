@@ -20,8 +20,12 @@ fn baseline() -> Models {
     .unwrap()
 }
 
-fn service(dir: &Path) -> (BackendService, Arc<AtomicUsize>) {
-    let service = BackendService::open(dir, baseline()).unwrap();
+fn service(dir: &Path) -> (Arc<BackendService>, Arc<AtomicUsize>) {
+    service_with(dir, BackendOptions::default())
+}
+
+fn service_with(dir: &Path, options: BackendOptions) -> (Arc<BackendService>, Arc<AtomicUsize>) {
+    let service = BackendService::open_with(dir, baseline(), options).unwrap();
     let changes = Arc::new(AtomicUsize::new(0));
     let counter = changes.clone();
     service.set_on_change(move || {
@@ -505,4 +509,471 @@ async fn probes_are_limited_to_four_at_a_time() {
     assert_eq!(backends.start_probe().err().unwrap().status, 429);
     drop(slots);
     assert!(backends.start_probe().is_ok());
+}
+
+// ---- subscription logins (`backend-auth.test.ts`) ----
+
+type LoginFn =
+    dyn Fn(String, Arc<dyn LoginHooks>) -> BoxFuture<Result<Credentials, String>> + Send + Sync;
+type RefreshFn =
+    dyn Fn(String, Credentials) -> BoxFuture<Result<Credentials, String>> + Send + Sync;
+
+struct FakeRunner {
+    login: Box<LoginFn>,
+    refresh: Box<RefreshFn>,
+}
+
+impl OAuthRunner for FakeRunner {
+    fn login(
+        &self,
+        provider: String,
+        hooks: Arc<dyn LoginHooks>,
+    ) -> BoxFuture<Result<Credentials, String>> {
+        (self.login)(provider, hooks)
+    }
+    fn refresh(
+        &self,
+        provider: String,
+        credentials: Credentials,
+    ) -> BoxFuture<Result<Credentials, String>> {
+        (self.refresh)(provider, credentials)
+    }
+}
+
+fn runner(
+    login: impl Fn(String, Arc<dyn LoginHooks>) -> BoxFuture<Result<Credentials, String>>
+    + Send
+    + Sync
+    + 'static,
+) -> BackendOptions {
+    runner_with(login, |_, credentials| {
+        Box::pin(async move { Ok(credentials) })
+    })
+}
+
+fn runner_with(
+    login: impl Fn(String, Arc<dyn LoginHooks>) -> BoxFuture<Result<Credentials, String>>
+    + Send
+    + Sync
+    + 'static,
+    refresh: impl Fn(String, Credentials) -> BoxFuture<Result<Credentials, String>>
+    + Send
+    + Sync
+    + 'static,
+) -> BackendOptions {
+    BackendOptions {
+        runner: Some(Arc::new(FakeRunner {
+            login: Box::new(login),
+            refresh: Box::new(refresh),
+        })),
+        ..BackendOptions::default()
+    }
+}
+
+fn creds(access: &str, expires: f64) -> Credentials {
+    json!({ "access": access, "refresh": "refresh-secret", "expires": expires })
+        .as_object()
+        .unwrap()
+        .clone()
+}
+
+fn later() -> f64 {
+    crate::stream::now_ms() as f64 + 3_600_000.0
+}
+
+async fn until(check: impl Fn() -> bool) {
+    for _ in 0..400 {
+        if check() {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    assert!(check(), "condition not reached");
+}
+
+const CALLBACK: &str = "http://localhost:1455/auth/callback?code=the-code&state=abc";
+
+/// A Codex-style flow: authorization URL, then a pasted callback URL,
+/// optionally held until `hold` is notified.
+fn callback_runner(hold: Option<Arc<tokio::sync::Notify>>) -> BackendOptions {
+    runner(move |_, hooks| {
+        let hold = hold.clone();
+        Box::pin(async move {
+            hooks.on_auth(
+                "https://auth.example/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&state=abc",
+                Some(&format!("Sign in Bearer {SECRET}")),
+            )?;
+            let input = hooks.manual().await?;
+            assert!(input.contains("code=the-code"));
+            if let Some(hold) = hold {
+                hold.notified().await;
+            }
+            Ok(creds(SECRET, later()))
+        })
+    })
+}
+
+fn connected(backends: &BackendService, id: &str) -> bool {
+    backends.snapshot()["oauthProviders"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|p| p["id"] == id && p["connected"] == true)
+}
+
+#[tokio::test]
+async fn completes_a_login_from_a_pasted_callback_url() {
+    let dir = tempfile::tempdir().unwrap();
+    let (backends, changes) = service_with(dir.path(), callback_runner(None));
+    let view = backends.start_auth("me", "openai-codex", false).unwrap();
+    assert_eq!(view["status"], "pending");
+    let id = view["id"].as_str().unwrap().to_owned();
+    let status = || backends.auth_status("me", &id).unwrap();
+    until(|| status()["prompts"].as_array().unwrap().len() == 1).await;
+    let view = status();
+    assert!(
+        view["auth"]["url"]
+            .as_str()
+            .unwrap()
+            .starts_with("https://auth.example/")
+    );
+    assert!(
+        !view["auth"]["instructions"]
+            .as_str()
+            .unwrap()
+            .contains(SECRET)
+    );
+    let prompt = view["prompts"][0].clone();
+    assert_eq!(prompt["kind"], "manual");
+    let prompt_id = prompt["id"].as_str().unwrap();
+    for bad in [
+        "the-code",
+        "http://localhost:1455/auth/callback?code=x&state=other",
+        "http://evil.example:1455/auth/callback?code=x&state=abc",
+    ] {
+        let error = backends
+            .auth_input("me", &id, prompt_id, Some(bad))
+            .unwrap_err();
+        assert!(error.message.contains("callback URL"), "{bad}");
+    }
+    assert_eq!(
+        backends.auth_input("me", &id, prompt_id, None).unwrap_err(),
+        invalid("A response is required")
+    );
+    assert_eq!(
+        backends.auth_status("someone-else", &id).unwrap_err(),
+        not_found()
+    );
+    backends
+        .auth_input("me", &id, prompt_id, Some(CALLBACK))
+        .unwrap();
+    until(|| status()["status"] == "succeeded").await;
+    assert_eq!(changes.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        backends
+            .auth_input("me", &id, prompt_id, Some(CALLBACK))
+            .unwrap_err(),
+        conflict("Authorization session is no longer pending")
+    );
+    let model = &crate::catalog::catalog_models("openai-codex")[0];
+    let resolved = resolve(&backends, "oauth:openai-codex", &model.id).await;
+    assert_eq!(resolved.api_key.as_deref(), Some(SECRET));
+    assert_eq!(
+        resolved.provider.pi_provider.as_deref(),
+        Some("openai-codex")
+    );
+    assert_eq!(
+        resolved.model.api,
+        Some(pirc_protocol::ModelApi::OpenaiCodexResponses)
+    );
+    let published = format!(
+        "{}{}",
+        serde_json::to_string(&backends.models()).unwrap(),
+        backends.snapshot()
+    );
+    for secret in [SECRET, "refresh-secret", "chatgpt.com"] {
+        assert!(!published.contains(secret), "{secret}");
+    }
+    assert!(connected(&backends, "openai-codex"));
+    assert!(
+        backends.snapshot()["providers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["id"] == "oauth:openai-codex"
+                && p["source"] == "oauth"
+                && p["hasApiKey"] == true)
+    );
+    // A second login of the same provider waits for the first to end.
+    let second = backends.start_auth("me", "openai-codex", false).unwrap();
+    assert_eq!(
+        backends
+            .start_auth("me", "openai-codex", false)
+            .unwrap_err(),
+        conflict("A login for this provider is already in progress")
+    );
+    backends
+        .cancel_auth("me", second["id"].as_str().unwrap())
+        .unwrap();
+}
+
+#[tokio::test]
+async fn copilot_needs_consent_and_checks_its_domain_prompt() {
+    let dir = tempfile::tempdir().unwrap();
+    let (backends, _) = service_with(
+        dir.path(),
+        runner(|_, hooks| {
+            Box::pin(async move {
+                let domain = hooks
+                    .prompt(Prompt {
+                        message: "Enterprise domain".to_owned(),
+                        placeholder: None,
+                        allow_empty: Some(true),
+                    })
+                    .await?;
+                hooks.on_auth(
+                    "https://github.com/login/device",
+                    Some("Enter code: AB12-CD34"),
+                )?;
+                let hold = hooks
+                    .prompt(Prompt {
+                        message: "Hold".to_owned(),
+                        placeholder: None,
+                        allow_empty: None,
+                    })
+                    .await?;
+                let domain = if domain.is_empty() {
+                    "none".to_owned()
+                } else {
+                    domain
+                };
+                Ok(creds(&format!("{domain}-{hold}"), later()))
+            })
+        }),
+    );
+    assert!(
+        backends
+            .start_auth("me", "github-copilot", false)
+            .unwrap_err()
+            .message
+            .contains("consent")
+    );
+    let id = backends.start_auth("me", "github-copilot", true).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let status = || backends.auth_status("me", &id).unwrap();
+    until(|| status()["prompts"].as_array().unwrap().len() == 1).await;
+    let prompt = status()["prompts"][0]["id"].as_str().unwrap().to_owned();
+    assert_eq!(status()["prompts"][0]["allowEmpty"], true);
+    let error = backends
+        .auth_input("me", &id, &prompt, Some("https://ghe.example/path"))
+        .unwrap_err();
+    assert!(error.message.contains("Enterprise"));
+    backends.auth_input("me", &id, &prompt, Some("")).unwrap();
+    until(|| status()["prompts"][0]["message"] == "Hold").await;
+    // The device-flow user code is shown apart from the instructions.
+    assert_eq!(
+        status()["auth"],
+        json!({ "url": "https://github.com/login/device",
+            "instructions": "Enter code: AB12-CD34", "userCode": "AB12-CD34" })
+    );
+    let hold = status()["prompts"][0]["id"].as_str().unwrap().to_owned();
+    assert_eq!(
+        backends
+            .auth_input("me", &id, &hold, Some("  "))
+            .unwrap_err(),
+        invalid("A response is required")
+    );
+    backends.auth_input("me", &id, &hold, Some("b")).unwrap();
+    until(|| status()["status"] == "succeeded").await;
+    let model = &crate::catalog::catalog_models("github-copilot")[0];
+    let resolved = resolve(&backends, "oauth:github-copilot", &model.id).await;
+    assert_eq!(resolved.api_key.as_deref(), Some("none-b"));
+}
+
+#[tokio::test]
+async fn unsafe_authorization_pages_and_bad_credentials_fail_the_login() {
+    let dir = tempfile::tempdir().unwrap();
+    let (backends, _) = service_with(
+        dir.path(),
+        runner(|provider, hooks| {
+            Box::pin(async move {
+                if provider == "anthropic" {
+                    hooks.on_auth("http://insecure.example/authorize", None)?;
+                }
+                Ok(Credentials::new())
+            })
+        }),
+    );
+    for provider in ["anthropic", "openai-codex"] {
+        let id = backends.start_auth("me", provider, false).unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        until(|| backends.auth_status("me", &id).unwrap()["status"] == "failed").await;
+        assert_eq!(
+            backends.auth_status("me", &id).unwrap()["error"],
+            "Authorization failed. Please retry."
+        );
+        assert!(!connected(&backends, provider));
+    }
+}
+
+#[tokio::test]
+async fn cancellation_wins_over_a_late_login() {
+    let dir = tempfile::tempdir().unwrap();
+    let hold = Arc::new(tokio::sync::Notify::new());
+    let (backends, _) = service_with(dir.path(), callback_runner(Some(hold.clone())));
+    let id = backends.start_auth("me", "openai-codex", false).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let status = || backends.auth_status("me", &id).unwrap();
+    until(|| status()["prompts"].as_array().unwrap().len() == 1).await;
+    let prompt = status()["prompts"][0]["id"].as_str().unwrap().to_owned();
+    backends
+        .auth_input("me", &id, &prompt, Some(CALLBACK))
+        .unwrap();
+    assert_eq!(
+        backends.cancel_auth("me", &id).unwrap()["status"],
+        "cancelled"
+    );
+    hold.notify_waiters();
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    assert!(!connected(&backends, "openai-codex"));
+    assert!(backends.resolve("oauth:openai-codex", "x").await.is_err());
+    // A cancelled view keeps no prompts or links.
+    let view = status();
+    assert!(view.get("auth").is_none());
+    assert!(view["prompts"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn logins_expire() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut options = runner(|_, hooks| {
+        Box::pin(async move {
+            hooks.manual().await?;
+            Err("unused".to_owned())
+        })
+    });
+    options.session_timeout = std::time::Duration::from_millis(30);
+    let (backends, _) = service_with(dir.path(), options);
+    let id = backends.start_auth("me", "anthropic", false).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    until(|| backends.auth_status("me", &id).unwrap()["status"] == "expired").await;
+}
+
+#[tokio::test]
+async fn refreshes_once_for_concurrent_requests_and_sign_out_discards_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let refreshes = Arc::new(AtomicUsize::new(0));
+    let gate = Arc::new(tokio::sync::Semaphore::new(1));
+    let (counter, gated) = (refreshes.clone(), gate.clone());
+    let (backends, changes) = service_with(
+        dir.path(),
+        runner_with(
+            |_, _| Box::pin(async { Ok(creds("old", 0.0)) }),
+            move |_, mut credentials| {
+                let n = counter.fetch_add(1, Ordering::SeqCst) + 1;
+                let gate = gated.clone();
+                Box::pin(async move {
+                    let _permit = gate.acquire().await.unwrap();
+                    credentials.insert("access".to_owned(), json!(format!("new-{n}")));
+                    credentials.insert("expires".to_owned(), json!(later()));
+                    Ok(credentials)
+                })
+            },
+        ),
+    );
+    let id = backends.start_auth("me", "anthropic", false).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    until(|| backends.auth_status("me", &id).unwrap()["status"] == "succeeded").await;
+    let model = crate::catalog::catalog_models("anthropic")[0].id.clone();
+    let (a, b) = tokio::join!(
+        backends.resolve("oauth:anthropic", &model),
+        backends.resolve("oauth:anthropic", &model)
+    );
+    assert_eq!(a.unwrap().api_key.as_deref(), Some("new-1"));
+    assert_eq!(b.unwrap().api_key.as_deref(), Some("new-1"));
+    assert_eq!(refreshes.load(Ordering::SeqCst), 1);
+    // Refreshes are saved without a change notification.
+    assert_eq!(changes.load(Ordering::SeqCst), 1);
+    let file = dir.path().join("backends/settings.json");
+    assert!(fs::read_to_string(&file).unwrap().contains("new-1"));
+
+    // Force another refresh, then sign out while it is still running.
+    {
+        let mut inner = backends.lock();
+        let mut next = inner.state.clone();
+        next.oauth["anthropic"].insert("expires".to_owned(), json!(0));
+        backends.commit(&mut inner, next).unwrap();
+    }
+    let permit = gate.clone().acquire_owned().await.unwrap();
+    let pending = {
+        let backends = backends.clone();
+        let model = model.clone();
+        tokio::spawn(async move { backends.resolve("oauth:anthropic", &model).await })
+    };
+    until(|| refreshes.load(Ordering::SeqCst) == 2).await;
+    backends.delete_provider("oauth:anthropic").unwrap();
+    drop(permit);
+    let error = pending.await.unwrap().err().unwrap();
+    assert!(error.contains("sign in again"), "{error}");
+    assert!(!connected(&backends, "anthropic"));
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    assert!(!fs::read_to_string(&file).unwrap().contains("new-2"));
+}
+
+#[tokio::test]
+async fn closing_cancels_logins() {
+    let dir = tempfile::tempdir().unwrap();
+    let (backends, _) = service_with(dir.path(), callback_runner(None));
+    let id = backends.start_auth("me", "openai-codex", false).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    backends.close();
+    assert_eq!(
+        backends.auth_status("me", &id).unwrap()["status"],
+        "cancelled"
+    );
+    assert_eq!(
+        backends.start_auth("me", "anthropic", false).unwrap_err(),
+        closed_error()
+    );
+}
+
+#[tokio::test]
+async fn a_refresh_with_rotated_credentials_returns_the_saved_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    let refreshes = Arc::new(AtomicUsize::new(0));
+    let counter = refreshes.clone();
+    let (backends, _) = service_with(
+        dir.path(),
+        runner_with(
+            |_, _| Box::pin(async { Ok(creds("fresh", later())) }),
+            move |_, credentials| {
+                counter.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async move { Ok(credentials) })
+            },
+        ),
+    );
+    let id = backends.start_auth("me", "anthropic", false).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    until(|| backends.auth_status("me", &id).unwrap()["status"] == "succeeded").await;
+    // Credentials read before another refresh rotated them.
+    let stale = creds("stale", 0.0);
+    let saved = backends.refresh("anthropic", stale).await.unwrap();
+    assert_eq!(saved["access"], "fresh");
+    assert_eq!(refreshes.load(Ordering::SeqCst), 0);
+    backends.close();
+    assert!(backends.refresh("anthropic", saved).await.is_err());
 }

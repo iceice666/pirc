@@ -1334,6 +1334,8 @@ name = "pirc-providers"
 version = "0.3.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
+ "form_urlencoded",
  "futures-util",
  "getrandom 0.3.4",
  "indexmap",
@@ -1343,6 +1345,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "tokio",
 ]

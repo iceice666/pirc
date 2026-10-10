@@ -3,6 +3,7 @@
 //! web-managed API-key backends and subscription (OAuth) accounts, kept in
 //! `<state>/backends/settings.json` (0600, atomic writes).
 
+mod auth;
 mod discovery;
 mod oauth;
 mod schema;
@@ -12,17 +13,20 @@ use std::io::Write;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, Weak};
+use std::time::Duration;
 
 use indexmap::IndexMap;
 use pirc_protocol::{Model, ModelRef, Models, Provider};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
+pub use auth::{OAuthRunner, ProviderRunner};
 pub use discovery::{
     BackendPreset, ConnectionResult, DiscoveredModel, UiModel, catalog_presets, locale_compare,
     parse_model_list,
 };
+pub use oauth::flows::{BoxFuture, Endpoints, LoginHooks, Prompt};
 pub use oauth::{OAUTH_PROVIDERS, OAuthProviderInfo};
 
 use crate::catalog::{CatalogModel, catalog_models, catalog_providers};
@@ -185,6 +189,27 @@ pub struct BackendService {
     /// Connection tests run on their own transports, which configuration
     /// changes (`Inference::cancel_all` of real runs) do not cancel.
     test_inference: Inference,
+    weak: Weak<Self>,
+    auth: Mutex<auth::AuthState>,
+    runner: Arc<dyn OAuthRunner>,
+    session_timeout: Duration,
+}
+
+/// Construction options; [`BackendOptions::default`] is production.
+pub struct BackendOptions {
+    /// Logins and refreshes (the real providers by default).
+    pub runner: Option<Arc<dyn OAuthRunner>>,
+    /// How long a login may stay pending (10 minutes).
+    pub session_timeout: Duration,
+}
+
+impl Default for BackendOptions {
+    fn default() -> Self {
+        Self {
+            runner: None,
+            session_timeout: Duration::from_secs(10 * 60),
+        }
+    }
 }
 
 impl std::fmt::Debug for BackendService {
@@ -208,7 +233,16 @@ fn has_model(providers: &IndexMap<String, Provider>, reference: &ModelRef) -> bo
 impl BackendService {
     /// Open `<state_dir>/backends/settings.json` (created on first save).
     /// An unreadable or invalid store stops the gateway.
-    pub fn open(state_dir: &Path, baseline: Models) -> Result<Self, String> {
+    pub fn open(state_dir: &Path, baseline: Models) -> Result<Arc<Self>, String> {
+        Self::open_with(state_dir, baseline, BackendOptions::default())
+    }
+
+    /// [`BackendService::open`] with explicit options.
+    pub fn open_with(
+        state_dir: &Path,
+        baseline: Models,
+        options: BackendOptions,
+    ) -> Result<Arc<Self>, String> {
         let directory = state_dir.join("backends");
         fs::create_dir_all(&directory)
             .and_then(|()| fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)))
@@ -242,7 +276,10 @@ impl BackendService {
             .build()
             .map_err(|error| format!("HTTP client: {error}"))?;
         let merged = Arc::new(merge(&baseline, &state));
-        Ok(Self {
+        let runner = options
+            .runner
+            .unwrap_or_else(|| Arc::new(ProviderRunner::new(Endpoints::default())));
+        Ok(Arc::new_cyclic(|weak| Self {
             file,
             inner: Mutex::new(Inner {
                 baseline,
@@ -255,7 +292,21 @@ impl BackendService {
             probe_client,
             presets: OnceLock::new(),
             test_inference: Inference::new(),
-        })
+            weak: weak.clone(),
+            auth: Mutex::new(auth::AuthState::default()),
+            runner,
+            session_timeout: options.session_timeout,
+        }))
+    }
+
+    fn auth(&self) -> MutexGuard<'_, auth::AuthState> {
+        self.auth
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn closed(&self) -> bool {
+        self.closed.load(Ordering::SeqCst)
     }
 
     /// Set the change hook (once).
@@ -553,6 +604,7 @@ impl BackendService {
 
     /// `deleteProvider`: a web-managed backend or a subscription account.
     pub fn delete_provider(&self, id: &str) -> Result<(), BackendError> {
+        let mut auth = self.auth();
         let inner = self.lock();
         if own(&inner.baseline.providers, id) {
             return Err(conflict("File-managed backends are read-only"));
@@ -562,6 +614,8 @@ impl BackendService {
             if oauth::info(provider_id).is_none() {
                 return Err(not_found());
             }
+            // A login or refresh still in flight must not bring the account back.
+            auth.sign_out(provider_id);
             next.oauth.shift_remove(provider_id);
         } else if next.providers.shift_remove(id).is_none() {
             return Err(not_found());
@@ -573,6 +627,7 @@ impl BackendService {
         {
             next.default_model = None;
         }
+        drop(auth);
         self.commit_and_notify(inner, next)
     }
 
@@ -592,62 +647,11 @@ impl BackendService {
         self.commit_and_notify(inner, next)
     }
 
-    /// `startAuth`: begin a subscription login for `owner`.
-    ///
-    /// The checks are those of the TS gateway; the login flows themselves
-    /// are not ported yet (M3, OAuth), so a valid start is refused.
-    pub fn start_auth(
-        &self,
-        _owner: &str,
-        provider_id: &str,
-        policy_consent: bool,
-    ) -> Result<Value, BackendError> {
-        self.check_open()?;
-        if oauth::info(provider_id).is_none() {
-            return Err(invalid("Unknown OAuth provider"));
-        }
-        if own(
-            &self.lock().baseline.providers,
-            &format!("oauth:{provider_id}"),
-        ) {
-            return Err(conflict("File-managed backend ID is reserved"));
-        }
-        if provider_id == "github-copilot" && !policy_consent {
-            return Err(invalid(
-                "Explicit consent to enable known GitHub Copilot models is required",
-            ));
-        }
-        Err(BackendError::new(
-            503,
-            "unavailable",
-            "Subscription sign-in is not available yet",
-        ))
-    }
-
-    /// `authStatus`: a login of `owner`.
-    pub fn auth_status(&self, _owner: &str, _id: &str) -> Result<Value, BackendError> {
-        Err(not_found())
-    }
-
-    /// `cancelAuth`: end a pending login of `owner`.
-    pub fn cancel_auth(&self, _owner: &str, _id: &str) -> Result<Value, BackendError> {
-        Err(not_found())
-    }
-
-    /// `authInput`: answer one of a login's prompts.
-    pub fn auth_input(
-        &self,
-        _owner: &str,
-        _id: &str,
-        _prompt_id: &str,
-        _value: Option<&str>,
-    ) -> Result<Value, BackendError> {
-        Err(not_found())
-    }
-
-    /// `close()`: refuse further changes and probes.
+    /// `close()`: refuse further changes and probes; logins are cancelled
+    /// and refreshes aborted.
     pub fn close(&self) {
         self.closed.store(true, Ordering::SeqCst);
+        self.auth().close();
     }
 }
 
@@ -661,31 +665,66 @@ impl Drop for ProbeSlot<'_> {
 }
 
 impl Resolve for BackendService {
-    /// `resolve`: file-managed providers first, then subscription accounts,
-    /// then web-managed backends.
+    /// `resolve`: file-managed providers first, then subscription accounts
+    /// (refreshed a minute before they expire), then web-managed backends.
     async fn resolve(&self, provider_name: &str, model_id: &str) -> Result<Resolved, String> {
-        if self.closed.load(Ordering::SeqCst) {
+        if self.closed() {
             return Err(closed_error().message);
         }
-        let inner = self.lock();
-        let provider = if let Some(provider) = inner.baseline.providers.get(provider_name) {
-            Some(provider)
-        } else if provider_name.starts_with("oauth:") {
-            // Subscription accounts are not ported yet (M3, OAuth).
-            None
+        let missing = || not_found().message;
+        let (provider, api_key) = if let Some(id) = provider_name
+            .strip_prefix("oauth:")
+            .filter(|_| !own(&self.lock().baseline.providers, provider_name))
+        {
+            let saved = self.lock().state.oauth.get(id).cloned();
+            let (Some(mut credentials), Some(_)) = (saved, oauth::info(id)) else {
+                return Err(missing());
+            };
+            let expires = credentials
+                .get("expires")
+                .and_then(Value::as_f64)
+                .unwrap_or(f64::NEG_INFINITY);
+            if expires <= crate::stream::now_ms() as f64 + 60_000.0 {
+                credentials = self
+                    .refresh(id, credentials)
+                    .await
+                    .map_err(|error| error.message)?;
+            }
+            if self.closed() || !self.lock().state.oauth.contains_key(id) {
+                return Err(missing());
+            }
+            let provider = oauth::provider_config(id, &credentials).ok_or_else(missing)?;
+            let key = credentials
+                .get("access")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            (provider, key)
         } else {
-            inner.state.providers.get(provider_name)
+            let inner = self.lock();
+            let provider = inner
+                .baseline
+                .providers
+                .get(provider_name)
+                .or_else(|| {
+                    (!provider_name.starts_with("oauth:"))
+                        .then(|| inner.state.providers.get(provider_name))
+                        .flatten()
+                })
+                .cloned()
+                .ok_or_else(missing)?;
+            let key = provider.api_key.clone();
+            (provider, key)
         };
-        let provider = provider.ok_or_else(|| not_found().message)?;
         let model = provider
             .models
             .iter()
             .find(|model| model.id == model_id)
-            .ok_or_else(|| not_found().message)?;
+            .cloned()
+            .ok_or_else(missing)?;
         Ok(Resolved {
-            provider: provider.clone(),
-            model: model.clone(),
-            api_key: provider.api_key.clone(),
+            provider,
+            model,
+            api_key,
         })
     }
 }

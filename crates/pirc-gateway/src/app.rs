@@ -57,7 +57,7 @@ pub struct Claimed {
 impl App {
     /// The app around its backend settings. Backend changes cancel
     /// inference in flight and send nodes the new catalog.
-    pub fn new(config: GatewayConfig, db: Arc<Db>, backends: BackendService) -> Arc<Self> {
+    pub fn new(config: GatewayConfig, db: Arc<Db>, backends: Arc<BackendService>) -> Arc<Self> {
         let devices = DeviceTokens::new(
             db.clone(),
             config.device_token_idle_ms,
@@ -71,7 +71,7 @@ impl App {
             hints: Hints::new(),
             nodes: Arc::new(NodeRegistry::default()),
             activity: Mutex::new(HashMap::new()),
-            backends: Arc::new(backends),
+            backends,
             inference: pirc_providers::Inference::new(),
             slots: Default::default(),
         });
