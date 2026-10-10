@@ -120,7 +120,14 @@ fn comparable_headers(headers: &Value) -> serde_json::Map<String, Value> {
                 && !(name.as_str() == "user-agent"
                     && value.as_str().is_some_and(|ua| ua.starts_with("Bun/")))
         })
-        .map(|(name, value)| (name.clone(), value.clone()))
+        .map(|(name, value)| {
+            // pi-ai's Codex agent names the host: `pi (linux 6.1.0; x64)`.
+            let value = match value.as_str() {
+                Some(ua) if name == "user-agent" && ua.starts_with("pi (") => json!("pi (<host>)"),
+                _ => value.clone(),
+            };
+            (name.clone(), value)
+        })
         .collect()
 }
 
