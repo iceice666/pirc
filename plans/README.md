@@ -10,6 +10,7 @@ This directory is the work queue, not a description of everything already shippe
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [Assistant roadmap](assistant.md)         | v1 and in-chat USER approval/source-chat deletion shipped; remaining roadmap, decisions and watch items retain their own gates                         |
 | [Project isolation](project-isolation.md) | Capability policy/instructions implemented; B, D, E1 and E3 are proposals, not privacy guarantees; E2 locally verified pending recorded review/release |
+| [Rust rewrite](rust-rewrite.md)           | Proposed 2026-10-10: all server roles in Rust under `crates/`, no embedded JS runtime, fresh-start release; M0–M9 with gates                           |
 | [Cross-feature backlog](backlog.md)       | Unresolved browser, schedules, Android, sandbox and accepted PTC follow-ups/manual checks extracted from completed designs                             |
 
 ## Audits with open findings
