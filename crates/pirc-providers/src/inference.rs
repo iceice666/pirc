@@ -234,7 +234,10 @@ impl Inference {
                 };
                 result
                     .map(|mut message| {
-                        if let Some(error) = &message.error_message {
+                        // `if (message.errorMessage && !usePi)`: an empty one stays.
+                        if let Some(error) =
+                            message.error_message.as_ref().filter(|e| !e.is_empty())
+                        {
                             message.error_message = Some(safe_inference_error(error));
                         }
                         message
