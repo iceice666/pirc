@@ -1,0 +1,687 @@
+---
+source: crates/pirc-conformance/tests/provider_auth.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "expiresAt": "<epoch-ms>",
+      "id": "<uuid:1>",
+      "prompts": [],
+      "providerId": "anthropic",
+      "status": "pending"
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions",
+    "status": 201,
+    "step": "start an Anthropic login"
+  },
+  {
+    "observed": {
+      "auth": {
+        "instructions": "Complete login in your browser. If the browser is on another machine, paste the final redirect URL here.",
+        "url": "https://claude.ai/oauth/authorize?code=true&client_id=<uuid:2>&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A53692%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference+user%3Asessions%3Aclaude_code+user%3Amcp_servers+user%3Afile_upload&code_challenge=<challenge>&code_challenge_method=S256&state=<state>"
+      },
+      "expiresAt": "<epoch-ms>",
+      "id": "<uuid:1>",
+      "prompts": [
+        {
+          "allowEmpty": false,
+          "id": "<uuid:3>",
+          "kind": "manual",
+          "message": "Paste the complete localhost callback URL after authorization"
+        }
+      ],
+      "providerId": "anthropic",
+      "status": "pending"
+    },
+    "step": "the login waits for the pasted callback URL"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "A login for this provider is already in progress"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions",
+    "status": 409,
+    "step": "a second Anthropic login"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Paste the complete expected localhost callback URL with matching authorization state"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:1>/input",
+    "status": 400,
+    "step": "paste a bare code"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Paste the complete expected localhost callback URL with matching authorization state"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:1>/input",
+    "status": 400,
+    "step": "paste another state"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Paste the complete expected localhost callback URL with matching authorization state"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:1>/input",
+    "status": 400,
+    "step": "paste no code"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Paste the complete expected localhost callback URL with matching authorization state"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:1>/input",
+    "status": 400,
+    "step": "paste two codes"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Paste the complete expected localhost callback URL with matching authorization state"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:1>/input",
+    "status": 400,
+    "step": "paste another host"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Paste the complete expected localhost callback URL with matching authorization state"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:1>/input",
+    "status": 400,
+    "step": "paste another path"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Paste the complete expected localhost callback URL with matching authorization state"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:1>/input",
+    "status": 400,
+    "step": "paste with a fragment"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "A response is required"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:1>/input",
+    "status": 400,
+    "step": "paste nothing"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "A response is required"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:1>/input",
+    "status": 400,
+    "step": "answer without a value"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "Prompt is no longer pending"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:1>/input",
+    "status": 409,
+    "step": "answer an unknown prompt"
+  },
+  {
+    "observed": {
+      "contentType": "text/html; charset=utf-8",
+      "details": null,
+      "message": "State mismatch.",
+      "status": 400,
+      "title": "Authentication failed"
+    },
+    "step": "the callback server: another state"
+  },
+  {
+    "observed": {
+      "contentType": "text/html; charset=utf-8",
+      "details": null,
+      "message": "Missing code or state parameter.",
+      "status": 400,
+      "title": "Authentication failed"
+    },
+    "step": "the callback server: no code"
+  },
+  {
+    "observed": {
+      "contentType": "text/html; charset=utf-8",
+      "details": "Error: access_denied",
+      "message": "Anthropic authentication did not complete.",
+      "status": 400,
+      "title": "Authentication failed"
+    },
+    "step": "the callback server: an error from Anthropic"
+  },
+  {
+    "observed": {
+      "contentType": "text/html; charset=utf-8",
+      "details": null,
+      "message": "Callback route not found.",
+      "status": 404,
+      "title": "Authentication failed"
+    },
+    "step": "the callback server: another path"
+  },
+  {
+    "body": {
+      "auth": {
+        "instructions": "Complete login in your browser. If the browser is on another machine, paste the final redirect URL here.",
+        "url": "https://claude.ai/oauth/authorize?code=true&client_id=<uuid:2>&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A53692%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference+user%3Asessions%3Aclaude_code+user%3Amcp_servers+user%3Afile_upload&code_challenge=<challenge>&code_challenge_method=S256&state=<state>"
+      },
+      "expiresAt": "<epoch-ms>",
+      "id": "<uuid:1>",
+      "prompts": [
+        {
+          "allowEmpty": false,
+          "id": "<uuid:3>",
+          "kind": "manual",
+          "message": "Paste the complete localhost callback URL after authorization"
+        }
+      ],
+      "providerId": "anthropic",
+      "status": "pending"
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/provider-auth/sessions/<uuid:1>",
+    "status": 200,
+    "step": "still pending"
+  },
+  {
+    "body": {
+      "expiresAt": "<epoch-ms>",
+      "id": "<uuid:1>",
+      "prompts": [],
+      "providerId": "anthropic",
+      "status": "cancelled"
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/provider-auth/sessions/<uuid:1>",
+    "status": 200,
+    "step": "cancel it"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "Authorization session is no longer pending"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:1>/input",
+    "status": 409,
+    "step": "answer after cancelling"
+  },
+  {
+    "body": {
+      "expiresAt": "<epoch-ms>",
+      "id": "<uuid:1>",
+      "prompts": [],
+      "providerId": "anthropic",
+      "status": "cancelled"
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/provider-auth/sessions/<uuid:1>",
+    "status": 200,
+    "step": "cancel it again"
+  },
+  {
+    "body": {
+      "expiresAt": "<epoch-ms>",
+      "id": "<uuid:1>",
+      "prompts": [],
+      "providerId": "anthropic",
+      "status": "cancelled"
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/provider-auth/sessions/<uuid:1>",
+    "status": 200,
+    "step": "its status"
+  },
+  {
+    "body": {
+      "expiresAt": "<epoch-ms>",
+      "id": "<uuid:4>",
+      "prompts": [],
+      "providerId": "openai-codex",
+      "status": "pending"
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions",
+    "status": 201,
+    "step": "start a Codex login"
+  },
+  {
+    "observed": {
+      "auth": {
+        "instructions": "A browser window should open. Complete login to finish.",
+        "url": "https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&scope=openid+profile+email+offline_access&code_challenge=<challenge>&code_challenge_method=S256&state=<state>&id_token_add_organizations=true&codex_cli_simplified_flow=true&originator=pi"
+      },
+      "expiresAt": "<epoch-ms>",
+      "id": "<uuid:4>",
+      "prompts": [
+        {
+          "allowEmpty": false,
+          "id": "<uuid:5>",
+          "kind": "manual",
+          "message": "Paste the complete localhost callback URL after authorization"
+        }
+      ],
+      "providerId": "openai-codex",
+      "status": "pending"
+    },
+    "step": "the Codex login"
+  },
+  {
+    "observed": {
+      "contentType": "text/html; charset=utf-8",
+      "details": null,
+      "message": "State mismatch.",
+      "status": 400,
+      "title": "Authentication failed"
+    },
+    "step": "the Codex callback server: another state"
+  },
+  {
+    "observed": {
+      "contentType": "text/html; charset=utf-8",
+      "details": null,
+      "message": "Missing authorization code.",
+      "status": 400,
+      "title": "Authentication failed"
+    },
+    "step": "the Codex callback server: no code"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Paste the complete expected localhost callback URL with matching authorization state"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:4>/input",
+    "status": 400,
+    "step": "paste the Anthropic callback into Codex"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "fake-model",
+        "provider": "fake",
+        "thinking": "low"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/oauth:openai-codex",
+    "status": 200,
+    "step": "sign out of Codex during the login"
+  },
+  {
+    "body": {
+      "expiresAt": "<epoch-ms>",
+      "id": "<uuid:4>",
+      "prompts": [],
+      "providerId": "openai-codex",
+      "status": "cancelled"
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/provider-auth/sessions/<uuid:4>",
+    "status": 200,
+    "step": "the Codex login after signing out"
+  },
+  {
+    "body": {
+      "expiresAt": "<epoch-ms>",
+      "id": "<uuid:6>",
+      "prompts": [],
+      "providerId": "github-copilot",
+      "status": "pending"
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions",
+    "status": 201,
+    "step": "start a Copilot login"
+  },
+  {
+    "observed": {
+      "expiresAt": "<epoch-ms>",
+      "id": "<uuid:6>",
+      "prompts": [
+        {
+          "allowEmpty": true,
+          "id": "<uuid:7>",
+          "kind": "prompt",
+          "message": "GitHub Enterprise URL/domain (blank for github.com)",
+          "placeholder": "company.ghe.com"
+        }
+      ],
+      "providerId": "github-copilot",
+      "status": "pending"
+    },
+    "step": "the Copilot login asks for a domain"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Enter an HTTPS GitHub Enterprise domain without path or credentials"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:6>/input",
+    "status": 400,
+    "step": "a domain with a path"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Enter an HTTPS GitHub Enterprise domain without path or credentials"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:6>/input",
+    "status": 400,
+    "step": "a domain over HTTP"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Enter an HTTPS GitHub Enterprise domain without path or credentials"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:6>/input",
+    "status": 400,
+    "step": "a domain with a port"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Enter an HTTPS GitHub Enterprise domain without path or credentials"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:6>/input",
+    "status": 400,
+    "step": "a domain with credentials"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Enter an HTTPS GitHub Enterprise domain without path or credentials"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/<uuid:6>/input",
+    "status": 400,
+    "step": "a domain with a query"
+  },
+  {
+    "body": {
+      "expiresAt": "<epoch-ms>",
+      "id": "<uuid:6>",
+      "prompts": [],
+      "providerId": "github-copilot",
+      "status": "cancelled"
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/provider-auth/sessions/<uuid:6>",
+    "status": 200,
+    "step": "cancel the Copilot login"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "fake-model",
+        "provider": "fake",
+        "thinking": "low"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/providers",
+    "status": 200,
+    "step": "providers after the logins"
+  }
+]
