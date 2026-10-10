@@ -17,7 +17,7 @@ pub use cluster::{
     Cluster, GatewayOptions, HOST, LoneNode, NODE_ID, NODE_TOKEN, ORIGIN, USER, WORKSPACE_ID,
 };
 pub use fake_gateway::{FakeGateway, NodeLink, assert_gateway_frame, assert_node_frame};
-pub use fake_llm::{FakeLlm, Reply};
+pub use fake_llm::{FakeLlm, ModelsReply, Reply};
 pub use fake_push::{FakePush, PushSubscription};
 pub use normalize::{Normalizer, Transcript};
 

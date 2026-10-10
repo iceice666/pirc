@@ -71,6 +71,8 @@ pub struct Cluster {
     gateway: Process,
     pub llm: FakeLlm,
     pub port: u16,
+    /// The gateway's `PIRC_MODELS_FILE` (`gateway-models.json`).
+    models_file: PathBuf,
     /// Root of every temporary directory the processes use.
     pub dir: TempDir,
 }
@@ -155,6 +157,7 @@ impl Cluster {
             gateway,
             llm,
             port,
+            models_file: models,
             dir,
         };
         cluster
@@ -202,6 +205,20 @@ impl Cluster {
             &dir_in(root, "node-home"),
             &env,
         )
+    }
+
+    /// The gateway's models file, which a test may rewrite before
+    /// [`Cluster::reload_gateway`]. It starts with one provider, `fake`
+    /// (the fake model server, key `test-key`, model `fake-model`), which is
+    /// also the default model.
+    pub fn models_file(&self) -> &Path {
+        &self.models_file
+    }
+
+    /// Send SIGHUP to the gateway (it reloads its models file). Returns at
+    /// once; the reload's effect has to be polled for.
+    pub fn reload_gateway(&self) {
+        self.gateway.signal(Signal::SIGHUP);
     }
 
     /// `http://127.0.0.1:<port>`
@@ -450,6 +467,12 @@ impl Process {
     /// The exit status, once the process has exited.
     fn exited(&mut self) -> Option<std::process::ExitStatus> {
         self.child.try_wait().ok().flatten()
+    }
+
+    fn signal(&self, signal: Signal) {
+        if !self.stopped {
+            let _ = kill(Pid::from_raw(self.child.id() as i32), signal);
+        }
     }
 
     /// SIGTERM (a node then stops its agents), then SIGKILL after a grace period.

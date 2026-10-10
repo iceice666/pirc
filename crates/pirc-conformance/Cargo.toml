@@ -28,6 +28,9 @@ pirc-protocol = { path = "../pirc-protocol" }
 
 [dev-dependencies]
 insta = { version = "1", features = ["json"] }
+# `cargo test --workspace` unifies reqwest with pirc-providers' `rustls-no-provider`:
+# a unit test that builds a client installs the provider first.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 
 [lints]
 workspace = true

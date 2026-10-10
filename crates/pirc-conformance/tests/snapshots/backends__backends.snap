@@ -1,0 +1,7086 @@
+---
+source: crates/pirc-conformance/tests/backends.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "defaultModel": {
+        "id": "fake-model",
+        "provider": "fake",
+        "thinking": "low"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/providers",
+    "status": 200,
+    "step": "providers"
+  },
+  {
+    "observed": {
+      "headers": [
+        "cache-control: no-store",
+        "content-type: application/json"
+      ],
+      "presets": [
+        {
+          "api": "openai-responses",
+          "baseUrl": "https://api.openai.com/v1",
+          "catalog": true,
+          "id": "openai",
+          "models": {
+            "count": 42,
+            "first": {
+              "contextWindow": 8192,
+              "id": "gpt-4",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 8192,
+              "name": "GPT-4",
+              "reasoning": false
+            },
+            "ids": [
+              "gpt-4",
+              "gpt-4-turbo",
+              "gpt-4.1",
+              "gpt-4.1-mini",
+              "gpt-4.1-nano",
+              "gpt-4o",
+              "gpt-4o-2024-05-13",
+              "gpt-4o-2024-08-06",
+              "gpt-4o-2024-11-20",
+              "gpt-4o-mini",
+              "gpt-5",
+              "gpt-5-chat-latest",
+              "gpt-5-codex",
+              "gpt-5-mini",
+              "gpt-5-nano",
+              "gpt-5-pro",
+              "gpt-5.1",
+              "gpt-5.1-chat-latest",
+              "gpt-5.1-codex",
+              "gpt-5.1-codex-max",
+              "gpt-5.1-codex-mini",
+              "gpt-5.2",
+              "gpt-5.2-chat-latest",
+              "gpt-5.2-codex",
+              "gpt-5.2-pro",
+              "gpt-5.3-chat-latest",
+              "gpt-5.3-codex",
+              "gpt-5.3-codex-spark",
+              "gpt-5.4",
+              "gpt-5.4-mini",
+              "gpt-5.4-nano",
+              "gpt-5.4-pro",
+              "gpt-5.5",
+              "gpt-5.5-pro",
+              "o1",
+              "o1-pro",
+              "o3",
+              "o3-deep-research",
+              "o3-mini",
+              "o3-pro",
+              "o4-mini",
+              "o4-mini-deep-research"
+            ]
+          },
+          "name": "OpenAI"
+        },
+        {
+          "api": "anthropic-messages",
+          "baseUrl": "https://api.anthropic.com",
+          "catalog": true,
+          "id": "anthropic",
+          "models": {
+            "count": 23,
+            "first": {
+              "contextWindow": 200000,
+              "id": "claude-3-5-haiku-20241022",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 8192,
+              "name": "Claude Haiku 3.5",
+              "reasoning": false
+            },
+            "ids": [
+              "claude-3-5-haiku-20241022",
+              "claude-3-5-haiku-latest",
+              "claude-3-5-sonnet-20240620",
+              "claude-3-5-sonnet-20241022",
+              "claude-3-7-sonnet-20250219",
+              "claude-3-haiku-20240307",
+              "claude-3-opus-20240229",
+              "claude-3-sonnet-20240229",
+              "claude-haiku-4-5",
+              "claude-haiku-4-5-20251001",
+              "claude-opus-4-0",
+              "claude-opus-4-1",
+              "claude-opus-4-1-20250805",
+              "claude-opus-4-20250514",
+              "claude-opus-4-5",
+              "claude-opus-4-5-20251101",
+              "claude-opus-4-6",
+              "claude-opus-4-7",
+              "claude-sonnet-4-0",
+              "claude-sonnet-4-20250514",
+              "claude-sonnet-4-5",
+              "claude-sonnet-4-5-20250929",
+              "claude-sonnet-4-6"
+            ]
+          },
+          "name": "Anthropic"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "https://openrouter.ai/api/v1",
+          "catalog": true,
+          "id": "openrouter",
+          "models": {
+            "count": 275,
+            "first": {
+              "contextWindow": 256000,
+              "id": "ai21/jamba-large-1.7",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 4096,
+              "name": "AI21: Jamba Large 1.7",
+              "reasoning": false
+            },
+            "ids": [
+              "ai21/jamba-large-1.7",
+              "alibaba/tongyi-deepresearch-30b-a3b",
+              "amazon/nova-2-lite-v1",
+              "amazon/nova-lite-v1",
+              "amazon/nova-micro-v1",
+              "amazon/nova-premier-v1",
+              "amazon/nova-pro-v1",
+              "anthropic/claude-3-haiku",
+              "anthropic/claude-3.5-haiku",
+              "anthropic/claude-3.7-sonnet",
+              "anthropic/claude-3.7-sonnet:thinking",
+              "anthropic/claude-haiku-4.5",
+              "anthropic/claude-opus-4",
+              "anthropic/claude-opus-4.1",
+              "anthropic/claude-opus-4.5",
+              "anthropic/claude-opus-4.6",
+              "anthropic/claude-opus-4.6-fast",
+              "anthropic/claude-opus-4.7",
+              "anthropic/claude-sonnet-4",
+              "anthropic/claude-sonnet-4.5",
+              "anthropic/claude-sonnet-4.6",
+              "arcee-ai/trinity-large-preview",
+              "arcee-ai/trinity-large-thinking",
+              "arcee-ai/trinity-mini",
+              "arcee-ai/virtuoso-large",
+              "auto",
+              "baidu/cobuddy:free",
+              "baidu/ernie-4.5-21b-a3b",
+              "baidu/ernie-4.5-vl-28b-a3b",
+              "bytedance-seed/seed-1.6",
+              "bytedance-seed/seed-1.6-flash",
+              "bytedance-seed/seed-2.0-lite",
+              "bytedance-seed/seed-2.0-mini",
+              "cohere/command-r-08-2024",
+              "cohere/command-r-plus-08-2024",
+              "deepseek/deepseek-chat",
+              "deepseek/deepseek-chat-v3-0324",
+              "deepseek/deepseek-chat-v3.1",
+              "deepseek/deepseek-r1",
+              "deepseek/deepseek-r1-0528",
+              "deepseek/deepseek-v3.1-terminus",
+              "deepseek/deepseek-v3.2",
+              "deepseek/deepseek-v3.2-exp",
+              "deepseek/deepseek-v4-flash",
+              "deepseek/deepseek-v4-pro",
+              "essentialai/rnj-1-instruct",
+              "google/gemini-2.0-flash-001",
+              "google/gemini-2.0-flash-lite-001",
+              "google/gemini-2.5-flash",
+              "google/gemini-2.5-flash-lite",
+              "google/gemini-2.5-flash-lite-preview-09-2025",
+              "google/gemini-2.5-pro",
+              "google/gemini-2.5-pro-preview",
+              "google/gemini-2.5-pro-preview-05-06",
+              "google/gemini-3-flash-preview",
+              "google/gemini-3.1-flash-lite-preview",
+              "google/gemini-3.1-pro-preview",
+              "google/gemini-3.1-pro-preview-customtools",
+              "google/gemma-3-12b-it",
+              "google/gemma-3-27b-it",
+              "google/gemma-4-26b-a4b-it",
+              "google/gemma-4-26b-a4b-it:free",
+              "google/gemma-4-31b-it",
+              "google/gemma-4-31b-it:free",
+              "ibm-granite/granite-4.1-8b",
+              "inception/mercury-2",
+              "inclusionai/ling-2.6-1t:free",
+              "inclusionai/ling-2.6-flash",
+              "kwaipilot/kat-coder-pro-v2",
+              "meta-llama/llama-3.1-70b-instruct",
+              "meta-llama/llama-3.1-8b-instruct",
+              "meta-llama/llama-3.3-70b-instruct",
+              "meta-llama/llama-3.3-70b-instruct:free",
+              "meta-llama/llama-4-scout",
+              "minimax/minimax-m1",
+              "minimax/minimax-m2",
+              "minimax/minimax-m2.1",
+              "minimax/minimax-m2.5",
+              "minimax/minimax-m2.5:free",
+              "minimax/minimax-m2.7",
+              "mistralai/codestral-2508",
+              "mistralai/devstral-2512",
+              "mistralai/devstral-medium",
+              "mistralai/devstral-small",
+              "mistralai/ministral-14b-2512",
+              "mistralai/ministral-3b-2512",
+              "mistralai/ministral-8b-2512",
+              "mistralai/mistral-large",
+              "mistralai/mistral-large-2407",
+              "mistralai/mistral-large-2411",
+              "mistralai/mistral-large-2512",
+              "mistralai/mistral-medium-3",
+              "mistralai/mistral-medium-3-5",
+              "mistralai/mistral-medium-3.1",
+              "mistralai/mistral-nemo",
+              "mistralai/mistral-saba",
+              "mistralai/mistral-small-2603",
+              "mistralai/mistral-small-3.2-24b-instruct",
+              "mistralai/mixtral-8x22b-instruct",
+              "mistralai/mixtral-8x7b-instruct",
+              "mistralai/pixtral-large-2411",
+              "mistralai/voxtral-small-24b-2507",
+              "moonshotai/kimi-k2",
+              "moonshotai/kimi-k2-0905",
+              "moonshotai/kimi-k2-thinking",
+              "moonshotai/kimi-k2.5",
+              "moonshotai/kimi-k2.6",
+              "nex-agi/deepseek-v3.1-nex-n1",
+              "nvidia/llama-3.1-nemotron-70b-instruct",
+              "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+              "nvidia/nemotron-3-nano-30b-a3b",
+              "nvidia/nemotron-3-nano-30b-a3b:free",
+              "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+              "nvidia/nemotron-3-super-120b-a12b",
+              "nvidia/nemotron-3-super-120b-a12b:free",
+              "nvidia/nemotron-nano-12b-v2-vl:free",
+              "nvidia/nemotron-nano-9b-v2",
+              "nvidia/nemotron-nano-9b-v2:free",
+              "openai/gpt-3.5-turbo",
+              "openai/gpt-3.5-turbo-0613",
+              "openai/gpt-3.5-turbo-16k",
+              "openai/gpt-4",
+              "openai/gpt-4-0314",
+              "openai/gpt-4-1106-preview",
+              "openai/gpt-4-turbo",
+              "openai/gpt-4-turbo-preview",
+              "openai/gpt-4.1",
+              "openai/gpt-4.1-mini",
+              "openai/gpt-4.1-nano",
+              "openai/gpt-4o",
+              "openai/gpt-4o-2024-05-13",
+              "openai/gpt-4o-2024-08-06",
+              "openai/gpt-4o-2024-11-20",
+              "openai/gpt-4o-audio-preview",
+              "openai/gpt-4o-mini",
+              "openai/gpt-4o-mini-2024-07-18",
+              "openai/gpt-5",
+              "openai/gpt-5-codex",
+              "openai/gpt-5-mini",
+              "openai/gpt-5-nano",
+              "openai/gpt-5-pro",
+              "openai/gpt-5.1",
+              "openai/gpt-5.1-chat",
+              "openai/gpt-5.1-codex",
+              "openai/gpt-5.1-codex-max",
+              "openai/gpt-5.1-codex-mini",
+              "openai/gpt-5.2",
+              "openai/gpt-5.2-chat",
+              "openai/gpt-5.2-codex",
+              "openai/gpt-5.2-pro",
+              "openai/gpt-5.3-chat",
+              "openai/gpt-5.3-codex",
+              "openai/gpt-5.4",
+              "openai/gpt-5.4-mini",
+              "openai/gpt-5.4-nano",
+              "openai/gpt-5.4-pro",
+              "openai/gpt-5.5",
+              "openai/gpt-5.5-pro",
+              "openai/gpt-audio",
+              "openai/gpt-audio-mini",
+              "openai/gpt-chat-latest",
+              "openai/gpt-oss-120b",
+              "openai/gpt-oss-120b:free",
+              "openai/gpt-oss-20b",
+              "openai/gpt-oss-20b:free",
+              "openai/gpt-oss-safeguard-20b",
+              "openai/o1",
+              "openai/o3",
+              "openai/o3-deep-research",
+              "openai/o3-mini",
+              "openai/o3-mini-high",
+              "openai/o3-pro",
+              "openai/o4-mini",
+              "openai/o4-mini-deep-research",
+              "openai/o4-mini-high",
+              "openrouter/auto",
+              "openrouter/free",
+              "openrouter/owl-alpha",
+              "poolside/laguna-m.1:free",
+              "poolside/laguna-xs.2:free",
+              "prime-intellect/intellect-3",
+              "qwen/qwen-2.5-72b-instruct",
+              "qwen/qwen-2.5-7b-instruct",
+              "qwen/qwen-max",
+              "qwen/qwen-plus",
+              "qwen/qwen-plus-2025-07-28",
+              "qwen/qwen-plus-2025-07-28:thinking",
+              "qwen/qwen-turbo",
+              "qwen/qwen-vl-max",
+              "qwen/qwen3-14b",
+              "qwen/qwen3-235b-a22b",
+              "qwen/qwen3-235b-a22b-2507",
+              "qwen/qwen3-235b-a22b-thinking-2507",
+              "qwen/qwen3-30b-a3b",
+              "qwen/qwen3-30b-a3b-instruct-2507",
+              "qwen/qwen3-30b-a3b-thinking-2507",
+              "qwen/qwen3-32b",
+              "qwen/qwen3-8b",
+              "qwen/qwen3-coder",
+              "qwen/qwen3-coder-30b-a3b-instruct",
+              "qwen/qwen3-coder-flash",
+              "qwen/qwen3-coder-next",
+              "qwen/qwen3-coder-plus",
+              "qwen/qwen3-coder:free",
+              "qwen/qwen3-max",
+              "qwen/qwen3-max-thinking",
+              "qwen/qwen3-next-80b-a3b-instruct",
+              "qwen/qwen3-next-80b-a3b-instruct:free",
+              "qwen/qwen3-next-80b-a3b-thinking",
+              "qwen/qwen3-vl-235b-a22b-instruct",
+              "qwen/qwen3-vl-235b-a22b-thinking",
+              "qwen/qwen3-vl-30b-a3b-instruct",
+              "qwen/qwen3-vl-30b-a3b-thinking",
+              "qwen/qwen3-vl-32b-instruct",
+              "qwen/qwen3-vl-8b-instruct",
+              "qwen/qwen3-vl-8b-thinking",
+              "qwen/qwen3.5-122b-a10b",
+              "qwen/qwen3.5-27b",
+              "qwen/qwen3.5-35b-a3b",
+              "qwen/qwen3.5-397b-a17b",
+              "qwen/qwen3.5-9b",
+              "qwen/qwen3.5-flash-02-23",
+              "qwen/qwen3.5-plus-02-15",
+              "qwen/qwen3.5-plus-20260420",
+              "qwen/qwen3.6-27b",
+              "qwen/qwen3.6-35b-a3b",
+              "qwen/qwen3.6-flash",
+              "qwen/qwen3.6-max-preview",
+              "qwen/qwen3.6-plus",
+              "rekaai/reka-edge",
+              "relace/relace-search",
+              "sao10k/l3-euryale-70b",
+              "sao10k/l3.1-euryale-70b",
+              "stepfun/step-3.5-flash",
+              "tencent/hy3-preview:free",
+              "thedrummer/rocinante-12b",
+              "thedrummer/unslopnemo-12b",
+              "tngtech/deepseek-r1t2-chimera",
+              "upstage/solar-pro-3",
+              "x-ai/grok-3",
+              "x-ai/grok-3-beta",
+              "x-ai/grok-3-mini",
+              "x-ai/grok-3-mini-beta",
+              "x-ai/grok-4",
+              "x-ai/grok-4-fast",
+              "x-ai/grok-4.1-fast",
+              "x-ai/grok-4.20",
+              "x-ai/grok-4.3",
+              "x-ai/grok-code-fast-1",
+              "xiaomi/mimo-v2-flash",
+              "xiaomi/mimo-v2-omni",
+              "xiaomi/mimo-v2-pro",
+              "xiaomi/mimo-v2.5",
+              "xiaomi/mimo-v2.5-pro",
+              "z-ai/glm-4-32b",
+              "z-ai/glm-4.5",
+              "z-ai/glm-4.5-air",
+              "z-ai/glm-4.5-air:free",
+              "z-ai/glm-4.5v",
+              "z-ai/glm-4.6",
+              "z-ai/glm-4.6v",
+              "z-ai/glm-4.7",
+              "z-ai/glm-4.7-flash",
+              "z-ai/glm-5",
+              "z-ai/glm-5-turbo",
+              "z-ai/glm-5.1",
+              "z-ai/glm-5v-turbo",
+              "~anthropic/claude-haiku-latest",
+              "~anthropic/claude-opus-latest",
+              "~anthropic/claude-sonnet-latest",
+              "~google/gemini-flash-latest",
+              "~google/gemini-pro-latest",
+              "~moonshotai/kimi-latest",
+              "~openai/gpt-latest",
+              "~openai/gpt-mini-latest"
+            ]
+          },
+          "name": "OpenRouter"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "https://api.deepseek.com",
+          "catalog": true,
+          "id": "deepseek",
+          "models": [
+            {
+              "contextWindow": 1000000,
+              "id": "deepseek-v4-flash",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 384000,
+              "name": "DeepSeek V4 Flash",
+              "reasoning": true
+            },
+            {
+              "contextWindow": 1000000,
+              "id": "deepseek-v4-pro",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 384000,
+              "name": "DeepSeek V4 Pro",
+              "reasoning": true
+            }
+          ],
+          "name": "DeepSeek"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "https://api.x.ai/v1",
+          "catalog": true,
+          "id": "xai",
+          "models": {
+            "count": 25,
+            "first": {
+              "contextWindow": 131072,
+              "id": "grok-2",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 8192,
+              "name": "Grok 2",
+              "reasoning": false
+            },
+            "ids": [
+              "grok-2",
+              "grok-2-1212",
+              "grok-2-latest",
+              "grok-2-vision",
+              "grok-2-vision-1212",
+              "grok-2-vision-latest",
+              "grok-3",
+              "grok-3-fast",
+              "grok-3-fast-latest",
+              "grok-3-latest",
+              "grok-3-mini",
+              "grok-3-mini-fast",
+              "grok-3-mini-fast-latest",
+              "grok-3-mini-latest",
+              "grok-4",
+              "grok-4-1-fast",
+              "grok-4-1-fast-non-reasoning",
+              "grok-4-fast",
+              "grok-4-fast-non-reasoning",
+              "grok-4.20-0309-non-reasoning",
+              "grok-4.20-0309-reasoning",
+              "grok-4.3",
+              "grok-beta",
+              "grok-code-fast-1",
+              "grok-vision-beta"
+            ]
+          },
+          "name": "xAI"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "https://api.groq.com/openai/v1",
+          "catalog": true,
+          "id": "groq",
+          "models": {
+            "count": 18,
+            "first": {
+              "contextWindow": 131072,
+              "id": "deepseek-r1-distill-llama-70b",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 8192,
+              "name": "DeepSeek R1 Distill Llama 70B",
+              "reasoning": true
+            },
+            "ids": [
+              "deepseek-r1-distill-llama-70b",
+              "gemma2-9b-it",
+              "groq/compound",
+              "groq/compound-mini",
+              "llama-3.1-8b-instant",
+              "llama-3.3-70b-versatile",
+              "llama3-70b-8192",
+              "llama3-8b-8192",
+              "meta-llama/llama-4-maverick-17b-128e-instruct",
+              "meta-llama/llama-4-scout-17b-16e-instruct",
+              "mistral-saba-24b",
+              "moonshotai/kimi-k2-instruct",
+              "moonshotai/kimi-k2-instruct-0905",
+              "openai/gpt-oss-120b",
+              "openai/gpt-oss-20b",
+              "openai/gpt-oss-safeguard-20b",
+              "qwen-qwq-32b",
+              "qwen/qwen3-32b"
+            ]
+          },
+          "name": "Groq"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "https://api.cerebras.ai/v1",
+          "catalog": true,
+          "id": "cerebras",
+          "models": {
+            "count": 4,
+            "first": {
+              "contextWindow": 131072,
+              "id": "gpt-oss-120b",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32768,
+              "name": "GPT OSS 120B",
+              "reasoning": true
+            },
+            "ids": [
+              "gpt-oss-120b",
+              "llama3.1-8b",
+              "qwen-3-235b-a22b-instruct-2507",
+              "zai-glm-4.7"
+            ]
+          },
+          "name": "Cerebras"
+        },
+        {
+          "api": "anthropic-messages",
+          "baseUrl": "https://api.fireworks.ai/inference",
+          "catalog": true,
+          "id": "fireworks",
+          "models": {
+            "count": 19,
+            "first": {
+              "contextWindow": 163840,
+              "id": "accounts/fireworks/models/deepseek-v3p1",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 163840,
+              "name": "DeepSeek V3.1",
+              "reasoning": true
+            },
+            "ids": [
+              "accounts/fireworks/models/deepseek-v3p1",
+              "accounts/fireworks/models/deepseek-v3p2",
+              "accounts/fireworks/models/deepseek-v4-pro",
+              "accounts/fireworks/models/glm-4p5",
+              "accounts/fireworks/models/glm-4p5-air",
+              "accounts/fireworks/models/glm-4p7",
+              "accounts/fireworks/models/glm-5",
+              "accounts/fireworks/models/glm-5p1",
+              "accounts/fireworks/models/gpt-oss-120b",
+              "accounts/fireworks/models/gpt-oss-20b",
+              "accounts/fireworks/models/kimi-k2-instruct",
+              "accounts/fireworks/models/kimi-k2-thinking",
+              "accounts/fireworks/models/kimi-k2p5",
+              "accounts/fireworks/models/kimi-k2p6",
+              "accounts/fireworks/models/minimax-m2p1",
+              "accounts/fireworks/models/minimax-m2p5",
+              "accounts/fireworks/models/minimax-m2p7",
+              "accounts/fireworks/models/qwen3p6-plus",
+              "accounts/fireworks/routers/kimi-k2p5-turbo"
+            ]
+          },
+          "name": "Fireworks"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "https://router.huggingface.co/v1",
+          "catalog": true,
+          "id": "huggingface",
+          "models": {
+            "count": 22,
+            "first": {
+              "contextWindow": 204800,
+              "id": "MiniMaxAI/MiniMax-M2.1",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 131072,
+              "name": "MiniMax-M2.1",
+              "reasoning": true
+            },
+            "ids": [
+              "MiniMaxAI/MiniMax-M2.1",
+              "MiniMaxAI/MiniMax-M2.5",
+              "MiniMaxAI/MiniMax-M2.7",
+              "Qwen/Qwen3-235B-A22B-Thinking-2507",
+              "Qwen/Qwen3-Coder-480B-A35B-Instruct",
+              "Qwen/Qwen3-Coder-Next",
+              "Qwen/Qwen3-Next-80B-A3B-Instruct",
+              "Qwen/Qwen3-Next-80B-A3B-Thinking",
+              "Qwen/Qwen3.5-397B-A17B",
+              "XiaomiMiMo/MiMo-V2-Flash",
+              "deepseek-ai/DeepSeek-R1-0528",
+              "deepseek-ai/DeepSeek-V3.2",
+              "deepseek-ai/DeepSeek-V4-Pro",
+              "moonshotai/Kimi-K2-Instruct",
+              "moonshotai/Kimi-K2-Instruct-0905",
+              "moonshotai/Kimi-K2-Thinking",
+              "moonshotai/Kimi-K2.5",
+              "moonshotai/Kimi-K2.6",
+              "zai-org/GLM-4.7",
+              "zai-org/GLM-4.7-Flash",
+              "zai-org/GLM-5",
+              "zai-org/GLM-5.1"
+            ]
+          },
+          "name": "Hugging Face"
+        },
+        {
+          "api": "anthropic-messages",
+          "baseUrl": "https://api.kimi.com/coding",
+          "catalog": true,
+          "id": "kimi-coding",
+          "models": [
+            {
+              "contextWindow": 262144,
+              "id": "kimi-for-coding",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 32768,
+              "name": "Kimi For Coding",
+              "reasoning": true
+            },
+            {
+              "contextWindow": 262144,
+              "id": "kimi-k2-thinking",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32768,
+              "name": "Kimi K2 Thinking",
+              "reasoning": true
+            }
+          ],
+          "name": "Kimi Coding"
+        },
+        {
+          "api": "anthropic-messages",
+          "baseUrl": "https://api.minimax.io/anthropic",
+          "catalog": true,
+          "id": "minimax",
+          "models": {
+            "count": 2,
+            "first": {
+              "contextWindow": 204800,
+              "id": "MiniMax-M2.7",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 131072,
+              "reasoning": true
+            },
+            "ids": [
+              "MiniMax-M2.7",
+              "MiniMax-M2.7-highspeed"
+            ]
+          },
+          "name": "MiniMax"
+        },
+        {
+          "api": "anthropic-messages",
+          "baseUrl": "https://api.minimaxi.com/anthropic",
+          "catalog": true,
+          "id": "minimax-cn",
+          "models": {
+            "count": 2,
+            "first": {
+              "contextWindow": 204800,
+              "id": "MiniMax-M2.7",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 131072,
+              "reasoning": true
+            },
+            "ids": [
+              "MiniMax-M2.7",
+              "MiniMax-M2.7-highspeed"
+            ]
+          },
+          "name": "MiniMax (China)"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "https://api.moonshot.ai/v1",
+          "catalog": true,
+          "id": "moonshotai",
+          "models": {
+            "count": 7,
+            "first": {
+              "contextWindow": 131072,
+              "id": "kimi-k2-0711-preview",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 16384,
+              "name": "Kimi K2 0711",
+              "reasoning": false
+            },
+            "ids": [
+              "kimi-k2-0711-preview",
+              "kimi-k2-0905-preview",
+              "kimi-k2-thinking",
+              "kimi-k2-thinking-turbo",
+              "kimi-k2-turbo-preview",
+              "kimi-k2.5",
+              "kimi-k2.6"
+            ]
+          },
+          "name": "Moonshot AI"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "https://api.moonshot.cn/v1",
+          "catalog": true,
+          "id": "moonshotai-cn",
+          "models": {
+            "count": 7,
+            "first": {
+              "contextWindow": 131072,
+              "id": "kimi-k2-0711-preview",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 16384,
+              "name": "Kimi K2 0711",
+              "reasoning": false
+            },
+            "ids": [
+              "kimi-k2-0711-preview",
+              "kimi-k2-0905-preview",
+              "kimi-k2-thinking",
+              "kimi-k2-thinking-turbo",
+              "kimi-k2-turbo-preview",
+              "kimi-k2.5",
+              "kimi-k2.6"
+            ]
+          },
+          "name": "Moonshot AI (China)"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "https://opencode.ai/zen/go/v1",
+          "catalog": true,
+          "id": "opencode-go",
+          "models": {
+            "count": 12,
+            "first": {
+              "contextWindow": 1000000,
+              "id": "deepseek-v4-flash",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 384000,
+              "name": "DeepSeek V4 Flash",
+              "reasoning": true
+            },
+            "ids": [
+              "deepseek-v4-flash",
+              "deepseek-v4-pro",
+              "glm-5",
+              "glm-5.1",
+              "kimi-k2.5",
+              "kimi-k2.6",
+              "mimo-v2.5",
+              "mimo-v2.5-pro",
+              "minimax-m2.5",
+              "minimax-m2.7",
+              "qwen3.5-plus",
+              "qwen3.6-plus"
+            ]
+          },
+          "name": "OpenCode Go"
+        },
+        {
+          "api": "anthropic-messages",
+          "baseUrl": "https://ai-gateway.vercel.sh",
+          "catalog": true,
+          "id": "vercel-ai-gateway",
+          "models": {
+            "count": 162,
+            "first": {
+              "contextWindow": 40960,
+              "id": "alibaba/qwen-3-14b",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 16384,
+              "name": "Qwen3-14B",
+              "reasoning": true
+            },
+            "ids": [
+              "alibaba/qwen-3-14b",
+              "alibaba/qwen-3-235b",
+              "alibaba/qwen-3-30b",
+              "alibaba/qwen-3-32b",
+              "alibaba/qwen-3.6-max-preview",
+              "alibaba/qwen3-235b-a22b-thinking",
+              "alibaba/qwen3-coder",
+              "alibaba/qwen3-coder-30b-a3b",
+              "alibaba/qwen3-coder-next",
+              "alibaba/qwen3-coder-plus",
+              "alibaba/qwen3-max",
+              "alibaba/qwen3-max-preview",
+              "alibaba/qwen3-max-thinking",
+              "alibaba/qwen3-vl-thinking",
+              "alibaba/qwen3.5-flash",
+              "alibaba/qwen3.5-plus",
+              "alibaba/qwen3.6-27b",
+              "alibaba/qwen3.6-plus",
+              "anthropic/claude-3-haiku",
+              "anthropic/claude-3.5-haiku",
+              "anthropic/claude-3.7-sonnet",
+              "anthropic/claude-haiku-4.5",
+              "anthropic/claude-opus-4",
+              "anthropic/claude-opus-4.1",
+              "anthropic/claude-opus-4.5",
+              "anthropic/claude-opus-4.6",
+              "anthropic/claude-opus-4.7",
+              "anthropic/claude-sonnet-4",
+              "anthropic/claude-sonnet-4.5",
+              "anthropic/claude-sonnet-4.6",
+              "arcee-ai/trinity-large-preview",
+              "arcee-ai/trinity-large-thinking",
+              "bytedance/seed-1.6",
+              "cohere/command-a",
+              "deepseek/deepseek-r1",
+              "deepseek/deepseek-v3",
+              "deepseek/deepseek-v3.1",
+              "deepseek/deepseek-v3.1-terminus",
+              "deepseek/deepseek-v3.2",
+              "deepseek/deepseek-v3.2-thinking",
+              "deepseek/deepseek-v4-flash",
+              "deepseek/deepseek-v4-pro",
+              "google/gemini-2.0-flash",
+              "google/gemini-2.0-flash-lite",
+              "google/gemini-2.5-flash",
+              "google/gemini-2.5-flash-lite",
+              "google/gemini-2.5-pro",
+              "google/gemini-3-flash",
+              "google/gemini-3-pro-preview",
+              "google/gemini-3.1-flash-lite-preview",
+              "google/gemini-3.1-pro-preview",
+              "google/gemma-4-26b-a4b-it",
+              "google/gemma-4-31b-it",
+              "inception/mercury-2",
+              "inception/mercury-coder-small",
+              "kwaipilot/kat-coder-pro-v2",
+              "meituan/longcat-flash-chat",
+              "meta/llama-3.1-70b",
+              "meta/llama-3.1-8b",
+              "meta/llama-3.2-11b",
+              "meta/llama-3.2-90b",
+              "meta/llama-3.3-70b",
+              "meta/llama-4-maverick",
+              "meta/llama-4-scout",
+              "minimax/minimax-m2",
+              "minimax/minimax-m2.1",
+              "minimax/minimax-m2.1-lightning",
+              "minimax/minimax-m2.5",
+              "minimax/minimax-m2.5-highspeed",
+              "minimax/minimax-m2.7",
+              "minimax/minimax-m2.7-highspeed",
+              "mistral/codestral",
+              "mistral/devstral-2",
+              "mistral/devstral-small",
+              "mistral/devstral-small-2",
+              "mistral/ministral-3b",
+              "mistral/ministral-8b",
+              "mistral/mistral-medium",
+              "mistral/mistral-small",
+              "mistral/pixtral-12b",
+              "mistral/pixtral-large",
+              "moonshotai/kimi-k2",
+              "moonshotai/kimi-k2-thinking",
+              "moonshotai/kimi-k2-thinking-turbo",
+              "moonshotai/kimi-k2-turbo",
+              "moonshotai/kimi-k2.5",
+              "moonshotai/kimi-k2.6",
+              "nvidia/nemotron-nano-12b-v2-vl",
+              "nvidia/nemotron-nano-9b-v2",
+              "openai/gpt-4-turbo",
+              "openai/gpt-4.1",
+              "openai/gpt-4.1-mini",
+              "openai/gpt-4.1-nano",
+              "openai/gpt-4o",
+              "openai/gpt-4o-mini",
+              "openai/gpt-5",
+              "openai/gpt-5-chat",
+              "openai/gpt-5-codex",
+              "openai/gpt-5-mini",
+              "openai/gpt-5-nano",
+              "openai/gpt-5-pro",
+              "openai/gpt-5.1-codex",
+              "openai/gpt-5.1-codex-max",
+              "openai/gpt-5.1-codex-mini",
+              "openai/gpt-5.1-instant",
+              "openai/gpt-5.1-thinking",
+              "openai/gpt-5.2",
+              "openai/gpt-5.2-chat",
+              "openai/gpt-5.2-codex",
+              "openai/gpt-5.2-pro",
+              "openai/gpt-5.3-chat",
+              "openai/gpt-5.3-codex",
+              "openai/gpt-5.4",
+              "openai/gpt-5.4-mini",
+              "openai/gpt-5.4-nano",
+              "openai/gpt-5.4-pro",
+              "openai/gpt-5.5",
+              "openai/gpt-5.5-pro",
+              "openai/gpt-oss-20b",
+              "openai/gpt-oss-safeguard-20b",
+              "openai/o1",
+              "openai/o3",
+              "openai/o3-deep-research",
+              "openai/o3-mini",
+              "openai/o3-pro",
+              "openai/o4-mini",
+              "perplexity/sonar",
+              "perplexity/sonar-pro",
+              "xai/grok-3",
+              "xai/grok-3-fast",
+              "xai/grok-3-mini",
+              "xai/grok-3-mini-fast",
+              "xai/grok-4",
+              "xai/grok-4-fast-non-reasoning",
+              "xai/grok-4-fast-reasoning",
+              "xai/grok-4.1-fast-non-reasoning",
+              "xai/grok-4.1-fast-reasoning",
+              "xai/grok-4.20-multi-agent",
+              "xai/grok-4.20-multi-agent-beta",
+              "xai/grok-4.20-non-reasoning",
+              "xai/grok-4.20-non-reasoning-beta",
+              "xai/grok-4.20-reasoning",
+              "xai/grok-4.20-reasoning-beta",
+              "xai/grok-4.3",
+              "xai/grok-code-fast-1",
+              "xiaomi/mimo-v2-flash",
+              "xiaomi/mimo-v2-pro",
+              "xiaomi/mimo-v2.5",
+              "xiaomi/mimo-v2.5-pro",
+              "zai/glm-4.5",
+              "zai/glm-4.5-air",
+              "zai/glm-4.5v",
+              "zai/glm-4.6",
+              "zai/glm-4.6v",
+              "zai/glm-4.6v-flash",
+              "zai/glm-4.7",
+              "zai/glm-4.7-flash",
+              "zai/glm-4.7-flashx",
+              "zai/glm-5",
+              "zai/glm-5-turbo",
+              "zai/glm-5.1",
+              "zai/glm-5v-turbo"
+            ]
+          },
+          "name": "Vercel AI Gateway"
+        },
+        {
+          "api": "anthropic-messages",
+          "baseUrl": "https://api.xiaomimimo.com/anthropic",
+          "catalog": true,
+          "id": "xiaomi",
+          "models": {
+            "count": 5,
+            "first": {
+              "contextWindow": 262144,
+              "id": "mimo-v2-flash",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 65536,
+              "name": "MiMo-V2-Flash",
+              "reasoning": true
+            },
+            "ids": [
+              "mimo-v2-flash",
+              "mimo-v2-omni",
+              "mimo-v2-pro",
+              "mimo-v2.5",
+              "mimo-v2.5-pro"
+            ]
+          },
+          "name": "Xiaomi MiMo"
+        },
+        {
+          "api": "anthropic-messages",
+          "baseUrl": "https://token-plan-ams.xiaomimimo.com/anthropic",
+          "catalog": true,
+          "id": "xiaomi-token-plan-ams",
+          "models": {
+            "count": 5,
+            "first": {
+              "contextWindow": 262144,
+              "id": "mimo-v2-flash",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 65536,
+              "name": "MiMo-V2-Flash",
+              "reasoning": true
+            },
+            "ids": [
+              "mimo-v2-flash",
+              "mimo-v2-omni",
+              "mimo-v2-pro",
+              "mimo-v2.5",
+              "mimo-v2.5-pro"
+            ]
+          },
+          "name": "xiaomi-token-plan-ams"
+        },
+        {
+          "api": "anthropic-messages",
+          "baseUrl": "https://token-plan-cn.xiaomimimo.com/anthropic",
+          "catalog": true,
+          "id": "xiaomi-token-plan-cn",
+          "models": {
+            "count": 5,
+            "first": {
+              "contextWindow": 262144,
+              "id": "mimo-v2-flash",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 65536,
+              "name": "MiMo-V2-Flash",
+              "reasoning": true
+            },
+            "ids": [
+              "mimo-v2-flash",
+              "mimo-v2-omni",
+              "mimo-v2-pro",
+              "mimo-v2.5",
+              "mimo-v2.5-pro"
+            ]
+          },
+          "name": "xiaomi-token-plan-cn"
+        },
+        {
+          "api": "anthropic-messages",
+          "baseUrl": "https://token-plan-sgp.xiaomimimo.com/anthropic",
+          "catalog": true,
+          "id": "xiaomi-token-plan-sgp",
+          "models": {
+            "count": 5,
+            "first": {
+              "contextWindow": 262144,
+              "id": "mimo-v2-flash",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 65536,
+              "name": "MiMo-V2-Flash",
+              "reasoning": true
+            },
+            "ids": [
+              "mimo-v2-flash",
+              "mimo-v2-omni",
+              "mimo-v2-pro",
+              "mimo-v2.5",
+              "mimo-v2.5-pro"
+            ]
+          },
+          "name": "xiaomi-token-plan-sgp"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+          "catalog": true,
+          "id": "zai",
+          "models": {
+            "count": 5,
+            "first": {
+              "contextWindow": 131072,
+              "id": "glm-4.5-air",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 98304,
+              "name": "GLM-4.5-Air",
+              "reasoning": true
+            },
+            "ids": [
+              "glm-4.5-air",
+              "glm-4.7",
+              "glm-5-turbo",
+              "glm-5.1",
+              "glm-5v-turbo"
+            ]
+          },
+          "name": "Z.ai Coding Plan"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "http://localhost:11434/v1",
+          "catalog": false,
+          "id": "ollama",
+          "keyless": true,
+          "models": [],
+          "name": "Ollama (local)"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "http://localhost:1234/v1",
+          "catalog": false,
+          "id": "lmstudio",
+          "keyless": true,
+          "models": {
+            "count": 0,
+            "first": null,
+            "ids": []
+          },
+          "name": "LM Studio (local)"
+        }
+      ],
+      "status": 200
+    },
+    "step": "presets"
+  },
+  {
+    "body": {
+      "models": [
+        {
+          "contextWindow": 100000,
+          "id": "fake-model",
+          "input": [
+            "text"
+          ],
+          "maxTokens": 1000,
+          "name": "fake-model",
+          "provider": "fake",
+          "reasoning": true
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/models",
+    "status": 200,
+    "step": "models"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "fake-model",
+        "provider": "fake",
+        "thinking": "low"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 201,
+    "step": "create a UI backend"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "Backend ID already exists"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 409,
+    "step": "create it again"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend ID"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "an ID with bad characters"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend ID"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "an ID starting with a dash"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend ID"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "an ID of 81 characters"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend ID"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "the reserved ID default-model"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend ID"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "the reserved ID __proto__"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend ID"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "the reserved ID constructor"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend ID"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "a numeric ID"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "File-managed backends are read-only"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 409,
+    "step": "the file-managed ID"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "File-managed backends are read-only"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 409,
+    "step": "the file-managed ID with an invalid body"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "duplicate model IDs"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "no models"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "a zero context window"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "fractional max tokens"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "an empty input list"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "an unknown input kind"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "an empty model name"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "an unknown model field"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "an unknown field"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "an unknown api"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "an ftp base URL"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "a base URL with a query"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "a base URL with a hash"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "a base URL with credentials"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "internal_error",
+        "message": "Internal server error"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 500,
+    "step": "a base URL that is not a URL"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Unknown backend preset"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "an unknown preset"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Unknown backend preset"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "a preset that is not from the catalog"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Unknown backend preset"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "a preset whose api differs"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend ID"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 400,
+    "step": "no body"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "fake-model",
+        "provider": "fake",
+        "thinking": "low"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-responses",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "openai-preset",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 400000,
+              "id": "gpt-5-mini",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 128000,
+              "reasoning": true,
+              "thinkingLevelMap": {
+                "off": null
+              }
+            },
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "not-in-the-catalog",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "openai-preset",
+          "opencodeGo": false,
+          "preset": "openai",
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 201,
+    "step": "create from the openai preset"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "fake-model",
+        "provider": "fake",
+        "thinking": "low"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-responses",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "openai-preset",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 400000,
+              "id": "gpt-5-mini",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 128000,
+              "reasoning": true,
+              "thinkingLevelMap": {
+                "off": null
+              }
+            },
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "not-in-the-catalog",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "openai-preset",
+          "opencodeGo": false,
+          "preset": "openai",
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/ui",
+    "status": 200,
+    "step": "update without apiKey keeps the key"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "fake-model",
+        "provider": "fake",
+        "thinking": "low"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-responses",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "openai-preset",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 400000,
+              "id": "gpt-5-mini",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 128000,
+              "reasoning": true,
+              "thinkingLevelMap": {
+                "off": null
+              }
+            },
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "not-in-the-catalog",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "openai-preset",
+          "opencodeGo": false,
+          "preset": "openai",
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/openai-preset",
+    "status": 200,
+    "step": "update with an empty apiKey clears it"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Backend or authorization session not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/nope",
+    "status": 404,
+    "step": "update an unknown backend"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "File-managed backends are read-only"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/fake",
+    "status": 409,
+    "step": "update the file-managed backend"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend ID"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/constructor",
+    "status": 400,
+    "step": "update with a reserved ID"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/ui",
+    "status": 400,
+    "step": "update with an invalid body"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/ui",
+    "status": 400,
+    "step": "update without a body"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Backend or authorization session not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/nope",
+    "status": 404,
+    "step": "delete an unknown backend"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "File-managed backends are read-only"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/fake",
+    "status": 409,
+    "step": "delete the file-managed backend"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "fake-model",
+        "provider": "fake",
+        "thinking": "low"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-responses",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "openai-preset",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 400000,
+              "id": "gpt-5-mini",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 128000,
+              "reasoning": true,
+              "thinkingLevelMap": {
+                "off": null
+              }
+            },
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "not-in-the-catalog",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "openai-preset",
+          "opencodeGo": false,
+          "preset": "openai",
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/oauth:anthropic",
+    "status": 200,
+    "step": "delete an OAuth backend that is not connected"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Backend or authorization session not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/oauth:nope",
+    "status": 404,
+    "step": "delete an unknown OAuth backend"
+  },
+  {
+    "body": {
+      "code": "FST_ERR_MAX_PARAM_LENGTH",
+      "error": "Bad Request",
+      "message": "'/api/providers/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' is exceeding the max param length",
+      "statusCode": 414
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "status": 414,
+    "step": "delete with an ID over 100 characters"
+  },
+  {
+    "observed": {
+      "data": [
+        {
+          "architecture": {
+            "input_modalities": [
+              "text",
+              "image"
+            ]
+          },
+          "context_length": 131072,
+          "id": "b-model",
+          "object": "model",
+          "supported_parameters": [
+            "tools",
+            "reasoning"
+          ],
+          "top_provider": {
+            "context_length": 1,
+            "max_completion_tokens": 8192
+          }
+        },
+        {
+          "context_window": 4096,
+          "id": "a-model",
+          "max_output_tokens": 1024,
+          "name": "A Model"
+        },
+        {
+          "id": "b-model",
+          "name": "duplicate, ignored"
+        },
+        {
+          "object": "model"
+        },
+        {
+          "id": 42,
+          "name": "named-by-name"
+        },
+        {
+          "id": "bad\u0001id"
+        },
+        {
+          "display_name": "C Display",
+          "id": "c-model",
+          "max_completion_tokens": 0,
+          "max_model_len": 100000001,
+          "name": "bad\u0007name"
+        },
+        {
+          "architecture": {
+            "input_modalities": "image"
+          },
+          "context_length": 1.5,
+          "id": "d-model",
+          "max_context_length": 2048,
+          "name": "d-model",
+          "supported_parameters": "reasoning",
+          "top_provider": {
+            "context_length": 9999
+          }
+        },
+        {
+          "model": "from-model-field"
+        },
+        {
+          "id": "Zeta"
+        },
+        {
+          "id": "alpha"
+        },
+        "a string",
+        null
+      ],
+      "object": "list"
+    },
+    "step": "scripted OpenAI model list"
+  },
+  {
+    "body": {
+      "models": [
+        {
+          "contextWindow": 4096,
+          "id": "a-model",
+          "known": false,
+          "maxTokens": 1024,
+          "name": "A Model"
+        },
+        {
+          "id": "alpha",
+          "known": false
+        },
+        {
+          "contextWindow": 131072,
+          "id": "b-model",
+          "input": [
+            "text",
+            "image"
+          ],
+          "known": false,
+          "maxTokens": 8192,
+          "reasoning": true
+        },
+        {
+          "id": "c-model",
+          "known": false,
+          "name": "C Display"
+        },
+        {
+          "contextWindow": 2048,
+          "id": "d-model",
+          "known": false
+        },
+        {
+          "id": "from-model-field",
+          "known": false
+        },
+        {
+          "id": "named-by-name",
+          "known": false
+        },
+        {
+          "id": "Zeta",
+          "known": false
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 200,
+    "step": "discover an OpenAI-style list"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover an OpenAI-style list: provider saw"
+  },
+  {
+    "observed": {
+      "models": [
+        {
+          "model": "llama3:8b",
+          "name": "llama3:8b",
+          "size": 1
+        },
+        {
+          "model": "only-model"
+        },
+        {
+          "details": {},
+          "name": "named"
+        }
+      ]
+    },
+    "step": "scripted Ollama model list"
+  },
+  {
+    "body": {
+      "models": [
+        {
+          "id": "llama3:8b",
+          "known": false
+        },
+        {
+          "id": "named",
+          "known": false
+        },
+        {
+          "id": "only-model",
+          "known": false
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 200,
+    "step": "discover an Ollama-style list (openai-chat, no key)"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover an Ollama-style list (openai-chat, no key): provider saw"
+  },
+  {
+    "body": {
+      "models": [
+        {
+          "id": "bare",
+          "known": false
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 200,
+    "step": "discover a bare array (openai-responses, trailing slashes)"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover a bare array (openai-responses, trailing slashes): provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_error",
+        "message": "The endpoint returned an unrecognized model list."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 502,
+    "step": "discover: an unrecognized object"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover: an unrecognized object: provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_error",
+        "message": "The endpoint returned an unrecognized model list."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 502,
+    "step": "discover: data that is not a list"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover: data that is not a list: provider saw"
+  },
+  {
+    "body": {
+      "models": []
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 200,
+    "step": "discover: an empty list"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover: an empty list: provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_error",
+        "message": "The endpoint returned an unrecognized model list."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 502,
+    "step": "discover: invalid JSON"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover: invalid JSON: provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_error",
+        "message": "The endpoint rejected the API key (HTTP 401). Check the key and try again."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 502,
+    "step": "discover: HTTP 401"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover: HTTP 401: provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_error",
+        "message": "The endpoint rejected the API key (HTTP 403). Check the key and try again."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 502,
+    "step": "discover: HTTP 403"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover: HTTP 403: provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_error",
+        "message": "This endpoint does not list its models (HTTP 404). Add model IDs manually."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 502,
+    "step": "discover: HTTP 404"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover: HTTP 404: provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_error",
+        "message": "The endpoint is rate limiting requests (HTTP 429). Try again later."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 502,
+    "step": "discover: HTTP 429"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover: HTTP 429: provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_error",
+        "message": "The endpoint returned HTTP 500 when listing models."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 502,
+    "step": "discover: HTTP 500"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover: HTTP 500: provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_error",
+        "message": "The endpoint returned HTTP 503 when listing models."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 502,
+    "step": "discover: HTTP 503"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover: HTTP 503: provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_error",
+        "message": "The endpoint redirected the request. Use the final base URL."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 502,
+    "step": "discover: a redirect"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover: a redirect: provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_error",
+        "message": "Cannot reach the endpoint from the gateway. Check the base URL."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 502,
+    "step": "discover: an unreachable endpoint"
+  },
+  {
+    "body": {
+      "models": [
+        {
+          "id": "claude-x",
+          "known": false,
+          "name": "Claude X"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 200,
+    "step": "discover through the Anthropic API"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "anthropic-version": "2023-06-01",
+          "x-api-key": "anthropic-key"
+        },
+        "request": "GET /v1/models?limit=1000"
+      }
+    ],
+    "step": "discover through the Anthropic API: provider saw"
+  },
+  {
+    "body": {
+      "models": [
+        {
+          "contextWindow": 128000,
+          "id": "gpt-4o-mini",
+          "input": [
+            "text",
+            "image"
+          ],
+          "known": true,
+          "maxTokens": 16384,
+          "name": "GPT-4o mini",
+          "reasoning": false
+        },
+        {
+          "contextWindow": 400000,
+          "id": "gpt-5-mini",
+          "input": [
+            "text",
+            "image"
+          ],
+          "known": true,
+          "maxTokens": 128000,
+          "name": "Renamed by the endpoint",
+          "reasoning": true
+        },
+        {
+          "contextWindow": 5,
+          "id": "not-in-the-catalog",
+          "known": false
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 200,
+    "step": "discover with the openai preset"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover with the openai preset: provider saw"
+  },
+  {
+    "body": {
+      "models": [
+        {
+          "id": "m",
+          "known": false
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 200,
+    "step": "discover with an unknown preset"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer probe-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover with an unknown preset: provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 400,
+    "step": "discover: an ftp base URL"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 400,
+    "step": "discover: a base URL with a query"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 400,
+    "step": "discover: a base URL with a hash"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 400,
+    "step": "discover: a base URL with credentials"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "internal_error",
+        "message": "Internal server error"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 500,
+    "step": "discover: not a URL"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 400,
+    "step": "discover: an unknown field"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 400,
+    "step": "discover: an unknown api"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 400,
+    "step": "discover: no base URL"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 400,
+    "step": "discover: no body"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "internal_error",
+        "message": "Internal server error"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 500,
+    "step": "discover: malformed JSON"
+  },
+  {
+    "body": {
+      "models": []
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 200,
+    "step": "discover reusing the saved key of a UI backend"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer ui-key"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover reusing the saved key of a UI backend: provider saw"
+  },
+  {
+    "body": {
+      "models": []
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 200,
+    "step": "discover with an empty key and a UI backend's ID"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover with an empty key and a UI backend's ID: provider saw"
+  },
+  {
+    "body": {
+      "models": []
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 200,
+    "step": "discover with the file-managed backend's ID (its key is not reused)"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover with the file-managed backend's ID (its key is not reused): provider saw"
+  },
+  {
+    "body": {
+      "models": []
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 200,
+    "step": "discover with an unknown backend ID"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover with an unknown backend ID: provider saw"
+  },
+  {
+    "body": {
+      "latencyMs": "<ms>",
+      "message": "probe-model answered in <ms> ms.",
+      "ok": true
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/test",
+    "status": 200,
+    "step": "test a connection"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer test-key-2"
+        },
+        "request": "POST /v1/chat/completions"
+      }
+    ],
+    "step": "test a connection: provider saw"
+  },
+  {
+    "observed": [
+      {
+        "max_completion_tokens": 32,
+        "messages": [
+          {
+            "content": "This is a connection test. Reply with OK.",
+            "role": "developer"
+          },
+          {
+            "content": "ping",
+            "role": "user"
+          }
+        ],
+        "model": "probe-model",
+        "store": false,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      }
+    ],
+    "step": "test a connection: request body"
+  },
+  {
+    "body": {
+      "latencyMs": "<ms>",
+      "message": "Model provider request failed.",
+      "ok": false
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/test",
+    "status": 200,
+    "step": "test a connection: HTTP 500"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer test-key-2"
+        },
+        "request": "POST /v1/chat/completions"
+      }
+    ],
+    "step": "test a connection: HTTP 500: provider saw"
+  },
+  {
+    "body": {
+      "latencyMs": "<ms>",
+      "message": "Model provider request failed.",
+      "ok": false
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/test",
+    "status": 200,
+    "step": "test a connection: HTTP 401"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer test-key-2"
+        },
+        "request": "POST /v1/chat/completions"
+      }
+    ],
+    "step": "test a connection: HTTP 401: provider saw"
+  },
+  {
+    "body": {
+      "latencyMs": "<ms>",
+      "message": "Model provider request failed.",
+      "ok": false
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/test",
+    "status": 200,
+    "step": "test a connection: an unreachable endpoint"
+  },
+  {
+    "body": {
+      "latencyMs": "<ms>",
+      "message": "probe-model answered in <ms> ms.",
+      "ok": true
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/test",
+    "status": 200,
+    "step": "test a connection reusing a UI backend's key"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer ui-key"
+        },
+        "request": "POST /v1/chat/completions"
+      }
+    ],
+    "step": "test a connection reusing a UI backend's key: provider saw"
+  },
+  {
+    "body": {
+      "latencyMs": "<ms>",
+      "message": "probe-model answered in <ms> ms.",
+      "ok": true
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/test",
+    "status": 200,
+    "step": "test a connection with the file-managed backend's ID"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer pirc-no-api-key"
+        },
+        "request": "POST /v1/chat/completions"
+      }
+    ],
+    "step": "test a connection with the file-managed backend's ID: provider saw"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/test",
+    "status": 400,
+    "step": "test a connection: no model"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/test",
+    "status": 400,
+    "step": "test a connection: an unknown model field"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "internal_error",
+        "message": "Internal server error"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/test",
+    "status": 500,
+    "step": "test a connection: a base URL that is not a URL"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Unknown backend preset"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/test",
+    "status": 400,
+    "step": "test a connection: an unknown preset"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/test",
+    "status": 400,
+    "step": "test a connection: an unknown field"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "gpt-5-mini",
+        "provider": "openai-preset",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-responses",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "openai-preset",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 400000,
+              "id": "gpt-5-mini",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 128000,
+              "reasoning": true,
+              "thinkingLevelMap": {
+                "off": null
+              }
+            },
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "not-in-the-catalog",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "openai-preset",
+          "opencodeGo": false,
+          "preset": "openai",
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/default-model",
+    "status": 200,
+    "step": "set the default model"
+  },
+  {
+    "body": {
+      "models": [
+        {
+          "contextWindow": 200000,
+          "id": "ui-model",
+          "input": [
+            "text"
+          ],
+          "maxTokens": 32000,
+          "name": "ui-model",
+          "provider": "ui",
+          "reasoning": true
+        },
+        {
+          "contextWindow": 1000,
+          "id": "ui-small",
+          "input": [
+            "text",
+            "image"
+          ],
+          "maxTokens": 100,
+          "name": "UI small, renamed",
+          "provider": "ui",
+          "reasoning": false
+        },
+        {
+          "contextWindow": 400000,
+          "id": "gpt-5-mini",
+          "input": [
+            "text",
+            "image"
+          ],
+          "maxTokens": 128000,
+          "name": "gpt-5-mini",
+          "provider": "openai-preset",
+          "reasoning": true
+        },
+        {
+          "contextWindow": 200000,
+          "id": "not-in-the-catalog",
+          "input": [
+            "text"
+          ],
+          "maxTokens": 32000,
+          "name": "not-in-the-catalog",
+          "provider": "openai-preset",
+          "reasoning": false
+        },
+        {
+          "contextWindow": 100000,
+          "id": "fake-model",
+          "input": [
+            "text"
+          ],
+          "maxTokens": 1000,
+          "name": "fake-model",
+          "provider": "fake",
+          "reasoning": true
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/models",
+    "status": 200,
+    "step": "models with that default"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Model is not configured"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/default-model",
+    "status": 400,
+    "step": "default model: an unknown model"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Model is not configured"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/default-model",
+    "status": 400,
+    "step": "default model: an unknown provider"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/default-model",
+    "status": 400,
+    "step": "default model: an extra field"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/default-model",
+    "status": 400,
+    "step": "default model: an unknown thinking level"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid backend settings"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/default-model",
+    "status": 400,
+    "step": "default model: a string"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "fake-model",
+        "provider": "fake",
+        "thinking": "low"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-responses",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "openai-preset",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 400000,
+              "id": "gpt-5-mini",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 128000,
+              "reasoning": true,
+              "thinkingLevelMap": {
+                "off": null
+              }
+            },
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "not-in-the-catalog",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "openai-preset",
+          "opencodeGo": false,
+          "preset": "openai",
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/default-model",
+    "status": 200,
+    "step": "clear the default model (null)"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "gpt-5-mini",
+        "provider": "openai-preset",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-responses",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "openai-preset",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 400000,
+              "id": "gpt-5-mini",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 128000,
+              "reasoning": true,
+              "thinkingLevelMap": {
+                "off": null
+              }
+            },
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "not-in-the-catalog",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "openai-preset",
+          "opencodeGo": false,
+          "preset": "openai",
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/default-model",
+    "status": 200,
+    "step": "set it again"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "fake-model",
+        "provider": "fake",
+        "thinking": "low"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-responses",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "openai-preset",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 400000,
+              "id": "gpt-5-mini",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 128000,
+              "reasoning": true,
+              "thinkingLevelMap": {
+                "off": null
+              }
+            },
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "not-in-the-catalog",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "openai-preset",
+          "opencodeGo": false,
+          "preset": "openai",
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/default-model",
+    "status": 200,
+    "step": "clear the default model (no body)"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "gpt-5-mini",
+        "provider": "openai-preset",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-responses",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "openai-preset",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 400000,
+              "id": "gpt-5-mini",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 128000,
+              "reasoning": true,
+              "thinkingLevelMap": {
+                "off": null
+              }
+            },
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "not-in-the-catalog",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "openai-preset",
+          "opencodeGo": false,
+          "preset": "openai",
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/default-model",
+    "status": 200,
+    "step": "set it once more"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "fake-model",
+        "provider": "fake",
+        "thinking": "low"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/openai-preset",
+    "status": 200,
+    "step": "delete the default model's backend"
+  },
+  {
+    "body": {
+      "models": [
+        {
+          "contextWindow": 200000,
+          "id": "ui-model",
+          "input": [
+            "text"
+          ],
+          "maxTokens": 32000,
+          "name": "ui-model",
+          "provider": "ui",
+          "reasoning": true
+        },
+        {
+          "contextWindow": 1000,
+          "id": "ui-small",
+          "input": [
+            "text",
+            "image"
+          ],
+          "maxTokens": 100,
+          "name": "UI small, renamed",
+          "provider": "ui",
+          "reasoning": false
+        },
+        {
+          "contextWindow": 100000,
+          "id": "fake-model",
+          "input": [
+            "text"
+          ],
+          "maxTokens": 1000,
+          "name": "fake-model",
+          "provider": "fake",
+          "reasoning": true
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/models",
+    "status": 200,
+    "step": "models after the delete"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/default-model",
+    "status": 200,
+    "step": "make a UI backend's model the default"
+  },
+  {
+    "observed": {
+      "model": {
+        "id": "ui-model",
+        "provider": "ui"
+      },
+      "thinkingLevel": "high"
+    },
+    "step": "the new session's agent"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "command-1",
+        "payload": {
+          "message": "Say hello",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:1>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:2>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:1>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 202,
+    "step": "prompt"
+  },
+  {
+    "observed": {
+      "api": "openai-completions",
+      "content": [
+        {
+          "text": "Hello through the UI backend.",
+          "type": "text"
+        }
+      ],
+      "errorMessage": null,
+      "model": "ui-model",
+      "provider": "ui",
+      "stopReason": "stop"
+    },
+    "step": "the run's assistant message"
+  },
+  {
+    "observed": [
+      {
+        "model": "ui-model",
+        "reasoning_effort": "high"
+      }
+    ],
+    "step": "the run: model requests"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Bearer ui-key"
+        },
+        "request": "POST /v1/chat/completions"
+      }
+    ],
+    "step": "the run: provider saw"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-only-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 201,
+    "step": "create a UI backend named like a later file provider"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/providers",
+    "status": 200,
+    "step": "providers after SIGHUP (the file provider shadows the UI one)"
+  },
+  {
+    "body": {
+      "models": [
+        {
+          "contextWindow": 200000,
+          "id": "ui-model",
+          "input": [
+            "text"
+          ],
+          "maxTokens": 32000,
+          "name": "ui-model",
+          "provider": "ui",
+          "reasoning": true
+        },
+        {
+          "contextWindow": 1000,
+          "id": "ui-small",
+          "input": [
+            "text",
+            "image"
+          ],
+          "maxTokens": 100,
+          "name": "UI small, renamed",
+          "provider": "ui",
+          "reasoning": false
+        },
+        {
+          "contextWindow": 200000,
+          "id": "second-model",
+          "input": [
+            "text"
+          ],
+          "maxTokens": 32000,
+          "name": "Second",
+          "provider": "second",
+          "reasoning": false
+        },
+        {
+          "contextWindow": 100000,
+          "id": "fake-model",
+          "input": [
+            "text"
+          ],
+          "maxTokens": 1000,
+          "name": "fake-model",
+          "provider": "fake",
+          "reasoning": true
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/models",
+    "status": 200,
+    "step": "models after SIGHUP"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "File-managed backends are read-only"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/second",
+    "status": 409,
+    "step": "update the shadowed backend"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "File-managed backends are read-only"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/second",
+    "status": 409,
+    "step": "delete the shadowed backend"
+  },
+  {
+    "body": {
+      "models": []
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers/discover",
+    "status": 200,
+    "step": "discover with the shadowed backend's ID (its saved key is not reused)"
+  },
+  {
+    "observed": [
+      {
+        "headers": {
+          "accept": "application/json"
+        },
+        "request": "GET /v1/models"
+      }
+    ],
+    "step": "discover with the shadowed backend's ID (its saved key is not reused): provider saw"
+  },
+  {
+    "observed": {
+      "status": 200,
+      "unchanged": true
+    },
+    "step": "invalid models files on SIGHUP leave the providers unchanged"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "test",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "m",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "test",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 201,
+    "step": "create a backend named test"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "test",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "m2",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "test",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/test",
+    "status": 200,
+    "step": "edit the backend named test"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/test",
+    "status": 200,
+    "step": "delete the backend named test"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Backend or authorization session not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/test",
+    "status": 404,
+    "step": "delete test again"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "discover",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "m",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "discover",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 201,
+    "step": "create a backend named discover"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "discover",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "m2",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "discover",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/discover",
+    "status": 200,
+    "step": "edit the backend named discover"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/discover",
+    "status": 200,
+    "step": "delete the backend named discover"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Backend or authorization session not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/discover",
+    "status": 404,
+    "step": "delete discover again"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "presets",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "m",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "presets",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 201,
+    "step": "create a backend named presets"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "presets",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "m2",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "presets",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/presets",
+    "status": 200,
+    "step": "edit the backend named presets"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/presets",
+    "status": 200,
+    "step": "delete the backend named presets"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Backend or authorization session not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/presets",
+    "status": 404,
+    "step": "delete presets again"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Backend or authorization session not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/default-model",
+    "status": 404,
+    "step": "delete default-model"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Backend or authorization session not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/providers/presets",
+    "status": 404,
+    "step": "edit a backend named presets that does not exist"
+  },
+  {
+    "body": {
+      "error": "Not Found",
+      "message": "Route GET:/api/providers/test not found",
+      "statusCode": 404
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/providers/test",
+    "status": 404,
+    "step": "GET a static route of another method"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": false,
+          "id": "ab",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "m",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": false
+            }
+          ],
+          "name": "ab",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/providers",
+    "status": 201,
+    "step": "create a backend named ab"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/providers/%61b",
+    "status": 200,
+    "step": "delete it by an escaped ID"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Unknown OAuth provider"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions",
+    "status": 400,
+    "step": "start a login: an unknown provider"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Explicit consent to enable known GitHub Copilot models is required"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions",
+    "status": 400,
+    "step": "start a login: github-copilot without policy consent"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Explicit consent to enable known GitHub Copilot models is required"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions",
+    "status": 400,
+    "step": "start a login: github-copilot with policyConsent false"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions",
+    "status": 400,
+    "step": "start a login: an extra field"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions",
+    "status": 400,
+    "step": "start a login: no providerId"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions",
+    "status": 400,
+    "step": "start a login: an empty providerId"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions",
+    "status": 400,
+    "step": "start a login: no body"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Backend or authorization session not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/provider-auth/sessions/nope",
+    "status": 404,
+    "step": "status of an unknown login"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Backend or authorization session not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/provider-auth/sessions/nope",
+    "status": 404,
+    "step": "cancel an unknown login"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Backend or authorization session not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/nope/input",
+    "status": 404,
+    "step": "answer an unknown login"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/nope/input",
+    "status": 400,
+    "step": "answer an unknown login with an invalid body"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Backend or authorization session not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/provider-auth/sessions/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "status": 404,
+    "step": "status of a login with a 100-character ID"
+  },
+  {
+    "body": {
+      "code": "FST_ERR_MAX_PARAM_LENGTH",
+      "error": "Bad Request",
+      "message": "'/api/provider-auth/sessions/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' is exceeding the max param length",
+      "statusCode": 414
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/provider-auth/sessions/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "status": 414,
+    "step": "status of a login with a 101-character ID"
+  },
+  {
+    "body": {
+      "code": "FST_ERR_MAX_PARAM_LENGTH",
+      "error": "Bad Request",
+      "message": "'/api/provider-auth/sessions/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/input' is exceeding the max param length",
+      "statusCode": 414
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/provider-auth/sessions/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/input",
+    "status": 414,
+    "step": "answer a login with a 101-character ID"
+  },
+  {
+    "body": {
+      "defaultModel": {
+        "id": "ui-model",
+        "provider": "ui",
+        "thinking": "high"
+      },
+      "oauthProviders": [
+        {
+          "connected": false,
+          "id": "anthropic",
+          "modelCount": 23,
+          "name": "Anthropic (Claude Pro/Max)",
+          "providerId": "oauth:anthropic",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        },
+        {
+          "connected": false,
+          "id": "github-copilot",
+          "modelCount": 26,
+          "name": "GitHub Copilot",
+          "providerId": "oauth:github-copilot",
+          "requiresPolicyConsent": true,
+          "usesCallbackServer": false
+        },
+        {
+          "connected": false,
+          "id": "openai-codex",
+          "modelCount": 10,
+          "name": "ChatGPT Plus/Pro (Codex Subscription)",
+          "providerId": "oauth:openai-codex",
+          "requiresPolicyConsent": false,
+          "usesCallbackServer": true
+        }
+      ],
+      "providers": [
+        {
+          "api": "openai-completions",
+          "baseUrl": "<llm>",
+          "hasApiKey": true,
+          "id": "ui",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "ui-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "reasoning": true
+            },
+            {
+              "compat": {},
+              "contextWindow": 1000,
+              "id": "ui-small",
+              "input": [
+                "text",
+                "image"
+              ],
+              "maxTokens": 100,
+              "name": "UI small, renamed",
+              "reasoning": false
+            }
+          ],
+          "name": "ui",
+          "opencodeGo": false,
+          "readOnly": false,
+          "source": "ui"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "second",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 200000,
+              "id": "second-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 32000,
+              "name": "Second",
+              "reasoning": false
+            }
+          ],
+          "name": "second",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        },
+        {
+          "api": "openai-completions",
+          "hasApiKey": true,
+          "id": "fake",
+          "models": [
+            {
+              "compat": {},
+              "contextWindow": 100000,
+              "id": "fake-model",
+              "input": [
+                "text"
+              ],
+              "maxTokens": 1000,
+              "reasoning": true
+            }
+          ],
+          "name": "fake",
+          "opencodeGo": false,
+          "readOnly": true,
+          "source": "file"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/providers",
+    "status": 200,
+    "step": "providers at the end"
+  }
+]
