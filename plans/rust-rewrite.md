@@ -132,6 +132,12 @@ Done 2026-10-10. With `PIRC_CONFORMANCE_GATEWAY_BIN=target/debug/pirc-gateway` e
 
 ### M3 Model backends (removes pi-ai)
 
+Decided with the user before starting (2026-10-11):
+
+- **OAuth runs in the gateway process** (tokio tasks with abort), not in an `oauth-worker` subprocess: the subprocess isolated third-party pi-ai code, and the Rust code reads no gateway environment. Behavior is kept: prompt/manual/select prompts, the 10-minute deadline, serialized refresh, generation checks.
+- **Both Anthropic transports are ported:** the native `agent/providers/anthropic.ts` (plain `anthropic-messages` providers) and pi-ai's (OAuth, presets, model-level `api`), so requests stay byte-identical to TS.
+- **Cadence as in M2:** one commit per sub-item, each starting with conformance or parity recordings from the TS build. Order: catalog, then settings store with routes and discovery, then transports, then OAuth.
+
 - [ ] Backend settings store (0600 atomic writes), discovery, `models.json` with SIGHUP reload.
 - [ ] Native transports for the four wire APIs, producing `inference-wire` deltas (`text_*`, `thinking_*`, `toolcall_*`) and error codes; parity tests from `pi-adapter.test.ts`, `inference-transport.test.ts`, `opencode-go.test.ts` against recorded SSE fixtures.
 - [ ] OAuth: Anthropic and Codex PKCE (fixed localhost redirects and manual paste-back), Copilot device flow and token minting, serialized refresh with revision checks; fake-provider tests from `backend-auth.test.ts`.
