@@ -1,25 +1,542 @@
-//! Workspace memory mirrored from the nodes, for the assistant's search
-//! (`apps/gateway/src/daemon/memory-records.ts`). STUB: being ported (M2.6).
+//! Workspace memory from every node, held by the gateway for the
+//! assistant's search (`apps/gateway/src/daemon/memory-records.ts`). Nodes
+//! mirror their ledgers (`memory_mirror`); this applies the lines the way
+//! the ledger fold does, and finds each item's owner and workspace through
+//! the session that wrote it. Items whose session the gateway does not know
+//! have no owner and are never found.
+//!
+//! Search matches every word anywhere (`LIKE`), in any script, and ranks by
+//! how many words a note holds: the corpus is small (a few thousand notes),
+//! and a trigram index would miss two-character Chinese words anyway.
 
-use serde_json::{Value, json};
+use rusqlite::types::Value as Sql;
+use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
+use serde_json::{Map, Value, json};
 
 use crate::app::App;
-use crate::error::ApiResult;
+use crate::db::{Store, atomic};
+use crate::dispatch::resolve_directory_workspace;
+use crate::error::{ApiError, ApiResult};
+use crate::memory::schema::{array, hex12, optional, required, string};
+use crate::memory::text::{clip, fold, local_stamp, parse_date, words};
+use crate::util::{now_ms, safe_json};
+
+const HIT_CHARS: usize = 600;
+const MAX_TERMS: usize = 8;
 
 /// Byte offsets of a node's mirrored ledgers, by ledger key (sent in `registered`).
-pub fn watermarks(_app: &App, _node_id: &str) -> Value {
-    json!({})
+pub fn watermarks(app: &App, node_id: &str) -> Value {
+    let conn = app.db.lock();
+    let rows = conn
+        .prepare("SELECT ledger_key, watermark FROM memory_mirrors WHERE node_id=?")
+        .and_then(|mut statement| {
+            statement
+                .query_map([node_id], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+        });
+    match rows {
+        Ok(rows) => Value::Object(
+            rows.into_iter()
+                .map(|(key, watermark)| (key, json!(watermark)))
+                .collect(),
+        ),
+        Err(error) => {
+            crate::log::error(&format!("database: {error}"));
+            json!({})
+        }
+    }
 }
 
-/// Store a `memory_mirror` chunk; returns the ledger's watermark.
+/// Store a `memory_mirror` chunk and return the ledger's watermark. A chunk
+/// must start exactly where the stored part ends (or start over with
+/// `reset`); anything else is ignored, and the answer tells the node where
+/// to resume.
 pub fn ingest(
-    _app: &App,
-    _node_id: &str,
-    _ledger_key: &str,
-    _offset: u64,
+    app: &App,
+    node_id: &str,
+    ledger_key: &str,
+    offset: u64,
     end: u64,
-    _reset: bool,
-    _lines: &[Value],
+    reset: bool,
+    lines: &[Value],
 ) -> ApiResult<u64> {
-    Ok(end)
+    let conn = app.db.lock();
+    atomic(&conn, |conn| {
+        let current: u64 = conn
+            .query_row(
+                "SELECT watermark FROM memory_mirrors WHERE node_id=? AND ledger_key=?",
+                [node_id, ledger_key],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?
+            .map_or(0, |watermark| watermark.max(0) as u64);
+        if reset {
+            if offset != 0 {
+                return Ok(current);
+            }
+            conn.execute(
+                "DELETE FROM memory_records WHERE node_id=? AND ledger_key=?",
+                [node_id, ledger_key],
+            )?;
+        } else if offset != current {
+            return Ok(current);
+        }
+        if end < offset {
+            return Ok(if reset { 0 } else { current });
+        }
+        for line in lines {
+            if let Some(line) = Line::parse(line) {
+                apply(conn, node_id, ledger_key, line)?;
+            }
+        }
+        conn.execute(
+            "INSERT INTO memory_mirrors (node_id,ledger_key,watermark,updated_at) VALUES (?,?,?,?) ON CONFLICT(node_id,ledger_key) DO UPDATE SET watermark=excluded.watermark, updated_at=excluded.updated_at",
+            params![node_id, ledger_key, end as i64, now_ms()],
+        )?;
+        Ok(end)
+    })
 }
+
+/// One ledger line (`lineSchema`); its items are checked one by one, so one
+/// bad item never costs its line.
+enum Line<'a> {
+    Recorded(&'a [Value]),
+    Retired { ids: Vec<&'a str>, forgotten: bool },
+    Cleared,
+}
+
+impl<'a> Line<'a> {
+    fn parse(value: &'a Value) -> Option<Self> {
+        let object = value.as_object()?;
+        match object.get("type")?.as_str()? {
+            "recorded" => {
+                let items = object.get("items")?.as_array()?;
+                (items.len() <= 2000).then_some(Self::Recorded(items))
+            }
+            "retired" => {
+                let ids = array(object.get("ids")?, 0, 2000, |id| string(id, 0, 40))?;
+                let forgotten = match object.get("reason")?.as_str()? {
+                    "superseded" => false,
+                    "forgotten" => true,
+                    _ => return None,
+                };
+                Some(Self::Retired { ids, forgotten })
+            }
+            "cleared" => Some(Self::Cleared),
+            _ => None,
+        }
+    }
+}
+
+/// A mirrored item (`itemSchema`).
+struct Item {
+    id: String,
+    content: String,
+    relevance: String,
+    timestamp: String,
+    session_id: Option<String>,
+    git: Option<Value>,
+    source_ids: Vec<String>,
+    origins: Option<Vec<String>>,
+}
+
+impl Item {
+    fn parse(value: &Value) -> Option<Self> {
+        Self::fields(value.as_object()?).ok()
+    }
+
+    fn fields(object: &Map<String, Value>) -> Result<Self, ()> {
+        let owned = |text: &str| text.to_owned();
+        let id = required(object, "id", hex12)?.to_owned();
+        let content = required(object, "content", |v| string(v, 0, 20_000).map(owned))?;
+        let relevance = required(object, "relevance", |v| {
+            v.as_str()
+                .filter(|r| ["low", "medium", "high", "critical"].contains(r))
+                .map(owned)
+        })?;
+        let timestamp = required(object, "timestamp", |v| string(v, 0, 40).map(owned))?;
+        let session_id = optional(object, "sessionId", |v| string(v, 1, 200).map(owned))?;
+        let git = optional(object, "git", |v| {
+            let git = v.as_object()?;
+            let mut out = Map::new();
+            out.insert("head".into(), json!(string(git.get("head")?, 0, 64)?));
+            if let Some(branch) = optional(git, "branch", |b| string(b, 0, 300)).ok()? {
+                out.insert("branch".into(), json!(branch));
+            }
+            out.insert("dirty".into(), json!(git.get("dirty")?.as_bool()?));
+            Some(Value::Object(out))
+        })?;
+        let source_ids = required(object, "sourceMemoryIds", |v| {
+            array(v, 0, 200, |id| string(id, 0, 40).map(owned))
+        })?;
+        let origins = optional(object, "origins", |v| {
+            array(v, 0, 50, |origin| string(origin, 0, 100).map(owned))
+        })?;
+        Ok(Self {
+            id,
+            content,
+            relevance,
+            timestamp,
+            session_id,
+            git,
+            source_ids,
+            origins,
+        })
+    }
+}
+
+/// One ledger line, applied like `foldWorkspace`.
+fn apply(conn: &Connection, node_id: &str, key: &str, line: Line<'_>) -> ApiResult<()> {
+    match line {
+        Line::Cleared => {
+            conn.execute(
+                "DELETE FROM memory_records WHERE node_id=? AND ledger_key=? AND status!='forgotten'",
+                [node_id, key],
+            )?;
+        }
+        Line::Retired { ids, forgotten } => {
+            for id in ids {
+                if !forgotten {
+                    conn.execute(
+                        "UPDATE memory_records SET status='superseded' WHERE node_id=? AND ledger_key=? AND id=? AND status='active'",
+                        [node_id, key, id],
+                    )?;
+                    continue;
+                }
+                // Forgotten: nothing of it stays here, and it is never recorded again.
+                let erased = conn.execute(
+                    "UPDATE memory_records SET content='', git_json=NULL, source_ids_json='[]', origins_json=NULL, status='forgotten' WHERE node_id=? AND ledger_key=? AND id=?",
+                    [node_id, key, id],
+                )?;
+                if erased == 0 {
+                    conn.execute(
+                        "INSERT INTO memory_records (node_id,ledger_key,id,content,relevance,recorded_at,source_ids_json,status) VALUES (?,?,?,'','low','','[]','forgotten')",
+                        [node_id, key, id],
+                    )?;
+                }
+            }
+        }
+        Line::Recorded(items) => {
+            for raw in items {
+                let Some(item) = Item::parse(raw) else {
+                    continue;
+                };
+                // First record wins, and a forgotten id stays forgotten.
+                let exists = conn
+                    .query_row(
+                        "SELECT 1 FROM memory_records WHERE node_id=? AND ledger_key=? AND id=?",
+                        [node_id, key, &item.id],
+                        |_| Ok(()),
+                    )
+                    .optional()?;
+                if exists.is_some() {
+                    continue;
+                }
+                let (session_id, workspace_id, owner_user) =
+                    source(conn, node_id, item.session_id.as_deref())?;
+                conn.execute(
+                    "INSERT INTO memory_records (node_id,ledger_key,id,content,relevance,recorded_at,git_json,source_ids_json,origins_json,node_session_id,session_id,workspace_id,owner_user,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'active')",
+                    params![
+                        node_id,
+                        key,
+                        item.id,
+                        item.content,
+                        item.relevance,
+                        item.timestamp,
+                        item.git.map(|git| git.to_string()),
+                        json!(item.source_ids).to_string(),
+                        item.origins.map(|origins| json!(origins).to_string()),
+                        item.session_id,
+                        session_id,
+                        workspace_id,
+                        owner_user,
+                    ],
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The gateway's session behind a node session: its id, workspace and owner.
+fn source(
+    conn: &Connection,
+    node_id: &str,
+    node_session_id: Option<&str>,
+) -> ApiResult<(Option<String>, Option<String>, Option<String>)> {
+    let Some(node_session_id) = node_session_id else {
+        return Ok((None, None, None));
+    };
+    let Some(session_id) = conn.resolve_remote_session(node_id, node_session_id)? else {
+        return Ok((None, None, None));
+    };
+    let session = conn.get_session(&session_id)?;
+    Ok((
+        Some(session_id),
+        Some(session.workspace_id),
+        session.owner_user,
+    ))
+}
+
+/// `${branch ?? 'detached'}@${head.slice(0, 7)}${dirty ? '*' : ''}`, for a git state with a head.
+fn git_label(git: &Value) -> Option<String> {
+    let head = git.get("head")?.as_str().filter(|head| !head.is_empty())?;
+    let branch = git
+        .get("branch")
+        .and_then(Value::as_str)
+        .unwrap_or("detached");
+    let short: String = String::from_utf16_lossy(&head.encode_utf16().take(7).collect::<Vec<_>>());
+    let dirty = git.get("dirty").and_then(Value::as_bool).unwrap_or(false);
+    Some(format!("{branch}@{short}{}", if dirty { "*" } else { "" }))
+}
+
+/// `${displayName} on ${hostId}`, else what is known of it.
+fn label(conn: &Connection, workspace_id: Option<&str>, node_id: Option<&str>) -> String {
+    if let Some(workspace_id) = workspace_id
+        && let Ok(workspace) = conn.get_workspace(workspace_id)
+    {
+        return format!("{} on {}", workspace.display_name, workspace.host_id);
+    }
+    match (node_id, workspace_id) {
+        (Some(node_id), _) => format!("a repository on {node_id}"),
+        (None, Some(workspace_id)) => workspace_id.to_owned(),
+        (None, None) => "a workspace".to_owned(),
+    }
+}
+
+fn escape_like(term: &str) -> String {
+    let mut out = String::with_capacity(term.len());
+    for c in term.chars() {
+        if matches!(c, '\\' | '%' | '_') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
+struct Ranked {
+    score: usize,
+    current: bool,
+    time: i64,
+    hit: Value,
+}
+
+fn all_rows(conn: &Connection, sql: &str, values: Vec<Sql>) -> ApiResult<Vec<Map<String, Value>>> {
+    let mut statement = conn.prepare(sql)?;
+    let names: Vec<String> = statement
+        .column_names()
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let rows = statement.query_map(params_from_iter(values), |row: &Row<'_>| {
+        let mut object = Map::new();
+        for (index, name) in names.iter().enumerate() {
+            let value = match row.get::<_, Sql>(index)? {
+                Sql::Null => Value::Null,
+                Sql::Integer(int) => json!(int),
+                Sql::Real(real) => json!(real),
+                Sql::Text(text) => json!(text),
+                Sql::Blob(_) => Value::Null,
+            };
+            object.insert(name.clone(), value);
+        }
+        Ok(object)
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Notes and delegations of `user` holding any of the words in `query`,
+/// most words first, then current before superseded, then newest.
+pub fn search(
+    app: &App,
+    user: &str,
+    query: &str,
+    workspace: Option<&str>,
+    limit: Option<i64>,
+) -> ApiResult<Vec<Value>> {
+    let folded = fold(query);
+    let mut terms: Vec<&str> = Vec::new();
+    for word in words(&folded) {
+        if !terms.contains(&word) {
+            terms.push(word);
+        }
+    }
+    terms.truncate(MAX_TERMS);
+    if terms.is_empty() {
+        return Err(ApiError::new(400, "invalid_input", "query is required"));
+    }
+    let limit = limit.unwrap_or(8).clamp(1, 20) as usize;
+    let workspace = match workspace {
+        Some(reference) => Some(resolve_directory_workspace(app, reference)?),
+        None => None,
+    };
+    let any_term = |column: &str| {
+        format!(
+            "({})",
+            terms
+                .iter()
+                .map(|_| format!("{column} LIKE ? ESCAPE '\\'"))
+                .collect::<Vec<_>>()
+                .join(" OR ")
+        )
+    };
+    let patterns = terms
+        .iter()
+        .map(|term| Sql::Text(format!("%{}%", escape_like(term))));
+    let mut values: Vec<Sql> = vec![Sql::Text(user.to_owned())];
+    values.extend(patterns.clone());
+    if let Some(workspace) = &workspace {
+        values.push(Sql::Text(workspace.id.clone()));
+    }
+    let conn = app.db.lock();
+    let records = all_rows(
+        &conn,
+        &format!(
+            "SELECT * FROM memory_records WHERE owner_user=? AND status IN ('active','superseded') AND {}{}",
+            any_term("content"),
+            if workspace.is_some() {
+                " AND (node_id || '/' || ledger_key) IN (SELECT node_id || '/' || ledger_key FROM memory_records WHERE workspace_id=?)"
+            } else {
+                ""
+            }
+        ),
+        values.clone(),
+    )?;
+    let delegations = all_rows(
+        &conn,
+        &format!(
+            "SELECT * FROM delegations WHERE owner_user=? AND {}{}",
+            any_term("(title || ' ' || task || ' ' || COALESCE(result, ''))"),
+            if workspace.is_some() {
+                " AND workspace_id=?"
+            } else {
+                ""
+            }
+        ),
+        values,
+    )?;
+    let score = |text: &str| {
+        let folded = fold(text);
+        terms.iter().filter(|term| folded.contains(**term)).count()
+    };
+    let text = |row: &Map<String, Value>, key: &str| -> String {
+        row.get(key)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let mut ranked: Vec<Ranked> = Vec::new();
+    for row in &records {
+        let content = text(row, "content");
+        let git = row
+            .get("git_json")
+            .and_then(Value::as_str)
+            .map(|git| safe_json(git, Value::Null))
+            .and_then(|git| git_label(&git));
+        let mut hit = Map::new();
+        hit.insert("id".into(), json!(text(row, "id")));
+        hit.insert("kind".into(), json!("workspace"));
+        hit.insert(
+            "workspace".into(),
+            json!(label(
+                &conn,
+                row.get("workspace_id").and_then(Value::as_str),
+                row.get("node_id").and_then(Value::as_str),
+            )),
+        );
+        hit.insert("date".into(), json!(text(row, "recorded_at")));
+        hit.insert("status".into(), json!(text(row, "status")));
+        if let Some(git) = git {
+            hit.insert("git".into(), json!(git));
+        }
+        hit.insert("relevance".into(), json!(text(row, "relevance")));
+        hit.insert("content".into(), json!(clip(&content, HIT_CHARS)));
+        ranked.push(Ranked {
+            score: score(&content),
+            current: text(row, "status") == "active",
+            time: parse_date(&text(row, "recorded_at").replacen(' ', "T", 1)).unwrap_or(0),
+            hit: Value::Object(hit),
+        });
+    }
+    for row in &delegations {
+        let result = row.get("result").and_then(Value::as_str);
+        let (title, task) = (text(row, "title"), text(row, "task"));
+        let updated_at = row.get("updated_at").and_then(Value::as_i64).unwrap_or(0);
+        ranked.push(Ranked {
+            score: score(&format!("{title} {task} {}", result.unwrap_or_default())),
+            current: true,
+            time: updated_at,
+            hit: json!({
+                "id": text(row, "id"),
+                "kind": "delegation",
+                "workspace": label(&conn, row.get("workspace_id").and_then(Value::as_str), None),
+                "date": local_stamp(updated_at),
+                "status": text(row, "status"),
+                "content": clip(&format!("{title}: {}", result.unwrap_or(&task)), HIT_CHARS),
+            }),
+        });
+    }
+    ranked.sort_by(|a, b| {
+        b.score
+            .cmp(&a.score)
+            .then(b.current.cmp(&a.current))
+            .then(b.time.cmp(&a.time))
+    });
+    Ok(ranked
+        .into_iter()
+        .take(limit)
+        .map(|ranked| ranked.hit)
+        .collect())
+}
+
+/// A mirrored note to recall.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Found {
+    pub node_id: String,
+    pub ledger_key: String,
+    pub workspace: String,
+    pub date: String,
+    pub status: String,
+    pub content: String,
+}
+
+/// The user's mirrored notes with this id (usually one), for recall.
+pub fn find(app: &App, user: &str, id: &str) -> ApiResult<Vec<Found>> {
+    let conn = app.db.lock();
+    let rows: Vec<(String, String, Option<String>, String, String, String)> = {
+        let mut statement = conn.prepare(
+            "SELECT node_id, ledger_key, workspace_id, recorded_at, status, content FROM memory_records WHERE id=? AND owner_user=? AND status!='forgotten' ORDER BY rowid",
+        )?;
+        let rows = statement.query_map([id, user], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+            ))
+        })?;
+        rows.collect::<Result<_, _>>()?
+    };
+    Ok(rows
+        .into_iter()
+        .map(
+            |(node_id, ledger_key, workspace_id, date, status, content)| Found {
+                workspace: label(&conn, workspace_id.as_deref(), Some(&node_id)),
+                node_id,
+                ledger_key,
+                date,
+                status,
+                content,
+            },
+        )
+        .collect())
+}
+
+#[cfg(test)]
+mod tests;

@@ -14,6 +14,8 @@ path = "src/main.rs"
 aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio", "ws"] }
 base64 = "0.22"
+# NFKC for memory hashes and search (already linked through `url`).
+icu_normalizer = { version = "2", default-features = false, features = ["compiled_data"] }
 getrandom = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 form_urlencoded = "1"
@@ -31,6 +33,8 @@ serde_json.workspace = true
 indexmap.workspace = true
 sha2 = "0.10"
 subtle = "2"
+# Local times in memory search, from the system's zone files (no embedded tz database).
+tz-rs = "0.7"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
 url = "2"
 
