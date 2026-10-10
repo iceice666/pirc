@@ -436,6 +436,14 @@ mod tests {
             "key [REDACTED MY_API_KEY] token sk-[REDACTED] Authorization: bearer [REDACTED] \
              [REDACTED AWS KEY] /home/someone/abcdefgh"
         );
+        // JavaScript's `\b` (no `u` flag) treats non-ASCII letters as non-word.
+        assert_eq!(
+            redact_with(
+                "密钥sk-abcdefghijklmnopqrstuvwxyz AKIAABCDEFGHIJKLMNOPé",
+                std::iter::empty()
+            ),
+            "密钥sk-[REDACTED] [REDACTED AWS KEY]é"
+        );
         let key = "-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----";
         assert_eq!(
             redact_with(key, std::iter::empty()),

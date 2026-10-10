@@ -292,7 +292,8 @@ fn encrypt_for(p256dh: &str, auth: &str, payload: &str) -> Result<Vec<u8>, Strin
 /// `url.parse`'s protocol and host (an explicit port kept, even the default).
 fn audience(endpoint: &str) -> Result<String, String> {
     let url =
-        Url::parse(endpoint).map_err(|_| format!("VAPID audience is not a url. {endpoint}"))?;
+        // The message names the host only: the endpoint is a capability URL.
+        Url::parse(endpoint).map_err(|_| format!("VAPID audience is not a url. {}", host_of(endpoint)))?;
     let host = url.host_str().unwrap_or_default();
     let authority = endpoint
         .split_once("://")
@@ -567,7 +568,9 @@ impl Push {
     pub fn new(db: Arc<Db>, vapid: VapidKeys, subject: String, allow_http: bool) -> Self {
         // ring, as in pirc-providers: no aws-lc.
         let _ = rustls::crypto::ring::default_provider().install_default();
+        // Direct connections, as Node's fetch made them (no proxy variables).
         let client = reqwest::Client::builder()
+            .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("the HTTP client builds with the ring provider installed");

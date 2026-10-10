@@ -197,7 +197,9 @@ impl WebSearch {
     fn with(api_key: Option<String>, url: String, now: Box<dyn Fn() -> i64 + Send + Sync>) -> Self {
         // ring, not aws-lc (as pirc-providers).
         let _ = rustls::crypto::ring::default_provider().install_default();
+        // Direct connections, as Node's fetch made them (no proxy variables).
         let client = reqwest::Client::builder()
+            .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("the HTTP client builds with the ring provider installed");

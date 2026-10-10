@@ -1053,7 +1053,18 @@ async fn report(app: &AppState, id: &str) {
     if !reachable {
         return;
     }
-    lock(&shared(app).reporting).insert(key.clone());
+    // Check and claim in one step: reports run on several threads at once.
+    if !lock(&shared(app).reporting).insert(key.clone()) {
+        return;
+    }
+    /// Releases the claim however the report ends (`finally`).
+    struct Claim(Arc<Shared>, String);
+    impl Drop for Claim {
+        fn drop(&mut self) {
+            lock(&self.0.reporting).remove(&self.1);
+        }
+    }
+    let _claim = Claim(shared(app), key);
     let delivered = deliver(
         app,
         &chat,
@@ -1079,7 +1090,6 @@ async fn report(app: &AppState, id: &str) {
             delegation.id, failure.0
         )),
     }
-    lock(&shared(app).reporting).remove(&key);
 }
 
 // ---------- helpers ----------

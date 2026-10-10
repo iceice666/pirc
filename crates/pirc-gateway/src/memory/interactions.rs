@@ -172,9 +172,11 @@ pub fn changed(app: &App, user: &str) {
                 );
             }
         }
-    }
-    for (session_id, epoch, kind, data) in events {
-        app.events.publish(&session_id, epoch, kind, data);
+        // Published before the database is released, so two changes for
+        // one user cannot publish out of order (hub listeners only queue).
+        for (session_id, epoch, kind, data) in events.drain(..) {
+            app.events.publish(&session_id, epoch, kind, data);
+        }
     }
 }
 
