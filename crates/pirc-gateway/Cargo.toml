@@ -14,6 +14,8 @@ path = "src/main.rs"
 aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio", "ws"] }
 base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+chrono-tz.workspace = true
 # NFKC for memory hashes and search (already linked through `url`).
 icu_normalizer = { version = "2", default-features = false, features = ["compiled_data"] }
 getrandom = "0.3"
