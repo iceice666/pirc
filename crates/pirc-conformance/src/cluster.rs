@@ -34,6 +34,9 @@ pub const WORKSPACE_ID: &str = "test:test";
 const BIN_DIR_VARIABLE: &str = "PIRC_CONFORMANCE_BIN_DIR";
 /// Set by `bun run test:conformance` (and so CI): skipping is then a failure.
 const REQUIRED_VARIABLE: &str = "PIRC_CONFORMANCE_REQUIRED";
+/// Another gateway executable to test against the nodes of the bin dir (the
+/// Rust gateway against the TS node while the rewrite is in progress).
+const GATEWAY_VARIABLE: &str = "PIRC_CONFORMANCE_GATEWAY_BIN";
 
 /// Replaces the sandbox runtime: answers the node's probe and runs the agent unconfined.
 const FAKE_SRT: &str = r#"#!/bin/sh
@@ -131,7 +134,7 @@ impl Cluster {
         override_env(&mut env, options.env.clone());
         let gateway = Process::spawn(
             "gateway",
-            &bin_dir.join("pirc-gateway"),
+            &gateway_bin(bin_dir),
             &root,
             &dir_in(&root, "gateway-home"),
             &env,
@@ -365,6 +368,23 @@ fn bin_dir() -> Option<PathBuf> {
         dir.canonicalize()
             .unwrap_or_else(|error| panic!("{BIN_DIR_VARIABLE} {}: {error}", dir.display())),
     )
+}
+
+/// The gateway under test: `PIRC_CONFORMANCE_GATEWAY_BIN`, else the bin dir's.
+fn gateway_bin(bin_dir: &Path) -> PathBuf {
+    let Some(path) = std::env::var_os(GATEWAY_VARIABLE) else {
+        return bin_dir.join("pirc-gateway");
+    };
+    let path = PathBuf::from(path);
+    let path = if path.is_absolute() {
+        path
+    } else {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(path)
+    };
+    path.canonicalize()
+        .unwrap_or_else(|error| panic!("{GATEWAY_VARIABLE} {}: {error}", path.display()))
 }
 
 fn dir_in(root: &Path, name: &str) -> String {

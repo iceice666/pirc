@@ -1,0 +1,122 @@
+---
+source: crates/pirc-conformance/tests/streams.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": {
+      "sessionId": "remote-1",
+      "streamId": "<uuid:1>",
+      "terminalId": "term-1",
+      "type": "terminal_open",
+      "user": "test@example.com"
+    },
+    "step": "the node is asked to open the terminal"
+  },
+  {
+    "observed": {
+      "data": "$ ",
+      "type": "output"
+    },
+    "step": "a node frame reaches the browser"
+  },
+  {
+    "observed": {
+      "message": {
+        "data": "ls\n",
+        "type": "input"
+      },
+      "streamId": "<uuid:1>",
+      "type": "terminal_input"
+    },
+    "step": "browser input reaches the node"
+  },
+  {
+    "observed": {
+      "closed": 4000,
+      "reason": "shell exited"
+    },
+    "step": "the node closes the terminal"
+  },
+  {
+    "observed": {
+      "kind": "browser",
+      "sessionId": "remote-1",
+      "streamId": "<uuid:2>",
+      "terminalId": "browser",
+      "type": "terminal_open",
+      "user": "test@example.com"
+    },
+    "step": "the node is asked to open the browser view"
+  },
+  {
+    "observed": {
+      "streamId": "<uuid:2>",
+      "type": "terminal_close"
+    },
+    "step": "the browser leaves"
+  },
+  {
+    "observed": {
+      "closed": 4404,
+      "reason": "Session not found"
+    },
+    "step": "unknown session"
+  },
+  {
+    "observed": {
+      "closed": 4403,
+      "reason": "Origin is not allowed"
+    },
+    "step": "no Origin"
+  },
+  {
+    "body": {
+      "code": "FST_ERR_MAX_PARAM_LENGTH",
+      "error": "Bad Request",
+      "message": "'/api/sessions/session_<uuid:3>/terminals/ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt/stream' is exceeding the max param length",
+      "statusCode": 414
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET (upgrade)",
+    "status": 414,
+    "step": "a terminal id over 100 characters"
+  },
+  {
+    "body": {
+      "code": "FST_ERR_MAX_PARAM_LENGTH",
+      "error": "Bad Request",
+      "message": "'/api/sessions/session_<uuid:3>/terminals/ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt/stream' is exceeding the max param length",
+      "statusCode": 414
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET (upgrade)",
+    "status": 414,
+    "step": "a terminal id over 100 characters, no identity"
+  },
+  {
+    "body": {
+      "code": "FST_ERR_MAX_PARAM_LENGTH",
+      "error": "Bad Request",
+      "message": "'/api/sessions/sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss/snapshot' is exceeding the max param length",
+      "statusCode": 414
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/<long>/snapshot",
+    "status": 414,
+    "step": "a session id over 100 characters"
+  },
+  {
+    "observed": {
+      "closed": 1012,
+      "reason": "node disconnected"
+    },
+    "step": "the node disconnects"
+  }
+]

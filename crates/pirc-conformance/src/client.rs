@@ -88,15 +88,41 @@ impl Api {
         headers: &[(&str, String)],
         body: Option<Value>,
     ) -> Result<Response, reqwest::Error> {
+        let body = body.map(|body| (Some("application/json"), body.to_string().into_bytes()));
+        self.try_send_bytes(method, path, headers, body).await
+    }
+
+    /// Send raw bytes with the given `content-type` (none when `None`).
+    pub async fn send_bytes(
+        &self,
+        method: &str,
+        path: &str,
+        headers: &[(&str, String)],
+        content_type: Option<&str>,
+        body: Vec<u8>,
+    ) -> Response {
+        self.try_send_bytes(method, path, headers, Some((content_type, body)))
+            .await
+            .unwrap_or_else(|error| panic!("{method} {path}: {error}"))
+    }
+
+    async fn try_send_bytes(
+        &self,
+        method: &str,
+        path: &str,
+        headers: &[(&str, String)],
+        body: Option<(Option<&str>, Vec<u8>)>,
+    ) -> Result<Response, reqwest::Error> {
         let method = reqwest::Method::from_bytes(method.as_bytes()).expect("HTTP method");
         let mut request = self.http.request(method, format!("{}{path}", self.base));
         for (name, value) in headers {
             request = request.header(*name, value);
         }
-        if let Some(body) = body {
-            request = request
-                .header("content-type", "application/json")
-                .body(body.to_string());
+        if let Some((content_type, body)) = body {
+            if let Some(content_type) = content_type {
+                request = request.header("content-type", content_type);
+            }
+            request = request.body(body);
         }
         let response = request.send().await?;
         let status = response.status().as_u16();

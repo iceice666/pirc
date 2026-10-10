@@ -1,0 +1,217 @@
+---
+source: crates/pirc-conformance/tests/http.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "nodes": 0,
+      "ok": true,
+      "version": 2
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/health",
+    "status": 200,
+    "step": "health"
+  },
+  {
+    "body": {
+      "nodes": 0,
+      "ok": true,
+      "version": 2
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/health?x=1",
+    "status": 200,
+    "step": "health with a query"
+  },
+  {
+    "body": {
+      "error": "Not Found",
+      "message": "Route GET:/api/nope not found",
+      "statusCode": 404
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/nope",
+    "status": 404,
+    "step": "unknown route"
+  },
+  {
+    "body": {
+      "error": "Not Found",
+      "message": "Route GET:/nope not found",
+      "statusCode": 404
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /nope",
+    "status": 404,
+    "step": "unknown route outside /api"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/nope",
+    "status": 401,
+    "step": "unknown route, no identity"
+  },
+  {
+    "body": {
+      "error": "Not Found",
+      "message": "Route PUT:/api/health not found",
+      "statusCode": 404
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/health",
+    "status": 404,
+    "step": "unknown method"
+  },
+  {
+    "body": null,
+    "request": "GET /node/connect",
+    "status": 404,
+    "step": "node link without upgrade"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Workspace not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 404,
+    "step": "valid JSON, unknown workspace"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Workspace not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 404,
+    "step": "JSON with a charset"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "internal_error",
+        "message": "Internal server error"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 500,
+    "step": "invalid JSON"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "internal_error",
+        "message": "Internal server error"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 500,
+    "step": "empty JSON body"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 400,
+    "step": "JSON array"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 400,
+    "step": "JSON as text/plain"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 400,
+    "step": "JSON without a content type"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "payload_too_large",
+        "message": "Request body exceeds configured limit"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 413,
+    "step": "JSON over the body limit"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "payload_too_large",
+        "message": "Request body exceeds configured limit"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 413,
+    "step": "bytes over the body limit"
+  }
+]

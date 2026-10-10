@@ -1,0 +1,992 @@
+---
+source: crates/pirc-conformance/tests/routes.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "workspace": {
+        "defaults": {},
+        "displayName": "Project",
+        "hostId": "test",
+        "id": "test:added",
+        "kind": "directory"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 201,
+    "step": "add a workspace"
+  },
+  {
+    "observed": [
+      {
+        "method": "POST",
+        "payload": {
+          "displayName": "Project",
+          "path": "/srv/project"
+        },
+        "url": "/api/workspaces",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "add a workspace: relayed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_offline",
+        "message": "Node is offline"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 503,
+    "step": "add a workspace on an unknown node"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 400,
+    "step": "add a workspace without a path"
+  },
+  {
+    "body": {
+      "workspaces": [
+        {
+          "defaults": {},
+          "displayName": "Fake workspace",
+          "hostId": "test",
+          "id": "test:ws",
+          "kind": "directory"
+        },
+        {
+          "defaults": {},
+          "displayName": "Project",
+          "hostId": "test",
+          "id": "test:added",
+          "kind": "directory"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 200,
+    "step": "workspaces"
+  },
+  {
+    "body": {
+      "capabilities": {
+        "delegation": true,
+        "memory_search": true,
+        "remote_recall": true,
+        "schedules": true,
+        "version": 1,
+        "web_search": true
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces/test:ws/capabilities",
+    "status": 200,
+    "step": "capabilities of a directory workspace"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Capabilities can only be changed for chat workspaces"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/workspaces/test:ws/capabilities",
+    "status": 400,
+    "step": "change them"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Only chat projects have instructions"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces/test:ws/instructions",
+    "status": 400,
+    "step": "a directory workspace has no instructions"
+  },
+  {
+    "body": {
+      "relayed": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces/test:ws/project-config",
+    "status": 200,
+    "step": "project config"
+  },
+  {
+    "observed": [
+      {
+        "method": "GET",
+        "url": "/api/workspaces/ws/project-config",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "project config: relayed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces/test:ws/project-trust",
+    "status": 400,
+    "step": "trust with a bad hash"
+  },
+  {
+    "body": {
+      "relayed": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces/test:ws/project-trust",
+    "status": 200,
+    "step": "trust"
+  },
+  {
+    "observed": [
+      {
+        "method": "POST",
+        "payload": {
+          "hash": "<sha256:1>",
+          "trusted": true
+        },
+        "url": "/api/workspaces/ws/project-trust",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "trust: relayed"
+  },
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "New session",
+        "nameSource": "auto",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:ws"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 201,
+    "step": "create a session"
+  },
+  {
+    "observed": [
+      {
+        "method": "POST",
+        "payload": {
+          "workspaceId": "ws"
+        },
+        "url": "/api/sessions",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "create a session: relayed"
+  },
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "Mine",
+        "nameSource": "user",
+        "nodeId": "test",
+        "pinnedAt": "<epoch-ms>",
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": "<epoch-ms>",
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:ws"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/session_<uuid:1>",
+    "status": 200,
+    "step": "rename, pin and settle"
+  },
+  {
+    "observed": [
+      {
+        "method": "PATCH",
+        "payload": {
+          "name": "Mine"
+        },
+        "url": "/api/sessions/remote-1",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "rename, pin and settle: relayed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/session_<uuid:1>",
+    "status": 400,
+    "step": "nothing to update"
+  },
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "Mine",
+        "nameSource": "user",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": "<epoch-ms>",
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:ws"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/session_<uuid:1>",
+    "status": 200,
+    "step": "unpin only (not relayed)"
+  },
+  {
+    "body": {
+      "history": [],
+      "interactions": [
+        {
+          "id": "node-interaction"
+        }
+      ],
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "Mine",
+        "nameSource": "user",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "ready",
+        "settledAt": "<epoch-ms>",
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:ws"
+      },
+      "watermark": {
+        "epoch": 0,
+        "sequence": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/snapshot",
+    "status": 200,
+    "step": "snapshot"
+  },
+  {
+    "observed": [
+      {
+        "method": "GET",
+        "url": "/api/sessions/remote-1/snapshot",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "snapshot: relayed"
+  },
+  {
+    "body": {
+      "lease": null
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/control",
+    "status": 200,
+    "step": "no lease yet"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 409,
+    "step": "a command without the lease"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "browser",
+        "expiresAt": 4000000000000,
+        "generation": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/control/acquire",
+    "status": 200,
+    "step": "acquire control"
+  },
+  {
+    "observed": [
+      {
+        "method": "POST",
+        "payload": {
+          "clientId": "browser"
+        },
+        "url": "/api/sessions/remote-1/control/acquire",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "acquire control: relayed"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "browser",
+        "expired": false,
+        "expiresAt": 4000000000000,
+        "generation": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/control",
+    "status": 200,
+    "step": "the lease"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/control/heartbeat",
+    "status": 409,
+    "step": "heartbeat with a stale generation"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "browser",
+        "expiresAt": 4000000000000,
+        "generation": 2
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/control/heartbeat",
+    "status": 200,
+    "step": "heartbeat"
+  },
+  {
+    "observed": [
+      {
+        "method": "POST",
+        "payload": {
+          "clientId": "browser",
+          "generation": 1
+        },
+        "url": "/api/sessions/remote-1/control/heartbeat",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "heartbeat: relayed"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c1",
+        "payload": {
+          "message": "hi",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:2>",
+        "result": {
+          "ok": true
+        },
+        "sessionId": "session_<uuid:1>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 202,
+    "step": "a command"
+  },
+  {
+    "observed": [
+      {
+        "method": "POST",
+        "payload": {
+          "clientId": "browser",
+          "commandId": "c1",
+          "extra": true,
+          "generation": 2,
+          "payload": {
+            "message": "hi",
+            "type": "prompt"
+          }
+        },
+        "url": "/api/sessions/remote-1/commands",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "a command: relayed"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c1",
+        "payload": {
+          "message": "hi",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:2>",
+        "result": {
+          "ok": true
+        },
+        "sessionId": "session_<uuid:1>",
+        "status": "accepted"
+      },
+      "duplicate": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 200,
+    "step": "the same command again"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "commandId was already used with a different payload"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 409,
+    "step": "the same id, another payload"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "Rejected by the node"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 409,
+    "step": "a command the node rejects"
+  },
+  {
+    "observed": [
+      {
+        "method": "POST",
+        "payload": {
+          "clientId": "browser",
+          "commandId": "c2",
+          "generation": 2,
+          "payload": {
+            "type": "reject"
+          }
+        },
+        "url": "/api/sessions/remote-1/commands",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "a command the node rejects: relayed"
+  },
+  {
+    "body": {
+      "command": {
+        "error": "Busy",
+        "id": "c3",
+        "payload": {
+          "type": "rejected_with_command"
+        },
+        "payloadHash": "<sha256:3>",
+        "result": null,
+        "sessionId": "session_<uuid:1>",
+        "status": "rejected"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 503,
+    "step": "a command the node rejects with a command"
+  },
+  {
+    "observed": [
+      {
+        "method": "POST",
+        "payload": {
+          "clientId": "browser",
+          "commandId": "c3",
+          "generation": 2,
+          "payload": {
+            "type": "rejected_with_command"
+          }
+        },
+        "url": "/api/sessions/remote-1/commands",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "a command the node rejects with a command: relayed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 400,
+    "step": "a command without a type"
+  },
+  {
+    "body": {
+      "answered": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/interactions/node-interaction/answer",
+    "status": 200,
+    "step": "answer an interaction"
+  },
+  {
+    "observed": [
+      {
+        "method": "POST",
+        "payload": {
+          "answer": {
+            "ok": true
+          },
+          "clientId": "browser",
+          "generation": 2
+        },
+        "url": "/api/sessions/remote-1/interactions/node-interaction/answer",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "answer an interaction: relayed"
+  },
+  {
+    "body": {
+      "echo": {
+        "bodyBase64": "AQID",
+        "contentType": "image/png"
+      },
+      "upload": {
+        "id": "upload-1"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=a%20b.png",
+    "status": 201,
+    "step": "upload"
+  },
+  {
+    "observed": [
+      {
+        "bodyBase64": "AQID",
+        "contentType": "image/png",
+        "method": "POST",
+        "url": "/api/sessions/remote-1/uploads?filename=a%20b.png",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "upload: relayed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Upload body must be raw bytes"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads",
+    "status": 400,
+    "step": "an upload as JSON"
+  },
+  {
+    "body": "plain text",
+    "headers": {
+      "content-type": "text/plain"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=README.md",
+    "status": 200,
+    "step": "files (a text answer)"
+  },
+  {
+    "observed": [
+      {
+        "method": "GET",
+        "url": "/api/sessions/remote-1/files?path=README.md",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "files (a text answer): relayed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_error",
+        "message": "git failed"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/status",
+    "status": 500,
+    "step": "git status (a node error)"
+  },
+  {
+    "observed": [
+      {
+        "method": "GET",
+        "url": "/api/sessions/remote-1/git/status",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "git status (a node error): relayed"
+  },
+  {
+    "body": {
+      "relayed": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/abcd1234",
+    "status": 200,
+    "step": "a git commit"
+  },
+  {
+    "observed": [
+      {
+        "method": "GET",
+        "url": "/api/sessions/remote-1/git/commits/abcd1234",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "a git commit: relayed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Route not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/secrets",
+    "status": 404,
+    "step": "a panel path that is not relayed"
+  },
+  {
+    "body": null,
+    "request": "POST /api/sessions/session_<uuid:1>/terminals",
+    "status": 204,
+    "step": "open a terminal"
+  },
+  {
+    "observed": [
+      {
+        "method": "POST",
+        "payload": {
+          "cols": 80
+        },
+        "url": "/api/sessions/remote-1/terminals",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "open a terminal: relayed"
+  },
+  {
+    "body": {
+      "relayed": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/task-1/stop",
+    "status": 200,
+    "step": "stop a background task"
+  },
+  {
+    "observed": [
+      {
+        "method": "POST",
+        "payload": {},
+        "url": "/api/sessions/remote-1/panel/background/task-1/stop",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "stop a background task: relayed"
+  },
+  {
+    "body": null,
+    "request": "POST /api/sessions/session_<uuid:1>/control/release",
+    "status": 204,
+    "step": "release control"
+  },
+  {
+    "observed": [
+      {
+        "method": "POST",
+        "payload": {
+          "clientId": "browser",
+          "generation": 2
+        },
+        "url": "/api/sessions/remote-1/control/release",
+        "user": "test@example.com"
+      }
+    ],
+    "step": "release control: relayed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Only chats can be deleted"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/sessions/session_<uuid:1>",
+    "status": 400,
+    "step": "only chats can be deleted"
+  },
+  {
+    "body": {
+      "models": [
+        {
+          "contextWindow": 100000,
+          "id": "fake-model",
+          "input": [
+            "text"
+          ],
+          "maxTokens": 1000,
+          "name": "fake-model",
+          "provider": "fake",
+          "reasoning": true
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/models",
+    "status": 200,
+    "step": "models"
+  },
+  {
+    "body": {
+      "models": [
+        {
+          "contextWindow": 100000,
+          "id": "fake-model",
+          "input": [
+            "text"
+          ],
+          "maxTokens": 1000,
+          "name": "fake-model",
+          "provider": "fake",
+          "reasoning": true
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/models?sessionId=session_<uuid:1>",
+    "status": 200,
+    "step": "models of a session"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/models?sessionId=nope",
+    "status": 404,
+    "step": "models of an unknown session"
+  },
+  {
+    "body": {
+      "sessions": [
+        {
+          "createdAt": "<epoch-ms>",
+          "id": "session_<uuid:1>",
+          "name": "Mine",
+          "nameSource": "user",
+          "nodeId": "test",
+          "pinnedAt": null,
+          "runStatus": null,
+          "runnerEpoch": 0,
+          "runnerState": "stopped",
+          "settledAt": "<epoch-ms>",
+          "unread": false,
+          "updatedAt": "<epoch-ms>",
+          "workspaceId": "test:ws"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions",
+    "status": 200,
+    "step": "sessions"
+  },
+  {
+    "body": {
+      "nodes": [
+        {
+          "connectedAt": "<epoch-ms>",
+          "id": "test",
+          "lastSeenAt": "<epoch-ms>",
+          "role": "node",
+          "workspaces": [
+            {
+              "displayName": "Fake workspace",
+              "id": "ws",
+              "kind": "directory"
+            },
+            {
+              "displayName": "Project",
+              "id": "added",
+              "kind": "directory"
+            }
+          ]
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/nodes",
+    "status": 200,
+    "step": "nodes"
+  },
+  {
+    "body": {
+      "nodeId": null,
+      "online": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/assistant/node",
+    "status": 200,
+    "step": "assistant node"
+  }
+]
