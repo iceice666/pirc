@@ -87,6 +87,7 @@ test('local/remote adapter persists, deduplicates and reconciles without automat
     nodeId: 'n',
     journal: f.journal,
     authorize: () => {},
+    unfencedHarness: true,
     result: (record) => {
       void remote.receive(unsolicitedResult(record));
     },
@@ -133,7 +134,12 @@ test('local/remote adapter persists, deduplicates and reconciles without automat
 test('admission snapshots arguments and executor loss stays reconcilable', async () => {
   const f = fixture();
   let seen: unknown;
-  const local = new LocalEnvironment({ nodeId: 'n', journal: f.journal, authorize: () => {} });
+  const local = new LocalEnvironment({
+    nodeId: 'n',
+    journal: f.journal,
+    authorize: () => {},
+    unfencedHarness: true,
+  });
   local.provision(f.descriptor, {
     healthy: true,
     async execute(intent, _signal, event) {
@@ -182,7 +188,12 @@ test('hook receipts bind execution and capability, consume once and do not repla
 
 test('unprovisioned bindings, unavailable sandbox and wrong request direction fail closed', async () => {
   const f = fixture();
-  const local = new LocalEnvironment({ nodeId: 'n', journal: f.journal, authorize: () => {} });
+  const local = new LocalEnvironment({
+    nodeId: 'n',
+    journal: f.journal,
+    authorize: () => {},
+    unfencedHarness: true,
+  });
   await expect(local.start(f.intent)).rejects.toThrow('binding');
   local.provision(f.descriptor, {
     healthy: false,

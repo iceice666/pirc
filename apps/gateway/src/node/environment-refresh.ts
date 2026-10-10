@@ -31,6 +31,10 @@ export async function replaceEnvironment(options: {
     options.previous.binding.executorEpoch === options.next.binding.executorEpoch
   )
     throw new Error('Refresh requires a fresh executor generation on the same session/workspace');
+  // Eligibility of the replacement BEFORE touching the old generation: `next` must be the
+  // newest fenced, unrevoked generation and nothing but `previous` may still be live.
+  // Otherwise a refusal at provision() would leave the session with no environment.
+  options.environment.assertProvisionable(options.next, options.previous.binding);
   await options.environment.quiesceBinding(options.previous.binding);
   if (options.backgroundActive())
     throw new Error(

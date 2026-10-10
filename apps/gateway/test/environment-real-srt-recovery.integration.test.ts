@@ -306,6 +306,7 @@ test.skipIf(!srt)(
             nodeId: 'test',
             journal: s.environmentJournal,
             authorize: authorize(bindings),
+            unfencedHarness: true,
           });
           await initialize(s);
         },

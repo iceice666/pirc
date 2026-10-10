@@ -24,6 +24,48 @@ import {
 } from './protocol.js';
 
 const DAY = 86_400_000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export type EnvironmentErrorCode = NonNullable<Terminal['error']>['code'];
+/**
+ * Node-side typed refusal. Dispatch turns it into a correlated `environment.error`
+ * reply carrying `code`; the message must stay free of paths and secrets.
+ */
+export class EnvironmentCodeError extends Error {
+  constructor(
+    readonly code: EnvironmentErrorCode,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+/**
+ * `unknown_execution`: never accepted for this binding and now guaranteed never to run.
+ * Only raised when a durable fence (a FULL-committed tombstone or the generation's
+ * permanent retirement) guarantees the ID can never be accepted; the gateway may then
+ * commit `not_started` for an intent it persisted.
+ *
+ * PRECONDITION (operational, not enforced): this journal file is never restored from a
+ * backup independently of the gateway authority. A node-only restore of an older
+ * environment-journal.sqlite would make a retired generation answer `unknown_execution`
+ * for work it accepted (and maybe ran) after that backup was taken, letting the gateway
+ * commit `not_started` for an effect that happened. Restore both ends together or not at all.
+ */
+const neverAccepted = () =>
+  new EnvironmentCodeError(
+    'unknown_execution',
+    'Unknown execution: never accepted and cannot start',
+  );
+const retiredGeneration = () => new EnvironmentCodeError('stale_epoch', 'Retired generation');
+const retiredBeforeStart = (): Terminal => ({
+  state: 'cancelled',
+  effect: 'not_started',
+  truncated: false,
+  artifacts: [],
+  error: {
+    code: 'stale_epoch',
+    message: 'Writer generation retired before this execution started',
+  },
+});
 const TERMINAL = new Set(['rejected', 'completed', 'failed', 'cancelled', 'unknown']);
 interface Row {
   id: string;
@@ -78,6 +120,11 @@ export class ExecutionJournal {
       );
       CREATE TABLE IF NOT EXISTS env_quarantines (
         binding TEXT PRIMARY KEY REFERENCES env_bindings(binding), paths TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS env_tombstones (
+        binding TEXT NOT NULL REFERENCES env_bindings(binding), id TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('never_accepted','reclaimed')), at INTEGER NOT NULL,
+        PRIMARY KEY(binding, id)
       );`);
     this.inner = new InnerJournal(this.db);
   }
@@ -108,7 +155,7 @@ export class ExecutionJournal {
         .get() as { n: number }
     ).n;
     if (this.usage() + bytes + (active + 1) * RESULT_BYTES > this.softCap)
-      throw new Error('Journal soft cap exceeded');
+      throw new EnvironmentCodeError('quota_exceeded', 'Journal soft cap exceeded');
   }
   bindings(): Binding[] {
     return (this.db.query('SELECT binding FROM env_bindings').all() as { binding: string }[]).map(
@@ -119,7 +166,7 @@ export class ExecutionJournal {
     if (![descriptor, policy].every((hash) => /^[a-f0-9]{64}$/.test(hash)))
       throw new Error('Invalid revision');
     const grant = this.grant(binding);
-    if (grant.retired) throw new Error('Retired generation');
+    if (grant.retired) throw retiredGeneration();
     this.db
       .query('UPDATE env_bindings SET descriptor=?,policy=? WHERE binding=?')
       .run(descriptor, policy, grant.binding);
@@ -137,9 +184,14 @@ export class ExecutionJournal {
   }
   compactRetired(binding: Binding): number {
     const grant = this.grant(binding);
-    if (!grant.retired) throw new Error('Generation is not fenced');
+    if (!grant.retired) throw new EnvironmentCodeError('stale_epoch', 'Generation is not fenced');
     return this.db
       .transaction(() => {
+        // Retirement already refuses every start, so never-accepted tombstones are
+        // redundant here: an unknown ID of a retired generation stays unknown_execution.
+        this.db
+          .query("DELETE FROM env_tombstones WHERE binding=? AND kind='never_accepted'")
+          .run(grant.binding);
         const rows = this.db
           .query('SELECT * FROM env_executions WHERE binding=?')
           .all(grant.binding) as Row[];
@@ -147,6 +199,12 @@ export class ExecutionJournal {
         for (const row of rows) {
           this.reclaim(binding, row.id);
           if (!this.status(binding, row.id).reclaimed) continue;
+          // Remember the ID so a later status cannot claim it was never accepted.
+          this.db
+            .query(
+              "INSERT OR REPLACE INTO env_tombstones(binding,id,kind,at) VALUES (?,?,'reclaimed',?)",
+            )
+            .run(grant.binding, row.id, this.now());
           this.db.query('DELETE FROM env_executions WHERE id=?').run(row.id);
           count++;
         }
@@ -163,25 +221,41 @@ export class ExecutionJournal {
     const grant = this.db
       .query('SELECT * FROM env_bindings WHERE binding=?')
       .get(key) as Grant | null;
-    if (!grant) throw new Error('Invalid binding');
+    if (!grant) throw new EnvironmentCodeError('invalid_binding', 'Invalid binding');
     return grant;
   }
-  /** Revisions are provisioned by trusted node policy resolution, never by start(). */
-  provision(binding: Binding, descriptor: string, policy: string): void {
+  /**
+   * Revisions are provisioned by trusted node policy resolution, never by start().
+   * `fresh` (node executors): refuse an existing generation, so a restart can never
+   * bring back an old executor epoch; fenced generations are only adopted read-only.
+   */
+  provision(
+    binding: Binding,
+    descriptor: string,
+    policy: string,
+    options: { fresh?: boolean } = {},
+  ): void {
     const key = this.key(binding);
     if (![descriptor, policy].every((hash) => /^[a-f0-9]{64}$/.test(hash)))
       throw new Error('Invalid revision');
     this.db
       .transaction(() => {
-        this.assertNotQuarantined(binding);
-        const old = this.db
-          .query('SELECT * FROM env_bindings WHERE binding=?')
-          .get(key) as Grant | null;
-        if (old?.retired) throw new Error('Retired generation');
-        if (old) {
-          if (old.descriptor !== descriptor || old.policy !== policy)
-            throw new Error('Binding already provisioned with different revisions');
-          return;
+        if (options.fresh) {
+          this.assertFreshProvisionable(binding);
+        } else {
+          this.assertNotQuarantined(binding);
+          const old = this.db
+            .query('SELECT * FROM env_bindings WHERE binding=?')
+            .get(key) as Grant | null;
+          if (old?.retired) throw retiredGeneration();
+          if (old) {
+            if (old.descriptor !== descriptor || old.policy !== policy)
+              throw new EnvironmentCodeError(
+                'conflict',
+                'Binding already provisioned with different revisions',
+              );
+            return;
+          }
         }
         this.db
           .query('INSERT INTO env_bindings(binding,descriptor,policy) VALUES (?,?,?)')
@@ -189,8 +263,45 @@ export class ExecutionJournal {
       })
       .immediate();
   }
+  /**
+   * Fresh (node executor) provisioning eligibility, side-effect free: the generation is
+   * new, not quarantined, and no OTHER generation of the same node session is still
+   * active (two live generations of one session must never coexist). `replacing` is the
+   * one generation a fenced replacement is about to retire (refresh pre-check only).
+   */
+  assertFreshProvisionable(binding: Binding, replacing?: Binding): void {
+    const key = this.key(binding);
+    this.assertNotQuarantined(binding);
+    const old = this.db.query('SELECT retired FROM env_bindings WHERE binding=?').get(key) as Pick<
+      Grant,
+      'retired'
+    > | null;
+    if (old?.retired) throw retiredGeneration();
+    if (old)
+      throw new EnvironmentCodeError(
+        'conflict',
+        'Binding already provisioned; use a fenced replacement generation',
+      );
+    const except = replacing ? this.key(replacing) : undefined;
+    const live = this.db
+      .query(
+        `SELECT binding FROM env_bindings WHERE retired=0
+          AND json_extract(binding,'$.nodeId')=? AND json_extract(binding,'$.sessionId')=?`,
+      )
+      .all(binding.nodeId, binding.sessionId) as { binding: string }[];
+    if (live.some((row) => row.binding !== except))
+      throw new EnvironmentCodeError(
+        'conflict',
+        'Another generation of this session is still live; fence and retire it first',
+      );
+  }
   isRetired(binding: Binding): boolean {
     return Boolean(this.grant(binding).retired);
+  }
+  isProvisioned(binding: Binding): boolean {
+    return Boolean(
+      this.db.query('SELECT binding FROM env_bindings WHERE binding=?').get(this.key(binding)),
+    );
   }
   /** Node supervisor only: persist the fence and retained lease roots before reconciliation. */
   quarantine(binding: Binding, paths: string[]): void {
@@ -236,19 +347,37 @@ export class ExecutionJournal {
             entry.binding.workspaceId === binding.workspaceId),
       )
     )
-      throw new Error('Environment binding quarantined; aggregate cleanup unverified');
+      throw new EnvironmentCodeError(
+        'unavailable_sandbox',
+        'Environment binding quarantined; aggregate cleanup unverified',
+      );
   }
-  /** Permanent fence: records remain queryable, but no old starts are admitted. */
-  retire(binding: Binding): void {
-    const grant = this.grant(binding);
-    this.db.query('UPDATE env_bindings SET retired=1 WHERE binding=?').run(grant.binding);
+  /**
+   * Permanent fence: records remain queryable, but no old starts are admitted. In the
+   * same transaction every still-queued (`accepted`, never claimed) record of the
+   * generation becomes `cancelled/not_started`, so revocation never leaves startable
+   * work behind. Running work is untouched; its executor still reports a terminal.
+   */
+  retire(binding: Binding): ExecutionRecord[] {
+    return this.db
+      .transaction(() => {
+        const grant = this.grant(binding);
+        this.db.query('UPDATE env_bindings SET retired=1 WHERE binding=?').run(grant.binding);
+        const queued = this.db
+          .query(
+            "SELECT * FROM env_executions WHERE binding=? AND json_extract(record,'$.state')='accepted'",
+          )
+          .all(grant.binding) as Row[];
+        return queued.map((row) => this.finishRecord(this.record(row), retiredBeforeStart()));
+      })
+      .immediate();
   }
   private row(binding: Binding, id: string): Row {
     const grant = this.grant(binding);
     const row = this.db
       .query('SELECT * FROM env_executions WHERE id=? AND binding=?')
       .get(id, grant.binding) as Row | null;
-    if (!row) throw new Error('Unknown execution');
+    if (!row) throw new EnvironmentCodeError('unknown', 'Unknown execution');
     return row;
   }
   private record(row: Row): ExecutionRecord {
@@ -264,6 +393,56 @@ export class ExecutionJournal {
   status(binding: Binding, id: string): ExecutionRecord {
     return this.record(this.row(binding, id));
   }
+  /**
+   * Wire status lookup (R1). An ID this binding never accepted is durably tombstoned
+   * (FULL commit) while the generation is active, so a late start can never create it;
+   * a retired generation already refuses every start. Either way the caller gets
+   * `unknown_execution`. Lookups are strictly per binding: other bindings' IDs and
+   * tombstones are invisible. Reclaimed records report `expired`, never "not accepted".
+   */
+  query(binding: Binding, id: string): ExecutionRecord {
+    // Read first without a write lock: a record, a tombstone or a retired generation is
+    // already a stable answer (all are monotonic). Only a missing ID of an active
+    // generation needs the IMMEDIATE transaction that writes its tombstone.
+    const read = this.lookup(binding, id);
+    const record =
+      read.record ??
+      (read.tombstoned || read.retired
+        ? undefined
+        : this.db.transaction(() => this.lookupOrTombstone(binding, id)).immediate());
+    // Retired/tombstoned: see the backup-restore precondition on neverAccepted().
+    if (!record) throw neverAccepted();
+    return record;
+  }
+  private lookup(
+    binding: Binding,
+    id: string,
+  ): { grant: Grant; record?: ExecutionRecord; tombstoned: boolean; retired: boolean } {
+    const grant = this.grant(binding);
+    if (typeof id !== 'string' || !UUID.test(id))
+      throw new EnvironmentCodeError('unknown', 'Unknown execution');
+    const row = this.db
+      .query('SELECT * FROM env_executions WHERE id=? AND binding=?')
+      .get(id, grant.binding) as Row | null;
+    if (row) return { grant, record: this.record(row), tombstoned: false, retired: false };
+    const tombstone = this.db
+      .query('SELECT kind FROM env_tombstones WHERE binding=? AND id=?')
+      .get(grant.binding, id) as { kind: string } | null;
+    if (tombstone?.kind === 'reclaimed')
+      throw new EnvironmentCodeError('expired', 'Execution record was reclaimed');
+    return { grant, tombstoned: Boolean(tombstone), retired: Boolean(grant.retired) };
+  }
+  private lookupOrTombstone(binding: Binding, id: string): ExecutionRecord | undefined {
+    const { grant, record, tombstoned } = this.lookup(binding, id);
+    if (record) return record;
+    if (!tombstoned && !grant.retired) {
+      this.assertAdmissionCapacity(1024);
+      this.db
+        .query("INSERT INTO env_tombstones(binding,id,kind,at) VALUES (?,?,'never_accepted',?)")
+        .run(grant.binding, id, this.now());
+    }
+    return undefined;
+  }
 
   /** Transaction commits acceptance/rejection before callers may start any hook/effect. */
   accept(value: ExecutionIntent): { fresh: boolean; record: ExecutionRecord } {
@@ -271,8 +450,17 @@ export class ExecutionJournal {
     return this.db
       .transaction(() => {
         const grant = this.grant(intent.binding);
-        if (grant.retired) throw new Error('Retired generation');
+        if (grant.retired) throw retiredGeneration();
         this.assertNotQuarantined(intent.binding);
+        if (
+          this.db
+            .query('SELECT id FROM env_tombstones WHERE binding=? AND id=?')
+            .get(grant.binding, intent.executionId)
+        )
+          throw new EnvironmentCodeError(
+            'conflict',
+            'Execution ID was tombstoned; it cannot start',
+          );
         const previous = this.db
           .query('SELECT * FROM env_executions WHERE id=?')
           .get(intent.executionId) as Row | null;
@@ -283,7 +471,7 @@ export class ExecutionJournal {
               ? previous.intent !== `sha256:${digest(intent, REQUEST_BYTES)}`
               : previous.intent !== canonicalJson(intent, REQUEST_BYTES))
           )
-            throw new Error('Execution ID conflict');
+            throw new EnvironmentCodeError('conflict', 'Execution ID conflict');
           return { fresh: false, record: this.record(previous) };
         }
         this.assertAdmissionCapacity(Buffer.byteLength(canonicalJson(intent, REQUEST_BYTES)));
@@ -331,16 +519,25 @@ export class ExecutionJournal {
       .immediate();
   }
 
-  /** Exactly one successful claim in this executor lifetime. Duplicates cannot run. */
+  /**
+   * Exactly one successful claim in this executor lifetime. Duplicates cannot run.
+   * A retired generation never claims: still-queued work becomes `cancelled/not_started`
+   * (normally already done by retire()) and that non-running record is returned; any
+   * other record gets a typed `stale_epoch` refusal. Either way a revoked session's
+   * queue is a per-item outcome, never a node-wide fault.
+   */
   claim(binding: Binding, id: string): ExecutionRecord {
     return this.db
       .transaction(() => {
         const grant = this.grant(binding);
-        if (grant.retired) throw new Error('Retired generation');
         const row = this.row(binding, id);
         const record = this.record(row);
+        if (grant.retired) {
+          if (record.state === 'accepted') return this.finishRecord(record, retiredBeforeStart());
+          throw retiredGeneration();
+        }
         if (record.state !== 'accepted' || record.cancelRequested)
-          throw new Error('Execution is not startable');
+          throw new EnvironmentCodeError('conflict', 'Execution is not startable');
         if (this.now() >= row.deadline_at)
           return this.finishRecord(record, {
             state: 'failed',
@@ -356,10 +553,12 @@ export class ExecutionJournal {
       .immediate();
   }
 
+  /** Unknown IDs are tombstoned exactly like query(); cancelling them reports `unknown_execution`. */
   cancel(binding: Binding, id: string): ExecutionRecord {
-    return this.db
+    const result = this.db
       .transaction(() => {
-        const record = this.status(binding, id);
+        const record = this.lookupOrTombstone(binding, id);
+        if (!record) return undefined;
         if (TERMINAL.has(record.state)) return record;
         record.cancelRequested = true;
         if (record.state === 'accepted')
@@ -374,6 +573,8 @@ export class ExecutionJournal {
         return this.save(record);
       })
       .immediate();
+    if (!result) throw neverAccepted();
+    return result;
   }
 
   appendEvent(
@@ -427,7 +628,7 @@ export class ExecutionJournal {
         artifact.workspaceId !== record.binding.workspaceId ||
         artifact.sessionId !== record.binding.sessionId
       )
-        throw new Error('Artifact ownership mismatch');
+        throw new EnvironmentCodeError('invalid_binding', 'Artifact ownership mismatch');
     }
     const resultDigest = digest(
       {
@@ -494,41 +695,74 @@ export class ExecutionJournal {
 
   /** Only after fencing the prior executor; never automatically dispatch recovered work. */
   recover(binding: Binding): ExecutionRecord[] {
+    return this.db.transaction(() => this.recoverRows(binding)).immediate();
+  }
+  /**
+   * Supervisor-only, after the old executor is stopped: classify unfinished work and
+   * permanently fence the generation in ONE transaction, so no crash can leave a
+   * recovered-but-startable or retired-but-unrecovered generation.
+   */
+  recoverAndRetire(binding: Binding): ExecutionRecord[] {
     return this.db
       .transaction(() => {
-        const grant = this.grant(binding);
-        const rows = this.db
-          .query('SELECT * FROM env_executions WHERE binding=?')
-          .all(grant.binding) as Row[];
-        const recovered: ExecutionRecord[] = [];
-        for (const row of rows) {
-          const record = this.record(row);
-          if (
-            !row.intent.startsWith('sha256:') &&
-            validateIntentText(row.intent).capability === 'ptc'
-          ) {
-            // Registration may not have happened before the crash. Missing parent is
-            // safe; any registered inner operations must be sealed before recovery.
-            const parent = this.db.query('SELECT id FROM ptc_parents WHERE id=?').get(row.id);
-            if (parent) this.inner.seal(binding, row.id);
-          }
-          if (record.state === 'running' || record.state === 'accepted')
-            recovered.push(
-              this.finishRecord(record, {
-                state: record.state === 'running' ? 'unknown' : 'failed',
-                effect: record.state === 'running' ? 'unknown' : 'not_started',
-                truncated: false,
-                artifacts: [],
-                error: {
-                  code: 'unknown',
-                  message: 'Executor stopped; do not replay this execution',
-                },
-              }),
-            );
-        }
+        const recovered = this.recoverRows(binding);
+        this.retire(binding);
         return recovered;
       })
       .immediate();
+  }
+  /**
+   * Trusted node startup only, before any executor, lease or admission exists: no
+   * executor from the previous process can still report, so every generation left
+   * active (or with unfinished records) by an abrupt stop is recovered and retired.
+   * Never replays; the gateway reconciles through status on adopted generations.
+   */
+  sweepStartup(): Array<{ binding: Binding; recovered: ExecutionRecord[] }> {
+    return (
+      this.db
+        .query(
+          `SELECT binding FROM env_bindings b WHERE retired=0 OR EXISTS (
+            SELECT 1 FROM env_executions e WHERE e.binding=b.binding
+            AND json_extract(e.record,'$.state') IN ('accepted','running'))`,
+        )
+        .all() as { binding: string }[]
+    ).map((row) => {
+      const binding = bindingSchema.parse(parseJson(row.binding, CONTROL_BYTES));
+      return { binding, recovered: this.recoverAndRetire(binding) };
+    });
+  }
+  private recoverRows(binding: Binding): ExecutionRecord[] {
+    const grant = this.grant(binding);
+    const rows = this.db
+      .query('SELECT * FROM env_executions WHERE binding=?')
+      .all(grant.binding) as Row[];
+    const recovered: ExecutionRecord[] = [];
+    for (const row of rows) {
+      const record = this.record(row);
+      if (
+        !row.intent.startsWith('sha256:') &&
+        validateIntentText(row.intent).capability === 'ptc'
+      ) {
+        // Registration may not have happened before the crash. Missing parent is
+        // safe; any registered inner operations must be sealed before recovery.
+        const parent = this.db.query('SELECT id FROM ptc_parents WHERE id=?').get(row.id);
+        if (parent) this.inner.seal(binding, row.id);
+      }
+      if (record.state === 'running' || record.state === 'accepted')
+        recovered.push(
+          this.finishRecord(record, {
+            state: record.state === 'running' ? 'unknown' : 'failed',
+            effect: record.state === 'running' ? 'unknown' : 'not_started',
+            truncated: false,
+            artifacts: [],
+            error: {
+              code: 'unknown',
+              message: 'Executor stopped; do not replay this execution',
+            },
+          }),
+        );
+    }
+    return recovered;
   }
 
   ack(binding: Binding, id: string, resultDigest: string): ExecutionRecord {
@@ -536,7 +770,7 @@ export class ExecutionJournal {
       .transaction(() => {
         const record = this.status(binding, id);
         if (!record.resultDigest || record.resultDigest !== resultDigest)
-          throw new Error('Result digest mismatch');
+          throw new EnvironmentCodeError('conflict', 'Result digest mismatch');
         if (!record.acknowledged) {
           this.db.query('UPDATE env_executions SET ack_at=? WHERE id=?').run(this.now(), id);
           record.acknowledged = true;
@@ -577,7 +811,7 @@ export class ExecutionJournal {
     this.db
       .transaction(() => {
         const grant = this.grant(intent.binding);
-        if (grant.retired) throw new Error('Retired generation');
+        if (grant.retired) throw retiredGeneration();
         const encoded = canonicalJson(intent, REQUEST_BYTES);
         const previous = this.db
           .query('SELECT intent FROM env_outbox WHERE id=?')

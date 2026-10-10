@@ -43,6 +43,16 @@ export class MixedCentral {
     )
       throw new Error('Invalid mixed central final arguments');
     const journal = this.options.authority.inner;
+    let known = false;
+    try {
+      journal.status(intent.binding, intent.parentExecutionId, intent.innerOperationId);
+      known = true;
+    } catch {
+      /* A fresh inner operation: admission checks below. */
+    }
+    // Retries of an accepted operation only read durable evidence. A fresh operation needs
+    // the active writer generation; a finished parent is sealed and refused by accept().
+    if (!known) this.options.authority.assertActiveGeneration(intent.binding);
     const accepted = journal.accept(intent);
     // Final-argument evidence is immutable and durably bound before the central effect.
     if (accepted.fresh) {

@@ -436,6 +436,7 @@ export async function runCandidateSample(
       nodeId: 'test',
       journal: nodeJ,
       authorize,
+      unfencedHarness: true,
       // Node → gateway progress/operation events and results over the same delayed
       // subchannel. No production composition exists yet; this mirrors the host wiring.
       event: (event) => {

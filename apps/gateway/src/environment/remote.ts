@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { canonicalJson } from './json.js';
-import { ExecutionJournal } from './journal.js';
+import { ExecutionJournal, type EnvironmentErrorCode } from './journal.js';
 import type { CentralLink } from './central-link.js';
 import type { ArtifactReference } from './artifact-transfer.js';
 import {
@@ -14,6 +14,30 @@ import {
   type ExecutionIntent,
   type ExecutionRecord,
 } from './protocol.js';
+
+/**
+ * A correlated `environment.error` reply from the node: an ordinary refusal of one
+ * request, never a link failure. `unknown_execution` from an online node means the ID
+ * was never accepted and a durable node fence guarantees it can never run.
+ */
+export class EnvironmentRequestError extends Error {
+  constructor(
+    readonly code: EnvironmentErrorCode,
+    readonly detail: string,
+  ) {
+    super(`${code}: ${detail}`);
+  }
+}
+/**
+ * Typed check for a node's correlated refusal. Callers must use this (optionally with a
+ * code) instead of matching message text: untyped node errors carry generic messages.
+ */
+export function isEnvironmentRequestError(
+  error: unknown,
+  code?: EnvironmentErrorCode,
+): error is EnvironmentRequestError {
+  return error instanceof EnvironmentRequestError && (code === undefined || error.code === code);
+}
 
 /** Gateway adapter: supplied bindings come from trusted service state, never model input. */
 export class RemoteEnvironment implements Environment {
@@ -85,7 +109,7 @@ export class RemoteEnvironment implements Environment {
     clearTimeout(pending.timer);
     this.pending.delete(message.requestId);
     if (message.type === 'environment.error')
-      pending.reject(new Error(`${message.error.code}: ${message.error.message}`));
+      pending.reject(new EnvironmentRequestError(message.error.code, message.error.message));
     else pending.resolve(message);
   }
   private wakeResult(executionId: string): void {

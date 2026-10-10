@@ -74,12 +74,38 @@ export class DirectCentral {
         acknowledged: false,
         reclaimed: false,
       };
-    const row = this.options.authority.inner.operations.db
+    const db = this.options.authority.inner.operations.db;
+    const hash = digest(intent, REQUEST_BYTES);
+    // GatewayOperations durably records an operation before any hook or effect. No row
+    // (and nothing active here) proves it never started: fence the ID with a terminal
+    // not_started row in the same database, so a later start returns it and never runs.
+    db.transaction(() => {
+      if (db.query('SELECT id FROM central_operations WHERE id=?').get(intent.executionId)) return;
+      db.query(
+        "INSERT INTO central_operations(id,digest,state,result) VALUES (?,?,'completed',?)",
+      ).run(
+        intent.executionId,
+        hash,
+        canonicalJson(
+          {
+            state: 'rejected',
+            effect: 'not_started',
+            artifacts: [],
+            truncated: false,
+            error: {
+              code: 'cancelled',
+              message: 'Central operation was never started; it did not run.',
+            },
+          },
+          RESULT_BYTES,
+        ),
+      );
+    }).immediate();
+    const row = db
       .query('SELECT digest,result FROM central_operations WHERE id=?')
-      .get(intent.executionId) as { digest: string; result: string | null } | null;
-    if (row && row.digest !== digest(intent, REQUEST_BYTES))
-      throw new Error('Central status identity conflict');
-    const terminal = row?.result
+      .get(intent.executionId) as { digest: string; result: string | null };
+    if (row.digest !== hash) throw new Error('Central status identity conflict');
+    const terminal = row.result
       ? terminalSchema.parse(parseJson(row.result, RESULT_BYTES))
       : {
           state: 'unknown' as const,

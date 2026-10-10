@@ -70,3 +70,64 @@ test('additional host on shared gateway database does not recover/interfere with
   journal.close();
   db.close();
 });
+
+test('host startup recovers gateway-placed PTC records left running, before any admission', async () => {
+  const db = new GatewayDatabase(':memory:'),
+    journal = new ExecutionJournal(':memory:');
+  const unsupported = async (): Promise<never> => {
+    throw new Error('fixture');
+  };
+  const { intentDigest } = await import('../src/environment/protocol.js');
+  const binding = {
+    nodeId: 'n',
+    workspaceId: 'n:w',
+    sessionId: randomUUID(),
+    writerEpoch: randomUUID(),
+    executorEpoch: randomUUID(),
+  };
+  const value = {
+    binding,
+    executionId: randomUUID(),
+    runId: randomUUID(),
+    turnId: randomUUID(),
+    toolCallId: randomUUID(),
+    descriptorRevision: 'a'.repeat(64),
+    policyRevision: 'b'.repeat(64),
+    capability: 'ptc',
+    arguments: { code: 'return 1;' },
+    budgetMs: 1000,
+  };
+  journal.provision(binding, 'a'.repeat(64), 'b'.repeat(64));
+  journal.accept({ ...value, argumentDigest: intentDigest(value) });
+  journal.claim(binding, value.executionId);
+  const host = createGatewayRuntimeHost({
+    database: db.raw,
+    journal,
+    owner: () => 'alice',
+    environment: {
+      describe: unsupported,
+      start: unsupported,
+      status: unsupported,
+      cancel: unsupported,
+      ack: unsupported,
+      pinArtifact: unsupported,
+      fetchArtifact: unsupported,
+    },
+    online: () => false,
+    inference: { run: unsupported },
+    models: [{ provider: 'fake', id: 'fake', thinking: 'off' as const, contextWindow: 100000 }],
+    authorizeModel: () => {},
+    authorize: () => {},
+    workerExecutable: '/unused',
+    ptcWorkerExecutable: '/unused',
+    systemPrompt: 'fixture',
+    tools: [],
+  });
+  expect(journal.status(binding, value.executionId)).toMatchObject({
+    state: 'unknown',
+    effect: 'unknown',
+  });
+  host.authority.close();
+  journal.close();
+  db.close();
+});

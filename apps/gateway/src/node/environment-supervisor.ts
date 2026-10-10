@@ -17,6 +17,43 @@ export function restoreEnvironmentQuarantines(
     writes.quarantine(entry.binding.sessionId, entry.paths);
 }
 
+/**
+ * Trusted startup, after quarantine restore and before any executor, lease, grant or
+ * admission: no executor of the previous process can still report, so every
+ * generation it left active or unfinished (abrupt crash, power loss) is recovered
+ * (running→unknown, accepted→failed/not_started) and retired in one transaction each.
+ * Never replays. Returns the swept generations so a composition can adopt them.
+ */
+export function sweepEnvironmentGenerations(
+  journal: ExecutionJournal,
+): Array<{ binding: Binding; recovered: ExecutionRecord[] }> {
+  return journal.sweepStartup();
+}
+
+/**
+ * Trusted composition, after the startup sweep: expose every retired (fenced) generation
+ * of this node read-only so the gateway can reconcile status/ACK, including
+ * `unknown_execution` for intents the node never accepted. Generations the composition's
+ * authorize() refuses stay hidden (their status replies `invalid_binding`).
+ */
+export function adoptRetiredGenerations(
+  environment: Pick<LocalEnvironment, 'adoptRetired'>,
+  journal: ExecutionJournal,
+  nodeId: string,
+): Binding[] {
+  const adopted: Binding[] = [];
+  for (const binding of journal.bindings()) {
+    if (binding.nodeId !== nodeId || !journal.isRetired(binding)) continue;
+    try {
+      environment.adoptRetired(binding);
+      adopted.push(binding);
+    } catch {
+      /* Unauthorized or already live: never exposed through this path. */
+    }
+  }
+  return adopted;
+}
+
 /** Recovery is a trusted lifecycle action, never an execution/status RPC. */
 export async function fenceEnvironment(options: {
   binding: Binding;
@@ -45,8 +82,7 @@ export async function fenceEnvironment(options: {
   // Recording unfinished work as unknown and retiring the generation only narrow
   // what it may do, so both happen even under quarantine; that is what lets the
   // gateway reconcile after a restart on platforms without aggregate fencing.
-  const recovered = options.journal.recover(options.binding);
-  options.journal.retire(options.binding);
+  const recovered = options.journal.recoverAndRetire(options.binding);
   // A later successful close cannot silently clear an earlier persistent fence.
   if (
     !quarantined &&

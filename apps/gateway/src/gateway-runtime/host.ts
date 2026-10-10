@@ -248,6 +248,8 @@ export function createGatewayRuntimeHost(options: {
     authorize: (intent) =>
       authority.assertOwner(intent.binding.sessionId, options.owner(intent.binding)),
   });
+  // Gateway-placed scripts never survive a restart; recover them before any admission.
+  ptc.recover();
   const runtime = new GatewayAgentRuntime({
     authority,
     environment: options.environment,

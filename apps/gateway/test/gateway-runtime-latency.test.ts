@@ -120,6 +120,7 @@ test('pushed results wake waiters with the verified receipt; timeouts and discon
       nodeId: 'node',
       journal: node,
       authorize,
+      unfencedHarness: true,
       result: (record) =>
         void remote.receive({
           version: 1,

@@ -102,6 +102,7 @@ test.skipIf(!smallFs)(
       nodeId: 'n',
       journal,
       authorize: () => undefined,
+      unfencedHarness: true,
       admission: new EnvironmentAdmission(),
       fault: (error) => faults.push(error),
       result: (record) => delivered.push(record),

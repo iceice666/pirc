@@ -82,7 +82,12 @@ test('opt-in environment harness crosses authenticated node WebSocket with indep
     };
     const artifact = await artifacts.put(binding, Buffer.from('image-wire'), 'image/png');
     const transfer = new ArtifactTransfer({ storage: artifacts, authorize, online: () => true });
-    const local = new LocalEnvironment({ nodeId: 'test', journal: nodeJournal, authorize });
+    const local = new LocalEnvironment({
+      nodeId: 'test',
+      journal: nodeJournal,
+      authorize,
+      unfencedHarness: true,
+    });
     let effects = 0;
     local.provision(descriptor, {
       healthy: true,

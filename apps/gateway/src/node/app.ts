@@ -54,7 +54,11 @@ import { loadRoles, roleBriefs } from '../agent/roles.js';
 import type { EnvironmentInteractions } from './environment-interactions.js';
 import { ExecutionJournal } from '../environment/journal.js';
 import { NodeWriterFence } from '../gateway-runtime/node-writer-fence.js';
-import { restoreEnvironmentQuarantines } from './environment-supervisor.js';
+import {
+  restoreEnvironmentQuarantines,
+  sweepEnvironmentGenerations,
+} from './environment-supervisor.js';
+import type { Binding } from '../environment/protocol.js';
 
 const sessionParams = z.object({ id: z.string().min(1) });
 const createWorkspaceBody = z.union([
@@ -167,7 +171,17 @@ export interface NodeServices {
   runners: RunnerManager;
   writes: WriteBroker;
   environmentJournal: ExecutionJournal;
+  /**
+   * Durable writer fence; revoke() and supersession retire the journal generations.
+   * A production LocalEnvironment composition MUST pass `fence: writerFence` (provisioning
+   * then requires the newest fenced, unrevoked generation of the session; LocalEnvironment
+   * refuses to construct without a fence unless `unfencedHarness` is set, which is for
+   * tests only) and MUST call adoptRetiredGenerations() after this startup sweep, before
+   * serving the gateway, so swept/fenced generations stay reconcilable after a restart.
+   */
   writerFence: NodeWriterFence;
+  /** Generations recovered and retired by this startup's sweep (never replayed). */
+  sweptGenerations: Binding[];
   /** Providers from the daemon, used for agents started from now on. */
   models: ModelStore;
   terminals: TerminalManager;
@@ -216,8 +230,20 @@ export async function buildNodeApp(
   const writerFence = new NodeWriterFence(
     path.join(config.stateDir, 'writer-fences.sqlite'),
     config.nodeId,
+    environmentJournal,
   );
   restoreEnvironmentQuarantines(environmentJournal, writes);
+  // No executor exists yet: generations an abrupt stop left active or unfinished are
+  // recovered and retired atomically before any lease, grant or admission. No replay.
+  const swept = sweepEnvironmentGenerations(environmentJournal);
+  if (swept.length)
+    app.log.warn(
+      {
+        generations: swept.length,
+        recovered: swept.reduce((sum, entry) => sum + entry.recovered.length, 0),
+      },
+      'environment startup sweep retired unfenced generations',
+    );
   // Filled by the daemon on registration; agents started before that get no providers.
   const models = new ModelStore();
   const browser = new BrowserManager(config.browser);
@@ -755,6 +781,7 @@ export async function buildNodeApp(
       writes,
       environmentJournal,
       writerFence,
+      sweptGenerations: swept.map((entry) => entry.binding),
       models,
       terminals,
       terminalStreams,

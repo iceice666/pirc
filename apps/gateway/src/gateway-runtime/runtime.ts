@@ -36,8 +36,11 @@ import {
   type InferenceRequest,
 } from '../inference-wire.js';
 import { canonicalJson, parseJson, digest } from '../environment/json.js';
+import { PtcError } from '../agent/ptc/contracts.js';
+import { isEnvironmentRequestError } from '../environment/remote.js';
 import {
   intentDigest,
+  validateIntent,
   REQUEST_BYTES,
   type Binding,
   type Descriptor,
@@ -63,6 +66,11 @@ interface ResultWaiter {
     ms: number,
     signal?: AbortSignal,
   ): Promise<ExecutionRecord | undefined>;
+}
+/** Typed node answer: the ID was never accepted and a durable fence prevents it running. */
+function unknownExecution(error: unknown): boolean {
+  // Only the typed transport error carries a code; message text is never trusted.
+  return isEnvironmentRequestError(error, 'unknown_execution');
 }
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
@@ -120,6 +128,8 @@ interface ActiveRun {
   queueSequence?: number;
   /** ACKs sent after their durable commits; awaited before the run returns, not per tool. */
   acks?: Promise<void>[];
+  /** Committed intents this process has not yet handed to execution(): provably unsent. */
+  undispatched?: ExecutionIntent[];
   settled: Promise<void>;
   settle(): void;
 }
@@ -175,6 +185,8 @@ export class GatewayAgentRuntime {
       };
       /** Opt-in PTC service; absent preserves M3-only harness behavior. */
       ptc?: {
+        /** True only when a gateway-placed script was never locally accepted. */
+        neverAccepted?(intent: ExecutionIntent): boolean;
         start(
           intent: ExecutionIntent,
           descriptor: Descriptor,
@@ -443,31 +455,71 @@ export class GatewayAgentRuntime {
     };
   }
 
-  private intents(run: ActiveRun, turn: AuthorityTurn, message: AssistantMessage) {
+  /**
+   * Durable intents for valid tool calls. A call whose arguments cannot form a valid,
+   * sendable intent (bad PTC script, unknown capability, oversized or too deep input)
+   * is recorded in `rejected` and answered with a typed tool error; nothing is persisted
+   * or dispatched for it, so it can never block the session.
+   */
+  private intents(
+    run: ActiveRun,
+    turn: AuthorityTurn,
+    message: AssistantMessage,
+    rejected = new Map<string, string>(),
+  ) {
     if (message.stopReason !== 'toolUse') return [];
     const tools = this.tools(turn.descriptor);
     return message.content
       .filter((part): part is ToolCall => part.type === 'toolCall')
       .filter((call) => call.name !== 'ptc_docs' && tools.some((tool) => tool.name === call.name))
-      .map((call) => {
-        const value = {
-          binding: run.lease.binding,
-          executionId: randomUUID(),
-          runId: run.input.runId,
-          turnId: turn.input.turnId,
-          toolCallId: randomUUID(),
-          descriptorRevision: turn.descriptor.revision,
-          policyRevision: turn.descriptor.policyRevision,
-          capability: call.name,
-          arguments: parseJson(canonicalJson(call.arguments, REQUEST_BYTES), REQUEST_BYTES),
-          budgetMs:
-            call.name === 'ptc'
-              ? planPtc(call.arguments, turn.descriptor.capabilityCatalog).timeoutMs
-              : Math.min(120_000, turn.descriptor.limits.maxBudgetMs),
-        };
-        const intent: ExecutionIntent = { ...value, argumentDigest: intentDigest(value) };
-        return { intent, modelToolCallId: call.id };
+      .flatMap((call) => {
+        try {
+          return [this.intent(run, turn, call)];
+        } catch (error) {
+          const typed =
+            error instanceof PtcError
+              ? error
+              : new PtcError(
+                  'InvalidArguments',
+                  `${error instanceof Error ? error.message : String(error)}`.slice(0, 2000),
+                );
+          rejected.set(
+            call.id,
+            JSON.stringify({
+              error: { ...typed.toJSON(), message: `${typed.message} Nothing ran.` },
+            }),
+          );
+          return [];
+        }
       });
+  }
+  private intent(run: ActiveRun, turn: AuthorityTurn, call: ToolCall) {
+    const value = {
+      binding: run.lease.binding,
+      executionId: randomUUID(),
+      runId: run.input.runId,
+      turnId: turn.input.turnId,
+      toolCallId: randomUUID(),
+      descriptorRevision: turn.descriptor.revision,
+      policyRevision: turn.descriptor.policyRevision,
+      capability: call.name,
+      arguments: parseJson(canonicalJson(call.arguments, REQUEST_BYTES), REQUEST_BYTES),
+      budgetMs:
+        call.name === 'ptc'
+          ? planPtc(call.arguments, turn.descriptor.capabilityCatalog).timeoutMs
+          : Math.min(120_000, turn.descriptor.limits.maxBudgetMs),
+    };
+    // Same admission persistExecution applies, so commitModel cannot refuse the reply.
+    if (value.budgetMs > turn.descriptor.limits.maxBudgetMs)
+      throw new PtcError(
+        'InvalidArguments',
+        `Requested timeout exceeds this environment's limit of ${Math.floor(
+          turn.descriptor.limits.maxBudgetMs / 1000,
+        )} s.`,
+      );
+    // Validate exactly what will be persisted and sent before committing anything.
+    const intent = validateIntent({ ...value, argumentDigest: intentDigest(value) });
+    return { intent, modelToolCallId: call.id };
   }
   private async commit(record: ExecutionRecord, deferAck?: (ack: Promise<void>) => void) {
     if (!record.terminal || record.reclaimed) throw new Error('Full execution result unavailable');
@@ -564,13 +616,31 @@ export class GatewayAgentRuntime {
       args: intent.arguments,
     });
     try {
+      // From here on the transport may have the intent; until here (same tick, after
+      // ready()) it provably has not. A stopped run aborts its controller first, so a
+      // detached tools loop cannot reach this point after the finally block ran.
+      run.undispatched = (run.undispatched ?? []).filter(
+        (item) => item.executionId !== intent.executionId,
+      );
+      const ptc = this.options.ptc;
       let record = await untilCancelled(
-        intent.capability === 'ptc' && this.options.ptc
-          ? this.options.ptc.start(
-              intent,
-              this.options.authority.executionDescriptor(intent),
-              run.controller.signal,
-            )
+        intent.capability === 'ptc' && ptc
+          ? ptc
+              .start(
+                intent,
+                this.options.authority.executionDescriptor(intent),
+                run.controller.signal,
+              )
+              .catch((error: unknown) => {
+                // A gateway-placed script refused before its local acceptance provably
+                // never ran (same process, same journal): resolve it, then fail the run.
+                if (ptc.neverAccepted?.(intent))
+                  this.options.authority.commitNotStarted(
+                    intent,
+                    'The gateway refused this script before it started; it did not run.',
+                  );
+                throw error;
+              })
           : this.options.central &&
               this.options.authority
                 .executionDescriptor(intent)
@@ -864,13 +934,15 @@ export class GatewayAgentRuntime {
         )
           await this.compactRun(run, turn, model);
         const { message, callId, end } = await this.model(run, turn, model);
-        pending = this.intents(run, turn, message);
+        const rejectedCalls = new Map<string, string>();
+        pending = this.intents(run, turn, message, rejectedCalls);
         this.options.authority.commitModel(
           lease,
           callId,
           entrySchema.parse({ type: 'message', message }),
           pending,
         );
+        run.undispatched = pending.map((item) => item.intent);
         end();
         if (message.stopReason === 'aborted') {
           state = 'interrupted';
@@ -949,7 +1021,12 @@ export class GatewayAgentRuntime {
                 role: 'toolResult',
                 toolCallId: call.id,
                 toolName: call.name,
-                content: [{ type: 'text', text: 'Capability unavailable in this runtime.' }],
+                content: [
+                  {
+                    type: 'text',
+                    text: rejectedCalls.get(call.id) ?? 'Capability unavailable in this runtime.',
+                  },
+                ],
                 isError: true,
                 timestamp: Date.now(),
               },
@@ -1047,6 +1124,20 @@ export class GatewayAgentRuntime {
       throw error;
     } finally {
       clearTimeout(deadline);
+      // Stop any detached tools loop (e.g. after the worker failed) before deciding which
+      // intents provably never reached the transport.
+      if (!run.controller.signal.aborted) run.controller.abort(new Error('Run finished'));
+      // Intents committed with the model reply but never handed to the transport cannot
+      // have run; resolve them now so they never block the session.
+      for (const intent of run.undispatched ?? [])
+        try {
+          this.options.authority.commitNotStarted(
+            intent,
+            'The run stopped before this tool call was dispatched; it did not run.',
+          );
+        } catch {
+          /* Reconcile resolves it later through node status. */
+        }
       try {
         await run.worker?.close();
       } finally {
@@ -1158,14 +1249,30 @@ export class GatewayAgentRuntime {
   async reconcile(sessionId: string, owner: string, after = 0) {
     if (this.active.has(sessionId)) throw new Error('Cannot reconcile during an active run');
     for (const phase of this.options.authority.lifecycleRecovery(sessionId, owner)) {
-      const record =
-        phase.receipt?.effect !== 'unknown' && phase.receipt
-          ? phase.receipt
-          : await untilCancelled(
-              this.options.environment.status(phase.intent.binding, phase.intent.executionId),
-              AbortSignal.timeout(60_000),
-            );
+      let record: ExecutionRecord;
+      try {
+        record =
+          phase.receipt?.effect !== 'unknown' && phase.receipt
+            ? phase.receipt
+            : await untilCancelled(
+                this.options.environment.status(phase.intent.binding, phase.intent.executionId),
+                AbortSignal.timeout(60_000),
+              );
+      } catch (error) {
+        if (!unknownExecution(error) || !this.options.online(phase.intent.binding)) throw error;
+        // Never accepted by the node and durably fenced there: the hook did not run.
+        this.options.authority.commitLifecycleNotStarted(
+          phase.intent,
+          'The node confirmed this lifecycle hook was never accepted; it did not run.',
+        );
+        continue;
+      }
       if (!record.terminal || record.reclaimed) throw new Error('Lifecycle phase still unresolved');
+      if (record.terminal.error?.code === 'unknown_execution' && record.state === 'rejected') {
+        // Gateway-made not-started receipt: the node holds no record to acknowledge.
+        this.options.authority.markLifecycleAck(record.binding, record.executionId);
+        continue;
+      }
       this.options.authority.commitLifecycle(record);
       await this.options.environment.ack(record.binding, record.executionId, record.resultDigest!);
       this.options.authority.markLifecycleAck(record.binding, record.executionId);
@@ -1189,56 +1296,46 @@ export class GatewayAgentRuntime {
         continue;
       }
       let record: ExecutionRecord;
+      // Route by the intent's own placement, never by which services happen to be wired:
+      // asking the node about gateway-side work would turn "never seen" into "not started".
+      const gatewayPlaced =
+        intent.capability !== 'ptc' &&
+        this.options.authority
+          .executionDescriptor(intent)
+          .capabilityCatalog.some(
+            (cap) => cap.name === intent.capability && cap.placement === 'gateway',
+          );
+      if (intent.capability === 'ptc' && !this.options.ptc)
+        throw new Error('PTC service unavailable; reconcile later');
+      if (gatewayPlaced && !this.options.central)
+        throw new Error('Central service unavailable; reconcile later');
       try {
         record = await untilCancelled(
-          intent.capability === 'ptc' && this.options.ptc
-            ? this.options.ptc.status(intent)
-            : this.options.central &&
-                this.options.authority
-                  .executionDescriptor(intent)
-                  .capabilityCatalog.some(
-                    (cap) => cap.name === intent.capability && cap.placement === 'gateway',
-                  )
-              ? this.options.central.status(intent)
+          intent.capability === 'ptc'
+            ? this.options.ptc!.status(intent)
+            : gatewayPlaced
+              ? this.options.central!.status(intent)
               : this.options.environment.status(intent.binding, intent.executionId),
           AbortSignal.timeout(60_000),
         );
       } catch (error) {
-        if (intent.capability !== 'ptc' || !this.options.online(intent.binding)) throw error;
-        const terminal = {
-          state: 'unknown' as const,
-          effect: 'unknown' as const,
-          artifacts: [],
-          truncated: false,
-          error: {
-            code: 'unknown' as const,
-            message:
-              'PTC dispatch status unavailable; original ID retained, script was not replayed',
-          },
-        };
-        record = {
-          binding: intent.binding,
-          executionId: intent.executionId,
-          argumentDigest: intent.argumentDigest,
-          state: 'unknown',
-          effect: 'unknown',
-          finalSeq: 0,
-          cancelRequested: false,
-          acknowledged: false,
-          reclaimed: false,
-          terminal,
-          resultDigest: digest(
-            {
-              binding: intent.binding,
-              executionId: intent.executionId,
-              argumentDigest: intent.argumentDigest,
-              finalSeq: 0,
-              terminal,
-            },
-            16 * 1024 * 1024,
-          ),
-        };
-        this.options.authority.commitPtcResult(record);
+        // Only a node's durable "never accepted" answer proves the call did not run.
+        // Any other failure is retryable; never invent an outcome.
+        if (!unknownExecution(error) || !this.options.online(intent.binding)) throw error;
+        // Evidence the gateway already holds wins over a later "never accepted" answer.
+        const pushed = await (this.options.environment as Partial<ResultWaiter>).awaitResult?.(
+          intent.binding,
+          intent.executionId,
+          0,
+        );
+        if (pushed) record = pushed;
+        else
+          record = this.options.authority.commitNotStarted(
+            intent,
+            'The node confirmed this tool call was never accepted; it did not run.',
+            'node',
+          );
+        if (pushed) await this.commit(record);
         results.push({
           executionId: record.executionId,
           state: record.state,

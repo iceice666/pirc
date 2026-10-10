@@ -79,6 +79,8 @@ async function fixture(
     directCentral?: boolean;
     /** Node pushes terminal results (execution.result) as soon as they are durable. */
     push?: boolean;
+    worker?: () => RuntimeWorker;
+    lifecycleHooks?: NonNullable<Descriptor['lifecycleHooks']>;
   } = {},
 ) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'pirc-runtime-'));
@@ -108,6 +110,7 @@ async function fixture(
   let effects = 0;
   let queries = 0;
   let loseAck = !!options.loseAck;
+  let lie = false;
   const wire: string[] = [];
   const descriptor: Descriptor = {
     binding: lease.binding,
@@ -137,6 +140,7 @@ async function fixture(
     cwdDisplay: '/node-only/workspace',
     sandboxStatus: { active: true },
     limits: { maxActive: 1, maxBudgetMs: options.ptcWorker ? 120_000 : 1000 },
+    ...(options.lifecycleHooks ? { lifecycleHooks: options.lifecycleHooks } : {}),
   };
   if (options.directCentral)
     descriptor.capabilityCatalog.push({
@@ -155,6 +159,7 @@ async function fixture(
     nodeId: 'node',
     journal: nodeJournal,
     authorize,
+    unfencedHarness: true,
     ...(options.push
       ? {
           result: (record: import('../src/environment/protocol.js').ExecutionRecord) => {
@@ -193,6 +198,15 @@ async function fixture(
     send: async (frame) => {
       wire.push(encodeMessage(frame));
       if (frame.type === 'execution.status') queries++;
+      if (lie && frame.type === 'execution.status') {
+        await remote.receive({
+          version: 1,
+          requestId: frame.requestId,
+          type: 'environment.error',
+          error: { code: 'unknown_execution', message: 'Unknown execution: never accepted' },
+        } as never);
+        return;
+      }
       const reply = await dispatchEnvironment(
         local,
         decodeMessage(encodeMessage(frame)),
@@ -283,7 +297,7 @@ async function fixture(
           }
         : {}),
       workerExecutable: options.realWorker ?? '/unused-in-synthetic-fixture',
-      ...(options.realWorker ? {} : { workerFactory: fakeWorker }),
+      ...(options.realWorker ? {} : { workerFactory: options.worker ?? fakeWorker }),
       ...(options.auxiliary ? { auxiliary: options.auxiliary } : {}),
       ...(options.ptcWorker
         ? {
@@ -326,6 +340,14 @@ async function fixture(
     },
     get queries() {
       return queries;
+    },
+    remoteStart: (intent: ExecutionIntent) => remote.start(intent),
+    waitPushed: async (intent: ExecutionIntent) => {
+      for (let i = 0; i < 100 && !gatewayJournal.receipt(intent.binding, intent.executionId); i++)
+        await Bun.sleep(10);
+    },
+    lieUnknown(value: boolean) {
+      lie = value;
     },
     input: (text = 'Read hello.txt') => ({
       runId: randomUUID(),
@@ -523,6 +545,346 @@ test('unknown effects stop the run without another model request or automatic to
   expect((await f.runtime.run(f.lease, 'alice', input)).state).toBe('unknown');
   expect(f.effects).toBe(1);
   expect(f.requests).toHaveLength(1);
+});
+
+test('invalid tool calls become typed tool errors without persisting or dispatching anything', async () => {
+  let rounds = 0;
+  const f = await fixture({
+    ptcWorker: '/unused-gateway-guest',
+    stream: async () => {
+      if (rounds++ > 0) return answer('recovered');
+      return {
+        ...answer(''),
+        stopReason: 'toolUse',
+        content: [
+          {
+            type: 'toolCall',
+            id: 'bad_script',
+            name: 'ptc',
+            arguments: { code: 'this is not js(' },
+          },
+          {
+            type: 'toolCall',
+            id: 'bad_capability',
+            name: 'ptc',
+            arguments: { code: 'return await tools.not_a_tool({});' },
+          },
+          {
+            type: 'toolCall',
+            id: 'bad_args',
+            name: 'ptc',
+            arguments: { code: 'return 1;', extra: true },
+          },
+        ],
+      } as AssistantMessage;
+    },
+  });
+  expect((await f.runtime.run(f.lease, 'alice', f.input())).state).toBe('completed');
+  expect(f.requests).toHaveLength(2);
+  expect(f.effects).toBe(0);
+  expect(f.authority.executions(f.lease.binding.sessionId, 'alice')).toHaveLength(0);
+  const errors = f.requests[1]!.messages.filter(
+    (message) => message.role === 'toolResult' && message.isError,
+  );
+  expect(errors.map((message) => (message as { toolCallId: string }).toolCallId).sort()).toEqual([
+    'bad_args',
+    'bad_capability',
+    'bad_script',
+  ]);
+  for (const message of errors) expect(JSON.stringify(message)).toContain('Nothing ran');
+});
+
+test('intents left undispatched when a run stops are resolved as not started at once', async () => {
+  const f = await fixture({
+    unknown: true,
+    stream: async () => ({
+      ...answer('', true),
+      content: [
+        { type: 'toolCall', id: 'first', name: 'read', arguments: { path: 'a' } },
+        { type: 'toolCall', id: 'second', name: 'read', arguments: { path: 'b' } },
+      ],
+    }),
+  });
+  expect((await f.runtime.run(f.lease, 'alice', f.input())).state).toBe('unknown');
+  expect(f.effects).toBe(1);
+  const executions = f.authority.executions(f.lease.binding.sessionId, 'alice');
+  expect(executions.map((execution) => execution.receipt?.state)).toEqual(['unknown', 'rejected']);
+  expect(executions[1]!.receipt?.effect).toBe('not_started');
+  expect(f.authority.hasUnresolvedExecutions(f.lease.binding.sessionId, 'alice')).toBe(false);
+});
+
+test('a failed worker cannot let a detached tools loop dispatch intents already resolved as not started', async () => {
+  let release!: () => void;
+  const toolsStarted = new Promise<void>((resolve) => (release = resolve));
+  const f = await fixture({
+    stream: async () => ({
+      ...answer('', true),
+      content: [
+        { type: 'toolCall', id: 'first', name: 'read', arguments: { path: 'a' } },
+        { type: 'toolCall', id: 'second', name: 'read', arguments: { path: 'b' } },
+      ],
+    }),
+    // Like GatewayWorkerProcess on a crash: drive() rejects while the tools step runs on.
+    worker: () => ({
+      async drive(step) {
+        const next = await step('model');
+        void step(next).catch(() => {});
+        release();
+        throw new Error('Gateway worker interrupted');
+      },
+      async close() {},
+    }),
+  });
+  await expect(f.runtime.run(f.lease, 'alice', f.input())).rejects.toThrow('interrupted');
+  await toolsStarted;
+  await Bun.sleep(200);
+  expect(f.effects).toBe(1);
+  const executions = f.authority.executions(f.lease.binding.sessionId, 'alice');
+  expect(executions[1]!.receipt).toMatchObject({ state: 'rejected', effect: 'not_started' });
+});
+
+test('a PTC timeout above the environment limit is a typed tool error, not a lost reply', async () => {
+  let rounds = 0;
+  const f = await fixture({
+    ptcWorker: '/unused-gateway-guest',
+    stream: async () => {
+      if (rounds++ > 0) return answer('done');
+      return {
+        ...answer(''),
+        stopReason: 'toolUse',
+        content: [
+          {
+            type: 'toolCall',
+            id: 'too_long',
+            name: 'ptc',
+            arguments: { code: 'return 1;', timeout: 3000 },
+          },
+        ],
+      } as AssistantMessage;
+    },
+  });
+  expect((await f.runtime.run(f.lease, 'alice', f.input())).state).toBe('completed');
+  expect(f.authority.executions(f.lease.binding.sessionId, 'alice')).toHaveLength(0);
+  expect(JSON.stringify(f.requests[1]!.messages)).toContain("exceeds this environment's limit");
+});
+
+test('a lifecycle hook the node never accepted resolves as not started on reconcile', async () => {
+  const f = await fixture({ lifecycleHooks: ['sessionStart'] });
+  const { GatewayTurnLifecycle } = await import('../src/gateway-runtime/turn-lifecycle.js');
+  const input = f.input();
+  await new GatewayTurnLifecycle({
+    authority: f.authority,
+    environment: {
+      describe: async () => f.descriptor,
+      pinArtifact: async () => {},
+      fetchArtifact: async () => ({ offset: 0, data: '' }),
+    },
+    online: () => true,
+  }).begin(f.lease, input);
+  const value = {
+    binding: f.lease.binding,
+    executionId: randomUUID(),
+    runId: randomUUID(),
+    turnId: input.turnId,
+    toolCallId: randomUUID(),
+    descriptorRevision: f.descriptor.revision,
+    policyRevision: f.descriptor.policyRevision,
+    capability: 'lifecycle.sessionStart',
+    arguments: {},
+    budgetMs: 1000,
+  };
+  const intent: ExecutionIntent = {
+    ...value,
+    argumentDigest: (await import('../src/environment/protocol.js')).intentDigest(value),
+  };
+  f.authority.persistLifecycle(f.lease, intent, f.descriptor);
+  expect(f.authority.hasUnresolvedExecutions(f.lease.binding.sessionId, 'alice')).toBe(true);
+  await f.restart();
+  await f.runtime.reconcile(f.lease.binding.sessionId, 'alice');
+  expect(f.authority.lifecycleReceipt(f.lease.binding, intent.executionId)).toMatchObject({
+    state: 'rejected',
+    effect: 'not_started',
+    terminal: { error: { code: 'unknown_execution' } },
+  });
+  expect(f.authority.hasUnresolvedExecutions(f.lease.binding.sessionId, 'alice')).toBe(false);
+  expect(f.effects).toBe(0);
+});
+
+test('a central intent persisted but never started is fenced as not started and can never run', async () => {
+  const f = await fixture({ directCentral: true });
+  const input = f.input();
+  const { GatewayTurnLifecycle } = await import('../src/gateway-runtime/turn-lifecycle.js');
+  const turn = await new GatewayTurnLifecycle({
+    authority: f.authority,
+    environment: {
+      describe: async () => f.descriptor,
+      pinArtifact: async () => {},
+      fetchArtifact: async () => ({ offset: 0, data: '' }),
+    },
+    online: () => true,
+  }).begin(f.lease, input);
+  f.authority.startRun(f.lease, turn);
+  const callId = f.authority.beginModel(f.lease, input.runId, {}, {});
+  const value = {
+    binding: f.lease.binding,
+    executionId: randomUUID(),
+    runId: input.runId,
+    turnId: input.turnId,
+    toolCallId: randomUUID(),
+    descriptorRevision: f.descriptor.revision,
+    policyRevision: f.descriptor.policyRevision,
+    capability: 'web_search',
+    arguments: { query: 'x' },
+    budgetMs: 1000,
+  };
+  const intent: ExecutionIntent = {
+    ...value,
+    argumentDigest: (await import('../src/environment/protocol.js')).intentDigest(value),
+  };
+  f.authority.commitModel(
+    f.lease,
+    callId,
+    (await import('../src/gateway-runtime/contracts.js')).entrySchema.parse({
+      type: 'message',
+      message: {
+        ...answer('', true),
+        content: [
+          {
+            type: 'toolCall',
+            id: 'provider_call_non_uuid',
+            name: 'web_search',
+            arguments: { query: 'x' },
+          },
+        ],
+      },
+    }),
+    [{ intent, modelToolCallId: 'provider_call_non_uuid' }],
+  );
+  await f.restart();
+  const reconciled = await f.runtime.reconcile(f.lease.binding.sessionId, 'alice');
+  expect(reconciled.results).toEqual([
+    expect.objectContaining({ state: 'rejected', effect: 'not_started' }),
+  ]);
+  let effects = 0;
+  const central = new DirectCentral({
+    authority: f.authority,
+    authorize: () => {},
+    capabilities: new GatewayCapabilities({
+      inner: f.authority.inner,
+      descriptor: () => f.descriptor,
+      authorize: () => {},
+      capabilities: new Map([['web_search', { execute: async () => (effects++, { text: 'x' }) }]]),
+    }),
+  });
+  // A late start finds the fenced row and never reaches the capability.
+  await expect(central.start(intent, new AbortController().signal)).rejects.toThrow();
+  expect(effects).toBe(0);
+});
+
+test('reconcile never asks the node about a gateway-placed PTC and records no guessed outcome', async () => {
+  const f = await fixture({ ptcWorker: '/unused-gateway-guest', directCentral: true });
+  const input = f.input();
+  const { GatewayTurnLifecycle } = await import('../src/gateway-runtime/turn-lifecycle.js');
+  const turn = await new GatewayTurnLifecycle({
+    authority: f.authority,
+    environment: {
+      describe: async () => f.descriptor,
+      pinArtifact: async () => {},
+      fetchArtifact: async () => ({ offset: 0, data: '' }),
+    },
+    online: () => true,
+  }).begin(f.lease, input);
+  f.authority.startRun(f.lease, turn);
+  const callId = f.authority.beginModel(f.lease, input.runId, {}, {});
+  const code = 'return await tools.web_search({});';
+  const value = {
+    binding: f.lease.binding,
+    executionId: randomUUID(),
+    runId: input.runId,
+    turnId: input.turnId,
+    toolCallId: randomUUID(),
+    descriptorRevision: f.descriptor.revision,
+    policyRevision: f.descriptor.policyRevision,
+    capability: 'ptc',
+    arguments: { code },
+    budgetMs: 120_000,
+  };
+  const intent: ExecutionIntent = {
+    ...value,
+    argumentDigest: (await import('../src/environment/protocol.js')).intentDigest(value),
+  };
+  f.authority.commitModel(
+    f.lease,
+    callId,
+    (await import('../src/gateway-runtime/contracts.js')).entrySchema.parse({
+      type: 'message',
+      message: {
+        ...answer('', true),
+        content: [
+          { type: 'toolCall', id: 'provider_call_non_uuid', name: 'ptc', arguments: { code } },
+        ],
+      },
+    }),
+    [{ intent, modelToolCallId: 'provider_call_non_uuid' }],
+  );
+  // Dispatched to the gateway guest (snapshot taken) but never accepted locally: crash.
+  f.authority.preparePtc(f.lease, intent.executionId);
+  await f.restart();
+  await expect(f.runtime.reconcile(f.lease.binding.sessionId, 'alice')).rejects.toThrow();
+  expect(f.queries).toBe(0);
+  expect(f.authority.executions(f.lease.binding.sessionId, 'alice')[0]!.receipt).toBeUndefined();
+});
+
+test('a verified pushed result outranks a later "never accepted" answer', async () => {
+  const f = await fixture({ push: true });
+  const input = f.input();
+  const { GatewayTurnLifecycle } = await import('../src/gateway-runtime/turn-lifecycle.js');
+  const turn = await new GatewayTurnLifecycle({
+    authority: f.authority,
+    environment: {
+      describe: async () => f.descriptor,
+      pinArtifact: async () => {},
+      fetchArtifact: async () => ({ offset: 0, data: '' }),
+    },
+    online: () => true,
+  }).begin(f.lease, input);
+  f.authority.startRun(f.lease, turn);
+  const callId = f.authority.beginModel(f.lease, input.runId, {}, {});
+  const value = {
+    binding: f.lease.binding,
+    executionId: randomUUID(),
+    runId: input.runId,
+    turnId: input.turnId,
+    toolCallId: randomUUID(),
+    descriptorRevision: f.descriptor.revision,
+    policyRevision: f.descriptor.policyRevision,
+    capability: 'read',
+    arguments: { path: 'hello.txt' },
+    budgetMs: 1000,
+  };
+  const intent: ExecutionIntent = {
+    ...value,
+    argumentDigest: (await import('../src/environment/protocol.js')).intentDigest(value),
+  };
+  f.authority.commitModel(
+    f.lease,
+    callId,
+    (await import('../src/gateway-runtime/contracts.js')).entrySchema.parse({
+      type: 'message',
+      message: answer('', true),
+    }),
+    [{ intent, modelToolCallId: 'provider_call_non_uuid' }],
+  );
+  // The node ran it and pushed a verified result; the gateway crashed before committing.
+  await f.remoteStart(intent);
+  await f.waitPushed(intent);
+  // A (compromised or reset) node now claims it never accepted the ID.
+  f.lieUnknown(true);
+  await f.runtime.reconcile(f.lease.binding.sessionId, 'alice');
+  expect(f.authority.executions(f.lease.binding.sessionId, 'alice')[0]!.receipt?.state).toBe(
+    'completed',
+  );
+  expect(f.effects).toBe(1);
 });
 
 test('offline admission, durable interrupted provider calls, and owner separation survive restart', async () => {
@@ -737,7 +1099,7 @@ test('eight global runs bound multiple sessions; shutdown releases all admission
   expect((await ninth.runtime.run(ninth.lease, 'alice', ninth.input())).state).toBe('completed');
 });
 
-test('pending dispatch intent is committed with the assistant; restart never dispatches it', async () => {
+test('pending dispatch intent is committed with the assistant; restart never dispatches it and reconcile resolves it as not started', async () => {
   const f = await fixture();
   const input = f.input();
   const { GatewayTurnLifecycle } = await import('../src/gateway-runtime/turn-lifecycle.js');
@@ -778,10 +1140,29 @@ test('pending dispatch intent is committed with the assistant; restart never dis
     [{ intent, modelToolCallId: 'provider_call_non_uuid' }],
   );
   await f.restart();
+  // An unreachable node proves nothing: reconcile fails and invents no outcome.
+  f.online(false);
   await expect(f.runtime.reconcile(f.lease.binding.sessionId, 'alice')).rejects.toThrow();
+  expect(f.authority.hasUnresolvedExecutions(f.lease.binding.sessionId, 'alice')).toBe(true);
+  f.online(true);
+  // The node never accepted the ID: it fences it durably and answers unknown_execution,
+  // so the gateway records rejected/not_started instead of blocking the session forever.
+  const reconciled = await f.runtime.reconcile(f.lease.binding.sessionId, 'alice');
+  expect(reconciled.results).toEqual([
+    expect.objectContaining({
+      executionId: intent.executionId,
+      state: 'rejected',
+      effect: 'not_started',
+    }),
+  ]);
   expect(f.effects).toBe(0);
   expect(f.requests).toHaveLength(0);
   expect(f.authority.executions(f.lease.binding.sessionId, 'alice')).toHaveLength(1);
+  expect(f.authority.hasUnresolvedExecutions(f.lease.binding.sessionId, 'alice')).toBe(false);
+  // A late start of the fenced ID can never run.
+  await expect(f.remoteStart(intent)).rejects.toThrow();
+  expect(f.effects).toBe(0);
+  expect((await f.runtime.reconcile(f.lease.binding.sessionId, 'alice')).results).toEqual([]);
 });
 
 test('opt-in authenticated history/context/recap and artifact routes use fresh authority, including offline reads', async () => {
@@ -797,6 +1178,9 @@ test('opt-in authenticated history/context/recap and artifact routes use fresh a
     runtime: f.runtime,
     authority: f.authority,
     writer: () => f.lease,
+    control: (_id, _owner, clientId, generation) => {
+      if (clientId !== 'held' || generation !== 1) throw Error('Control lease required');
+    },
     authenticate(request, mutation) {
       validateRequest(
         request,
@@ -822,7 +1206,7 @@ test('opt-in authenticated history/context/recap and artifact routes use fresh a
     method: 'POST',
     url: `${prefix}/commands`,
     headers,
-    payload: { type: 'prompt', input: f.input() },
+    payload: { type: 'prompt', clientId: 'held', generation: 1, input: f.input() },
   });
   expect(command.statusCode).toBe(200);
   expect(command.json().run.state).toBe('completed');
@@ -859,7 +1243,7 @@ test('opt-in authenticated history/context/recap and artifact routes use fresh a
     method: 'POST',
     url: `${prefix}/commands`,
     headers,
-    payload: { type: 'stop', binding: f.lease.binding },
+    payload: { type: 'stop', clientId: 'held', generation: 1, binding: f.lease.binding },
   });
   expect(bad.statusCode).toBe(400);
   f.online(false);

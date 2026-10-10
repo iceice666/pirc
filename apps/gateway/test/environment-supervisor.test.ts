@@ -61,7 +61,10 @@ function fixture(error?: Error) {
       if (error) throw error;
     },
   } as SandboxedEnvironmentExecutor;
-  const environment = { async quiesceBinding() {} } as unknown as LocalEnvironment;
+  const environment = {
+    async quiesceBinding() {},
+    assertProvisionable() {},
+  } as unknown as LocalEnvironment;
   const fence = () =>
     fenceEnvironment({ binding, journal, writes, approvals, executor, environment });
   const reopen = () => {

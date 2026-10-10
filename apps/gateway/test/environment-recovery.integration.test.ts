@@ -262,6 +262,7 @@ test('fake-srt subprocess recovery across both-end restart: effects never replay
     nodeId: 'test',
     journal: nodeJournal,
     authorize: authorizeFrom(bindings),
+    unfencedHarness: true,
   });
   const first = await provisionGeneration(root, gen1, approvals, writes);
   cleanups.push(async () => {
@@ -362,6 +363,7 @@ test('fake-srt subprocess recovery across both-end restart: effects never replay
     nodeId: 'test',
     journal: nodeJournal,
     authorize: authorizeFrom(bindings),
+    unfencedHarness: true,
   });
   local.adoptRetired(gen1);
   const otherRoot = path.join(root, 'other');

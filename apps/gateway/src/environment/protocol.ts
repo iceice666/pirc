@@ -110,6 +110,8 @@ export const errorSchema = z
       'failed',
       'unknown',
       'conflict',
+      // Node-attested: this ID was never accepted for the binding and now can never run.
+      'unknown_execution',
     ]),
     message: z.string().max(8192),
   })

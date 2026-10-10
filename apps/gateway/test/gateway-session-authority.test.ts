@@ -354,14 +354,15 @@ test('remote Environment receipt is not an ACK: authority commits before lost AC
     nodeJournal.close();
   });
   const intent = intentFor(lease);
-  for (const journal of [gatewayJournal, nodeJournal])
-    journal.provision(lease.binding, intent.descriptorRevision, intent.policyRevision);
+  // The node journal generation is created only by LocalEnvironment.provision (fresh, M6 R4).
+  gatewayJournal.provision(lease.binding, intent.descriptorRevision, intent.policyRevision);
   let effects = 0;
   let dropAck = false;
   const local = new LocalEnvironment({
     nodeId: 'test',
     journal: nodeJournal,
     authorize: (binding) => f.node.assertProvisioned(binding),
+    unfencedHarness: true,
   });
   // Component executor, not real OS containment evidence. Descriptor uses protocol digest.
   const { descriptorDigest } = await import('../src/environment/protocol.js');
@@ -394,7 +395,6 @@ test('remote Environment receipt is not an ACK: authority commits before lost AC
   intent.descriptorRevision = descriptor.revision;
   intent.argumentDigest = intentDigest(intent);
   gatewayJournal.refresh(lease.binding, descriptor.revision, descriptor.policyRevision);
-  nodeJournal.refresh(lease.binding, descriptor.revision, descriptor.policyRevision);
   local.provision(descriptor, {
     healthy: true,
     execute: async () => {

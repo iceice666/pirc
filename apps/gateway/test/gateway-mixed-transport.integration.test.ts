@@ -182,7 +182,7 @@ test('mixed PTC uses authenticated reverse RPC; node final hooks, central transa
       },
     });
     await executor.started;
-    local = new LocalEnvironment({ nodeId: 'test', journal, authorize });
+    local = new LocalEnvironment({ nodeId: 'test', journal, authorize, unfencedHarness: true });
     local.provision(descriptor, executor);
     transport.provision(binding, descriptor.revision, descriptor.policyRevision);
     remote = new RemoteEnvironment({

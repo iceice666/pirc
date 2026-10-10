@@ -71,6 +71,45 @@ interface ExecutionRow {
   receipt: string | null;
 }
 const recoveredDatabases = new WeakSet<Database>();
+/** `rejected/not_started` terminal for work that provably never ran; error code records why. */
+function notStartedRecord(
+  intent: ExecutionIntent,
+  evidence: 'undispatched' | 'node',
+  message: string,
+): ExecutionRecord {
+  const terminal = {
+    state: 'rejected' as const,
+    effect: 'not_started' as const,
+    artifacts: [],
+    truncated: false,
+    error: {
+      code: evidence === 'node' ? ('unknown_execution' as const) : ('cancelled' as const),
+      message: message.slice(0, 2000),
+    },
+  };
+  return {
+    binding: intent.binding,
+    executionId: intent.executionId,
+    argumentDigest: intent.argumentDigest,
+    state: terminal.state,
+    effect: terminal.effect,
+    finalSeq: 0,
+    cancelRequested: false,
+    acknowledged: false,
+    reclaimed: false,
+    terminal,
+    resultDigest: digest(
+      {
+        binding: intent.binding,
+        executionId: intent.executionId,
+        argumentDigest: intent.argumentDigest,
+        finalSeq: 0,
+        terminal,
+      },
+      RESULT_BYTES,
+    ),
+  };
+}
 const uuid = z.string().uuid();
 const sameBinding = (a: Binding, b: Binding) =>
   canonicalJson(a, CONTROL_BYTES) === canonicalJson(b, CONTROL_BYTES);
@@ -1130,6 +1169,65 @@ export class GatewaySessionAuthority {
       })
       .immediate();
   }
+  /**
+   * Durable `rejected/not_started` result for an intent the node provably never ran:
+   * either it was never handed to the transport (same-process evidence), or the node
+   * answered `unknown_execution` after durably fencing the ID. Idempotent: an existing
+   * receipt is returned unchanged. Never used for a possibly started execution.
+   */
+  commitNotStarted(
+    intent: ExecutionIntent,
+    message: string,
+    evidence: 'undispatched' | 'node' = 'undispatched',
+  ): ExecutionRecord {
+    return this.db
+      .transaction(() => {
+        const current = this.executionIntent(intent.binding, intent.executionId);
+        if (current.argumentDigest !== intent.argumentDigest)
+          throw new Error('Execution intent conflict');
+        const row = this.db
+          .query('SELECT receipt FROM runtime_executions WHERE id=? AND session=?')
+          .get(current.executionId, current.binding.sessionId) as { receipt: string | null };
+        if (row.receipt) return recordSchema.parse(parseJson(row.receipt, RESULT_BYTES));
+        const record = notStartedRecord(current, evidence, message);
+        if (
+          current.capability === 'ptc' &&
+          this.db
+            .query('SELECT execution FROM runtime_ptc_dispatch WHERE execution=?')
+            .get(current.executionId)
+        )
+          this.commitPtcResult(record);
+        else {
+          this.commitExecutionResult(record, current.capability === 'ptc');
+          this.sealPtcParent(record.binding, record.executionId);
+        }
+        // No node record exists to acknowledge; recovery pages skip it.
+        this.db.query('INSERT OR IGNORE INTO runtime_acks VALUES (?)').run(current.executionId);
+        return record;
+      })
+      .immediate();
+  }
+  /** Lifecycle counterpart of commitNotStarted for a node-attested `unknown_execution`. */
+  commitLifecycleNotStarted(intent: ExecutionIntent, message: string): ExecutionRecord {
+    const row = this.db
+      .query('SELECT intent FROM runtime_lifecycle WHERE id=? AND session=?')
+      .get(intent.executionId, intent.binding.sessionId) as { intent: string } | null;
+    if (!row) throw new Error('Lifecycle obligation missing');
+    const current = validateIntentText(row.intent);
+    if (current.argumentDigest !== intent.argumentDigest)
+      throw new Error('Lifecycle intent conflict');
+    const existing = this.lifecycleReceipt(current.binding, current.executionId);
+    if (existing) return existing;
+    const record = notStartedRecord(current, 'node', message);
+    // Receipt and ACK marker together: no node record exists to acknowledge.
+    this.db
+      .transaction(() => {
+        this.commitLifecycle(record);
+        this.markLifecycleAck(current.binding, current.executionId);
+      })
+      .immediate();
+    return record;
+  }
   /** Recovery of an obligation that provably never reached dispatch finalization. */
   rejectUndispatchedPtc(intent: ExecutionIntent): ExecutionRecord {
     return this.db
@@ -1177,6 +1275,7 @@ export class GatewaySessionAuthority {
         };
         this.commitExecutionResult(record, true);
         this.db.query('INSERT OR IGNORE INTO runtime_acks VALUES (?)').run(intent.executionId);
+        this.sealPtcParent(record.binding, record.executionId);
         return record;
       })
       .immediate();
@@ -1191,13 +1290,19 @@ export class GatewaySessionAuthority {
   ): 'unchanged' | 'committed' | 'conflict' {
     canonicalJson(value, RESULT_BYTES);
     const record = recordSchema.parse(value);
-    const checked =
-      proposal === undefined
-        ? null
-        : {
-            store: validatePtcStore(proposal.store),
-            untrusted: validatePtcProvenance(proposal.untrusted),
-          };
+    // An invalid store proposal (e.g. nesting/duplicates the guest could not detect) must
+    // not wedge the session: commit the result without the store and record why.
+    let invalidStore: string | undefined;
+    let checked: { store: string; untrusted: string[] } | null = null;
+    if (proposal !== undefined)
+      try {
+        checked = {
+          store: validatePtcStore(proposal.store),
+          untrusted: validatePtcProvenance(proposal.untrusted),
+        };
+      } catch (error) {
+        invalidStore = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+      }
     if (checked && record.state !== 'completed')
       throw new Error('Failed PTC cannot commit a store');
     const completion = canonicalJson(
@@ -1236,6 +1341,12 @@ export class GatewaySessionAuthority {
         }
         const snapshot = parseJson(dispatch.snapshot, ENTRY_BYTES) as unknown as PtcStoreSnapshot;
         let outcome: 'unchanged' | 'committed' | 'conflict' = 'unchanged';
+        if (invalidStore !== undefined)
+          this.appendTo(session.id, snapshot.branchId, {
+            type: 'custom',
+            customType: 'runtime.ptc.store_invalid',
+            data: { executionId: record.executionId, reason: invalidStore },
+          });
         if (checked && checked.store !== snapshot.store) {
           const current = this.storeSnapshot(session.id, snapshot.branchId);
           if (
@@ -1269,6 +1380,8 @@ export class GatewaySessionAuthority {
         this.db
           .query('UPDATE runtime_ptc_dispatch SET completion=?,outcome=? WHERE execution=?')
           .run(completion, outcome, record.executionId);
+        // The script is over: no new central operation may join this parent.
+        this.sealPtcParent(record.binding, record.executionId);
         return outcome;
       })
       .immediate();
@@ -1909,8 +2022,26 @@ export class GatewaySessionAuthority {
         this.db
           .query("UPDATE runtime_model_calls SET state='interrupted' WHERE state='pending'")
           .run();
+        // Close every open PTC parent. Gateway-placed guests died with the process; a
+        // node-placed script may still run, but deliberately fails closed: it can add no
+        // new central operation after a gateway restart (its original inner IDs and its
+        // outer result still reconcile). Sealing also marks inner operations that were
+        // running here as unknown, which they are after a restart.
+        for (const row of this.db
+          .query('SELECT id,binding FROM ptc_parents WHERE sealed=0')
+          .all() as { id: string; binding: string }[])
+          this.inner.seal(bindingSchema.parse(parseJson(row.binding, CONTROL_BYTES)), row.id);
       })
       .immediate();
+  }
+  /** Seals a registered PTC parent (idempotent); parents that never registered are ignored. */
+  private sealPtcParent(binding: Binding, executionId: string): void {
+    if (this.db.query('SELECT id FROM ptc_parents WHERE id=? AND sealed=0').get(executionId))
+      this.inner.seal(binding, executionId);
+  }
+  /** New central work requires the live, active writer generation, not just a known binding. */
+  assertActiveGeneration(binding: Binding): void {
+    if (this.bound(binding).state !== 'active') throw new Error('Writer is not active');
   }
   beginModel(lease: WriterLease, runId: string, request: unknown, snapshot?: unknown): string {
     return this.db

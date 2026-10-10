@@ -4,9 +4,11 @@ import { isWriteCall } from '../agent/ptc/registry.js';
 import { CONTRACT_VERSION, PtcError, type Result } from '../agent/ptc/contracts.js';
 import { gatewayPtcGuest } from './ptc-guest.js';
 import { planPtc } from './ptc-contracts.js';
+import { preflight } from '../agent/ptc/preflight.js';
+import { capabilityMetadata } from '../environment/catalog.js';
 import { validatePtcResult, aliasPtcResult, ptcTerminal } from '../environment/ptc-result.js';
 import { innerIntent } from '../environment/ptc-operation.js';
-import { ExecutionJournal } from '../environment/journal.js';
+import { EnvironmentCodeError, ExecutionJournal } from '../environment/journal.js';
 import type { InnerJournal } from '../environment/inner-journal.js';
 import type {
   Descriptor,
@@ -17,11 +19,14 @@ import type {
 import { canonicalJson, digest } from '../environment/json.js';
 import { RESULT_BYTES, descriptorDigest } from '../environment/protocol.js';
 
+const recoveredJournals = new WeakSet<ExecutionJournal>();
+
 /** Static routing coordinator. Central callbacks are session-scoped services, never arbitrary
  * tools registered from project code. Each callback must authorize its exact final arguments.
  */
 export class GatewayPtcService {
   private readonly active = new Map<string, Promise<ExecutionRecord>>();
+  private readonly placements = new Map<string, 'node' | 'gateway'>();
   constructor(
     private readonly options: {
       environment: Environment;
@@ -38,6 +43,22 @@ export class GatewayPtcService {
       operation?(intent: ExecutionIntent, event: Record<string, unknown>, seq: number): void;
     },
   ) {}
+  /**
+   * Trusted host startup, before any run is admitted: a gateway-placed script never
+   * survives a gateway restart, so its unfinished outer record becomes `unknown`
+   * (running) or `failed/not_started` (accepted). Nothing is replayed; inner parents
+   * are sealed by the authority's own startup recovery. Once per journal; any failure
+   * propagates so a broken recovery cannot silently leave scripts running.
+   */
+  recover(): ExecutionRecord[] {
+    if (this.active.size) throw new Error('PTC recovery must precede admission');
+    if (recoveredJournals.has(this.options.journal)) return [];
+    const recovered = this.options.journal
+      .bindings()
+      .flatMap((binding) => this.options.journal.recover(binding));
+    recoveredJournals.add(this.options.journal);
+    return recovered;
+  }
   async start(
     intent: ExecutionIntent,
     descriptor: Descriptor,
@@ -237,27 +258,53 @@ export class GatewayPtcService {
       });
     }
   }
-  async cancel(intent: ExecutionIntent): Promise<void> {
-    if (this.active.has(intent.executionId)) return; // Runtime abort signal already propagates to this guest.
+  /**
+   * Static placement from the script's manifest and the fixed capability ownership table
+   * (the same inputs planPtc validates). A gateway-placed script is never routed to the
+   * node: a node that never saw the ID would answer "never accepted" for work that ran.
+   */
+  private placement(intent: ExecutionIntent): 'node' | 'gateway' {
+    let placement = this.placements.get(intent.executionId);
+    if (!placement) {
+      const code = (intent.arguments as { code?: unknown }).code;
+      if (typeof code !== 'string') throw new Error('Invalid PTC intent');
+      placement = preflight(code).manifest.some(
+        (name) => capabilityMetadata(name).placement === 'node',
+      )
+        ? 'node'
+        : 'gateway';
+      if (this.placements.size >= 1024)
+        this.placements.delete(this.placements.keys().next().value!);
+      this.placements.set(intent.executionId, placement);
+    }
+    return placement;
+  }
+  neverAccepted(intent: ExecutionIntent): boolean {
+    if (this.active.has(intent.executionId) || this.placement(intent) !== 'gateway') return false;
     try {
       this.options.journal.status(intent.binding, intent.executionId);
-      return;
-    } catch {}
+      return false;
+    } catch (error) {
+      // Only a definite absence (no generation or no record) proves non-acceptance.
+      return (
+        error instanceof EnvironmentCodeError &&
+        (error.code === 'invalid_binding' || error.message === 'Unknown execution')
+      );
+    }
+  }
+  async cancel(intent: ExecutionIntent): Promise<void> {
+    if (this.active.has(intent.executionId)) return; // Runtime abort signal already propagates to this guest.
+    if (this.placement(intent) === 'gateway') return;
     await this.options.environment.cancel(intent.binding, intent.executionId);
   }
   async acknowledge(intent: ExecutionIntent, resultDigest: string): Promise<void> {
-    try {
-      this.options.journal.status(intent.binding, intent.executionId);
-    } catch {
+    if (this.placement(intent) === 'node')
       return this.options.environment.ack(intent.binding, intent.executionId, resultDigest);
-    }
     this.options.journal.ack(intent.binding, intent.executionId, resultDigest);
   }
   async status(intent: ExecutionIntent): Promise<ExecutionRecord> {
-    try {
-      return this.options.journal.status(intent.binding, intent.executionId);
-    } catch {
-      return this.options.environment.status(intent.binding, intent.executionId);
-    }
+    return this.placement(intent) === 'node'
+      ? this.options.environment.status(intent.binding, intent.executionId)
+      : this.options.journal.status(intent.binding, intent.executionId);
   }
 }

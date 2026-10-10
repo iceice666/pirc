@@ -278,3 +278,92 @@ test('failure, corrupted receipt and transaction failure cannot partially commit
   }
   expect(f.authority.commitPtcResult(result(b.intent), proposal)).toBe('committed');
 });
+
+test('an invalid store proposal commits the result without the store instead of wedging the session', () => {
+  const f = fixture();
+  const a = f.begin();
+  const deep = `{"k":${'['.repeat(70)}1${']'.repeat(70)}}`;
+  expect(f.authority.commitPtcResult(result(a.intent), { store: deep, untrusted: [] })).toBe(
+    'unchanged',
+  );
+  expect(f.authority.hasUnresolvedExecutions(f.lease.binding.sessionId, 'alice')).toBe(false);
+  expect(f.authority.ptcStore(f.lease.binding.sessionId, 'alice').store).toBe('{}');
+  const entries = f.authority.read(f.lease.binding.sessionId, 'alice').entries;
+  expect(
+    entries.some(
+      (entry) => entry.type === 'custom' && entry.customType === 'runtime.ptc.store_invalid',
+    ),
+  ).toBe(true);
+  // Retrying the same completion is idempotent; duplicate keys are rejected the same way.
+  expect(f.authority.commitPtcResult(result(a.intent), { store: deep, untrusted: [] })).toBe(
+    'unchanged',
+  );
+  const b = f.begin();
+  expect(
+    f.authority.commitPtcResult(result(b.intent), { store: '{"a":1,"a":2}', untrusted: [] }),
+  ).toBe('unchanged');
+});
+
+test('mixed central calls are refused once the parent completed or the writer was revoked; retries stay readable', async () => {
+  const f = fixture();
+  const { GatewayCapabilities } = await import('../src/gateway-runtime/capabilities.js');
+  const { MixedCentral } = await import('../src/gateway-runtime/mixed-central.js');
+  let effects = 0;
+  const mixed = () =>
+    new MixedCentral({
+      authority: f.authority,
+      authorize: () => {},
+      capabilities: new GatewayCapabilities({
+        inner: f.authority.inner,
+        descriptor: (intent) =>
+          f.authority.executionDescriptor(
+            f.authority.executionIntent(intent.binding, intent.parentExecutionId!),
+          ),
+        authorize: () => {},
+        capabilities: new Map([
+          ['web_search', { execute: async () => (effects++, { text: 'answer' }) }],
+        ]),
+      }),
+    });
+  const { innerIntent } = await import('../src/environment/ptc-operation.js');
+  const innerFor = (parent: ExecutionIntent, n: number) =>
+    innerIntent(parent, `${parent.executionId}:op${n}`, 'web_search', { query: 'x' });
+  const code = 'await tools.read({path:"a"}); return await tools.web_search({query:"x"});';
+  const a = f.begin(f.lease, code);
+  f.authority.inner.register(a.intent, ['read', 'web_search']);
+  const first = innerFor(a.intent, 1);
+  await mixed().execute(first, new AbortController().signal, { query: 'x' });
+  expect(effects).toBe(1);
+  f.authority.commitPtcResult(result(a.intent));
+  // Finished parent: sealed, so a fresh operation is refused; the original stays readable.
+  await expect(
+    mixed().execute(innerFor(a.intent, 2), new AbortController().signal, { query: 'x' }),
+  ).rejects.toThrow('sealed');
+  await mixed().execute(first, new AbortController().signal, { query: 'x' });
+  expect(effects).toBe(1);
+  // Revoked writer: still-open parent, but no new central effect.
+  const b = f.begin(f.lease, code);
+  f.authority.inner.register(b.intent, ['read', 'web_search']);
+  f.authority.revoke(f.lease.binding);
+  await expect(
+    mixed().execute(innerFor(b.intent, 1), new AbortController().signal, { query: 'x' }),
+  ).rejects.toThrow('not active');
+  expect(effects).toBe(1);
+});
+
+test('gateway restart seals every open PTC parent; original inner IDs stay queryable', async () => {
+  const f = fixture();
+  const code = 'await tools.read({path:"a"}); return await tools.web_search({query:"x"});';
+  const a = f.begin(f.lease, code);
+  f.authority.inner.register(a.intent, ['read', 'web_search']);
+  f.restart();
+  f.authority.recoverRuntimeOnce();
+  const { innerIntent } = await import('../src/environment/ptc-operation.js');
+  expect(() =>
+    f.authority.inner.accept(
+      innerIntent(a.intent, `${a.intent.executionId}:op1`, 'web_search', { query: 'x' }),
+    ),
+  ).toThrow('sealed');
+  // The outer result can still reconcile its original execution after the seal.
+  expect(f.authority.commitPtcResult(result(a.intent))).toBe('unchanged');
+});
