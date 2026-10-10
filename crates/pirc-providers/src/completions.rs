@@ -1011,7 +1011,7 @@ impl PiRun {
     }
 
     fn event(&mut self, event: &Event, pending: &mut Vec<Pending>) -> Result<(), Failure> {
-        let parsed: Value = serde_json::from_str(&event.data)
+        let parsed: Value = crate::json_parse::parse_event(&event.data)
             .map_err(|_| Failure::upstream("JSON Parse error: Unable to parse JSON string"))?;
         let thread = event
             .event

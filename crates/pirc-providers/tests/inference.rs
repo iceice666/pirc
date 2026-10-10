@@ -258,3 +258,40 @@ async fn connection_failures_are_classified() {
         Some("Model network request failed")
     );
 }
+
+/// A resolver that waits (as an account refresh does) until released.
+struct SlowResolver(Arc<Notify>);
+
+impl pirc_providers::Resolve for SlowResolver {
+    async fn resolve(&self, _: &str, _: &str) -> Result<pirc_providers::Resolved, String> {
+        self.0.notified().await;
+        Err("Backend or authorization session not found".to_owned())
+    }
+}
+
+#[tokio::test]
+async fn cancel_all_during_resolution_is_a_cancellation() {
+    let inference = Arc::new(Inference::with_cache_retention(false));
+    let release = Arc::new(Notify::new());
+    let task = tokio::spawn({
+        let (inference, release) = (inference.clone(), release.clone());
+        async move {
+            let mut on_delta = ignore;
+            inference
+                .run(&SlowResolver(release), &request(), "node-1", &mut on_delta)
+                .await
+        }
+    });
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    inference.cancel_all();
+    let message = tokio::time::timeout(Duration::from_secs(5), task)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(message.stop_reason, StopReason::Aborted);
+    assert_eq!(
+        message.error_message.as_deref(),
+        Some("Model request cancelled")
+    );
+    drop(release);
+}

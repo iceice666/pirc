@@ -4,8 +4,17 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 /// Header names are case-insensitive; a later value replaces an earlier one
 /// (the merge order of the TS code).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct Headers(Vec<(String, String)>);
+
+/// Debug output shows names only: values carry keys and tokens.
+impl std::fmt::Debug for Headers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list()
+            .entries(self.0.iter().map(|(name, _)| name))
+            .finish()
+    }
+}
 
 impl Headers {
     pub fn set(&mut self, name: &str, value: &str) {
@@ -37,6 +46,8 @@ impl Headers {
         let mut map = HeaderMap::with_capacity(self.0.len());
         for (name, value) in &self.0 {
             let name = HeaderName::from_bytes(name.as_bytes()).ok()?;
+            // `fetch` strips leading and trailing HTTP white space.
+            let value = value.trim_matches([' ', '\t', '\r', '\n']);
             let value = HeaderValue::from_str(value).ok()?;
             map.insert(name, value);
         }

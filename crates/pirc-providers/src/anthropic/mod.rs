@@ -83,10 +83,10 @@ fn same_index(a: Option<&Value>, b: Option<&Value>) -> bool {
 
 /// `JSON.parse`, then once more after `repairJson` (`parseJsonWithRepair`).
 fn parse_json_with_repair(text: &str) -> Option<Value> {
-    serde_json::from_str(text).ok().or_else(|| {
+    crate::json_parse::parse_event(text).ok().or_else(|| {
         let repaired = repair_json(text);
         (repaired != text)
-            .then(|| serde_json::from_str(&repaired).ok())
+            .then(|| crate::json_parse::parse_event(&repaired).ok())
             .flatten()
     })
 }

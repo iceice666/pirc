@@ -139,12 +139,14 @@ fn node_arch() -> &'static str {
     }
 }
 
-/// `os.release()`: the kernel release (`uname -r`), read once.
+/// `os.release()`: the kernel release, read once (`/proc` on Linux; the
+/// system's own `uname -r` by absolute path elsewhere, never one found
+/// through `PATH`).
 fn os_release() -> &'static str {
     static RELEASE: LazyLock<String> = LazyLock::new(|| {
         let release = std::fs::read_to_string("/proc/sys/kernel/osrelease").ok();
         let release = release.or_else(|| {
-            let output = std::process::Command::new("uname")
+            let output = std::process::Command::new("/usr/bin/uname")
                 .arg("-r")
                 .output()
                 .ok()?;
@@ -367,7 +369,7 @@ impl CodexSse {
             if data.is_empty() || data == "[DONE]" {
                 continue;
             }
-            match serde_json::from_str::<Value>(data) {
+            match crate::json_parse::parse_event(data) {
                 Ok(value) => events.push(Ok(value)),
                 Err(error) => {
                     events.push(Err(format!("Invalid Codex SSE JSON: SyntaxError: {error}")));

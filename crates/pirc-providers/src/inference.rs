@@ -154,12 +154,18 @@ impl Inference {
         }
         let resolved = tokio::select! {
             biased;
-            resolved = resolver.resolve(&request.provider_name, &request.model_id) => resolved,
-            _ = cancel.changed() => Err("Aborted".to_owned()),
+            resolved = resolver.resolve(&request.provider_name, &request.model_id) => Some(resolved),
+            // `changed()` marks the value seen, so `fail` would no longer see it.
+            _ = cancel.changed() => None,
         };
         let resolved = match resolved {
-            Ok(resolved) => resolved,
-            Err(error) => return fail(message, &cancel, &error),
+            Some(Ok(resolved)) => resolved,
+            Some(Err(error)) => return fail(message, &cancel, &error),
+            None => {
+                message.stop_reason = StopReason::Aborted;
+                message.error_message = Some(CANCELLED.to_owned());
+                return message;
+            }
         };
         let (provider, model) = (&resolved.provider, &resolved.model);
         if cancel.has_changed().unwrap_or(true) {

@@ -60,9 +60,10 @@ fn number_to_js(number: &serde_json::Number) -> String {
     }
 }
 
-/// `String.prototype.trim`: Unicode white space plus the BOM.
+/// `String.prototype.trim`: Unicode white space (but U+0085, which
+/// JavaScript does not count) plus the BOM.
 pub fn trim(text: &str) -> &str {
-    text.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
+    text.trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
 }
 
 /// A JSON number as the `u64` the wire types use (JavaScript would keep
@@ -89,6 +90,12 @@ mod tests {
             assert!(truthy(Some(&value)), "{value}");
         }
         assert!(!truthy(None));
+    }
+
+    #[test]
+    fn trims_like_javascript() {
+        assert_eq!(trim("\u{feff}\u{a0} a \u{2028}\u{3000}"), "a");
+        assert_eq!(trim("\u{85}"), "\u{85}");
     }
 
     #[test]

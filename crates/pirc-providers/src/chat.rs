@@ -467,7 +467,7 @@ impl ChatRun {
         finish: &mut Option<Value>,
         emit: &mut Emitter<'_>,
     ) -> Result<(), Failure> {
-        let chunk: Value = serde_json::from_str(data)
+        let chunk: Value = crate::json_parse::parse_event(data)
             .map_err(|_| Failure::upstream("JSON Parse error: Unable to parse JSON string"))?;
         if chunk.is_null() {
             return Err(Failure::upstream("null is not an object"));

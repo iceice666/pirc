@@ -8,7 +8,65 @@ use serde_json::{Map, Value};
 /// `JSON.parse`. `Infinity`-producing number literals fail here, where
 /// JavaScript yields `Infinity`.
 fn json_parse(text: &str) -> Result<Value, ()> {
-    serde_json::from_str(text).map_err(|_| ())
+    parse_event(text).map_err(|_| ())
+}
+
+/// `JSON.parse` of provider data. JavaScript accepts unpaired UTF-16
+/// surrogate escapes (`"\ud83d"`), which providers emit when they split an
+/// emoji between events; Rust strings cannot hold them, so after a failed
+/// strict parse they become U+FFFD instead of failing the turn.
+pub fn parse_event(text: &str) -> Result<Value, serde_json::Error> {
+    serde_json::from_str(text).or_else(|error| {
+        if !text.contains("\\u") {
+            return Err(error);
+        }
+        let repaired = replace_lone_surrogates(text);
+        if repaired == text {
+            Err(error)
+        } else {
+            serde_json::from_str(&repaired)
+        }
+    })
+}
+
+/// The `\uXXXX` escape at the start of `bytes`, if any.
+fn escape_at(bytes: &[u8]) -> Option<u32> {
+    let hex = bytes.get(..6)?;
+    if hex[0] != b'\\' || hex[1] != b'u' {
+        return None;
+    }
+    u32::from_str_radix(std::str::from_utf8(&hex[2..]).ok()?, 16).ok()
+}
+
+/// Every `\uD800`–`\uDFFF` escape without its partner becomes `\uFFFD`.
+fn replace_lone_surrogates(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut copied = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != b'\\' {
+            index += 1;
+            continue;
+        }
+        let Some(unit) = escape_at(&bytes[index..]).filter(|u| u & 0xf800 == 0xd800) else {
+            // Any other escape (including `\\`): skip both characters.
+            index += 2;
+            continue;
+        };
+        let paired = unit < 0xdc00
+            && escape_at(&bytes[index + 6..]).is_some_and(|low| (0xdc00..0xe000).contains(&low));
+        if paired {
+            index += 12;
+            continue;
+        }
+        out.push_str(&text[copied..index]);
+        out.push_str("\\ufffd");
+        index += 6;
+        copied = index;
+    }
+    out.push_str(&text[copied..]);
+    out
 }
 
 fn is_control(c: char) -> bool {
@@ -334,6 +392,19 @@ impl Partial {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unpaired_surrogate_escapes_become_replacement_characters() {
+        let parsed =
+            parse_event(r#"{"t":"a\ud83d","u":"\ude00b","p":"\ud83d\ude00","e":"\\ud83d"}"#)
+                .unwrap();
+        assert_eq!(parsed["t"], "a\u{fffd}");
+        assert_eq!(parsed["u"], "\u{fffd}b");
+        assert_eq!(parsed["p"], "\u{1f600}");
+        assert_eq!(parsed["e"], "\\ud83d");
+        assert!(parse_event("{not json").is_err());
+        assert!(parse_event(r#"{"t":"\ud83d"#).is_err());
+    }
     use serde_json::json;
 
     #[test]

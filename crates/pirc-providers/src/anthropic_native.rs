@@ -488,7 +488,7 @@ impl NativeAnthropicRun {
         stop: &mut Option<Value>,
         emit: &mut Emitter<'_>,
     ) -> Result<(), Failure> {
-        let event: Value = serde_json::from_str(data)
+        let event: Value = crate::json_parse::parse_event(data)
             .map_err(|_| Failure::upstream("JSON Parse error: Unable to parse JSON string"))?;
         if event.is_null() {
             return Err(Failure::upstream(
