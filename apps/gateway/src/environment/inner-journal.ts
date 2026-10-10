@@ -9,6 +9,7 @@ import {
   RESULT_BYTES,
   terminalSchema,
   validateIntent,
+  validateIntentText,
   type Binding,
   type ExecutionIntent,
   type Terminal,
@@ -85,7 +86,7 @@ export class InnerJournal {
     } | null;
     if (!row) throw new Error('Unknown PTC parent');
     return {
-      intent: validateIntent(parseJson(row.intent, REQUEST_BYTES)),
+      intent: validateIntentText(row.intent),
       manifest: parseJson(row.manifest, CONTROL_BYTES) as string[],
       sealed: !!row.sealed,
     };
@@ -100,7 +101,7 @@ export class InnerJournal {
   }
   private decode(row: Row): InnerOperation {
     return {
-      intent: validateIntent(parseJson(row.intent, REQUEST_BYTES)),
+      intent: validateIntentText(row.intent),
       state: row.state,
       ...(row.result ? { result: terminalSchema.parse(parseJson(row.result, RESULT_BYTES)) } : {}),
       delivered: !!row.delivered,

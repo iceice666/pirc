@@ -3,6 +3,7 @@ import { InnerJournal } from '../environment/inner-journal.js';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   validateTurnDescriptor,
+  validateTurnDescriptorText,
   validateTurnInput,
   type AuthorityTurn,
   type TurnInput,
@@ -19,6 +20,7 @@ import {
   REQUEST_BYTES,
   RESULT_BYTES,
   validateIntent,
+  validateIntentText,
   intentDigest,
   validateRecordDelivery,
   recordSchema,
@@ -420,7 +422,7 @@ export class GatewaySessionAuthority {
     return {
       nodeId: binding.nodeId,
       repositoryKey: row
-        ? validateTurnDescriptor(parseJson(row.descriptor, ENTRY_BYTES), binding).repositoryKey
+        ? validateTurnDescriptorText(row.descriptor, binding).repositoryKey
         : undefined,
     };
   }
@@ -869,7 +871,7 @@ export class GatewaySessionAuthority {
             parseJson(row.input, ENTRY_BYTES) as unknown as TurnInput,
             lease.binding,
           ),
-          descriptor: validateTurnDescriptor(parseJson(row.descriptor, ENTRY_BYTES), lease.binding),
+          descriptor: validateTurnDescriptorText(row.descriptor, lease.binding),
           entry: parseJson(row.entry, ENTRY_BYTES) as unknown as AuthorityEntry,
           branchId: row.branch,
         }
@@ -1083,7 +1085,7 @@ export class GatewaySessionAuthority {
           .query('SELECT intent,branch,receipt FROM runtime_executions WHERE id=? AND session=?')
           .get(executionId, lease.binding.sessionId) as ExecutionRow | null;
         if (!row || row.branch !== lease.branchId) throw new Error('Unknown PTC execution');
-        const intent = validateIntent(parseJson(row.intent, REQUEST_BYTES));
+        const intent = validateIntentText(row.intent);
         if (intent.capability !== 'ptc' || intent.parentExecutionId)
           throw new Error('Expected outer PTC execution');
         const old = this.db
@@ -1099,10 +1101,7 @@ export class GatewaySessionAuthority {
           .query('SELECT descriptor FROM runtime_turns WHERE id=?')
           .get(intent.turnId) as { descriptor: string } | null;
         if (!turn) throw new Error('PTC requires authoritative turn');
-        const descriptor = validateTurnDescriptor(
-          parseJson(turn.descriptor, ENTRY_BYTES),
-          lease.binding,
-        );
+        const descriptor = validateTurnDescriptorText(turn.descriptor, lease.binding);
         const plan = planPtc(intent.arguments, descriptor.capabilityCatalog);
         const snapshot = this.storeSnapshot(lease.binding.sessionId, lease.branchId);
         if (
@@ -1293,10 +1292,7 @@ export class GatewaySessionAuthority {
           throw new Error('No authoritative turn');
         if (turn) {
           const input = parseJson(turn.input, ENTRY_BYTES) as unknown as TurnInput;
-          const descriptor = validateTurnDescriptor(
-            parseJson(turn.descriptor, ENTRY_BYTES),
-            lease.binding,
-          );
+          const descriptor = validateTurnDescriptorText(turn.descriptor, lease.binding);
           if (
             turn.branch !== lease.branchId ||
             input.runId !== intent.runId ||
@@ -1358,7 +1354,7 @@ export class GatewaySessionAuthority {
           .query('SELECT intent,branch,receipt FROM runtime_executions WHERE id=? AND session=?')
           .get(record.executionId, record.binding.sessionId) as ExecutionRow | null;
         if (!row) throw new Error('No authoritative execution intent');
-        const intent = validateIntent(parseJson(row.intent, REQUEST_BYTES));
+        const intent = validateIntentText(row.intent);
         if (intent.capability === 'ptc' && !ptc)
           throw new Error('PTC requires atomic store/result commit');
         if (
@@ -1530,7 +1526,7 @@ export class GatewaySessionAuthority {
           .query('SELECT intent,branch,receipt FROM runtime_lifecycle WHERE id=? AND session=?')
           .get(record.executionId, record.binding.sessionId) as ExecutionRow | null;
         if (!row) throw new Error('Lifecycle obligation missing');
-        const intent = validateIntent(parseJson(row.intent, REQUEST_BYTES));
+        const intent = validateIntentText(row.intent);
         if (intent.argumentDigest !== record.argumentDigest)
           throw new Error('Lifecycle result mismatch');
         if (row.receipt) {
@@ -1592,7 +1588,7 @@ export class GatewaySessionAuthority {
         )
         .all(sessionId) as { intent: string; receipt: string | null }[]
     ).map((row) => ({
-      intent: validateIntent(parseJson(row.intent, REQUEST_BYTES)),
+      intent: validateIntentText(row.intent),
       receipt: row.receipt ? recordSchema.parse(parseJson(row.receipt, RESULT_BYTES)) : undefined,
     }));
   }
@@ -1612,7 +1608,7 @@ export class GatewaySessionAuthority {
       .query('SELECT descriptor FROM runtime_turns WHERE id=? AND session=?')
       .get(intent.turnId, intent.binding.sessionId) as { descriptor: string } | null;
     if (!row) throw new Error('Authoritative turn unavailable');
-    return validateTurnDescriptor(parseJson(row.descriptor, ENTRY_BYTES), intent.binding);
+    return validateTurnDescriptorText(row.descriptor, intent.binding);
   }
   executionBranch(intent: ExecutionIntent): string {
     this.bound(intent.binding);
@@ -1661,7 +1657,7 @@ export class GatewaySessionAuthority {
       .query('SELECT intent FROM runtime_executions WHERE id=? AND session=?')
       .get(executionId, binding.sessionId) as { intent: string } | null;
     if (!row) throw new Error('Unknown execution');
-    return validateIntent(parseJson(row.intent, REQUEST_BYTES));
+    return validateIntentText(row.intent);
   }
   /** Retry safe after restart/lost ACK; never ACK from a mere transport receipt. */
   async acknowledge(
@@ -2055,7 +2051,7 @@ export class GatewaySessionAuthority {
       )
       .all(sessionId, runId ?? null, runId ?? null) as (ExecutionRow & { ack: string | null })[];
     return rows.map((row) => ({
-      intent: validateIntent(parseJson(row.intent, REQUEST_BYTES)),
+      intent: validateIntentText(row.intent),
       receipt: row.receipt ? recordSchema.parse(parseJson(row.receipt, RESULT_BYTES)) : undefined,
       acknowledged: !!row.ack,
       branchId: row.branch,
@@ -2083,7 +2079,7 @@ export class GatewaySessionAuthority {
       const row = this.db
         .query('SELECT intent FROM runtime_executions WHERE id=? AND session=?')
         .get(header.id, sessionId) as { intent: string };
-      executions.push(validateIntent(parseJson(row.intent, REQUEST_BYTES)));
+      executions.push(validateIntentText(row.intent));
       cursor = header.cursor;
     }
     return { executions, nextCursor: headers.length > executions.length ? cursor : null };

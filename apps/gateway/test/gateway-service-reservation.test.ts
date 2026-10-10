@@ -156,7 +156,9 @@ test('five concurrent service runs wait for the four descriptor preparation slot
     release();
     const results = await Promise.all(starts);
     expect(results.map((result) => result?.state)).toEqual(Array(5).fill('completed'));
-    expect(descriptions).toBe(10); // begin re-attests the descriptor before commit.
+    // Without attachments nothing awaits between attestation and commit, so one describe
+    // per turn suffices; attachment turns re-attest after loading (turn-lifecycle test).
+    expect(descriptions).toBe(5);
   } finally {
     release();
     await runtime?.close();

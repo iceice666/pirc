@@ -5,9 +5,10 @@ import {
   descriptorSchema,
   DESCRIPTOR_BYTES,
   CONTROL_BYTES,
+  textMemo,
   type Binding,
 } from '../environment/protocol.js';
-import { canonicalJson } from '../environment/json.js';
+import { canonicalJson, parseJson } from '../environment/json.js';
 import { ENTRY_BYTES, type AuthorityEntry } from './contracts.js';
 
 /** Model image expansion + text + provenance must fit one authoritative entry. */
@@ -57,6 +58,16 @@ export function validateTurnInput(value: TurnInput, binding: Binding): TurnInput
   return input;
 }
 
+const descriptorTexts = textMemo<ReturnType<typeof validateTurnDescriptor>>(
+  8 * 1024 * 1024,
+  DESCRIPTOR_BYTES + CONTROL_BYTES,
+);
+/** `validateTurnDescriptor(parseJson(text, ENTRY_BYTES), binding)`, memoized by exact input. */
+export function validateTurnDescriptorText(text: string, binding: Binding) {
+  return descriptorTexts(`${canonicalJson(binding, CONTROL_BYTES)}\n${text}`, () =>
+    validateTurnDescriptor(parseJson(text, ENTRY_BYTES), binding),
+  );
+}
 export function validateTurnDescriptor(value: unknown, binding: Binding) {
   canonicalJson(value, DESCRIPTOR_BYTES);
   const descriptor = descriptorSchema.parse(value);

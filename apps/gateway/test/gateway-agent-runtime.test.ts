@@ -77,6 +77,8 @@ async function fixture(
     toolArtifact?: boolean;
     ptcWorker?: string;
     directCentral?: boolean;
+    /** Node pushes terminal results (execution.result) as soon as they are durable. */
+    push?: boolean;
   } = {},
 ) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'pirc-runtime-'));
@@ -106,6 +108,7 @@ async function fixture(
   let effects = 0;
   let queries = 0;
   let loseAck = !!options.loseAck;
+  const wire: string[] = [];
   const descriptor: Descriptor = {
     binding: lease.binding,
     version: 1,
@@ -148,7 +151,25 @@ async function fixture(
     if (JSON.stringify(binding) !== JSON.stringify(lease.binding))
       throw new Error('Foreign binding');
   };
-  const local = new LocalEnvironment({ nodeId: 'node', journal: nodeJournal, authorize });
+  const local = new LocalEnvironment({
+    nodeId: 'node',
+    journal: nodeJournal,
+    authorize,
+    ...(options.push
+      ? {
+          result: (record: import('../src/environment/protocol.js').ExecutionRecord) => {
+            const message = {
+              version: 1 as const,
+              requestId: randomUUID(),
+              type: 'execution.result' as const,
+              record,
+            };
+            wire.push(encodeMessage(message));
+            void remote.receive(decodeMessage(encodeMessage(message)));
+          },
+        }
+      : {}),
+  });
   local.provision(descriptor, {
     healthy: true,
     async execute() {
@@ -163,7 +184,6 @@ async function fixture(
     },
   });
   gatewayJournal.provision(lease.binding, descriptor.revision, descriptor.policyRevision);
-  const wire: string[] = [];
   let remote!: RemoteEnvironment;
   remote = new RemoteEnvironment({
     nodeId: 'node',
@@ -432,6 +452,24 @@ test('fresh gateway coding loop streams directly, keeps context off node wire, a
   expect(f.runtime.project(f.lease.binding.sessionId, 'alice').snapshot).toBeDefined();
   expect(() => f.runtime.project(f.lease.binding.sessionId, 'mallory')).toThrow('owner');
   expect(() => f.runtime.project('0123456789abcdef', 'alice')).toThrow('Legacy');
+});
+
+test('pushed node results end the wait without status polling; ACK follows the commit', async () => {
+  const f = await fixture({ push: true });
+  const input = f.input();
+  expect((await f.runtime.run(f.lease, 'alice', input)).state).toBe('completed');
+  expect(f.effects).toBe(1);
+  expect(f.requests).toHaveLength(2);
+  // The verified pushed receipt replaced the 20 ms status poll entirely.
+  expect(f.queries).toBe(0);
+  expect(f.wire.filter((frame) => frame.includes('"execution.result"'))).toHaveLength(1);
+  // ACK left the per-tool critical path but completed before the run returned.
+  expect(f.authority.executions(f.lease.binding.sessionId, 'alice')[0]!.acknowledged).toBe(true);
+  expect(
+    f.authority
+      .read(f.lease.binding.sessionId, 'alice')
+      .history.filter((message) => message.role === 'toolResult'),
+  ).toHaveLength(1);
 });
 
 test('chat flow, title and memory call paths stay gateway-local and retain auxiliary metadata', async () => {

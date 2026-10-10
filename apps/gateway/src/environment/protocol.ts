@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
 import { canonicalJson, digest, parseJson, type Json } from './json.js';
 
 /** Foundation only: not negotiated or dispatched on the production node link yet. */
@@ -433,19 +434,61 @@ export function intentDigest(
   return digest(content, REQUEST_BYTES);
 }
 export function validateIntent(value: unknown): ExecutionIntent {
-  canonicalJson(value, REQUEST_BYTES);
-  canonicalJson(
-    {
-      version: ENVIRONMENT_PROTOCOL_VERSION,
-      requestId: SIZE_REQUEST_ID,
-      type: 'execution.start',
-      intent: value,
-    },
-    REQUEST_BYTES,
-  );
-  const intent = intentSchema.parse(value);
-  if (intent.argumentDigest !== intentDigest(intent)) throw new Error('Intent digest mismatch');
-  return intent;
+  const text = canonicalJson(value, REQUEST_BYTES);
+  // Pure in the canonical text: the same intent is validated at every hop and journal.
+  return intentValues(text, () => {
+    // The start envelope adds bytes and one nesting level; check it exactly as sent.
+    canonicalJson(
+      {
+        version: ENVIRONMENT_PROTOCOL_VERSION,
+        requestId: SIZE_REQUEST_ID,
+        type: 'execution.start',
+        intent: value,
+      },
+      REQUEST_BYTES,
+    );
+    const intent = intentSchema.parse(value);
+    if (intent.argumentDigest !== intentDigest(intent)) throw new Error('Intent digest mismatch');
+    return intent;
+  });
+}
+/**
+ * Bounded memo for pure validations of exact stored text. Durable rows are re-read and
+ * re-validated many times per turn; the result depends only on the key text, so equal
+ * text yields an equal value. Keys are SHA-256 digests; texts over `maxTextBytes` are
+ * never cached and the total cached text is capped. Callers get independent copies.
+ */
+export function textMemo<T>(maxTotalBytes = 8 * 1024 * 1024, maxTextBytes = 64 * 1024) {
+  const cache = new Map<string, { value: T; bytes: number }>();
+  let total = 0;
+  return (key: string, compute: () => T): T => {
+    if (key.length > maxTextBytes) return compute();
+    // UTF-16 code units, not UTF-8: lone surrogates must not collide with U+FFFD.
+    const id = createHash('sha256').update(Buffer.from(key, 'utf16le')).digest('base64');
+    const hit = cache.get(id);
+    if (hit) {
+      cache.delete(id);
+      cache.set(id, hit);
+      return structuredClone(hit.value);
+    }
+    const value = compute();
+    // Approximate retained size (twice the UTF-16 key length); the cap is not exact.
+    const bytes = key.length * 2;
+    cache.set(id, { value: structuredClone(value), bytes });
+    total += bytes;
+    for (const [oldest, entry] of cache) {
+      if (total <= maxTotalBytes) break;
+      cache.delete(oldest);
+      total -= entry.bytes;
+    }
+    return value;
+  };
+}
+const intentTexts = textMemo<ExecutionIntent>();
+const intentValues = textMemo<ExecutionIntent>();
+/** `validateIntent(parseJson(text, REQUEST_BYTES))`, memoized by the exact text. */
+export function validateIntentText(text: string): ExecutionIntent {
+  return intentTexts(text, () => validateIntent(parseJson(text, REQUEST_BYTES)));
 }
 export function descriptorDigest(value: Omit<Descriptor, 'revision'> | Descriptor): string {
   const { revision: _ignored, ...content } = value as Descriptor;

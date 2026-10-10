@@ -55,6 +55,29 @@ import { untilCancelled } from './cancellation.js';
 import { resolveArtifact, uiArtifact } from '../environment/artifact-transfer.js';
 
 const globalRuns = new Set<ActiveRun>();
+/** Optional transport capability: wait for a node-pushed, already verified terminal receipt. */
+interface ResultWaiter {
+  awaitResult(
+    binding: Binding,
+    executionId: string,
+    ms: number,
+    signal?: AbortSignal,
+  ): Promise<ExecutionRecord | undefined>;
+}
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', abort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) abort();
+  });
+}
 const serviceReservations = new Set<symbol>();
 const serviceSessions = new Map<string, symbol>();
 const serviceConfiguration = new AsyncLocalStorage<symbol>();
@@ -95,6 +118,8 @@ interface ActiveRun {
   hookContext?: string;
   workspaceContext?: string;
   queueSequence?: number;
+  /** ACKs sent after their durable commits; awaited before the run returns, not per tool. */
+  acks?: Promise<void>[];
   settled: Promise<void>;
   settle(): void;
 }
@@ -110,6 +135,7 @@ export class GatewayAgentRuntime {
   private readonly active = new Map<string, ActiveRun>();
   private readonly docs = new Map<string, { revision: string; registry: CapabilityRegistry }>();
   private closed = false;
+  private readonly draining = new Set<Promise<unknown>>();
   private readonly deliveries = new Map<
     string,
     { token: symbol; controller: AbortController; settled: Promise<void>; settle(): void }
@@ -443,7 +469,7 @@ export class GatewayAgentRuntime {
         return { intent, modelToolCallId: call.id };
       });
   }
-  private async commit(record: ExecutionRecord) {
+  private async commit(record: ExecutionRecord, deferAck?: (ack: Promise<void>) => void) {
     if (!record.terminal || record.reclaimed) throw new Error('Full execution result unavailable');
     for (const artifact of record.terminal.artifacts)
       await untilCancelled(
@@ -463,8 +489,9 @@ export class GatewayAgentRuntime {
       );
     } else this.options.authority.commitResult(record);
     // ACK loss is recoverable from the committed receipt; it never repeats the tool.
-    try {
-      await this.options.authority.acknowledge(
+    // The commit above already happened, so a run may continue while the ACK travels.
+    const ack = this.options.authority
+      .acknowledge(
         intent.capability === 'ptc' && this.options.ptc
           ? { ack: (_binding, _id, digest) => this.options.ptc!.acknowledge(intent, digest) }
           : this.options.central &&
@@ -477,10 +504,27 @@ export class GatewayAgentRuntime {
             : this.options.environment,
         record.binding,
         record.executionId,
-      );
-    } catch {
-      /* Reconcile retries original ACK after reconnect. */
+      )
+      .catch(() => {
+        /* Reconcile retries original ACK after reconnect. */
+      });
+    if (deferAck) deferAck(ack);
+    else await ack;
+  }
+  /** Pushed terminal result for a node-placed execution, or undefined after `ms`. */
+  private async awaitResult(
+    intent: ExecutionIntent,
+    ms: number,
+    signal: AbortSignal,
+    local: boolean,
+  ): Promise<ExecutionRecord | undefined> {
+    const environment = this.options.environment as Partial<ResultWaiter>;
+    if (local || !environment.awaitResult) {
+      // No push channel: keep the original short status poll.
+      await sleep(20, signal);
+      return undefined;
     }
+    return environment.awaitResult(intent.binding, intent.executionId, ms, signal);
   }
   private async execution(run: ActiveRun, intent: ExecutionIntent): Promise<ExecutionRecord> {
     this.ready(run);
@@ -538,39 +582,70 @@ export class GatewayAgentRuntime {
         run.controller.signal,
       );
       const until = performance.now() + intent.budgetMs + 30 * 60_000;
+      const central =
+        !!this.options.central &&
+        this.options.authority
+          .executionDescriptor(intent)
+          .capabilityCatalog.some(
+            (cap) => cap.name === intent.capability && cap.placement === 'gateway',
+          );
+      // Node results are pushed; status is only the fallback, with backoff. Gateway-local
+      // records (central, gateway-placed PTC) keep the short local poll.
+      const localPtc =
+        !record.terminal &&
+        intent.capability === 'ptc' &&
+        !!this.options.ptc &&
+        planPtc(
+          intent.arguments,
+          this.options.authority.executionDescriptor(intent).capabilityCatalog,
+        ).placement === 'gateway';
+      let wait = 20;
       while (!record.terminal) {
         this.ready(run);
         if (performance.now() >= until)
           throw new Error('Execution deadline; reconcile original ID');
-        await new Promise<void>((resolve, reject) => {
-          const signal = run.controller.signal;
-          const abort = () => {
-            clearTimeout(timer);
-            signal.removeEventListener('abort', abort);
-            reject(signal.reason);
-          };
-          const timer = setTimeout(() => {
-            signal.removeEventListener('abort', abort);
-            resolve();
-          }, 20);
-          signal.addEventListener('abort', abort, { once: true });
-          if (signal.aborted) abort();
-        });
-        record = await untilCancelled(
-          intent.capability === 'ptc' && this.options.ptc
-            ? this.options.ptc.status(intent)
-            : this.options.central &&
-                this.options.authority
-                  .executionDescriptor(intent)
-                  .capabilityCatalog.some(
-                    (cap) => cap.name === intent.capability && cap.placement === 'gateway',
-                  )
-              ? this.options.central.status(intent)
-              : this.options.environment.status(intent.binding, intent.executionId),
+        const pushed = await untilCancelled(
+          central
+            ? sleep(20, run.controller.signal).then(() => undefined)
+            : this.awaitResult(intent, wait, run.controller.signal, localPtc),
           run.controller.signal,
         );
+        run.controller.signal.throwIfAborted();
+        // Pushes normally end the wait; status is a bounded fallback if one is missed.
+        wait = Math.min(wait * 2, 250);
+        if (pushed) {
+          record = pushed;
+          continue;
+        }
+        const status =
+          intent.capability === 'ptc' && this.options.ptc
+            ? this.options.ptc.status(intent)
+            : central
+              ? this.options.central!.status(intent)
+              : this.options.environment.status(intent.binding, intent.executionId);
+        // A pushed result that lands while the status query is in flight wins the race;
+        // the late status reply is discarded (both carry the same durable outcome).
+        const racing = new AbortController();
+        const pushedDuring =
+          central || localPtc
+            ? undefined
+            : this.awaitResult(
+                intent,
+                60_000,
+                AbortSignal.any([run.controller.signal, racing.signal]),
+                false,
+              ).then((value) => value ?? new Promise<never>(() => {}));
+        try {
+          record = await untilCancelled(
+            pushedDuring ? Promise.race([status, pushedDuring]) : status,
+            run.controller.signal,
+          );
+        } finally {
+          racing.abort();
+        }
+        void status.catch(() => {});
       }
-      await this.commit(record);
+      await this.commit(record, (ack) => (run.acks ??= []).push(ack));
       emit({
         type: 'tool_execution_end',
         toolCallId,
@@ -709,6 +784,11 @@ export class GatewayAgentRuntime {
     let state: Exclude<RuntimeRun['state'], 'running'> = 'completed';
     try {
       this.ready(run);
+      // Spawn the sandboxed phase worker while the turn is prepared; it receives nothing
+      // until drive() and is closed by the finally block if preparation fails.
+      run.worker =
+        this.options.workerFactory?.() ??
+        new GatewayWorkerProcess({ executable: this.options.workerExecutable });
       let turn = await this.lifecycle.begin(lease, input, run.controller.signal);
       const hooks = new GatewayLifecycleHooks(this.options.environment, this.options.authority);
       run.hookContext = [
@@ -735,9 +815,6 @@ export class GatewayAgentRuntime {
           type: 'agent_start',
         });
       } catch {}
-      run.worker =
-        this.options.workerFactory?.() ??
-        new GatewayWorkerProcess({ executable: this.options.workerExecutable });
       let pending: ReturnType<GatewayAgentRuntime['intents']> = [];
       const settings = this.options.authority.settings(
         lease.binding.sessionId,
@@ -976,6 +1053,14 @@ export class GatewayAgentRuntime {
         this.active.delete(lease.binding.sessionId);
         globalRuns.delete(run);
         run.settle();
+        // The session is idle once settled; this run's ACKs may still finish afterwards.
+        const acks = Promise.allSettled(run.acks ?? []);
+        this.draining.add(acks);
+        try {
+          await acks;
+        } finally {
+          this.draining.delete(acks);
+        }
       }
     }
   }
@@ -1486,6 +1571,8 @@ export class GatewayAgentRuntime {
     const runs = [...this.active.values()];
     await Promise.all(runs.map((run) => run.worker?.close()));
     await Promise.all(runs.map((run) => run.settled));
+    // Late ACKs of settled runs finish (or fail) before the host closes its stores.
+    await Promise.allSettled([...this.draining]);
     await Promise.race([
       Promise.all(reservations.map((reservation) => reservation.settled)),
       Bun.sleep(1000).then(() => {

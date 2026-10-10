@@ -27,6 +27,8 @@ export class RemoteEnvironment implements Environment {
   >();
   private online = true;
   private starting = new Map<string, Promise<ExecutionRecord>>();
+  /** Local wake-ups for pushed results; never a substitute for the verified receipt. */
+  private resultWaiters = new Map<string, Set<() => void>>();
   constructor(
     private readonly options: {
       nodeId: string;
@@ -73,8 +75,10 @@ export class RemoteEnvironment implements Environment {
     }
     if (message.type === 'execution.result' || message.type === 'execution.reply') {
       this.authorize(message.record.binding);
-      if (message.record.terminal)
+      if (message.record.terminal) {
         this.options.journal.receiveResult(message.record.binding, message.record);
+        this.wakeResult(message.record.executionId);
+      }
     }
     const pending = this.pending.get(message.requestId);
     if (!pending) return;
@@ -84,9 +88,52 @@ export class RemoteEnvironment implements Environment {
       pending.reject(new Error(`${message.error.code}: ${message.error.message}`));
     else pending.resolve(message);
   }
+  private wakeResult(executionId: string): void {
+    const waiters = this.resultWaiters.get(executionId);
+    if (!waiters) return;
+    this.resultWaiters.delete(executionId);
+    for (const wake of waiters) wake();
+  }
+  /**
+   * Wait up to `ms` for a node-pushed terminal result of an execution started here.
+   * Returns only the digest-verified receipt the journal already persisted; undefined
+   * means "query status", never a terminal outcome. Disconnect wakes waiters early.
+   */
+  async awaitResult(
+    binding: Binding,
+    executionId: string,
+    ms: number,
+    signal?: AbortSignal,
+  ): Promise<ExecutionRecord | undefined> {
+    this.authorize(binding);
+    const receipt = () => {
+      const record = this.options.journal.receipt(binding, executionId);
+      return record?.terminal ? record : undefined;
+    };
+    const ready = receipt();
+    if (ready || !this.online) return ready;
+    await new Promise<void>((resolve) => {
+      let waiters = this.resultWaiters.get(executionId);
+      if (!waiters) this.resultWaiters.set(executionId, (waiters = new Set()));
+      const done = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', done);
+        waiters!.delete(done);
+        if (!waiters!.size && this.resultWaiters.get(executionId) === waiters)
+          this.resultWaiters.delete(executionId);
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      waiters.add(done);
+      signal?.addEventListener('abort', done, { once: true });
+      if (signal?.aborted) done();
+    });
+    return receipt();
+  }
   disconnect(): void {
     this.online = false;
     this.options.central?.disconnect();
+    for (const id of [...this.resultWaiters.keys()]) this.wakeResult(id);
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
       pending.reject(new Error('Node offline; query original execution on reconnect'));

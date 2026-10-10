@@ -3,12 +3,14 @@ import { chmodSync, statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import { canonicalJson, digest, parseJson } from './json.js';
 import { InnerJournal } from './inner-journal.js';
+import { relaxedTransaction } from './durability.js';
 import {
   bindingSchema,
   eventSchema,
   recordSchema,
   terminalSchema,
   validateIntent,
+  validateIntentText,
   validateEventDelivery,
   validateRecordDelivery,
   CONTROL_BYTES,
@@ -380,26 +382,25 @@ export class ExecutionJournal {
     kind: ExecutionEvent['kind'],
     payload: ExecutionEvent['payload'],
   ): ExecutionEvent {
-    return this.db
-      .transaction(() => {
-        const record = this.status(binding, id);
-        if (TERMINAL.has(record.state)) throw new Error('Execution is terminal');
-        const event = eventSchema.parse({
-          binding,
-          executionId: id,
-          seq: record.finalSeq + 1,
-          kind,
-          payload,
-        });
-        validateEventDelivery(event);
-        const encoded = canonicalJson(event, CONTROL_BYTES);
-        this.db
-          .query('INSERT INTO env_events(id,seq,event) VALUES (?,?,?)')
-          .run(id, event.seq, encoded);
-        this.save({ ...record, finalSeq: event.seq });
-        return event;
-      })
-      .immediate();
+    // Progress/operation events guard no effect; terminal finish (FULL) fsyncs them too.
+    return relaxedTransaction(this.db, () => {
+      const record = this.status(binding, id);
+      if (TERMINAL.has(record.state)) throw new Error('Execution is terminal');
+      const event = eventSchema.parse({
+        binding,
+        executionId: id,
+        seq: record.finalSeq + 1,
+        kind,
+        payload,
+      });
+      validateEventDelivery(event);
+      const encoded = canonicalJson(event, CONTROL_BYTES);
+      this.db
+        .query('INSERT INTO env_events(id,seq,event) VALUES (?,?,?)')
+        .run(id, event.seq, encoded);
+      this.save({ ...record, finalSeq: event.seq });
+      return event;
+    });
   }
   events(binding: Binding, id: string, after = 0, limit = 100): ExecutionEvent[] {
     this.row(binding, id);
@@ -504,7 +505,7 @@ export class ExecutionJournal {
           const record = this.record(row);
           if (
             !row.intent.startsWith('sha256:') &&
-            validateIntent(parseJson(row.intent, REQUEST_BYTES)).capability === 'ptc'
+            validateIntentText(row.intent).capability === 'ptc'
           ) {
             // Registration may not have happened before the crash. Missing parent is
             // safe; any registered inner operations must be sealed before recovery.
@@ -609,7 +610,7 @@ export class ExecutionJournal {
           receipt: string | null;
         } | null;
         if (!row) throw new Error('No persisted intent');
-        const intent = validateIntent(parseJson(row.intent, REQUEST_BYTES));
+        const intent = validateIntentText(row.intent);
         if (intent.argumentDigest !== record.argumentDigest)
           throw new Error('Result intent mismatch');
         const expected = digest(

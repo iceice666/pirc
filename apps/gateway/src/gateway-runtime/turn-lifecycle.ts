@@ -118,9 +118,12 @@ export class GatewayTurnLifecycle {
         ready();
       }
       // No turn starts with a descriptor that changed while attachments were loading.
-      const current = await describe();
-      if (current.revision !== descriptor.revision)
-        throw new Error('Descriptor changed during turn preparation');
+      // Without attachments there is no such window: the admitted descriptor is current.
+      if (input.attachments.length) {
+        const current = await describe();
+        if (current.revision !== descriptor.revision)
+          throw new Error('Descriptor changed during turn preparation');
+      }
       ready();
       return this.options.authority.commitTurn(lease, input, descriptor, images);
     } finally {

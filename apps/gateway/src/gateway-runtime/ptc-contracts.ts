@@ -3,7 +3,13 @@ import { BUDGETS, WRAPPER_NAMES } from '../agent/ptc/contracts.js';
 import { preflight } from '../agent/ptc/preflight.js';
 import { capabilityMetadata } from '../environment/catalog.js';
 import { canonicalJson, parseJson } from '../environment/json.js';
-import { descriptorSchema, REQUEST_BYTES, type Descriptor } from '../environment/protocol.js';
+import {
+  descriptorSchema,
+  DESCRIPTOR_BYTES,
+  REQUEST_BYTES,
+  textMemo,
+  type Descriptor,
+} from '../environment/protocol.js';
 
 export const ptcArgumentsSchema = z
   .object({
@@ -25,8 +31,19 @@ export interface PtcPlan {
   timeoutMs: number;
 }
 
+const plans = textMemo<PtcPlan>(8 * 1024 * 1024, DESCRIPTOR_BYTES + 64 * 1024);
 /** Static placement is metadata, not an execution grant. Every inner call is authorized again. */
 export function planPtc(args: unknown, catalog: Descriptor['capabilityCatalog']): PtcPlan {
+  // Pure in (arguments, catalog); the same script is planned at dispatch, polling and commit.
+  let key: string;
+  try {
+    key = `${canonicalJson(args, REQUEST_BYTES)}\n${canonicalJson(catalog, DESCRIPTOR_BYTES)}`;
+  } catch {
+    return computePlan(args, catalog);
+  }
+  return plans(key, () => computePlan(args, catalog));
+}
+function computePlan(args: unknown, catalog: Descriptor['capabilityCatalog']): PtcPlan {
   canonicalJson(args, REQUEST_BYTES);
   const input = ptcArgumentsSchema.parse(args);
   const entries = descriptorSchema.innerType().shape.capabilityCatalog.parse(catalog);

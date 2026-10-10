@@ -4,6 +4,7 @@ import { emptyReducedState, reducePiEvent, type ReducedSessionState } from '../n
 import type { RuntimeEvent } from './runtime.js';
 import type { ExecutionEvent } from '../environment/protocol.js';
 import { canonicalJson, parseJson } from '../environment/json.js';
+import { relaxedTransaction } from '../environment/durability.js';
 import { ENTRY_BYTES } from './contracts.js';
 import { panel as todoPanel } from '../agent/features/todo/index.js';
 import { parseState } from '../agent/features/todo/model.js';
@@ -15,6 +16,11 @@ import { parseGoal } from '../agent/features/goal/model.js';
  */
 export class GatewayClientProjection {
   private readonly db;
+  /**
+   * Last committed state per session/branch, reused only while the durable row still holds
+   * exactly the text it was encoded as; removed before any mutation, restored after commit.
+   */
+  private readonly cache = new Map<string, { text: string; state: ReducedSessionState }>();
   constructor(private readonly authority: GatewaySessionAuthority) {
     this.db = authority.inner.operations.db;
     this.db.exec(`CREATE TABLE IF NOT EXISTS runtime_client_state (
@@ -24,61 +30,75 @@ export class GatewayClientProjection {
       session TEXT NOT NULL, branch TEXT NOT NULL, source TEXT NOT NULL, seq INTEGER NOT NULL,
       payload TEXT NOT NULL, PRIMARY KEY(session,branch,source,seq));`);
   }
-  private state(lease: WriterLease): ReducedSessionState {
+  private state(lease: WriterLease, reuse = false): ReducedSessionState {
     const row = this.db
       .query('SELECT state FROM runtime_client_state WHERE session=? AND branch=?')
       .get(lease.binding.sessionId, lease.branchId) as { state: string } | null;
+    const key = `${lease.binding.sessionId}\n${lease.branchId}`;
+    const cached = this.cache.get(key);
+    this.cache.delete(key);
+    if (reuse && row && cached?.text === row.state) return cached.state;
     return row
       ? (parseJson(row.state, ENTRY_BYTES) as unknown as ReducedSessionState)
       : emptyReducedState();
   }
   private commit(lease: WriterLease, source: string, seq: number, value: Record<string, unknown>) {
     if (!Number.isSafeInteger(seq) || seq < 1) throw new Error('Invalid client event sequence');
-    this.db
-      .transaction(() => {
-        this.authority.assertWriter(lease);
-        const encoded = canonicalJson(value, ENTRY_BYTES);
-        const old = this.db
-          .query(
-            'SELECT payload FROM runtime_client_receipts WHERE session=? AND branch=? AND source=? AND seq=?',
-          )
-          .get(lease.binding.sessionId, lease.branchId, source, seq) as { payload: string } | null;
-        if (old) {
-          if (old.payload !== encoded) throw new Error('Client event identity conflict');
-          return;
-        }
-        const latest = this.db
-          .query(
-            'SELECT MAX(seq) AS seq FROM runtime_client_receipts WHERE session=? AND branch=? AND source=?',
-          )
-          .get(lease.binding.sessionId, lease.branchId, source) as { seq: number | null };
-        if (latest.seq !== null && seq <= latest.seq)
-          throw new Error('Stale client event sequence');
-        const state = this.state(lease);
-        reducePiEvent(state, value);
-        // Transcript owns completed messages. Do not duplicate images/history in mutable state.
-        state.history = [];
-        if (
-          value.type === 'agent_start' ||
-          value.type === 'agent_settled' ||
-          value.type === 'agent_end'
-        ) {
-          state.partialMessage = null;
-          state.operations = [];
-          state.queue = { steering: [], followUp: [] };
-        }
-        this.db
-          .query('INSERT OR REPLACE INTO runtime_client_state VALUES (?,?,?)')
-          .run(lease.binding.sessionId, lease.branchId, canonicalJson(state, ENTRY_BYTES));
-        this.db
-          .query('INSERT INTO runtime_client_receipts VALUES (?,?,?,?,?)')
-          .run(lease.binding.sessionId, lease.branchId, source, seq, encoded);
-        let wire: unknown = { type: 'pi_event', data: value };
-        if (Buffer.byteLength(canonicalJson(wire, ENTRY_BYTES)) > 60000)
-          wire = { type: 'reset', reason: 'cursor_expired' };
-        this.authority.publishClientEvent(lease, wire);
-      })
-      .immediate();
+    let committed: { text: string; state: ReducedSessionState } | undefined;
+    // A UI compatibility view and its cursor: process-crash durable, not fsynced per event.
+    relaxedTransaction(this.db, () => {
+      this.authority.assertWriter(lease);
+      const encoded = canonicalJson(value, ENTRY_BYTES);
+      const old = this.db
+        .query(
+          'SELECT payload FROM runtime_client_receipts WHERE session=? AND branch=? AND source=? AND seq=?',
+        )
+        .get(lease.binding.sessionId, lease.branchId, source, seq) as { payload: string } | null;
+      if (old) {
+        if (old.payload !== encoded) throw new Error('Client event identity conflict');
+        return;
+      }
+      const latest = this.db
+        .query(
+          'SELECT MAX(seq) AS seq FROM runtime_client_receipts WHERE session=? AND branch=? AND source=?',
+        )
+        .get(lease.binding.sessionId, lease.branchId, source) as { seq: number | null };
+      if (latest.seq !== null && seq <= latest.seq) throw new Error('Stale client event sequence');
+      const state = this.state(lease, true);
+      reducePiEvent(state, value);
+      // Transcript owns completed messages. Do not duplicate images/history in mutable state.
+      state.history = [];
+      if (
+        value.type === 'agent_start' ||
+        value.type === 'agent_settled' ||
+        value.type === 'agent_end'
+      ) {
+        state.partialMessage = null;
+        state.operations = [];
+        state.queue = { steering: [], followUp: [] };
+      }
+      const text = canonicalJson(state, ENTRY_BYTES);
+      this.db
+        .query('INSERT OR REPLACE INTO runtime_client_state VALUES (?,?,?)')
+        .run(lease.binding.sessionId, lease.branchId, text);
+      this.db
+        .query('INSERT INTO runtime_client_receipts VALUES (?,?,?,?,?)')
+        .run(lease.binding.sessionId, lease.branchId, source, seq, encoded);
+      // canonicalJson({type:'pi_event', data:value}) is exactly this text (sorted keys).
+      let wire: unknown = { type: 'pi_event', data: value };
+      const wireBytes = Buffer.byteLength(`{"data":${encoded},"type":"pi_event"}`);
+      if (wireBytes > ENTRY_BYTES) throw new Error('JSON exceeds byte limit');
+      if (wireBytes > 60000) wire = { type: 'reset', reason: 'cursor_expired' };
+      this.authority.publishClientEvent(lease, wire);
+      // Detached copy: the reducer may alias caller-owned event objects.
+      committed = { text, state: JSON.parse(text) as ReducedSessionState };
+    });
+    if (committed) {
+      const key = `${lease.binding.sessionId}\n${lease.branchId}`;
+      if (!this.cache.has(key) && this.cache.size >= 256)
+        this.cache.delete(this.cache.keys().next().value!);
+      this.cache.set(key, committed);
+    }
   }
   runtime(lease: WriterLease, event: RuntimeEvent) {
     if (event.sessionId !== lease.binding.sessionId)
