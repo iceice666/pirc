@@ -1,6 +1,6 @@
 # Rust rewrite of the server executables
 
-Status: M0 and M1 done 2026-10-10; M2 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
+Status: M0, M1 and M2 done 2026-10-10; M3 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
 
 Paths are relative to `apps/gateway/src/` unless noted.
 
@@ -117,16 +117,18 @@ Decided with the user before starting (2026-10-10):
 - [x] Fresh SQLite schema (consolidated from `database.ts` migrations, new `user_version` line). If a TS-era database is found in the state directory, refuse to start with a message pointing to the migration notes.
 - [x] EventHub (epoch, sequence, cursor, `reset`) and `/api/events` with hint frames.
 - [x] `/node/connect` registry, request relay, terminal and browser stream relays, inference multiplexing (`daemon/nodes.ts`).
-- [ ] Sessions, commands (idempotency), leases, interactions, uploads, workspaces, capabilities, trust.
-- [ ] Devices and pairing, push (VAPID), schedules, delegations, memory, agent-ops, web search.
+- [x] Sessions, commands (idempotency), leases, interactions, uploads, workspaces, capabilities, trust.
+- [x] Devices and pairing, push (VAPID), schedules, delegations, memory, agent-ops, web search.
 
 Acceptance: all M0 gateway scenarios pass with Rust gateway + TS node; `fixtures/timeline` passes; size within budget.
 
-Progress 2026-10-10: sub-items 1–4 done, 5 done except the chat-workspace paths (chat capabilities, instructions, deleting a chat), which come with 6. New scenarios recorded against TS: `http_edges`, `event_stream`, `session_routes`, `relayed_streams`; with `PIRC_CONFORMANCE_GATEWAY_BIN=target/debug/pirc-gateway` every scenario passes against the TS node. `pirc-gateway` is 7.46 MiB. Notes:
+Done 2026-10-10. With `PIRC_CONFORMANCE_GATEWAY_BIN=target/debug/pirc-gateway` every scenario passes against the TS node, and `bun run check` now runs that too (`test:conformance:rust-gateway`); `fixtures/timeline` is unchanged and passes. `pirc-gateway` is 10.71 MiB (chrono-tz's zone data is most of the growth since sub-item 4). Sub-items 1–4 landed first; sub-item 6 was ported in parallel (push, memory, schedules, delegations with web search) behind interfaces laid out first, then reviewed through security, correctness and schedule lenses. New scenarios recorded against TS: `http_edges`, `event_stream`, `session_routes`, `relayed_streams`, `push`, `memory` (with the chat-workspace paths of sub-item 5), `schedules`, `delegations`, `delegation_expiry`. Notes:
 
 - The gateway's database lives in `pirc-gateway` (`db.rs`, `schema.sql`), not a shared `pirc-store`: the node's store has nothing in common with it. Tables the TS gateway created but never wrote (`runs`, `interactions`, `uploads`, `workspace_trust`) are gone; `user_version` is 1000, and 1–999 (the TS migrations) is refused.
 - `pirc-providers` holds `models.json` loading and the M2 inference transport: the native `openai-chat` port and pi-ai's `openai-completions`, checked against 43 recordings of the TS gateway (`tests/parity`). Known gaps: SDK telemetry headers, Bun's network error texts, non-object tool arguments (sent as `{}`).
 - Framework behavior clients can see is reproduced where recorded: Fastify's 404 and 414 bodies, JSON body parsing errors as 500, `no-store` on device and backend routes even when authentication fails, and the double `node_offline` when a node's link is replaced (Bun's `ws` closed the old socket synchronously). The 4 KiB limit on browser messages to `/api/events`, which never took effect under Bun, is enforced.
+- Replaced libraries: `web-push` by RFC 8291/8292 on p256, aes-gcm and hkdf (RFC appendix vector as a test); `croner` by a line-by-line port (`schedules/cron.rs`), compared with croner 10.0.1 on 100k generated cases. Feature state lives in typed slots on the app (`slots.rs`); unusable VAPID keys stop the gateway before it listens.
+- Accepted gaps: one-shot schedule times must be ISO 8601 (Bun's `Date.parse` took more forms); `US/Pacific-New` and `Canada/East-Saskatchewan` are unknown to chrono-tz; a UTF-16 cut through a surrogate pair gives U+FFFD; the gateway's own HTTP clients ignore proxy variables, as Node's `fetch` did; search dates use the system zone files through `tz-rs`.
 
 ### M3 Model backends (removes pi-ai)
 
