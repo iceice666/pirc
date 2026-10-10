@@ -22,7 +22,7 @@ http-body-util = "0.1"
 # Web Push (push.rs): VAPID signatures and RFC 8291 key agreement.
 p256 = { version = "0.13", default-features = false, features = ["ecdh", "ecdsa", "std"] }
 regex-lite = "0.1"
-# Same TLS setup as pirc-providers: rustls with the ring provider.
+# Push and web search; the same TLS setup as pirc-providers (ring, no aws-lc).
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
