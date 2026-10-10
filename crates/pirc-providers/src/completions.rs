@@ -227,6 +227,7 @@ fn convert_messages(
                     tool_call_id,
                     tool_name,
                     content,
+                    ..
                 }) = messages.get(end)
                 {
                     let text = content
@@ -626,7 +627,7 @@ fn build_params(
 }
 
 /// `resolveCloudflareBaseUrl`: `{VAR}` placeholders from the environment.
-fn cloudflare_base_url(model: &PiModel) -> Result<String, String> {
+pub(crate) fn cloudflare_base_url(model: &PiModel) -> Result<String, String> {
     let url = &model.base_url;
     let mut out = String::with_capacity(url.len());
     let mut rest = url.as_str();

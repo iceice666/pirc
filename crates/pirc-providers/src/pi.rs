@@ -153,6 +153,7 @@ pub enum PiMessage {
         tool_call_id: String,
         tool_name: String,
         content: Vec<UserBlock>,
+        is_error: bool,
     },
 }
 
@@ -180,11 +181,13 @@ pub fn history_message(message: &Message, provider_name: &str, model: &PiModel) 
             tool_call_id,
             tool_name,
             content,
+            is_error,
             ..
         } => PiMessage::ToolResult {
             tool_call_id: tool_call_id.clone(),
             tool_name: tool_name.clone(),
             content: content.clone(),
+            is_error: *is_error,
         },
     }
 }
@@ -251,6 +254,7 @@ pub fn transform_messages(
                 tool_call_id,
                 tool_name,
                 content,
+                is_error,
             } => {
                 let content = if vision {
                     content
@@ -262,6 +266,7 @@ pub fn transform_messages(
                     tool_call_id,
                     tool_name,
                     content,
+                    is_error,
                 }
             }
             PiMessage::Assistant {
@@ -360,6 +365,7 @@ pub fn transform_messages(
                         text: "No result provided".to_owned(),
                         text_signature: None,
                     }],
+                    is_error: true,
                 });
             }
         }
