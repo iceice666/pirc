@@ -107,14 +107,26 @@ Done 2026-10-10; gate decided with the user the same day. The spikes are in `spi
 
 Runs against TS nodes over node protocol v9 (development only; the release is not mixed).
 
-- [ ] Config, error shape `{error:{code,message,details?}}`, auth middleware (`daemon/auth.ts`, `daemon/devices.ts`) with constant-time comparisons.
-- [ ] Fresh SQLite schema (consolidated from `database.ts` migrations, new `user_version` line). If a TS-era database is found in the state directory, refuse to start with a message pointing to the migration notes.
-- [ ] EventHub (epoch, sequence, cursor, `reset`) and `/api/events` with hint frames.
-- [ ] `/node/connect` registry, request relay, terminal and browser stream relays, inference multiplexing (`daemon/nodes.ts`).
+Decided with the user before starting (2026-10-10):
+
+- **Inference:** M2 brings forward a minimal native `openai-completions` transport and `models.json` loading, enough for the conformance fake provider, so the session scenarios run with the Rust gateway. M3 adds the other three wire APIs, OAuth, the settings store and discovery.
+- **Backend routes** (`/api/providers*`, `/api/provider-auth/*`, `backends/routes.ts`) belong to M3; the M2 gateway does not serve them.
+- **Cadence:** one commit per sub-item below, each starting with conformance scenarios for its area recorded against the TS build. `PIRC_CONFORMANCE_GATEWAY_BIN` runs the suite with another gateway executable (the Rust one) next to the TS node; until M2 is done that run is not part of `bun run check`.
+
+- [x] Config, error shape `{error:{code,message,details?}}`, auth middleware (`daemon/auth.ts`, `daemon/devices.ts`) with constant-time comparisons.
+- [x] Fresh SQLite schema (consolidated from `database.ts` migrations, new `user_version` line). If a TS-era database is found in the state directory, refuse to start with a message pointing to the migration notes.
+- [x] EventHub (epoch, sequence, cursor, `reset`) and `/api/events` with hint frames.
+- [x] `/node/connect` registry, request relay, terminal and browser stream relays, inference multiplexing (`daemon/nodes.ts`).
 - [ ] Sessions, commands (idempotency), leases, interactions, uploads, workspaces, capabilities, trust.
 - [ ] Devices and pairing, push (VAPID), schedules, delegations, memory, agent-ops, web search.
 
 Acceptance: all M0 gateway scenarios pass with Rust gateway + TS node; `fixtures/timeline` passes; size within budget.
+
+Progress 2026-10-10: sub-items 1–4 done, 5 done except the chat-workspace paths (chat capabilities, instructions, deleting a chat), which come with 6. New scenarios recorded against TS: `http_edges`, `event_stream`, `session_routes`, `relayed_streams`; with `PIRC_CONFORMANCE_GATEWAY_BIN=target/debug/pirc-gateway` every scenario passes against the TS node. `pirc-gateway` is 7.46 MiB. Notes:
+
+- The gateway's database lives in `pirc-gateway` (`db.rs`, `schema.sql`), not a shared `pirc-store`: the node's store has nothing in common with it. Tables the TS gateway created but never wrote (`runs`, `interactions`, `uploads`, `workspace_trust`) are gone; `user_version` is 1000, and 1–999 (the TS migrations) is refused.
+- `pirc-providers` holds `models.json` loading and the M2 inference transport: the native `openai-chat` port and pi-ai's `openai-completions`, checked against 43 recordings of the TS gateway (`tests/parity`). Known gaps: SDK telemetry headers, Bun's network error texts, non-object tool arguments (sent as `{}`).
+- Framework behavior clients can see is reproduced where recorded: Fastify's 404 and 414 bodies, JSON body parsing errors as 500, `no-store` on device and backend routes even when authentication fails, and the double `node_offline` when a node's link is replaced (Bun's `ws` closed the old socket synchronously). The 4 KiB limit on browser messages to `/api/events`, which never took effect under Bun, is enforced.
 
 ### M3 Model backends (removes pi-ai)
 

@@ -1,0 +1,485 @@
+//! The gateway's shared state and its HTTP router
+//! (`apps/gateway/src/daemon/app.ts`).
+
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::{Arc, Mutex, RwLock};
+
+use axum::Router;
+use axum::extract::{ConnectInfo, FromRequest, Request, State};
+use axum::http::{HeaderMap, Uri, header};
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{delete, get, post};
+use pirc_config::GatewayConfig;
+use pirc_protocol::{HttpMethod, Models, NodeHttpRequest, NodeHttpResponse};
+use serde_json::Value;
+
+use crate::auth::{self, Identity, RequestInfo};
+use crate::db::{Db, Session, Store};
+use crate::devices::DeviceTokens;
+use crate::error::{ApiError, ApiResult, json_response};
+use crate::events::EventHub;
+use crate::hints::Hints;
+use crate::http::{self, Body};
+use crate::node_events::LiveActivity;
+use crate::nodes::NodeRegistry;
+use crate::{routes, sockets};
+
+/// Everything the routes share.
+pub struct App {
+    pub config: GatewayConfig,
+    pub db: Arc<Db>,
+    pub devices: Arc<DeviceTokens>,
+    pub events: Arc<EventHub>,
+    pub hints: Hints,
+    pub nodes: Arc<NodeRegistry>,
+    /// Open runs and write leases each node reported, by gateway session id.
+    pub activity: Mutex<HashMap<String, HashMap<String, LiveActivity>>>,
+    /// The providers of `PIRC_MODELS_FILE` (keys resolved); replaced on reload.
+    pub models: RwLock<Arc<Models>>,
+    pub inference: pirc_providers::Inference,
+}
+
+pub type AppState = Arc<App>;
+
+/// A claimed session together with its node.
+pub struct Claimed {
+    pub session: Session,
+    pub node_id: String,
+    pub pi_session_id: String,
+}
+
+impl App {
+    pub fn new(config: GatewayConfig, db: Arc<Db>, models: Models) -> Arc<Self> {
+        let devices = DeviceTokens::new(
+            db.clone(),
+            config.device_token_idle_ms,
+            config.device_token_max_age_ms,
+        );
+        Arc::new(Self {
+            events: EventHub::new(config.event_buffer_size),
+            config,
+            db,
+            devices,
+            hints: Hints::new(),
+            nodes: Arc::new(NodeRegistry::default()),
+            activity: Mutex::new(HashMap::new()),
+            models: RwLock::new(Arc::new(models)),
+            inference: pirc_providers::Inference::new(),
+        })
+    }
+
+    /// Authenticate a request's parts (`validateRequest`).
+    pub fn validate(
+        &self,
+        peer: &SocketAddr,
+        headers: &HeaderMap,
+        uri: &Uri,
+        require_origin: bool,
+    ) -> ApiResult<Identity> {
+        let peer = auth::peer_address(peer.ip());
+        auth::validate_request(
+            &RequestInfo {
+                peer: &peer,
+                headers,
+                path: uri.path(),
+            },
+            &self.config.auth,
+            self.devices.as_ref(),
+            require_origin,
+        )
+    }
+
+    /// The session, if the user owns it, together with its node.
+    pub fn claim(&self, identity: &Identity, session_id: &str) -> ApiResult<Claimed> {
+        let session = self
+            .db
+            .lock()
+            .claim_session(session_id, &identity.user, false)?;
+        match (session.node_id.clone(), session.pi_session_id.clone()) {
+            (Some(node_id), Some(pi_session_id)) => Ok(Claimed {
+                session,
+                node_id,
+                pi_session_id,
+            }),
+            _ => Err(ApiError::not_found("Session not found")),
+        }
+    }
+
+    pub fn models(&self) -> Arc<Models> {
+        self.models
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+
+    /// The secret-free catalog nodes receive.
+    pub fn public_models(&self) -> Value {
+        serde_json::to_value(pirc_providers::public_models(&self.models())).unwrap_or_default()
+    }
+
+    /// Re-read `PIRC_MODELS_FILE` (SIGHUP): in-flight inference ends, nodes
+    /// get the new catalog. A bad file keeps the previous providers.
+    pub fn reload_models(&self) {
+        let env = pirc_config::Env::from_process();
+        match pirc_providers::load_models_file(
+            &self.config.models_file,
+            &|name| env.get(name).map(str::to_owned),
+            &env.home(),
+        ) {
+            Ok(models) => {
+                *self
+                    .models
+                    .write()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+                    Arc::new(models.unwrap_or_else(empty_models));
+                self.inference.cancel_all();
+                self.nodes.broadcast(
+                    &serde_json::json!({ "type": "models", "models": self.public_models() }),
+                );
+            }
+            Err(_) => crate::log::error("models reload failed; keeping the previous providers"),
+        }
+    }
+
+    /// Replay a request on the node as `identity`.
+    pub async fn relay(
+        &self,
+        node_id: &str,
+        identity: &Identity,
+        method: HttpMethod,
+        url: String,
+        payload: Option<Value>,
+    ) -> ApiResult<NodeHttpResponse> {
+        self.nodes
+            .request(
+                node_id,
+                NodeHttpRequest {
+                    method,
+                    url,
+                    user: identity.user.clone(),
+                    payload,
+                    body_base64: None,
+                    content_type: None,
+                },
+            )
+            .await
+    }
+}
+
+pub fn empty_models() -> Models {
+    Models {
+        providers: Default::default(),
+        default_model: None,
+        inference: None,
+    }
+}
+
+/// The request body, read with the configured limit.
+pub struct ReqBody(pub Body);
+
+impl FromRequest<AppState> for ReqBody {
+    type Rejection = ApiError;
+
+    async fn from_request(request: Request, app: &AppState) -> ApiResult<Self> {
+        http::read_body(request, app.config.upload_max_bytes)
+            .await
+            .map(Self)
+    }
+}
+
+/// The query string as Fastify parsed it: every value of every name.
+pub fn query_map(uri: &Uri) -> HashMap<String, Vec<String>> {
+    let mut query: HashMap<String, Vec<String>> = HashMap::new();
+    for (name, value) in form_urlencoded::parse(uri.query().unwrap_or_default().as_bytes()) {
+        query
+            .entry(name.into_owned())
+            .or_default()
+            .push(value.into_owned());
+    }
+    query
+}
+
+/// A node's answer passed through to the browser: its status and body.
+pub fn forward(response: NodeHttpResponse) -> Response {
+    match (response.status, response.body) {
+        (204, _) | (_, None) => {
+            let mut reply = axum::body::Body::empty().into_response();
+            *reply.status_mut() = axum::http::StatusCode::from_u16(response.status)
+                .unwrap_or(axum::http::StatusCode::BAD_GATEWAY);
+            reply
+        }
+        (status, Some(Value::String(text))) => {
+            let mut reply = text.into_response();
+            *reply.status_mut() = axum::http::StatusCode::from_u16(status)
+                .unwrap_or(axum::http::StatusCode::BAD_GATEWAY);
+            reply.headers_mut().insert(
+                header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("text/plain; charset=utf-8"),
+            );
+            reply
+        }
+        (status, Some(body)) => json_response(status, &body),
+    }
+}
+
+pub fn router(app: AppState) -> Router {
+    Router::new()
+        .route("/node/connect", get(sockets::node_connect))
+        .route("/api/events", get(sockets::events))
+        .route(
+            "/api/sessions/{id}/terminals/{terminal_id}/stream",
+            get(sockets::terminal_stream),
+        )
+        .route(
+            "/api/sessions/{id}/browser/stream",
+            get(sockets::browser_stream),
+        )
+        .route("/api/health", get(routes::health))
+        .route("/api/nodes", get(routes::list_nodes))
+        .route("/api/assistant/node", get(routes::assistant_node))
+        .route(
+            "/api/assistant/node/release",
+            post(routes::release_assistant_node),
+        )
+        .route("/api/assistant/prompts", get(routes::assistant_prompts))
+        .route(
+            "/api/assistant/prompts/{name}",
+            axum::routing::put(routes::save_assistant_prompt),
+        )
+        .route(
+            "/api/workspaces",
+            get(routes::list_workspaces).post(routes::create_workspace),
+        )
+        .route(
+            "/api/workspaces/{workspace_id}/capabilities",
+            get(routes::get_capabilities).patch(routes::patch_capabilities),
+        )
+        .route(
+            "/api/workspaces/{workspace_id}/instructions",
+            get(routes::get_instructions).patch(routes::patch_instructions),
+        )
+        .route(
+            "/api/workspaces/{workspace_id}/project-config",
+            get(routes::project_config),
+        )
+        .route(
+            "/api/workspaces/{workspace_id}/project-trust",
+            post(routes::project_trust),
+        )
+        .route(
+            "/api/sessions",
+            get(routes::list_sessions).post(routes::create_session),
+        )
+        .route(
+            "/api/sessions/{id}",
+            delete(routes::delete_session).patch(routes::update_session),
+        )
+        .route("/api/sessions/{id}/read", post(routes::read_session))
+        .route("/api/sessions/{id}/snapshot", get(routes::snapshot))
+        .route("/api/sessions/{id}/commands", post(routes::command))
+        .route("/api/sessions/{id}/control", get(routes::control))
+        .route("/api/sessions/{id}/control/acquire", post(routes::acquire))
+        .route(
+            "/api/sessions/{id}/control/heartbeat",
+            post(routes::heartbeat),
+        )
+        .route("/api/sessions/{id}/control/release", post(routes::release))
+        .route(
+            "/api/sessions/{id}/interactions/{interaction_id}/answer",
+            post(routes::answer),
+        )
+        .route("/api/sessions/{id}/uploads", post(routes::upload))
+        .route("/api/models", get(routes::list_models))
+        .route("/api/sessions/{id}/git/{*rest}", get(routes::relay_get))
+        .route("/api/sessions/{id}/files", get(routes::relay_get))
+        .route("/api/sessions/{id}/files/content", get(routes::relay_get))
+        .route("/api/sessions/{id}/panel/{*rest}", get(routes::relay_get))
+        .route(
+            "/api/sessions/{id}/terminals",
+            get(routes::relay_get).post(routes::relay_post),
+        )
+        .route(
+            "/api/sessions/{id}/terminals/{terminal_id}/close",
+            post(routes::relay_post),
+        )
+        .route(
+            "/api/sessions/{id}/panel/background/{task_id}/stop",
+            post(routes::relay_post),
+        )
+        .route(
+            "/api/sessions/{id}/browser/recording",
+            get(routes::recording),
+        )
+        .merge(routes::feature_routes())
+        .fallback(not_found)
+        .method_not_allowed_fallback(not_found)
+        .layer(middleware::from_fn_with_state(app.clone(), authenticate))
+        .layer(middleware::from_fn(param_length))
+        .layer(middleware::from_fn(crate::features::no_store))
+        .layer(middleware::from_fn(detach))
+        .with_state(app)
+}
+
+/// Routes with path parameters, by method (`{name}` segments; a `{*rest}`
+/// tail is not limited).
+const PARAM_ROUTES: &[(&str, &str)] = &[
+    ("GET", "/api/sessions/{id}/terminals/{terminal_id}/stream"),
+    ("GET", "/api/sessions/{id}/browser/stream"),
+    ("PUT", "/api/assistant/prompts/{name}"),
+    ("GET", "/api/workspaces/{workspace_id}/capabilities"),
+    ("PATCH", "/api/workspaces/{workspace_id}/capabilities"),
+    ("GET", "/api/workspaces/{workspace_id}/instructions"),
+    ("PATCH", "/api/workspaces/{workspace_id}/instructions"),
+    ("GET", "/api/workspaces/{workspace_id}/project-config"),
+    ("POST", "/api/workspaces/{workspace_id}/project-trust"),
+    ("DELETE", "/api/sessions/{id}"),
+    ("PATCH", "/api/sessions/{id}"),
+    ("POST", "/api/sessions/{id}/read"),
+    ("GET", "/api/sessions/{id}/snapshot"),
+    ("POST", "/api/sessions/{id}/commands"),
+    ("GET", "/api/sessions/{id}/control"),
+    ("POST", "/api/sessions/{id}/control/acquire"),
+    ("POST", "/api/sessions/{id}/control/heartbeat"),
+    ("POST", "/api/sessions/{id}/control/release"),
+    (
+        "POST",
+        "/api/sessions/{id}/interactions/{interaction_id}/answer",
+    ),
+    ("POST", "/api/sessions/{id}/uploads"),
+    ("GET", "/api/sessions/{id}/git/{*rest}"),
+    ("GET", "/api/sessions/{id}/files"),
+    ("GET", "/api/sessions/{id}/files/content"),
+    ("GET", "/api/sessions/{id}/panel/{*rest}"),
+    ("GET", "/api/sessions/{id}/terminals"),
+    ("POST", "/api/sessions/{id}/terminals"),
+    ("POST", "/api/sessions/{id}/terminals/{terminal_id}/close"),
+    ("POST", "/api/sessions/{id}/panel/background/{task_id}/stop"),
+    ("GET", "/api/sessions/{id}/browser/recording"),
+    ("DELETE", "/api/devices/{id}"),
+];
+
+/// Fastify's router refuses a path parameter over 100 characters with
+/// 414, before any hook runs.
+fn param_too_long(method: &str, path: &str) -> bool {
+    let method = if method == "HEAD" { "GET" } else { method };
+    let segments: Vec<&str> = path.split('/').collect();
+    PARAM_ROUTES.iter().any(|(route_method, route)| {
+        if *route_method != method {
+            return false;
+        }
+        let pattern: Vec<&str> = route.split('/').collect();
+        let tail = pattern.last().is_some_and(|last| last.starts_with("{*"));
+        let fits = if tail {
+            segments.len() >= pattern.len()
+        } else {
+            segments.len() == pattern.len()
+        };
+        let mut long = false;
+        fits && pattern.iter().zip(&segments).all(|(part, segment)| {
+            if part.starts_with("{*") {
+                true
+            } else if part.starts_with('{') {
+                long |= segment.len() > 100;
+                !segment.is_empty()
+            } else {
+                part == segment
+            }
+        }) && long
+    })
+}
+
+async fn param_length(request: Request, next: Next) -> Response {
+    let path = request.uri().path().to_owned();
+    if param_too_long(request.method().as_str(), &path) {
+        return json_response(
+            414,
+            &serde_json::json!({
+                "error": "Bad Request",
+                "code": "FST_ERR_MAX_PARAM_LENGTH",
+                "message": format!("'{path}' is exceeding the max param length"),
+                "statusCode": 414,
+            }),
+        );
+    }
+    next.run(request).await
+}
+
+/// Fastify ran a handler to its end even when the client went away (a
+/// relayed command still records its outcome). Handlers run in their own
+/// task, so a dropped connection does not cancel them halfway.
+async fn detach(request: Request, next: Next) -> Response {
+    match tokio::spawn(next.run(request)).await {
+        Ok(response) => response,
+        Err(_) => ApiError::internal().into_response(),
+    }
+}
+
+/// The `Upgrade` header as the TS gateway saw it (duplicates joined).
+fn is_websocket_upgrade(headers: &HeaderMap) -> bool {
+    auth::header(headers, header::UPGRADE.as_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("websocket"))
+}
+
+/// Every route but the node link authenticates its caller before anything
+/// else, unknown routes included (Fastify's `onRequest` hook).
+async fn authenticate(
+    State(app): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    if request.uri().path() == "/node/connect" && is_websocket_upgrade(request.headers()) {
+        return next.run(request).await;
+    }
+    let require_origin = auth::requires_origin(request.method());
+    match app.validate(&peer, request.headers(), request.uri(), require_origin) {
+        Ok(identity) => {
+            request.extensions_mut().insert(identity);
+            next.run(request).await
+        }
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Fastify parsed the body before it found no route: a bad one fails first.
+async fn not_found(State(app): State<AppState>, request: Request) -> Response {
+    let method = request.method().clone();
+    let uri = request.uri().clone();
+    if let Err(error) = http::read_body(request, app.config.upload_max_bytes).await {
+        return error.into_response();
+    }
+    let target = uri
+        .path_and_query()
+        .map_or_else(|| uri.path().to_owned(), ToString::to_string);
+    http::route_not_found(&method, &target)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn long_parameters() {
+        let long = "x".repeat(101);
+        assert!(super::param_too_long(
+            "GET",
+            &format!("/api/sessions/{long}/snapshot")
+        ));
+        assert!(!super::param_too_long(
+            "GET",
+            &format!("/api/sessions/{}/snapshot", "x".repeat(100))
+        ));
+        assert!(!super::param_too_long(
+            "POST",
+            &format!("/api/sessions/{long}/snapshot")
+        ));
+        assert!(super::param_too_long(
+            "GET",
+            &format!("/api/sessions/{long}/git/a/b")
+        ));
+        assert!(!super::param_too_long(
+            "GET",
+            &format!("/api/sessions/s/git/{long}")
+        ));
+    }
+}

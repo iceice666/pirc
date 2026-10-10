@@ -1,0 +1,1341 @@
+//! The gateway's SQLite database (`apps/gateway/src/database.ts`): a fresh
+//! schema (`schema.sql`) and the queries over sessions, workspaces,
+//! commands, leases and capabilities. Feature modules (devices, memory,
+//! schedules, ...) keep their own queries next to their logic.
+//!
+//! Queries are methods of [`Store`], implemented for [`Connection`], so a
+//! transaction (which dereferences to a connection) can combine several.
+
+use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
+
+use rusqlite::{Connection, OptionalExtension, Row, params};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+
+use crate::error::{ApiError, ApiResult};
+use crate::util::{new_id, now_ms, safe_json};
+
+/// `PRAGMA user_version` of the Rust schema. The TS gateway's migrations
+/// numbered 1 to 19; the Rust line starts far above them, so a TS-era
+/// database is recognized and refused rather than misread.
+pub const SCHEMA_VERSION: i64 = 1000;
+const SCHEMA: &str = include_str!("schema.sql");
+
+/// Placeholder name of a new session until the agent's title replaces it.
+pub const PLACEHOLDER_SESSION_NAME: &str = "New session";
+
+/// The open database. Never hold the lock across an `await`.
+pub struct Db(Mutex<Connection>);
+
+impl Db {
+    /// Open (creating) the database at `path`, readable by the owner only.
+    pub fn open(path: &Path) -> Result<Self, String> {
+        let describe = |error: rusqlite::Error| format!("{}: {error}", path.display());
+        let connection = Connection::open(path).map_err(describe)?;
+        // Push keys, device-token hashes and memory live here. SQLite gives
+        // the WAL and shm files the main file's mode, so this covers them.
+        restrict_mode(path)?;
+        connection
+            .pragma_update(None, "journal_mode", "WAL")
+            .map_err(describe)?;
+        for suffix in ["-wal", "-shm"] {
+            let mut name = path.as_os_str().to_owned();
+            name.push(suffix);
+            restrict_mode(Path::new(&name))?;
+        }
+        connection
+            .pragma_update(None, "foreign_keys", "ON")
+            .map_err(describe)?;
+        create_schema(&connection, path)?;
+        Ok(Self(Mutex::new(connection)))
+    }
+
+    /// An in-memory database (tests).
+    #[cfg(test)]
+    pub fn memory() -> Self {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .pragma_update(None, "foreign_keys", "ON")
+            .unwrap();
+        create_schema(&connection, Path::new(":memory:")).unwrap();
+        Self(Mutex::new(connection))
+    }
+
+    pub fn lock(&self) -> MutexGuard<'_, Connection> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+/// A TS-era `gateway.sqlite` left in the state directory while
+/// `PIRC_DATABASE_PATH` points elsewhere is refused too.
+pub fn refuse_typescript_database(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let connection = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    let version: i64 = connection
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    if (1..SCHEMA_VERSION).contains(&version) {
+        return Err(typescript_era(path));
+    }
+    Ok(())
+}
+
+fn typescript_era(path: &Path) -> String {
+    format!(
+        "{} was written by the TypeScript gateway (pirc 0.3 or earlier). This gateway starts \
+         from a fresh state directory: devices are paired again, sessions start anew. See the \
+         upgrade notes (docs/deploy/upgrades.md), then move the old state directory away.",
+        path.display()
+    )
+}
+
+fn restrict_mode(path: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    match std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+            Err(format!("{}: {error}", path.display()))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Create the schema in a new database; refuse one from the TS gateway or a
+/// newer Rust gateway.
+fn create_schema(connection: &Connection, path: &Path) -> Result<(), String> {
+    let describe = |error: rusqlite::Error| format!("{}: {error}", path.display());
+    let version: i64 = connection
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .map_err(describe)?;
+    if version == SCHEMA_VERSION {
+        return Ok(());
+    }
+    if (1..SCHEMA_VERSION).contains(&version) {
+        return Err(typescript_era(path));
+    }
+    if version > SCHEMA_VERSION {
+        return Err(format!(
+            "{} has schema version {version}, newer than this gateway's {SCHEMA_VERSION}",
+            path.display()
+        ));
+    }
+    let tables: i64 = connection
+        .query_row("SELECT count(*) FROM sqlite_master", [], |row| row.get(0))
+        .map_err(describe)?;
+    if tables > 0 {
+        return Err(format!(
+            "{} is not empty but has no pirc schema version; refusing to use it",
+            path.display()
+        ));
+    }
+    connection
+        .execute_batch(&format!(
+            "BEGIN; {SCHEMA}\nPRAGMA user_version = {SCHEMA_VERSION}; COMMIT;"
+        ))
+        .map_err(describe)
+}
+
+/// Storage failures are logged and become a plain 500.
+impl From<rusqlite::Error> for ApiError {
+    fn from(error: rusqlite::Error) -> Self {
+        crate::log::error(&format!("database: {error}"));
+        ApiError::internal()
+    }
+}
+
+/// `directory`: a real directory on the node. `chat`: the assistant's chats.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WorkspaceKind {
+    Directory,
+    Chat,
+}
+
+impl WorkspaceKind {
+    fn from_column(value: &str) -> Self {
+        if value == "chat" {
+            Self::Chat
+        } else {
+            Self::Directory
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Directory => "directory",
+            Self::Chat => "chat",
+        }
+    }
+}
+
+/// A workspace as clients see it; `canonical_path` stays in the gateway.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Workspace {
+    pub id: String,
+    pub host_id: String,
+    pub display_name: String,
+    #[serde(skip)]
+    pub canonical_path: String,
+    pub defaults: Value,
+    pub kind: WorkspaceKind,
+}
+
+impl Workspace {
+    fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
+        Ok(Self {
+            id: row.get("id")?,
+            host_id: row.get("host_id")?,
+            display_name: row.get("display_name")?,
+            canonical_path: row.get("canonical_path")?,
+            defaults: safe_json(&row.get::<_, String>("defaults_json")?, json!({})),
+            kind: WorkspaceKind::from_column(&row.get::<_, String>("kind")?),
+        })
+    }
+
+    /// The node's own id of the workspace (`<nodeId>:<local>`), when it is a node's.
+    pub fn local_id(&self) -> Option<&str> {
+        self.id
+            .strip_prefix(self.host_id.as_str())
+            .and_then(|rest| rest.strip_prefix(':'))
+    }
+}
+
+/// A session row. Serializing gives the public session (`publicSession`):
+/// the node's session id, the owner, the private path and the lost-output
+/// flag never leave the gateway.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Session {
+    pub id: String,
+    pub workspace_id: String,
+    pub node_id: Option<String>,
+    pub name: String,
+    /// `auto`: a placeholder or generated title that a new one may replace.
+    pub name_source: String,
+    pub runner_state: String,
+    /// Finished runs are the nodes' business; the gateway never records one.
+    pub run_status: Option<String>,
+    pub runner_epoch: i64,
+    pub pinned_at: Option<i64>,
+    pub settled_at: Option<i64>,
+    pub unread: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+    #[serde(skip)]
+    pub owner_user: Option<String>,
+    #[serde(skip)]
+    pub private_session_path: String,
+    #[serde(skip)]
+    pub pi_session_id: Option<String>,
+    #[serde(skip)]
+    pub partial_output_lost: bool,
+}
+
+impl Session {
+    fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
+        let activity: Option<i64> = row.get("activity_at")?;
+        let read: Option<i64> = row.get("read_at")?;
+        Ok(Self {
+            id: row.get("id")?,
+            workspace_id: row.get("workspace_id")?,
+            node_id: row.get("node_id")?,
+            owner_user: row.get("owner_user")?,
+            name: row.get("name")?,
+            name_source: if row.get::<_, String>("name_source")? == "auto" {
+                "auto".into()
+            } else {
+                "user".into()
+            },
+            runner_state: row.get("runner_state")?,
+            run_status: None,
+            runner_epoch: row.get("runner_epoch")?,
+            pinned_at: row.get("pinned_at")?,
+            settled_at: row.get("settled_at")?,
+            unread: activity.is_some_and(|activity| activity > read.unwrap_or(0)),
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            private_session_path: row.get("private_session_path")?,
+            pi_session_id: row.get("pi_session_id")?,
+            partial_output_lost: row.get::<_, i64>("partial_output_lost")? != 0,
+        })
+    }
+
+    /// The public session as JSON.
+    pub fn public(&self) -> Value {
+        serde_json::to_value(self).unwrap_or(Value::Null)
+    }
+}
+
+/// A chat workspace's capability policy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Capabilities {
+    pub version: Version1,
+    pub delegation: bool,
+    pub memory_search: bool,
+    pub remote_recall: bool,
+    pub schedules: bool,
+    pub web_search: bool,
+}
+
+/// The literal `1`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u8", into = "u8")]
+pub struct Version1;
+
+impl TryFrom<u8> for Version1 {
+    type Error = &'static str;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if value == 1 {
+            Ok(Self)
+        } else {
+            Err("version must be 1")
+        }
+    }
+}
+
+impl From<Version1> for u8 {
+    fn from(_: Version1) -> Self {
+        1
+    }
+}
+
+impl Default for Capabilities {
+    fn default() -> Self {
+        Self {
+            version: Version1,
+            delegation: true,
+            memory_search: true,
+            remote_recall: true,
+            schedules: true,
+            web_search: true,
+        }
+    }
+}
+
+/// Part of a policy to change (`workspaceCapabilitiesSchema.partial()`).
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CapabilitiesPatch {
+    #[serde(default, deserialize_with = "crate::util::present")]
+    pub version: Option<Version1>,
+    #[serde(default, deserialize_with = "crate::util::present")]
+    pub delegation: Option<bool>,
+    #[serde(default, deserialize_with = "crate::util::present")]
+    pub memory_search: Option<bool>,
+    #[serde(default, deserialize_with = "crate::util::present")]
+    pub remote_recall: Option<bool>,
+    #[serde(default, deserialize_with = "crate::util::present")]
+    pub schedules: Option<bool>,
+    #[serde(default, deserialize_with = "crate::util::present")]
+    pub web_search: Option<bool>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Capability {
+    Delegation,
+    MemorySearch,
+    RemoteRecall,
+    Schedules,
+    WebSearch,
+}
+
+impl Capability {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Delegation => "delegation",
+            Self::MemorySearch => "memory_search",
+            Self::RemoteRecall => "remote_recall",
+            Self::Schedules => "schedules",
+            Self::WebSearch => "web_search",
+        }
+    }
+
+    fn of(self, policy: &Capabilities) -> bool {
+        match self {
+            Self::Delegation => policy.delegation,
+            Self::MemorySearch => policy.memory_search,
+            Self::RemoteRecall => policy.remote_recall,
+            Self::Schedules => policy.schedules,
+            Self::WebSearch => policy.web_search,
+        }
+    }
+}
+
+/// A browser command, kept for idempotency.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Command {
+    pub id: String,
+    pub session_id: String,
+    pub payload_hash: String,
+    pub payload: Value,
+    pub status: String,
+    pub result: Value,
+    pub error: Option<String>,
+}
+
+impl Command {
+    fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
+        let result: Option<String> = row.get("result_json")?;
+        Ok(Self {
+            id: row.get("id")?,
+            session_id: row.get("session_id")?,
+            payload_hash: row.get("payload_hash")?,
+            payload: safe_json(&row.get::<_, String>("payload_json")?, Value::Null),
+            status: row.get("status")?,
+            result: result.map_or(Value::Null, |result| safe_json(&result, Value::Null)),
+            error: row.get("error_text")?,
+        })
+    }
+}
+
+/// What started a session other than the user.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum SessionOrigin {
+    #[serde(rename_all = "camelCase")]
+    Schedule {
+        schedule_id: String,
+        title: String,
+        due_at: i64,
+    },
+    #[serde(rename_all = "camelCase")]
+    Delegation {
+        delegation_id: String,
+        title: String,
+        from_session_id: String,
+    },
+}
+
+/// A node's lease as it reports it.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Lease {
+    pub client_id: String,
+    pub generation: i64,
+    pub expires_at: i64,
+}
+
+/// A session being deleted: its owner and `deleting`/`deleted`.
+#[derive(Clone, Debug)]
+pub struct Deletion {
+    pub owner_user: String,
+    pub status: String,
+}
+
+/// Run `body` atomically: a savepoint, so it nests inside a caller's
+/// transaction as bun:sqlite's `transaction()` did.
+pub fn atomic<T>(
+    connection: &Connection,
+    body: impl FnOnce(&Connection) -> ApiResult<T>,
+) -> ApiResult<T> {
+    /// Rolls the savepoint back unless released (an error or a panic).
+    struct Guard<'a>(&'a Connection, bool);
+    impl Drop for Guard<'_> {
+        fn drop(&mut self) {
+            if !self.1 {
+                let _ = self.0.execute_batch("ROLLBACK TO atomic; RELEASE atomic");
+            }
+        }
+    }
+    connection.execute_batch("SAVEPOINT atomic")?;
+    let mut guard = Guard(connection, false);
+    let value = body(connection)?;
+    connection.execute_batch("RELEASE atomic")?;
+    guard.1 = true;
+    Ok(value)
+}
+
+fn session_not_found() -> ApiError {
+    ApiError::not_found("Session not found")
+}
+
+/// The gateway's queries; see the module documentation.
+pub trait Store {
+    fn assistant_node(&self) -> ApiResult<Option<String>>;
+    fn claim_assistant_node(&self, node_id: &str) -> ApiResult<bool>;
+    fn release_assistant_node(&self, node_id: &str) -> ApiResult<bool>;
+    fn recover_startup(&self) -> ApiResult<RecoveredStartup>;
+
+    fn sync_remote_workspaces(
+        &self,
+        node_id: &str,
+        workspaces: &[(String, String, Option<WorkspaceKind>)],
+    ) -> ApiResult<()>;
+    fn list_workspaces(&self) -> ApiResult<Vec<Workspace>>;
+    fn get_workspace(&self, workspace_id: &str) -> ApiResult<Workspace>;
+    fn get_workspace_capabilities(&self, workspace_id: &str) -> ApiResult<Capabilities>;
+    fn patch_workspace_capabilities(
+        &self,
+        workspace_id: &str,
+        patch: &CapabilitiesPatch,
+    ) -> ApiResult<Capabilities>;
+    fn require_workspace_capability(
+        &self,
+        workspace_id: &str,
+        capability: Capability,
+    ) -> ApiResult<()>;
+    fn require_session_capability(&self, session_id: &str, capability: Capability)
+    -> ApiResult<()>;
+
+    fn create_session(
+        &self,
+        workspace_id: &str,
+        private_session_path: &str,
+        node_id: &str,
+        remote_session_id: &str,
+        owner_user: &str,
+    ) -> ApiResult<Session>;
+    fn list_sessions(&self) -> ApiResult<Vec<Session>>;
+    fn get_session(&self, session_id: &str) -> ApiResult<Session>;
+    fn rename_session(&self, session_id: &str, name: &str) -> ApiResult<Session>;
+    fn set_session_flags(
+        &self,
+        session_id: &str,
+        pinned: Option<bool>,
+        settled: Option<bool>,
+    ) -> ApiResult<Session>;
+    fn mark_session_activity(&self, session_id: &str) -> ApiResult<()>;
+    fn mark_session_read(&self, session_id: &str) -> ApiResult<bool>;
+    fn auto_rename_session(&self, session_id: &str, name: &str) -> ApiResult<bool>;
+    fn claim_session(&self, session_id: &str, user: &str, deleting: bool) -> ApiResult<Session>;
+    fn session_origins(&self, owner_user: &str) -> ApiResult<Vec<(String, SessionOrigin)>>;
+    fn session_deletion(&self, session_id: &str) -> ApiResult<Option<Deletion>>;
+    fn require_session_available(&self, session_id: &str) -> ApiResult<()>;
+    fn begin_session_deletion(&self, session_id: &str, user: &str) -> ApiResult<()>;
+    fn finish_session_deletion(&self, session_id: &str) -> ApiResult<()>;
+    fn resolve_remote_session(&self, node_id: &str, remote_id: &str) -> ApiResult<Option<String>>;
+    fn interrupt_remote_session(&self, session_id: &str) -> ApiResult<()>;
+    fn remote_session_ids(&self, node_id: &str) -> ApiResult<Vec<String>>;
+    fn set_runner_state(&self, session_id: &str, state: &str) -> ApiResult<()>;
+    fn increment_epoch(&self, session_id: &str) -> ApiResult<i64>;
+
+    fn receive_command(
+        &self,
+        command_id: &str,
+        session_id: &str,
+        hash: &str,
+        payload: &Value,
+    ) -> ApiResult<(Command, bool)>;
+    fn get_command(&self, command_id: &str) -> ApiResult<Command>;
+    fn update_command(
+        &self,
+        command_id: &str,
+        status: &str,
+        result: Option<&Value>,
+        error: Option<&str>,
+    ) -> ApiResult<()>;
+
+    fn check_lease_user(&self, session_id: &str, user: &str, force: bool) -> ApiResult<()>;
+    fn mirror_lease(
+        &self,
+        session_id: &str,
+        lease: &Lease,
+        user: &str,
+        force: bool,
+    ) -> ApiResult<()>;
+    fn clear_remote_lease(&self, session_id: &str) -> ApiResult<()>;
+    fn validate_lease_user(&self, session_id: &str, user: &str) -> ApiResult<()>;
+    fn get_lease(&self, session_id: &str) -> ApiResult<Value>;
+    fn validate_lease(&self, session_id: &str, client_id: &str, generation: i64) -> ApiResult<()>;
+}
+
+fn finish_deletion(conn: &Connection, session_id: &str) -> ApiResult<()> {
+    if conn.session_deletion(session_id)?.is_none() {
+        crate::log::error("session deletion must be fenced first");
+        return Err(ApiError::internal());
+    }
+    for table in ["commands", "leases"] {
+        conn.execute(
+            &format!("DELETE FROM {table} WHERE session_id=?"),
+            [session_id],
+        )?;
+    }
+    // Deletion fences the final node events, so the scheduler cannot rely
+    // on an agent-stop event to settle a run. Keep its audit record and
+    // the schedule, but release the open-run guard and the dead link.
+    conn.execute(
+        "UPDATE schedule_runs SET status='failed', result='The chat was deleted.', finished_at=? WHERE session_id=? AND status IN ('running','waiting_input')",
+        params![now_ms(), session_id],
+    )?;
+    conn.execute(
+        "UPDATE schedule_runs SET session_id=NULL WHERE session_id=?",
+        [session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM schedule_proposals WHERE session_id=?",
+        [session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM delegations WHERE assistant_session_id=?",
+        [session_id],
+    )?;
+    conn.execute("DELETE FROM sessions WHERE id=?", [session_id])?;
+    conn.execute(
+        "UPDATE session_deletions SET status='deleted' WHERE session_id=?",
+        [session_id],
+    )?;
+    Ok(())
+}
+
+/// What startup recovery found (logged).
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveredStartup {
+    pub unknown_commands: usize,
+}
+
+const SESSION_SELECT: &str = "SELECT * FROM sessions";
+
+impl Store for Connection {
+    fn assistant_node(&self) -> ApiResult<Option<String>> {
+        Ok(self
+            .query_row(
+                "SELECT node_id FROM assistant_node WHERE singleton = 1",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+
+    fn claim_assistant_node(&self, node_id: &str) -> ApiResult<bool> {
+        self.execute(
+            "INSERT OR IGNORE INTO assistant_node(singleton, node_id) VALUES (1, ?)",
+            [node_id],
+        )?;
+        Ok(self.assistant_node()?.as_deref() == Some(node_id))
+    }
+
+    fn release_assistant_node(&self, node_id: &str) -> ApiResult<bool> {
+        Ok(self.execute(
+            "DELETE FROM assistant_node WHERE singleton = 1 AND node_id = ?",
+            [node_id],
+        )? > 0)
+    }
+
+    /// Commands in flight when the gateway stopped have an unknown outcome;
+    /// runners and leases belong to nodes that reconnect.
+    fn recover_startup(&self) -> ApiResult<RecoveredStartup> {
+        let stamp = now_ms();
+        atomic(self, |tx| {
+            let unknown_commands = tx.execute(
+            "UPDATE commands SET status='outcome_unknown', error_text='gateway restarted before RPC acceptance was recorded', updated_at=? WHERE status='dispatched'",
+            [stamp],
+        )?;
+            tx.execute(
+            "UPDATE sessions SET runner_state='stopped', partial_output_lost=1, updated_at=? WHERE runner_state!='stopped'",
+            [stamp],
+        )?;
+            tx.execute("DELETE FROM leases", [])?;
+            Ok(RecoveredStartup { unknown_commands })
+        })
+    }
+
+    fn sync_remote_workspaces(
+        &self,
+        node_id: &str,
+        workspaces: &[(String, String, Option<WorkspaceKind>)],
+    ) -> ApiResult<()> {
+        atomic(self, |tx| {
+            let mut insert = tx.prepare(
+                "INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at,kind) VALUES (?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name, kind=excluded.kind",
+            )?;
+            for (id, display_name, kind) in workspaces {
+                insert.execute(params![
+                    format!("{node_id}:{id}"),
+                    node_id,
+                    display_name,
+                    format!("node://{node_id}/{id}"),
+                    "{}",
+                    now_ms(),
+                    kind.unwrap_or(WorkspaceKind::Directory).as_str(),
+                ])?;
+            }
+            Ok(())
+        })
+    }
+
+    fn list_workspaces(&self) -> ApiResult<Vec<Workspace>> {
+        let mut statement = self.prepare("SELECT * FROM workspaces ORDER BY display_name")?;
+        let rows = statement.query_map([], Workspace::from_row)?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    fn get_workspace(&self, workspace_id: &str) -> ApiResult<Workspace> {
+        self.query_row(
+            "SELECT * FROM workspaces WHERE id=?",
+            [workspace_id],
+            Workspace::from_row,
+        )
+        .optional()?
+        .ok_or_else(|| ApiError::not_found("Workspace not found"))
+    }
+
+    /// Gateway-owned policy: node workspace sync never overwrites it.
+    fn get_workspace_capabilities(&self, workspace_id: &str) -> ApiResult<Capabilities> {
+        self.get_workspace(workspace_id)?;
+        let stored: Option<String> = self
+            .query_row(
+                "SELECT policy_json FROM workspace_capabilities WHERE workspace_id=?",
+                [workspace_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        match stored {
+            None => Ok(Capabilities::default()),
+            Some(json) => serde_json::from_str(&json).map_err(|error| {
+                crate::log::error(&format!("capabilities of {workspace_id}: {error}"));
+                ApiError::internal()
+            }),
+        }
+    }
+
+    fn patch_workspace_capabilities(
+        &self,
+        workspace_id: &str,
+        patch: &CapabilitiesPatch,
+    ) -> ApiResult<Capabilities> {
+        if self.get_workspace(workspace_id)?.kind != WorkspaceKind::Chat {
+            return Err(ApiError::new(
+                400,
+                "invalid_input",
+                "Capabilities can only be changed for chat workspaces",
+            ));
+        }
+        let mut policy = self.get_workspace_capabilities(workspace_id)?;
+        let set = |field: &mut bool, value: Option<bool>| {
+            if let Some(value) = value {
+                *field = value;
+            }
+        };
+        set(&mut policy.delegation, patch.delegation);
+        set(&mut policy.memory_search, patch.memory_search);
+        set(&mut policy.remote_recall, patch.remote_recall);
+        set(&mut policy.schedules, patch.schedules);
+        set(&mut policy.web_search, patch.web_search);
+        self.execute(
+            "INSERT INTO workspace_capabilities (workspace_id,policy_json) VALUES (?,?) ON CONFLICT(workspace_id) DO UPDATE SET policy_json=excluded.policy_json",
+            params![workspace_id, json!(policy).to_string()],
+        )?;
+        Ok(policy)
+    }
+
+    fn require_workspace_capability(
+        &self,
+        workspace_id: &str,
+        capability: Capability,
+    ) -> ApiResult<()> {
+        if capability.of(&self.get_workspace_capabilities(workspace_id)?) {
+            return Ok(());
+        }
+        Err(ApiError::new(
+            403,
+            "capability_disabled",
+            format!(
+                "Capability {} is disabled for this chat workspace. Ask the user to enable it in workspace settings.",
+                capability.name()
+            ),
+        ))
+    }
+
+    fn require_session_capability(
+        &self,
+        session_id: &str,
+        capability: Capability,
+    ) -> ApiResult<()> {
+        let workspace = self.get_session(session_id)?.workspace_id;
+        self.require_workspace_capability(&workspace, capability)
+    }
+
+    fn create_session(
+        &self,
+        workspace_id: &str,
+        private_session_path: &str,
+        node_id: &str,
+        remote_session_id: &str,
+        owner_user: &str,
+    ) -> ApiResult<Session> {
+        self.get_workspace(workspace_id)?;
+        let session_id = new_id("session");
+        let stamp = now_ms();
+        self.execute(
+            "INSERT INTO sessions (id,workspace_id,private_session_path,name,name_source,node_id,pi_session_id,owner_user,created_at,updated_at) VALUES (?,?,?,?,'auto',?,?,?,?,?)",
+            params![
+                session_id,
+                workspace_id,
+                private_session_path,
+                PLACEHOLDER_SESSION_NAME,
+                node_id,
+                remote_session_id,
+                owner_user,
+                stamp,
+                stamp
+            ],
+        )?;
+        self.get_session(&session_id)
+    }
+
+    fn list_sessions(&self) -> ApiResult<Vec<Session>> {
+        let mut statement = self.prepare(&format!("{SESSION_SELECT} ORDER BY updated_at DESC"))?;
+        let rows = statement.query_map([], Session::from_row)?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    fn get_session(&self, session_id: &str) -> ApiResult<Session> {
+        self.query_row(
+            &format!("{SESSION_SELECT} WHERE id=?"),
+            [session_id],
+            Session::from_row,
+        )
+        .optional()?
+        .ok_or_else(session_not_found)
+    }
+
+    fn rename_session(&self, session_id: &str, name: &str) -> ApiResult<Session> {
+        self.get_session(session_id)?;
+        self.execute(
+            "UPDATE sessions SET name=?, name_source='user', updated_at=? WHERE id=?",
+            params![name, now_ms(), session_id],
+        )?;
+        self.get_session(session_id)
+    }
+
+    /// Sidebar organisation only: never touches `updated_at`.
+    fn set_session_flags(
+        &self,
+        session_id: &str,
+        pinned: Option<bool>,
+        settled: Option<bool>,
+    ) -> ApiResult<Session> {
+        let session = self.get_session(session_id)?;
+        let stamp = now_ms();
+        let next = |wanted: Option<bool>, current: Option<i64>| match wanted {
+            None => current,
+            Some(true) => Some(current.unwrap_or(stamp)),
+            Some(false) => None,
+        };
+        self.execute(
+            "UPDATE sessions SET pinned_at=?, settled_at=? WHERE id=?",
+            params![
+                next(pinned, session.pinned_at),
+                next(settled, session.settled_at),
+                session_id
+            ],
+        )?;
+        self.get_session(session_id)
+    }
+
+    /// The agent finished a run or stopped to ask something: unread until read.
+    fn mark_session_activity(&self, session_id: &str) -> ApiResult<()> {
+        self.execute(
+            "UPDATE sessions SET activity_at=? WHERE id=?",
+            params![now_ms(), session_id],
+        )?;
+        Ok(())
+    }
+
+    fn mark_session_read(&self, session_id: &str) -> ApiResult<bool> {
+        Ok(self.execute(
+            "UPDATE sessions SET read_at=MAX(?, activity_at) WHERE id=? AND activity_at > COALESCE(read_at, 0)",
+            params![now_ms(), session_id],
+        )? > 0)
+    }
+
+    /// A generated title, unless the user has named the session.
+    fn auto_rename_session(&self, session_id: &str, name: &str) -> ApiResult<bool> {
+        Ok(self.execute(
+            "UPDATE sessions SET name=? WHERE id=? AND name_source='auto' AND name!=?",
+            params![name, session_id, name],
+        )? > 0)
+    }
+
+    /// Every session belongs to the user who created it.
+    fn claim_session(&self, session_id: &str, user: &str, deleting: bool) -> ApiResult<Session> {
+        let session = self.get_session(session_id)?;
+        if session.owner_user.as_deref() != Some(user) {
+            return Err(ApiError::new(
+                403,
+                "forbidden",
+                "Session belongs to another user",
+            ));
+        }
+        if !deleting {
+            self.require_session_available(session_id)?;
+        }
+        Ok(session)
+    }
+
+    /// Sessions a schedule or a delegation started, with what started them
+    /// (the newest when a delegation follows up in the same session).
+    fn session_origins(&self, owner_user: &str) -> ApiResult<Vec<(String, SessionOrigin)>> {
+        let mut origins = Vec::new();
+        let mut scheduled = self.prepare(
+            "SELECT r.session_id, r.schedule_id, r.due_at, s.title FROM schedule_runs r JOIN schedules s ON s.id=r.schedule_id WHERE r.owner_user=? AND r.session_id IS NOT NULL ORDER BY r.created_at",
+        )?;
+        for row in scheduled.query_map([owner_user], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                SessionOrigin::Schedule {
+                    schedule_id: row.get(1)?,
+                    due_at: row.get(2)?,
+                    title: row.get(3)?,
+                },
+            ))
+        })? {
+            origins.push(row?);
+        }
+        let mut delegated = self.prepare(
+            "SELECT id, target_session_id, assistant_session_id, title FROM delegations WHERE owner_user=? AND target_session_id IS NOT NULL ORDER BY created_at",
+        )?;
+        for row in delegated.query_map([owner_user], |row| {
+            Ok((
+                row.get::<_, String>(1)?,
+                SessionOrigin::Delegation {
+                    delegation_id: row.get(0)?,
+                    from_session_id: row.get(2)?,
+                    title: row.get(3)?,
+                },
+            ))
+        })? {
+            origins.push(row?);
+        }
+        Ok(origins)
+    }
+
+    fn session_deletion(&self, session_id: &str) -> ApiResult<Option<Deletion>> {
+        Ok(self
+            .query_row(
+                "SELECT owner_user, status FROM session_deletions WHERE session_id=?",
+                [session_id],
+                |row| {
+                    Ok(Deletion {
+                        owner_user: row.get(0)?,
+                        status: row.get(1)?,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    fn require_session_available(&self, session_id: &str) -> ApiResult<()> {
+        if self.session_deletion(session_id)?.is_some() {
+            return Err(ApiError::new(
+                409,
+                "conflict",
+                "This chat is being deleted. Retry Delete to finish cleanup.",
+            ));
+        }
+        Ok(())
+    }
+
+    fn begin_session_deletion(&self, session_id: &str, user: &str) -> ApiResult<()> {
+        self.claim_session(session_id, user, true)?;
+        self.execute(
+            "INSERT OR IGNORE INTO session_deletions VALUES (?, ?, 'deleting', ?)",
+            params![session_id, user, now_ms()],
+        )?;
+        Ok(())
+    }
+
+    /// Atomic, and nests in the caller's transaction (with forgetting the session's memory).
+    fn finish_session_deletion(&self, session_id: &str) -> ApiResult<()> {
+        atomic(self, |conn| finish_deletion(conn, session_id))
+    }
+
+    fn resolve_remote_session(&self, node_id: &str, remote_id: &str) -> ApiResult<Option<String>> {
+        Ok(self
+            .query_row(
+                "SELECT id FROM sessions WHERE node_id=? AND pi_session_id=? AND id NOT IN (SELECT session_id FROM session_deletions)",
+                [node_id, remote_id],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+
+    fn interrupt_remote_session(&self, session_id: &str) -> ApiResult<()> {
+        self.execute(
+            "UPDATE commands SET status='outcome_unknown', error_text='node disconnected', updated_at=? WHERE session_id=? AND status='dispatched'",
+            params![now_ms(), session_id],
+        )?;
+        self.execute("DELETE FROM leases WHERE session_id=?", [session_id])?;
+        Ok(())
+    }
+
+    fn remote_session_ids(&self, node_id: &str) -> ApiResult<Vec<String>> {
+        let mut statement = self.prepare("SELECT id FROM sessions WHERE node_id=?")?;
+        let rows = statement.query_map([node_id], |row| row.get(0))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    fn set_runner_state(&self, session_id: &str, state: &str) -> ApiResult<()> {
+        self.execute(
+            "UPDATE sessions SET runner_state=?, updated_at=? WHERE id=?",
+            params![state, now_ms(), session_id],
+        )?;
+        Ok(())
+    }
+
+    fn increment_epoch(&self, session_id: &str) -> ApiResult<i64> {
+        self.execute(
+            "UPDATE sessions SET runner_epoch=runner_epoch+1, partial_output_lost=0, updated_at=? WHERE id=?",
+            params![now_ms(), session_id],
+        )?;
+        Ok(self.get_session(session_id)?.runner_epoch)
+    }
+
+    /// Record a command once; a retry with the same id and payload is a
+    /// duplicate, with another payload a conflict.
+    fn receive_command(
+        &self,
+        command_id: &str,
+        session_id: &str,
+        hash: &str,
+        payload: &Value,
+    ) -> ApiResult<(Command, bool)> {
+        atomic(self, |tx| {
+            let existing = tx
+                .query_row(
+                    "SELECT * FROM commands WHERE id=?",
+                    [command_id],
+                    Command::from_row,
+                )
+                .optional()?;
+            if let Some(existing) = existing {
+                if existing.session_id != session_id || existing.payload_hash != hash {
+                    return Err(ApiError::new(
+                        409,
+                        "conflict",
+                        "commandId was already used with a different payload",
+                    ));
+                }
+                return Ok((existing, true));
+            }
+            let stamp = now_ms();
+            tx.execute(
+            "INSERT INTO commands (id,session_id,payload_hash,payload_json,status,created_at,updated_at) VALUES (?,?,?,?,'received',?,?)",
+            params![command_id, session_id, hash, payload.to_string(), stamp, stamp],
+        )?;
+            Ok((tx.get_command(command_id)?, false))
+        })
+    }
+
+    fn get_command(&self, command_id: &str) -> ApiResult<Command> {
+        self.query_row(
+            "SELECT * FROM commands WHERE id=?",
+            [command_id],
+            Command::from_row,
+        )
+        .optional()?
+        .ok_or_else(|| ApiError::not_found("Command not found"))
+    }
+
+    fn update_command(
+        &self,
+        command_id: &str,
+        status: &str,
+        result: Option<&Value>,
+        error: Option<&str>,
+    ) -> ApiResult<()> {
+        self.execute(
+            "UPDATE commands SET status=?, result_json=?, error_text=?, updated_at=? WHERE id=?",
+            params![
+                status,
+                result.map(Value::to_string),
+                error,
+                now_ms(),
+                command_id
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn check_lease_user(&self, session_id: &str, user: &str, force: bool) -> ApiResult<()> {
+        let current: Option<(Option<String>, i64)> = self
+            .query_row(
+                "SELECT owner_user, expires_at FROM leases WHERE session_id=?",
+                [session_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        if let Some((owner, expires_at)) = current
+            && expires_at > now_ms()
+            && owner.as_deref() != Some(user)
+            && !force
+        {
+            return Err(ApiError::new(
+                409,
+                "lost_control",
+                "Another user holds control",
+            ));
+        }
+        Ok(())
+    }
+
+    fn mirror_lease(
+        &self,
+        session_id: &str,
+        lease: &Lease,
+        user: &str,
+        force: bool,
+    ) -> ApiResult<()> {
+        self.check_lease_user(session_id, user, force)?;
+        self.execute(
+            "INSERT INTO leases (session_id,client_id,generation,expires_at,updated_at,owner_user) VALUES (?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET client_id=excluded.client_id,generation=excluded.generation,expires_at=excluded.expires_at,updated_at=excluded.updated_at,owner_user=excluded.owner_user",
+            params![
+                session_id,
+                lease.client_id,
+                lease.generation,
+                lease.expires_at,
+                now_ms(),
+                user
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn clear_remote_lease(&self, session_id: &str) -> ApiResult<()> {
+        self.execute("DELETE FROM leases WHERE session_id=?", [session_id])?;
+        Ok(())
+    }
+
+    fn validate_lease_user(&self, session_id: &str, user: &str) -> ApiResult<()> {
+        let owner: Option<Option<String>> = self
+            .query_row(
+                "SELECT owner_user FROM leases WHERE session_id=?",
+                [session_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if owner.flatten().as_deref() != Some(user) {
+            return Err(ApiError::new(
+                409,
+                "lost_control",
+                "Control belongs to another user",
+            ));
+        }
+        Ok(())
+    }
+
+    fn get_lease(&self, session_id: &str) -> ApiResult<Value> {
+        let lease = self
+            .query_row(
+                "SELECT client_id, generation, expires_at FROM leases WHERE session_id=?",
+                [session_id],
+                |row| {
+                    let expires_at: i64 = row.get(2)?;
+                    Ok(json!({
+                        "clientId": row.get::<_, String>(0)?,
+                        "generation": row.get::<_, i64>(1)?,
+                        "expiresAt": expires_at,
+                        "expired": expires_at <= now_ms(),
+                    }))
+                },
+            )
+            .optional()?;
+        Ok(lease.unwrap_or(Value::Null))
+    }
+
+    fn validate_lease(&self, session_id: &str, client_id: &str, generation: i64) -> ApiResult<()> {
+        let lease: Option<(String, i64, i64)> = self
+            .query_row(
+                "SELECT client_id, generation, expires_at FROM leases WHERE session_id=?",
+                [session_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()?;
+        match lease {
+            Some((client, current, expires_at))
+                if client == client_id && current == generation && expires_at > now_ms() =>
+            {
+                Ok(())
+            }
+            _ => Err(ApiError::new(
+                409,
+                "lost_control",
+                "Control lease is missing, expired, or superseded",
+            )),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn with_workspace(db: &Db) {
+        db.lock()
+            .sync_remote_workspaces("n1", &[("w".into(), "W".into(), Some(WorkspaceKind::Chat))])
+            .unwrap();
+    }
+
+    #[test]
+    fn refuses_typescript_databases() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("gateway.sqlite");
+        let old = Connection::open(&path).unwrap();
+        old.execute_batch("CREATE TABLE workspaces (id TEXT); PRAGMA user_version = 19;")
+            .unwrap();
+        drop(old);
+        let error = Db::open(&path).err().unwrap();
+        assert!(error.contains("TypeScript gateway"), "{error}");
+        assert!(error.contains("upgrades.md"), "{error}");
+    }
+
+    #[test]
+    fn refuses_unversioned_databases() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("other.sqlite");
+        Connection::open(&path)
+            .unwrap()
+            .execute_batch("CREATE TABLE x (y TEXT);")
+            .unwrap();
+        assert!(Db::open(&path).err().unwrap().contains("no pirc schema"));
+    }
+
+    #[test]
+    fn creates_and_reopens() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("gateway.sqlite");
+        drop(Db::open(&path).unwrap());
+        let db = Db::open(&path).unwrap();
+        let version: i64 = db
+            .lock()
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[test]
+    fn sessions() {
+        let db = Db::memory();
+        with_workspace(&db);
+        let conn = db.lock();
+        let session = conn
+            .create_session("n1:w", "node://n1/r1", "n1", "r1", "u")
+            .unwrap();
+        let public = session.public();
+        assert_eq!(public["name"], "New session");
+        assert_eq!(public["nameSource"], "auto");
+        assert_eq!(public["nodeId"], "n1");
+        assert!(public.get("ownerUser").is_none());
+        assert!(public.get("piSessionId").is_none());
+        assert_eq!(
+            conn.resolve_remote_session("n1", "r1").unwrap().as_deref(),
+            Some(session.id.as_str())
+        );
+        assert!(conn.auto_rename_session(&session.id, "Title").unwrap());
+        conn.rename_session(&session.id, "Mine").unwrap();
+        assert!(!conn.auto_rename_session(&session.id, "Other").unwrap());
+        assert_eq!(
+            conn.claim_session(&session.id, "v", false)
+                .unwrap_err()
+                .code,
+            "forbidden"
+        );
+        assert!(!conn.mark_session_read(&session.id).unwrap());
+        conn.mark_session_activity(&session.id).unwrap();
+        assert!(conn.get_session(&session.id).unwrap().unread);
+        assert!(conn.mark_session_read(&session.id).unwrap());
+        let flagged = conn
+            .set_session_flags(&session.id, Some(true), None)
+            .unwrap();
+        assert!(flagged.pinned_at.is_some() && flagged.settled_at.is_none());
+        assert_eq!(conn.increment_epoch(&session.id).unwrap(), 1);
+        conn.begin_session_deletion(&session.id, "u").unwrap();
+        assert_eq!(
+            conn.claim_session(&session.id, "u", false)
+                .unwrap_err()
+                .code,
+            "conflict"
+        );
+        assert_eq!(conn.resolve_remote_session("n1", "r1").unwrap(), None);
+        conn.finish_session_deletion(&session.id).unwrap();
+        assert_eq!(
+            conn.session_deletion(&session.id).unwrap().unwrap().status,
+            "deleted"
+        );
+    }
+
+    #[test]
+    fn commands_and_leases() {
+        let db = Db::memory();
+        with_workspace(&db);
+        let conn = db.lock();
+        let session = conn
+            .create_session("n1:w", "node://n1/r1", "n1", "r1", "u")
+            .unwrap();
+        let payload = json!({ "type": "prompt" });
+        let (_, duplicate) = conn
+            .receive_command("c1", &session.id, "h", &payload)
+            .unwrap();
+        assert!(!duplicate);
+        assert!(
+            conn.receive_command("c1", &session.id, "h", &payload)
+                .unwrap()
+                .1
+        );
+        assert_eq!(
+            conn.receive_command("c1", &session.id, "other", &payload)
+                .unwrap_err()
+                .code,
+            "conflict"
+        );
+        conn.update_command("c1", "accepted", Some(&json!({ "ok": true })), None)
+            .unwrap();
+        assert_eq!(conn.get_command("c1").unwrap().result["ok"], true);
+
+        let lease = Lease {
+            client_id: "b".into(),
+            generation: 1,
+            expires_at: now_ms() + 60_000,
+        };
+        conn.mirror_lease(&session.id, &lease, "u", false).unwrap();
+        conn.validate_lease(&session.id, "b", 1).unwrap();
+        conn.validate_lease_user(&session.id, "u").unwrap();
+        assert!(conn.validate_lease(&session.id, "b", 2).is_err());
+        assert!(conn.mirror_lease(&session.id, &lease, "v", false).is_err());
+        conn.mirror_lease(&session.id, &lease, "v", true).unwrap();
+        assert_eq!(conn.get_lease(&session.id).unwrap()["expired"], false);
+        conn.clear_remote_lease(&session.id).unwrap();
+        assert_eq!(conn.get_lease(&session.id).unwrap(), Value::Null);
+    }
+
+    #[test]
+    fn capabilities() {
+        let db = Db::memory();
+        with_workspace(&db);
+        let conn = db.lock();
+        assert_eq!(
+            conn.get_workspace_capabilities("n1:w").unwrap(),
+            Capabilities::default()
+        );
+        let patch: CapabilitiesPatch =
+            serde_json::from_value(json!({ "web_search": false })).unwrap();
+        let policy = conn.patch_workspace_capabilities("n1:w", &patch).unwrap();
+        assert!(!policy.web_search && policy.delegation);
+        assert_eq!(
+            conn.require_workspace_capability("n1:w", Capability::WebSearch)
+                .unwrap_err()
+                .code,
+            "capability_disabled"
+        );
+        assert_eq!(
+            json!(policy),
+            json!({ "version": 1, "delegation": true, "memory_search": true,
+                "remote_recall": true, "schedules": true, "web_search": false })
+        );
+        assert!(serde_json::from_value::<CapabilitiesPatch>(json!({ "version": 2 })).is_err());
+        assert!(serde_json::from_value::<CapabilitiesPatch>(json!({ "other": 1 })).is_err());
+        assert!(serde_json::from_value::<CapabilitiesPatch>(json!({ "schedules": null })).is_err());
+    }
+}

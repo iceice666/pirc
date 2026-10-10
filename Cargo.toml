@@ -19,6 +19,7 @@ serde = { version = "1", features = ["derive"] }
 # and decides defaults (the first provider), as in the TypeScript code.
 serde_json = { version = "1", features = ["preserve_order"] }
 indexmap = { version = "2", features = ["serde"] }
+chrono-tz = { version = "0.10", default-features = false, features = ["std", "case-insensitive"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
