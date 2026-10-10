@@ -1,0 +1,6 @@
+{
+  "binaries": {
+    "pirc-gateway": 16777216,
+    "pirc-node": 33554432
+  }
+}

@@ -140,7 +140,11 @@ async fn session_lifecycle() {
 fn envelope(frames: &[Value]) -> Value {
     let keys: Vec<Vec<&String>> = frames
         .iter()
-        .map(|frame| frame.as_object().unwrap().keys().collect())
+        .map(|frame| {
+            let mut keys: Vec<&String> = frame.as_object().unwrap().keys().collect();
+            keys.sort();
+            keys
+        })
         .collect();
     let sequences: Vec<u64> = frames
         .iter()

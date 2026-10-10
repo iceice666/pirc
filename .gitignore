@@ -32,3 +32,6 @@ DEPLOY.md
 # insta: snapshots awaiting review
 *.snap.new
 *.pending-snap
+
+# M1 spikes (each its own Cargo project)
+/spikes/*/target

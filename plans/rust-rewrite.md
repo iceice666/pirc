@@ -1,6 +1,6 @@
 # Rust rewrite of the server executables
 
-Status: M0 done 2026-10-10; M1 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
+Status: M0 and M1 done 2026-10-10; M2 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
 
 Paths are relative to `apps/gateway/src/` unless noted.
 
@@ -85,14 +85,23 @@ Done 2026-10-10. The agent's own event stream is a separate snapshot (`session_a
 
 ### M1 Workspace skeleton, size budget and spikes
 
-- [ ] Product crates under the M0 workspace; the workspace version added to `scripts/version.ts` manifests.
-- [ ] `pirc-protocol` serde types, hand-ported from `protocol-schema.ts` and `inference-wire.ts`, round-trip the node-link frames the harness captures.
-- [ ] CI job that builds release binaries and fails above a recorded size budget.
-- [ ] **Spike A, browser snapshot:** run Playwright's injected aria-snapshot code (or an equivalent) through raw CDP `Runtime.evaluate` and compare `mode:'ai'` output and `aria-ref` resolution against `browser.ts` on a fixed page set.
-- [ ] **Spike B, PTC size:** measure `rquickjs` + oxc (parser, type stripping) binary cost; fallback options if too large.
-- [ ] **Spike C, Linux sandbox:** bwrap + seccomp BPF + domain-filtering proxy + socket bridge running `/bin/sh -c 'exit 0'` and the `sandbox*.integration` cases.
+- [x] Product crates under the M0 workspace; the workspace version added to `scripts/version.ts` manifests.
+- [x] `pirc-protocol` serde types, hand-ported from `protocol-schema.ts` and `inference-wire.ts`, round-trip the node-link frames the harness captures.
+- [x] CI job that builds release binaries and fails above a recorded size budget.
+- [x] **Spike A, browser snapshot:** run Playwright's injected aria-snapshot code (or an equivalent) through raw CDP `Runtime.evaluate` and compare `mode:'ai'` output and `aria-ref` resolution against `browser.ts` on a fixed page set.
+- [x] **Spike B, PTC size:** measure `rquickjs` + oxc (parser, type stripping) binary cost; fallback options if too large.
+- [x] **Spike C, Linux sandbox:** bwrap + domain-filtering proxy + socket bridge running `/bin/sh -c 'exit 0'` and the spike's own policy checks (seccomp turned out to be unused by pirc; the node-level `sandbox*.integration` cases belong to M6/M7).
 
 **Gate:** record the spike results and the size budget per binary here before M2.
+
+Done 2026-10-10; gate decided with the user the same day. The spikes are in `spikes/`, each with its README and numbers.
+
+- **Size budget:** `pirc-gateway` 16 MiB, `pirc-node` 32 MiB (`crates/size-budget.json`, checked by `bun run size:check` and CI on Linux x86_64; the macOS ARM64 release build is measured at M9). Raising it needs a recorded reason. Today's placeholders are 0.31 MiB, so the check bites only once real code lands.
+- **Protocol:** `pirc-protocol` round-trips every frame the conformance suite sees from real executables: `register`, `response`, `event`, `model_start` from a node; `registered`, `heartbeat_ack`, `request` from the gateway. The other frame kinds are covered only by hand-written unit fixtures so far; M2 and M6 add scenarios for them. A new scenario, `node_side_link`, plays the gateway to a real node and records the node's half of the link for M6. Maps keep their order (`serde_json` `preserve_order`, `IndexMap`; unit-tested), since the first provider is the default and tool schemas are model-visible text; struct field order is not compared.
+- **Spike A, browser (`spikes/browser-snapshot`):** Playwright's injected script evaluated over a hand-written CDP client gives the same AI snapshots on the test pages except for the frame prefix of refs (Playwright's `f3e2` against the spike's `e2`; M8 reproduces Playwright's per-context frame numbering), and `aria-ref` fill and click work through CDP input events. Missing: child frames, which Playwright snapshots separately and merges with per-frame ref prefixes. About 0.9 MiB plus 313 KiB of embedded JavaScript.
+- **Spike B, PTC (`spikes/ptc-size`):** rquickjs adds 1.3 MiB and oxc 2.2 MiB (2.1 MiB together at `opt-level="z"`); type stripping, the `tools.<name>` manifest, async host calls, the interrupt deadline and the heap limit work. The killable child process stays (regular expressions are not interruptible).
+- **Spike C, Linux sandbox (`spikes/linux-sandbox`):** bubblewrap with srt's argument order, a network namespace, a filtering proxy on a Unix socket, an in-sandbox bridge replacing socat and runtime domain approval pass the spike's 20 checks at about 15 ms per start; 505 KiB. Run as a normal user only: `--cap-drop ALL` is passed but not tested, and M7 must test uid 0. pirc already runs srt without seccomp on Linux (`allowAllUnixSockets`), so seccomp is not needed. srt's filesystem argument generation handles many symlink, missing-path and scan cases the spike does not; M7 ports that algorithm rather than redesigning it.
+- The release profile keeps `opt-level=3`; `"z"` and `panic = "abort"` are left for measurement once real code exists.
 
 ### M2 Gateway core
 
@@ -131,7 +140,7 @@ Acceptance: recorded RPC transcripts replay with equivalent events; fake-llm end
 
 - [ ] `Feature` trait; todo, goal, title, recap, skills, project instructions, ask-question, web search, compact, role, schedules, sandbox approvals.
 - [ ] Auto-mode rules and classifier, porting `auto-mode-rules.test.ts` and `agent-auto-mode.test.ts` as golden cases.
-- [ ] PTC on `rquickjs` in a killable `ptc-guest` child with empty environment; same limits (operations, concurrency, time, heap, source size), broker checks and refusal semantics; port `agent-ptc.test.ts` and `ptc-runtime.test.ts`.
+- [ ] PTC on `rquickjs` (spike B; use `AsyncContext::async_with`, not the deprecated macro) in a killable `ptc-guest` child with empty environment; same limits (operations, concurrency, time, heap, source size), broker checks and refusal semantics; port `agent-ptc.test.ts` and `ptc-runtime.test.ts`.
 - [ ] Memory (observational and workspace), background tasks, team/subagents, assistant.
 
 **Gate:** before cutover, re-run the PTC and task-time evaluations against the TS baseline (`docs/evaluations/ptc/`). Paid runs need the user's approval.
@@ -148,7 +157,7 @@ Acceptance: full M0 scenario suite passes with Rust gateway + Rust node + Rust a
 
 ### M7 Native sandbox
 
-- [ ] Linux: complete policy mapping (read denials, write allowlist, read-only `.pirc/`, `.git/hooks`, `.git/config`, rc files), seccomp, network proxy with runtime domain approval, Unix-socket handling.
+- [ ] Linux: port srt's filesystem argument generation (symlinks, missing paths, `/` expansion, mandatory deny scan; Apache-2.0 notice) on spike C's base; read denials, write allowlist, read-only `.pirc/`, `.git/hooks`, `.git/config`, rc files; `--cap-drop ALL` and the uid-0 and missing-`CAP_SETFCAP` cases; the network proxy with SOCKS5, denied domains, local binding and runtime approval; no seccomp, as today (`allowAllUnixSockets`).
 - [ ] macOS: SBPL generation and the same proxy; test on a macOS node.
 - [ ] Port `sandbox-policy.test.ts`, `sandbox.integration`, `sandbox-srt.integration`; add escape tests.
 
@@ -156,7 +165,7 @@ Acceptance: full M0 scenario suite passes with Rust gateway + Rust node + Rust a
 
 ### M8 Native browser
 
-- [ ] CDP client: persistent per-workspace profile, tabs per session, snapshot/ref interaction model from spike A, host guard (`browser-hosts.ts`) via the `Fetch` domain, screencast live view with backpressure, input forwarding, handoff lease, extraction, ffmpeg recording and chunked upload.
+- [ ] CDP client: persistent per-workspace profile, tabs per session, snapshot/ref interaction model from spike A (pinned, embedded injected script in an isolated world; child frames merged with per-frame refs as Playwright does), host guard (`browser-hosts.ts`) via the `Fetch` domain, screencast live view with backpressure, input forwarding, handoff lease, extraction, ffmpeg recording and chunked upload.
 - [ ] Port `browser.test.ts`, `browser-hosts.test.ts`, `browser.integration.test.ts`.
 
 ### M9 Cutover

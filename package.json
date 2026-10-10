@@ -23,6 +23,7 @@
     "dev:chat": "bun run --filter @pirc/gateway dev:chat",
     "test:compiled": "bun run --filter @pirc/gateway test:compiled",
     "test:conformance": "PIRC_CONFORMANCE_REQUIRED=1 PIRC_CONFORMANCE_BIN_DIR=apps/gateway/dist INSTA_UPDATE=no cargo test -p pirc-conformance",
+    "size:check": "bun scripts/binary-size.ts",
     "conformance:record": "PIRC_CONFORMANCE_REQUIRED=1 PIRC_CONFORMANCE_BIN_DIR=apps/gateway/dist INSTA_UPDATE=always cargo test -p pirc-conformance"
   },
   "devDependencies": {

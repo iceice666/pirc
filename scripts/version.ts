@@ -3,6 +3,30 @@ import path from 'node:path';
 
 const manifests = ['package.json', 'apps/gateway/package.json', 'apps/web/package.json'];
 const android = 'apps/android/app/build.gradle.kts';
+/** The Rust workspace (plans/rust-rewrite.md): every member inherits `[workspace.package]`. */
+const cargo = 'Cargo.toml';
+const cargoLock = 'Cargo.lock';
+/** The line of `version = "…"` in `[workspace.package]`, and its value. */
+function cargoVersionLine(lines: string[]): { index: number; version: string } {
+  const start = lines.findIndex((line) => line.trim() === '[workspace.package]');
+  for (let index = start + 1; start >= 0 && index < lines.length; index++) {
+    if (lines[index]!.trimStart().startsWith('[')) break;
+    const match = /^version\s*=\s*"([^"]+)"\s*$/.exec(lines[index]!.trim());
+    if (match) return { index, version: match[1]! };
+  }
+  throw new Error('Expected version in [workspace.package] of Cargo.toml');
+}
+function cargoVersion(text: string): string {
+  return cargoVersionLine(text.split('\n')).version;
+}
+/** Versions of the workspace's own packages (no `source`) in Cargo.lock. */
+function cargoLockVersions(text: string): Array<[string, string]> {
+  return text
+    .split('[[package]]')
+    .slice(1)
+    .filter((entry) => !/\nsource = /.test(entry))
+    .map((entry) => [field(entry, /\nname = "([^"]+)"/), field(entry, /\nversion = "([^"]+)"/)]);
+}
 export function parseVersion(value: string): number[] {
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(value))
     throw new Error('Expected a stable MAJOR.MINOR.PATCH version (without v)');
@@ -38,6 +62,10 @@ export function checkVersions(root: string): string {
     )
       throw new Error(`Lockfile mismatch: ${workspace}; run bun install --lockfile-only`);
   }
+  if (cargoVersion(read(cargo)) !== version) throw new Error(`Version mismatch: ${cargo}`);
+  for (const [name, locked] of cargoLockVersions(read(cargoLock)))
+    if (locked !== version)
+      throw new Error(`Lockfile mismatch: ${name} in ${cargoLock}; run cargo update --workspace`);
   return version;
 }
 export function bumpVersion(root: string, next: string): void {
@@ -49,6 +77,8 @@ export function bumpVersion(root: string, next: string): void {
     throw new Error('Version must increase');
   const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
   const text = read(android);
+  const cargoLines = read(cargo).split('\n');
+  const cargoLine = cargoVersionLine(cargoLines);
   const code = Number(field(text, /versionCode = (\d+)/));
   if (code >= 2100000000) throw new Error('Android versionCode exhausted');
   // Validate every input before writing anything. No git/network/release side effects.
@@ -58,6 +88,11 @@ export function bumpVersion(root: string, next: string): void {
     return [file, JSON.stringify(manifest, null, 2) + '\n'] as const;
   });
   for (const [file, content] of changes) writeFileSync(path.join(root, file), content);
+  cargoLines[cargoLine.index] = cargoLines[cargoLine.index]!.replace(
+    `"${cargoLine.version}"`,
+    `"${next}"`,
+  );
+  writeFileSync(path.join(root, cargo), cargoLines.join('\n'));
   writeFileSync(
     path.join(root, android),
     text
@@ -72,7 +107,7 @@ if (import.meta.main) {
   else if (command === 'bump' && version && !extra.length) {
     bumpVersion(root, version);
     console.log(
-      `Bumped to ${version}. Run bun install --lockfile-only, then bun run version:check.`,
+      `Bumped to ${version}. Run bun install --lockfile-only and cargo update --workspace, then bun run version:check.`,
     );
   } else throw new Error('Usage: bun scripts/version.ts check | bump <version>');
 }

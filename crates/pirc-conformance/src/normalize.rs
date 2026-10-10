@@ -18,6 +18,8 @@ static PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| {
     [
         ("device-token", r"pirc_dev_[A-Za-z0-9_-]{43}"),
         ("sha256", r"\b[0-9a-f]{64}\b"),
+        // Short random ids: an agent's session id, a memory ledger key.
+        ("hex16", r"\b[0-9a-f]{16}\b"),
         (
             "uuid",
             r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
@@ -69,8 +71,13 @@ impl Normalizer {
             },
             Value::Array(items) => items.iter().map(|item| self.value(item)).collect(),
             Value::Object(object) => {
+                // Keys in sorted order, whatever order they arrived in: key
+                // order is not part of the contract snapshots record, and the
+                // placeholder numbering must not depend on it.
+                let mut entries: Vec<_> = object.iter().collect();
+                entries.sort_by(|a, b| a.0.cmp(b.0));
                 let mut out = Map::new();
-                for (key, item) in object {
+                for (key, item) in entries {
                     let item = self.value(item);
                     let key = self.text(key);
                     assert!(
@@ -171,7 +178,20 @@ impl Transcript {
     }
 
     pub fn into_value(self) -> Value {
-        Value::Array(self.steps)
+        sorted(Value::Array(self.steps))
+    }
+}
+
+/// `value` with every object's keys in sorted order.
+pub fn sorted(value: Value) -> Value {
+    match value {
+        Value::Array(items) => items.into_iter().map(sorted).collect(),
+        Value::Object(object) => {
+            let mut entries: Vec<_> = object.into_iter().collect();
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+            Value::Object(entries.into_iter().map(|(k, v)| (k, sorted(v))).collect())
+        }
+        other => other,
     }
 }
 
@@ -239,13 +259,14 @@ mod tests {
             "cwd": "/tmp/pirc-x/workspace",
             "payloadHash": hash,
             "again": hash,
+            "agentSession": "abef2ee2acf21019",
         }));
         assert_eq!(
             value,
             json!({ "token": "<device-token:1>", "at": "<epoch-ms>", "small": 42,
                 "iso": "<time>", "isoSeconds": "2026-10-10T09:06:36Z",
                 "upper": "0B1C6B8E-5D7A-4B55-9A3E-1C2D3E4F5A6C", "cwd": "<tmp>/workspace",
-                "payloadHash": "<sha256:1>", "again": "<sha256:1>" })
+                "payloadHash": "<sha256:1>", "again": "<sha256:1>", "agentSession": "<hex16:1>" })
         );
     }
 }

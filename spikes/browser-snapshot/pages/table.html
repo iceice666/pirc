@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Table</title>
+  </head>
+  <body>
+    <table>
+      <caption>
+        Builds
+      </caption>
+      <thead>
+        <tr>
+          <th>Job</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>check</td>
+          <td>passed</td>
+        </tr>
+        <tr>
+          <td>size</td>
+          <td><span role="status">running</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div role="tablist">
+      <button role="tab" aria-selected="true">One</button>
+      <button role="tab" aria-selected="false" aria-expanded="false">Two</button>
+    </div>
+    <input type="range" aria-label="Volume" value="30" />
+    <textarea aria-label="Notes">first line</textarea>
+  </body>
+</html>

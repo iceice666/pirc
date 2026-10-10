@@ -2,7 +2,10 @@
 //! acting as a node: registration, heartbeats, relaying a browser request
 //! and publishing a node event (`apps/gateway/src/daemon/nodes.ts`).
 
-use pirc_conformance::{Cluster, GatewayOptions, NODE_ID, NODE_TOKEN, Transcript, browser_headers};
+use pirc_conformance::{
+    Cluster, GatewayOptions, NODE_ID, NODE_TOKEN, Transcript, WebSocket, assert_gateway_frame,
+    assert_node_frame, browser_headers,
+};
 use serde_json::{Value, json};
 
 fn node_headers(token: &str) -> Vec<(&'static str, String)> {
@@ -10,6 +13,19 @@ fn node_headers(token: &str) -> Vec<(&'static str, String)> {
         ("x-pirc-node-id", NODE_ID.to_owned()),
         ("authorization", format!("Bearer {token}")),
     ]
+}
+
+/// Send a well-formed node frame, checking it against `pirc-protocol` too.
+async fn send(socket: &mut WebSocket, frame: &Value) {
+    assert_node_frame(frame);
+    socket.send_json(frame).await;
+}
+
+/// The gateway's next frame, checked against `pirc-protocol`.
+async fn receive(socket: &mut WebSocket, what: &str) -> Value {
+    let frame = socket.next_json().await.expect(what);
+    assert_gateway_frame(&frame);
+    frame
 }
 
 fn register(protocol: Value) -> Value {
@@ -70,12 +86,12 @@ async fn node_link() {
         .connect("/node/connect", &node_headers(NODE_TOKEN))
         .await
         .open();
-    node.send_json(&register(json!(9))).await;
-    let registered = node.next_json().await.expect("registered");
+    send(&mut node, &register(json!(9))).await;
+    let registered = receive(&mut node, "registered").await;
     t.note("register", registered);
 
-    node.send_json(&json!({ "type": "heartbeat" })).await;
-    t.note("heartbeat", node.next_json().await.expect("heartbeat_ack"));
+    send(&mut node, &json!({ "type": "heartbeat" })).await;
+    t.note("heartbeat", receive(&mut node, "heartbeat_ack").await);
 
     let nodes = api.send("GET", "/api/nodes", &browser, None).await;
     t.response("list nodes", "GET /api/nodes", &nodes);
@@ -95,13 +111,16 @@ async fn node_link() {
             )
             .await
     });
-    let request = node.next_json().await.expect("relayed request");
+    let request = receive(&mut node, "relayed request").await;
     t.note("relayed request", request.clone());
-    node.send_json(&json!({
+    send(
+        &mut node,
+        &json!({
         "type": "response",
         "requestId": request["requestId"],
         "data": { "status": 201, "body": { "session": { "id": "remote-1" } } },
-    }))
+        }),
+    )
     .await;
     let created = create.await.unwrap();
     t.response(
@@ -115,11 +134,14 @@ async fn node_link() {
         .connect(&format!("/api/events?sessionId={session}"), &browser)
         .await
         .open();
-    node.send_json(&json!({
+    send(
+        &mut node,
+        &json!({
         "type": "event",
         "sessionId": "remote-1",
         "event": { "type": "pi_event", "data": { "type": "agent_start" } },
-    }))
+        }),
+    )
     .await;
     t.note(
         "a node event reaches the browser",
@@ -131,13 +153,13 @@ async fn node_link() {
         .connect("/node/connect", &node_headers(NODE_TOKEN))
         .await
         .open();
-    replacement.send_json(&register(json!(9))).await;
+    send(&mut replacement, &register(json!(9))).await;
     let (code, reason) = node.closed().await;
     t.note(
         "a second connection replaces the first",
         json!({ "closed": code, "reason": reason }),
     );
-    let registered = replacement.next_json().await.expect("registered");
+    let registered = receive(&mut replacement, "registered").await;
     t.note("the replacement registers", registered);
 
     replacement

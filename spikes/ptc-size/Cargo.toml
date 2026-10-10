@@ -1,0 +1,24 @@
+[package]
+name = "ptc-size"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "M1 spike B: what QuickJS (rquickjs) and TypeScript stripping (oxc) add to a release binary"
+
+[features]
+default = []
+quickjs = ["dep:rquickjs"]
+oxc = ["dep:oxc"]
+
+[dependencies]
+tokio = { version = "1", features = ["rt", "macros", "time"] }
+rquickjs = { version = "0.14", optional = true, features = ["futures"] }
+oxc = { version = "0.153", optional = true, features = ["semantic", "transformer", "codegen", "ast_visit"] }
+
+# Same as the workspace's release profile.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+
+[workspace]

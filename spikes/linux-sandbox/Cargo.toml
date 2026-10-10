@@ -1,0 +1,15 @@
+[package]
+name = "linux-sandbox"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "M1 spike C: srt's Linux sandbox (bubblewrap, filtered network) without Node"
+
+[dependencies]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+
+[workspace]

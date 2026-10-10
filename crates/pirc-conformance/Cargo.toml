@@ -1,6 +1,6 @@
 [package]
 name = "pirc-conformance"
-version = "0.0.0"
+version.workspace = true
 description = "Black-box conformance tests for the pirc executables"
 edition.workspace = true
 rust-version.workspace = true
@@ -12,10 +12,12 @@ futures-util = { version = "0.3", features = ["sink"] }
 nix = { version = "0.31", features = ["signal"] }
 regex = "1"
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
-serde_json = "1"
+serde_json.workspace = true
 tempfile = "3"
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.30"
+
+pirc-protocol = { path = "../pirc-protocol" }
 
 [dev-dependencies]
 insta = { version = "1", features = ["json"] }

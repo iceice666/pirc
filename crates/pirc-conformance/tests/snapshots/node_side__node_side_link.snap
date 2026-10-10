@@ -1,0 +1,222 @@
+---
+source: crates/pirc-conformance/tests/node_side.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": {
+      "authorization is the node token": true,
+      "x-pirc-node-id": "test"
+    },
+    "step": "handshake"
+  },
+  {
+    "observed": {
+      "protocol": 9,
+      "role": "node",
+      "type": "register",
+      "workspaces": [
+        {
+          "displayName": "Test",
+          "id": "test",
+          "kind": "directory",
+          "roles": [
+            {
+              "description": "General-purpose agent with the default model and all tools.",
+              "name": "general"
+            }
+          ]
+        }
+      ]
+    },
+    "step": "register"
+  },
+  {
+    "observed": {
+      "data": {
+        "body": {
+          "session": {
+            "createdAt": "<epoch-ms>",
+            "id": "session_<uuid:1>",
+            "name": "New session",
+            "nameSource": "auto",
+            "nodeId": null,
+            "pinnedAt": null,
+            "runStatus": null,
+            "runnerEpoch": 0,
+            "runnerState": "stopped",
+            "settledAt": null,
+            "unread": false,
+            "updatedAt": "<epoch-ms>",
+            "workspaceId": "test"
+          }
+        },
+        "status": 201
+      },
+      "requestId": "request-1",
+      "type": "response"
+    },
+    "step": "create a session"
+  },
+  {
+    "observed": {
+      "data": {
+        "body": {
+          "lease": {
+            "clientId": "browser",
+            "expiresAt": "<epoch-ms>",
+            "generation": 1
+          }
+        },
+        "status": 200
+      },
+      "requestId": "request-2",
+      "type": "response"
+    },
+    "step": "acquire control"
+  },
+  {
+    "observed": {
+      "data": {
+        "body": {
+          "command": {
+            "error": null,
+            "id": "command-1",
+            "payload": {
+              "message": "Say hello",
+              "type": "prompt"
+            },
+            "payloadHash": "<sha256:1>",
+            "result": {
+              "command": "prompt",
+              "id": "rpc_<uuid:2>",
+              "success": true,
+              "type": "response"
+            },
+            "sessionId": "session_<uuid:1>",
+            "status": "accepted"
+          },
+          "duplicate": false
+        },
+        "status": 202
+      },
+      "requestId": "request-3",
+      "type": "response"
+    },
+    "step": "prompt"
+  },
+  {
+    "observed": {
+      "has a system prompt": true,
+      "keys": [
+        "messages",
+        "modelId",
+        "providerName",
+        "sessionId",
+        "systemPrompt",
+        "thinking",
+        "tools"
+      ],
+      "messages": [
+        {
+          "content": "Say hello",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        }
+      ],
+      "modelId": "fake-model",
+      "providerName": "fake",
+      "sessionId": "<hex16:1>",
+      "thinking": "low",
+      "tools": [
+        "ptc",
+        "ptc_docs",
+        "read",
+        "write",
+        "edit",
+        "ls",
+        "grep",
+        "find",
+        "bash",
+        "web_search"
+      ]
+    },
+    "step": "model request (system prompt and tool contracts belong to the agent port)"
+  },
+  {
+    "observed": {
+      "event keys": [
+        "data",
+        "epoch",
+        "sequence",
+        "sessionId",
+        "timestamp",
+        "type"
+      ],
+      "keys": [
+        "event",
+        "sessionId",
+        "type"
+      ],
+      "sessionId is the node session": true
+    },
+    "step": "event frame"
+  },
+  {
+    "observed": {
+      "api": "openai-completions",
+      "completedAt": "<epoch-ms>",
+      "content": [
+        {
+          "text": "Hello through the gateway.",
+          "type": "text"
+        }
+      ],
+      "model": "fake-model",
+      "provider": "fake",
+      "role": "assistant",
+      "stopReason": "stop",
+      "timestamp": "<epoch-ms>",
+      "usage": {
+        "cacheRead": 40,
+        "cacheWrite": 0,
+        "input": 60,
+        "output": 10,
+        "totalTokens": 110
+      }
+    },
+    "step": "the agent's final message"
+  },
+  {
+    "observed": [
+      {
+        "content": "Say hello",
+        "role": "user",
+        "timestamp": "<epoch-ms>"
+      },
+      {
+        "api": "openai-completions",
+        "completedAt": "<epoch-ms>",
+        "content": [
+          {
+            "text": "Hello through the gateway.",
+            "type": "text"
+          }
+        ],
+        "model": "fake-model",
+        "provider": "fake",
+        "role": "assistant",
+        "stopReason": "stop",
+        "timestamp": "<epoch-ms>",
+        "usage": {
+          "cacheRead": 40,
+          "cacheWrite": 0,
+          "input": 60,
+          "output": 10,
+          "totalTokens": 110
+        }
+      }
+    ],
+    "step": "snapshot"
+  }
+]

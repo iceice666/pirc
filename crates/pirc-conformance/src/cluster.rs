@@ -94,15 +94,7 @@ impl Cluster {
     }
 
     async fn try_start(bin_dir: &Path, options: &GatewayOptions) -> Result<Self, String> {
-        // Not under /tmp: agents may write there, and the node warns when its
-        // state lies inside a path its agents may write.
-        let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/conformance");
-        fs::create_dir_all(&base).expect("conformance directory");
-        let dir = tempfile::Builder::new()
-            .prefix("run-")
-            .tempdir_in(&base)
-            .expect("temporary directory");
-        let root = dir.path().canonicalize().expect("temporary directory path");
+        let (dir, root) = run_dir();
         let llm = FakeLlm::start().await.expect("fake model server");
         let port = free_port();
 
@@ -148,7 +140,11 @@ impl Cluster {
         let node = if options.without_node {
             None
         } else {
-            Some(Self::spawn_node(bin_dir, &root, port))
+            Some(Self::spawn_node(
+                bin_dir,
+                &root,
+                &format!("ws://127.0.0.1:{port}"),
+            ))
         };
 
         let mut cluster = Self {
@@ -164,7 +160,7 @@ impl Cluster {
         Ok(cluster)
     }
 
-    fn spawn_node(bin_dir: &Path, root: &Path, port: u16) -> Process {
+    fn spawn_node(bin_dir: &Path, root: &Path, gateway_url: &str) -> Process {
         let workspace = dir_in(root, "workspace");
         fs::write(Path::new(&workspace).join("README.md"), "conformance\n").unwrap();
         let config_dir = dir_in(root, "node-config");
@@ -182,7 +178,7 @@ impl Cluster {
         let env = [
             ("PIRC_NODE_ID", NODE_ID.to_owned()),
             ("PIRC_NODE_TOKEN", NODE_TOKEN.to_owned()),
-            ("PIRC_DAEMON_URL", format!("ws://127.0.0.1:{port}")),
+            ("PIRC_DAEMON_URL", gateway_url.to_owned()),
             ("PIRC_ALLOWED_USERS", USER.to_owned()),
             ("PIRC_STATE_DIR", dir_in(root, "node-state")),
             ("PIRC_CONFIG_DIR", config_dir),
@@ -286,6 +282,57 @@ impl Drop for Cluster {
         }
         // Fields then drop in order: the node stops before the gateway.
     }
+}
+
+/// A node alone, connected to a gateway the test plays
+/// ([`crate::FakeGateway`]).
+pub struct LoneNode {
+    process: Process,
+    /// Root of the node's temporary directories.
+    pub dir: TempDir,
+}
+
+impl LoneNode {
+    /// Start a node against `ws://127.0.0.1:<gateway_port>`, or `None` (test
+    /// skipped) when `PIRC_CONFORMANCE_BIN_DIR` is unset.
+    pub fn start(gateway_port: u16) -> Option<Self> {
+        let bin_dir = bin_dir()?;
+        let (dir, root) = run_dir();
+        let url = format!("ws://127.0.0.1:{gateway_port}");
+        let process = Cluster::spawn_node(&bin_dir, &root, &url);
+        Some(Self { process, dir })
+    }
+
+    /// Values that differ between runs, to be replaced in recorded transcripts.
+    pub fn volatile(&self) -> Vec<(String, &'static str)> {
+        let canonical = self.dir.path().canonicalize().unwrap();
+        vec![
+            (canonical.display().to_string(), "<tmp>"),
+            (self.dir.path().display().to_string(), "<tmp>"),
+        ]
+    }
+}
+
+impl Drop for LoneNode {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.process.dump();
+        }
+    }
+}
+
+/// A fresh run directory and its canonical path. Not under /tmp: agents may
+/// write there, and the node warns when its state lies inside a path its
+/// agents may write.
+fn run_dir() -> (TempDir, PathBuf) {
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/conformance");
+    fs::create_dir_all(&base).expect("conformance directory");
+    let dir = tempfile::Builder::new()
+        .prefix("run-")
+        .tempdir_in(&base)
+        .expect("temporary directory");
+    let root = dir.path().canonicalize().expect("temporary directory path");
+    (dir, root)
 }
 
 /// `/api/health` itself, or one of the gateway's own error bodies.

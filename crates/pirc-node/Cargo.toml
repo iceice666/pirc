@@ -1,0 +1,14 @@
+[package]
+name = "pirc-node"
+description = "pirc node: coding and chat agents, shells and workspaces (Rust rewrite, not usable yet)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "pirc-node"
+path = "src/main.rs"
+
+[lints]
+workspace = true

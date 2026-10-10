@@ -29,6 +29,14 @@ function fixture() {
       },
     }),
   );
+  writeFileSync(
+    path.join(root, 'Cargo.toml'),
+    '[workspace]\nmembers = ["crates/*"]\n\n[workspace.package]\nauthors = ["a"]\nversion = "0.1.0"\n\n[workspace.dependencies]\nversion = "9"\n',
+  );
+  writeFileSync(
+    path.join(root, 'Cargo.lock'),
+    'version = 4\n\n[[package]]\nname = "dep"\nversion = "9.9.9"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\n\n[[package]]\nname = "pirc-node"\nversion = "0.1.0"\n',
+  );
   return root;
 }
 it('checks manifests and lockfile and bumps Android monotonically', () => {
@@ -40,8 +48,16 @@ it('checks manifests and lockfile and bumps Android monotonically', () => {
     'versionCode = 2',
   );
   expect(() => checkVersions(root)).toThrow('Lockfile mismatch');
+  const cargoToml = readFileSync(path.join(root, 'Cargo.toml'), 'utf8');
+  expect(cargoToml).toContain('authors = ["a"]\nversion = "0.2.0"');
+  // Only [workspace.package] follows the product version.
+  expect(cargoToml).toContain('[workspace.dependencies]\nversion = "9"');
   const lock = path.join(root, 'bun.lock');
   writeFileSync(lock, readFileSync(lock, 'utf8').replaceAll('0.1.0', '0.2.0'));
+  // Registry dependencies keep their own versions; workspace packages follow.
+  expect(() => checkVersions(root)).toThrow('Lockfile mismatch: pirc-node');
+  const cargoLock = path.join(root, 'Cargo.lock');
+  writeFileSync(cargoLock, readFileSync(cargoLock, 'utf8').replaceAll('0.1.0', '0.2.0'));
   expect(checkVersions(root)).toBe('0.2.0');
   expect(() => bumpVersion(root, '0.2.0')).toThrow('increase');
   expect(() => bumpVersion(root, '0.1.9')).toThrow('increase');
@@ -53,6 +69,15 @@ it('rejects mismatches and malformed versions without writing', () => {
   writeFileSync(path.join(root, 'apps/web/package.json'), JSON.stringify({ version: '0.9.0' }));
   expect(() => bumpVersion(root, '1.0.0')).toThrow('mismatch');
   expect(JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version).toBe('0.1.0');
+  const cargo = fixture();
+  writeFileSync(
+    path.join(cargo, 'Cargo.toml'),
+    '[workspace]\n\n[workspace.package]\nversion = "0.2.0"\n',
+  );
+  expect(() => checkVersions(cargo)).toThrow('Version mismatch: Cargo.toml');
+  writeFileSync(path.join(cargo, 'Cargo.toml'), '[workspace]\n');
+  expect(() => bumpVersion(cargo, '1.0.0')).toThrow('Cargo.toml');
+  expect(JSON.parse(readFileSync(path.join(cargo, 'package.json'), 'utf8')).version).toBe('0.1.0');
 });
 it('keeps the actual repository versions synchronized', () => {
   expect(checkVersions(path.resolve(import.meta.dir, '../../..'))).toBe(version);
