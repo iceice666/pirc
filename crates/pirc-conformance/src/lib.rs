@@ -9,6 +9,7 @@ mod client;
 mod cluster;
 mod fake_gateway;
 mod fake_llm;
+mod fake_push;
 mod normalize;
 
 pub use client::{Api, Connection, Response, WebSocket};
@@ -17,6 +18,7 @@ pub use cluster::{
 };
 pub use fake_gateway::{FakeGateway, NodeLink, assert_gateway_frame, assert_node_frame};
 pub use fake_llm::{FakeLlm, Reply};
+pub use fake_push::{FakePush, PushSubscription};
 pub use normalize::{Normalizer, Transcript};
 
 /// Headers a trusted proxy adds to an authenticated browser request.

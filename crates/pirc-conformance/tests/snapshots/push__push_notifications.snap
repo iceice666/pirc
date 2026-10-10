@@ -1,0 +1,1097 @@
+---
+source: crates/pirc-conformance/tests/push.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "publicKey": "<vapid-public-key>",
+      "subscriptions": []
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/push",
+    "status": 200,
+    "step": "the key to subscribe with"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with no body"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with an unknown field"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with an unknown key field"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with a short p256dh"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with a p256dh in standard base64"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with a long auth"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with an unknown kind"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with a null name"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with a long name"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with an endpoint that is no URL"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with a long endpoint"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "A push endpoint must use https"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with an ftp endpoint"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "A push endpoint cannot carry credentials"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "subscribe with an endpoint with credentials"
+  },
+  {
+    "body": {
+      "subscription": {
+        "createdAt": "<epoch-ms>",
+        "failing": false,
+        "host": "<push-host>",
+        "id": "push_<uuid:1>",
+        "kind": "web",
+        "lastSuccessAt": null,
+        "name": "Laptop"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 201,
+    "step": "subscribe a browser (name trimmed)"
+  },
+  {
+    "body": {
+      "subscription": {
+        "createdAt": "<epoch-ms>",
+        "failing": false,
+        "host": "<push-host>",
+        "id": "push_<uuid:1>",
+        "kind": "unifiedpush",
+        "lastSuccessAt": null,
+        "name": "<push-host>"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 201,
+    "step": "the same endpoint again: refreshed, blank name shows the host"
+  },
+  {
+    "body": {
+      "publicKey": "<vapid-public-key>",
+      "subscriptions": [
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": false,
+          "host": "<push-host>",
+          "id": "push_<uuid:1>",
+          "kind": "unifiedpush",
+          "lastSuccessAt": null,
+          "name": "<push-host>"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": false,
+          "host": "<push-host>",
+          "id": "push_<uuid:2>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "gone"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": false,
+          "host": "<push-host>",
+          "id": "push_<uuid:3>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "broken"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": false,
+          "host": "<push-host>",
+          "id": "push_<uuid:4>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "moved"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": false,
+          "host": "<push-host>",
+          "id": "push_<uuid:5>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "missing"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": false,
+          "host": "<push-host>",
+          "id": "push_<uuid:6>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "short-auth"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/push",
+    "status": 200,
+    "step": "six places to notify"
+  },
+  {
+    "body": {
+      "delivered": 1
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/test",
+    "status": 200,
+    "step": "a test notification"
+  },
+  {
+    "observed": [
+      {
+        "authorization": {
+          "claims": {
+            "aud": "<push>",
+            "exp": "<now + 12h>",
+            "sub": "https://test.example"
+          },
+          "header": {
+            "alg": "ES256",
+            "typ": "JWT"
+          },
+          "k": "<vapid-public-key>",
+          "signatureVerified": true
+        },
+        "headers": {
+          "content-encoding": "aes128gcm",
+          "content-length": "270",
+          "content-type": "application/octet-stream",
+          "topic": "t2487m4",
+          "ttl": "86400",
+          "urgency": "normal"
+        },
+        "method": "POST",
+        "path": "/broken",
+        "payload": {
+          "at": "<epoch-ms>",
+          "body": "Scheduled runs and anything waiting for you will show up here.",
+          "tag": "test",
+          "target": {
+            "schedules": true
+          },
+          "title": "pirc notifications work"
+        },
+        "record": {
+          "keyIdLength": 65,
+          "recordSize": 4096
+        }
+      },
+      {
+        "authorization": {
+          "claims": {
+            "aud": "<push>",
+            "exp": "<now + 12h>",
+            "sub": "https://test.example"
+          },
+          "header": {
+            "alg": "ES256",
+            "typ": "JWT"
+          },
+          "k": "<vapid-public-key>",
+          "signatureVerified": true
+        },
+        "headers": {
+          "content-encoding": "aes128gcm",
+          "content-length": "270",
+          "content-type": "application/octet-stream",
+          "topic": "t2487m4",
+          "ttl": "86400",
+          "urgency": "normal"
+        },
+        "method": "POST",
+        "path": "/gone",
+        "payload": {
+          "at": "<epoch-ms>",
+          "body": "Scheduled runs and anything waiting for you will show up here.",
+          "tag": "test",
+          "target": {
+            "schedules": true
+          },
+          "title": "pirc notifications work"
+        },
+        "record": {
+          "keyIdLength": 65,
+          "recordSize": 4096
+        }
+      },
+      {
+        "authorization": {
+          "claims": {
+            "aud": "<push>",
+            "exp": "<now + 12h>",
+            "sub": "https://test.example"
+          },
+          "header": {
+            "alg": "ES256",
+            "typ": "JWT"
+          },
+          "k": "<vapid-public-key>",
+          "signatureVerified": true
+        },
+        "headers": {
+          "content-encoding": "aes128gcm",
+          "content-length": "270",
+          "content-type": "application/octet-stream",
+          "topic": "t2487m4",
+          "ttl": "86400",
+          "urgency": "normal"
+        },
+        "method": "POST",
+        "path": "/laptop",
+        "payload": {
+          "at": "<epoch-ms>",
+          "body": "Scheduled runs and anything waiting for you will show up here.",
+          "tag": "test",
+          "target": {
+            "schedules": true
+          },
+          "title": "pirc notifications work"
+        },
+        "record": {
+          "keyIdLength": 65,
+          "recordSize": 4096
+        }
+      },
+      {
+        "authorization": {
+          "claims": {
+            "aud": "<push>",
+            "exp": "<now + 12h>",
+            "sub": "https://test.example"
+          },
+          "header": {
+            "alg": "ES256",
+            "typ": "JWT"
+          },
+          "k": "<vapid-public-key>",
+          "signatureVerified": true
+        },
+        "headers": {
+          "content-encoding": "aes128gcm",
+          "content-length": "270",
+          "content-type": "application/octet-stream",
+          "topic": "t2487m4",
+          "ttl": "86400",
+          "urgency": "normal"
+        },
+        "method": "POST",
+        "path": "/missing",
+        "payload": {
+          "at": "<epoch-ms>",
+          "body": "Scheduled runs and anything waiting for you will show up here.",
+          "tag": "test",
+          "target": {
+            "schedules": true
+          },
+          "title": "pirc notifications work"
+        },
+        "record": {
+          "keyIdLength": 65,
+          "recordSize": 4096
+        }
+      },
+      {
+        "authorization": {
+          "claims": {
+            "aud": "<push>",
+            "exp": "<now + 12h>",
+            "sub": "https://test.example"
+          },
+          "header": {
+            "alg": "ES256",
+            "typ": "JWT"
+          },
+          "k": "<vapid-public-key>",
+          "signatureVerified": true
+        },
+        "headers": {
+          "content-encoding": "aes128gcm",
+          "content-length": "270",
+          "content-type": "application/octet-stream",
+          "topic": "t2487m4",
+          "ttl": "86400",
+          "urgency": "normal"
+        },
+        "method": "POST",
+        "path": "/moved",
+        "payload": {
+          "at": "<epoch-ms>",
+          "body": "Scheduled runs and anything waiting for you will show up here.",
+          "tag": "test",
+          "target": {
+            "schedules": true
+          },
+          "title": "pirc notifications work"
+        },
+        "record": {
+          "keyIdLength": 65,
+          "recordSize": 4096
+        }
+      }
+    ],
+    "step": "what the push service received (by path)"
+  },
+  {
+    "body": {
+      "publicKey": "<vapid-public-key>",
+      "subscriptions": [
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": false,
+          "host": "<push-host>",
+          "id": "push_<uuid:1>",
+          "kind": "unifiedpush",
+          "lastSuccessAt": "<epoch-ms>",
+          "name": "<push-host>"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": true,
+          "host": "<push-host>",
+          "id": "push_<uuid:3>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "broken"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": true,
+          "host": "<push-host>",
+          "id": "push_<uuid:4>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "moved"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": true,
+          "host": "<push-host>",
+          "id": "push_<uuid:6>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "short-auth"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/push",
+    "status": 200,
+    "step": "404 and 410 removed the subscription, other failures are counted"
+  },
+  {
+    "body": {
+      "subscription": {
+        "createdAt": "<epoch-ms>",
+        "failing": false,
+        "host": "<push-host>",
+        "id": "push_<uuid:7>",
+        "kind": "unifiedpush",
+        "lastSuccessAt": null,
+        "name": "<push-host>"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 201,
+    "step": "a phone subscribes with its device token"
+  },
+  {
+    "body": {
+      "publicKey": "<vapid-public-key>",
+      "subscriptions": [
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": false,
+          "host": "<push-host>",
+          "id": "push_<uuid:1>",
+          "kind": "unifiedpush",
+          "lastSuccessAt": "<epoch-ms>",
+          "name": "<push-host>"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": true,
+          "host": "<push-host>",
+          "id": "push_<uuid:3>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "broken"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": true,
+          "host": "<push-host>",
+          "id": "push_<uuid:4>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "moved"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": true,
+          "host": "<push-host>",
+          "id": "push_<uuid:6>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "short-auth"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": false,
+          "host": "<push-host>",
+          "id": "push_<uuid:7>",
+          "kind": "unifiedpush",
+          "lastSuccessAt": null,
+          "name": "<push-host>"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/push",
+    "status": 200,
+    "step": "the phone's view"
+  },
+  {
+    "body": {
+      "publicKey": "<vapid-public-key>",
+      "subscriptions": [
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": false,
+          "host": "<push-host>",
+          "id": "push_<uuid:1>",
+          "kind": "unifiedpush",
+          "lastSuccessAt": "<epoch-ms>",
+          "name": "<push-host>"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": true,
+          "host": "<push-host>",
+          "id": "push_<uuid:3>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "broken"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": true,
+          "host": "<push-host>",
+          "id": "push_<uuid:4>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "moved"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": true,
+          "host": "<push-host>",
+          "id": "push_<uuid:6>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "short-auth"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/push",
+    "status": 200,
+    "step": "the phone's subscription went with its token"
+  },
+  {
+    "observed": [
+      {
+        "authorization": {
+          "claims": {
+            "aud": "<push>",
+            "exp": "<now + 12h>",
+            "sub": "https://test.example"
+          },
+          "header": {
+            "alg": "ES256",
+            "typ": "JWT"
+          },
+          "k": "<vapid-public-key>",
+          "signatureVerified": true
+        },
+        "headers": {
+          "content-encoding": "aes128gcm",
+          "content-length": "324",
+          "content-type": "application/octet-stream",
+          "topic": "<topic of session:<session id>>",
+          "ttl": "86400",
+          "urgency": "normal"
+        },
+        "method": "POST",
+        "path": "/broken",
+        "payload": {
+          "at": "<epoch-ms>",
+          "body": "Allow rm -rf build?",
+          "tag": "session:session_<uuid:8>",
+          "target": {
+            "sessionId": "session_<uuid:8>"
+          },
+          "title": "New session is waiting for you"
+        },
+        "record": {
+          "keyIdLength": 65,
+          "recordSize": 4096
+        }
+      },
+      {
+        "authorization": {
+          "claims": {
+            "aud": "<push>",
+            "exp": "<now + 12h>",
+            "sub": "https://test.example"
+          },
+          "header": {
+            "alg": "ES256",
+            "typ": "JWT"
+          },
+          "k": "<vapid-public-key>",
+          "signatureVerified": true
+        },
+        "headers": {
+          "content-encoding": "aes128gcm",
+          "content-length": "324",
+          "content-type": "application/octet-stream",
+          "topic": "<topic of session:<session id>>",
+          "ttl": "86400",
+          "urgency": "normal"
+        },
+        "method": "POST",
+        "path": "/laptop",
+        "payload": {
+          "at": "<epoch-ms>",
+          "body": "Allow rm -rf build?",
+          "tag": "session:session_<uuid:8>",
+          "target": {
+            "sessionId": "session_<uuid:8>"
+          },
+          "title": "New session is waiting for you"
+        },
+        "record": {
+          "keyIdLength": 65,
+          "recordSize": 4096
+        }
+      },
+      {
+        "authorization": {
+          "claims": {
+            "aud": "<push>",
+            "exp": "<now + 12h>",
+            "sub": "https://test.example"
+          },
+          "header": {
+            "alg": "ES256",
+            "typ": "JWT"
+          },
+          "k": "<vapid-public-key>",
+          "signatureVerified": true
+        },
+        "headers": {
+          "content-encoding": "aes128gcm",
+          "content-length": "324",
+          "content-type": "application/octet-stream",
+          "topic": "<topic of session:<session id>>",
+          "ttl": "86400",
+          "urgency": "normal"
+        },
+        "method": "POST",
+        "path": "/moved",
+        "payload": {
+          "at": "<epoch-ms>",
+          "body": "Allow rm -rf build?",
+          "tag": "session:session_<uuid:8>",
+          "target": {
+            "sessionId": "session_<uuid:8>"
+          },
+          "title": "New session is waiting for you"
+        },
+        "record": {
+          "keyIdLength": 65,
+          "recordSize": 4096
+        }
+      }
+    ],
+    "step": "an interaction with a title: pushed"
+  },
+  {
+    "observed": [
+      {
+        "authorization": {
+          "claims": {
+            "aud": "<push>",
+            "exp": "<now + 12h>",
+            "sub": "https://test.example"
+          },
+          "header": {
+            "alg": "ES256",
+            "typ": "JWT"
+          },
+          "k": "<vapid-public-key>",
+          "signatureVerified": true
+        },
+        "headers": {
+          "content-encoding": "aes128gcm",
+          "content-length": "335",
+          "content-type": "application/octet-stream",
+          "topic": "<topic of session:<session id>>",
+          "ttl": "86400",
+          "urgency": "normal"
+        },
+        "method": "POST",
+        "path": "/broken",
+        "payload": {
+          "at": "<epoch-ms>",
+          "body": "It needs your answer to go on.",
+          "tag": "session:session_<uuid:8>",
+          "target": {
+            "sessionId": "session_<uuid:8>"
+          },
+          "title": "New session is waiting for you"
+        },
+        "record": {
+          "keyIdLength": 65,
+          "recordSize": 4096
+        }
+      },
+      {
+        "authorization": {
+          "claims": {
+            "aud": "<push>",
+            "exp": "<now + 12h>",
+            "sub": "https://test.example"
+          },
+          "header": {
+            "alg": "ES256",
+            "typ": "JWT"
+          },
+          "k": "<vapid-public-key>",
+          "signatureVerified": true
+        },
+        "headers": {
+          "content-encoding": "aes128gcm",
+          "content-length": "335",
+          "content-type": "application/octet-stream",
+          "topic": "<topic of session:<session id>>",
+          "ttl": "86400",
+          "urgency": "normal"
+        },
+        "method": "POST",
+        "path": "/laptop",
+        "payload": {
+          "at": "<epoch-ms>",
+          "body": "It needs your answer to go on.",
+          "tag": "session:session_<uuid:8>",
+          "target": {
+            "sessionId": "session_<uuid:8>"
+          },
+          "title": "New session is waiting for you"
+        },
+        "record": {
+          "keyIdLength": 65,
+          "recordSize": 4096
+        }
+      },
+      {
+        "authorization": {
+          "claims": {
+            "aud": "<push>",
+            "exp": "<now + 12h>",
+            "sub": "https://test.example"
+          },
+          "header": {
+            "alg": "ES256",
+            "typ": "JWT"
+          },
+          "k": "<vapid-public-key>",
+          "signatureVerified": true
+        },
+        "headers": {
+          "content-encoding": "aes128gcm",
+          "content-length": "335",
+          "content-type": "application/octet-stream",
+          "topic": "<topic of session:<session id>>",
+          "ttl": "86400",
+          "urgency": "normal"
+        },
+        "method": "POST",
+        "path": "/moved",
+        "payload": {
+          "at": "<epoch-ms>",
+          "body": "It needs your answer to go on.",
+          "tag": "session:session_<uuid:8>",
+          "target": {
+            "sessionId": "session_<uuid:8>"
+          },
+          "title": "New session is waiting for you"
+        },
+        "record": {
+          "keyIdLength": 65,
+          "recordSize": 4096
+        }
+      }
+    ],
+    "step": "an interaction with a blank title: pushed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/push/subscriptions",
+    "status": 400,
+    "step": "unsubscribe: no body"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/push/subscriptions",
+    "status": 400,
+    "step": "unsubscribe: neither endpoint nor id"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/push/subscriptions",
+    "status": 400,
+    "step": "unsubscribe: an empty endpoint"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/push/subscriptions",
+    "status": 400,
+    "step": "unsubscribe: an unknown field"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/push/subscriptions",
+    "status": 400,
+    "step": "unsubscribe: a long id"
+  },
+  {
+    "body": null,
+    "request": "DELETE /api/push/subscriptions",
+    "status": 204,
+    "step": "unsubscribe: an unknown id"
+  },
+  {
+    "body": null,
+    "request": "DELETE /api/push/subscriptions",
+    "status": 204,
+    "step": "unsubscribe: the browser's endpoint"
+  },
+  {
+    "body": null,
+    "request": "DELETE /api/push/subscriptions",
+    "status": 204,
+    "step": "unsubscribe: an id"
+  },
+  {
+    "body": {
+      "publicKey": "<vapid-public-key>",
+      "subscriptions": [
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": true,
+          "host": "<push-host>",
+          "id": "push_<uuid:4>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "moved"
+        },
+        {
+          "createdAt": "<epoch-ms>",
+          "failing": true,
+          "host": "<push-host>",
+          "id": "push_<uuid:6>",
+          "kind": "web",
+          "lastSuccessAt": null,
+          "name": "short-auth"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/push",
+    "status": 200,
+    "step": "what is left"
+  },
+  {
+    "body": {
+      "delivered": 0
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/test",
+    "status": 200,
+    "step": "nothing delivered"
+  },
+  {
+    "observed": [
+      {
+        "authorization": {
+          "claims": {
+            "aud": "<push>",
+            "exp": "<now + 12h>",
+            "sub": "https://test.example"
+          },
+          "header": {
+            "alg": "ES256",
+            "typ": "JWT"
+          },
+          "k": "<vapid-public-key>",
+          "signatureVerified": true
+        },
+        "headers": {
+          "content-encoding": "aes128gcm",
+          "content-length": "270",
+          "content-type": "application/octet-stream",
+          "topic": "t2487m4",
+          "ttl": "86400",
+          "urgency": "normal"
+        },
+        "method": "POST",
+        "path": "/moved",
+        "payload": {
+          "at": "<epoch-ms>",
+          "body": "Scheduled runs and anything waiting for you will show up here.",
+          "tag": "test",
+          "target": {
+            "schedules": true
+          },
+          "title": "pirc notifications work"
+        },
+        "record": {
+          "keyIdLength": 65,
+          "recordSize": 4096
+        }
+      }
+    ],
+    "step": "received"
+  }
+]

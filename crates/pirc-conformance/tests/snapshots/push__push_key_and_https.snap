@@ -1,0 +1,46 @@
+---
+source: crates/pirc-conformance/tests/push.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": {
+      "file keys": [
+        "privateKey",
+        "publicKey"
+      ],
+      "file mode": "600",
+      "private key length": 43,
+      "public key length": 87,
+      "public key prefix (uncompressed point)": "B",
+      "shown key is the stored one": true,
+      "subscriptions": []
+    },
+    "step": "the generated key pair"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "A push endpoint must use https"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/subscriptions",
+    "status": 400,
+    "step": "a plain http endpoint"
+  },
+  {
+    "body": {
+      "delivered": 0
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/push/test",
+    "status": 200,
+    "step": "nowhere to deliver"
+  }
+]
