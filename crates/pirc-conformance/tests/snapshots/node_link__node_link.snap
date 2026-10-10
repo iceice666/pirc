@@ -1,0 +1,221 @@
+---
+source: crates/pirc-conformance/tests/node_link.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": {
+      "closed": 4401,
+      "reason": "invalid node credentials"
+    },
+    "step": "wrong node token"
+  },
+  {
+    "observed": {
+      "closed": 4426,
+      "reason": "node protocol 8 != daemon 9"
+    },
+    "step": "older protocol"
+  },
+  {
+    "observed": {
+      "closed": 4426,
+      "reason": "node protocol 1 != daemon 9"
+    },
+    "step": "no protocol"
+  },
+  {
+    "observed": {
+      "closed": 1008,
+      "reason": "invalid registration"
+    },
+    "step": "invalid registration"
+  },
+  {
+    "observed": {
+      "mirrors": {},
+      "models": {
+        "defaultModel": {
+          "id": "fake-model",
+          "provider": "fake",
+          "thinking": "low"
+        },
+        "providers": {
+          "fake": {
+            "api": "openai-completions",
+            "baseUrl": "https://gateway.invalid",
+            "compat": {},
+            "headers": {},
+            "models": [
+              {
+                "compat": {},
+                "contextWindow": 100000,
+                "id": "fake-model",
+                "input": [
+                  "text"
+                ],
+                "maxTokens": 1000,
+                "reasoning": true
+              }
+            ]
+          }
+        }
+      },
+      "nodeId": "test",
+      "type": "registered"
+    },
+    "step": "register"
+  },
+  {
+    "observed": {
+      "type": "heartbeat_ack"
+    },
+    "step": "heartbeat"
+  },
+  {
+    "body": {
+      "nodes": [
+        {
+          "connectedAt": "<epoch-ms>",
+          "id": "test",
+          "lastSeenAt": "<epoch-ms>",
+          "role": "node",
+          "workspaces": [
+            {
+              "displayName": "Fake workspace",
+              "id": "ws",
+              "kind": "directory"
+            }
+          ]
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/nodes",
+    "status": 200,
+    "step": "list nodes"
+  },
+  {
+    "body": {
+      "workspaces": [
+        {
+          "defaults": {},
+          "displayName": "Fake workspace",
+          "hostId": "test",
+          "id": "test:ws",
+          "kind": "directory"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 200,
+    "step": "list workspaces"
+  },
+  {
+    "observed": {
+      "data": {
+        "method": "POST",
+        "payload": {
+          "workspaceId": "ws"
+        },
+        "url": "/api/sessions",
+        "user": "test@example.com"
+      },
+      "requestId": "<uuid:1>",
+      "type": "request"
+    },
+    "step": "relayed request"
+  },
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:2>",
+        "name": "New session",
+        "nameSource": "auto",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:ws"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 201,
+    "step": "create a session on the node"
+  },
+  {
+    "observed": {
+      "data": {
+        "type": "agent_start"
+      },
+      "epoch": 0,
+      "sequence": 1,
+      "sessionId": "session_<uuid:2>",
+      "timestamp": "<epoch-ms>",
+      "type": "pi_event"
+    },
+    "step": "a node event reaches the browser"
+  },
+  {
+    "observed": {
+      "closed": 4000,
+      "reason": "replaced by new connection"
+    },
+    "step": "a second connection replaces the first"
+  },
+  {
+    "observed": {
+      "mirrors": {},
+      "models": {
+        "defaultModel": {
+          "id": "fake-model",
+          "provider": "fake",
+          "thinking": "low"
+        },
+        "providers": {
+          "fake": {
+            "api": "openai-completions",
+            "baseUrl": "https://gateway.invalid",
+            "compat": {},
+            "headers": {},
+            "models": [
+              {
+                "compat": {},
+                "contextWindow": 100000,
+                "id": "fake-model",
+                "input": [
+                  "text"
+                ],
+                "maxTokens": 1000,
+                "reasoning": true
+              }
+            ]
+          }
+        }
+      },
+      "nodeId": "test",
+      "type": "registered"
+    },
+    "step": "the replacement registers"
+  },
+  {
+    "observed": {
+      "closed": 1008,
+      "reason": "unsupported message"
+    },
+    "step": "unsupported message"
+  }
+]

@@ -1,0 +1,153 @@
+//! The gateway's side of the node link (`/node/connect`), with the test
+//! acting as a node: registration, heartbeats, relaying a browser request
+//! and publishing a node event (`apps/gateway/src/daemon/nodes.ts`).
+
+use pirc_conformance::{Cluster, GatewayOptions, NODE_ID, NODE_TOKEN, Transcript, browser_headers};
+use serde_json::{Value, json};
+
+fn node_headers(token: &str) -> Vec<(&'static str, String)> {
+    vec![
+        ("x-pirc-node-id", NODE_ID.to_owned()),
+        ("authorization", format!("Bearer {token}")),
+    ]
+}
+
+fn register(protocol: Value) -> Value {
+    json!({
+        "type": "register",
+        "role": "node",
+        "protocol": protocol,
+        "workspaces": [{ "id": "ws", "displayName": "Fake workspace", "kind": "directory" }],
+    })
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn node_link() {
+    let Some(cluster) = Cluster::start_with(GatewayOptions {
+        without_node: true,
+        ..Default::default()
+    })
+    .await
+    else {
+        return;
+    };
+    let api = cluster.api();
+    let browser = browser_headers();
+    let mut t = Transcript::new(cluster.volatile());
+
+    let mut socket = api
+        .connect("/node/connect", &node_headers("wrong-token"))
+        .await
+        .open();
+    let (code, reason) = socket.closed().await;
+    t.note(
+        "wrong node token",
+        json!({ "closed": code, "reason": reason }),
+    );
+
+    for (step, frame) in [
+        ("older protocol", register(json!(8))),
+        ("no protocol", {
+            let mut frame = register(Value::Null);
+            frame.as_object_mut().unwrap().remove("protocol");
+            frame
+        }),
+        (
+            "invalid registration",
+            json!({ "type": "register", "role": "node", "protocol": 9 }),
+        ),
+    ] {
+        let mut socket = api
+            .connect("/node/connect", &node_headers(NODE_TOKEN))
+            .await
+            .open();
+        socket.send_json(&frame).await;
+        let (code, reason) = socket.closed().await;
+        t.note(step, json!({ "closed": code, "reason": reason }));
+    }
+
+    let mut node = api
+        .connect("/node/connect", &node_headers(NODE_TOKEN))
+        .await
+        .open();
+    node.send_json(&register(json!(9))).await;
+    let registered = node.next_json().await.expect("registered");
+    t.note("register", registered);
+
+    node.send_json(&json!({ "type": "heartbeat" })).await;
+    t.note("heartbeat", node.next_json().await.expect("heartbeat_ack"));
+
+    let nodes = api.send("GET", "/api/nodes", &browser, None).await;
+    t.response("list nodes", "GET /api/nodes", &nodes);
+    let workspaces = api.send("GET", "/api/workspaces", &browser, None).await;
+    t.response("list workspaces", "GET /api/workspaces", &workspaces);
+
+    // A browser request the gateway relays to the node, answered by the test.
+    let browser_api = api.clone();
+    let browser_for_task = browser.clone();
+    let create = tokio::spawn(async move {
+        browser_api
+            .send(
+                "POST",
+                "/api/sessions",
+                &browser_for_task,
+                Some(json!({ "workspaceId": "test:ws" })),
+            )
+            .await
+    });
+    let request = node.next_json().await.expect("relayed request");
+    t.note("relayed request", request.clone());
+    node.send_json(&json!({
+        "type": "response",
+        "requestId": request["requestId"],
+        "data": { "status": 201, "body": { "session": { "id": "remote-1" } } },
+    }))
+    .await;
+    let created = create.await.unwrap();
+    t.response(
+        "create a session on the node",
+        "POST /api/sessions",
+        &created,
+    );
+    let session = created.body["session"]["id"].as_str().unwrap().to_owned();
+
+    let mut events = api
+        .connect(&format!("/api/events?sessionId={session}"), &browser)
+        .await
+        .open();
+    node.send_json(&json!({
+        "type": "event",
+        "sessionId": "remote-1",
+        "event": { "type": "pi_event", "data": { "type": "agent_start" } },
+    }))
+    .await;
+    t.note(
+        "a node event reaches the browser",
+        events.next_json().await.expect("event"),
+    );
+    events.close().await;
+
+    let mut replacement = api
+        .connect("/node/connect", &node_headers(NODE_TOKEN))
+        .await
+        .open();
+    replacement.send_json(&register(json!(9))).await;
+    let (code, reason) = node.closed().await;
+    t.note(
+        "a second connection replaces the first",
+        json!({ "closed": code, "reason": reason }),
+    );
+    let registered = replacement.next_json().await.expect("registered");
+    t.note("the replacement registers", registered);
+
+    replacement
+        .send_json(&json!({ "type": "something_else" }))
+        .await;
+    let (code, reason) = replacement.closed().await;
+    t.note(
+        "unsupported message",
+        json!({ "closed": code, "reason": reason }),
+    );
+
+    insta::assert_json_snapshot!("node_link", t.into_value());
+}

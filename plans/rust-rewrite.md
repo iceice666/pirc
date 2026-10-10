@@ -1,6 +1,6 @@
 # Rust rewrite of the server executables
 
-Status: proposed 2026-10-10. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
+Status: M0 done 2026-10-10; M1 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
 
 Paths are relative to `apps/gateway/src/` unless noted.
 
@@ -68,18 +68,20 @@ Release profile: `lto = "fat"`, `codegen-units = 1`, `strip = true`, `opt-level`
 
 The harness drives real executables over HTTP and WebSocket only, so the same tests later run unchanged against the Rust executables. Snapshots accepted from the TS 0.3.0 build are the contract. The CLI (`version`, `help`, subcommands) is not part of it: the merged node executable changes it, and M9 re-specifies it.
 
-- [ ] Cargo workspace at the repository root with `crates/pirc-conformance` (test-only, `publish = false`); Rust toolchain in the flake dev shell; `cargo fmt --check`, `cargo clippy -- -D warnings` and the harness's unit tests in `bun run check`.
-- [ ] Harness: start `pirc-gateway` and `pirc-node` from `PIRC_CONFORMANCE_BIN_DIR` with isolated temporary state, config directory and `HOME`, a free port, a fake srt that runs the agent unconfined, and a scripted OpenAI-compatible SSE server in Rust as the only provider; wait for node registration; kill the processes on drop.
-- [ ] Normalizer: stable placeholders for generated ids, tokens, timestamps, temporary paths and ports that keep equal values equal; `insta` JSON snapshots.
-- [ ] Scenarios:
+- [x] Cargo workspace at the repository root with `crates/pirc-conformance` (test-only, `publish = false`); Rust toolchain in the flake dev shell; `cargo fmt --check`, `cargo clippy -- -D warnings` and the harness's unit tests in `bun run check`.
+- [x] Harness: start `pirc-gateway` and `pirc-node` from `PIRC_CONFORMANCE_BIN_DIR` with isolated temporary state, config directory and `HOME`, a free port, a fake srt that runs the agent unconfined, and a scripted OpenAI-compatible SSE server in Rust as the only provider; wait for node registration; kill the processes on drop.
+- [x] Normalizer: stable placeholders for generated ids, tokens, timestamps, temporary paths and ports that keep equal values equal; `insta` JSON snapshots.
+- [x] Scenarios:
   - Auth matrix on a GET and a mutating route: untrusted peer, proxy secret missing/wrong/right, Host, Origin (missing on a mutation, not allowed), identity missing/not allowed, device token together with an identity, device-denied routes; error bodies.
   - Devices: pair, list, use the bearer token, revoke; an open `/api/events` socket closes with 4401 on revoke.
   - Node link, with the harness acting as a node: bad credentials 4401, protocol mismatch 4426, register then `registered`, heartbeat then `heartbeat_ack`, a second connection replacing the first with 4000.
   - Session lifecycle with the real agent and the fake model: workspaces, create, acquire control, prompt command (202), events until `agent_settled`, snapshot, duplicate command, cursor replay, `reset` for an expired cursor, release; `/api/events` close codes for unauthenticated, forbidden and unknown sessions.
-- [ ] `bun run test:conformance` builds nothing itself: it runs the harness against `apps/gateway/dist` after `bun run build`, and is part of `bun run check`. `INSTA_UPDATE=always` re-records.
-- [ ] CI workflow running `bun run check` (today CI covers Android only).
+- [x] `bun run test:conformance` builds nothing itself: it runs the harness against `apps/gateway/dist` after `bun run build`, and is part of `bun run check`. `INSTA_UPDATE=always` re-records.
+- [x] CI workflow running `bun run check` (today CI covers Android only).
 
 Acceptance: three consecutive runs against the TS build pass with no snapshot changes; snapshots are committed.
+
+Done 2026-10-10. The agent's own event stream is a separate snapshot (`session_agent_events`), the parity target of M4/M5; the gateway-owned part of a session is `session_lifecycle`. Validation-error `details` (the TS validation library's report, read by no client) are left out of transcripts. The CI workflow has not run yet. Locally (NixOS), `bun run check` still stops at 24 gateway tests and 4 compiled-role tests that need `/bin/bash` (or its team workers); the change does not touch `apps/`.
 
 ### M1 Workspace skeleton, size budget and spikes
 

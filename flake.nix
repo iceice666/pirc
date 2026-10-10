@@ -60,6 +60,11 @@
           packages = with pkgs; [
             bun
             nodejs_22 # vitest/svelte-check for apps/web
+            # Rust rewrite (crates/, see plans/rust-rewrite.md)
+            cargo
+            rustc
+            clippy
+            rustfmt
           ];
           shellHook = ''
             echo "pirc development shell (Bun $(bun --version))"

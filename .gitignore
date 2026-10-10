@@ -26,3 +26,9 @@ DEPLOY.md
 
 # Per-workspace agent runtime data (uploads, screenshots, recordings)
 .pirc/
+
+# Cargo
+/target
+# insta: snapshots awaiting review
+*.snap.new
+*.pending-snap

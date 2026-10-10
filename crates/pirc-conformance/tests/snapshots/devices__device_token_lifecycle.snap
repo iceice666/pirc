@@ -1,0 +1,207 @@
+---
+source: crates/pirc-conformance/tests/devices.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "device": {
+        "createdAt": "<epoch-ms>",
+        "expiresAt": "<epoch-ms>",
+        "id": "dev_<uuid:1>",
+        "lastUsedAt": "<epoch-ms>",
+        "name": "Phone"
+      },
+      "token": "<device-token:1>"
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/devices",
+    "status": 201,
+    "step": "pair a device"
+  },
+  {
+    "observed": 604800000,
+    "step": "expiresAt - createdAt (ms): 7 days without use"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/devices",
+    "status": 400,
+    "step": "pair with an unknown field"
+  },
+  {
+    "body": {
+      "devices": [
+        {
+          "createdAt": "<epoch-ms>",
+          "expiresAt": "<epoch-ms>",
+          "id": "dev_<uuid:1>",
+          "lastUsedAt": "<epoch-ms>",
+          "name": "Phone"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/devices",
+    "status": 200,
+    "step": "list devices"
+  },
+  {
+    "body": {
+      "sessions": [
+        {
+          "createdAt": "<epoch-ms>",
+          "id": "session_<uuid:2>",
+          "name": "New session",
+          "nameSource": "auto",
+          "nodeId": "test",
+          "pinnedAt": null,
+          "runStatus": null,
+          "runnerEpoch": 0,
+          "runnerState": "stopped",
+          "settledAt": null,
+          "unread": false,
+          "updatedAt": "<epoch-ms>",
+          "workspaceId": "test:test"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions",
+    "status": 200,
+    "step": "device token: GET /api/sessions"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Device tokens cannot reach this route"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/devices",
+    "status": 403,
+    "step": "device token: GET /api/devices"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Device tokens cannot reach this route"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/providers",
+    "status": 403,
+    "step": "device token: GET /api/providers"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Device tokens cannot reach this route"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/provider-auth/sessions",
+    "status": 403,
+    "step": "device token: GET /api/provider-auth/sessions"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Device tokens cannot reach this route"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/devices/<device>",
+    "status": 403,
+    "step": "device token revoking itself"
+  },
+  {
+    "body": null,
+    "headers": {
+      "cache-control": "no-store"
+    },
+    "request": "DELETE /api/devices/dev_<uuid:1>",
+    "status": 204,
+    "step": "revoke the device"
+  },
+  {
+    "observed": {
+      "closed": 4401,
+      "reason": "device token revoked or expired"
+    },
+    "step": "the device's event socket closes"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Device token is invalid, expired or revoked"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions",
+    "status": 401,
+    "step": "revoked token"
+  },
+  {
+    "body": {
+      "devices": []
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/devices",
+    "status": 200,
+    "step": "list devices after revoking"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Device not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/devices/dev_<uuid:1>",
+    "status": 404,
+    "step": "revoke again"
+  }
+]

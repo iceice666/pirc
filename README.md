@@ -40,6 +40,7 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 ## Requirements
 
 - [Bun](https://bun.sh) 1.2 or newer (development/build only; the compiled executables embed their runtime)
+- A Rust toolchain with `clippy` and `rustfmt` for `bun run check` (development only; `nix develop` provides one). The Rust rewrite in `crates/` is in progress ([plan](plans/rust-rewrite.md)) and ships nothing yet.
 - A model backend, configured on the gateway: a subscription login (Claude Pro/Max, GitHub Copilot, ChatGPT/Codex) or an API-key/custom endpoint from the web **Settings**, and/or `models.json` (see [Model backends](docs/guides/model-backends.md))
 - A trusted forward-auth reverse proxy
 
@@ -87,6 +88,8 @@ Start with the [documentation index](docs/README.md). Current usage guides and a
 ```sh
 bun run check
 ```
+
+`bun run check` ends with the conformance suite (`crates/pirc-conformance`), which starts the built `pirc-gateway` and `pirc-node` and compares their HTTP and WebSocket behavior with committed snapshots; after an intended change, `bun run conformance:record` re-records them; review the snapshot diff before committing it.
 
 Real-model smoke tests are deliberately separate because they require credentials and incur provider cost. The automated suite drives the real agent against a scripted fake OpenAI/Anthropic SSE server (end to end through gateway inference), and covers subscription logins, refresh and logout with fake OAuth providers, and the pi-ai adapter with an injected stream.
 

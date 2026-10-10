@@ -1,0 +1,347 @@
+---
+source: crates/pirc-conformance/tests/session.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "workspaces": [
+        {
+          "defaults": {},
+          "displayName": "Test",
+          "hostId": "test",
+          "id": "test:test",
+          "kind": "directory"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 200,
+    "step": "list workspaces"
+  },
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "New session",
+        "nameSource": "auto",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 201,
+    "step": "create session"
+  },
+  {
+    "body": {
+      "sessions": [
+        {
+          "createdAt": "<epoch-ms>",
+          "id": "session_<uuid:1>",
+          "name": "New session",
+          "nameSource": "auto",
+          "nodeId": "test",
+          "pinnedAt": null,
+          "runStatus": null,
+          "runnerEpoch": 0,
+          "runnerState": "stopped",
+          "settledAt": null,
+          "unread": false,
+          "updatedAt": "<epoch-ms>",
+          "workspaceId": "test:test"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions",
+    "status": 200,
+    "step": "list sessions"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "browser",
+        "expiresAt": "<epoch-ms>",
+        "generation": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/control/acquire",
+    "status": 200,
+    "step": "acquire control"
+  },
+  {
+    "body": {
+      "agent": {
+        "model": {
+          "id": "fake-model",
+          "provider": "fake"
+        },
+        "thinkingLevel": "low"
+      },
+      "history": [],
+      "interactions": [],
+      "notifications": [],
+      "operations": [],
+      "partialMessage": null,
+      "partialOutputLost": false,
+      "queue": {
+        "followUp": [],
+        "steering": []
+      },
+      "run": null,
+      "sandbox": null,
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "New session",
+        "nameSource": "auto",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      },
+      "statuses": {},
+      "watermark": {
+        "epoch": 0,
+        "sequence": 0
+      },
+      "widgets": {}
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/snapshot",
+    "status": 200,
+    "step": "snapshot before prompting"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "command-1",
+        "payload": {
+          "message": "Say hello",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:1>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:2>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:1>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 202,
+    "step": "prompt"
+  },
+  {
+    "observed": {
+      "agent_start, agent_end, agent_settled in order": true,
+      "assistant message": [
+        {
+          "text": "Hello from the fake model.",
+          "type": "text"
+        }
+      ],
+      "envelope keys": [
+        "data",
+        "epoch",
+        "sequence",
+        "sessionId",
+        "timestamp",
+        "type"
+      ],
+      "epochs": [
+        0
+      ],
+      "every frame has them": true,
+      "sequences are consecutive from 1": true
+    },
+    "step": "events until the run settles"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "command-1",
+        "payload": {
+          "message": "Say hello",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:1>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:2>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:1>",
+        "status": "accepted"
+      },
+      "duplicate": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 200,
+    "step": "same command again"
+  },
+  {
+    "body": {
+      "agent": {
+        "model": {
+          "id": "fake-model",
+          "provider": "fake"
+        },
+        "thinkingLevel": "low"
+      },
+      "history": [
+        {
+          "content": "Say hello",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "canonicalProvider": "fake",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "Hello from the fake model.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 60,
+            "output": 10,
+            "totalTokens": 110
+          }
+        }
+      ],
+      "interactions": [],
+      "notifications": [],
+      "operations": [],
+      "partialMessage": null,
+      "partialOutputLost": false,
+      "queue": {
+        "followUp": [],
+        "steering": []
+      },
+      "run": {
+        "createdAt": "<epoch-ms>",
+        "endedAt": "<epoch-ms>",
+        "failureReason": null,
+        "id": "run_<uuid:3>",
+        "startedAt": "<epoch-ms>",
+        "status": "succeeded"
+      },
+      "sandbox": {
+        "active": true
+      },
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "New session",
+        "nameSource": "auto",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "ready",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      },
+      "statuses": {},
+      "watermark": {
+        "epoch": 0,
+        "sequence": 24
+      },
+      "widgets": {}
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/snapshot",
+    "status": 200,
+    "step": "snapshot after the run"
+  },
+  {
+    "observed": true,
+    "step": "replay from the same cursor repeats the stream"
+  },
+  {
+    "observed": {
+      "reason": "cursor_expired_or_epoch_changed",
+      "type": "reset",
+      "watermark": {
+        "epoch": 0,
+        "sequence": 24
+      }
+    },
+    "step": "cursor from another epoch"
+  },
+  {
+    "observed": {
+      "reason": "cursor_expired_or_epoch_changed",
+      "type": "reset",
+      "watermark": {
+        "epoch": 0,
+        "sequence": 24
+      }
+    },
+    "step": "cursor ahead of the stream"
+  },
+  {
+    "body": null,
+    "request": "POST /api/sessions/session_<uuid:1>/control/release",
+    "status": 204,
+    "step": "release control"
+  },
+  {
+    "observed": 1,
+    "step": "model requests"
+  }
+]

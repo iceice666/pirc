@@ -1,0 +1,287 @@
+---
+source: crates/pirc-conformance/tests/auth.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "workspaces": []
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 200,
+    "step": "proxy headers: GET"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 400,
+    "step": "proxy headers: POST"
+  },
+  {
+    "body": {
+      "workspaces": []
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 200,
+    "step": "no Origin: GET"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_origin",
+        "message": "Origin is not allowed"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 403,
+    "step": "no Origin: POST"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_origin",
+        "message": "Origin is not allowed"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 403,
+    "step": "Origin not allowed: GET"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_origin",
+        "message": "Origin is not allowed"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 403,
+    "step": "Origin not allowed: POST"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_host",
+        "message": "Host is not allowed"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 403,
+    "step": "Host not allowed: GET"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_host",
+        "message": "Host is not allowed"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 403,
+    "step": "Host not allowed: POST"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 401,
+    "step": "no identity: GET"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 401,
+    "step": "no identity: POST"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Identity is not allowed"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 403,
+    "step": "identity not allowed: GET"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Identity is not allowed"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 403,
+    "step": "identity not allowed: POST"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "A request cannot carry both a device token and a forward-auth identity"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 401,
+    "step": "device token and identity: GET"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "A request cannot carry both a device token and a forward-auth identity"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 401,
+    "step": "device token and identity: POST"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Device token is invalid, expired or revoked"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 401,
+    "step": "unknown device token: GET"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Device token is invalid, expired or revoked"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 401,
+    "step": "unknown device token: POST"
+  },
+  {
+    "observed": {
+      "closed": 4404,
+      "reason": "Session not found"
+    },
+    "step": "events: unknown session"
+  },
+  {
+    "observed": {
+      "closed": 4403,
+      "reason": "Origin is not allowed"
+    },
+    "step": "events: no Origin"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Identity is not allowed"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/events (upgrade)",
+    "status": 403,
+    "step": "events: identity not allowed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/events (upgrade)",
+    "status": 401,
+    "step": "events: no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Device token is invalid, expired or revoked"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/events (upgrade)",
+    "status": 401,
+    "step": "events: unknown device token"
+  },
+  {
+    "observed": {
+      "closed": 4400,
+      "reason": "Invalid request"
+    },
+    "step": "events: no session id"
+  }
+]

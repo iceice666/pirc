@@ -1,0 +1,34 @@
+---
+source: crates/pirc-conformance/tests/auth.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Request did not arrive from a trusted proxy"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 401,
+    "step": "proxy headers from an untrusted peer: GET"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Request did not arrive from a trusted proxy"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 401,
+    "step": "proxy headers from an untrusted peer: POST"
+  }
+]

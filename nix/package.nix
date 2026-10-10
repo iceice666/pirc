@@ -39,6 +39,11 @@ let
         ".state"
         "result"
         "plans"
+        # The Rust rewrite (plans/rust-rewrite.md) is not part of these packages yet.
+        "crates"
+        "target"
+        "Cargo.toml"
+        "Cargo.lock"
       ];
   };
 

@@ -1,0 +1,342 @@
+---
+source: crates/pirc-conformance/tests/session.rs
+expression: agent_events
+---
+[
+  {
+    "data": {
+      "sandbox": {
+        "active": true
+      }
+    },
+    "epoch": 0,
+    "sequence": 1,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "runner_ready"
+  },
+  {
+    "data": {
+      "id": "<uuid:2>",
+      "method": "setWidget",
+      "type": "extension_ui_request",
+      "widgetKey": "local-todo",
+      "widgetPlacement": "aboveEditor"
+    },
+    "epoch": 0,
+    "sequence": 2,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "notification"
+  },
+  {
+    "data": {
+      "id": "<uuid:2>",
+      "method": "setWidget",
+      "type": "extension_ui_request",
+      "widgetKey": "local-todo",
+      "widgetPlacement": "aboveEditor"
+    },
+    "epoch": 0,
+    "sequence": 3,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "id": "<uuid:3>",
+      "method": "setStatus",
+      "statusKey": "background-task",
+      "type": "extension_ui_request"
+    },
+    "epoch": 0,
+    "sequence": 4,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "notification"
+  },
+  {
+    "data": {
+      "id": "<uuid:3>",
+      "method": "setStatus",
+      "statusKey": "background-task",
+      "type": "extension_ui_request"
+    },
+    "epoch": 0,
+    "sequence": 5,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "sections": [
+        "background"
+      ],
+      "type": "panel_changed"
+    },
+    "epoch": 0,
+    "sequence": 6,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "id": "<uuid:4>",
+      "method": "setWidget",
+      "type": "extension_ui_request",
+      "widgetKey": "goal",
+      "widgetPlacement": "aboveEditor"
+    },
+    "epoch": 0,
+    "sequence": 7,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "notification"
+  },
+  {
+    "data": {
+      "id": "<uuid:4>",
+      "method": "setWidget",
+      "type": "extension_ui_request",
+      "widgetKey": "goal",
+      "widgetPlacement": "aboveEditor"
+    },
+    "epoch": 0,
+    "sequence": 8,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "type": "agent_start"
+    },
+    "epoch": 0,
+    "sequence": 9,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "message": {
+        "content": "Say hello",
+        "role": "user",
+        "timestamp": "<epoch-ms>"
+      },
+      "type": "message_start"
+    },
+    "epoch": 0,
+    "sequence": 10,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "message": {
+        "content": "Say hello",
+        "role": "user",
+        "timestamp": "<epoch-ms>"
+      },
+      "type": "message_end"
+    },
+    "epoch": 0,
+    "sequence": 11,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "type": "turn_start"
+    },
+    "epoch": 0,
+    "sequence": 12,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "message": {
+        "content": [],
+        "model": "fake-model",
+        "provider": "fake",
+        "role": "assistant",
+        "timestamp": "<epoch-ms>"
+      },
+      "type": "message_start"
+    },
+    "epoch": 0,
+    "sequence": 13,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "sections": [
+        "context"
+      ],
+      "type": "panel_changed"
+    },
+    "epoch": 0,
+    "sequence": 14,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "assistantMessageEvent": {
+        "contentIndex": 0,
+        "type": "text_start"
+      },
+      "type": "message_update"
+    },
+    "epoch": 0,
+    "sequence": 15,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "assistantMessageEvent": {
+        "contentIndex": 0,
+        "delta": "Hello from th",
+        "type": "text_delta"
+      },
+      "type": "message_update"
+    },
+    "epoch": 0,
+    "sequence": 16,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "assistantMessageEvent": {
+        "contentIndex": 0,
+        "delta": "e fake model.",
+        "type": "text_delta"
+      },
+      "type": "message_update"
+    },
+    "epoch": 0,
+    "sequence": 17,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "assistantMessageEvent": {
+        "content": "Hello from the fake model.",
+        "contentIndex": 0,
+        "type": "text_end"
+      },
+      "type": "message_update"
+    },
+    "epoch": 0,
+    "sequence": 18,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "message": {
+        "api": "openai-completions",
+        "canonicalProvider": "fake",
+        "completedAt": "<epoch-ms>",
+        "content": [
+          {
+            "text": "Hello from the fake model.",
+            "type": "text"
+          }
+        ],
+        "model": "fake-model",
+        "provider": "fake",
+        "role": "assistant",
+        "stopReason": "stop",
+        "timestamp": "<epoch-ms>",
+        "usage": {
+          "cacheRead": 40,
+          "cacheWrite": 0,
+          "input": 60,
+          "output": 10,
+          "totalTokens": 110
+        }
+      },
+      "type": "message_end"
+    },
+    "epoch": 0,
+    "sequence": 19,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "sections": [
+        "context"
+      ],
+      "type": "panel_changed"
+    },
+    "epoch": 0,
+    "sequence": 20,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "type": "turn_end"
+    },
+    "epoch": 0,
+    "sequence": 21,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "sections": [
+        "memory"
+      ],
+      "type": "panel_changed"
+    },
+    "epoch": 0,
+    "sequence": 22,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "type": "agent_end",
+      "willRetry": false
+    },
+    "epoch": 0,
+    "sequence": 23,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  },
+  {
+    "data": {
+      "type": "agent_settled"
+    },
+    "epoch": 0,
+    "sequence": 24,
+    "sessionId": "session_<uuid:1>",
+    "timestamp": "<epoch-ms>",
+    "type": "pi_event"
+  }
+]
