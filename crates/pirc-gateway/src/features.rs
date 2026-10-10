@@ -1,7 +1,6 @@
-//! The gateway's features around sessions: device pairing, and (sub-item 6
-//! of M2, still being ported) the assistant's memory, delegations,
-//! schedules, push notifications, agent operations and web search. Until
-//! they land, the hooks below behave as a gateway without them.
+//! The gateway's features around sessions: device pairing here, and the
+//! hooks the core calls into the assistant's memory, delegations,
+//! schedules and push notifications (their own modules).
 
 use axum::Router;
 use axum::extract::{Extension, Path, State};
@@ -23,6 +22,9 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/devices", get(list_devices).post(pair_device))
         .route("/api/devices/{id}", delete(revoke_device))
+        .merge(crate::memory::routes())
+        .merge(crate::schedules::routes())
+        .merge(crate::push::routes())
 }
 
 /// The routes of the TS gateway's device and model-backend scopes, whose
@@ -115,8 +117,9 @@ async fn revoke_device(
 }
 
 impl App {
-    /// Memory hints (`memory=1`) for `user`.
+    /// Memory hints (`memory=1`) for `user`, after memory's own update.
     pub fn memory_changed(&self, user: &str) {
+        crate::memory::changed(self, user);
         self.hints.memory.notify(&user.to_owned());
     }
 
@@ -124,61 +127,67 @@ impl App {
     /// the deletion's transaction).
     pub fn forget_session_memory(
         &self,
-        _conn: &Connection,
-        _user: &str,
-        _session_id: &str,
+        conn: &Connection,
+        user: &str,
+        session_id: &str,
     ) -> ApiResult<()> {
-        Ok(())
+        crate::memory::forget_session(self, conn, user, session_id)
     }
 
     /// Confirmations the gateway asks for itself (delegations, schedule
     /// proposals, memory), shown with the node's interactions.
-    pub fn pending_gateway_interactions(&self, _session_id: &str, _user: &str) -> Vec<Value> {
-        Vec::new()
-    }
-
-    /// Answer one of the gateway's own confirmations; `None` when the
-    /// interaction is the node's.
-    pub fn answer_gateway_interaction(
-        &self,
-        _session_id: &str,
-        _interaction_id: &str,
-        _user: &str,
-        _answer: Option<Value>,
-    ) -> ApiResult<Option<Value>> {
-        Ok(None)
+    pub fn pending_gateway_interactions(&self, session_id: &str, user: &str) -> Vec<Value> {
+        let mut pending = crate::delegations::pending_interactions(self, session_id);
+        pending.extend(crate::schedules::pending_interactions(self, session_id));
+        pending.extend(crate::memory::pending_interactions(self, session_id, user));
+        pending
     }
 
     /// Byte offsets of a node's mirrored workspace-memory ledgers.
-    pub fn mirror_watermarks(&self, _node_id: &str) -> Value {
-        json!({})
+    pub fn mirror_watermarks(&self, node_id: &str) -> Value {
+        crate::memory_records::watermarks(self, node_id)
     }
 
     /// Store a mirrored chunk; the ledger's new watermark.
     pub fn on_mirror(
         &self,
-        _node_id: &str,
-        _ledger_key: &str,
-        _offset: u64,
+        node_id: &str,
+        ledger_key: &str,
+        offset: u64,
         end: u64,
-        _reset: bool,
-        _lines: &[Value],
+        reset: bool,
+        lines: &[Value],
     ) -> ApiResult<u64> {
-        Ok(end)
+        crate::memory_records::ingest(self, node_id, ledger_key, offset, end, reset, lines)
     }
+}
 
-    /// Answer an agent's gateway operation: `(status, body)`.
-    pub async fn run_agent_op(
-        &self,
-        _node_id: &str,
-        _session_id: &str,
-        op: &str,
-        _args: Value,
-    ) -> (u16, Value) {
-        (
-            404,
-            json!({ "error": { "code": "unknown_operation",
-                "message": format!("Unknown gateway operation: {op}") } }),
-        )
+/// Answer one of the gateway's own confirmations (memory, then delegations,
+/// then schedule proposals); `None` when the interaction is the node's.
+pub fn answer_gateway_interaction(
+    app: &AppState,
+    session_id: &str,
+    interaction_id: &str,
+    user: &str,
+    answer: Option<Value>,
+) -> ApiResult<Option<Value>> {
+    if let Some(answered) =
+        crate::memory::answer(app, session_id, interaction_id, user, answer.as_ref())?
+    {
+        app.memory_changed(user);
+        return Ok(Some(answered));
     }
+    if let Some(answered) =
+        crate::delegations::answer(app, session_id, interaction_id, user, answer.as_ref())?
+    {
+        return Ok(Some(answered));
+    }
+    crate::schedules::answer(app, session_id, interaction_id, user, answer.as_ref())
+}
+
+/// Start the features' background work.
+pub fn start(app: &AppState) {
+    crate::push::start(app);
+    crate::delegations::start(app);
+    crate::schedules::start(app);
 }

@@ -1041,9 +1041,13 @@ pub async fn answer(
     }
     let given = body.json().and_then(|body| body.get("answer")).cloned();
     // The gateway's own confirmations are answered here; the node never saw them.
-    if let Some(answer) =
-        app.answer_gateway_interaction(session_id, &interaction_id, &identity.user, given)?
-    {
+    if let Some(answer) = crate::features::answer_gateway_interaction(
+        &app,
+        session_id,
+        &interaction_id,
+        &identity.user,
+        given,
+    )? {
         return Ok(ok(answer));
     }
     Ok(forward(

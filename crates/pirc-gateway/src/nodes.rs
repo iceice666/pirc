@@ -987,7 +987,7 @@ fn answer_agent(
         let answer = tokio::spawn({
             let app = app.clone();
             let node_id = node_id.clone();
-            async move { app.run_agent_op(&node_id, &session_id, &op, args).await }
+            async move { crate::agent_ops::run(&app, &node_id, &session_id, &op, args).await }
         })
         .await
         .unwrap_or_else(|_| agent_error(500, "internal_error", "The gateway operation failed"));

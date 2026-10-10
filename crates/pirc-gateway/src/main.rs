@@ -7,21 +7,29 @@
 // Parts land one M2 sub-item at a time; removed once M2 is complete.
 #![allow(dead_code)]
 
+mod agent_ops;
 mod app;
 mod auth;
 mod db;
+mod delegations;
 mod devices;
+mod dispatch;
 mod error;
 mod events;
 mod features;
 mod hints;
 mod http;
 mod log;
+mod memory;
+mod memory_records;
 mod node_events;
 mod nodes;
+mod push;
 mod routes;
+mod schedules;
 mod sockets;
 mod util;
+mod web_search;
 mod ws;
 
 use std::net::SocketAddr;
@@ -107,6 +115,7 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
     .unwrap_or_else(app::empty_models);
     let app = app::App::new(config, db, models);
     app.devices.start_sweeper();
+    features::start(&app);
     tokio::spawn(reload_on_hangup(app.clone()));
     log::info(&format!("listening on http://{address}"));
     axum::serve(
