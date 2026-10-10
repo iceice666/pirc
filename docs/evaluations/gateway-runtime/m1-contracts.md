@@ -404,3 +404,33 @@ These refine, not replace, §2–§3:
   shown.
 
 Production activation, deployment and cutover remain separately unauthorized.
+
+## Amendment: M6 cutover-blocker fixes
+
+Recorded with [M6](m6-blockers.md); refines §2–§3 and §6. Environment protocol v1 is
+still unreleased and opt-in, so its closed enums changed without a version bump; all
+peers must ship from one release.
+
+- **`unknown_execution`.** A node answers `execution.status`/`execution.cancel` for an
+  ID it never accepted with this error class only when a durable fence guarantees the
+  ID can never start: in an active generation it first commits a FULL tombstone; a
+  retired generation needs none. Unknown bindings answer `invalid_binding`; reclaimed
+  records answer `expired`. Starting a tombstoned ID is refused (`conflict`). This
+  presumes the node journal is never restored independently of the gateway.
+- **Gateway not-started receipts.** The gateway may commit its own
+  `rejected/not_started` receipt (no ACK, nothing to acknowledge) only for an intent
+  it provably never handed to the transport in this process, or after a node's
+  `unknown_execution` answer while no verified pushed result exists. Gateway-local
+  central operations are fenced the same way by a terminal not-started row.
+- **Typed refusals.** Node dispatch errors are `environment.error` replies with a fixed
+  per-code message; only protocol violations close the link.
+- **Generations.** Provisioning requires the newest fenced transfer of the session.
+  Fencing supersedes and retires earlier generations; revocation matches node, session
+  and writer epoch and retires the journal binding, cancelling queued work. Every node
+  restart recovers and retires all generations (no replay), so new work needs a newly
+  fenced executor generation; swept generations must be adopted read-only for
+  reconciliation.
+- **PTC.** Invalid scripts or arguments are tool errors before anything is persisted;
+  invalid store proposals commit without the store; finished or abandoned parents are
+  sealed, a gateway restart seals every open parent, and new central operations need
+  the active writer generation.

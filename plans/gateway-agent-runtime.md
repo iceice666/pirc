@@ -231,6 +231,30 @@ Performance gates accepted at M1 review (M0 remains a component baseline; do not
 - Long-context fixtures must not retransmit complete history over the node link. Report bytes saved separately; do not count gateway → provider traffic as eliminated.
 - All correctness and security tests pass, with no lost transcripts, duplicate tool results, weakened permissions, or unexplained feature removals.
 
+### M6 — Fix audit cutover blockers
+
+Authorized by the maintainer after M5. Scope is the nine auditor-rated cutover blockers in the [M5 audit](../docs/evaluations/gateway-runtime/m5-evaluation.md#fresh-audit) plus P2 items they interact with; production activation stays out of scope.
+
+- [x] R1: tool intents that never reached the node resolve as `not_started` instead of blocking the session; a node tombstones unknown IDs it was asked about so a late start cannot run.
+- [x] R2: node dispatch errors return typed `environment.error` replies; only framing/protocol violations close the link.
+- [x] R3: gateway-placed PTC records recover on gateway restart without replay; outer finish and inner seal are consistent.
+- [x] R4/R5: node provisioning and authorization require the durable writer fence; revocation retires the journal binding; recover and retire are atomic, with a startup sweep after abrupt crashes.
+- [x] T1/T2: invalid PTC stores and invalid `ptc` calls become typed failures, never wedged sessions or interrupted runs.
+- [x] T5: mixed-PTC central calls are refused once the parent has a result or the writer is revoked.
+- [x] S2: fresh `/commands` and `/reconcile` routes verify the client control lease.
+
+Acceptance: regression tests for each blocker, full checks, and a fresh review. Re-running the M5 matrix belongs to M7. **Done; see the [M6 record](../docs/evaluations/gateway-runtime/m6-blockers.md).** Production activation remains unauthorized.
+
+### M7 — PTC operation cost and gate re-run
+
+- [ ] Reduce per-operation PTC cost (validation, journaling, event projection) without weakening M1 durability rules; any further durability trade-off needs maintainer approval.
+- [ ] Re-run the M5 matrix with the same gates; report all cohorts.
+
+### M8 — Production composition and cutover coordinator (design first)
+
+- [ ] Write the coordinator design (reconnect → version check → fence → activate, quiescence, no-write verification, rollback limits) for maintainer review before implementation.
+- [ ] Implement an opt-in production composition (node result/event push, host wiring) and the reviewed coordinator; activation, deployment and cutover remain separately unauthorized.
+
 ## 9. Validation and implementation scope
 
 During implementation, run the narrowest relevant tests first, then the repository's `bun run check` (version, format, typecheck, test, build, compiled-role tests). Use fake providers; paid-model evaluation is not part of M2/M3 implementation.
