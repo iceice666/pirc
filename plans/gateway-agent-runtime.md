@@ -1,6 +1,6 @@
 # Gateway agent runtime: centralize the agent loop, keep execution environments on nodes
 
-Status: **M4 implementation and Linux/macOS arm64 automated acceptance completed for the opt-in fresh-session runtime. M5 evaluation/cutover remains open.** The [M4 completion record](../docs/evaluations/gateway-runtime/m4-completion.md) documents product parity, host wiring and validation limits; the [M4 macOS record](../docs/evaluations/gateway-runtime/m4-macos-validation.md) verifies `8bb2718399d8` on macOS arm64 without source changes. Android APK/device acceptance remains a separate maintainer handoff. The earlier [M2/M3 platform completion record](../docs/evaluations/gateway-runtime/m2-m3-platform-completion.md) retains its Linux/macOS arm64 evidence. Production session routing, live writer transfer and deployment cutover remain excluded. See the [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [reviewed M1 contracts/security design](../docs/evaluations/gateway-runtime/m1-contracts.md). M1's accepted amendment starts fresh sessions without importing legacy JSONL; old data is retained.
+Status: **M5 evaluation completed; cutover not recommended and not authorized.** The [M5 evaluation](../docs/evaluations/gateway-runtime/m5-evaluation.md) found the streaming, PTC round-trip, long-context and correctness gates met but the task-time gate failed in all covered cohorts, and a fresh audit recorded cutover blockers; the design returns to review. M4 implementation and Linux/macOS arm64 automated acceptance were completed for the opt-in fresh-session runtime. The [M4 completion record](../docs/evaluations/gateway-runtime/m4-completion.md) documents product parity, host wiring and validation limits; the [M4 macOS record](../docs/evaluations/gateway-runtime/m4-macos-validation.md) verifies `8bb2718399d8` on macOS arm64 without source changes. Android APK/device acceptance remains a separate maintainer handoff. The earlier [M2/M3 platform completion record](../docs/evaluations/gateway-runtime/m2-m3-platform-completion.md) retains its Linux/macOS arm64 evidence. Production session routing, live writer transfer and deployment cutover remain excluded. See the [M0 component baseline](../docs/evaluations/gateway-runtime/m0-baseline.md) and [reviewed M1 contracts/security design](../docs/evaluations/gateway-runtime/m1-contracts.md). M1's accepted amendment starts fresh sessions without importing legacy JSONL; old data is retained.
 
 Code baseline: `17a91a0`. This investigation used static architecture inspection only, with no latency measurements; the benefits below are hypotheses to validate.
 
@@ -215,11 +215,13 @@ Acceptance: preserve the existing hybrid model interface and identical direct/PT
 
 ### M5 — Comparative evaluation, fresh-session cutover rehearsal, and cutover decision
 
-- [ ] Rerun M0 with identical fixtures, model conditions, and network settings. Report p50/p95, traffic, and success rates rather than selecting a single faster case.
-- [ ] Use fixture backups to rehearse fresh-session startup, retained legacy files, stale references, offline nodes, cutover fencing, and rollback limitations before/after new writes. No legacy importer is required.
-- [ ] Have a fresh reviewer audit security, recovery, PTC, and fresh-session cutover; run the full checks after fixes.
-- [ ] Update topology, backend auth, sandbox, backup/recovery, upgrades, Nix/role packaging, and version-compatibility documentation.
-- [ ] Present measurements and remaining risks for a human cutover decision. Deployment, stopping existing work, and deleting old data require separate explicit authorization.
+**Evaluation complete; see the [M5 record](../docs/evaluations/gateway-runtime/m5-evaluation.md).** Checked items mean the evaluation work was done, not that cutover passed: the task-time gate failed, audit findings were recorded as cutover blockers rather than fixed (maintainer decision), and the rehearsal is fixture-only policy evidence without a production coordinator.
+
+- [x] Rerun M0 with identical fixtures, model conditions, and network settings. Report p50/p95, traffic, and success rates rather than selecting a single faster case.
+- [x] Use fixture backups to rehearse fresh-session startup, retained legacy files, stale references, offline nodes, cutover fencing, and rollback limitations before/after new writes. No legacy importer is required.
+- [x] Have a fresh reviewer audit security, recovery, PTC, and fresh-session cutover; run the full checks after fixes.
+- [x] Update topology, backend auth, sandbox, backup/recovery, upgrades, Nix/role packaging, and version-compatibility documentation.
+- [x] Present measurements and remaining risks for a human cutover decision. Deployment, stopping existing work, and deleting old data require separate explicit authorization.
 
 Performance gates accepted at M1 review (M0 remains a component baseline; do not relax gates after seeing implementation results):
 

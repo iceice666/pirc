@@ -112,6 +112,8 @@ Consequences of B, as built:
 - If the gateway is temporarily unreachable, new model requests fail; existing tool/session runtime on the node is unaffected, but work needing another model turn cannot complete. A disconnect must never cause a silent fallback to handing credentials to the node.
 - Refresh/login/logout are serialized per credential ID with a revision check, so a stale refresh cannot resurrect a logged-out account. Provider-reported expiry values are inconsistent (some subtract a safety margin, Codex does not); the host applies one consistent refresh policy. A 401 does not unconditionally replay a request that has already started streaming output.
 
+**Opt-in gateway agent runtime (not deployed).** The [gateway agent runtime](../../plans/gateway-agent-runtime.md) keeps this credential model but removes the node from the model path: its trusted host calls the same `GatewayInference` service directly for main, fallback, title, memory and compaction calls, with the same per-call credential resolution and refresh/logout serialization. Neither the constrained phase worker nor nodes receive provider credentials, prompts are assembled on the gateway, and nodes see only tool intents. The gateway then becomes the dependency for the agent loop itself, not only for model transport: a gateway restart interrupts running turns, which reconcile by original execution ID rather than replaying. Evaluation and cutover status: [M5 evaluation](../evaluations/gateway-runtime/m5-evaluation.md).
+
 ## 6. Web authorization protocol
 
 - `GET /api/providers`: registry plus redacted config/login state/source/scope.

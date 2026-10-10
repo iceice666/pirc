@@ -2,7 +2,7 @@
 
 The flake exposes:
 
-- `packages.<system>.pirc-gateway`: independently compiled `bin/pirc-gateway`, the static Web bundle (`share/pirc/web`), and internal `libexec/pirc/pirc-runtime-worker` asset, with no srt or playwright-core runtime. This is also `packages.<system>.default`.
+- `packages.<system>.pirc-gateway`: independently compiled `bin/pirc-gateway`, the static Web bundle (`share/pirc/web`), and the opt-in runtime's internal `libexec/pirc/pirc-runtime-worker` and `libexec/pirc/pirc-ptc-worker` assets (the latter built from the pinned wasm3 source, with its license and provenance under `share/`), with no srt or playwright-core runtime. This is also `packages.<system>.default`.
 - `packages.<system>.pirc-chat` and `packages.<system>.pirc-node`: independently compiled fixed-role executables, with no Web UI. Their wrappers point at [srt](sandbox-runtime.nix) (`PIRC_SANDBOX_SRT`, preferred over the srt built into the executables because it brings bubblewrap, socat and ripgrep) and on-disk playwright-core (`PIRC_PLAYWRIGHT_CORE`), whose computed file paths cannot be bundled by `bun --compile`. They share the node/agent implementation. No separate Bun installation is needed; srt brings its own Node.js.
 - `overlays.default`: adds `pkgs.pirc-gateway`, `pkgs.pirc-chat` and `pkgs.pirc-node`, built against the consumer's nixpkgs. There is no legacy `pkgs.pirc` alias.
 - `nixosModules.pirc`: unprivileged systemd services for the gateway and a local node, and an optional nginx/forward-auth virtual host.
@@ -38,6 +38,11 @@ assets must stay together. macOS arm64 isolation and resource/lifecycle checks a
 recorded in [M2/M3 platform completion](../docs/evaluations/gateway-runtime/m2-m3-platform-completion.md).
 This does not enable production routing or establish a Darwin Nix build on every
 architecture; other releases must still pass the mandatory kernel admission guards.
+The module does not provision `bwrap`/`ldd` for the gateway service or wire the
+runtime host; install checks only prove the assets exist. Outside Nix, the native
+PTC worker build needs `PIRC_WASM3_ARCHIVE` (pinned SHA-256, no network fallback)
+and a C compiler (`CC`, default `clang`). See the
+[M5 evaluation](../docs/evaluations/gateway-runtime/m5-evaluation.md) for cutover status.
 
 Import `nixosModules.default` from the flake and configure `services.pirc`. A complete starting point is in [`example.nix`](example.nix).
 

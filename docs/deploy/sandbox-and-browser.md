@@ -1,6 +1,6 @@
 # Sandbox and browser (per node)
 
-Both are node-side concerns: the node starts every agent inside an OS sandbox, and refuses to start one when it cannot; it also hands its agents a Chromium it owns. Neither involves the gateway.
+Both are node-side concerns: the node starts every agent inside an OS sandbox, and refuses to start one when it cannot; it also hands its agents a Chromium it owns. In the deployed topology neither involves the gateway; see [the opt-in gateway runtime](#opt-in-gateway-agent-runtime-boundaries) for the separate boundaries that runtime adds.
 
 ## The agent sandbox (srt)
 
@@ -143,6 +143,15 @@ Add `~/.local/pirc-ssh/id_ed25519.pub` to each repository as a deploy key with w
 ### What it does not cover
 
 `web_fetch`, the `browser_*` tools and `web_search` run in the node's browser or on the gateway, outside the sandbox. A hostile node account or host is out of scope; the sandbox limits an agent, it does not make the machine safe from the person who configured it.
+
+## Opt-in gateway agent runtime boundaries
+
+The [opt-in gateway runtime](topology.md#opt-in-gateway-agent-runtime-evaluated-not-deployed) is not enabled by any shipped service. When composed, it has two boundaries that must not be confused:
+
+- **Gateway phase worker** (`pirc-runtime-worker`): a per-run finite driver that receives only phase names and sequence numbers — no context, credentials, database, paths or network. Linux runs it under bubblewrap (private namespaces, UID 65534, no capabilities, scrubbed environment, tmpfs-only home/tmp) with seccomp filters that deny sockets, process creation, ptrace, mount and namespace changes, plus 512 MiB RSS supervision. macOS arm64 uses a native deny-default driver with adjacent bootstrap/inspection libraries and watchdog. Missing `bwrap`/`ldd`, failed kernel admission or an unsupported platform refuses startup. Gateway-only PTC scripts run in the native wasm3/QuickJS guest (`pirc-ptc-worker`) without ambient authority.
+- **Node environment executor**: every tool, environment-only and mixed PTC script and hook runs in a session-scoped executor subprocess under the same srt policy described above. The node still owns `sandbox_allow_domains` and `unsandboxed_bash` approvals, final path checks and write leases; the gateway can only request them. An executor that cannot start leaves environment work refused, and uncertain cleanup quarantines the workspace durably across node restarts (`environment-journal.sqlite`). Do not delete quarantine records to "repair" a workspace.
+
+The gateway worker sandbox protects the gateway host from the loop; it says nothing about whether workspace commands were sandboxed. Clients show the node executor's live sandbox status, never the worker's.
 
 ## The agents' browser
 

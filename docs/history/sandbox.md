@@ -1,6 +1,6 @@
 # OS sandbox for agent processes
 
-> Historical design and implementation record. Use the [current guide](../deploy/sandbox-and-browser.md) for operation and the [backlog](../../plans/backlog.md#sandbox) for unresolved follow-ups. Original proposals and dated validation limits below are preserved, not new authorization.
+> Historical design and implementation record. Use the [current guide](../deploy/sandbox-and-browser.md) for operation and the [backlog](../../plans/backlog.md#sandbox) for unresolved follow-ups. Original proposals and dated validation limits below are preserved, not new authorization. The opt-in gateway runtime's separate worker and node-executor boundaries are described in the [current guide](../deploy/sandbox-and-browser.md#opt-in-gateway-agent-runtime-boundaries).
 
 Status (2026-10-02): option C built and tested on macOS; mandatory and fail-closed, with srt built into the node executables; not yet run on a real NixOS node. The investigation below is kept as written; "Decisions" and "As built" come first. Paths are relative to `apps/gateway/src/` unless noted.
 

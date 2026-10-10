@@ -18,6 +18,7 @@ Use stable `MAJOR.MINOR.PATCH` versions and annotated `vMAJOR.MINOR.PATCH` tags.
 ## Independent compatibility counters
 
 - `NODE_PROTOCOL_VERSION` changes only for incompatible gateway/node transport changes. Such upgrades require all nodes and the gateway to move together.
+- The opt-in gateway runtime's Environment messages carry `ENVIRONMENT_PROTOCOL_VERSION` (`apps/gateway/src/environment/protocol.ts`). New opt-in message/event variants have so far shipped without bumping either constant, so compatibility of that runtime requires the gateway, its worker assets and every node from the same release. `version:check`/`version:bump` do not inspect protocol constants, and a release does not authorize the runtime cutover ([Upgrades](../deploy/upgrades.md#gateway-agent-runtime-cutover-not-authorized)).
 - SQLite schema migrations keep their own ordered migration numbers. A product version does not imply rollback compatibility; back up state before upgrades.
 - Android `versionCode` is an install/update counter, not SemVer.
 
