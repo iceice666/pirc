@@ -56,8 +56,15 @@ test('interleaving alternates variant order and keeps thrown runs in the denomin
   expect(result.comparison.variants.baseline!.successRate).toBe(1);
 });
 
-function synthetic(cell: Cell, variant: 'baseline' | 'candidate', task: number, delta: number) {
-  const sample = {
+function sampleOf(
+  cell: Cell,
+  variant: 'baseline' | 'candidate',
+  task: number,
+  delta: number,
+  historyMessages = 0,
+  nodeBytes = variant === 'baseline' ? cell.contextBytes + 1000 : 1000,
+) {
+  return {
     cell,
     success: true,
     errors: [],
@@ -67,7 +74,7 @@ function synthetic(cell: Cell, variant: 'baseline' | 'candidate', task: number, 
     toolQueueMs: [],
     toolExecutionMs: [],
     contextBytes: [],
-    nodeToGatewayBytes: variant === 'baseline' ? cell.contextBytes + 1000 : 1000,
+    nodeToGatewayBytes: nodeBytes,
     gatewayToNodeBytes: 0,
     uiBytes: 0,
     modelCalls: 0,
@@ -79,7 +86,18 @@ function synthetic(cell: Cell, variant: 'baseline' | 'candidate', task: number, 
     cpuSystemMs: 0,
     rssStartBytes: 0,
     rssPeakBytes: 0,
+    ...(variant === 'candidate' ? { historyMessages } : {}),
   } satisfies Sample;
+}
+function synthetic(
+  cell: Cell,
+  variant: 'baseline' | 'candidate',
+  task: number,
+  delta: number,
+  historyMessages = 0,
+  nodeBytes?: number,
+) {
+  const sample = sampleOf(cell, variant, task, delta, historyMessages, nodeBytes);
   return summarize(cell, [sample, sample], 2, true);
 }
 
@@ -116,18 +134,36 @@ test('gates use per-cohort percentiles and report regressions instead of hiding 
   expect(linear.environmentPtc.pass).toBe(false);
   expect(linear.environmentPtc.rows[0]!.extraRoundTrips).toBeCloseTo(9);
 
-  // Node-link bytes that grow with the history mean it is being retransmitted.
+  // Any node-link message carrying the long history fails, even if bytes stay small.
   const retransmit = evaluateGates(
     build((cell) => 100 + cell.rttMs * 2 + 40).map((entry) => ({
       ...entry,
       variants: {
         ...entry.variants,
-        candidate: synthetic(entry.cell, 'baseline', 100 + entry.cell.rttMs * 2 + 40, 1),
+        candidate: synthetic(entry.cell, 'candidate', 100 + entry.cell.rttMs * 2 + 40, 1, 1),
       },
     })),
   );
   expect(retransmit.longContext.pass).toBe(false);
   expect(retransmit.longContext.failed).toBe(32);
+  // Baseline-sized node-link bytes (a whole history per run) fail as well.
+  const oversize = evaluateGates(
+    build((cell) => 100 + cell.rttMs * 2 + 40).map((entry) => ({
+      ...entry,
+      variants: {
+        ...entry.variants,
+        candidate: synthetic(
+          entry.cell,
+          'candidate',
+          1,
+          1,
+          0,
+          entry.cell.contextBytes * entry.cell.sessions + 1000,
+        ),
+      },
+    })),
+  );
+  expect(oversize.longContext.rows.filter((row) => row.cell.sessions === 1)[0]!.pass).toBe(false);
 
   const missing = evaluateGates([]);
   expect(missing.pass).toBe(false);
@@ -162,4 +198,5 @@ test('candidate deltas skip the delayed node link and long histories stay on the
   expect(sample.contextBytes.every((bytes) => bytes > 262144)).toBe(true);
   // Four 256 KiB histories never cross; only descriptors/control frames do.
   expect(sample.nodeToGatewayBytes + sample.gatewayToNodeBytes).toBeLessThan(262144);
+  expect(sample.historyMessages).toBe(0);
 }, 30000);

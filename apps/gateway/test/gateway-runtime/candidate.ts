@@ -109,11 +109,15 @@ function deferred<T>() {
 /** Candidate-only frame counts; M0's Sample shape and harness bytes stay unchanged. */
 export interface CandidateSample extends Sample {
   nodeToGatewayFrames: number;
+  /** Decoded Environment messages, either direction, that carry the 256 KiB history marker. */
+  historyMessages: number;
   gatewayToNodeFrames: number;
   /** Attribution spans (ms), measured window only: Environment RPCs, turn preparation, worker. */
   spans: Record<string, number[]>;
 }
 const TRACED = ['describe', 'start', 'status', 'ack', 'pinArtifact'] as const;
+/** A run only the 256 KiB synthetic history contains (the 1 KiB history is shorter). */
+const HISTORY_MARK = 'h'.repeat(4096);
 
 export function candidateRunner(options: CandidateOptions) {
   return (cell: Cell) => runCandidateSample(cell, options);
@@ -156,8 +160,13 @@ export async function runCandidateSample(
     rssStartBytes: 0,
     rssPeakBytes: 0,
     nodeToGatewayFrames: 0,
+    historyMessages: 0,
     gatewayToNodeFrames: 0,
     spans: {},
+  };
+  // Data messages travel as base64 chunks, so the marker is checked after decoding.
+  const inspect = (message: unknown) => {
+    if (measured && JSON.stringify(message).includes(HISTORY_MARK)) metrics.historyMessages++;
   };
   const span = (name: string, ms: number) => {
     if (measured) (metrics.spans[name] ??= []).push(ms);
@@ -427,8 +436,8 @@ export async function runCandidateSample(
       nodeId: 'test',
       journal: nodeJ,
       authorize,
-      // Node → gateway progress/operation events over the same delayed subchannel. No
-      // production composition exists yet; this mirrors the documented host wiring.
+      // Node → gateway progress/operation events and results over the same delayed
+      // subchannel. No production composition exists yet; this mirrors the host wiring.
       event: (event) => {
         void nodeFlow
           ?.send({
@@ -436,6 +445,17 @@ export async function runCandidateSample(
             requestId: randomUUID(),
             type: 'execution.event',
             event,
+          })
+          .catch(fail);
+      },
+      // Terminal results are pushed as soon as they are durable; status stays a fallback.
+      result: (record) => {
+        void nodeFlow
+          ?.send({
+            version: ENVIRONMENT_PROTOCOL_VERSION,
+            requestId: randomUUID(),
+            type: 'execution.result',
+            record,
           })
           .catch(fail);
       },
@@ -487,7 +507,10 @@ export async function runCandidateSample(
       append: (...args) => incoming.append(...args),
       take: (id) => incoming.take(id),
       discard: (id) => incoming.discard(id),
-      receive: (message) => remote!.receive(message),
+      receive: (message) => {
+        inspect(message);
+        return remote!.receive(message);
+      },
       failed: () => remote!.disconnect(),
     });
     services.nodes.onEnvironmentFrame = async (nodeId, raw) => {
@@ -506,11 +529,17 @@ export async function runCandidateSample(
             append: (...args) => outgoing.append(...args),
             take: (id) => outgoing.take(id),
             discard: (id) => outgoing.discard(id),
-            receive: nodeEnvironmentReceiver({
-              environment: local!,
-              central: nodeCentral!,
-              send: (message) => nodeFlow!.send(message),
-            }),
+            receive: (() => {
+              const receive = nodeEnvironmentReceiver({
+                environment: local!,
+                central: nodeCentral!,
+                send: (message) => nodeFlow!.send(message),
+              });
+              return (message: Parameters<typeof receive>[0]) => {
+                inspect(message);
+                return receive(message);
+              };
+            })(),
             failed: () => {
               local!.disconnect();
               nodeCentral!.disconnect();

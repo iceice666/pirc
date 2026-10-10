@@ -58,6 +58,10 @@ export function parseCompareArgs(args: string[]) {
 }
 
 export function summarize(cell: Cell, samples: Sample[], repeats: number, warmupSuccess: boolean) {
+  const history = samples.flatMap((sample) => {
+    const value = sample as Sample & { historyMessages?: number };
+    return value.historyMessages === undefined ? [] : [value.historyMessages];
+  });
   const frames = samples.flatMap((sample) => {
     const value = sample as Sample & { nodeToGatewayFrames?: number; gatewayToNodeFrames?: number };
     return value.nodeToGatewayFrames === undefined
@@ -88,6 +92,9 @@ export function summarize(cell: Cell, samples: Sample[], repeats: number, warmup
     contextBytes: distribution(samples.flatMap((s) => s.contextBytes)),
     nodeLinkBytes: distribution(samples.map((s) => s.nodeToGatewayBytes + s.gatewayToNodeBytes)),
     nodeLinkFrames: distribution(frames),
+    /** Candidate only: most node-link messages carrying the long history in any run. */
+    historyMessagesMax: history.length ? Math.max(...history) : null,
+    historyRuns: history.length,
     uiBytes: distribution(samples.map((s) => s.uiBytes)),
     peakDelayQueueBytes: distribution(samples.map((s) => s.peakDelayQueueBytes)),
     peakSocketBufferedBytes: distribution(samples.map((s) => s.peakSocketBufferedBytes)),
@@ -240,9 +247,9 @@ export function evaluateGates(cells: CellComparison[]) {
     });
 
   // 4. Long context never crosses the node link in full; provider traffic is not counted.
-  // Per session: below one 256 KiB history, and independent of history size (versus the
-  // matching 1 KiB cohort). An aggregate threshold would count four sessions' control
-  // traffic against a single history.
+  // Deterministic: no decoded node-link message in any measured run carries the 256 KiB
+  // history (marker), and per-session bytes stay below one history. Growth versus the
+  // 1 KiB cohort is reported only; push/status races make it vary by a few KB.
   const longContext = cells
     .filter((entry) => entry.cell.contextBytes === 262144)
     .map((entry) => {
@@ -252,33 +259,24 @@ export function evaluateGates(cells: CellComparison[]) {
       const baselineP50 = p50(baseline?.nodeLinkBytes);
       const candidateP50 = p50(candidate?.nodeLinkBytes);
       const smallP50 = p50(small?.nodeLinkBytes);
-      const smallP95 = p95(small?.nodeLinkBytes);
       const perSessionP95 = candidateP95 === null ? null : candidateP95 / entry.cell.sessions;
-      const growthPerSession =
-        candidateP50 === null || smallP50 === null
-          ? null
-          : (candidateP50 - smallP50) / entry.cell.sessions;
-      // p95 too, so retransmission in a minority of runs cannot hide behind the median.
-      const growthP95PerSession =
-        candidateP95 === null || smallP95 === null
-          ? null
-          : (candidateP95 - smallP95) / entry.cell.sessions;
       return {
         cell: entry.cell,
         baselineP50,
         candidateP50,
         candidateP95,
         perSessionP95,
-        growthPerSession,
-        growthP95PerSession,
+        growthPerSession:
+          candidateP50 === null || smallP50 === null
+            ? null
+            : (candidateP50 - smallP50) / entry.cell.sessions,
+        historyMessagesMax: candidate?.historyMessagesMax ?? null,
         savedP50: baselineP50 === null || candidateP50 === null ? null : baselineP50 - candidateP50,
         pass:
           perSessionP95 !== null &&
           perSessionP95 < 262144 &&
-          growthPerSession !== null &&
-          Math.abs(growthPerSession) < 262144 / 100 &&
-          growthP95PerSession !== null &&
-          Math.abs(growthP95PerSession) < 262144 / 100,
+          candidate!.historyRuns === candidate!.runs &&
+          candidate!.historyMessagesMax === 0,
       };
     });
 
