@@ -223,11 +223,9 @@ pub fn replace_images(content: &[UserBlock], placeholder: &str) -> Vec<UserBlock
 
 /// The assistant message a tool call came from (`normalizeToolCallId`'s
 /// `source`). Only the Responses APIs read it.
-#[allow(dead_code)]
 pub struct Source<'a> {
     pub api: &'a str,
     pub provider: &'a str,
-    pub model: &'a str,
 }
 
 /// `transformMessages`: image downgrade, cross-model thinking and tool call
@@ -317,7 +315,6 @@ pub fn transform_messages(
                                 let source = Source {
                                     api: &api,
                                     provider: &provider,
-                                    model: &model_id,
                                 };
                                 let normalized = normalize(&id, model, &source);
                                 if normalized != id {

@@ -25,9 +25,9 @@ use crate::pi::{
 use crate::sse::{Event, SdkDecoder};
 use crate::stream::{Cancelled, Emitter, StreamRequest, assistant, content_index, empty_usage};
 
-const SDK_USER_AGENT: &str = "OpenAI/JS 6.26.0";
+pub(crate) const SDK_USER_AGENT: &str = "OpenAI/JS 6.26.0";
 /// The SDK's default request timeout, which ends once headers arrive.
-const SDK_TIMEOUT: Duration = Duration::from_secs(600);
+pub(crate) const SDK_TIMEOUT: Duration = Duration::from_secs(600);
 
 fn has_tool_history(messages: &[PiMessage]) -> bool {
     messages.iter().any(|message| match message {
@@ -626,7 +626,7 @@ fn build_params(
 }
 
 /// `resolveCloudflareBaseUrl`: `{VAR}` placeholders from the environment.
-fn cloudflare_base_url(model: &PiModel) -> Result<String, String> {
+pub(crate) fn cloudflare_base_url(model: &PiModel) -> Result<String, String> {
     let url = &model.base_url;
     let mut out = String::with_capacity(url.len());
     let mut rest = url.as_str();
@@ -760,7 +760,11 @@ fn prepare(
 }
 
 /// `APIError.makeMessage`.
-fn api_error_message(status: Option<u16>, error: Option<&Value>, message: Option<&str>) -> String {
+pub(crate) fn api_error_message(
+    status: Option<u16>,
+    error: Option<&Value>,
+    message: Option<&str>,
+) -> String {
     let error = error.filter(|e| !e.is_null());
     let msg = match error {
         Some(error) if truthy(get(Some(error), "message")) => match &error["message"] {
