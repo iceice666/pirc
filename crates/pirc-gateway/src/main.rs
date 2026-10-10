@@ -7,6 +7,7 @@
 mod agent_ops;
 mod app;
 mod auth;
+mod backends;
 mod db;
 mod delegations;
 mod devices;
@@ -105,8 +106,9 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
         &env.home(),
     )?
     .unwrap_or_else(app::empty_models);
+    let backends = pirc_providers::backends::BackendService::open(&config.state_dir, models)?;
     let (host, port) = (config.host.clone(), config.port);
-    let app = app::App::new(config, db, models);
+    let app = app::App::new(config, db, backends);
     // Everything that can refuse to start does so before the port is bound.
     features::start(&app)?;
     app.devices.start_sweeper();
@@ -126,6 +128,7 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
         let app = app.clone();
         async move {
             shutdown().await;
+            app.backends.close();
             app.inference.cancel_all();
             app.nodes.close_all();
         }

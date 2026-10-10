@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 use axum::Router;
 use axum::extract::{ConnectInfo, FromRequest, Request, State};
@@ -13,6 +13,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use pirc_config::GatewayConfig;
 use pirc_protocol::{HttpMethod, Models, NodeHttpRequest, NodeHttpResponse};
+use pirc_providers::backends::BackendService;
 use serde_json::Value;
 
 use crate::auth::{self, Identity, RequestInfo};
@@ -36,8 +37,9 @@ pub struct App {
     pub nodes: Arc<NodeRegistry>,
     /// Open runs and write leases each node reported, by gateway session id.
     pub activity: Mutex<HashMap<String, HashMap<String, LiveActivity>>>,
-    /// The providers of `PIRC_MODELS_FILE` (keys resolved); replaced on reload.
-    pub models: RwLock<Arc<Models>>,
+    /// Model backends: `PIRC_MODELS_FILE` (replaced on reload), web-managed
+    /// backends and subscription accounts.
+    pub backends: Arc<BackendService>,
     pub inference: pirc_providers::Inference,
     /// The feature modules' own state (push keys, schedulers, caches).
     pub slots: crate::slots::Slots,
@@ -53,13 +55,15 @@ pub struct Claimed {
 }
 
 impl App {
-    pub fn new(config: GatewayConfig, db: Arc<Db>, models: Models) -> Arc<Self> {
+    /// The app around its backend settings. Backend changes cancel
+    /// inference in flight and send nodes the new catalog.
+    pub fn new(config: GatewayConfig, db: Arc<Db>, backends: BackendService) -> Arc<Self> {
         let devices = DeviceTokens::new(
             db.clone(),
             config.device_token_idle_ms,
             config.device_token_max_age_ms,
         );
-        Arc::new(Self {
+        let app = Arc::new(Self {
             events: EventHub::new(config.event_buffer_size),
             config,
             db,
@@ -67,10 +71,20 @@ impl App {
             hints: Hints::new(),
             nodes: Arc::new(NodeRegistry::default()),
             activity: Mutex::new(HashMap::new()),
-            models: RwLock::new(Arc::new(models)),
+            backends: Arc::new(backends),
             inference: pirc_providers::Inference::new(),
             slots: Default::default(),
-        })
+        });
+        let weak = Arc::downgrade(&app);
+        app.backends.set_on_change(move || {
+            if let Some(app) = weak.upgrade() {
+                app.inference.cancel_all();
+                app.nodes.broadcast(
+                    &serde_json::json!({ "type": "models", "models": app.public_models() }),
+                );
+            }
+        });
+        app
     }
 
     /// Authenticate a request's parts (`validateRequest`).
@@ -110,11 +124,9 @@ impl App {
         }
     }
 
+    /// Every configured provider, keys included (gateway-side only).
     pub fn models(&self) -> Arc<Models> {
-        self.models
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
+        self.backends.merged()
     }
 
     /// The secret-free catalog nodes receive.
@@ -123,7 +135,8 @@ impl App {
     }
 
     /// Re-read `PIRC_MODELS_FILE` (SIGHUP): in-flight inference ends, nodes
-    /// get the new catalog. A bad file keeps the previous providers.
+    /// get the new catalog (the change hook). A bad file keeps the previous
+    /// providers.
     pub fn reload_models(&self) {
         let env = pirc_config::Env::from_process();
         match pirc_providers::load_models_file(
@@ -131,17 +144,9 @@ impl App {
             &|name| env.get(name).map(str::to_owned),
             &env.home(),
         ) {
-            Ok(models) => {
-                *self
-                    .models
-                    .write()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner()) =
-                    Arc::new(models.unwrap_or_else(empty_models));
-                self.inference.cancel_all();
-                self.nodes.broadcast(
-                    &serde_json::json!({ "type": "models", "models": self.public_models() }),
-                );
-            }
+            Ok(models) => self
+                .backends
+                .set_baseline(models.unwrap_or_else(empty_models)),
             Err(_) => crate::log::error("models reload failed; keeping the previous providers"),
         }
     }
@@ -316,6 +321,7 @@ pub fn router(app: AppState) -> Router {
             get(routes::recording),
         )
         .merge(routes::feature_routes())
+        .merge(crate::backends::routes())
         .fallback(not_found)
         .method_not_allowed_fallback(not_found)
         .layer(middleware::from_fn_with_state(app.clone(), authenticate))
@@ -362,6 +368,11 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/sessions/{id}/panel/background/{task_id}/stop"),
     ("GET", "/api/sessions/{id}/browser/recording"),
     ("DELETE", "/api/devices/{id}"),
+    ("PUT", "/api/providers/{id}"),
+    ("DELETE", "/api/providers/{id}"),
+    ("GET", "/api/provider-auth/sessions/{id}"),
+    ("DELETE", "/api/provider-auth/sessions/{id}"),
+    ("POST", "/api/provider-auth/sessions/{id}/input"),
     ("GET", "/api/schedules/{id}"),
     ("PATCH", "/api/schedules/{id}"),
     ("DELETE", "/api/schedules/{id}"),

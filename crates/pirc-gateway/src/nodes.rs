@@ -1085,8 +1085,9 @@ fn start_inference(
                     let _ = stop.send(());
                 }
             };
-            let models = app.models();
-            let run = app.inference.run(&models, &request, &key.0, &mut on_delta);
+            let run = app
+                .inference
+                .run(app.backends.as_ref(), &request, &key.0, &mut on_delta);
             tokio::select! {
                 biased;
                 _ = stopped => finish(model_error("limit_exceeded")),

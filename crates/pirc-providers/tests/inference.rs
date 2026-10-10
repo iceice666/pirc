@@ -208,7 +208,7 @@ async fn dropping_the_run_closes_the_connection() {
                 }
             };
             inference
-                .run(&models, &request(), "node-1", &mut on_delta)
+                .run(models.as_ref(), &request(), "node-1", &mut on_delta)
                 .await
         }
     });

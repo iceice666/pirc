@@ -1,8 +1,11 @@
 //! Gateway-only model execution (`GatewayInference` in
 //! `backends/inference.ts`). No provider configuration comes from a node.
 
+use std::future::Future;
+
 use pirc_protocol::{
-    AssistantDelta, AssistantMessage, InferenceRequest, ModelApi, Models, StopReason, ThinkingLevel,
+    AssistantDelta, AssistantMessage, InferenceRequest, Model, ModelApi, Models, Provider,
+    StopReason, ThinkingLevel,
 };
 use tokio::sync::watch;
 
@@ -12,6 +15,47 @@ use crate::errors::safe_inference_error;
 use crate::stream::{Emitter, StreamRequest, assistant};
 
 const CANCELLED: &str = "Model request cancelled";
+
+/// A provider and model a request runs against, with the key to send.
+#[derive(Clone)]
+pub struct Resolved {
+    pub provider: Provider,
+    pub model: Model,
+    pub api_key: Option<String>,
+}
+
+/// `BackendResolver`: finds the provider and model of a request. Errors
+/// are reported to the node through [`safe_inference_error`].
+pub trait Resolve: Sync {
+    fn resolve(
+        &self,
+        provider: &str,
+        model: &str,
+    ) -> impl Future<Output = Result<Resolved, String>> + Send;
+}
+
+/// The providers of a `models.json` alone.
+impl Resolve for Models {
+    async fn resolve(&self, provider_name: &str, model_id: &str) -> Result<Resolved, String> {
+        let provider = self.providers.get(provider_name);
+        let model = provider.and_then(|p| p.models.iter().find(|m| m.id == model_id));
+        match (provider, model) {
+            (Some(provider), Some(model)) => Ok(Resolved {
+                provider: provider.clone(),
+                model: model.clone(),
+                api_key: provider.api_key.clone(),
+            }),
+            _ => Err("Backend or authorization session not found".to_owned()),
+        }
+    }
+}
+
+/// A fixed answer (the settings page's connection test).
+impl Resolve for Resolved {
+    async fn resolve(&self, _: &str, _: &str) -> Result<Resolved, String> {
+        Ok(self.clone())
+    }
+}
 
 /// Runs inference requests; [`Inference::cancel_all`] ends every run in
 /// flight.
@@ -66,9 +110,9 @@ impl Inference {
 
     /// `GatewayInference.run`. Errors are folded into the message
     /// (`stopReason: "error"`); dropping the future aborts the HTTP request.
-    pub async fn run(
+    pub async fn run<R: Resolve>(
         &self,
-        models: &Models,
+        resolver: &R,
         request: &InferenceRequest,
         node_id: &str,
         on_delta: &mut (dyn FnMut(&AssistantDelta, &AssistantMessage) + Send),
@@ -94,16 +138,19 @@ impl Inference {
             });
             message
         };
-        // BackendResolver for the baseline models.json providers.
-        let provider = models.providers.get(&request.provider_name);
-        let model = provider.and_then(|p| p.models.iter().find(|m| m.id == request.model_id));
-        let (Some(provider), Some(model)) = (provider, model) else {
-            return fail(
-                message,
-                &cancel,
-                "Backend or authorization session not found",
-            );
+        if cancel.has_changed().unwrap_or(true) {
+            return fail(message, &cancel, "Aborted");
+        }
+        let resolved = tokio::select! {
+            biased;
+            resolved = resolver.resolve(&request.provider_name, &request.model_id) => resolved,
+            _ = cancel.changed() => Err("Aborted".to_owned()),
         };
+        let resolved = match resolved {
+            Ok(resolved) => resolved,
+            Err(error) => return fail(message, &cancel, &error),
+        };
+        let (provider, model) = (&resolved.provider, &resolved.model);
         if cancel.has_changed().unwrap_or(true) {
             return fail(message, &cancel, "Aborted");
         }
@@ -133,7 +180,7 @@ impl Inference {
             provider_name: &request.provider_name,
             provider,
             model,
-            api_key: provider.api_key.as_deref(),
+            api_key: resolved.api_key.as_deref(),
             system_prompt: &request.system_prompt,
             messages: &request.messages,
             tools: &request.tools,

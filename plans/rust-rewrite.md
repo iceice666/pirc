@@ -138,12 +138,17 @@ Decided with the user before starting (2026-10-11):
 - **Both Anthropic transports are ported:** the native `agent/providers/anthropic.ts` (plain `anthropic-messages` providers) and pi-ai's (OAuth, presets, model-level `api`), so requests stay byte-identical to TS.
 - **Cadence as in M2:** one commit per sub-item, each starting with conformance or parity recordings from the TS build. Order: catalog, then settings store with routes and discovery, then transports, then OAuth.
 
-- [ ] Backend settings store (0600 atomic writes), discovery, `models.json` with SIGHUP reload.
+- [x] Backend settings store (0600 atomic writes), discovery, `models.json` with SIGHUP reload.
 - [ ] Native transports for the four wire APIs, producing `inference-wire` deltas (`text_*`, `thinking_*`, `toolcall_*`) and error codes; parity tests from `pi-adapter.test.ts`, `inference-transport.test.ts`, `opencode-go.test.ts` against recorded SSE fixtures.
 - [ ] OAuth: Anthropic and Codex PKCE (fixed localhost redirects and manual paste-back), Copilot device flow and token minting, serialized refresh with revision checks; fake-provider tests from `backend-auth.test.ts`.
 - [x] Catalog snapshot script and embedded catalog.
 
 **Gate:** real-provider smoke tests cost money and need the user's approval and credentials.
+
+Progress notes:
+
+- Catalog (2026-10-11): `scripts/model-catalog.ts` snapshots pi-ai 0.73.1's catalog into `crates/pirc-providers/catalog.json` (186 KB, embedded) for the providers whose every model uses one of the four wire APIs; `cost` is dropped. `bun run check` fails on a stale snapshot.
+- Settings store (2026-10-11): `pirc_providers::backends::BackendService` (store, merge, snapshot, presets, discovery, connection test) and the gateway's `/api/providers*` routes; scenario `backends` recorded against TS passes with the Rust gateway. `settings.json` keeps the TS path and shape (version 1), since the gateway already refuses a TS-era state directory. The provider-auth routes check their input as TS does, but a valid login start answers 503 until the OAuth sub-item, and `oauth:` providers do not resolve yet. Connection tests run on their own transports, so configuration changes do not cancel them (TS built a fresh `GatewayInference` per test). Reproduced quirks: a `baseUrl` string that is not a URL is a 500 (zod runs the refinement after `.url()` failed); static `/api/providers/<name>` paths of one method do not hide `{id}` for other methods (Fastify routes per method). Accepted gap: integer-like backend IDs (`"7"`) keep insertion order, where JS objects list them first (also true of M2's `models.json`). `pirc-gateway` is 11.23 MiB.
 
 ### M4 Agent core
 

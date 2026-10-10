@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use pirc_config::{Env, GatewayConfig};
+use pirc_providers::backends::BackendService;
 use serde_json::{Value, json};
 
 use super::fields::object;
@@ -48,7 +49,8 @@ fn fixture() -> Fixture {
         "api": "openai-completions", "baseUrl": "http://127.0.0.1:9/v1",
         "models": [{ "id": "model-a" }] } } }))
     .unwrap();
-    let app = App::new(config, Arc::new(Db::memory()), models);
+    let backends = BackendService::open(&state, models).unwrap();
+    let app = App::new(config, Arc::new(Db::memory()), backends);
     {
         let conn = app.db.lock();
         for (node, id, name, kind) in [

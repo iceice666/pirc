@@ -7,6 +7,8 @@ use rusqlite::Connection;
 use serde_json::{Value, json};
 
 use super::store::{Action, Budgets, Change, Entry, NoteInput, Proposal, ProposeInput, Store};
+use pirc_providers::backends::BackendService;
+
 use crate::app::{App, empty_models};
 use crate::db::{Db, Store as _};
 use crate::error::ApiResult;
@@ -37,10 +39,8 @@ pub fn app() -> (Arc<App>, tempfile::TempDir) {
         "/",
     );
     let config = pirc_config::GatewayConfig::load(&env).unwrap();
-    (
-        App::new(config, Arc::new(Db::memory()), empty_models()),
-        dir,
-    )
+    let backends = BackendService::open(&state, empty_models()).unwrap();
+    (App::new(config, Arc::new(Db::memory()), backends), dir)
 }
 
 fn store(conn: &Connection) -> Store<'_> {
