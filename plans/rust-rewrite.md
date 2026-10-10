@@ -141,7 +141,7 @@ Decided with the user before starting (2026-10-11):
 - [ ] Backend settings store (0600 atomic writes), discovery, `models.json` with SIGHUP reload.
 - [ ] Native transports for the four wire APIs, producing `inference-wire` deltas (`text_*`, `thinking_*`, `toolcall_*`) and error codes; parity tests from `pi-adapter.test.ts`, `inference-transport.test.ts`, `opencode-go.test.ts` against recorded SSE fixtures.
 - [ ] OAuth: Anthropic and Codex PKCE (fixed localhost redirects and manual paste-back), Copilot device flow and token minting, serialized refresh with revision checks; fake-provider tests from `backend-auth.test.ts`.
-- [ ] Catalog snapshot script and embedded catalog.
+- [x] Catalog snapshot script and embedded catalog.
 
 **Gate:** real-provider smoke tests cost money and need the user's approval and credentials.
 
