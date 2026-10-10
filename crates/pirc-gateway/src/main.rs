@@ -4,9 +4,6 @@
 //! node that owns it. It never runs agents, terminals or workspace
 //! inspection itself.
 
-// Parts land one M2 sub-item at a time; removed once M2 is complete.
-#![allow(dead_code)]
-
 mod agent_ops;
 mod app;
 mod auth;
@@ -27,6 +24,7 @@ mod nodes;
 mod push;
 mod routes;
 mod schedules;
+mod slots;
 mod sockets;
 mod util;
 mod web_search;
@@ -99,12 +97,6 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
              the proxy send it as x-pirc-proxy-secret (docs/deploy).",
         );
     }
-    let listener = tokio::net::TcpListener::bind((config.host.as_str(), config.port))
-        .await
-        .map_err(|error| format!("cannot listen on {}:{}: {error}", config.host, config.port))?;
-    let address = listener
-        .local_addr()
-        .map_err(|error| format!("listener address: {error}"))?;
     // An invalid models file at startup is fatal; a missing one means no providers.
     let env = Env::from_process();
     let models = pirc_providers::load_models_file(
@@ -113,9 +105,17 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
         &env.home(),
     )?
     .unwrap_or_else(app::empty_models);
+    let (host, port) = (config.host.clone(), config.port);
     let app = app::App::new(config, db, models);
+    // Everything that can refuse to start does so before the port is bound.
+    features::start(&app)?;
     app.devices.start_sweeper();
-    features::start(&app);
+    let listener = tokio::net::TcpListener::bind((host.as_str(), port))
+        .await
+        .map_err(|error| format!("cannot listen on {}:{}: {error}", host, port))?;
+    let address = listener
+        .local_addr()
+        .map_err(|error| format!("listener address: {error}"))?;
     tokio::spawn(reload_on_hangup(app.clone()));
     log::info(&format!("listening on http://{address}"));
     axum::serve(

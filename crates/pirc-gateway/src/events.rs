@@ -206,6 +206,7 @@ impl EventHub {
         }
     }
 
+    #[cfg(test)]
     pub fn replay(&self, session_id: &str, cursor: Option<Cursor>, epoch: i64) -> Replay {
         Self::replay_locked(&mut self.lock(), session_id, cursor, epoch)
     }

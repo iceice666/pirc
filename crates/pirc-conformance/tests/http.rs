@@ -43,6 +43,67 @@ async fn http_edges() {
     let node = api.send("GET", "/node/connect", &browser, None).await;
     t.response("node link without upgrade", "GET /node/connect", &node);
 
+    // Scoped `no-store` replies and Fastify's 414 for a path parameter over
+    // 100 characters (before authentication, without `no-store`).
+    let long = "x".repeat(101);
+    for (step, method, path, headers) in [
+        (
+            "memory, no identity",
+            "GET",
+            "/api/memory".to_owned(),
+            &anonymous,
+        ),
+        (
+            "memory history, no identity",
+            "GET",
+            "/api/memory/entries/e1/history".to_owned(),
+            &anonymous,
+        ),
+        (
+            "schedules, no identity",
+            "GET",
+            "/api/schedules".to_owned(),
+            &anonymous,
+        ),
+        (
+            "long memory id",
+            "POST",
+            format!("/api/memory/entries/{long}/forget"),
+            &browser,
+        ),
+        (
+            "long memory id, no identity",
+            "GET",
+            format!("/api/memory/entries/{long}/history"),
+            &anonymous,
+        ),
+        (
+            "long device id",
+            "DELETE",
+            format!("/api/devices/{long}"),
+            &browser,
+        ),
+        (
+            "long schedule id",
+            "GET",
+            format!("/api/schedules/{long}"),
+            &browser,
+        ),
+        (
+            "long run id",
+            "POST",
+            format!("/api/schedules/s1/runs/{long}/dismiss"),
+            &browser,
+        ),
+    ] {
+        let response = api.send(method, &path, headers, None).await;
+        t.response(
+            step,
+            &format!("{method} {}", path.replace(&long, "<101 x>")),
+            &response,
+        );
+    }
+
     let post = |content_type: Option<&'static str>, body: &[u8]| {
         let api = api.clone();
         let browser = browser.clone();

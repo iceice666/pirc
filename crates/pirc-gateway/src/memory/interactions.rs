@@ -8,7 +8,7 @@
 //! read at the latest.
 
 use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
 use serde_json::{Value, json};
@@ -21,24 +21,26 @@ use crate::error::{ApiError, ApiResult};
 /// A user's pending cards, by interaction id, in proposal order.
 type Cards = Vec<(String, Value)>;
 
-/// What each gateway last published, per user (keyed by the `App`'s address).
-static KNOWN: LazyLock<Mutex<HashMap<usize, HashMap<String, Cards>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// What the gateway last published, per user; `None` until read.
+#[derive(Default)]
+struct Known(Mutex<Option<HashMap<String, Cards>>>);
 
-fn key(app: &App) -> usize {
-    std::ptr::from_ref(app) as usize
+fn known(app: &App) -> Arc<Known> {
+    app.slots.get_or_init(Known::default)
 }
 
-fn known() -> std::sync::MutexGuard<'static, HashMap<usize, HashMap<String, Cards>>> {
-    KNOWN
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+impl Known {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Option<HashMap<String, Cards>>> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 }
 
 /// Read what is pending, if this gateway has not yet (before any change to
 /// memory; `conn` is the locked database).
 pub fn ensure_known(app: &App, conn: &Connection) {
-    if known().contains_key(&key(app)) {
+    if known(app).lock().is_some() {
         return;
     }
     let store = super::store(app, conn);
@@ -56,7 +58,7 @@ pub fn ensure_known(app: &App, conn: &Connection) {
             users.insert(user, cards);
         }
     }
-    known().entry(key(app)).or_insert(users);
+    known(app).lock().get_or_insert(users);
 }
 
 fn card(store: &Store<'_>, user: &str, proposal: &Proposal) -> ApiResult<Value> {
@@ -139,9 +141,9 @@ pub fn changed(app: &App, user: &str) {
         let Ok(after) = cards(&super::store(app, &conn), user) else {
             return;
         };
-        let before = known()
-            .entry(key(app))
-            .or_default()
+        let before = known(app)
+            .lock()
+            .get_or_insert_with(HashMap::new)
             .insert(user.to_owned(), after.clone())
             .unwrap_or_default();
         let has = |cards: &Cards, id: &str| cards.iter().any(|(known, _)| known == id);

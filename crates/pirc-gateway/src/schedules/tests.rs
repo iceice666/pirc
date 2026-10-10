@@ -384,7 +384,6 @@ fn context(app: &App, workspace: &str, remote: &str) -> OpContext {
     let session = session(app, workspace, remote);
     let workspace = app.db.lock().get_workspace(workspace).unwrap();
     OpContext {
-        node_id: workspace.host_id.clone(),
         session,
         workspace,
         user: USER.into(),

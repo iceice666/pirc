@@ -91,6 +91,120 @@ expression: t.into_value()
   {
     "body": {
       "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory",
+    "status": 401,
+    "step": "memory, no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/entries/e1/history",
+    "status": 401,
+    "step": "memory history, no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/schedules",
+    "status": 401,
+    "step": "schedules, no identity"
+  },
+  {
+    "body": {
+      "code": "FST_ERR_MAX_PARAM_LENGTH",
+      "error": "Bad Request",
+      "message": "'/api/memory/entries/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/forget' is exceeding the max param length",
+      "statusCode": 414
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/memory/entries/<101 x>/forget",
+    "status": 414,
+    "step": "long memory id"
+  },
+  {
+    "body": {
+      "code": "FST_ERR_MAX_PARAM_LENGTH",
+      "error": "Bad Request",
+      "message": "'/api/memory/entries/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/history' is exceeding the max param length",
+      "statusCode": 414
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/entries/<101 x>/history",
+    "status": 414,
+    "step": "long memory id, no identity"
+  },
+  {
+    "body": {
+      "code": "FST_ERR_MAX_PARAM_LENGTH",
+      "error": "Bad Request",
+      "message": "'/api/devices/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' is exceeding the max param length",
+      "statusCode": 414
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/devices/<101 x>",
+    "status": 414,
+    "step": "long device id"
+  },
+  {
+    "body": {
+      "code": "FST_ERR_MAX_PARAM_LENGTH",
+      "error": "Bad Request",
+      "message": "'/api/schedules/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' is exceeding the max param length",
+      "statusCode": 414
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/schedules/<101 x>",
+    "status": 414,
+    "step": "long schedule id"
+  },
+  {
+    "body": {
+      "code": "FST_ERR_MAX_PARAM_LENGTH",
+      "error": "Bad Request",
+      "message": "'/api/schedules/s1/runs/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/dismiss' is exceeding the max param length",
+      "statusCode": 414
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/schedules/s1/runs/<101 x>/dismiss",
+    "status": 414,
+    "step": "long run id"
+  },
+  {
+    "body": {
+      "error": {
         "code": "not_found",
         "message": "Workspace not found"
       }

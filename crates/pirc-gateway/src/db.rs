@@ -173,15 +173,14 @@ impl WorkspaceKind {
     }
 }
 
-/// A workspace as clients see it; `canonical_path` stays in the gateway.
+/// A workspace as clients see it (its stored `canonical_path` is a
+/// gateway-internal unique key and is not read).
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
     pub id: String,
     pub host_id: String,
     pub display_name: String,
-    #[serde(skip)]
-    pub canonical_path: String,
     pub defaults: Value,
     pub kind: WorkspaceKind,
 }
@@ -192,7 +191,6 @@ impl Workspace {
             id: row.get("id")?,
             host_id: row.get("host_id")?,
             display_name: row.get("display_name")?,
-            canonical_path: row.get("canonical_path")?,
             defaults: safe_json(&row.get::<_, String>("defaults_json")?, json!({})),
             kind: WorkspaceKind::from_column(&row.get::<_, String>("kind")?),
         })
@@ -207,8 +205,7 @@ impl Workspace {
 }
 
 /// A session row. Serializing gives the public session (`publicSession`):
-/// the node's session id, the owner, the private path and the lost-output
-/// flag never leave the gateway.
+/// the node's session id and the owner never leave the gateway.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
@@ -230,11 +227,7 @@ pub struct Session {
     #[serde(skip)]
     pub owner_user: Option<String>,
     #[serde(skip)]
-    pub private_session_path: String,
-    #[serde(skip)]
     pub pi_session_id: Option<String>,
-    #[serde(skip)]
-    pub partial_output_lost: bool,
 }
 
 impl Session {
@@ -260,9 +253,7 @@ impl Session {
             unread: activity.is_some_and(|activity| activity > read.unwrap_or(0)),
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
-            private_session_path: row.get("private_session_path")?,
             pi_session_id: row.get("pi_session_id")?,
-            partial_output_lost: row.get::<_, i64>("partial_output_lost")? != 0,
         })
     }
 
@@ -323,8 +314,9 @@ impl Default for Capabilities {
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CapabilitiesPatch {
-    #[serde(default, deserialize_with = "crate::util::present")]
-    pub version: Option<Version1>,
+    /// Accepted (it can only be 1) and otherwise ignored.
+    #[serde(default, rename = "version", deserialize_with = "crate::util::present")]
+    pub _version: Option<Version1>,
     #[serde(default, deserialize_with = "crate::util::present")]
     pub delegation: Option<bool>,
     #[serde(default, deserialize_with = "crate::util::present")]

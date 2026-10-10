@@ -19,7 +19,6 @@ use crate::{delegations, memory, schedules, web_search};
 
 /// Who is asking.
 pub struct OpContext {
-    pub node_id: String,
     pub session: Session,
     pub workspace: Workspace,
     pub user: String,
@@ -116,7 +115,6 @@ pub async fn run(
                 .require_workspace_capability(&workspace.id, capability)?;
         }
         let context = OpContext {
-            node_id: node_id.to_owned(),
             session,
             workspace,
             user,

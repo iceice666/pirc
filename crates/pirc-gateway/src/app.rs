@@ -39,6 +39,8 @@ pub struct App {
     /// The providers of `PIRC_MODELS_FILE` (keys resolved); replaced on reload.
     pub models: RwLock<Arc<Models>>,
     pub inference: pirc_providers::Inference,
+    /// The feature modules' own state (push keys, schedulers, caches).
+    pub slots: crate::slots::Slots,
 }
 
 pub type AppState = Arc<App>;
@@ -67,6 +69,7 @@ impl App {
             activity: Mutex::new(HashMap::new()),
             models: RwLock::new(Arc::new(models)),
             inference: pirc_providers::Inference::new(),
+            slots: Default::default(),
         })
     }
 
@@ -316,8 +319,9 @@ pub fn router(app: AppState) -> Router {
         .fallback(not_found)
         .method_not_allowed_fallback(not_found)
         .layer(middleware::from_fn_with_state(app.clone(), authenticate))
-        .layer(middleware::from_fn(param_length))
         .layer(middleware::from_fn(crate::features::no_store))
+        // Outside `no_store`: Fastify's router refused before any scope's hooks.
+        .layer(middleware::from_fn(param_length))
         .layer(middleware::from_fn(detach))
         .with_state(app)
 }
@@ -358,6 +362,16 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/sessions/{id}/panel/background/{task_id}/stop"),
     ("GET", "/api/sessions/{id}/browser/recording"),
     ("DELETE", "/api/devices/{id}"),
+    ("GET", "/api/schedules/{id}"),
+    ("PATCH", "/api/schedules/{id}"),
+    ("DELETE", "/api/schedules/{id}"),
+    ("POST", "/api/schedules/{id}/run"),
+    ("POST", "/api/schedules/{id}/runs/{run_id}/dismiss"),
+    ("GET", "/api/memory/entries/{id}/history"),
+    ("POST", "/api/memory/proposals/{id}/approve"),
+    ("POST", "/api/memory/proposals/{id}/reject"),
+    ("POST", "/api/memory/entries/{id}/forget"),
+    ("POST", "/api/memory/entries/{id}/restore"),
 ];
 
 /// Fastify's router refuses a path parameter over 100 characters with

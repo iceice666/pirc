@@ -27,7 +27,7 @@ pub fn routes() -> Router<AppState> {
         .merge(crate::push::routes())
 }
 
-/// The routes of the TS gateway's device and model-backend scopes, whose
+/// The routes of the TS gateway's device, memory and model-backend scopes, whose
 /// replies (authentication failures included) are never cached.
 fn no_store_route(method: &Method, path: &str) -> bool {
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
@@ -42,6 +42,10 @@ fn no_store_route(method: &Method, path: &str) -> bool {
         ("POST", ["api", "provider-auth", "sessions"]) => true,
         ("GET" | "DELETE", ["api", "provider-auth", "sessions", id]) => one(id),
         ("POST", ["api", "provider-auth", "sessions", id, "input"]) => one(id),
+        ("GET", ["api", "memory"]) => true,
+        ("GET", ["api", "memory", "entries", id, "history"]) => one(id),
+        ("POST", ["api", "memory", "proposals", id, "approve" | "reject"]) => one(id),
+        ("POST", ["api", "memory", "entries", id, "forget" | "restore"]) => one(id),
         _ => false,
     }
 }
@@ -185,9 +189,10 @@ pub fn answer_gateway_interaction(
     crate::schedules::answer(app, session_id, interaction_id, user, answer.as_ref())
 }
 
-/// Start the features' background work.
-pub fn start(app: &AppState) {
-    crate::push::start(app);
+/// Start the features' background work; fails on unusable push keys.
+pub fn start(app: &AppState) -> Result<(), String> {
+    crate::push::start(app)?;
     crate::delegations::start(app);
     crate::schedules::start(app);
+    Ok(())
 }

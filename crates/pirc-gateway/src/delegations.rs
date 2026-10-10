@@ -9,8 +9,8 @@
 //! `delegation.status` in `agent-ops.ts`) and the push it sends (`announce`
 //! in `daemon/app.ts`).
 
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, LazyLock, Mutex, Weak};
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use rusqlite::{Connection, OptionalExtension, ToSql, params};
@@ -108,7 +108,6 @@ pub struct Delegation {
     pub expires_at: i64,
     pub dispatched_at: Option<i64>,
     pub created_at: i64,
-    pub updated_at: i64,
 }
 
 fn row_of(row: &rusqlite::Row<'_>) -> rusqlite::Result<Delegation> {
@@ -140,7 +139,6 @@ fn row_of(row: &rusqlite::Row<'_>) -> rusqlite::Result<Delegation> {
         expires_at: row.get("expires_at")?,
         dispatched_at: row.get("dispatched_at")?,
         created_at: row.get("created_at")?,
-        updated_at: row.get("updated_at")?,
     })
 }
 
@@ -201,14 +199,7 @@ struct Shared {
 }
 
 fn shared(app: &App) -> Arc<Shared> {
-    static STATES: LazyLock<Mutex<HashMap<usize, Arc<Shared>>>> = LazyLock::new(Default::default);
-    let key = std::ptr::from_ref(app) as usize;
-    STATES
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .entry(key)
-        .or_default()
-        .clone()
+    app.slots.get_or_init(Shared::default)
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -1367,7 +1358,6 @@ mod tests {
             expires_at: 10,
             dispatched_at: None,
             created_at: 5,
-            updated_at: 5,
         }
     }
 

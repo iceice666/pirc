@@ -7,7 +7,7 @@
 //! `App` has none for them, so they live in a registry keyed by the app.
 
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -34,17 +34,8 @@ struct Runtime {
     _events: Mutex<Option<Subscription>>,
 }
 
-type Registry = Mutex<Vec<(Weak<App>, Arc<Runtime>)>>;
-
-static RUNTIMES: Registry = Mutex::new(Vec::new());
-
 fn runtime(app: &App) -> Option<Arc<Runtime>> {
-    RUNTIMES
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .iter()
-        .find(|(owner, _)| std::ptr::eq(owner.as_ptr(), app) && owner.strong_count() > 0)
-        .map(|(_, runtime)| runtime.clone())
+    app.slots.get::<Runtime>()
 }
 
 /// Look at the schedules again (the TS `arm()`); nothing before [`start`].
@@ -61,13 +52,7 @@ pub fn start(app: &AppState) {
         checks: Mutex::new(HashSet::new()),
         _events: Mutex::new(None),
     });
-    {
-        let mut runtimes = RUNTIMES
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        runtimes.retain(|(owner, _)| owner.strong_count() > 0);
-        runtimes.push((Arc::downgrade(app), runtime.clone()));
-    }
+    app.slots.set(runtime.clone());
     // Listeners run under the hub's lock: only hand the session on.
     let (sender, mut sessions) = mpsc::unbounded_channel::<String>();
     let subscription = app.events.subscribe_all(Arc::new(move |event| {

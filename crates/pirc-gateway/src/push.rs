@@ -10,7 +10,7 @@ use std::fs;
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::Path;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use aes_gcm::aead::Aead;
@@ -823,25 +823,23 @@ fn prune(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
 }
 
 /// The gateway's push state, made from its configuration on first use (at
-/// startup, by [`start`]). One gateway per process.
-static PUSH: OnceLock<Arc<Push>> = OnceLock::new();
-
-fn state(app: &App) -> Result<&'static Arc<Push>, String> {
-    if let Some(push) = PUSH.get() {
+/// startup, by [`start`]).
+fn state(app: &App) -> Result<Arc<Push>, String> {
+    if let Some(push) = app.slots.get::<Push>() {
         return Ok(push);
     }
     let vapid = load_vapid_keys(&app.config.state_dir, &Env::from_process())?;
-    Ok(PUSH.get_or_init(|| {
-        Arc::new(Push::new(
+    Ok(app.slots.get_or_init(|| {
+        Push::new(
             app.db.clone(),
             vapid,
             app.config.vapid_subject.clone(),
             app.config.push_allow_http,
-        ))
+        )
     }))
 }
 
-fn push_of(app: &App) -> ApiResult<&'static Arc<Push>> {
+fn push_of(app: &App) -> ApiResult<Arc<Push>> {
     state(app).map_err(|error| {
         crate::log::error(&format!("push: {error}"));
         ApiError::internal()
@@ -915,15 +913,11 @@ pub fn routes() -> Router<AppState> {
 /// Load the VAPID keys and start watching for interactions that need the
 /// user (`watchInteractions`). Keys that cannot be loaded stop the gateway,
 /// as they stopped `createApp`.
-pub fn start(app: &AppState) {
-    let push = match state(app) {
-        Ok(push) => push.clone(),
-        Err(error) => {
-            eprintln!("pirc-gateway: {error}");
-            std::process::exit(1);
-        }
-    };
+/// Fails, before the gateway listens, on unusable VAPID keys.
+pub fn start(app: &AppState) -> Result<(), String> {
+    let push = state(app)?;
     watch_interactions(&app.events, app.db.clone(), push);
+    Ok(())
 }
 
 /// Send `message` to every subscription of `user`, in the background.

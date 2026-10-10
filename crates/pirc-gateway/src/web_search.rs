@@ -4,8 +4,7 @@
 //! (https://exa.ai/docs/search/quickstart): each result is a title, URL and
 //! query-relevant highlights; agents read whole pages with `web_fetch`.
 
-use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use indexmap::IndexMap;
@@ -171,15 +170,8 @@ pub fn parse_args(args: &Value) -> Result<SearchArgs, ()> {
 
 /// One search per `App`, with its key and cache (`WebSearch`).
 fn searcher(app: &App) -> Arc<WebSearch> {
-    static SEARCHERS: LazyLock<Mutex<HashMap<usize, Arc<WebSearch>>>> =
-        LazyLock::new(Default::default);
-    let key = std::ptr::from_ref(app) as usize;
-    SEARCHERS
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .entry(key)
-        .or_insert_with(|| Arc::new(WebSearch::new(app.config.exa_api_key.clone())))
-        .clone()
+    app.slots
+        .get_or_init(|| WebSearch::new(app.config.exa_api_key.clone()))
 }
 
 struct Cached {
@@ -216,10 +208,6 @@ impl WebSearch {
             cache: Mutex::new(IndexMap::new()),
             client,
         }
-    }
-
-    pub fn configured(&self) -> bool {
-        self.api_key.is_some()
     }
 
     fn cache(&self) -> std::sync::MutexGuard<'_, IndexMap<String, Cached>> {
@@ -613,7 +601,7 @@ mod tests {
     #[tokio::test]
     async fn is_off_without_a_key() {
         let search = WebSearch::with(None, "http://127.0.0.1:9/search".into(), Box::new(now_ms));
-        assert!(!search.configured());
+        assert!(search.api_key.is_none());
         let error = search
             .search(&args(json!({ "query": "x" })))
             .await
