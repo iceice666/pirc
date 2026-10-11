@@ -64,7 +64,7 @@ expression: r.into_value()
       {
         "assistantMessageEvent": {
           "contentIndex": 0,
-          "delta": "{\"command\":\"rm -rf ~/gone\"}",
+          "delta": "{\"command\":\"rm -rf /opt/pirc-conformance-gone\"}",
           "type": "toolcall_delta"
         },
         "type": "message_update"
@@ -74,7 +74,7 @@ expression: r.into_value()
           "contentIndex": 0,
           "toolCall": {
             "arguments": {
-              "command": "rm -rf ~/gone"
+              "command": "rm -rf /opt/pirc-conformance-gone"
             },
             "id": "a1",
             "name": "bash",
@@ -96,7 +96,7 @@ expression: r.into_value()
       {
         "assistantMessageEvent": {
           "contentIndex": 1,
-          "delta": "{\"command\":\"rm -rf ~/gone\"}",
+          "delta": "{\"command\":\"rm -rf /opt/pirc-conformance-gone\"}",
           "type": "toolcall_delta"
         },
         "type": "message_update"
@@ -106,7 +106,7 @@ expression: r.into_value()
           "contentIndex": 1,
           "toolCall": {
             "arguments": {
-              "command": "rm -rf ~/gone"
+              "command": "rm -rf /opt/pirc-conformance-gone"
             },
             "id": "a2",
             "name": "bash",
@@ -283,7 +283,7 @@ expression: r.into_value()
           "content": [
             {
               "arguments": {
-                "command": "rm -rf ~/gone"
+                "command": "rm -rf /opt/pirc-conformance-gone"
               },
               "id": "a1",
               "name": "bash",
@@ -291,7 +291,7 @@ expression: r.into_value()
             },
             {
               "arguments": {
-                "command": "rm -rf ~/gone"
+                "command": "rm -rf /opt/pirc-conformance-gone"
               },
               "id": "a2",
               "name": "bash",
@@ -361,7 +361,7 @@ expression: r.into_value()
       },
       {
         "args": {
-          "command": "rm -rf ~/gone"
+          "command": "rm -rf /opt/pirc-conformance-gone"
         },
         "toolCallId": "a1",
         "toolName": "bash",
@@ -376,7 +376,7 @@ expression: r.into_value()
       },
       {
         "id": "<uuid:2>",
-        "message": "Command (bash, in <tmp>/workspace):\n\nrm -rf ~/gone\n\nReason: deletes <tmp>/home/gone, outside the workspace",
+        "message": "Command (bash, in <tmp>/workspace):\n\nrm -rf /opt/pirc-conformance-gone\n\nReason: deletes /opt/pirc-conformance-gone, outside the workspace",
         "method": "confirm",
         "title": "Auto mode: allow a potentially dangerous action?",
         "toolCallId": "a1",
@@ -387,7 +387,7 @@ expression: r.into_value()
         "result": {
           "content": [
             {
-              "text": "Blocked by auto mode: deletes <tmp>/home/gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: deletes /opt/pirc-conformance-gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -401,7 +401,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: deletes <tmp>/home/gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: deletes /opt/pirc-conformance-gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -417,7 +417,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: deletes <tmp>/home/gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: deletes /opt/pirc-conformance-gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -431,7 +431,7 @@ expression: r.into_value()
       },
       {
         "args": {
-          "command": "rm -rf ~/gone"
+          "command": "rm -rf /opt/pirc-conformance-gone"
         },
         "toolCallId": "a2",
         "toolName": "bash",
@@ -439,7 +439,7 @@ expression: r.into_value()
       },
       {
         "id": "<uuid:3>",
-        "message": "Command (bash, in <tmp>/workspace):\n\nrm -rf ~/gone\n\nReason: deletes <tmp>/home/gone, outside the workspace",
+        "message": "Command (bash, in <tmp>/workspace):\n\nrm -rf /opt/pirc-conformance-gone\n\nReason: deletes /opt/pirc-conformance-gone, outside the workspace",
         "method": "confirm",
         "title": "Auto mode: allow a potentially dangerous action?",
         "toolCallId": "a2",
@@ -1212,7 +1212,7 @@ expression: r.into_value()
             "content": [
               {
                 "arguments": {
-                  "command": "rm -rf ~/gone"
+                  "command": "rm -rf /opt/pirc-conformance-gone"
                 },
                 "id": "a1",
                 "name": "bash",
@@ -1220,7 +1220,7 @@ expression: r.into_value()
               },
               {
                 "arguments": {
-                  "command": "rm -rf ~/gone"
+                  "command": "rm -rf /opt/pirc-conformance-gone"
                 },
                 "id": "a2",
                 "name": "bash",
@@ -1283,7 +1283,7 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "Blocked by auto mode: deletes <tmp>/home/gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+                "text": "Blocked by auto mode: deletes /opt/pirc-conformance-gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
                 "type": "text"
               }
             ],
@@ -1428,7 +1428,7 @@ expression: r.into_value()
           "content": [
             {
               "arguments": {
-                "command": "rm -rf ~/gone"
+                "command": "rm -rf /opt/pirc-conformance-gone"
               },
               "id": "a1",
               "name": "bash",
@@ -1436,7 +1436,7 @@ expression: r.into_value()
             },
             {
               "arguments": {
-                "command": "rm -rf ~/gone"
+                "command": "rm -rf /opt/pirc-conformance-gone"
               },
               "id": "a2",
               "name": "bash",
@@ -1505,7 +1505,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: deletes <tmp>/home/gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: deletes /opt/pirc-conformance-gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],

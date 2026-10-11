@@ -373,11 +373,14 @@ impl AgentRun {
     /// Start an agent, or `None` (test skipped) without executables.
     pub async fn start(options: AgentOptions) -> Option<Self> {
         let (program, mut args) = agent_command()?;
-        let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/conformance");
-        std::fs::create_dir_all(&base).unwrap();
+        // A root whose length does not depend on where the repository is
+        // checked out: the context snapshot's token estimates count the
+        // workspace path.
+        let base = Path::new("/tmp/pirc-conformance");
+        std::fs::create_dir_all(base).unwrap();
         let dir = tempfile::Builder::new()
             .prefix("agent-")
-            .tempdir_in(&base)
+            .tempdir_in(base)
             .unwrap();
         let root = dir.path().canonicalize().unwrap();
         let make = |name: &str| {

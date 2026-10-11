@@ -604,7 +604,7 @@ expression: r.into_value()
             "title": "Capabilities"
           },
           {
-            "estimatedTokens": 28,
+            "estimatedTokens": 19,
             "id": "cwd",
             "source": "built-in",
             "text": "Current working directory: <tmp>/workspace",
@@ -837,13 +837,13 @@ expression: r.into_value()
           "buckets": {
             "memory": 0,
             "messages": 20,
-            "system": 910,
+            "system": 901,
             "tools": 1637
           },
-          "estimatedInput": 2567,
+          "estimatedInput": 2558,
           "remaining": 99860,
           "reportedInput": 140,
-          "scale": 0.05453837164004675
+          "scale": 0.054730258014073496
         },
         "version": 1
       },
