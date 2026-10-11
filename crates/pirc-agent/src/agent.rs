@@ -1531,7 +1531,9 @@ impl Agent {
         }
     }
 
-    fn flush_panel(&self) {
+    /// Emit the coalesced `panel_changed` events now: where the TS agent's
+    /// microtasks ran (a feature's sync segment ended).
+    pub fn flush_panel(&self) {
         for _ in 0..self.scheduled_flushes.replace(0) {
             let sections = std::mem::take(&mut *self.changed_sections.borrow_mut());
             self.emit(json!({ "type": "panel_changed", "sections": sections }));
@@ -2149,6 +2151,33 @@ impl Agent {
             .collect()
     }
 
+    /// The memory a folded compaction (observational memory) shows, when
+    /// its summary is among the request's `messages`.
+    fn memory_tokens(&self, messages: &[Message]) -> u64 {
+        let branch = self.store.borrow().branch();
+        let Some(compaction) = branch
+            .iter()
+            .rev()
+            .find(|entry| matches!(entry.data, EntryData::Compaction { .. }))
+        else {
+            return 0;
+        };
+        let EntryData::Compaction {
+            summary, details, ..
+        } = &compaction.data
+        else {
+            return 0;
+        };
+        let shown = messages.iter().any(|message| {
+            matches!(message, Message::CompactionSummary { summary: shown, timestamp, .. }
+                if shown == summary && *timestamp == compaction.timestamp)
+        });
+        if !shown || !crate::features::memory::ledger::is_folded_details(details.as_ref()) {
+            return 0;
+        }
+        crate::features::memory::panel::visible_memory_tokens(&branch) as u64
+    }
+
     /// `stream`: one model call with retries and role fallbacks; emits
     /// the streaming events.
     pub async fn stream(
@@ -2192,7 +2221,7 @@ impl Agent {
                     system_prompt,
                 )]
             };
-            // Observational memory's folded compactions (M5) add memory tokens.
+            let memory_tokens = self.memory_tokens(&messages);
             let snapshot = context::capture_context(ContextInput {
                 sections: &shown,
                 tools: &tools,
@@ -2200,7 +2229,7 @@ impl Agent {
                 provider: &resolved.provider_name,
                 model_id: &resolved.model.id,
                 context_window: Some(resolved.model.context_window).filter(|window| *window > 0),
-                memory_tokens: 0,
+                memory_tokens,
                 capabilities: Some(self.registry.summaries(&self.available_tools())),
             });
             let snapshot_id = snapshot.get("id").cloned();

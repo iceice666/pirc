@@ -18,6 +18,8 @@ regex-lite = "0.1"
 # auto-mode deny-list and schema patterns are JavaScript regexes.
 regress = "0.12"
 sha2 = "0.10"
+# Local times of memory records (`localStamp`), from the system's zone files, as the gateway's memory.
+tz-rs = "0.7"
 serde.workspace = true
 serde_json.workspace = true
 # Role and skill front matter (Bun.YAML).

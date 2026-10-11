@@ -93,6 +93,12 @@ fn memory_issues(raw: Option<&Value>) -> Vec<Issue> {
     checker.issues
 }
 
+/// Whether `memorySchema.safeParse(raw)` succeeds (`raw` is
+/// `features.observationalMemory ?? {}`); unknown keys do not count.
+pub fn memory_settings_valid(raw: &Value) -> bool {
+    memory_issues(Some(raw)).is_empty()
+}
+
 fn field_path(parts: &[PathPart]) -> String {
     let mut out = "features.observationalMemory".to_owned();
     for part in parts {

@@ -192,6 +192,9 @@ pub struct Log {
     /// Session entry ids (8 random hex digits) wherever they appear: the
     /// observer's chunk and observations cite them in text.
     entries: Vec<String>,
+    /// How long a turn waits for a memory worker's request started in the
+    /// run (held by a gate once it arrives) before taking the requests.
+    pub worker_pause: Duration,
 }
 
 impl Log {
@@ -238,6 +241,7 @@ impl Log {
             r: Recorder::new(agent),
             prompts: Vec::new(),
             entries: Vec::new(),
+            worker_pause: Duration::from_millis(200),
         }
     }
 
@@ -287,6 +291,7 @@ impl Log {
         self.note(&format!("{step}: response"), response);
         let events = agent.settle().await;
         self.note(&format!("{step}: events"), json!(events));
+        tokio::time::sleep(self.worker_pause).await;
         self.requests(agent, step);
     }
 

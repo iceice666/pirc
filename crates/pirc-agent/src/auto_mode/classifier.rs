@@ -8,11 +8,11 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use pirc_protocol::{AssistantContent, Message, StopReason, ThinkingLevel, UserBlock, UserContent};
-use serde_json::Value;
 
 use super::rules::Verdict;
 use super::{ActionKind, ShellAction};
 use crate::agent::ResolvedModel;
+use crate::features::memory::ledger::{Observation, Relevance, folded_details};
 use crate::host::AgentHost;
 use crate::session_store::{EntryData, SessionEntry};
 use crate::signal::{AbortController, AbortSignal};
@@ -224,86 +224,18 @@ pub struct MemoryNote {
 /// `None` when any source is tool output, a custom message, or unknown
 /// (records older than origins), or when no source is the human. Tool
 /// output could otherwise plant a forged "the user approved …" note.
-fn note_source(origins: Option<&[Value]>) -> Option<&'static str> {
+fn note_source(origins: Option<&[String]>) -> Option<&'static str> {
     let origins = origins?;
-    let is = |origin: &Value, name: &str| origin.as_str() == Some(name);
-    if !origins.iter().any(|origin| is(origin, "user")) {
+    if !origins.iter().any(|origin| origin == "user") {
         return None;
     }
-    if origins.iter().all(|origin| is(origin, "user")) {
+    if origins.iter().all(|origin| origin == "user") {
         return Some("user");
     }
     origins
         .iter()
-        .all(|origin| is(origin, "user") || is(origin, "assistant"))
+        .all(|origin| origin == "user" || origin == "assistant")
         .then_some("user+agent")
-}
-
-/// `isObservation` (`features/memory/ledger.ts`).
-fn is_observation(value: &Value) -> bool {
-    let Value::Object(o) = value else {
-        return false;
-    };
-    let id = o.get("id").and_then(Value::as_str).is_some_and(|id| {
-        id.len() == 12
-            && id
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-    });
-    let strings = |value: Option<&Value>| {
-        value
-            .and_then(Value::as_array)
-            .is_some_and(|items| !items.is_empty() && items.iter().all(Value::is_string))
-    };
-    id && o.get("content").is_some_and(Value::is_string)
-        && o.get("timestamp").is_some_and(Value::is_string)
-        && o.get("relevance")
-            .and_then(Value::as_str)
-            .is_some_and(|r| ["low", "medium", "high", "critical"].contains(&r))
-        && strings(o.get("sourceEntryIds"))
-        && match o.get("origins") {
-            None => true,
-            Some(Value::Array(items)) => items.iter().all(Value::is_string),
-            Some(_) => false,
-        }
-        && o.get("tokenCount").is_some_and(Value::is_number)
-}
-
-/// `isReflection` (`features/memory/ledger.ts`).
-fn is_reflection(value: &Value) -> bool {
-    let Value::Object(o) = value else {
-        return false;
-    };
-    let id = o.get("id").and_then(Value::as_str).is_some_and(|id| {
-        id.len() == 12
-            && id
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-    });
-    id && o
-        .get("content")
-        .and_then(Value::as_str)
-        .is_some_and(|content| !content.contains(['\r', '\n']))
-        && o.get("supportingObservationIds")
-            .and_then(Value::as_array)
-            .is_some_and(|items| !items.is_empty() && items.iter().all(Value::is_string))
-        && o.get("tokenCount").is_some_and(Value::is_number)
-}
-
-/// `isFoldedDetails` (`features/memory/ledger.ts`): the observations of
-/// an observational-memory compaction.
-fn folded_observations(details: Option<&Value>) -> Option<&Vec<Value>> {
-    let details = details?.as_object()?;
-    let observations = details.get("observations")?.as_array()?;
-    let valid = details.get("type").and_then(Value::as_str) == Some("om.folded")
-        && details.get("version").and_then(Value::as_f64) == Some(1.0)
-        && details.get("fullFold").is_some_and(Value::is_boolean)
-        && observations.iter().all(is_observation)
-        && details
-            .get("reflections")
-            .and_then(Value::as_array)
-            .is_some_and(|items| items.iter().all(is_reflection));
-    valid.then_some(observations)
 }
 
 /// `memoryNotes`: critical observations from the observational-memory
@@ -320,13 +252,13 @@ pub fn memory_notes(branch: &[SessionEntry]) -> Vec<MemoryNote> {
     }) else {
         return Vec::new();
     };
-    let Some(observations) = folded_observations(details.as_ref()) else {
+    let Some(folded) = folded_details(details.as_ref()) else {
         return Vec::new();
     };
-    let field = |o: &Value, key: &str| o[key].as_str().unwrap_or_default().to_owned();
-    let critical: Vec<&Value> = observations
+    let critical: Vec<&Observation> = folded
+        .observations
         .iter()
-        .filter(|o| o["relevance"] == "critical")
+        .filter(|o| o.relevance == Relevance::Critical)
         .collect();
     let mut out = Vec::new();
     let mut chars = 0;
@@ -334,15 +266,10 @@ pub fn memory_notes(branch: &[SessionEntry]) -> Vec<MemoryNote> {
         if out.len() >= MEMORY_NOTES {
             break;
         }
-        let origins = o.get("origins").and_then(Value::as_array);
-        let Some(from) = note_source(origins.map(Vec::as_slice)) else {
+        let Some(from) = note_source(o.origins.as_deref()) else {
             continue;
         };
-        let text = format!(
-            "{} {}",
-            field(o, "timestamp"),
-            js::trim(&collapse_spaces(&field(o, "content")))
-        );
+        let text = format!("{} {}", o.timestamp, js::trim(&collapse_spaces(&o.content)));
         let length = js::len16(&text);
         if chars + length > MAX_MEMORY_CHARS {
             break;

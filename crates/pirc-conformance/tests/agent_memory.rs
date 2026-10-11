@@ -203,6 +203,8 @@ async fn agent_memory_auto_compaction() {
         return;
     };
     let mut log = Log::new(&agent);
+    // The summarizer's request follows the run at once: no worker to wait for.
+    log.worker_pause = std::time::Duration::ZERO;
     // Below the threshold after one turn, above it after two. No memory
     // yet: the session's model summarizes.
     agent.push([

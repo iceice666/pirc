@@ -19,7 +19,7 @@ use crate::roles::{RoleDir, RolePreset};
 use crate::session_store::{EntryData, SessionEntry};
 use schema::{Checker, PathPart};
 
-pub use memory::memory_config_warning;
+pub use memory::{memory_config_warning, memory_settings_valid};
 
 /// One hook (`hookSchema`).
 #[derive(Clone, Debug, PartialEq, Eq)]
