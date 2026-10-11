@@ -172,7 +172,7 @@ expression: t.into_value()
           "currentContext": "AGENTS.md (loaded snapshot): []\nInstalled skills (descriptions only): []\nAvailable roles (summaries only): [{\"name\":\"general\",\"description\":\"General-purpose agent with the default model and all tools.\"}]\nSafe config: {\"model\":{\"provider\":\"fake\",\"id\":\"fake-model\"},\"thinking\":\"low\",\"features\":{\"sessionTitle\":false,\"autoMode\":\"default/unknown\"}}\n",
           "evidence": {
             "sampling": "Bounded sample of recent owned sessions in this exact workspace; active branch only, user text prioritized. Entire recap-marked, oversized, malformed, or changing sessions are excluded. Not full history coverage. Redaction is best-effort.",
-            "scannedBytes": 5847,
+            "scannedBytes": "<depends on the run directory>",
             "scope": {
               "days": 7,
               "since": "<epoch-ms>",
@@ -304,7 +304,7 @@ expression: t.into_value()
   },
   {
     "observed": {
-      "content": "## Recap scope\n\n- Workspace: `test`\n- Window: 7 days, <time> – <time>\n- Coverage: 2 sessions included; 0 skipped; 5,847 bytes scanned.\n- Truncated: no. Sampling: Bounded sample of recent owned sessions in this exact workspace; active branch only, user text prioritized. Entire recap-marked, oversized, malformed, or changing sessions are excluded. Not full history coverage. Redaction is best-effort.\n- Sources: `session_<uuid:3>`, `session_<uuid:2>`\n- Skips: none\n\nLimitations: bounded sampling, not a complete audit. Only eligible same-workspace session evidence is considered; tool payloads, thinking and excluded sessions are omitted. Current AGENTS.md is the loaded snapshot (may be stale); skills/roles are summaries only. Current context is capped at 20,000 characters and individual sections may be truncated. Redaction is best effort. Recommendations require human review; nothing was changed or saved to memory.\n\nWrote notes; searched the web.",
+      "content": "## Recap scope\n\n- Workspace: `test`\n- Window: 7 days, <time> – <time>\n- Coverage: 2 sessions included; 0 skipped; <bytes> bytes scanned.\n- Truncated: no. Sampling: Bounded sample of recent owned sessions in this exact workspace; active branch only, user text prioritized. Entire recap-marked, oversized, malformed, or changing sessions are excluded. Not full history coverage. Redaction is best-effort.\n- Sources: `session_<uuid:3>`, `session_<uuid:2>`\n- Skips: none\n\nLimitations: bounded sampling, not a complete audit. Only eligible same-workspace session evidence is considered; tool payloads, thinking and excluded sessions are omitted. Current AGENTS.md is the loaded snapshot (may be stale); skills/roles are summaries only. Current context is capped at 20,000 characters and individual sections may be truncated. Redaction is best effort. Recommendations require human review; nothing was changed or saved to memory.\n\nWrote notes; searched the web.",
       "customType": "recap.report",
       "display": true,
       "role": "custom",

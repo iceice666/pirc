@@ -341,6 +341,18 @@ fn event_kinds(frames: &[Value], session: &str) -> Vec<String> {
         .collect()
 }
 
+/// The report's "N bytes scanned", which depends on the run directory's
+/// path (the session files hold it).
+fn scanned_bytes(text: &str) -> String {
+    let Some(end) = text.find(" bytes scanned") else {
+        return text.to_owned();
+    };
+    let start = text[..end]
+        .rfind(|c: char| !(c.is_ascii_digit() || c == ','))
+        .map_or(0, |i| i + 1);
+    format!("{}<bytes>{}", &text[..start], &text[end..])
+}
+
 /// A recap's model request: its one message is JSON with the evidence the
 /// node collected. Entry ids are random, and the order of entries and
 /// sessions follows timestamps that can tie, so both are sorted here.
@@ -351,6 +363,10 @@ fn recap_request(start: &Value) -> Value {
     if let Some(content) = last["content"].as_str()
         && let Ok(mut parsed) = serde_json::from_str::<Value>(content)
     {
+        // The session files hold the run directory's path.
+        if parsed["evidence"]["scannedBytes"].is_number() {
+            parsed["evidence"]["scannedBytes"] = json!("<depends on the run directory>");
+        }
         if let Some(sessions) = parsed["evidence"]["sessions"].as_array_mut() {
             for session in sessions.iter_mut() {
                 if let Some(entries) = session["evidence"].as_array_mut() {
@@ -520,10 +536,11 @@ async fn node_link_side_runs() {
                 && frame["event"]["data"]["message"]["customType"] == "recap.report"
         })
         .await;
-    t.note(
-        "the recap's report",
-        report["event"]["data"]["message"].clone(),
-    );
+    let mut message = report["event"]["data"]["message"].clone();
+    if let Some(content) = message["content"].as_str() {
+        message["content"] = json!(scanned_bytes(content));
+    }
+    t.note("the recap's report", message);
     t.note(
         "no agent_request reached the gateway for the recap",
         json!(
