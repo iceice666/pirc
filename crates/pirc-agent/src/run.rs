@@ -212,6 +212,8 @@ async fn main(args: Vec<String>) -> Result<(), String> {
     let config = load_agent_config(&cwd, configured.models, &|name| std::env::var(name).ok())?;
     let warnings = config.warnings.clone();
     let store = SessionStore::open(PathBuf::from(session_dir), &cwd)?;
+    let features =
+        crate::features::process_features(std::env::var("PIRC_AGENT_FEATURES").ok().as_deref())?;
     let agent = Agent::new(AgentOptions {
         config,
         capabilities: configured.capabilities,
@@ -222,6 +224,7 @@ async fn main(args: Vec<String>) -> Result<(), String> {
         ui: ui.clone(),
         has_ui: !headless(&args.headless),
         tools: crate::tools::builtin_tools(),
+        features,
         acquire_write: process_write_lease(),
         allowed_tools,
         stream_override: None,
@@ -247,7 +250,7 @@ async fn main(args: Vec<String>) -> Result<(), String> {
     for warning in &warnings {
         ui.notify(warning, NotifyLevel::Warning);
     }
-    agent.init().await;
+    agent.init().await?;
     let channels = node_channels();
     let mut terminate = signal(tokio::signal::unix::SignalKind::terminate())?;
     let mut interrupt = signal(tokio::signal::unix::SignalKind::interrupt())?;

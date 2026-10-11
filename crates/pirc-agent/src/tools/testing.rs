@@ -146,6 +146,7 @@ pub fn context(config: AgentConfig, signal: AbortSignal) -> Context {
             env: Vec::new(),
             acquire_write,
             update: Rc::new(move |partial| sink.borrow_mut().push(partial)),
+            human_wait: Rc::new(super::HumanWait::none),
         },
         leases,
         updates,

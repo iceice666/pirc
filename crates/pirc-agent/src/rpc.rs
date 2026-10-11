@@ -453,10 +453,10 @@ pub(crate) trait Commands: 'static {
     fn prompt(self: &Rc<Self>, text: String, images: Vec<UserBlock>) -> Result<(), String>;
     fn steer(self: &Rc<Self>, text: String, images: Vec<UserBlock>);
     fn follow_up(self: &Rc<Self>, text: String, images: Vec<UserBlock>);
-    fn abort(&self);
+    fn abort(self: &Rc<Self>);
     fn idle(&self) -> LocalBoxFuture<'_, ()>;
     fn send_now(self: &Rc<Self>, queue: Queue, index: usize, text: &str) -> Result<(), String>;
-    fn clear_queue(&self) -> Value;
+    fn clear_queue(self: &Rc<Self>) -> Value;
     fn state(&self) -> Value;
     fn all_messages(&self) -> Vec<Message>;
     fn compact(
@@ -470,13 +470,21 @@ pub(crate) trait Commands: 'static {
     fn set_role(&self, name: &str) -> Result<(), String>;
     fn set_name(&self, name: &str, source: NameSource) -> Result<(), String>;
     fn last_context(&self) -> Option<Value>;
-    fn panel_state(&self) -> Value;
+    fn panel_state(self: &Rc<Self>) -> Value;
     fn deliver(
         self: &Rc<Self>,
         delivery: Delivery,
         trigger_turn: bool,
         follow_up: bool,
     ) -> Result<(), String>;
+    /// A feature's extra command (`feature.rpc`), if one answers `kind`.
+    fn feature_rpc<'a>(
+        self: &'a Rc<Self>,
+        _kind: &'a str,
+        _command: &'a Value,
+    ) -> Option<LocalBoxFuture<'a, Result<Option<Value>, String>>> {
+        None
+    }
 }
 
 impl Commands for Agent {
@@ -495,7 +503,7 @@ impl Commands for Agent {
     fn follow_up(self: &Rc<Self>, text: String, images: Vec<UserBlock>) {
         Agent::follow_up(self, text, images);
     }
-    fn abort(&self) {
+    fn abort(self: &Rc<Self>) {
         Agent::abort(self);
     }
     fn idle(&self) -> LocalBoxFuture<'_, ()> {
@@ -504,7 +512,7 @@ impl Commands for Agent {
     fn send_now(self: &Rc<Self>, queue: Queue, index: usize, text: &str) -> Result<(), String> {
         Agent::send_now(self, queue, index, text)
     }
-    fn clear_queue(&self) -> Value {
+    fn clear_queue(self: &Rc<Self>) -> Value {
         Agent::clear_queue(self)
     }
     fn state(&self) -> Value {
@@ -540,7 +548,7 @@ impl Commands for Agent {
     fn last_context(&self) -> Option<Value> {
         Agent::last_context(self)
     }
-    fn panel_state(&self) -> Value {
+    fn panel_state(self: &Rc<Self>) -> Value {
         Agent::panel_state(self)
     }
     fn deliver(
@@ -550,6 +558,20 @@ impl Commands for Agent {
         follow_up: bool,
     ) -> Result<(), String> {
         Agent::deliver(self, delivery, trigger_turn, follow_up)
+    }
+    fn feature_rpc<'a>(
+        self: &'a Rc<Self>,
+        kind: &'a str,
+        command: &'a Value,
+    ) -> Option<LocalBoxFuture<'a, Result<Option<Value>, String>>> {
+        let feature = self
+            .features()
+            .iter()
+            .find(|feature| feature.rpc_types().contains(&kind))?
+            .clone();
+        Some(Box::pin(
+            async move { feature.rpc(self, kind, command).await },
+        ))
     }
 }
 
@@ -690,11 +712,13 @@ pub(crate) async fn dispatch<A: Commands>(
             )?;
             Ok(None)
         }
-        // Feature commands (`feature.rpc`) arrive with M5.
-        _ => Err(format!(
-            "Unsupported command: {}",
-            js_string(command.get("type"))
-        )),
+        _ => match kind.and_then(|kind| agent.feature_rpc(kind, command)) {
+            Some(handler) => handler.await,
+            None => Err(format!(
+                "Unsupported command: {}",
+                js_string(command.get("type"))
+            )),
+        },
     }
 }
 

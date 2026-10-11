@@ -1,8 +1,8 @@
 //! The agent (`agent/agent.ts`): queues, the run loop, model calls with
 //! retries and role fallbacks, tool execution through the policy chain
 //! (validation, hooks, auto mode, write lease), and the API the RPC layer
-//! drives. Built-in features (todo, goal, …) and PTC script execution are
-//! M5's; their hook points in the TS loop are noted where they would run.
+//! drives. Built-in features (todo, goal, …) hook in where the TS agent
+//! called them (`crate::feature`).
 
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
@@ -22,16 +22,17 @@ use crate::capabilities::{Capabilities, capability_for_tool};
 use crate::compaction::{self, CompactionReason, CompactionSettings};
 use crate::config::{AgentConfig, session_settings};
 use crate::context::{self, ContextInput, PromptSection, join_prompt, trim_sections};
+use crate::feature::{BeforeStart, Feature, PromptAddition};
 use crate::hooks::{HookName, HookRunner};
 use crate::host::AgentHost;
 use crate::messages::empty_usage;
 use crate::ptc::{self, CapabilityRegistry, DIRECT_CAPABILITIES, WRAPPER_NAMES};
 use crate::roles::{AgentRole, expand_models, read_roles};
 use crate::rpc::Write;
-use crate::session_store::{EntryData, SessionStore};
+use crate::session_store::{EntryData, SessionEntry, SessionStore};
 use crate::signal::{AbortController, AbortSignal};
 use crate::stream::{StreamFn, StreamRequest};
-use crate::tools::{AcquireWrite, Tool, ToolContext, ToolResult};
+use crate::tools::{AcquireWrite, HumanWait, Tool, ToolContext, ToolResult};
 use crate::ui::{Choice, DialogOptions, NotifyLevel, Ui};
 use crate::{LocalBoxFuture, now_ms};
 
@@ -54,6 +55,8 @@ pub struct AgentOptions {
     pub ui: Rc<dyn Ui>,
     pub has_ui: bool,
     pub tools: Vec<Rc<dyn Tool>>,
+    /// Built-in features, in hook order.
+    pub features: Vec<Rc<dyn Feature>>,
     /// The write-lease transport (`processWriteLease`); `None` grants all.
     pub acquire_write: Option<AcquireWrite>,
     /// Only these capabilities (a restricted kind).
@@ -186,7 +189,27 @@ pub struct Agent {
     scheduled_flushes: Cell<usize>,
     /// The direct tool call running now (`operationScope`); dialogs carry it.
     current_operation: RefCell<Option<String>>,
+    features: Vec<Rc<dyn Feature>>,
+    /// Wakes [`Agent::wait_for_completion`] (`completionWake`).
+    completion_wake: Notify,
+    completion_waiting: RefCell<Vec<String>>,
+    completion_revision: Cell<u64>,
+    /// Dialogs and other waits for a human now open (`openDialogs`).
+    open_dialogs: Cell<usize>,
+    human_wait_listeners: RefCell<Vec<(u64, HumanWaitListener)>>,
+    next_listener: Cell<u64>,
+    /// Capabilities started by `ptc` executions still running, one set per
+    /// execution (`runningScripts`): their results are not in the session
+    /// yet, so features that judge where content came from (memory
+    /// provenance) consult this too.
+    running_scripts: RefCell<Vec<ScriptCapabilities>>,
 }
+
+/// Told whether a human is being asked (`onHumanWait`).
+pub type HumanWaitListener = Rc<dyn Fn(bool)>;
+
+/// The capability names one running `ptc` execution started.
+pub type ScriptCapabilities = Rc<RefCell<Vec<String>>>;
 
 /// `sanitizeHistory`: every tool call has a result and no result is
 /// orphaned, so providers accept the history.
@@ -279,6 +302,22 @@ fn interrupted_note(message: &AssistantMessage) -> QueueItem {
     }))
 }
 
+/// `/name args` (`/^\/([a-z][\w:-]*)(?:\s+([\s\S]*))?$/i` on the trimmed
+/// text): the name and the trimmed arguments.
+fn parse_command(text: &str) -> Option<(String, String)> {
+    use std::sync::LazyLock;
+    static COMMAND: LazyLock<regex_lite::Regex> = LazyLock::new(|| {
+        regex_lite::Regex::new(
+            r"(?s)^/([A-Za-z][A-Za-z0-9_:-]*)(?:[\t\n\x0B\x0C\r \u{a0}\u{1680}\u{2000}-\u{200a}\u{2028}\u{2029}\u{202f}\u{205f}\u{3000}\u{feff}]+(.*))?$",
+        )
+        .unwrap()
+    });
+    let found = COMMAND.captures(js_trim(text))?;
+    let name = found.get(1).map_or("", |m| m.as_str()).to_owned();
+    let args = js_trim(found.get(2).map_or("", |m| m.as_str())).to_owned();
+    Some((name, args))
+}
+
 /// `String.prototype.trim`.
 fn js_trim(text: &str) -> &str {
     text.trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
@@ -343,22 +382,38 @@ async fn sleep_or_abort(ms: u64, signal: &AbortSignal) {
     }
 }
 
-/// The UI with dialogs linked to the direct tool call that opens them
-/// (`trackDialogs`).
+/// The UI with dialogs linked to the direct tool call that opens them and
+/// counted as waits for a human (`trackDialogs`), so a running `ptc`
+/// script's active-time budget pauses while a human answers.
 struct TrackingUi {
     inner: Rc<dyn Ui>,
     agent: Weak<Agent>,
 }
 
 impl TrackingUi {
-    fn link(&self, mut opts: DialogOptions) -> DialogOptions {
-        if opts.tool_call_id.is_none()
-            && let Some(agent) = self.agent.upgrade()
-        {
+    /// The linked options, and the wait counted from now until the dialog's
+    /// future is done (or dropped).
+    fn link(&self, mut opts: DialogOptions) -> (DialogOptions, HumanWait) {
+        let Some(agent) = self.agent.upgrade() else {
+            return (opts, HumanWait::none());
+        };
+        if opts.tool_call_id.is_none() {
             opts.tool_call_id = agent.current_operation.borrow().clone();
         }
-        opts
+        (opts, agent.human_wait())
     }
+}
+
+/// `future`, holding `wait` until it is done.
+fn while_waiting<'a, T: 'a>(
+    future: LocalBoxFuture<'a, T>,
+    wait: HumanWait,
+) -> LocalBoxFuture<'a, T> {
+    Box::pin(async move {
+        let value = future.await;
+        drop(wait);
+        value
+    })
 }
 
 impl Ui for TrackingUi {
@@ -368,7 +423,8 @@ impl Ui for TrackingUi {
         options: &'a [String],
         opts: DialogOptions,
     ) -> LocalBoxFuture<'a, Option<String>> {
-        self.inner.select(title, options, self.link(opts))
+        let (opts, wait) = self.link(opts);
+        while_waiting(self.inner.select(title, options, opts), wait)
     }
     fn choose<'a>(
         &'a self,
@@ -377,7 +433,8 @@ impl Ui for TrackingUi {
         multiple: bool,
         opts: DialogOptions,
     ) -> LocalBoxFuture<'a, Option<Vec<String>>> {
-        self.inner.choose(title, options, multiple, self.link(opts))
+        let (opts, wait) = self.link(opts);
+        while_waiting(self.inner.choose(title, options, multiple, opts), wait)
     }
     fn confirm<'a>(
         &'a self,
@@ -385,7 +442,8 @@ impl Ui for TrackingUi {
         message: &'a str,
         opts: DialogOptions,
     ) -> LocalBoxFuture<'a, Option<bool>> {
-        self.inner.confirm(title, message, self.link(opts))
+        let (opts, wait) = self.link(opts);
+        while_waiting(self.inner.confirm(title, message, opts), wait)
     }
     fn input<'a>(
         &'a self,
@@ -393,7 +451,8 @@ impl Ui for TrackingUi {
         placeholder: Option<&'a str>,
         opts: DialogOptions,
     ) -> LocalBoxFuture<'a, Option<String>> {
-        self.inner.input(title, placeholder, self.link(opts))
+        let (opts, wait) = self.link(opts);
+        while_waiting(self.inner.input(title, placeholder, opts), wait)
     }
     fn editor<'a>(
         &'a self,
@@ -401,7 +460,8 @@ impl Ui for TrackingUi {
         prefill: Option<&'a str>,
         opts: DialogOptions,
     ) -> LocalBoxFuture<'a, Option<String>> {
-        self.inner.editor(title, prefill, self.link(opts))
+        let (opts, wait) = self.link(opts);
+        while_waiting(self.inner.editor(title, prefill, opts), wait)
     }
     fn notify(&self, message: &str, level: NotifyLevel) {
         self.inner.notify(message, level);
@@ -505,8 +565,27 @@ impl Agent {
                 changed_sections: RefCell::new(Vec::new()),
                 scheduled_flushes: Cell::new(0),
                 current_operation: RefCell::new(None),
+                features: options.features,
+                completion_wake: Notify::new(),
+                completion_waiting: RefCell::new(Vec::new()),
+                completion_revision: Cell::new(0),
+                open_dialogs: Cell::new(0),
+                human_wait_listeners: RefCell::new(Vec::new()),
+                next_listener: Cell::new(0),
+                running_scripts: RefCell::new(Vec::new()),
             }
         });
+        // The wrappers are never capabilities: no recursive dispatch.
+        for feature in agent.features.clone() {
+            for tool in feature.tools(&agent) {
+                if !WRAPPER_NAMES.contains(&tool.name()) {
+                    agent
+                        .tools
+                        .borrow_mut()
+                        .insert(tool.name().to_owned(), tool);
+                }
+            }
+        }
         let host: Weak<dyn AgentHost> = {
             let weak: Weak<Agent> = Rc::downgrade(&agent);
             weak
@@ -549,10 +628,15 @@ impl Agent {
         self.ui.notify(message, NotifyLevel::Warning);
     }
 
-    /// `init`: the `sessionStart` hooks.
-    pub async fn init(self: &Rc<Self>) {
+    /// `init`: the `sessionStart` hooks, then the features'; `Err` ends the
+    /// agent at startup.
+    pub async fn init(self: &Rc<Self>) -> Result<(), String> {
         let extra = self.hooks.collect(HookName::SessionStart, Map::new()).await;
         *self.extra_system_prompt.borrow_mut() = extra;
+        for feature in self.features.clone() {
+            feature.init(self).await?;
+        }
+        Ok(())
     }
 
     fn restore_settings(&self) {
@@ -585,8 +669,257 @@ impl Agent {
         self.running.get()
     }
 
-    fn pending_count(&self) -> usize {
+    /// Queued items, user and custom (`pendingCount`).
+    pub fn pending_count(&self) -> usize {
         self.steering.borrow().len() + self.follow_ups.borrow().len()
+    }
+
+    /// The built-in features this agent runs, in hook order.
+    pub fn features(&self) -> &[Rc<dyn Feature>] {
+        &self.features
+    }
+
+    /// Some feature will start another run after this one settles
+    /// (`Feature::will_continue`).
+    pub fn will_continue(self: &Rc<Self>) -> bool {
+        self.features
+            .iter()
+            .any(|feature| feature.will_continue(self))
+    }
+
+    /// Feature state changed: recheck completion without polling or calling
+    /// the model (`completionChanged`).
+    pub fn completion_changed(&self) {
+        self.completion_revision
+            .set(self.completion_revision.get() + 1);
+        self.completion_wake.notify_waiters();
+    }
+
+    /// Remove only matching queued custom notifications; never human input
+    /// (`discardNotifications`).
+    pub fn discard_notifications(&self, predicate: impl Fn(&Message) -> bool) {
+        let keep = |item: &QueueItem| match item {
+            QueueItem::Custom(message) => !predicate(message),
+            QueueItem::User { .. } => true,
+        };
+        self.steering.borrow_mut().retain(keep);
+        self.follow_ups.borrow_mut().retain(keep);
+    }
+
+    /// `teamBatchSize`: how many adjacent team events lead the follow-up
+    /// queue (at most 50, and past the first at most 40,000 bytes); a human
+    /// follow-up is never reordered.
+    fn team_batch_size(&self) -> usize {
+        let follow_ups = self.follow_ups.borrow();
+        let mut count = 0;
+        let mut bytes = 0;
+        while count < 50 {
+            let Some(QueueItem::Custom(message)) = follow_ups.get(count) else {
+                break;
+            };
+            if !matches!(&**message, Message::Custom { custom_type, .. } if custom_type == "agent-team")
+            {
+                break;
+            }
+            bytes +=
+                crate::tools::js::stringify(&serde_json::to_value(&**message).unwrap_or_default())
+                    .len();
+            if count > 0 && bytes > 40_000 {
+                break;
+            }
+            count += 1;
+        }
+        count
+    }
+
+    /// `waitForCompletion`: while features report blockers (team workers),
+    /// wait for a change, up to `limits.completionWaitMs`; then tell the
+    /// model what is still pending. True when the wait timed out.
+    async fn wait_for_completion(self: &Rc<Self>, signal: &AbortSignal) -> bool {
+        let deadline = tokio::time::Instant::now()
+            + Duration::from_millis(self.config.limits.completion_wait_ms);
+        let timed_out = loop {
+            if signal.aborted() || self.pending_count() > 0 {
+                break false;
+            }
+            let revision = self.completion_revision.get();
+            let blockers: Vec<String> = self
+                .features
+                .iter()
+                .flat_map(|feature| feature.completion_blockers(self))
+                .collect();
+            if blockers.is_empty() {
+                break false;
+            }
+            *self.completion_waiting.borrow_mut() = blockers.clone();
+            self.ui.set_status(
+                "completion-wait",
+                Some(&format!("Waiting for team: {}", blockers.join(", "))),
+            );
+            if tokio::time::Instant::now() >= deadline {
+                let _ = self.deliver(
+                    Delivery {
+                        custom_type: "completion-timeout".to_owned(),
+                        content: format!(
+                            "Team completion wait timed out. These workers have NOT completed: {}. Report the pending work honestly; do not claim completion. Workers were not stopped.",
+                            blockers.join(", ")
+                        ),
+                        display: true,
+                        details: None,
+                    },
+                    false,
+                    true,
+                );
+                break true;
+            }
+            let woken = self.completion_wake.notified();
+            if signal.aborted()
+                || self.pending_count() > 0
+                || revision != self.completion_revision.get()
+            {
+                continue;
+            }
+            tokio::select! {
+                () = woken => {}
+                () = tokio::time::sleep_until(deadline.max(tokio::time::Instant::now() + Duration::from_millis(1))) => {}
+                () = signal.cancelled() => {}
+            }
+        };
+        if !self.completion_waiting.borrow().is_empty() {
+            self.ui.set_status("completion-wait", None);
+        }
+        self.completion_waiting.borrow_mut().clear();
+        timed_out
+    }
+
+    /// Start a wait for a human (`humanWait`); it ends when the guard drops.
+    pub fn human_wait(&self) -> HumanWait {
+        let agent = self.weak.clone();
+        HumanWait::new(Rc::new(move |delta: isize| {
+            if let Some(agent) = agent.upgrade() {
+                agent.human_wait_changed(delta);
+            }
+        }))
+    }
+
+    fn human_wait_changed(&self, delta: isize) {
+        let before = self.open_dialogs.get() > 0;
+        self.open_dialogs
+            .set(self.open_dialogs.get().saturating_add_signed(delta));
+        let after = self.open_dialogs.get() > 0;
+        if before != after {
+            let listeners: Vec<Rc<dyn Fn(bool)>> = self
+                .human_wait_listeners
+                .borrow()
+                .iter()
+                .map(|(_, listener)| listener.clone())
+                .collect();
+            for listener in listeners {
+                listener(after);
+            }
+        }
+    }
+
+    /// Listen for "a human is being asked" (`onHumanWait`); told at once if
+    /// one is. The id unsubscribes ([`Agent::off_human_wait`]).
+    pub fn on_human_wait(&self, listener: Rc<dyn Fn(bool)>) -> u64 {
+        let id = self.next_listener.get();
+        self.next_listener.set(id + 1);
+        self.human_wait_listeners
+            .borrow_mut()
+            .push((id, listener.clone()));
+        if self.open_dialogs.get() > 0 {
+            listener(true);
+        }
+        id
+    }
+
+    pub fn off_human_wait(&self, id: u64) {
+        self.human_wait_listeners
+            .borrow_mut()
+            .retain(|(listener, _)| *listener != id);
+    }
+
+    /// Record a running `ptc` execution's capabilities (`runningScripts.add`).
+    pub fn add_running_script(&self, names: ScriptCapabilities) {
+        self.running_scripts.borrow_mut().push(names);
+    }
+
+    /// `runningScripts.delete`.
+    pub fn remove_running_script(&self, names: &ScriptCapabilities) {
+        self.running_scripts
+            .borrow_mut()
+            .retain(|item| !Rc::ptr_eq(item, names));
+    }
+
+    /// Capability names started by `ptc` executions still running.
+    pub fn running_script_capabilities(&self) -> Vec<String> {
+        self.running_scripts
+            .borrow()
+            .iter()
+            .flat_map(|names| names.borrow().clone())
+            .collect()
+    }
+
+    /// The session's current branch (`store.branch()`).
+    pub fn branch(&self) -> Vec<SessionEntry> {
+        self.store.borrow().branch()
+    }
+
+    /// Append a session entry (`store.append`); `Err` with the file
+    /// system's error text.
+    pub fn append_entry(&self, data: EntryData) -> Result<SessionEntry, String> {
+        self.store.borrow_mut().append(data)
+    }
+
+    /// The newest entry of a type on the branch (`store.latest`).
+    pub fn latest_entry(&self, type_name: &str) -> Option<SessionEntry> {
+        self.store.borrow().latest(type_name)
+    }
+
+    /// Custom entries of a type on the branch (`store.customEntries`).
+    pub fn custom_entries(&self, custom_type: &str) -> Vec<SessionEntry> {
+        self.store.borrow().custom_entries(custom_type)
+    }
+
+    /// The session directory (`store.dir`).
+    pub fn session_dir(&self) -> std::path::PathBuf {
+        self.store.borrow().dir.clone()
+    }
+
+    /// The session file (`store.file`).
+    pub fn session_file(&self) -> std::path::PathBuf {
+        self.store.borrow().file.clone()
+    }
+
+    /// The gateway's policy for this project (`capabilities`).
+    pub fn capabilities(&self) -> Capabilities {
+        self.capabilities.borrow().clone()
+    }
+
+    /// The path guard (`guard`).
+    pub fn path_guard(&self) -> Rc<PathGuard> {
+        self.guard.clone()
+    }
+
+    /// The capability registry (`capabilityRegistry`).
+    pub fn registry(&self) -> &CapabilityRegistry {
+        &self.registry
+    }
+
+    /// The current thinking level.
+    pub fn thinking(&self) -> ThinkingLevel {
+        self.thinking.get()
+    }
+
+    /// `isCompacting`.
+    pub fn is_compacting(&self) -> bool {
+        self.compacting.borrow().is_some()
+    }
+
+    /// Whether a human can answer dialogs (`hasUI`).
+    pub fn has_ui(&self) -> bool {
+        self.has_ui
     }
 
     /// `getTool`: a capability, unless the gateway's policy disables it.
@@ -691,7 +1024,7 @@ impl Agent {
             "model": model,
             "thinkingLevel": thinking_name(self.thinking.get()),
             "isStreaming": self.running.get(),
-            "completionWaiting": [],
+            "completionWaiting": *self.completion_waiting.borrow(),
             "isCompacting": self.compacting.borrow().is_some(),
             "messageCount": store.all_messages().len(),
             "pendingMessageCount": self.pending_count(),
@@ -956,24 +1289,65 @@ impl Agent {
     }
 
     /// `clearQueue`: `{steering, followUp}` texts.
-    pub fn clear_queue(&self) -> Value {
+    pub fn clear_queue(self: &Rc<Self>) -> Value {
         let cleared = json!({ "steering": Self::queue_texts(&self.steering.borrow()),
             "followUp": Self::queue_texts(&self.follow_ups.borrow()) });
-        // `notificationsCleared` (features, M5) would get the custom messages.
+        let notifications: Vec<Message> = self
+            .steering
+            .borrow()
+            .iter()
+            .chain(self.follow_ups.borrow().iter())
+            .filter_map(|item| match item {
+                QueueItem::Custom(message) => Some((**message).clone()),
+                QueueItem::User { .. } => None,
+            })
+            .collect();
+        for feature in &self.features {
+            feature.notifications_cleared(self, &notifications);
+        }
         self.steering.borrow_mut().clear();
         self.follow_ups.borrow_mut().clear();
         self.emit_queue();
         cleared
     }
 
-    /// Slash commands come from features (M5): none run here yet.
-    fn try_command(&self, _text: &str) -> bool {
-        false
+    /// `tryCommand`: run `/name args` if a feature registered it (names may
+    /// be namespaced, e.g. `om:status`); true when handled.
+    fn try_command(self: &Rc<Self>, text: &str) -> bool {
+        let Some((name, args)) = parse_command(text) else {
+            return false;
+        };
+        let Some(feature) = self
+            .features
+            .iter()
+            .find(|feature| {
+                feature
+                    .commands()
+                    .iter()
+                    .any(|command| command.name == name)
+            })
+            .cloned()
+        else {
+            return false;
+        };
+        let agent = self.clone();
+        crate::spawn_eager(async move {
+            if let Err(error) = feature.run_command(&agent, &name, args).await {
+                agent.ui.notify(&error, NotifyLevel::Error);
+            }
+        });
+        true
     }
 
-    /// `panelState`: merged across features (M5).
-    pub fn panel_state(&self) -> Value {
-        json!({})
+    /// `panelState`: side-panel state contributed by features, merged.
+    pub fn panel_state(self: &Rc<Self>) -> Value {
+        let mut out = Map::new();
+        for feature in &self.features {
+            if let Some(panel) = feature.panel(self) {
+                out.extend(panel);
+            }
+        }
+        Value::Object(out)
     }
 
     /// `panelChanged`: coalesced until [`Agent::flush_panel`], where the TS
@@ -1000,9 +1374,23 @@ impl Agent {
         }
     }
 
-    /// `commandList`: feature commands (M5).
+    /// `commandList`: the features' slash commands.
     pub fn command_list(&self) -> Vec<Value> {
-        Vec::new()
+        self.features
+            .iter()
+            .flat_map(|feature| feature.commands())
+            .map(|command| {
+                json!({ "name": command.name, "description": command.description,
+                    "source": "extension" })
+            })
+            .collect()
+    }
+
+    /// `userInput`: a human submitted input.
+    fn user_input(self: &Rc<Self>, text: &str) {
+        for feature in &self.features {
+            feature.user_input(self, text);
+        }
     }
 
     fn user_item(text: String, images: Vec<UserBlock>) -> QueueItem {
@@ -1017,6 +1405,7 @@ impl Agent {
         if self.running.get() {
             return Err("Agent is already running; use steer or follow_up".to_owned());
         }
+        self.user_input(&text);
         self.start_run(vec![Self::user_item(text, images)]);
         Ok(())
     }
@@ -1025,11 +1414,13 @@ impl Agent {
         if self.try_command(&text) {
             return;
         }
+        self.user_input(&text);
         let item = Self::user_item(text, images);
         if !self.running.get() {
             return self.start_run(vec![item]);
         }
         self.steering.borrow_mut().push(item);
+        self.completion_changed();
         self.emit_queue();
     }
 
@@ -1037,11 +1428,13 @@ impl Agent {
         if self.try_command(&text) {
             return;
         }
+        self.user_input(&text);
         let item = Self::user_item(text, images);
         if !self.running.get() {
             return self.start_run(vec![item]);
         }
         self.follow_ups.borrow_mut().push(item);
+        self.completion_changed();
         self.emit_queue();
     }
 
@@ -1073,6 +1466,7 @@ impl Agent {
         }
         self.steering.borrow_mut().insert(0, item);
         self.emit_queue();
+        self.completion_changed();
         let turn = self.turn.borrow().clone();
         match turn {
             Some(turn) => turn.abort(),
@@ -1103,6 +1497,7 @@ impl Agent {
             } else {
                 self.steering.borrow_mut().push(item);
             }
+            self.completion_changed();
             return Ok(());
         }
         if trigger_turn {
@@ -1113,8 +1508,10 @@ impl Agent {
         Ok(())
     }
 
-    pub fn abort(&self) {
-        // `abort` hooks of features (M5).
+    pub fn abort(self: &Rc<Self>) {
+        for feature in &self.features {
+            feature.abort(self);
+        }
         // Clones first: abort listeners must be free to touch the agent.
         let controller = self.controller.borrow().clone();
         if let Some(controller) = controller {
@@ -1156,11 +1553,16 @@ impl Agent {
         let controller = AbortController::new();
         *self.controller.borrow_mut() = Some(controller.clone());
         self.emit(json!({ "type": "agent_start" }));
-        // `beforeAgentStart` of features (M5) runs here.
+        // Features' `beforeAgentStart` comes first and is awaited (in TS
+        // even a feature without one is an await), so with features
+        // everything is admitted in the run task.
+        let with_features = !self.features.is_empty();
         // Only a user item awaits (`beforePrompt` hooks run before it), so
         // the items before the first one are admitted at once either way.
         let mut now = initial;
-        let later = if self.hooks.has(HookName::BeforePrompt) {
+        let later = if with_features {
+            std::mem::take(&mut now)
+        } else if self.hooks.has(HookName::BeforePrompt) {
             let first_user = now
                 .iter()
                 .position(|item| matches!(item, QueueItem::User { .. }))
@@ -1183,7 +1585,10 @@ impl Agent {
             let signal = controller.signal();
             // A panic is a bug; it ends the run like a crash.
             let outcome =
-                tokio::task::spawn_local(async move { run.run(signal, pending).await }).await;
+                tokio::task::spawn_local(
+                    async move { run.run(signal, pending, with_features).await },
+                )
+                .await;
             let error = match outcome {
                 Ok(Ok(())) => None,
                 Ok(Err(error)) => Some(error),
@@ -1204,6 +1609,53 @@ impl Agent {
         });
     }
 
+    /// The start of a run with features: their `beforeAgentStart` in order
+    /// (system prompt sections into `extra_prompt`, hidden messages after
+    /// the run's first item), then admission. A failing feature skips the
+    /// admission, as the TS agent's `try` did.
+    async fn start_features(
+        self: &Rc<Self>,
+        mut items: Vec<QueueItem>,
+        extra_prompt: &mut Vec<PromptSection>,
+    ) -> Result<(), String> {
+        let mut hidden = Vec::new();
+        for feature in self.features.clone() {
+            let Some(BeforeStart {
+                system_prompt,
+                messages,
+            }) = feature.before_agent_start(self).await?
+            else {
+                continue;
+            };
+            match system_prompt {
+                Some(PromptAddition::Text(text)) if !text.is_empty() => {
+                    let name = feature.name();
+                    extra_prompt.push(PromptSection::new(
+                        name,
+                        name,
+                        &format!("feature:{name}"),
+                        text,
+                    ));
+                }
+                Some(PromptAddition::Sections(sections)) => extra_prompt.extend(sections),
+                _ => {}
+            }
+            hidden.extend(messages);
+        }
+        let rest = if items.is_empty() {
+            Vec::new()
+        } else {
+            items.split_off(1)
+        };
+        items.extend(
+            hidden
+                .into_iter()
+                .map(|message| QueueItem::Custom(Box::new(message))),
+        );
+        items.extend(rest);
+        self.admit(items).await
+    }
+
     /// The run's start failed (`Failed to start run`); it goes on.
     fn start_failed(&self, error: &str) {
         self.ui
@@ -1221,7 +1673,15 @@ impl Agent {
                 agent.hooks.run(HookName::AgentSettled, data, None).await;
             });
         }
-        // `agentSettled` of features (M5) may queue work.
+        for feature in self.features.clone() {
+            if let Err(error) = feature.agent_settled(self).await {
+                self.ui.notify(
+                    &format!("{}: {error}", feature.name()),
+                    NotifyLevel::Warning,
+                );
+            }
+        }
+        // A feature (e.g. background completion) may have queued work while settling.
         if !self.running.get() && self.pending_count() > 0 {
             let mut next = std::mem::take(&mut *self.steering.borrow_mut());
             next.append(&mut self.follow_ups.borrow_mut());
@@ -1230,12 +1690,22 @@ impl Agent {
         }
     }
 
+    /// `admitted`: tell the features a message reached model history.
+    fn admitted(&self, message: &Message) {
+        let Some(agent) = self.weak.upgrade() else {
+            return;
+        };
+        for feature in &self.features {
+            feature.message_admitted(&agent, message);
+        }
+    }
+
     /// One queued item into the session, without hooks.
     fn admit_item(&self, item: QueueItem) -> Result<(), String> {
         match item {
             QueueItem::Custom(message) => {
-                self.append_message(*message)?;
-                // `messageAdmitted` of features (M5).
+                self.append_message((*message).clone())?;
+                self.admitted(&message);
             }
             QueueItem::User { text, images } => {
                 let content = if images.is_empty() {
@@ -1465,7 +1935,7 @@ impl Agent {
     }
 
     /// `streamFunction`: the gateway's inference (tests may override it).
-    fn stream_function(&self) -> Rc<dyn StreamFn> {
+    pub fn stream_function(&self) -> Rc<dyn StreamFn> {
         if let Some(stream) = &self.stream_override {
             return stream.clone();
         }
@@ -1657,16 +2127,25 @@ impl Agent {
         self: &Rc<Self>,
         signal: AbortSignal,
         pending: Option<Vec<QueueItem>>,
+        with_features: bool,
     ) -> Result<(), String> {
-        if let Some(items) = pending
+        let mut extra_prompt = Vec::new();
+        if with_features {
+            let items = pending.unwrap_or_default();
+            if let Err(error) = self.start_features(items, &mut extra_prompt).await {
+                self.start_failed(&error);
+            }
+        } else if let Some(items) = pending
             && let Err(error) = self.admit(items).await
         {
             self.start_failed(&error);
         }
-        *self.run_prompt.borrow_mut() = trim_sections(&[]);
+        *self.run_prompt.borrow_mut() = trim_sections(&extra_prompt);
         let max_turns = self.config.limits.max_turns;
         let mut turns: u64 = 0;
         let mut overflow_retried = false;
+        let mut completion_timed_out = false;
+        let mut produced: Vec<Message> = Vec::new();
         while !signal.aborted() {
             turns += 1;
             if turns > max_turns {
@@ -1675,6 +2154,15 @@ impl Agent {
                     NotifyLevel::Warning,
                 );
                 break;
+            }
+            // Team reports are safe at tool boundaries. Admit them before the
+            // next model call so a final synthesis cannot overlook
+            // already-queued results.
+            let team_batch = self.team_batch_size();
+            if team_batch > 0 {
+                let items: Vec<QueueItem> =
+                    self.follow_ups.borrow_mut().drain(..team_batch).collect();
+                self.admit(items).await?;
             }
             *self.turn.borrow_mut() = None;
             self.maybe_compact(&signal).await?;
@@ -1741,6 +2229,7 @@ impl Agent {
             if !persisted.get() {
                 self.append(EntryData::Message(Message::Assistant(message.clone())))?;
             }
+            produced.push(Message::Assistant(message.clone()));
             if message.stop_reason == StopReason::ToolUse {
                 let calls: Vec<(String, String, Map<String, Value>)> = message
                     .content
@@ -1770,7 +2259,9 @@ impl Agent {
                 }
             }
             self.emit(json!({ "type": "turn_end" }));
-            // `turnEnd` of features (M5).
+            for feature in self.features.clone() {
+                feature.turn_end(self, &message).await?;
+            }
             if message.stop_reason == StopReason::Error {
                 break;
             }
@@ -1797,15 +2288,22 @@ impl Agent {
                 );
                 break;
             }
-            // Team completion waits and `agentEnd` hooks are features (M5).
+            if self.pending_count() == 0 && !completion_timed_out {
+                completion_timed_out = self.wait_for_completion(&signal).await;
+            }
             if signal.aborted() {
                 break;
             }
-            if self.pending_count() > 0 {
-                let mut items = std::mem::take(&mut *self.steering.borrow_mut());
-                if !self.follow_ups.borrow().is_empty() {
-                    items.push(self.follow_ups.borrow_mut().remove(0));
+            if self.follow_ups.borrow().is_empty() {
+                for feature in self.features.clone() {
+                    feature.agent_end(self, &produced).await?;
                 }
+            }
+            if self.pending_count() > 0 {
+                let count = self.team_batch_size().max(1);
+                let mut items = std::mem::take(&mut *self.steering.borrow_mut());
+                let take = count.min(self.follow_ups.borrow().len());
+                items.extend(self.follow_ups.borrow_mut().drain(..take));
                 self.emit_queue();
                 self.admit(items).await?;
                 continue;
@@ -1833,6 +2331,7 @@ impl Agent {
             timestamp: now_ms(),
         };
         self.append_message(message.clone())?;
+        self.admitted(&message);
         Ok(message)
     }
 
@@ -1882,6 +2381,13 @@ impl Agent {
                 })
             }),
             update: on_update,
+            human_wait: {
+                let agent = self.weak.clone();
+                Rc::new(move || match agent.upgrade() {
+                    Some(agent) => agent.human_wait(),
+                    None => HumanWait::none(),
+                })
+            },
         }
     }
 
@@ -2154,10 +2660,12 @@ impl Agent {
         self.ui.clone()
     }
 
-    pub async fn shutdown(&self) {
+    pub async fn shutdown(self: &Rc<Self>) {
         self.abort();
         self.idle().await;
-        // `shutdown` of features (M5).
+        for feature in self.features.clone() {
+            feature.shutdown(self).await;
+        }
         self.closed.set(true);
     }
 
@@ -2382,6 +2890,26 @@ mod tests {
                 _ => panic!(),
             },
             _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn parses_slash_commands() {
+        let parsed = |text: &str| parse_command(text);
+        assert_eq!(
+            parsed("  /goal   finish it \n"),
+            Some(("goal".to_owned(), "finish it".to_owned()))
+        );
+        assert_eq!(
+            parsed("/om:status"),
+            Some(("om:status".to_owned(), String::new()))
+        );
+        assert_eq!(
+            parsed("/Todo\u{3000}a\nb"),
+            Some(("Todo".to_owned(), "a\nb".to_owned()))
+        );
+        for text in ["goal", "/1goal", "/goal!", "/ goal", "/goal\u{85}x"] {
+            assert_eq!(parsed(text), None, "{text:?}");
         }
     }
 

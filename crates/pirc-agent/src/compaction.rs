@@ -1,6 +1,6 @@
 //! Context compaction (`agent/compaction.ts`): the context size, the cut
-//! point, the summary request and the compaction entry. Custom compactions
-//! of features (`beforeCompact`, observational memory) are M5's.
+//! point, the summary request and the compaction entry. A feature may
+//! replace the summary or cancel the compaction (`beforeCompact`).
 
 use std::rc::Rc;
 
@@ -10,6 +10,7 @@ use pirc_protocol::{
 use serde_json::{Map, Value, json};
 
 use crate::agent::{Agent, StreamOptions};
+use crate::feature::{CompactContext, CompactDecision, CompactionPlan};
 use crate::messages::estimate_tokens;
 use crate::now_ms;
 use crate::signal::{AbortController, AbortSignal};
@@ -300,7 +301,92 @@ pub async fn run_compaction(
         return Ok(CompactionResult::failed("Nothing to compact"));
     };
     agent.emit(json!({ "type": "compaction_start", "reason": reason.as_str() }));
-    // `beforeCompact` of features (M5) may replace or cancel the summary.
+    // A feature may replace or cancel the summary.
+    let mut plan = None;
+    for feature in agent.features().to_vec() {
+        let decision = feature
+            .before_compact(
+                agent,
+                CompactContext {
+                    first_kept_entry_id: &first_kept_entry_id,
+                    tokens_before,
+                    signal,
+                },
+            )
+            .await;
+        match decision {
+            Ok(None) => continue,
+            Ok(Some(CompactDecision::Cancel)) => {
+                agent.emit(json!({ "type": "compaction_end", "reason": reason.as_str(),
+                    "aborted": true }));
+                return Ok(CompactionResult::failed(
+                    "Compaction cancelled by extension",
+                ));
+            }
+            Ok(Some(CompactDecision::Plan(found))) => {
+                plan = Some(found);
+                break;
+            }
+            Err(error) => {
+                agent.emit(json!({ "type": "compaction_end", "reason": reason.as_str(),
+                    "aborted": signal.aborted(), "errorMessage": error }));
+                return Ok(CompactionResult::failed(error));
+            }
+        }
+    }
+    let plan = match plan {
+        Some(plan) => plan,
+        None => match summarize(agent, signal, instructions, &first_kept_entry_id).await {
+            Ok(summary) => CompactionPlan {
+                summary,
+                first_kept_entry_id: first_kept_entry_id.clone(),
+                tokens_before,
+                details: None,
+            },
+            Err(error) => {
+                agent.emit(json!({ "type": "compaction_end", "reason": reason.as_str(),
+                    "aborted": signal.aborted(), "errorMessage": error }));
+                return Ok(CompactionResult::failed(error));
+            }
+        },
+    };
+    let entry_id = agent.append_compaction(
+        &plan.summary,
+        &plan.first_kept_entry_id,
+        plan.tokens_before,
+        plan.details.clone(),
+    )?;
+    agent.emit(json!({ "type": "compaction_end", "reason": reason.as_str(),
+        "result": { "summary": plan.summary, "tokensBefore": plan.tokens_before,
+            "entryId": entry_id } }));
+    for feature in agent.features().to_vec() {
+        if let Err(error) = feature.after_compact(agent).await {
+            agent.ui().notify(
+                &format!("{}: {error}", feature.name()),
+                NotifyLevel::Warning,
+            );
+        }
+    }
+    if settings.warm_cache && reason != CompactionReason::Overflow {
+        warm_cache(agent);
+    }
+    Ok(CompactionResult {
+        ok: true,
+        error: None,
+        tokens_before: Some(plan.tokens_before),
+        summary: Some(plan.summary),
+    })
+}
+
+/// The default summary: the same system prompt, tools and history prefix as
+/// normal turns (so the provider's prompt cache is reused), then the
+/// summary instruction. `Err` with what failed.
+async fn summarize(
+    agent: &Rc<Agent>,
+    signal: &AbortSignal,
+    instructions: Option<String>,
+    first_kept_entry_id: &str,
+) -> Result<String, String> {
     let text = match instructions.filter(|text| !text.is_empty()) {
         Some(extra) => format!("{SUMMARY_PROMPT}\n\nAdditional focus from the user: {extra}"),
         None => SUMMARY_PROMPT.to_owned(),
@@ -317,12 +403,12 @@ pub async fn run_compaction(
                     content: UserContent::Text(text),
                     timestamp: now_ms(),
                 }],
-                up_to: Some(first_kept_entry_id.clone()),
+                up_to: Some(first_kept_entry_id.to_owned()),
                 ..StreamOptions::default()
             },
         )
         .await;
-    let outcome = response.and_then(|response| {
+    response.and_then(|response| {
         let summary: String = response
             .content
             .iter()
@@ -350,27 +436,6 @@ pub async fn run_compaction(
             }));
         }
         Ok(summary)
-    });
-    let summary = match outcome {
-        Ok(summary) => summary,
-        Err(error) => {
-            agent.emit(json!({ "type": "compaction_end", "reason": reason.as_str(),
-                "aborted": signal.aborted(), "errorMessage": error }));
-            return Ok(CompactionResult::failed(error));
-        }
-    };
-    let entry_id = agent.append_compaction(&summary, &first_kept_entry_id, tokens_before, None)?;
-    agent.emit(json!({ "type": "compaction_end", "reason": reason.as_str(),
-        "result": { "summary": summary, "tokensBefore": tokens_before, "entryId": entry_id } }));
-    // `afterCompact` of features (M5).
-    if settings.warm_cache && reason != CompactionReason::Overflow {
-        warm_cache(agent);
-    }
-    Ok(CompactionResult {
-        ok: true,
-        error: None,
-        tokens_before: Some(tokens_before),
-        summary: Some(summary),
     })
 }
 

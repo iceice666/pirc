@@ -1,5 +1,5 @@
 //! The session agent (`apps/gateway/src/agent`), being rewritten in Rust
-//! (plans/rust-rewrite.md, M4): one session per process, JSONL RPC on
+//! (plans/rust-rewrite.md, M4 and M5): one session per process, JSONL RPC on
 //! stdin/stdout, inference through the node's Unix socket.
 //!
 //! Like the TS agent it is single-threaded: a current-thread tokio runtime,
@@ -16,6 +16,8 @@ pub mod channels;
 pub mod compaction;
 pub mod config;
 pub mod context;
+pub mod feature;
+pub mod features;
 pub mod hooks;
 pub mod host;
 pub mod messages;

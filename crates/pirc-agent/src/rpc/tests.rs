@@ -354,7 +354,7 @@ impl Commands for Fake {
     fn follow_up(self: &Rc<Self>, text: String, _: Vec<UserBlock>) {
         self.call(format!("follow_up {text}"));
     }
-    fn abort(&self) {
+    fn abort(self: &Rc<Self>) {
         self.call("abort");
     }
     fn idle(&self) -> LocalBoxFuture<'_, ()> {
@@ -365,7 +365,7 @@ impl Commands for Fake {
         self.call(format!("send_now {queue:?} {index} {text}"));
         Err("That message is no longer queued".to_owned())
     }
-    fn clear_queue(&self) -> Value {
+    fn clear_queue(self: &Rc<Self>) -> Value {
         json!({ "steering": [], "followUp": [] })
     }
     fn state(&self) -> Value {
@@ -405,7 +405,7 @@ impl Commands for Fake {
     fn last_context(&self) -> Option<Value> {
         self.context.borrow().clone()
     }
-    fn panel_state(&self) -> Value {
+    fn panel_state(self: &Rc<Self>) -> Value {
         json!({})
     }
     fn deliver(

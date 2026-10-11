@@ -86,6 +86,31 @@ impl ToolResult {
 /// Take the node's write lease for the root containing an absolute path.
 pub type AcquireWrite = Rc<dyn Fn(String) -> LocalBoxFuture<'static, Result<(), String>>>;
 
+/// A wait for a human, counted while alive (`humanWait`): a running `ptc`
+/// script's active-time budget pauses meanwhile.
+pub struct HumanWait(Option<Rc<dyn Fn(isize)>>);
+
+impl HumanWait {
+    /// Count one more wait through `change` (+1 now, -1 when dropped).
+    pub fn new(change: Rc<dyn Fn(isize)>) -> Self {
+        change(1);
+        Self(Some(change))
+    }
+
+    /// Counts nothing.
+    pub fn none() -> Self {
+        Self(None)
+    }
+}
+
+impl Drop for HumanWait {
+    fn drop(&mut self) {
+        if let Some(change) = self.0.take() {
+            change(-1);
+        }
+    }
+}
+
 /// `ToolContext`.
 #[derive(Clone)]
 pub struct ToolContext {
@@ -103,6 +128,9 @@ pub struct ToolContext {
     pub acquire_write: AcquireWrite,
     /// Partial output for observers (`tool_execution_update`).
     pub update: Rc<dyn Fn(ToolResult)>,
+    /// Start waiting for a human (`humanWait`): hold the guard until the
+    /// answer is in.
+    pub human_wait: Rc<dyn Fn() -> HumanWait>,
 }
 
 /// `Tool`.
