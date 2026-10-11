@@ -54,11 +54,35 @@ pub enum ModelReply {
     Hang(String),
     /// These NDJSON events as they are.
     Raw(Vec<Value>),
+    /// The reply, once the gate is opened: the request waits until the
+    /// test lets it go, so a side request (a session title) ends at a
+    /// known point of the transcript.
+    Gated(Gate, Box<ModelReply>),
 }
 
 impl ModelReply {
     pub fn tool(id: &str, name: &str, args: Value) -> Self {
         Self::Tools(vec![(id.to_owned(), name.to_owned(), args)])
+    }
+
+    /// `reply`, held until `gate` opens.
+    pub fn gated(gate: &Gate, reply: ModelReply) -> Self {
+        Self::Gated(gate.clone(), Box::new(reply))
+    }
+}
+
+/// Holds a [`ModelReply::Gated`] reply until opened.
+#[derive(Clone, Debug, Default)]
+pub struct Gate(Arc<tokio::sync::Notify>);
+
+impl Gate {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Let the held reply go (now, or as soon as its request arrives).
+    pub fn open(&self) {
+        self.0.notify_one();
     }
 }
 
@@ -165,6 +189,8 @@ fn reply_lines(reply: &ModelReply, model: &str) -> (Vec<Value>, bool) {
             return (lines, true);
         }
         ModelReply::Raw(events) => lines.extend(events.iter().cloned()),
+        // The handler waits for the gate first.
+        ModelReply::Gated(_, inner) => return reply_lines(inner, model),
     }
     (lines, false)
 }
@@ -172,6 +198,9 @@ fn reply_lines(reply: &ModelReply, model: &str) -> (Vec<Value>, bool) {
 #[derive(Default)]
 struct Inference {
     replies: VecDeque<ModelReply>,
+    /// Replies for requests whose messages contain the marker, taken
+    /// before the main queue (`llm.route` of the TS tests).
+    routes: Vec<(String, VecDeque<ModelReply>)>,
     requests: Vec<Value>,
     models: Value,
 }
@@ -222,14 +251,23 @@ async fn inference(
         .as_str()
         .unwrap_or("fake-model")
         .to_owned();
-    let reply = {
+    let mut reply = {
         let mut state = state.lock().unwrap();
+        let messages = request["messages"].to_string();
         state.requests.push(request);
-        state
-            .replies
-            .pop_front()
+        let routed = state
+            .routes
+            .iter_mut()
+            .find(|(marker, replies)| !replies.is_empty() && messages.contains(marker.as_str()))
+            .and_then(|(_, replies)| replies.pop_front());
+        routed
+            .or_else(|| state.replies.pop_front())
             .unwrap_or_else(|| ModelReply::Text("default reply".to_owned()))
     };
+    while let ModelReply::Gated(gate, inner) = reply {
+        gate.0.notified().await;
+        reply = *inner;
+    }
     let (lines, hang) = reply_lines(&reply, &model);
     let stream =
         futures_util::stream::unfold((lines.into_iter(), hang), |(mut lines, hang)| async move {
@@ -260,6 +298,7 @@ pub struct Answers {
     pub refuse_leases: Vec<String>,
     /// Dialog answers in order: fields merged into `extension_ui_response`
     /// (`{"confirmed": true}`, `{"value": "x"}`, `{"cancelled": true}`).
+    /// `{"hold": true}` leaves that dialog unanswered.
     pub dialogs: VecDeque<Value>,
     /// Gateway operation results by `op` (`{"ok": true, "result": …}` or an
     /// error object), else `{"ok": false, "error": {"code": "not_found"}}`.
@@ -387,7 +426,7 @@ fn merge(base: &mut Value, extra: &Value) {
 impl AgentRun {
     /// Start an agent, or `None` (test skipped) without executables.
     pub async fn start(options: AgentOptions) -> Option<Self> {
-        let (program, mut args) = agent_command()?;
+        agent_command()?;
         // A root whose length does not depend on where the repository is
         // checked out: the context snapshot's token estimates count the
         // workspace path.
@@ -397,6 +436,28 @@ impl AgentRun {
             .prefix("agent-")
             .tempdir_in(base)
             .unwrap();
+        Self::start_in(dir, options).await
+    }
+
+    /// Close this agent (as [`AgentRun::finish`]) and start another on the
+    /// same workspace, session and config directories: a new process
+    /// resuming the session. The files and config of `options` are
+    /// written again.
+    pub async fn restart(mut self, options: AgentOptions) -> Option<Self> {
+        self.stdin.take();
+        tokio::time::timeout(TIMEOUT, self.child.wait())
+            .await
+            .expect("the agent did not exit after stdin closed")
+            .ok()?;
+        self.server.abort();
+        let placeholder = tempfile::tempdir().unwrap();
+        let dir = std::mem::replace(&mut self.dir, placeholder);
+        drop(self);
+        Self::start_in(dir, options).await
+    }
+
+    async fn start_in(dir: TempDir, options: AgentOptions) -> Option<Self> {
+        let (program, mut args) = agent_command()?;
         let root = dir.path().canonicalize().unwrap();
         let make = |name: &str| {
             let path = root.join(name);
@@ -419,6 +480,8 @@ impl AgentRun {
         std::fs::write(config_dir.join("config.json"), config.to_string()).unwrap();
 
         let socket = root.join("inference.sock");
+        // A restarted agent's socket is still there.
+        let _ = std::fs::remove_file(&socket);
         let models = options.models.clone().unwrap_or_else(fake_models);
         let inference: SharedInference = Arc::new(Mutex::new(Inference {
             models: models.clone(),
@@ -496,6 +559,19 @@ impl AgentRun {
     /// Queue model replies; once empty, every request gets "default reply".
     pub fn push(&self, replies: impl IntoIterator<Item = ModelReply>) {
         self.inference.lock().unwrap().replies.extend(replies);
+    }
+
+    /// Queue replies for requests whose messages contain `marker` (a side
+    /// request running next to the main one); they are taken before the
+    /// main queue.
+    pub fn route(&self, marker: &str, replies: impl IntoIterator<Item = ModelReply>) {
+        let mut inference = self.inference.lock().unwrap();
+        match inference.routes.iter_mut().find(|(m, _)| m == marker) {
+            Some((_, queue)) => queue.extend(replies),
+            None => inference
+                .routes
+                .push((marker.to_owned(), replies.into_iter().collect())),
+        }
     }
 
     /// Inference requests received since the last call.
@@ -628,9 +704,13 @@ impl AgentRun {
                         .dialogs
                         .pop_front()
                         .unwrap_or_else(|| json!({ "cancelled": true }));
-                    reply["type"] = json!("extension_ui_response");
-                    reply["id"] = line["id"].clone();
-                    Some(reply)
+                    if reply["hold"] == true {
+                        None
+                    } else {
+                        reply["type"] = json!("extension_ui_response");
+                        reply["id"] = line["id"].clone();
+                        Some(reply)
+                    }
                 }
                 _ => None,
             }
@@ -648,6 +728,27 @@ impl AgentRun {
             .filter(|line| !line.trim().is_empty())
             .map(|line| serde_json::from_str(line).unwrap())
             .collect()
+    }
+
+    /// Close stdin and wait for the agent to exit: the lines it wrote
+    /// meanwhile (shutdown hooks), and its exit code.
+    pub async fn close(mut self) -> (Vec<Value>, Option<i32>) {
+        self.stdin.take();
+        let mut lines: Vec<Value> = self.backlog.drain(..).collect();
+        loop {
+            let line = tokio::time::timeout(TIMEOUT, self.lines.recv())
+                .await
+                .expect("the agent did not exit after stdin closed");
+            match line {
+                Some(line) => lines.push(line),
+                None => break,
+            }
+        }
+        let status = tokio::time::timeout(TIMEOUT, self.child.wait())
+            .await
+            .expect("the agent did not exit after stdin closed")
+            .ok();
+        (lines, status.and_then(|status| status.code()))
     }
 
     /// Close stdin and wait for the agent to exit; its exit code.
