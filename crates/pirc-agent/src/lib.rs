@@ -51,6 +51,25 @@ pub fn spawn_eager(future: impl Future<Output = ()> + 'static) {
     }
 }
 
+/// One microtask tick: the task goes to the back of the ready queue at
+/// once, behind what is already runnable (tasks spawned or woken before
+/// it), as a JavaScript `await` lets the queued microtasks run first.
+/// `tokio::task::yield_now` defers the wake until the runtime has polled
+/// its drivers, which lets tasks woken later overtake it.
+pub async fn tick() {
+    let mut ready = false;
+    std::future::poll_fn(|cx| {
+        if ready {
+            std::task::Poll::Ready(())
+        } else {
+            ready = true;
+            cx.waker().wake_by_ref();
+            std::task::Poll::Pending
+        }
+    })
+    .await;
+}
+
 /// The current time in epoch milliseconds (`Date.now()`).
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now()

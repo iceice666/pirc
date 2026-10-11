@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 
 use crate::LocalBoxFuture;
 use crate::agent::Agent;
-use crate::channels::{ChannelError, process_sandbox_channel};
+use crate::channels::{ChannelError, process_sandbox_requester};
 use crate::feature::{BeforeStart, Feature, PromptAddition};
 use crate::tools::bash::shell_result_schema;
 use crate::tools::result_schema::{arr, bool_, fields, str_};
@@ -47,9 +47,10 @@ When the sandbox blocks something the task needs:
     )
 }
 
-/// `active`: inside the node's sandbox, with its channel.
+/// `active`: inside the node's sandbox, with a way to it (the node, or a
+/// team child's parent).
 fn active(agent: &Agent) -> bool {
-    agent.config().sandboxed && process_sandbox_channel().is_some()
+    agent.config().sandboxed && process_sandbox_requester().is_some()
 }
 
 struct SandboxFeature;
@@ -167,14 +168,13 @@ impl AllowDomainsTool {
     }
 
     async fn run(&self, args: Map<String, Value>, ctx: ToolContext) -> Result<ToolResult, String> {
-        let channels = process_sandbox_channel().ok_or_else(unavailable)?;
+        let requester = process_sandbox_requester().ok_or_else(unavailable)?;
         let mut request = Map::new();
         copy(&mut request, &args, "domains");
         copy(&mut request, &args, "reason");
         // The node asks the human; a ptc script's budget pauses meanwhile.
         let wait = (ctx.human_wait)();
-        let result = channels
-            .sandbox
+        let result = requester
             .request(
                 "network",
                 request,
@@ -260,7 +260,7 @@ impl UnsandboxedBashTool {
     }
 
     async fn run(&self, args: Map<String, Value>, ctx: ToolContext) -> Result<ToolResult, String> {
-        let channels = process_sandbox_channel().ok_or_else(unavailable)?;
+        let requester = process_sandbox_requester().ok_or_else(unavailable)?;
         // It may write anywhere; hold the workspace's write lease like bash does.
         (ctx.acquire_write)(ctx.cwd.clone()).await?;
         let mut request = Map::new();
@@ -281,8 +281,7 @@ impl UnsandboxedBashTool {
         // The whole request counts as waiting for the human: the node asks
         // first, and the command it then runs is bounded by its own timeout.
         let wait = (ctx.human_wait)();
-        let result = channels
-            .sandbox
+        let result = requester
             .request("exec", request, Some(&ctx.signal), Some(&ctx.tool_call_id))
             .await;
         drop(wait);
