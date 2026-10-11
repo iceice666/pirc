@@ -11,5 +11,9 @@ serde.workspace = true
 serde_json.workspace = true
 indexmap.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# `O_PATH` for `SocketPath` (long Unix socket paths).
+libc = "0.2"
+
 [lints]
 workspace = true

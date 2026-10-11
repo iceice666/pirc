@@ -39,7 +39,9 @@ impl SocketPath {
                 _directory: None,
             });
         };
-        let directory = File::open(parent)?;
+        // `O_PATH`: reaching the socket needs search permission on its
+        // directory only, as with the full path.
+        let directory = open_directory(parent)?;
         let short = Path::new("/proc/self/fd")
             .join(std::os::fd::AsRawFd::as_raw_fd(&directory).to_string())
             .join(name);
@@ -48,6 +50,20 @@ impl SocketPath {
             _directory: Some(directory),
         })
     }
+}
+
+#[cfg(target_os = "linux")]
+fn open_directory(path: &Path) -> io::Result<File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_PATH | libc::O_DIRECTORY)
+        .open(path)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn open_directory(path: &Path) -> io::Result<File> {
+    File::open(path)
 }
 
 #[cfg(test)]
