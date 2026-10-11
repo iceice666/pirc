@@ -1,0 +1,463 @@
+//! Golden cases from `panel.integration.test.ts` ("reports git status,
+//! diffs, history and commit details", "reports a workspace that is not a
+//! repository", "lists and reads files but never escapes the workspace"),
+//! on temporary repositories.
+
+use std::os::unix::fs::symlink;
+use std::process::Command;
+
+use super::*;
+
+/// What git needs to run: the test's `PATH` and `HOME`, and no repository
+/// above the temporary directory.
+fn env(ceiling: &Path) -> ChildEnv {
+    let mut env = ChildEnv::new();
+    for name in ["PATH", "HOME"] {
+        if let Ok(value) = std::env::var(name) {
+            env.insert(name.to_owned(), value);
+        }
+    }
+    env.insert(
+        "GIT_CEILING_DIRECTORIES".to_owned(),
+        ceiling.display().to_string(),
+    );
+    env
+}
+
+fn run_git(dir: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_CEILING_DIRECTORIES", dir.parent().unwrap())
+        .env("GIT_AUTHOR_NAME", "Ada")
+        .env("GIT_AUTHOR_EMAIL", "ada@example.com")
+        .env("GIT_COMMITTER_NAME", "Ada")
+        .env("GIT_COMMITTER_EMAIL", "ada@example.com")
+        .env("GIT_AUTHOR_DATE", "1700000000 +0000")
+        .env("GIT_COMMITTER_DATE", "1700000000 +0000")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "git {args:?}: {output:?}");
+    String::from_utf8(output.stdout).unwrap()
+}
+
+struct Fixture {
+    _dir: tempfile::TempDir,
+    run: PathBuf,
+    ws: PathBuf,
+}
+
+fn fixture() -> Fixture {
+    let dir = tempfile::tempdir().unwrap();
+    let run = dir.path().canonicalize().unwrap();
+    let ws = run.join("workspace");
+    std::fs::create_dir(&ws).unwrap();
+    Fixture { _dir: dir, run, ws }
+}
+
+fn status(error: ApiError) -> (u16, String, String) {
+    (error.status, error.code.into_owned(), error.message)
+}
+
+#[test]
+fn parses_porcelain_status() {
+    let parsed = parse_status(
+        "## main...origin/main [ahead 2, behind 1]\0M  a.txt\0R  new\0old\0?? dir/x y\0",
+    );
+    assert_eq!(parsed.branch.as_deref(), Some("main"));
+    assert_eq!(parsed.upstream.as_deref(), Some("origin/main"));
+    assert_eq!((parsed.ahead, parsed.behind), (2.0, 1.0));
+    assert_eq!(
+        parsed.files,
+        vec![
+            json!({ "path": "a.txt", "index": "M", "worktree": " " }),
+            json!({ "path": "new", "index": "R", "worktree": " ", "origPath": "old" }),
+            json!({ "path": "dir/x y", "index": "?", "worktree": "?" }),
+        ]
+    );
+    let unborn = parse_status("## No commits yet on main\0");
+    assert_eq!(unborn.branch.as_deref(), Some("main"));
+    assert_eq!(unborn.upstream, None);
+    let detached = parse_status("## HEAD (no branch)\0");
+    assert_eq!(detached.branch.as_deref(), Some("HEAD (no branch)"));
+}
+
+#[test]
+fn resolves_inside_the_workspace() {
+    let f = fixture();
+    std::fs::create_dir(f.ws.join("src")).unwrap();
+    std::fs::write(f.ws.join("src/main.ts"), "x").unwrap();
+    std::fs::write(f.run.join("secret.txt"), "nope").unwrap();
+    symlink(f.run.join("secret.txt"), f.ws.join("leak")).unwrap();
+    symlink("src", f.ws.join("dir-link")).unwrap();
+
+    assert_eq!(resolve_inside(&f.ws, "src").unwrap(), f.ws.join("src"));
+    assert_eq!(resolve_inside(&f.ws, "/src/").unwrap(), f.ws.join("src"));
+    assert_eq!(resolve_inside(&f.ws, ".").unwrap(), f.ws);
+    assert_eq!(resolve_inside(&f.ws, "").unwrap(), f.ws);
+    // Lexical `..` first (Node's `path.resolve`), then the real path.
+    assert_eq!(
+        resolve_inside(&f.ws, "dir-link/../src/main.ts").unwrap(),
+        f.ws.join("src/main.ts")
+    );
+    let inside = f.ws.join("src/main.ts").display().to_string();
+    assert_eq!(
+        resolve_inside(&f.ws, &inside).unwrap(),
+        f.ws.join("src/main.ts")
+    );
+    let forbidden = (
+        403,
+        "forbidden".to_owned(),
+        "Path is outside the workspace".to_owned(),
+    );
+    let missing = (404, "not_found".to_owned(), "Path not found".to_owned());
+    assert_eq!(
+        status(resolve_inside(&f.ws, "leak").unwrap_err()),
+        forbidden
+    );
+    assert_eq!(status(resolve_inside(&f.ws, "..").unwrap_err()), forbidden);
+    assert_eq!(
+        status(resolve_inside(&f.ws, "src/../../secret.txt").unwrap_err()),
+        forbidden
+    );
+    // An absolute path outside is read as workspace-relative: missing.
+    let outside = f.run.join("secret.txt").display().to_string();
+    assert_eq!(
+        status(resolve_inside(&f.ws, &outside).unwrap_err()),
+        missing
+    );
+    assert_eq!(status(resolve_inside(&f.ws, "nope").unwrap_err()), missing);
+    assert_eq!(
+        status(resolve_inside(&f.ws, "src\0").unwrap_err()),
+        (400, "invalid_input".to_owned(), "Invalid path".to_owned())
+    );
+    assert_eq!(
+        status(resolve_inside(&f.run.join("gone"), "x").unwrap_err()),
+        (
+            404,
+            "not_found".to_owned(),
+            "Workspace directory is missing".to_owned()
+        )
+    );
+}
+
+#[test]
+fn pathspecs_are_literal_and_contained() {
+    let f = fixture();
+    std::fs::create_dir(f.ws.join("src")).unwrap();
+    assert_eq!(pathspec(&f.ws, "a.txt").unwrap(), ":(literal)a.txt");
+    assert_eq!(pathspec(&f.ws, "/a.txt").unwrap(), ":(literal)a.txt");
+    assert_eq!(
+        pathspec(&f.ws, "src\\lib.rs").unwrap(),
+        ":(literal)src/lib.rs"
+    );
+    assert_eq!(pathspec(&f.ws, "src/../a.txt").unwrap(), ":(literal)a.txt");
+    assert_eq!(pathspec(&f.ws, "*.txt").unwrap(), ":(literal)*.txt");
+    assert_eq!(pathspec(&f.ws, "src/").unwrap(), ":(literal)src/");
+    for path in ["../secret.txt", "..", ".", "", "a/../.."] {
+        assert_eq!(
+            status(pathspec(&f.ws, path).unwrap_err()),
+            (400, "invalid_input".to_owned(), "Invalid path".to_owned()),
+            "{path:?}"
+        );
+    }
+    assert_eq!(pathspec(&f.ws, "nowhere/x").unwrap_err().status, 404);
+}
+
+#[test]
+fn lists_directories_in_locale_order() {
+    let f = fixture();
+    for dir in ["src", ".git", ".config", "Zeta", "alpha"] {
+        std::fs::create_dir(f.ws.join(dir)).unwrap();
+    }
+    for name in ["b10.txt", "b2.txt", "B1.txt", "_under.txt", "émile.txt"] {
+        std::fs::write(f.ws.join(name), name).unwrap();
+    }
+    std::fs::write(f.run.join("secret.txt"), "nope").unwrap();
+    symlink(f.run.join("secret.txt"), f.ws.join("leak")).unwrap();
+    symlink("src", f.ws.join("dir-link")).unwrap();
+    symlink("nowhere", f.ws.join("dangling")).unwrap();
+    let listed = list_directory(&f.ws, "").unwrap();
+    let names: Vec<(String, String)> = listed["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| {
+            (
+                e["name"].as_str().unwrap().to_owned(),
+                e["kind"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    let expected = [
+        (".config", "dir"),
+        ("alpha", "dir"),
+        ("dir-link", "dir"),
+        ("src", "dir"),
+        ("Zeta", "dir"),
+        ("_under.txt", "file"),
+        ("B1.txt", "file"),
+        ("b10.txt", "file"),
+        ("b2.txt", "file"),
+        ("dangling", "symlink"),
+        ("émile.txt", "file"),
+        ("leak", "symlink"),
+    ];
+    assert_eq!(
+        names,
+        expected
+            .iter()
+            .map(|(n, k)| ((*n).to_owned(), (*k).to_owned()))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(listed["path"], "");
+    assert_eq!(listed["truncated"], false);
+    assert_eq!(
+        listed["entries"][5],
+        json!({ "name": "_under.txt", "kind": "file", "size": 10 })
+    );
+    assert_eq!(list_directory(&f.ws, "dir-link").unwrap()["path"], "src");
+    assert_eq!(
+        status(list_directory(&f.ws, "b2.txt").unwrap_err()),
+        (
+            400,
+            "invalid_input".to_owned(),
+            "Not a directory".to_owned()
+        )
+    );
+}
+
+#[test]
+fn reads_files_text_binary_and_images() {
+    let f = fixture();
+    std::fs::write(f.ws.join("README.md"), "hello\n").unwrap();
+    std::fs::write(f.ws.join("bin.dat"), [1u8, 0, 2]).unwrap();
+    let png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
+    std::fs::write(f.ws.join("shot.PNG"), png).unwrap();
+    std::fs::write(f.ws.join("icon.svg"), "<svg/>").unwrap();
+    std::fs::File::create(f.ws.join("huge.jpg"))
+        .unwrap()
+        .set_len(9 * 1_048_576)
+        .unwrap();
+    std::fs::write(
+        f.ws.join("big-utf8.txt"),
+        format!("{}é tail", "x".repeat(1_048_575)),
+    )
+    .unwrap();
+
+    let text = read_workspace_file(&f.ws, "README.md").unwrap();
+    let keys: Vec<&String> = text.as_object().unwrap().keys().collect();
+    assert_eq!(
+        keys,
+        [
+            "path",
+            "size",
+            "modifiedAt",
+            "binary",
+            "truncated",
+            "content"
+        ]
+    );
+    assert_eq!(text["content"], "hello\n");
+    assert!(text["modifiedAt"].is_number());
+
+    let binary = read_workspace_file(&f.ws, "bin.dat").unwrap();
+    assert_eq!(binary["binary"], true);
+    assert!(binary.get("content").is_none());
+
+    let image = read_workspace_file(&f.ws, "shot.PNG").unwrap();
+    assert_eq!(image["binary"], true);
+    assert_eq!(image["image"]["mimeType"], "image/png");
+    assert_eq!(
+        image["image"]["dataBase64"],
+        base64::engine::general_purpose::STANDARD.encode(png)
+    );
+
+    let svg = read_workspace_file(&f.ws, "icon.svg").unwrap();
+    assert_eq!(svg["content"], "<svg/>");
+    assert_eq!(svg["image"]["mimeType"], "image/svg+xml");
+
+    let huge = read_workspace_file(&f.ws, "huge.jpg").unwrap();
+    assert_eq!(huge["imageTooLarge"], true);
+    assert_eq!(huge["truncated"], true);
+    assert_eq!(huge["binary"], true);
+    assert!(huge.get("image").is_none());
+
+    // The cut splits `é`: decoded lossily.
+    let big = read_workspace_file(&f.ws, "big-utf8.txt").unwrap();
+    assert_eq!(big["truncated"], true);
+    let content = big["content"].as_str().unwrap();
+    assert!(
+        content.ends_with("x\u{FFFD}"),
+        "{:?}",
+        &content[content.len() - 8..]
+    );
+
+    assert_eq!(
+        status(read_workspace_file(&f.ws, ".").unwrap_err()),
+        (400, "invalid_input".to_owned(), "Not a file".to_owned())
+    );
+}
+
+#[test]
+fn reads_recording_chunks() {
+    let f = fixture();
+    std::fs::create_dir_all(f.ws.join(".pirc/recordings/dir.webm")).unwrap();
+    std::fs::write(f.ws.join(".pirc/recordings/r.webm"), b"0123456789").unwrap();
+    let chunk = read_recording_chunk(&f.ws, ".pirc/recordings/r.webm", 3, 4).unwrap();
+    assert_eq!(
+        chunk,
+        json!({ "size": 10, "offset": 3, "mimeType": "video/webm", "dataBase64": "MzQ1Ng==" })
+    );
+    let past = read_recording_chunk(&f.ws, ".pirc/recordings/r.webm", 50, 4).unwrap();
+    assert_eq!(past["offset"], 10);
+    assert_eq!(past["dataBase64"], "");
+    for path in [".pirc/recordings/dir.webm", ".pirc/recordings/missing.webm"] {
+        assert_eq!(
+            status(read_recording_chunk(&f.ws, path, 0, 4).unwrap_err()),
+            (
+                404,
+                "not_found".to_owned(),
+                "Recording not found".to_owned()
+            )
+        );
+    }
+}
+
+#[tokio::test]
+async fn git_outside_a_repository() {
+    let f = fixture();
+    let env = env(&f.run);
+    assert_eq!(
+        git_status(&f.ws, &env).await.unwrap(),
+        json!({ "repo": false })
+    );
+    assert_eq!(
+        git_log(&f.ws, &env, 0, 50).await.unwrap(),
+        json!({ "commits": [], "more": false })
+    );
+    let error = git_show(&f.ws, &env, "abcd1234").await.unwrap_err();
+    assert_eq!((error.status, error.code.as_ref()), (400, "invalid_input"));
+    assert_eq!(
+        status(git_show(&f.ws, &env, "not-a-sha").await.unwrap_err()),
+        (
+            400,
+            "invalid_input".to_owned(),
+            "Invalid commit id".to_owned()
+        )
+    );
+}
+
+#[tokio::test]
+async fn git_status_diff_log_and_show() {
+    let f = fixture();
+    let ws = &f.ws;
+    let env = env(&f.run);
+    run_git(ws, &["init", "-q", "-b", "main"]);
+    let unborn = git_status(ws, &env).await.unwrap();
+    assert_eq!(unborn["branch"], "main");
+    assert_eq!(unborn["root"], "");
+    // `rev-parse --verify --quiet HEAD` exits 1, which passes (TS), so
+    // `git log` itself fails.
+    assert_eq!(
+        status(git_log(ws, &env, 0, 50).await.unwrap_err()),
+        (
+            400,
+            "invalid_input".to_owned(),
+            "fatal: your current branch 'main' does not have any commits yet".to_owned()
+        )
+    );
+
+    std::fs::write(ws.join("a.txt"), "one\n").unwrap();
+    std::fs::write(ws.join("old name.txt"), "renamed content\n").unwrap();
+    run_git(ws, &["add", "."]);
+    run_git(ws, &["commit", "-q", "-m", "first commit"]);
+    run_git(ws, &["branch", "base"]);
+    std::fs::write(ws.join("a.txt"), "one\ntwo\n").unwrap();
+    run_git(
+        ws,
+        &["commit", "-q", "-am", "second commit", "-m", "With a body."],
+    );
+    run_git(ws, &["tag", "v1"]);
+    run_git(ws, &["branch", "-q", "--set-upstream-to", "base"]);
+    run_git(ws, &["mv", "old name.txt", "new name.txt"]);
+    std::fs::write(ws.join("a.txt"), "one\ntwo\nthree\n").unwrap();
+    std::fs::write(ws.join("-dash.txt"), "dash\n").unwrap();
+    std::fs::write(ws.join("ünïcode.txt"), "ü\n").unwrap();
+
+    let changes = git_status(ws, &env).await.unwrap();
+    assert_eq!(changes["branch"], "main");
+    assert_eq!(changes["upstream"], "base");
+    assert_eq!(changes["ahead"], 1);
+    assert_eq!(changes["behind"], 0);
+    let files = changes["files"].as_array().unwrap();
+    assert!(files.contains(
+        &json!({ "path": "new name.txt", "index": "R", "worktree": " ",
+        "origPath": "old name.txt" })
+    ));
+    assert!(files.contains(&json!({ "path": "a.txt", "index": " ", "worktree": "M" })));
+    // core.quotepath=false: names as they are.
+    assert!(files.contains(&json!({ "path": "ünïcode.txt", "index": "?", "worktree": "?" })));
+
+    let diff = git_diff(ws, &env, Some("a.txt"), false, false)
+        .await
+        .unwrap();
+    assert!(diff["diff"].as_str().unwrap().contains("+three"));
+    assert_eq!(diff["truncated"], false);
+    let staged = git_diff(ws, &env, None, true, false).await.unwrap();
+    assert!(
+        staged["diff"]
+            .as_str()
+            .unwrap()
+            .contains("rename to new name.txt")
+    );
+    let untracked = git_diff(ws, &env, Some("-dash.txt"), true, true)
+        .await
+        .unwrap();
+    assert!(untracked["diff"].as_str().unwrap().contains("+dash"));
+    let glob = git_diff(ws, &env, Some("*.txt"), false, false)
+        .await
+        .unwrap();
+    assert_eq!(glob["diff"], "");
+    assert_eq!(
+        git_diff(ws, &env, Some("../secret.txt"), false, false)
+            .await
+            .unwrap_err()
+            .status,
+        400
+    );
+
+    let log = git_log(ws, &env, 0, 1).await.unwrap();
+    assert_eq!(log["more"], true);
+    let head = &log["commits"][0];
+    assert_eq!(head["subject"], "second commit");
+    assert_eq!(head["author"], "Ada");
+    assert_eq!(head["email"], "ada@example.com");
+    assert_eq!(head["time"], json!(1_700_000_000_000_u64));
+    assert_eq!(head["refs"], json!(["HEAD -> main", "tag: v1"]));
+    let rest = git_log(ws, &env, 1, 50).await.unwrap();
+    assert_eq!(rest["more"], false);
+    assert_eq!(rest["commits"][0]["refs"], json!(["base"]));
+
+    let sha = head["sha"].as_str().unwrap().to_uppercase();
+    let show = git_show(ws, &env, &sha).await.unwrap();
+    assert_eq!(show["message"], "second commit\n\nWith a body.");
+    assert_eq!(show["time"], json!(1_700_000_000_000_u64));
+    let patch = show["diff"].as_str().unwrap();
+    assert!(patch.starts_with(" a.txt | 1 +"), "{patch}");
+    assert!(patch.contains("+two"));
+    let unknown = git_show(ws, &env, "deadbeef0").await.unwrap_err();
+    assert_eq!(unknown.status, 400);
+
+    // A subdirectory of the repository: its path and only its files.
+    std::fs::create_dir(ws.join("sub")).unwrap();
+    std::fs::write(ws.join("sub/inner.txt"), "x").unwrap();
+    let sub = git_status(&ws.join("sub"), &env).await.unwrap();
+    assert_eq!(sub["root"], "sub");
+    assert_eq!(
+        sub["files"],
+        json!([{ "path": "sub/inner.txt", "index": "?", "worktree": "?" }])
+    );
+}
