@@ -43,7 +43,9 @@ const NODE_VARIABLE: &str = "PIRC_CONFORMANCE_NODE_BIN";
 /// The top-level chats workspace of a chat node, as the gateway names it.
 pub const CHATS_WORKSPACE_ID: &str = "test:chats";
 
-/// Replaces the sandbox runtime: answers the node's probe and runs the agent unconfined.
+/// Replaces the sandbox runtime: answers the node's probe and runs the agent
+/// unconfined. What the node writes to the control fd (3, runtime network
+/// approvals) is appended to [`FAKE_SRT_CONTROL_LOG`] next to the script.
 const FAKE_SRT: &str = r#"#!/bin/sh
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -52,8 +54,15 @@ while [ $# -gt 0 ]; do
     *) shift ;;
   esac
 done
+if [ -e /dev/fd/3 ]; then
+  cat <&3 >> "$(dirname "$0")/fake-srt-control.log" &
+fi
 exec "$@"
 "#;
+
+/// The file in a node's run directory ([`LoneNode::dir`], [`Cluster::dir`])
+/// where the fake srt keeps the node's control-fd lines.
+pub const FAKE_SRT_CONTROL_LOG: &str = "fake-srt-control.log";
 
 /// Starting again with another port when the gateway exits before it
 /// answers (the free port was taken in between).

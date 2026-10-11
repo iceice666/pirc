@@ -1,0 +1,184 @@
+---
+source: crates/pirc-conformance/tests/node_link_side.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": {
+      "frames": [
+        {
+          "end": 491,
+          "ledgerKey": "<hex16:1>",
+          "lines": [
+            {
+              "items": [
+                {
+                  "content": "Staging first",
+                  "git": {
+                    "branch": "main",
+                    "dirty": false,
+                    "head": "abcdef123456"
+                  },
+                  "id": "a00000000001",
+                  "relevance": "high",
+                  "sourceMemoryIds": [
+                    "aaaaaaaaaaaa"
+                  ],
+                  "timestamp": "2026-09-27 10:00"
+                }
+              ],
+              "type": "recorded"
+            },
+            {
+              "ids": [
+                "a00000000001"
+              ],
+              "reason": "superseded",
+              "type": "retired"
+            }
+          ],
+          "offset": 0,
+          "type": "memory_mirror"
+        },
+        {
+          "end": 70,
+          "ledgerKey": "<hex16:2>",
+          "lines": [
+            {
+              "ids": [
+                "c00000000001"
+              ],
+              "reason": "forgotten",
+              "type": "retired"
+            }
+          ],
+          "offset": 0,
+          "reset": true,
+          "type": "memory_mirror"
+        }
+      ],
+      "then": {
+        "sessions": [],
+        "type": "activity"
+      }
+    },
+    "step": "after registered: a frame per ledger with lines after the gateway's offset, then the activity"
+  },
+  {
+    "observed": 0,
+    "step": "unacknowledged: no second frame for the ledger"
+  },
+  {
+    "observed": {
+      "end": 830,
+      "ledgerKey": "<hex16:1>",
+      "lines": [
+        {
+          "items": [
+            {
+              "content": "Later",
+              "git": {
+                "branch": "main",
+                "dirty": false,
+                "head": "abcdef123456"
+              },
+              "id": "a00000000002",
+              "relevance": "high",
+              "sourceMemoryIds": [
+                "aaaaaaaaaaaa"
+              ],
+              "timestamp": "2026-09-27 10:00"
+            }
+          ],
+          "type": "recorded"
+        }
+      ],
+      "offset": 491,
+      "type": "memory_mirror"
+    },
+    "step": "acknowledged: the rest of the ledger, now complete"
+  },
+  {
+    "observed": 0,
+    "step": "a line without its newline is not sent"
+  },
+  {
+    "observed": {
+      "end": 856,
+      "ledgerKey": "<hex16:1>",
+      "lines": [
+        {
+          "type": "cleared"
+        }
+      ],
+      "offset": 830,
+      "type": "memory_mirror"
+    },
+    "step": "its newline written: sent on the next scan"
+  },
+  {
+    "observed": {
+      "end": 26,
+      "ledgerKey": "<hex16:1>",
+      "lines": [
+        {
+          "type": "cleared"
+        }
+      ],
+      "offset": 0,
+      "reset": true,
+      "type": "memory_mirror"
+    },
+    "step": "a shrunk ledger: sent again from 0 with reset"
+  },
+  {
+    "observed": {
+      "end": 338,
+      "ledgerKey": "<hex16:3>",
+      "lines": [
+        {
+          "items": [
+            {
+              "content": "Kept",
+              "git": {
+                "branch": "main",
+                "dirty": false,
+                "head": "abcdef123456"
+              },
+              "id": "b00000000001",
+              "relevance": "high",
+              "sourceMemoryIds": [
+                "aaaaaaaaaaaa"
+              ],
+              "timestamp": "2026-09-27 10:00"
+            }
+          ],
+          "type": "recorded"
+        }
+      ],
+      "offset": 0,
+      "type": "memory_mirror"
+    },
+    "step": "acknowledged at 0: the ledger is sent from the start"
+  },
+  {
+    "observed": 0,
+    "step": "an acknowledgement for a ledger the node does not have: nothing"
+  },
+  {
+    "observed": [
+      {
+        "end": 26,
+        "ledgerKey": "<hex16:1>",
+        "lines": [
+          {
+            "type": "cleared"
+          }
+        ],
+        "offset": 0,
+        "type": "memory_mirror"
+      }
+    ],
+    "step": "registered again: only what the gateway lacks"
+  }
+]
