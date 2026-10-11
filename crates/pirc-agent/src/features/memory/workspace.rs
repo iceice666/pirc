@@ -144,9 +144,15 @@ pub fn workspace_memory_dir() -> String {
     mjs::path_join(&[&state, "pirc", "workspace-memory"])
 }
 
-/// `git(cwd, args)`: trimmed output, or `None` when git fails (or takes
-/// more than 5 s). Blocking, as `execFileSync` was.
+/// `execFileSync`'s default `maxBuffer`: more output fails the call.
+const GIT_MAX_BUFFER: usize = 1024 * 1024;
+
+/// `git(cwd, args)`: trimmed output, or `None` when git fails, prints more
+/// than 1 MiB or takes more than 5 s. Blocking, as `execFileSync` was; the
+/// output is read while git runs, so a large one cannot fill the pipe and
+/// stall it.
 fn git(cwd: &str, args: &[&str]) -> Option<String> {
+    use std::io::Read;
     let mut child = Command::new("git")
         .args(args)
         .current_dir(cwd)
@@ -155,23 +161,35 @@ fn git(cwd: &str, args: &[&str]) -> Option<String> {
         .stderr(Stdio::null())
         .spawn()
         .ok()?;
+    let stdout = child.stdout.take()?;
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut output = Vec::new();
+        // One byte past the limit tells an overflow from a full buffer.
+        let read = stdout
+            .take(GIT_MAX_BUFFER as u64 + 1)
+            .read_to_end(&mut output);
+        let _ = sender.send(read.ok().map(|_| output));
+    });
     let deadline = Instant::now() + Duration::from_secs(5);
+    let fail = |child: &mut std::process::Child| {
+        let _ = child.kill();
+        let _ = child.wait();
+        None
+    };
+    let output = match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+        Ok(Some(output)) if output.len() <= GIT_MAX_BUFFER => output,
+        _ => return fail(&mut child),
+    };
+    // Its output is complete; it exits now.
     loop {
         match child.try_wait() {
-            Ok(Some(_)) => break,
+            Ok(Some(status)) if status.success() => break,
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(2)),
-            _ => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return None;
-            }
+            _ => return fail(&mut child),
         }
     }
-    let output = child.wait_with_output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(js::trim(&String::from_utf8_lossy(&output.stdout)).to_owned())
+    Some(js::trim(&String::from_utf8_lossy(&output)).to_owned())
 }
 
 fn safe_realpath(path: &str) -> String {

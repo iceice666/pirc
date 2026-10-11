@@ -23,8 +23,12 @@ pub fn memory_panel(
 ) -> Value {
     let folded = fold_ledger(branch);
     let visible = visible_projection(branch);
-    let visible_observation = |id: &str| visible.observations.iter().any(|o| o.id == id);
-    let visible_reflection = |id: &str| visible.reflections.iter().any(|r| r.id == id);
+    let observation_ids: std::collections::HashSet<&str> =
+        visible.observations.iter().map(|o| o.id.as_str()).collect();
+    let reflection_ids: std::collections::HashSet<&str> =
+        visible.reflections.iter().map(|r| r.id.as_str()).collect();
+    let visible_observation = |id: &str| observation_ids.contains(id);
+    let visible_reflection = |id: &str| reflection_ids.contains(id);
     let current = context_tokens(&context_entries_of(branch));
     let compactions: Vec<&SessionEntry> = branch
         .iter()
@@ -97,16 +101,20 @@ pub fn memory_panel(
 pub fn visible_memory_tokens(branch: &[SessionEntry]) -> f64 {
     let folded = fold_ledger(branch);
     let visible = visible_projection(branch);
+    let observation_ids: std::collections::HashSet<&str> =
+        visible.observations.iter().map(|o| o.id.as_str()).collect();
+    let reflection_ids: std::collections::HashSet<&str> =
+        visible.reflections.iter().map(|r| r.id.as_str()).collect();
     let observations: f64 = folded
         .observations
         .iter()
-        .filter(|o| visible.observations.iter().any(|v| v.id == o.id))
+        .filter(|o| observation_ids.contains(o.id.as_str()))
         .map(|o| o.token_count)
         .fold(0.0, |sum, n| sum + n);
     let reflections: f64 = folded
         .reflections
         .iter()
-        .filter(|r| visible.reflections.iter().any(|v| v.id == r.id))
+        .filter(|r| reflection_ids.contains(r.id.as_str()))
         .map(|r| r.token_count)
         .fold(0.0, |sum, n| sum + n);
     observations + reflections

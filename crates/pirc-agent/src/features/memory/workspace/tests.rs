@@ -402,3 +402,17 @@ fn skips_work_when_another_process_holds_the_lock() {
     drop(held);
     assert!(ledger.try_lock().unwrap().is_some());
 }
+
+/// Output past the pipe buffer is read while git runs (it used to stall
+/// git until the 5 s kill), and output past `maxBuffer` fails the call.
+#[test]
+fn git_reads_large_output_and_refuses_more_than_a_mebibyte() {
+    let dir = tempfile::tempdir().unwrap();
+    let cwd = dir.path().to_str().unwrap();
+    let alias = |bytes: usize| format!("alias.big=!head -c {bytes} /dev/zero | tr '\\0' a");
+    let started = std::time::Instant::now();
+    let output = super::git(cwd, &["-c", &alias(200_000), "big"]).expect("output");
+    assert_eq!(output.len(), 200_000);
+    assert!(super::git(cwd, &["-c", &alias(2_000_000), "big"]).is_none());
+    assert!(started.elapsed() < std::time::Duration::from_secs(4));
+}
