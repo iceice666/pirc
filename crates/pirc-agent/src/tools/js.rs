@@ -563,9 +563,105 @@ pub fn compare16(a: &str, b: &str) -> Ordering {
     a.encode_utf16().cmp(b.encode_utf16())
 }
 
+// ---------------------------------------------------------------------------
+// Dates and numbers
+
+/// `new Date(ms).toISOString()`; `None` where it throws (an invalid date:
+/// not finite, or more than 8.64e15 ms from the epoch).
+pub fn iso_string(ms: f64) -> Option<String> {
+    if !ms.is_finite() || ms.abs() > 8.64e15 {
+        return None;
+    }
+    // TimeClip: toward zero.
+    let ms = ms.trunc() as i64;
+    let days = ms.div_euclid(86_400_000);
+    let in_day = ms.rem_euclid(86_400_000);
+    // Howard Hinnant's civil_from_days.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    let year = if (0..=9999).contains(&year) {
+        format!("{year:04}")
+    } else if year < 0 {
+        format!("-{:06}", -year)
+    } else {
+        format!("+{year:06}")
+    };
+    Some(format!(
+        "{year}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{:03}Z",
+        in_day / 3_600_000,
+        in_day / 60_000 % 60,
+        in_day / 1000 % 60,
+        in_day % 1000
+    ))
+}
+
+/// `n.toLocaleString('en-US')`: grouped thousands, at most three
+/// fraction digits.
+pub fn locale_string_en_us(n: f64) -> String {
+    if n.is_nan() {
+        return "NaN".to_owned();
+    }
+    if n.is_infinite() {
+        return if n > 0.0 { "∞" } else { "-∞" }.to_owned();
+    }
+    let text = format!("{:.3}", n.abs());
+    let (whole, fraction) = text.split_once('.').unwrap_or((&text, ""));
+    let fraction = fraction.trim_end_matches('0');
+    let mut grouped = String::new();
+    for (index, digit) in whole.chars().enumerate() {
+        if index > 0 && (whole.len() - index) % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(digit);
+    }
+    // Intl keeps the sign of -0 and of what rounds to it.
+    let sign = if n.is_sign_negative() { "-" } else { "" };
+    if fraction.is_empty() {
+        format!("{sign}{grouped}")
+    } else {
+        format!("{sign}{grouped}.{fraction}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn formats_dates_and_numbers_as_javascript() {
+        assert_eq!(iso_string(0.0).as_deref(), Some("1970-01-01T00:00:00.000Z"));
+        assert_eq!(
+            iso_string(1_767_830_400_123.9).as_deref(),
+            Some("2026-01-08T00:00:00.123Z")
+        );
+        assert_eq!(
+            iso_string(-1.0).as_deref(),
+            Some("1969-12-31T23:59:59.999Z")
+        );
+        assert_eq!(
+            iso_string(8.64e15).as_deref(),
+            Some("+275760-09-13T00:00:00.000Z")
+        );
+        assert_eq!(
+            iso_string(-62_198_755_200_000.0).as_deref(),
+            Some("-000001-01-01T00:00:00.000Z")
+        );
+        assert_eq!(iso_string(8.64e15 + 1.0), None);
+        assert_eq!(iso_string(f64::NAN), None);
+        assert_eq!(locale_string_en_us(1_234_567.0), "1,234,567");
+        assert_eq!(locale_string_en_us(100.0), "100");
+        assert_eq!(locale_string_en_us(0.0), "0");
+        assert_eq!(locale_string_en_us(-1234.5), "-1,234.5");
+        assert_eq!(locale_string_en_us(1.23456), "1.235");
+        assert_eq!(locale_string_en_us(f64::NAN), "NaN");
+    }
 
     #[test]
     fn strings_count_utf16_units() {
