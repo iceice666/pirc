@@ -208,7 +208,10 @@ pub fn filesystem_args(paths: &PathPolicy) -> Vec<String> {
 /// The paths that must be mount points so nothing the agent may not write
 /// can be renamed away (see [`filesystem_args`]): each existing point the
 /// agent may not write, and every ancestor of it, whose parent directory is
-/// writable. Ancestors exist since the point does.
+/// writable. Ancestors exist since the point does. Symlinks are left out:
+/// bubblewrap refuses to mount onto one (`<ws>/.git` may be a link to the
+/// real repository), and a symlinked ancestor stays renamable, as with the
+/// other symlink cases left to M7.
 fn pinned(paths: &PathPolicy, points: &[String]) -> Vec<String> {
     let writable_parent = |path: &Path| {
         path.parent()
@@ -227,7 +230,12 @@ fn pinned(paths: &PathPolicy, points: &[String]) -> Vec<String> {
             let Some(text) = path.to_str() else {
                 continue;
             };
-            if writable_parent(path) && !kernel_path(text) && !pinned.iter().any(|p| p == text) {
+            let symlink = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
+            if !symlink
+                && writable_parent(path)
+                && !kernel_path(text)
+                && !pinned.iter().any(|p| p == text)
+            {
                 pinned.push(text.to_owned());
             }
         }
@@ -596,6 +604,31 @@ mod tests {
         .map(String::from)
         .to_vec();
         assert_eq!(args, expected);
+    }
+
+    #[test]
+    fn symlinked_ancestors_are_not_pinned() {
+        // `<ws>/.git` linking to the real repository (worktrees, dotfile
+        // managers): bubblewrap cannot mount onto the link.
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap().display().to_string();
+        let p = |rest: &str| format!("{root}/{rest}");
+        fs::create_dir_all(p("repo")).unwrap();
+        fs::create_dir_all(p("ws")).unwrap();
+        fs::write(p("repo/config"), "").unwrap();
+        std::os::unix::fs::symlink(p("repo"), p("ws/.git")).unwrap();
+        let paths = PathPolicy {
+            allow_write: vec![p("ws")],
+            deny_write: vec![p("ws/.git/config")],
+            ..PathPolicy::default()
+        };
+        let args = filesystem_args(&paths);
+        assert!(!args.contains(&p("ws/.git")), "{args:?}");
+        assert!(
+            args.windows(3)
+                .any(|w| w == ["--ro-bind", &p("ws/.git/config"), &p("ws/.git/config")]),
+            "{args:?}"
+        );
     }
 
     #[test]

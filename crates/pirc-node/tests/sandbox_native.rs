@@ -584,6 +584,33 @@ async fn protected_paths_cannot_be_renamed_away() {
     assert!(root.join("home/new").exists());
 }
 
+/// A workspace whose `.git` links to the repository elsewhere (worktrees,
+/// dotfile managers) still starts: bubblewrap cannot mount onto the link,
+/// so it is not pinned, and the config behind it stays read-only.
+#[tokio::test]
+async fn starts_with_a_symlinked_git_directory() {
+    let Some(f) = fixture("git-link") else {
+        return;
+    };
+    let w = path(&f.root, "workspace");
+    fs::rename(
+        f.root.join("workspace/.git"),
+        f.root.join("workspace/.git-real"),
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(
+        f.root.join("workspace/.git-real"),
+        f.root.join("workspace/.git"),
+    )
+    .unwrap();
+    assert_eq!(f.sh("exit 0").await, 0, "the agent starts");
+    assert_ne!(f.sh(&format!("echo x >> {w}/.git/config")).await, 0);
+    assert_eq!(
+        fs::read_to_string(f.root.join("workspace/.git-real/config")).unwrap(),
+        "[core]"
+    );
+}
+
 /// The node's inference socket lives in a private directory of its state,
 /// which the sandbox hides: the policy gives that one directory back.
 #[tokio::test]
