@@ -197,6 +197,8 @@ pub struct Agent {
     completion_wake: Notify,
     completion_waiting: RefCell<Vec<String>>,
     completion_revision: Cell<u64>,
+    /// The latest completion wait waited for a feature.
+    completion_waited: Cell<bool>,
     /// Dialogs and other waits for a human now open (`openDialogs`).
     open_dialogs: Cell<usize>,
     human_wait_listeners: RefCell<Vec<(u64, HumanWaitListener)>>,
@@ -720,6 +722,7 @@ impl Agent {
                 completion_wake: Notify::new(),
                 completion_waiting: RefCell::new(Vec::new()),
                 completion_revision: Cell::new(0),
+                completion_waited: Cell::new(false),
                 open_dialogs: Cell::new(0),
                 human_wait_listeners: RefCell::new(Vec::new()),
                 next_listener: Cell::new(0),
@@ -936,10 +939,18 @@ impl Agent {
                 () = signal.cancelled() => {}
             }
         };
-        if !self.completion_waiting.borrow().is_empty() {
+        let waited = !self.completion_waiting.borrow().is_empty();
+        if waited {
             self.ui.set_status("completion-wait", None);
         }
         self.completion_waiting.borrow_mut().clear();
+        if waited {
+            // Woken by a feature (team events): what it queued as TS
+            // microtasks (panel flushes, a broker's next step) ran before
+            // `await waitForCompletion()` returned.
+            crate::tick().await;
+        }
+        self.completion_waited.set(waited);
         timed_out
     }
 
@@ -2498,6 +2509,11 @@ impl Agent {
                 items.extend(self.follow_ups.borrow_mut().drain(..take));
                 self.emit_queue();
                 self.admit(items).await?;
+                if self.completion_waited.replace(false) {
+                    // `await this.admit(items)`: the microtasks the woken
+                    // features queued meanwhile run first.
+                    crate::tick().await;
+                }
                 continue;
             }
             break;

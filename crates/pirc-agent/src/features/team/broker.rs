@@ -1738,7 +1738,11 @@ impl Team {
         let id = entry.get("id").cloned().unwrap_or(Value::Null);
         let mut data = Json::new();
         data.insert("message_id".to_owned(), id);
-        match self.deliver(&entry).await {
+        let delivered = self.deliver(&entry).await;
+        // `await this.deliver(entry)` takes a microtask tick even when the
+        // parent took the entry synchronously.
+        crate::tick().await;
+        match delivered {
             Ok(()) => {
                 self.record("accepted", data)?;
             }

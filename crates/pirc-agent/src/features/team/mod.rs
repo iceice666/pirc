@@ -867,6 +867,20 @@ impl TeamTool {
 
     async fn run(&self, args: Map<String, Value>, ctx: ToolContext) -> Result<ToolResult, String> {
         let agent = self.agent.upgrade().ok_or("Aborted")?;
+        let outcome = self.dispatch(&agent, args, ctx).await;
+        // The panel changes queued as microtasks ran before the awaiting
+        // tool went on, even when the broker answered synchronously.
+        agent.flush_panel();
+        outcome
+    }
+
+    async fn dispatch(
+        &self,
+        agent: &Rc<Agent>,
+        args: Map<String, Value>,
+        ctx: ToolContext,
+    ) -> Result<ToolResult, String> {
+        let agent = agent.clone();
         match self.kind {
             Kind::Call => Ok(result(
                 self.state
