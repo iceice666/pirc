@@ -14,6 +14,7 @@ async fn http_edges() {
     let Some(cluster) = Cluster::start_with(GatewayOptions {
         without_node: true,
         env: vec![("PIRC_UPLOAD_MAX_BYTES", BODY_LIMIT.to_string())],
+        ..GatewayOptions::default()
     })
     .await
     else {

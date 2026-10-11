@@ -337,22 +337,26 @@ impl Drop for AgentRun {
     }
 }
 
+/// `PIRC_CONFORMANCE_AGENT_BIN`, resolved.
+pub(crate) fn agent_override() -> Option<PathBuf> {
+    let path = PathBuf::from(std::env::var_os(AGENT_VARIABLE)?);
+    let path = if path.is_absolute() {
+        path
+    } else {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(path)
+    };
+    Some(
+        path.canonicalize()
+            .unwrap_or_else(|e| panic!("{AGENT_VARIABLE}: {e}")),
+    )
+}
+
 /// The agent executable and its leading arguments, or `None` (skipped).
 fn agent_command() -> Option<(PathBuf, Vec<String>)> {
-    if let Some(path) = std::env::var_os(AGENT_VARIABLE) {
-        let path = PathBuf::from(path);
-        let path = if path.is_absolute() {
-            path
-        } else {
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../..")
-                .join(path)
-        };
-        return Some((
-            path.canonicalize()
-                .unwrap_or_else(|e| panic!("{AGENT_VARIABLE}: {e}")),
-            vec!["agent".to_owned()],
-        ));
+    if let Some(path) = agent_override() {
+        return Some((path, vec!["agent".to_owned()]));
     }
     let bin_dir = crate::cluster::bin_dir()?;
     Some((bin_dir.join("pirc-node"), vec!["agent".to_owned()]))

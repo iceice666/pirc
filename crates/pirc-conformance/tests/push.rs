@@ -91,6 +91,7 @@ async fn push_notifications() {
             ("PIRC_VAPID_PRIVATE_KEY", VAPID_PRIVATE.to_owned()),
         ],
         without_node: true,
+        ..GatewayOptions::default()
     })
     .await
     else {

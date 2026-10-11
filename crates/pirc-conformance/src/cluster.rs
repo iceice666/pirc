@@ -61,6 +61,11 @@ pub struct GatewayOptions {
     pub env: Vec<(&'static str, String)>,
     /// Start no node.
     pub without_node: bool,
+    /// The node's agents run without their built-in features
+    /// (`PIRC_AGENT_FEATURES=none`), and are the executable of
+    /// `PIRC_CONFORMANCE_AGENT_BIN` when it is set (the Rust agent under the
+    /// TS node; plans/rust-rewrite.md, M4).
+    pub agent_core_only: bool,
 }
 
 /// A running gateway (and node) with a fake model provider.
@@ -149,6 +154,7 @@ impl Cluster {
                 bin_dir,
                 &root,
                 &format!("ws://127.0.0.1:{port}"),
+                options.agent_core_only,
             ))
         };
 
@@ -166,7 +172,12 @@ impl Cluster {
         Ok(cluster)
     }
 
-    fn spawn_node(bin_dir: &Path, root: &Path, gateway_url: &str) -> Process {
+    fn spawn_node(
+        bin_dir: &Path,
+        root: &Path,
+        gateway_url: &str,
+        agent_core_only: bool,
+    ) -> Process {
         let workspace = dir_in(root, "workspace");
         fs::write(Path::new(&workspace).join("README.md"), "conformance\n").unwrap();
         let config_dir = dir_in(root, "node-config");
@@ -181,7 +192,7 @@ impl Cluster {
         let srt = root.join("fake-srt.sh");
         fs::write(&srt, FAKE_SRT).unwrap();
         fs::set_permissions(&srt, fs::Permissions::from_mode(0o755)).unwrap();
-        let env = [
+        let mut env = vec![
             ("PIRC_NODE_ID", NODE_ID.to_owned()),
             ("PIRC_NODE_TOKEN", NODE_TOKEN.to_owned()),
             ("PIRC_DAEMON_URL", gateway_url.to_owned()),
@@ -198,6 +209,13 @@ impl Cluster {
             ("PIRC_BROWSER", "false".to_owned()),
             ("PIRC_SHUTDOWN_GRACE_MS", "200".to_owned()),
         ];
+        if agent_core_only {
+            env.push(("PIRC_AGENT_FEATURES", "none".to_owned()));
+            if let Some(agent) = crate::agent::agent_override() {
+                env.push(("PIRC_AGENT_COMMAND", agent.display().to_string()));
+                env.push(("PIRC_AGENT_ARGS", r#"["agent"]"#.to_owned()));
+            }
+        }
         Process::spawn(
             "node",
             &bin_dir.join("pirc-node"),
@@ -319,7 +337,7 @@ impl LoneNode {
         let bin_dir = bin_dir()?;
         let (dir, root) = run_dir();
         let url = format!("ws://127.0.0.1:{gateway_port}");
-        let process = Cluster::spawn_node(&bin_dir, &root, &url);
+        let process = Cluster::spawn_node(&bin_dir, &root, &url, false);
         Some(Self { process, dir })
     }
 

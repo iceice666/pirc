@@ -293,6 +293,7 @@ async fn memory() {
             ("PIRC_MEMORY_USER_CHARS", "80".to_owned()),
             ("PIRC_MEMORY_NOTE_CHARS", "120".to_owned()),
         ],
+        ..GatewayOptions::default()
     })
     .await
     else {

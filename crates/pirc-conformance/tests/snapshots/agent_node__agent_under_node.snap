@@ -1,0 +1,1022 @@
+---
+source: crates/pirc-conformance/tests/agent_node.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c1",
+        "payload": {
+          "message": "Write, read and edit",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:1>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:1>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "prompt"
+  },
+  {
+    "observed": [
+      {
+        "type": "agent_start"
+      },
+      {
+        "message": {
+          "content": "Write, read and edit",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "Write, read and edit",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "id": "w1",
+          "toolName": "write",
+          "type": "toolcall_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"pat",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "h\":\"notes.txt\",\"content\":\"from the agent\\n\"}",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "arguments": {
+              "content": "from the agent\n",
+              "path": "notes.txt"
+            },
+            "id": "w1",
+            "name": "write",
+            "type": "toolCall"
+          },
+          "type": "toolcall_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "canonicalProvider": "fake",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "content": "from the agent\n",
+                "path": "notes.txt"
+              },
+              "id": "w1",
+              "name": "write",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 60,
+            "output": 10,
+            "totalTokens": 110
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "args": {
+          "content": "from the agent\n",
+          "path": "notes.txt"
+        },
+        "toolCallId": "w1",
+        "toolName": "write",
+        "type": "tool_execution_start"
+      },
+      {
+        "isError": false,
+        "result": {
+          "content": [
+            {
+              "text": "Wrote 15 bytes to notes.txt",
+              "type": "text"
+            }
+          ]
+        },
+        "toolCallId": "w1",
+        "toolName": "write",
+        "type": "tool_execution_end"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "Wrote 15 bytes to notes.txt",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "w1",
+          "toolName": "write"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "Wrote 15 bytes to notes.txt",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "w1",
+          "toolName": "write"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "id": "r1",
+          "toolName": "read",
+          "type": "toolcall_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"pat",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "h\":\"notes.txt\"}",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "arguments": {
+              "path": "notes.txt"
+            },
+            "id": "r1",
+            "name": "read",
+            "type": "toolCall"
+          },
+          "type": "toolcall_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "canonicalProvider": "fake",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "path": "notes.txt"
+              },
+              "id": "r1",
+              "name": "read",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 60,
+            "output": 10,
+            "totalTokens": 110
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "args": {
+          "path": "notes.txt"
+        },
+        "toolCallId": "r1",
+        "toolName": "read",
+        "type": "tool_execution_start"
+      },
+      {
+        "isError": false,
+        "result": {
+          "content": [
+            {
+              "text": "1\tfrom the agent\n2\t",
+              "type": "text"
+            }
+          ]
+        },
+        "toolCallId": "r1",
+        "toolName": "read",
+        "type": "tool_execution_end"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "1\tfrom the agent\n2\t",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "r1",
+          "toolName": "read"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "1\tfrom the agent\n2\t",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "r1",
+          "toolName": "read"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "id": "e1",
+          "toolName": "edit",
+          "type": "toolcall_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"pat",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "h\":\"notes.txt\",\"oldText\":\"from\",\"newText\":\"edited by\"}",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "arguments": {
+              "newText": "edited by",
+              "oldText": "from",
+              "path": "notes.txt"
+            },
+            "id": "e1",
+            "name": "edit",
+            "type": "toolCall"
+          },
+          "type": "toolcall_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "canonicalProvider": "fake",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "newText": "edited by",
+                "oldText": "from",
+                "path": "notes.txt"
+              },
+              "id": "e1",
+              "name": "edit",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 60,
+            "output": 10,
+            "totalTokens": 110
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "args": {
+          "newText": "edited by",
+          "oldText": "from",
+          "path": "notes.txt"
+        },
+        "toolCallId": "e1",
+        "toolName": "edit",
+        "type": "tool_execution_start"
+      },
+      {
+        "isError": false,
+        "result": {
+          "content": [
+            {
+              "text": "Edited notes.txt (1 replacement)",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "diff": "--- notes.txt\n+++ notes.txt\n@@ -1 +1 @@\n-from the agent\n+edited by the agent\n "
+          }
+        },
+        "toolCallId": "e1",
+        "toolName": "edit",
+        "type": "tool_execution_end"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "Edited notes.txt (1 replacement)",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "diff": "--- notes.txt\n+++ notes.txt\n@@ -1 +1 @@\n-from the agent\n+edited by the agent\n "
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "e1",
+          "toolName": "edit"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "Edited notes.txt (1 replacement)",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "diff": "--- notes.txt\n+++ notes.txt\n@@ -1 +1 @@\n-from the agent\n+edited by the agent\n "
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "e1",
+          "toolName": "edit"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "type": "text_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "All d",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "one.",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "content": "All done.",
+          "contentIndex": 0,
+          "type": "text_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "canonicalProvider": "fake",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "All done.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 60,
+            "output": 10,
+            "totalTokens": 110
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "agent_end",
+        "willRetry": false
+      },
+      {
+        "type": "agent_settled"
+      }
+    ],
+    "step": "agent events"
+  },
+  {
+    "observed": [
+      {
+        "messages": [
+          {
+            "content": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\nCurrent working directory: <tmp>/workspace",
+            "role": "developer"
+          },
+          {
+            "content": "Write, read and edit",
+            "role": "user"
+          }
+        ],
+        "tools": [
+          "ptc",
+          "ptc_docs",
+          "read",
+          "write",
+          "edit",
+          "ls",
+          "grep",
+          "find",
+          "bash"
+        ]
+      },
+      {
+        "messages": [
+          {
+            "content": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\nCurrent working directory: <tmp>/workspace",
+            "role": "developer"
+          },
+          {
+            "content": "Write, read and edit",
+            "role": "user"
+          },
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"path\":\"notes.txt\",\"content\":\"from the agent\\n\"}",
+                  "name": "write"
+                },
+                "id": "w1",
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "Wrote 15 bytes to notes.txt",
+            "role": "tool",
+            "tool_call_id": "w1"
+          }
+        ],
+        "tools": [
+          "ptc",
+          "ptc_docs",
+          "read",
+          "write",
+          "edit",
+          "ls",
+          "grep",
+          "find",
+          "bash"
+        ]
+      },
+      {
+        "messages": [
+          {
+            "content": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\nCurrent working directory: <tmp>/workspace",
+            "role": "developer"
+          },
+          {
+            "content": "Write, read and edit",
+            "role": "user"
+          },
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"path\":\"notes.txt\",\"content\":\"from the agent\\n\"}",
+                  "name": "write"
+                },
+                "id": "w1",
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "Wrote 15 bytes to notes.txt",
+            "role": "tool",
+            "tool_call_id": "w1"
+          },
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"path\":\"notes.txt\"}",
+                  "name": "read"
+                },
+                "id": "r1",
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "1\tfrom the agent\n2\t",
+            "role": "tool",
+            "tool_call_id": "r1"
+          }
+        ],
+        "tools": [
+          "ptc",
+          "ptc_docs",
+          "read",
+          "write",
+          "edit",
+          "ls",
+          "grep",
+          "find",
+          "bash"
+        ]
+      },
+      {
+        "messages": [
+          {
+            "content": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\nCurrent working directory: <tmp>/workspace",
+            "role": "developer"
+          },
+          {
+            "content": "Write, read and edit",
+            "role": "user"
+          },
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"path\":\"notes.txt\",\"content\":\"from the agent\\n\"}",
+                  "name": "write"
+                },
+                "id": "w1",
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "Wrote 15 bytes to notes.txt",
+            "role": "tool",
+            "tool_call_id": "w1"
+          },
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"path\":\"notes.txt\"}",
+                  "name": "read"
+                },
+                "id": "r1",
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "1\tfrom the agent\n2\t",
+            "role": "tool",
+            "tool_call_id": "r1"
+          },
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"path\":\"notes.txt\",\"oldText\":\"from\",\"newText\":\"edited by\"}",
+                  "name": "edit"
+                },
+                "id": "e1",
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "Edited notes.txt (1 replacement)",
+            "role": "tool",
+            "tool_call_id": "e1"
+          }
+        ],
+        "tools": [
+          "ptc",
+          "ptc_docs",
+          "read",
+          "write",
+          "edit",
+          "ls",
+          "grep",
+          "find",
+          "bash"
+        ]
+      }
+    ],
+    "step": "model requests (messages and tool names)"
+  },
+  {
+    "observed": [
+      {
+        "content": "Write, read and edit",
+        "role": "user",
+        "timestamp": "<epoch-ms>"
+      },
+      {
+        "api": "openai-completions",
+        "canonicalProvider": "fake",
+        "completedAt": "<epoch-ms>",
+        "content": [
+          {
+            "arguments": {
+              "content": "from the agent\n",
+              "path": "notes.txt"
+            },
+            "id": "w1",
+            "name": "write",
+            "type": "toolCall"
+          }
+        ],
+        "model": "fake-model",
+        "provider": "fake",
+        "role": "assistant",
+        "stopReason": "toolUse",
+        "timestamp": "<epoch-ms>",
+        "usage": {
+          "cacheRead": 40,
+          "cacheWrite": 0,
+          "input": 60,
+          "output": 10,
+          "totalTokens": 110
+        }
+      },
+      {
+        "content": [
+          {
+            "text": "Wrote 15 bytes to notes.txt",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "role": "toolResult",
+        "timestamp": "<epoch-ms>",
+        "toolCallId": "w1",
+        "toolName": "write"
+      },
+      {
+        "api": "openai-completions",
+        "canonicalProvider": "fake",
+        "completedAt": "<epoch-ms>",
+        "content": [
+          {
+            "arguments": {
+              "path": "notes.txt"
+            },
+            "id": "r1",
+            "name": "read",
+            "type": "toolCall"
+          }
+        ],
+        "model": "fake-model",
+        "provider": "fake",
+        "role": "assistant",
+        "stopReason": "toolUse",
+        "timestamp": "<epoch-ms>",
+        "usage": {
+          "cacheRead": 40,
+          "cacheWrite": 0,
+          "input": 60,
+          "output": 10,
+          "totalTokens": 110
+        }
+      },
+      {
+        "content": [
+          {
+            "text": "1\tfrom the agent\n2\t",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "role": "toolResult",
+        "timestamp": "<epoch-ms>",
+        "toolCallId": "r1",
+        "toolName": "read"
+      },
+      {
+        "api": "openai-completions",
+        "canonicalProvider": "fake",
+        "completedAt": "<epoch-ms>",
+        "content": [
+          {
+            "arguments": {
+              "newText": "edited by",
+              "oldText": "from",
+              "path": "notes.txt"
+            },
+            "id": "e1",
+            "name": "edit",
+            "type": "toolCall"
+          }
+        ],
+        "model": "fake-model",
+        "provider": "fake",
+        "role": "assistant",
+        "stopReason": "toolUse",
+        "timestamp": "<epoch-ms>",
+        "usage": {
+          "cacheRead": 40,
+          "cacheWrite": 0,
+          "input": 60,
+          "output": 10,
+          "totalTokens": 110
+        }
+      },
+      {
+        "content": [
+          {
+            "text": "Edited notes.txt (1 replacement)",
+            "type": "text"
+          }
+        ],
+        "details": {
+          "diff": "--- notes.txt\n+++ notes.txt\n@@ -1 +1 @@\n-from the agent\n+edited by the agent\n "
+        },
+        "isError": false,
+        "role": "toolResult",
+        "timestamp": "<epoch-ms>",
+        "toolCallId": "e1",
+        "toolName": "edit"
+      },
+      {
+        "api": "openai-completions",
+        "canonicalProvider": "fake",
+        "completedAt": "<epoch-ms>",
+        "content": [
+          {
+            "text": "All done.",
+            "type": "text"
+          }
+        ],
+        "model": "fake-model",
+        "provider": "fake",
+        "role": "assistant",
+        "stopReason": "stop",
+        "timestamp": "<epoch-ms>",
+        "usage": {
+          "cacheRead": 40,
+          "cacheWrite": 0,
+          "input": 60,
+          "output": 10,
+          "totalTokens": 110
+        }
+      }
+    ],
+    "step": "history after the run"
+  },
+  {
+    "observed": "edited by the agent\n",
+    "step": "the written file"
+  }
+]

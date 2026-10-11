@@ -128,6 +128,7 @@ async fn untrusted_peer() {
         without_node: true,
         // Not the address the test connects from.
         env: vec![("PIRC_TRUSTED_PROXIES", "192.0.2.1".to_owned())],
+        ..GatewayOptions::default()
     })
     .await
     else {
@@ -150,6 +151,7 @@ async fn proxy_secret() {
     let Some(cluster) = Cluster::start_with(GatewayOptions {
         without_node: true,
         env: vec![("PIRC_PROXY_SECRET", PROXY_SECRET.to_owned())],
+        ..GatewayOptions::default()
     })
     .await
     else {

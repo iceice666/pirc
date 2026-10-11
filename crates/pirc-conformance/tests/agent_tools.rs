@@ -87,8 +87,16 @@ async fn agent_auto_mode() {
         VecDeque::from([json!({ "confirmed": false }), json!({ "confirmed": true })]);
     agent.push([
         tools(&[
-            ("a1", "bash", json!({ "command": "rm -rf /opt/pirc-conformance-gone" })),
-            ("a2", "bash", json!({ "command": "rm -rf /opt/pirc-conformance-gone" })),
+            (
+                "a1",
+                "bash",
+                json!({ "command": "rm -rf /opt/pirc-conformance-gone" }),
+            ),
+            (
+                "a2",
+                "bash",
+                json!({ "command": "rm -rf /opt/pirc-conformance-gone" }),
+            ),
             ("a3", "bash", json!({ "command": "echo deploy-prod" })),
             ("a4", "bash", json!({ "command": "ls; echo 'rm -rf ('" })),
             (

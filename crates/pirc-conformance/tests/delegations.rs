@@ -200,6 +200,7 @@ async fn start(ttl_ms: Option<u64>) -> Option<Cluster> {
     Cluster::start_with(GatewayOptions {
         env,
         without_node: true,
+        ..GatewayOptions::default()
     })
     .await
 }
