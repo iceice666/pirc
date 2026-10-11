@@ -1,0 +1,1990 @@
+---
+source: crates/pirc-conformance/tests/agent_background.rs
+expression: run.r.into_value()
+---
+[
+  {
+    "observed": {
+      "command": "get_commands",
+      "data": {
+        "commands": [
+          {
+            "description": "Background tasks: list / start / tty / write / output / stop / stop-all",
+            "name": "bg",
+            "source": "extension"
+          }
+        ]
+      },
+      "id": "c1",
+      "success": true,
+      "type": "response"
+    },
+    "step": "commands"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:1>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "id": "<uuid:2>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "No background tasks.",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "No background tasks.",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:3>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "/bg or /bg list — List tasks\n/bg start <shell command> — Run in the background\n/bg tty <shell command> — Run on a pseudo-terminal (accepts input)\n/bg write <id> <text> — Send a line of input to a tty task\n/bg output <id> [lines] — Show recent output (default: 200 lines)\n/bg stop <id> — Stop the process group\n/bg stop-all — Stop all tasks\nAborting a run does not stop background tasks; closing the session does.\nTasks run with the current user's permissions, not in a sandbox.",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "/bg or /bg list — List tasks\n/bg start <shell command> — Run in the background\n/bg tty <shell command> — Run on a pseudo-terminal (accepts input)\n/bg write <id> <text> — Send a line of input to a tty task\n/bg output <id> [lines] — Show recent output (default: 200 lines)\n/bg stop <id> — Stop the process group\n/bg stop-all — Stop all tasks\nAborting a run does not stop background tasks; closing the session does.\nTasks run with the current user's permissions, not in a sandbox.",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c3",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg help"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:4>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "/bg or /bg list — List tasks\n/bg start <shell command> — Run in the background\n/bg tty <shell command> — Run on a pseudo-terminal (accepts input)\n/bg write <id> <text> — Send a line of input to a tty task\n/bg output <id> [lines] — Show recent output (default: 200 lines)\n/bg stop <id> — Stop the process group\n/bg stop-all — Stop all tasks\nAborting a run does not stop background tasks; closing the session does.\nTasks run with the current user's permissions, not in a sandbox.",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "/bg or /bg list — List tasks\n/bg start <shell command> — Run in the background\n/bg tty <shell command> — Run on a pseudo-terminal (accepts input)\n/bg write <id> <text> — Send a line of input to a tty task\n/bg output <id> [lines] — Show recent output (default: 200 lines)\n/bg stop <id> — Stop the process group\n/bg stop-all — Stop all tasks\nAborting a run does not stop background tasks; closing the session does.\nTasks run with the current user's permissions, not in a sandbox.",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c4",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg frob x"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:5>",
+        "message": "command must be a nonempty string of at most 16000 characters without NUL characters",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c5",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg start"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:6>",
+        "message": "Usage: /bg output <id> [lines]",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c6",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg output"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:7>",
+        "message": "Unknown background task: nope",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c7",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg output nope"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:8>",
+        "message": "Usage: /bg output <id> [lines]",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c8",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg output a b c"
+  },
+  {
+    "observed": [
+      {
+        "command": "prompt",
+        "id": "c9",
+        "success": true,
+        "type": "response"
+      },
+      {
+        "id": "<uuid:9>",
+        "message": "Unknown background task: nope",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      }
+    ],
+    "step": "/bg stop nope"
+  },
+  {
+    "observed": [
+      {
+        "command": "prompt",
+        "id": "c10",
+        "success": true,
+        "type": "response"
+      },
+      {
+        "id": "<uuid:10>",
+        "message": "Unknown background task: ",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      }
+    ],
+    "step": "/bg stop"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:11>",
+        "message": "Usage: /bg write <id> <text>",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c11",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg write x"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:12>",
+        "message": "Unknown background task: nope",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c12",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg write nope hi"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:13>",
+        "message": "command must be a nonempty string of at most 16000 characters without NUL characters",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c13",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg tty"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:14>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "statusText": "BG 1",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\nLog: /tmp/pirc-background-<dir>/<task:1>.log",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\nLog: /tmp/pirc-background-<dir>/<task:1>.log",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c14",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg start until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:15>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "statusText": "BG 1",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c15",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg list"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:16>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "statusText": "BG 1",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\n",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\n",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c16",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg output <task:1>"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:17>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "statusText": "BG 1",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\n",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\n",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c17",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg output <task:1> 1"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:18>",
+        "message": "lines must be an integer from 1 to 2000.",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c18",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg output <task:1> x"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:19>",
+        "message": "lines must be an integer from 1 to 2000.",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c19",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg output <task:1> 0"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:20>",
+        "message": "lines must be an integer from 1 to 2000.",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c20",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg output <task:1> 2001"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:21>",
+        "message": "lines must be an integer from 1 to 2000.",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c21",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg output <task:1> 1.5"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:22>",
+        "message": "Task <task:1> has no terminal; start it with tty: true",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c22",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg write <task:1> hi"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:23>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "id": "<uuid:24>",
+        "message": "Background task: <task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+        "method": "notify",
+        "notifyType": "info",
+        "type": "extension_ui_request"
+      },
+      {
+        "type": "agent_start"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "message": {
+          "content": "1 background task finished:\n<task:1> · completed (exit 0)\nUse background_task list/output to inspect results.",
+          "customType": "background-task-finished",
+          "details": {
+            "matches": [],
+            "status": "completed",
+            "tasks": [
+              {
+                "command": "until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+                "cwd": "<tmp>/workspace",
+                "endedAt": "<time>",
+                "exitCode": 0,
+                "id": "<task:1>",
+                "logPath": "/tmp/pirc-background-<dir>/<task:1>.log",
+                "pid": "<pid>",
+                "signal": null,
+                "startedAt": "<time>",
+                "status": "completed"
+              }
+            ]
+          },
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "1 background task finished:\n<task:1> · completed (exit 0)\nUse background_task list/output to inspect results.",
+          "customType": "background-task-finished",
+          "details": {
+            "matches": [],
+            "status": "completed",
+            "tasks": [
+              {
+                "command": "until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+                "cwd": "<tmp>/workspace",
+                "endedAt": "<time>",
+                "exitCode": 0,
+                "id": "<task:1>",
+                "logPath": "/tmp/pirc-background-<dir>/<task:1>.log",
+                "pid": "<pid>",
+                "signal": null,
+                "startedAt": "<time>",
+                "status": "completed"
+              }
+            ]
+          },
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "type": "text_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "Bui",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "lt.",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "content": "Built.",
+          "contentIndex": 0,
+          "type": "text_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "Built.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "agent_end",
+        "willRetry": false
+      },
+      {
+        "type": "agent_settled"
+      }
+    ],
+    "step": "finished: events"
+  },
+  {
+    "observed": [
+      {
+        "messages": [
+          {
+            "content": "No background tasks.",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "/bg or /bg list — List tasks\n/bg start <shell command> — Run in the background\n/bg tty <shell command> — Run on a pseudo-terminal (accepts input)\n/bg write <id> <text> — Send a line of input to a tty task\n/bg output <id> [lines] — Show recent output (default: 200 lines)\n/bg stop <id> — Stop the process group\n/bg stop-all — Stop all tasks\nAborting a run does not stop background tasks; closing the session does.\nTasks run with the current user's permissions, not in a sandbox.",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "/bg or /bg list — List tasks\n/bg start <shell command> — Run in the background\n/bg tty <shell command> — Run on a pseudo-terminal (accepts input)\n/bg write <id> <text> — Send a line of input to a tty task\n/bg output <id> [lines] — Show recent output (default: 200 lines)\n/bg stop <id> — Stop the process group\n/bg stop-all — Stop all tasks\nAborting a run does not stop background tasks; closing the session does.\nTasks run with the current user's permissions, not in a sandbox.",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\nLog: /tmp/pirc-background-<dir>/<task:1>.log",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\n",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\n",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "1 background task finished:\n<task:1> · completed (exit 0)\nUse background_task list/output to inspect results.",
+            "customType": "background-task-finished",
+            "details": {
+              "matches": [],
+              "status": "completed",
+              "tasks": [
+                {
+                  "command": "until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+                  "cwd": "<tmp>/workspace",
+                  "endedAt": "<time>",
+                  "exitCode": 0,
+                  "id": "<task:1>",
+                  "logPath": "/tmp/pirc-background-<dir>/<task:1>.log",
+                  "pid": "<pid>",
+                  "signal": null,
+                  "startedAt": "<time>",
+                  "status": "completed"
+                }
+              ]
+            },
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- shell: background_task, bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\n### Other capabilities\n\nCall these with the arguments shown. Each result has `text`; `ptc_docs({ names: [...] })` documents its typed fields if a script needs more.\n\n`tools.background_task(args: { action: \"start\" | \"list\" | \"output\" | \"wait\" | \"write\" | \"monitor\" | \"stop\"; command?: string; cwd?: string; timeout?: number; id?: string; lines?: number; tty?: boolean; notify_on?: string; input?: string })` — Start/list/output/wait/write/monitor/stop background Bash jobs.\n\nCurrent working directory: <tmp>/workspace",
+        "thinking": "low",
+        "tools": [
+          {
+            "description": "Run a TypeScript async function body that calls capabilities. Every operation (files, shell commands, web, questions to the user, …) is a capability callable from here; the core ones may also be direct tools. Use a script to combine several operations, loop, or filter results before they reach you.\n\n- `await tools.<name>(args)` returns the result data and throws a `PtcError` on failure: `code` is ApprovalDenied, CapabilityUnavailable, InvalidArguments, QuotaExceeded, Cancelled, Timeout or OperationFailed; `outcome` says whether it ran (`not_started`, `failed`, `cancelled`, `unknown`); `data` holds the typed fields of a failed result when there are any. A `bash` command that exits non-zero is not a failure here: check its `exitCode`.\n- Result data is `text` (the formatted output) plus typed fields, e.g. `read` → `content`, `nextOffset`; `bash` → `output`, `exitCode`; `grep` → `matches`. Use the fields instead of parsing `text`.\n- `await tools.call(\"<name>\", args)` returns `{ ok: true, data }` or `{ ok: false, error: { code, message, outcome } }` instead of throwing.\n- Capability names must be literals (`tools.read(…)`, `tools.call(\"read\", …)`); never `tools[name]`. A script using an unavailable capability is rejected before anything runs.\n- `await tools.par(items, async (item, index) => …, { concurrency })` maps with up to 8 at a time and keeps order. At the first failure it starts no more items, cancels the operations its items still have running and throws that failure. Writes and commands still run one at a time. At most 8 operations run at once (more wait their turn), 200 operations and 200 `tools.par` calls per `ptc` call.\n- `return` what you need: strings are shown as is, other values as JSON. `console.log` output is shown too. Both are bounded, so filter large results in the script.\n- Images (e.g. `browser_screenshot`, `read` of a picture) come back as `images: [{ handle, mimeType, bytes }]`. To see one, `await attachments.add(result.images[0])`: it is attached to this `ptc` result (at most 4, together 512 KiB).\n- `store(key, value)` / `load(key)` keep small JSON values across `ptc` calls in this session (kept only when the script completes; `undefined` deletes).\n- The script runs in an isolated interpreter with no filesystem, network, processes, imports or timers: only `tools`, `attachments`, `store` and `load`.\n\nThe core signatures in the system prompt are complete; other listed capabilities show their arguments only: use `ptc_docs` for their result fields, or for a capability named without a signature. Default timeout 120 s (`timeout` in seconds, max 3600), not counting time spent waiting for the user. Nothing is retried automatically, and operations that already ran are not undone when a later one fails.",
+            "name": "ptc",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "description": "Body of an async TypeScript function, e.g. `const { text } = await tools.read({ path: \"README.md\" }); return text.split(\"\\n\").length;`",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "timeout": {
+                  "description": "Active-time budget in seconds (default 120)",
+                  "exclusiveMinimum": 0,
+                  "maximum": 3600,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Look up the capabilities `ptc` scripts can call. `{}` lists categories and names; `{ category }` gives one-line summaries (continue with the returned `cursor`); `{ names: [...] }` (1–8) gives argument schemas, results, errors, effects and approval behavior. Read-only. Docs already in the conversation stay valid until a call fails with StaleContract.",
+            "name": "ptc_docs",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "category": {
+                  "description": "A category from the index",
+                  "type": "string"
+                },
+                "cursor": {
+                  "description": "nextCursor of the previous page (with category)",
+                  "type": "string"
+                },
+                "names": {
+                  "description": "Capabilities to document in full",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "registryVersion": {
+                  "description": "registryVersion you already have; a mismatch fails with StaleContract",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "description": "Read a file. Text is returned with line numbers (`offset` is 1-based, default limit 2000 lines). Images (png/jpg/gif/webp) are returned as images.",
+            "name": "read",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "limit": {
+                  "description": "Maximum lines to return",
+                  "type": "number"
+                },
+                "offset": {
+                  "description": "1-based first line",
+                  "type": "number"
+                },
+                "path": {
+                  "description": "File path, relative to the workspace or absolute",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Create or overwrite a file with the given content. Parent directories are created.",
+            "name": "write",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "content": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "content"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true. Read the file first.",
+            "name": "edit",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "newText": {
+                  "type": "string"
+                },
+                "oldText": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "replaceAll": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "path",
+                "oldText",
+                "newText"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "List a directory (directories end with /).",
+            "name": "ls",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "description": "Default: workspace root",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "description": "Search file contents with a JavaScript regular expression. Returns `path:line: text`. Optional `glob` filters files.",
+            "name": "grep",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "glob": {
+                  "type": "string"
+                },
+                "ignoreCase": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "description": "Maximum matches (default 200)",
+                  "type": "number"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "pattern": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Find files by glob pattern (e.g. `**/*.ts`). Skips .git, node_modules, dist, target, result.",
+            "name": "find",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "description": "Directory to search (default workspace)",
+                  "type": "string"
+                },
+                "pattern": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Run a bash command in the workspace. stdout and stderr are combined. Default timeout 120s (`timeout` in seconds).",
+            "name": "bash",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "timeout": {
+                  "description": "Timeout in seconds",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "command"
+              ],
+              "type": "object"
+            }
+          }
+        ]
+      }
+    ],
+    "step": "finished: model requests"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:25>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\none\ntwo\nred\nlast\nthree",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\none\ntwo\nred\nlast\nthree",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c23",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg output <task:1>"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:26>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\nlast\nthree",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\nlast\nthree",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c24",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg output <task:1> 2"
+  },
+  {
+    "observed": [
+      {
+        "command": "prompt",
+        "id": "c25",
+        "success": true,
+        "type": "response"
+      },
+      {
+        "id": "<uuid:27>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      }
+    ],
+    "step": "/bg stop <task:1>"
+  },
+  {
+    "observed": [
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "id": "<uuid:28>",
+        "message": "Task <task:1> has no terminal; start it with tty: true",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c26",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg write <task:1> hi"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:29>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c27",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg list"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:30>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "statusText": "BG 1",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "<task:2> · running · exit 3\nLog: /tmp/pirc-background-<dir>/<task:2>.log",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "<task:2> · running · exit 3\nLog: /tmp/pirc-background-<dir>/<task:2>.log",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c28",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg start exit 3"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:31>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "id": "<uuid:32>",
+        "message": "Background task: <task:2> · failed (exit 3) · exit 3",
+        "method": "notify",
+        "notifyType": "warning",
+        "type": "extension_ui_request"
+      },
+      {
+        "type": "agent_start"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "message": {
+          "content": "1 background task finished:\n<task:2> · failed (exit 3)\nUse background_task list/output to inspect results.",
+          "customType": "background-task-finished",
+          "details": {
+            "matches": [],
+            "status": "failed",
+            "tasks": [
+              {
+                "command": "exit 3",
+                "cwd": "<tmp>/workspace",
+                "endedAt": "<time>",
+                "exitCode": 3,
+                "id": "<task:2>",
+                "logPath": "/tmp/pirc-background-<dir>/<task:2>.log",
+                "pid": "<pid>",
+                "signal": null,
+                "startedAt": "<time>",
+                "status": "failed"
+              }
+            ]
+          },
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "1 background task finished:\n<task:2> · failed (exit 3)\nUse background_task list/output to inspect results.",
+          "customType": "background-task-finished",
+          "details": {
+            "matches": [],
+            "status": "failed",
+            "tasks": [
+              {
+                "command": "exit 3",
+                "cwd": "<tmp>/workspace",
+                "endedAt": "<time>",
+                "exitCode": 3,
+                "id": "<task:2>",
+                "logPath": "/tmp/pirc-background-<dir>/<task:2>.log",
+                "pid": "<pid>",
+                "signal": null,
+                "startedAt": "<time>",
+                "status": "failed"
+              }
+            ]
+          },
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "type": "text_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "It fa",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "iled.",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "content": "It failed.",
+          "contentIndex": 0,
+          "type": "text_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "It failed.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "agent_end",
+        "willRetry": false
+      },
+      {
+        "type": "agent_settled"
+      }
+    ],
+    "step": "failed: events"
+  },
+  {
+    "observed": [
+      {
+        "messages": [
+          {
+            "content": "No background tasks.",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "/bg or /bg list — List tasks\n/bg start <shell command> — Run in the background\n/bg tty <shell command> — Run on a pseudo-terminal (accepts input)\n/bg write <id> <text> — Send a line of input to a tty task\n/bg output <id> [lines] — Show recent output (default: 200 lines)\n/bg stop <id> — Stop the process group\n/bg stop-all — Stop all tasks\nAborting a run does not stop background tasks; closing the session does.\nTasks run with the current user's permissions, not in a sandbox.",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "/bg or /bg list — List tasks\n/bg start <shell command> — Run in the background\n/bg tty <shell command> — Run on a pseudo-terminal (accepts input)\n/bg write <id> <text> — Send a line of input to a tty task\n/bg output <id> [lines] — Show recent output (default: 200 lines)\n/bg stop <id> — Stop the process group\n/bg stop-all — Stop all tasks\nAborting a run does not stop background tasks; closing the session does.\nTasks run with the current user's permissions, not in a sandbox.",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\nLog: /tmp/pirc-background-<dir>/<task:1>.log",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\n",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\n",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "1 background task finished:\n<task:1> · completed (exit 0)\nUse background_task list/output to inspect results.",
+            "customType": "background-task-finished",
+            "details": {
+              "matches": [],
+              "status": "completed",
+              "tasks": [
+                {
+                  "command": "until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+                  "cwd": "<tmp>/workspace",
+                  "endedAt": "<time>",
+                  "exitCode": 0,
+                  "id": "<task:1>",
+                  "logPath": "/tmp/pirc-background-<dir>/<task:1>.log",
+                  "pid": "<pid>",
+                  "signal": null,
+                  "startedAt": "<time>",
+                  "status": "completed"
+                }
+              ]
+            },
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "Built.",
+                "type": "text"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\none\ntwo\nred\nlast\nthree",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\nlast\nthree",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "<task:2> · running · exit 3\nLog: /tmp/pirc-background-<dir>/<task:2>.log",
+            "customType": "background-task-command",
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "1 background task finished:\n<task:2> · failed (exit 3)\nUse background_task list/output to inspect results.",
+            "customType": "background-task-finished",
+            "details": {
+              "matches": [],
+              "status": "failed",
+              "tasks": [
+                {
+                  "command": "exit 3",
+                  "cwd": "<tmp>/workspace",
+                  "endedAt": "<time>",
+                  "exitCode": 3,
+                  "id": "<task:2>",
+                  "logPath": "/tmp/pirc-background-<dir>/<task:2>.log",
+                  "pid": "<pid>",
+                  "signal": null,
+                  "startedAt": "<time>",
+                  "status": "failed"
+                }
+              ]
+            },
+            "display": true,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "<unchanged>",
+        "thinking": "low",
+        "tools": "<unchanged>"
+      }
+    ],
+    "step": "failed: model requests"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:33>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "<task:2> · failed (exit 3) · exit 3\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:2>.log\n",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "<task:2> · failed (exit 3) · exit 3\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:2>.log\n",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c29",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg output <task:2>"
+  },
+  {
+    "observed": [
+      {
+        "cwd": "<tmp>/workspace",
+        "id": "<entry:1>",
+        "parentId": null,
+        "sessionId": "<hex16:1>",
+        "timestamp": "<epoch-ms>",
+        "type": "session",
+        "version": 1
+      },
+      {
+        "id": "<entry:2>",
+        "message": {
+          "content": "No background tasks.",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:1>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:3>",
+        "message": {
+          "content": "/bg or /bg list — List tasks\n/bg start <shell command> — Run in the background\n/bg tty <shell command> — Run on a pseudo-terminal (accepts input)\n/bg write <id> <text> — Send a line of input to a tty task\n/bg output <id> [lines] — Show recent output (default: 200 lines)\n/bg stop <id> — Stop the process group\n/bg stop-all — Stop all tasks\nAborting a run does not stop background tasks; closing the session does.\nTasks run with the current user's permissions, not in a sandbox.",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:2>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:4>",
+        "message": {
+          "content": "/bg or /bg list — List tasks\n/bg start <shell command> — Run in the background\n/bg tty <shell command> — Run on a pseudo-terminal (accepts input)\n/bg write <id> <text> — Send a line of input to a tty task\n/bg output <id> [lines] — Show recent output (default: 200 lines)\n/bg stop <id> — Stop the process group\n/bg stop-all — Stop all tasks\nAborting a run does not stop background tasks; closing the session does.\nTasks run with the current user's permissions, not in a sandbox.",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:3>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:5>",
+        "message": {
+          "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\nLog: /tmp/pirc-background-<dir>/<task:1>.log",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:4>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:6>",
+        "message": {
+          "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:5>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:7>",
+        "message": {
+          "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\n",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:6>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:8>",
+        "message": {
+          "content": "<task:1> · running · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\n",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:7>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:9>",
+        "message": {
+          "content": "1 background task finished:\n<task:1> · completed (exit 0)\nUse background_task list/output to inspect results.",
+          "customType": "background-task-finished",
+          "details": {
+            "matches": [],
+            "status": "completed",
+            "tasks": [
+              {
+                "command": "until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+                "cwd": "<tmp>/workspace",
+                "endedAt": "<time>",
+                "exitCode": 0,
+                "id": "<task:1>",
+                "logPath": "/tmp/pirc-background-<dir>/<task:1>.log",
+                "pid": "<pid>",
+                "signal": null,
+                "startedAt": "<time>",
+                "status": "completed"
+              }
+            ]
+          },
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:8>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:10>",
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "Built.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "parentId": "<entry:9>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:11>",
+        "message": {
+          "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\none\ntwo\nred\nlast\nthree",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:10>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:12>",
+        "message": {
+          "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:1>.log\nlast\nthree",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:11>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:13>",
+        "message": {
+          "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:12>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:14>",
+        "message": {
+          "content": "<task:1> · completed (exit 0) · until [ -e go ]; do sleep 0.02; done; printf 'one\\ntwo\\n'; printf '\\033[31mred\\033[0m\\n'; echo last; sleep 0.1; echo three >&2",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:13>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:15>",
+        "message": {
+          "content": "<task:2> · running · exit 3\nLog: /tmp/pirc-background-<dir>/<task:2>.log",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:14>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:16>",
+        "message": {
+          "content": "1 background task finished:\n<task:2> · failed (exit 3)\nUse background_task list/output to inspect results.",
+          "customType": "background-task-finished",
+          "details": {
+            "matches": [],
+            "status": "failed",
+            "tasks": [
+              {
+                "command": "exit 3",
+                "cwd": "<tmp>/workspace",
+                "endedAt": "<time>",
+                "exitCode": 3,
+                "id": "<task:2>",
+                "logPath": "/tmp/pirc-background-<dir>/<task:2>.log",
+                "pid": "<pid>",
+                "signal": null,
+                "startedAt": "<time>",
+                "status": "failed"
+              }
+            ]
+          },
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:15>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:17>",
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "It failed.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "parentId": "<entry:16>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:18>",
+        "message": {
+          "content": "<task:2> · failed (exit 3) · exit 3\ncwd: <tmp>/workspace\nLog (capped at 10 MiB): /tmp/pirc-background-<dir>/<task:2>.log\n",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:17>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      }
+    ],
+    "step": "session file"
+  }
+]

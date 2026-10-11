@@ -1,0 +1,128 @@
+---
+source: crates/pirc-conformance/tests/agent_background.rs
+expression: run.r.into_value()
+---
+[
+  {
+    "observed": [
+      {
+        "id": "<uuid:1>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "id": "<uuid:2>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "statusText": "BG 1",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "<task:1> · running · sleep 60 & sleep 61; wait\nLog: /tmp/pirc-background-<dir>/<task:1>.log",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "<task:1> · running · sleep 60 & sleep 61; wait\nLog: /tmp/pirc-background-<dir>/<task:1>.log",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg start sleep 60 & sleep 61; wait"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:3>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "statusText": "BG 2",
+        "type": "extension_ui_request"
+      },
+      {
+        "message": {
+          "content": "<task:2> · running · tty · sleep 62\nLog: /tmp/pirc-background-<dir>/<task:2>.log",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "<task:2> · running · tty · sleep 62\nLog: /tmp/pirc-background-<dir>/<task:2>.log",
+          "customType": "background-task-command",
+          "display": true,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/bg tty sleep 62"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:4>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      }
+    ],
+    "step": "shutdown"
+  },
+  {
+    "observed": 0,
+    "step": "exit code"
+  },
+  {
+    "observed": [
+      true,
+      true
+    ],
+    "step": "tasks stopped"
+  }
+]
