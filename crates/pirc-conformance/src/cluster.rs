@@ -62,9 +62,7 @@ pub struct GatewayOptions {
     /// Start no node.
     pub without_node: bool,
     /// The node's agents run without their built-in features
-    /// (`PIRC_AGENT_FEATURES=none`), and are the executable of
-    /// `PIRC_CONFORMANCE_AGENT_BIN` when it is set (the Rust agent under the
-    /// TS node; plans/rust-rewrite.md, M4).
+    /// (`PIRC_AGENT_FEATURES=none`; plans/rust-rewrite.md, M4).
     pub agent_core_only: bool,
 }
 
@@ -211,10 +209,12 @@ impl Cluster {
         ];
         if agent_core_only {
             env.push(("PIRC_AGENT_FEATURES", "none".to_owned()));
-            if let Some(agent) = crate::agent::agent_override() {
-                env.push(("PIRC_AGENT_COMMAND", agent.display().to_string()));
-                env.push(("PIRC_AGENT_ARGS", r#"["agent"]"#.to_owned()));
-            }
+        }
+        // The node's agents are the executable of `PIRC_CONFORMANCE_AGENT_BIN`
+        // when it is set: the Rust agent under the TS node (M4, M5).
+        if let Some(agent) = crate::agent::agent_override() {
+            env.push(("PIRC_AGENT_COMMAND", agent.display().to_string()));
+            env.push(("PIRC_AGENT_ARGS", r#"["agent"]"#.to_owned()));
         }
         Process::spawn(
             "node",
