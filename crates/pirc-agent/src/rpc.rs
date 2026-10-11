@@ -771,8 +771,11 @@ pub(crate) async fn serve<A: Commands>(
                 tokio::task::yield_now().await;
                 continue;
             }
-            // The team channel is M5.
-            "team_result" => continue,
+            "team_result" => {
+                crate::features::team::channel::parent_channel().receive(&command);
+                tokio::task::yield_now().await;
+                continue;
+            }
             _ if channels.route(kind, &command) => {
                 tokio::task::yield_now().await;
                 continue;

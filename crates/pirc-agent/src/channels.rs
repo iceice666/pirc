@@ -5,7 +5,8 @@
 //!
 //! As in TS each channel is one per process ([`node_channels`]), writing to
 //! stdout; `serve_rpc` routes the `*_response` lines here. Team children
-//! forwarding to their parent (`parentChannel`) are M5.
+//! forward write leases and sandbox requests to their parent instead
+//! (`crate::features::team::channel`).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -595,8 +596,9 @@ pub fn browser_enabled(env: Env<'_>) -> bool {
     env("PIRC_BROWSER").as_deref() == Some("1") && team_child_name(env).is_none()
 }
 
-/// Whether this process talks to a sandboxing node (`PIRC_SANDBOX=srt`).
-/// A team child's requests go through its parent (M5).
+/// Whether this process talks to a sandboxing node (`PIRC_SANDBOX=srt`)
+/// itself. A team child's requests go through its parent
+/// ([`process_sandbox_requester`]).
 pub fn sandbox_enabled(env: Env<'_>) -> bool {
     env("PIRC_SANDBOX").as_deref() == Some("srt") && team_child_name(env).is_none()
 }
@@ -613,14 +615,145 @@ pub fn process_sandbox_channel() -> Option<Rc<NodeChannels>> {
     sandbox_enabled(&process_env).then(node_channels)
 }
 
-/// `processWriteLease()`: the node's broker under `PIRC_WRITE_BROKER=1`,
-/// else `None` (standalone agents are always granted). Team children
-/// forward to their parent in M5.
+/// `SandboxRequester`: whatever carries this process's sandbox requests to
+/// the node.
+#[derive(Clone)]
+pub enum SandboxRequester {
+    /// The node itself (a node's main agent).
+    Node(Rc<NodeChannels>),
+    /// The parent agent, which passes the request on (`viaParent`).
+    Parent,
+}
+
+impl SandboxRequester {
+    /// `request(op, args, signal, toolCallId)`. The parent is not told the
+    /// `ptc` operation asking: only this session's own requests carry it.
+    pub fn request(
+        &self,
+        op: &str,
+        args: Map<String, Value>,
+        signal: Option<&AbortSignal>,
+        tool_call_id: Option<&str>,
+    ) -> LocalBoxFuture<'static, Result<Value, ChannelError>> {
+        match self {
+            Self::Node(channels) => {
+                Box::pin(channels.sandbox.request(op, args, signal, tool_call_id))
+            }
+            Self::Parent => {
+                let call = crate::features::team::channel::parent_channel().call(
+                    "sandbox_request",
+                    json!({ "op": op, "args": args }),
+                    signal,
+                );
+                Box::pin(async move {
+                    let answer = call.await?;
+                    if let Some(error) = answer
+                        .get("error")
+                        .filter(|e| crate::tools::js::truthy(Some(e)))
+                    {
+                        return Err(ChannelError::coded(
+                            &crate::tools::js::string_of(error.get("code").unwrap_or(&Value::Null)),
+                            &crate::tools::js::string_of(
+                                error.get("message").unwrap_or(&Value::Null),
+                            ),
+                        ));
+                    }
+                    Ok(match answer.get("result") {
+                        None | Some(Value::Null) => Value::Object(Map::new()),
+                        Some(result) => result.clone(),
+                    })
+                })
+            }
+        }
+    }
+}
+
+/// `processSandboxChannel()`: under a sandboxing node (`PIRC_SANDBOX=srt`),
+/// the node, or the parent for a team child; else `None`.
+pub fn process_sandbox_requester() -> Option<SandboxRequester> {
+    sandbox_requester_with(&process_env)
+}
+
+fn sandbox_requester_with(env: Env<'_>) -> Option<SandboxRequester> {
+    if env("PIRC_SANDBOX").as_deref() != Some("srt") {
+        return None;
+    }
+    Some(if team_child_name(env).is_some() {
+        SandboxRequester::Parent
+    } else {
+        SandboxRequester::Node(node_channels())
+    })
+}
+
+/// `relaySandboxRequest`: the parent's side of a child's `sandbox_request`,
+/// passed on (to the node, or up to this agent's own parent) with the
+/// child named in the reason. Errors are values, since the team channel
+/// carries only messages; `Err` is an unexpected failure.
+pub async fn relay_sandbox_request(
+    requester: Option<SandboxRequester>,
+    child: &str,
+    message: &Value,
+    signal: Option<&AbortSignal>,
+) -> Result<Value, String> {
+    let Some(requester) = requester else {
+        return Ok(json!({ "error": { "code": "unavailable",
+            "message": "This team is not running inside a node sandbox" } }));
+    };
+    let op = match message.get("op").and_then(Value::as_str) {
+        Some(op @ ("network" | "exec")) => op,
+        _ => {
+            return Ok(json!({ "error": { "code": "invalid_input",
+                "message": "Unknown sandbox operation" } }));
+        }
+    };
+    let mut args = match message.get("args") {
+        Some(Value::Object(args)) => args.clone(),
+        _ => Map::new(),
+    };
+    let reason = match args.get("reason") {
+        Some(Value::String(reason)) if !crate::tools::js::trim(reason).is_empty() => {
+            crate::tools::js::trim(reason).to_owned()
+        }
+        _ => "(no reason given)".to_owned(),
+    };
+    args.insert(
+        "reason".to_owned(),
+        json!(format!("[asked by {child}] {reason}")),
+    );
+    match requester.request(op, args, signal, None).await {
+        Ok(result) => Ok(json!({ "result": result })),
+        Err(ChannelError::Coded { code, message, .. }) => {
+            Ok(json!({ "error": { "code": code, "message": message } }))
+        }
+        Err(ChannelError::Plain(message)) => Err(message),
+    }
+}
+
+/// `processWriteLease()`: a team child's parent, which shares its own
+/// lease; the node's broker under `PIRC_WRITE_BROKER=1`; else `None`
+/// (standalone agents are always granted).
 pub fn process_write_lease() -> Option<AcquireWrite> {
     write_lease_with(&process_env, node_channels)
 }
 
 fn write_lease_with(env: Env<'_>, channels: fn() -> Rc<NodeChannels>) -> Option<AcquireWrite> {
+    if team_child_name(env).is_some() {
+        // An abort drops the call, which tells the parent (`team_cancel`).
+        return Some(Rc::new(
+            move |root: String| -> LocalBoxFuture<'static, Result<(), String>> {
+                let call = crate::features::team::channel::parent_channel().call(
+                    "write_lease",
+                    json!({ "path": root }),
+                    None,
+                );
+                Box::pin(async move {
+                    call.await
+                        .map(|_| ())
+                        .map_err(|error| error.message().to_owned())
+                })
+            },
+        ));
+    }
     if env("PIRC_WRITE_BROKER").as_deref() != Some("1") {
         return None;
     }
