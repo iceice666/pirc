@@ -398,8 +398,9 @@ impl Commands for Fake {
         self.call(format!("set_role {name}"));
         Ok(())
     }
-    fn set_name(&self, name: &str, source: NameSource) {
+    fn set_name(&self, name: &str, source: NameSource) -> Result<(), String> {
         self.call(format!("set_name {name:?} {source:?}"));
+        Ok(())
     }
     fn last_context(&self) -> Option<Value> {
         self.context.borrow().clone()
@@ -407,9 +408,15 @@ impl Commands for Fake {
     fn panel_state(&self) -> Value {
         json!({})
     }
-    fn deliver(self: &Rc<Self>, delivery: Delivery, trigger_turn: bool, follow_up: bool) {
+    fn deliver(
+        self: &Rc<Self>,
+        delivery: Delivery,
+        trigger_turn: bool,
+        follow_up: bool,
+    ) -> Result<(), String> {
         self.call(format!("deliver {trigger_turn} {follow_up}"));
         self.delivered.borrow_mut().push(delivery);
+        Ok(())
     }
 }
 

@@ -468,10 +468,15 @@ pub(crate) trait Commands: 'static {
     fn set_model(&self, provider: &str, id: &str) -> Result<(), String>;
     fn set_thinking(&self, level: &str) -> Result<(), String>;
     fn set_role(&self, name: &str) -> Result<(), String>;
-    fn set_name(&self, name: &str, source: NameSource);
+    fn set_name(&self, name: &str, source: NameSource) -> Result<(), String>;
     fn last_context(&self) -> Option<Value>;
     fn panel_state(&self) -> Value;
-    fn deliver(self: &Rc<Self>, delivery: Delivery, trigger_turn: bool, follow_up: bool);
+    fn deliver(
+        self: &Rc<Self>,
+        delivery: Delivery,
+        trigger_turn: bool,
+        follow_up: bool,
+    ) -> Result<(), String>;
 }
 
 impl Commands for Agent {
@@ -529,8 +534,8 @@ impl Commands for Agent {
     fn set_role(&self, name: &str) -> Result<(), String> {
         Agent::set_role(self, name)
     }
-    fn set_name(&self, name: &str, source: NameSource) {
-        Agent::set_name(self, name, source);
+    fn set_name(&self, name: &str, source: NameSource) -> Result<(), String> {
+        Agent::set_name(self, name, source)
     }
     fn last_context(&self) -> Option<Value> {
         Agent::last_context(self)
@@ -538,8 +543,13 @@ impl Commands for Agent {
     fn panel_state(&self) -> Value {
         Agent::panel_state(self)
     }
-    fn deliver(self: &Rc<Self>, delivery: Delivery, trigger_turn: bool, follow_up: bool) {
-        Agent::deliver(self, delivery, trigger_turn, follow_up);
+    fn deliver(
+        self: &Rc<Self>,
+        delivery: Delivery,
+        trigger_turn: bool,
+        follow_up: bool,
+    ) -> Result<(), String> {
+        Agent::deliver(self, delivery, trigger_turn, follow_up)
     }
 }
 
@@ -639,7 +649,7 @@ pub(crate) async fn dispatch<A: Commands>(
                 None | Some(Value::Null) => String::new(),
                 name => js_string(name),
             };
-            agent.set_name(&name, NameSource::User);
+            agent.set_name(&name, NameSource::User)?;
             Ok(None)
         }
         Some("get_context") => {
@@ -677,7 +687,7 @@ pub(crate) async fn dispatch<A: Commands>(
                 },
                 true,
                 true,
-            );
+            )?;
             Ok(None)
         }
         // Feature commands (`feature.rpc`) arrive with M5.

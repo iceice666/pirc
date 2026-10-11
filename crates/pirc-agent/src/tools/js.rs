@@ -110,18 +110,14 @@ pub fn number_text(n: &serde_json::Number) -> String {
     float_text(f)
 }
 
-/// `String(f)` for a finite double.
+/// `String(f)`.
 pub fn float_text(f: f64) -> String {
-    if f.fract() == 0.0 && f.abs() < 1e21 {
-        format!("{f:.0}")
-    } else {
-        format!("{f}")
-    }
+    crate::messages::js::number_text(f)
 }
 
-/// `JSON.stringify(value)`.
+/// `JSON.stringify(value)`, numbers formatted as JavaScript does.
 pub fn stringify(value: &Value) -> String {
-    serde_json::to_string(value).unwrap_or_default()
+    crate::messages::js::stringify(value)
 }
 
 // ---------------------------------------------------------------------------

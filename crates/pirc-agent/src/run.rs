@@ -235,10 +235,13 @@ async fn main(args: Vec<String>) -> Result<(), String> {
     if let Some(level) = string(&args.thinking) {
         agent.set_thinking(level)?;
     }
+    // `!agent.sessionName`: a recorded empty name counts as none.
     if let Some(name) = string(&args.name)
-        && agent.session_name().is_none()
+        && agent
+            .session_name()
+            .is_none_or(|current| current.is_empty())
     {
-        agent.set_name(name, NameSource::User);
+        agent.set_name(name, NameSource::User)?;
     }
     // E.g. an untrusted project config whose hooks / env / allowedPaths were ignored (H3).
     for warning in &warnings {
@@ -248,13 +251,52 @@ async fn main(args: Vec<String>) -> Result<(), String> {
     let channels = node_channels();
     let mut terminate = signal(tokio::signal::unix::SignalKind::terminate())?;
     let mut interrupt = signal(tokio::signal::unix::SignalKind::interrupt())?;
-    tokio::select! {
-        served = serve_rpc(agent.clone(), ui.clone(), channels.clone(), write, &mut lines) => served?,
-        _ = terminate.recv() => {}
-        _ = interrupt.recv() => {}
+    let serve = serve_rpc(
+        agent.clone(),
+        ui.clone(),
+        channels.clone(),
+        write,
+        &mut lines,
+    );
+    tokio::pin!(serve);
+    let signalled = tokio::select! {
+        served = &mut serve => {
+            crash_on(served);
+            false
+        }
+        _ = terminate.recv() => true,
+        _ = interrupt.recv() => true,
+    };
+    let shutting_down = shutdown(&agent, &ui, &channels);
+    tokio::pin!(shutting_down);
+    if !signalled {
+        shutting_down.await;
+        return Ok(());
     }
-    shutdown(&agent, &ui, &channels).await;
-    Ok(())
+    // `process.once`: stdin is still served while shutting down (a run may
+    // still need its node), and a second signal ends the process.
+    let mut serving = true;
+    loop {
+        tokio::select! {
+            () = &mut shutting_down => return Ok(()),
+            served = &mut serve, if serving => {
+                crash_on(served);
+                serving = false;
+            }
+            _ = terminate.recv() => std::process::exit(128 + 15),
+            _ = interrupt.recv() => std::process::exit(128 + 2),
+        }
+    }
+}
+
+/// An error that escaped the RPC loop crashed the TS agent on the spot:
+/// exit without running what is still pending (whose cleanup would write
+/// cancel requests the TS agent never sent).
+fn crash_on(served: Result<(), String>) {
+    if let Err(error) = served {
+        eprintln!("error: {error}");
+        std::process::exit(1);
+    }
 }
 
 /// `!values.headless`: a flag or a non-empty value.

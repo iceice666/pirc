@@ -36,6 +36,18 @@ pub use run::run_agent;
 /// A boxed future that need not be `Send` (the agent is single-threaded).
 pub type LocalBoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
+/// Run `future` at once up to its first pending await, then as a task: a
+/// JavaScript `void promise()` call, whose synchronous part runs before the
+/// caller goes on.
+pub fn spawn_eager(future: impl Future<Output = ()> + 'static) {
+    let mut future = Box::pin(future);
+    let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+    if future.as_mut().poll(&mut context).is_pending() {
+        // The task polls it again at once, with its own waker.
+        tokio::task::spawn_local(future);
+    }
+}
+
 /// The current time in epoch milliseconds (`Date.now()`).
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now()

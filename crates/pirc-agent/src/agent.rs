@@ -181,6 +181,8 @@ pub struct Agent {
     name_source: Cell<Option<NameSource>>,
     /// Side-panel sections changed since the last flush (`panelChanged`).
     changed_sections: RefCell<Vec<String>>,
+    /// Flushes the TS agent would have queued as microtasks by now.
+    scheduled_flushes: Cell<usize>,
     /// The direct tool call running now (`operationScope`); dialogs carry it.
     current_operation: RefCell<Option<String>>,
 }
@@ -411,6 +413,15 @@ impl Ui for TrackingUi {
     }
 }
 
+/// Clears `compacting` when dropped.
+struct CompactingGuard<'a>(&'a RefCell<Option<AbortController>>);
+
+impl Drop for CompactingGuard<'_> {
+    fn drop(&mut self) {
+        *self.0.borrow_mut() = None;
+    }
+}
+
 /// How far a capability call got (`OperationStage`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OperationStage {
@@ -491,6 +502,7 @@ impl Agent {
                 session_name: RefCell::new(None),
                 name_source: Cell::new(None),
                 changed_sections: RefCell::new(Vec::new()),
+                scheduled_flushes: Cell::new(0),
                 current_operation: RefCell::new(None),
             }
         });
@@ -685,11 +697,9 @@ impl Agent {
         })
     }
 
-    fn append(&self, data: EntryData) -> String {
-        match self.store.borrow_mut().append(data) {
-            Ok(entry) => entry.id,
-            Err(error) => panic!("cannot write the session file: {error}"),
-        }
+    /// Append a session entry; `Err` with the file system's error text.
+    fn append(&self, data: EntryData) -> Result<String, String> {
+        self.store.borrow_mut().append(data).map(|entry| entry.id)
     }
 
     pub fn set_model(&self, provider: &str, id: &str) -> Result<(), String> {
@@ -698,7 +708,7 @@ impl Agent {
         self.append(EntryData::ModelChange {
             provider: provider.to_owned(),
             model_id: id.to_owned(),
-        });
+        })?;
         Ok(())
     }
 
@@ -886,7 +896,7 @@ impl Agent {
         self.append(EntryData::Custom {
             custom_type: ROLE_ENTRY.to_owned(),
             data: Value::Object(data),
-        });
+        })?;
         *self.role.borrow_mut() = Some(AgentRole {
             name: name.to_owned(),
             instructions: preset.instructions.clone(),
@@ -904,7 +914,7 @@ impl Agent {
         self.thinking.set(parsed);
         self.append(EntryData::ThinkingLevelChange {
             thinking_level: level.to_owned(),
-        });
+        })?;
         Ok(())
     }
 
@@ -912,20 +922,21 @@ impl Agent {
         self.session_name.borrow().clone()
     }
 
-    pub fn set_name(&self, name: &str, source: NameSource) {
+    pub fn set_name(&self, name: &str, source: NameSource) -> Result<(), String> {
         if self.session_name.borrow().as_deref() == Some(name)
             && self.name_source.get() == Some(source)
         {
-            return;
+            return Ok(());
         }
         *self.session_name.borrow_mut() = Some(name.to_owned());
         self.name_source.set(Some(source));
         self.append(EntryData::SessionInfo {
             name: name.to_owned(),
             source: Some(source.as_str().to_owned()),
-        });
+        })?;
         self.emit(json!({ "type": "session_name_changed", "name": name,
             "source": source.as_str() }));
+        Ok(())
     }
 
     fn queue_texts(items: &[QueueItem]) -> Vec<String> {
@@ -968,15 +979,23 @@ impl Agent {
     /// `panelChanged`: coalesced until [`Agent::flush_panel`], where the TS
     /// agent's microtask ran.
     pub fn panel_changed(&self, section: &str) {
-        let mut sections = self.changed_sections.borrow_mut();
-        if !sections.iter().any(|s| s == section) {
-            sections.push(section.to_owned());
+        let size = {
+            let mut sections = self.changed_sections.borrow_mut();
+            if !sections.iter().any(|s| s == section) {
+                sections.push(section.to_owned());
+            }
+            sections.len()
+        };
+        // `if (size > 1) return; queueMicrotask(flush)`: one flush per call
+        // that leaves a single section; the later ones find nothing.
+        if size == 1 {
+            self.scheduled_flushes.set(self.scheduled_flushes.get() + 1);
         }
     }
 
     fn flush_panel(&self) {
-        let sections = std::mem::take(&mut *self.changed_sections.borrow_mut());
-        if !sections.is_empty() {
+        for _ in 0..self.scheduled_flushes.replace(0) {
+            let sections = std::mem::take(&mut *self.changed_sections.borrow_mut());
             self.emit(json!({ "type": "panel_changed", "sections": sections }));
         }
     }
@@ -1064,7 +1083,12 @@ impl Agent {
 
     /// `deliver`: queued while running; idle, it starts a run or is
     /// recorded without one.
-    pub fn deliver(self: &Rc<Self>, delivery: Delivery, trigger_turn: bool, follow_up: bool) {
+    pub fn deliver(
+        self: &Rc<Self>,
+        delivery: Delivery,
+        trigger_turn: bool,
+        follow_up: bool,
+    ) -> Result<(), String> {
         let message = Message::Custom {
             custom_type: delivery.custom_type,
             content: delivery.content,
@@ -1079,21 +1103,25 @@ impl Agent {
             } else {
                 self.steering.borrow_mut().push(item);
             }
-            return;
+            return Ok(());
         }
         if trigger_turn {
             self.start_run(vec![item]);
         } else {
-            self.append_message(message);
+            self.append_message(message)?;
         }
+        Ok(())
     }
 
     pub fn abort(&self) {
         // `abort` hooks of features (M5).
-        if let Some(controller) = self.controller.borrow().clone() {
+        // Clones first: abort listeners must be free to touch the agent.
+        let controller = self.controller.borrow().clone();
+        if let Some(controller) = controller {
             controller.abort();
         }
-        if let Some(compacting) = self.compacting.borrow().clone() {
+        let compacting = self.compacting.borrow().clone();
+        if let Some(compacting) = compacting {
             compacting.abort();
         }
     }
@@ -1110,33 +1138,58 @@ impl Agent {
     }
 
     /// `appendMessage`: written, then announced.
-    pub fn append_message(&self, message: Message) -> String {
-        let id = self.append(EntryData::Message(message.clone()));
+    pub fn append_message(&self, message: Message) -> Result<String, String> {
+        let id = self.append(EntryData::Message(message.clone()))?;
         let value = serde_json::to_value(&message).unwrap_or_default();
         self.emit(json!({ "type": "message_start", "message": value }));
         self.emit(json!({ "type": "message_end", "message": value }));
-        id
+        Ok(id)
     }
 
+    /// `startRun`. The TS agent ran `run()` at once up to its first await:
+    /// `agent_start` and, without `beforePrompt` hooks (whose processes
+    /// are that await), the admitted messages go out before the command
+    /// that started the run is answered.
     fn start_run(self: &Rc<Self>, initial: Vec<QueueItem>) {
         self.running.set(true);
         self.run_active.set(true);
+        let controller = AbortController::new();
+        *self.controller.borrow_mut() = Some(controller.clone());
+        self.emit(json!({ "type": "agent_start" }));
+        // `beforeAgentStart` of features (M5) runs here.
+        let pending = if self.hooks.has(HookName::BeforePrompt) {
+            Some(initial)
+        } else {
+            if let Err(error) = self.admit_now(initial) {
+                self.start_failed(&error);
+            }
+            None
+        };
         let agent = self.clone();
         tokio::task::spawn_local(async move {
             let run = agent.clone();
-            let outcome = tokio::task::spawn_local(async move { run.run(initial).await }).await;
-            if let Err(error) = outcome {
-                let message = format!(
-                    "Agent loop crashed: {}",
-                    error
+            let signal = controller.signal();
+            // A panic is a bug; it ends the run like a crash.
+            let outcome =
+                tokio::task::spawn_local(async move { run.run(signal, pending).await }).await;
+            let error = match outcome {
+                Ok(Ok(())) => None,
+                Ok(Err(error)) => Some(error),
+                Err(panic) => Some(
+                    panic
                         .try_into_panic()
                         .ok()
-                        .and_then(|panic| panic
-                            .downcast_ref::<String>()
-                            .cloned()
-                            .or_else(|| panic.downcast_ref::<&str>().map(|s| (*s).to_owned())))
-                        .unwrap_or_else(|| "unknown error".to_owned())
-                );
+                        .and_then(|panic| {
+                            panic
+                                .downcast_ref::<String>()
+                                .cloned()
+                                .or_else(|| panic.downcast_ref::<&str>().map(|s| (*s).to_owned()))
+                        })
+                        .unwrap_or_else(|| "unknown error".to_owned()),
+                ),
+            };
+            if let Some(error) = error {
+                let message = format!("Agent loop crashed: {error}");
                 agent.emit(json!({ "type": "agent_error", "error": message }));
                 agent.ui.notify(&message, NotifyLevel::Error);
             }
@@ -1146,6 +1199,12 @@ impl Agent {
             agent.run_done.notify_waiters();
             agent.settle().await;
         });
+    }
+
+    /// The run's start failed (`Failed to start run`); it goes on.
+    fn start_failed(&self, error: &str) {
+        self.ui
+            .notify(&format!("Failed to start run: {error}"), NotifyLevel::Error);
     }
 
     async fn settle(self: &Rc<Self>) {
@@ -1168,42 +1227,57 @@ impl Agent {
         }
     }
 
-    async fn admit(&self, items: Vec<QueueItem>) {
-        for item in items {
-            match item {
-                QueueItem::Custom(message) => {
-                    self.append_message(*message);
-                    // `messageAdmitted` of features (M5).
-                }
-                QueueItem::User { text, images } => {
-                    if self.hooks.has(HookName::BeforePrompt) {
-                        let mut data = Map::new();
-                        data.insert("prompt".to_owned(), json!(text));
-                        let extra = self.hooks.collect(HookName::BeforePrompt, data).await;
-                        if !extra.is_empty() {
-                            self.append_message(Message::Custom {
-                                custom_type: "hook-context".to_owned(),
-                                content: extra,
-                                display: false,
-                                details: None,
-                                timestamp: now_ms(),
-                            });
-                        }
-                    }
-                    let content = if images.is_empty() {
-                        UserContent::Text(text)
-                    } else {
-                        let mut blocks = vec![text_block(text)];
-                        blocks.extend(images);
-                        UserContent::Blocks(blocks)
-                    };
-                    self.append_message(Message::User {
-                        content,
-                        timestamp: now_ms(),
-                    });
-                }
+    /// One queued item into the session, without hooks.
+    fn admit_item(&self, item: QueueItem) -> Result<(), String> {
+        match item {
+            QueueItem::Custom(message) => {
+                self.append_message(*message)?;
+                // `messageAdmitted` of features (M5).
+            }
+            QueueItem::User { text, images } => {
+                let content = if images.is_empty() {
+                    UserContent::Text(text)
+                } else {
+                    let mut blocks = vec![text_block(text)];
+                    blocks.extend(images);
+                    UserContent::Blocks(blocks)
+                };
+                self.append_message(Message::User {
+                    content,
+                    timestamp: now_ms(),
+                })?;
             }
         }
+        Ok(())
+    }
+
+    /// `admit` when no `beforePrompt` hook runs: nothing to wait for.
+    fn admit_now(&self, items: Vec<QueueItem>) -> Result<(), String> {
+        items.into_iter().try_for_each(|item| self.admit_item(item))
+    }
+
+    /// `admit`: `beforePrompt` hooks add hidden context before each prompt.
+    async fn admit(&self, items: Vec<QueueItem>) -> Result<(), String> {
+        for item in items {
+            if let QueueItem::User { text, .. } = &item
+                && self.hooks.has(HookName::BeforePrompt)
+            {
+                let mut data = Map::new();
+                data.insert("prompt".to_owned(), json!(text));
+                let extra = self.hooks.collect(HookName::BeforePrompt, data).await;
+                if !extra.is_empty() {
+                    self.append_message(Message::Custom {
+                        custom_type: "hook-context".to_owned(),
+                        content: extra,
+                        display: false,
+                        details: None,
+                        timestamp: now_ms(),
+                    })?;
+                }
+            }
+            self.admit_item(item)?;
+        }
+        Ok(())
     }
 
     /// The system prompt with the latest run's feature additions.
@@ -1282,7 +1356,7 @@ impl Agent {
             return Err("Compaction already in progress".to_owned());
         }
         let controller = AbortController::new();
-        *self.compacting.borrow_mut() = Some(controller.clone());
+        let _compacting = self.compacting_guard(controller.clone());
         let result = compaction::run_compaction(
             self,
             CompactionReason::Manual,
@@ -1290,8 +1364,7 @@ impl Agent {
             instructions,
             &self.compaction_settings(),
         )
-        .await;
-        *self.compacting.borrow_mut() = None;
+        .await?;
         if !result.ok {
             return Err(result
                 .error
@@ -1301,19 +1374,20 @@ impl Agent {
     }
 
     /// Compact before a turn when the context is near the window.
-    async fn maybe_compact(self: &Rc<Self>, signal: &AbortSignal) {
+    async fn maybe_compact(self: &Rc<Self>, signal: &AbortSignal) -> Result<(), String> {
         let settings = self.compaction_settings();
         if !settings.enabled {
-            return;
+            return Ok(());
         }
         let Ok(resolved) = self.resolve_model(None) else {
-            return;
+            return Ok(());
         };
         let window = resolved.model.context_window;
         let used = compaction::context_tokens(&self.store.borrow().context_entries());
-        // Signed, as in JavaScript: a reserve beyond the window always compacts.
-        if i128::from(used) <= i128::from(window) - i128::from(settings.reserve_tokens) {
-            return;
+        // JavaScript arithmetic: signed, and a reserve that is not a number
+        // (NaN) always compacts.
+        if (used as f64) <= window as f64 - settings.reserve_tokens {
+            return Ok(());
         }
         let result = self
             .with_compacting(signal, |inner| async move {
@@ -1326,7 +1400,7 @@ impl Agent {
                 )
                 .await
             })
-            .await;
+            .await?;
         if !result.ok && !signal.aborted() {
             self.ui.notify(
                 &format!(
@@ -1336,6 +1410,7 @@ impl Agent {
                 NotifyLevel::Warning,
             );
         }
+        Ok(())
     }
 
     async fn with_compacting<'a, T, F>(
@@ -1347,10 +1422,14 @@ impl Agent {
         F: std::future::Future<Output = T> + 'a,
     {
         let controller = AbortController::child_of(signal);
-        *self.compacting.borrow_mut() = Some(controller.clone());
-        let result = work(controller.signal()).await;
-        *self.compacting.borrow_mut() = None;
-        result
+        let _compacting = self.compacting_guard(controller.clone());
+        work(controller.signal()).await
+    }
+
+    /// `compacting` while the guard lives (`finally` in the TS agent).
+    fn compacting_guard(&self, controller: AbortController) -> CompactingGuard<'_> {
+        *self.compacting.borrow_mut() = Some(controller);
+        CompactingGuard(&self.compacting)
     }
 
     /// `refreshModels`: the node's current public catalog.
@@ -1566,14 +1645,18 @@ impl Agent {
         self.emit(json!({ "type": "message_end", "message": value }));
     }
 
-    async fn run(self: &Rc<Self>, initial: Vec<QueueItem>) {
-        let controller = AbortController::new();
-        *self.controller.borrow_mut() = Some(controller.clone());
-        let signal = controller.signal();
-        self.emit(json!({ "type": "agent_start" }));
-        // `beforeAgentStart` of features (M5) adds prompt sections and hidden
-        // messages after the first queued item.
-        self.admit(initial).await;
+    /// The run after its start (`run`): `pending` are the queued items
+    /// still to admit when `beforePrompt` hooks made admitting wait.
+    async fn run(
+        self: &Rc<Self>,
+        signal: AbortSignal,
+        pending: Option<Vec<QueueItem>>,
+    ) -> Result<(), String> {
+        if let Some(items) = pending
+            && let Err(error) = self.admit(items).await
+        {
+            self.start_failed(&error);
+        }
         *self.run_prompt.borrow_mut() = trim_sections(&[]);
         let max_turns = self.config.limits.max_turns;
         let mut turns: u64 = 0;
@@ -1588,14 +1671,14 @@ impl Agent {
                 break;
             }
             *self.turn.borrow_mut() = None;
-            self.maybe_compact(&signal).await;
+            self.maybe_compact(&signal).await?;
             if signal.aborted() {
                 break;
             }
             if self.interrupt_pending.replace(false) {
                 let items = std::mem::take(&mut *self.steering.borrow_mut());
                 self.emit_queue();
-                self.admit(items).await;
+                self.admit(items).await?;
             }
             let turn = AbortController::child_of(&signal);
             *self.turn.borrow_mut() = Some(turn.clone());
@@ -1607,7 +1690,8 @@ impl Agent {
                 compaction::is_context_overflow(reply) && !retried && settings.enabled
             };
             let persisted = Rc::new(Cell::new(false));
-            let marker = persisted.clone();
+            let failure: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
+            let (marker, failed) = (persisted.clone(), failure.clone());
             let agent = self.clone();
             let retried = overflow_retried;
             let settings_enabled = settings.enabled;
@@ -1615,11 +1699,13 @@ impl Agent {
                 if compaction::is_context_overflow(reply) && !retried && settings_enabled {
                     return;
                 }
-                agent.append(EntryData::Message(Message::Assistant(reply.clone())));
-                marker.set(true);
+                match agent.append(EntryData::Message(Message::Assistant(reply.clone()))) {
+                    Ok(_) => marker.set(true),
+                    Err(error) => *failed.borrow_mut() = Some(error),
+                }
             });
             let prompt = self.system_prompt();
-            let message = match self
+            let message = self
                 .stream(
                     &prompt,
                     &turn_signal,
@@ -1628,11 +1714,10 @@ impl Agent {
                         ..StreamOptions::default()
                     },
                 )
-                .await
-            {
-                Ok(message) => message,
-                Err(error) => panic!("{error}"),
-            };
+                .await?;
+            if let Some(error) = failure.borrow_mut().take() {
+                return Err(error);
+            }
             if !persisted.get() && compacts_instead(&message, overflow_retried) {
                 overflow_retried = true;
                 self.emit(json!({ "type": "turn_end" }));
@@ -1647,13 +1732,13 @@ impl Agent {
                         )
                         .await
                     })
-                    .await;
+                    .await?;
                 if result.ok {
                     continue;
                 }
             }
             if !persisted.get() {
-                self.append(EntryData::Message(Message::Assistant(message.clone())));
+                self.append(EntryData::Message(Message::Assistant(message.clone())))?;
             }
             if message.stop_reason == StopReason::ToolUse {
                 let calls: Vec<(String, String, Map<String, Value>)> = message
@@ -1676,10 +1761,11 @@ impl Agent {
                         } else {
                             "Interrupted: the user sent a message before this tool ran."
                         };
-                        self.record_result(&id, &name, ToolResult::error(text));
+                        self.record_result(&id, &name, ToolResult::error(text))?;
                         continue;
                     }
-                    self.execute_tool(&id, &name, arguments, &turn_signal).await;
+                    self.execute_tool(&id, &name, arguments, &turn_signal)
+                        .await?;
                 }
             }
             self.emit(json!({ "type": "turn_end" }));
@@ -1697,7 +1783,7 @@ impl Agent {
                 if message.stop_reason == StopReason::Aborted {
                     items.insert(0, interrupted_note(&message));
                 }
-                self.admit(items).await;
+                self.admit(items).await?;
                 continue;
             }
             if message.stop_reason == StopReason::ToolUse {
@@ -1720,7 +1806,7 @@ impl Agent {
                     items.push(self.follow_ups.borrow_mut().remove(0));
                 }
                 self.emit_queue();
-                self.admit(items).await;
+                self.admit(items).await?;
                 continue;
             }
             break;
@@ -1728,9 +1814,10 @@ impl Agent {
         *self.turn.borrow_mut() = None;
         self.interrupt_pending.set(false);
         self.emit(json!({ "type": "agent_end", "willRetry": false }));
+        Ok(())
     }
 
-    fn record_result(&self, id: &str, name: &str, result: ToolResult) -> Message {
+    fn record_result(&self, id: &str, name: &str, result: ToolResult) -> Result<Message, String> {
         let content = if result.content.is_empty() {
             vec![text_block("(no output)")]
         } else {
@@ -1744,8 +1831,8 @@ impl Agent {
             is_error: result.is_error,
             timestamp: now_ms(),
         };
-        self.append_message(message.clone());
-        message
+        self.append_message(message.clone())?;
+        Ok(message)
     }
 
     /// `acquireWrite`: the write lease for the allowed root containing
@@ -2004,7 +2091,7 @@ impl Agent {
         name: &str,
         arguments: Map<String, Value>,
         signal: &AbortSignal,
-    ) -> Message {
+    ) -> Result<Message, String> {
         self.emit(
             json!({ "type": "tool_execution_start", "toolCallId": id, "toolName": name,
             "args": arguments }),
@@ -2053,7 +2140,7 @@ impl Agent {
         first_kept_entry_id: &str,
         tokens_before: u64,
         details: Option<Value>,
-    ) -> String {
+    ) -> Result<String, String> {
         self.append(EntryData::Compaction {
             summary: summary.to_owned(),
             first_kept_entry_id: first_kept_entry_id.to_owned(),

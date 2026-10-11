@@ -1,0 +1,88 @@
+---
+source: crates/pirc-conformance/tests/agent_order.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update text_start",
+      "message_update text_delta",
+      "message_update text_delta",
+      "message_update text_end",
+      "message_end assistant",
+      "panel_changed",
+      "turn_end",
+      "agent_end",
+      "agent_settled"
+    ],
+    "step": "prompt while idle"
+  },
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user",
+      "response steer true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update text_start",
+      "message_update text_delta",
+      "message_update text_delta",
+      "message_update text_end",
+      "message_end assistant",
+      "panel_changed",
+      "turn_end",
+      "agent_end",
+      "agent_settled"
+    ],
+    "step": "steer while idle"
+  },
+  {
+    "observed": [
+      "agent_start",
+      "message_start custom",
+      "message_end custom",
+      "response deliver true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update text_start",
+      "message_update text_delta",
+      "message_update text_delta",
+      "message_update text_end",
+      "message_end assistant",
+      "panel_changed",
+      "turn_end",
+      "agent_end",
+      "agent_settled"
+    ],
+    "step": "deliver while idle"
+  },
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update text_start",
+      "message_end assistant",
+      "panel_changed",
+      "turn_end",
+      "agent_end",
+      "agent_settled",
+      "response abort true"
+    ],
+    "step": "abort while streaming"
+  }
+]

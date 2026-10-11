@@ -15,14 +15,15 @@ use crate::now_ms;
 use crate::signal::{AbortController, AbortSignal};
 use crate::ui::NotifyLevel;
 
-/// `CompactionSettings`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// `CompactionSettings`, as the TS agent used them: whatever the node's
+/// config holds, with JavaScript's truthiness and number coercion.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompactionSettings {
     pub enabled: bool,
     /// Compact when context exceeds `contextWindow - reserveTokens`.
-    pub reserve_tokens: u64,
+    pub reserve_tokens: f64,
     /// Recent context kept verbatim after the summary.
-    pub keep_recent_tokens: u64,
+    pub keep_recent_tokens: f64,
     /// Warm the provider prompt cache after compaction.
     pub warm_cache: bool,
 }
@@ -31,10 +32,41 @@ impl Default for CompactionSettings {
     fn default() -> Self {
         Self {
             enabled: true,
-            reserve_tokens: 16_384,
-            keep_recent_tokens: 20_000,
+            reserve_tokens: 16_384.0,
+            keep_recent_tokens: 20_000.0,
             warm_cache: true,
         }
+    }
+}
+
+/// JavaScript truthiness.
+fn truthy(value: &Value) -> bool {
+    match value {
+        Value::Null => false,
+        Value::Bool(value) => *value,
+        Value::Number(number) => number.as_f64().is_some_and(|n| n != 0.0 && !n.is_nan()),
+        Value::String(text) => !text.is_empty(),
+        Value::Array(_) | Value::Object(_) => true,
+    }
+}
+
+/// JavaScript `ToNumber`, as arithmetic and comparisons apply it.
+fn to_number(value: &Value) -> f64 {
+    match value {
+        Value::Null => 0.0,
+        Value::Bool(value) => f64::from(u8::from(*value)),
+        Value::Number(number) => number.as_f64().unwrap_or(f64::NAN),
+        Value::String(text) => {
+            let text = text.trim();
+            if text.is_empty() {
+                0.0
+            } else {
+                text.parse().unwrap_or(f64::NAN)
+            }
+        }
+        Value::Array(items) if items.is_empty() => 0.0,
+        Value::Array(items) if items.len() == 1 => to_number(&items[0]),
+        Value::Array(_) | Value::Object(_) => f64::NAN,
     }
 }
 
@@ -45,23 +77,17 @@ impl CompactionSettings {
         let Some(raw) = features.get("compaction").and_then(Value::as_object) else {
             return settings;
         };
-        if let Some(value) = raw.get("enabled").and_then(Value::as_bool) {
-            settings.enabled = value;
+        if let Some(value) = raw.get("enabled") {
+            settings.enabled = truthy(value);
         }
-        if let Some(value) = raw.get("warmCache").and_then(Value::as_bool) {
-            settings.warm_cache = value;
+        if let Some(value) = raw.get("warmCache") {
+            settings.warm_cache = truthy(value);
         }
-        let number = |key: &str| {
-            raw.get(key)
-                .and_then(Value::as_f64)
-                .filter(|n| n.is_finite())
-                .map(|n| n.max(0.0) as u64)
-        };
-        if let Some(value) = number("reserveTokens") {
-            settings.reserve_tokens = value;
+        if let Some(value) = raw.get("reserveTokens") {
+            settings.reserve_tokens = to_number(value);
         }
-        if let Some(value) = number("keepRecentTokens") {
-            settings.keep_recent_tokens = value;
+        if let Some(value) = raw.get("keepRecentTokens") {
+            settings.keep_recent_tokens = to_number(value);
         }
         settings
     }
@@ -139,7 +165,7 @@ pub fn context_tokens(entries: &[(String, Message)]) -> u64 {
 
 /// `findCutPoint`: the first entry kept verbatim, at the start of a user
 /// turn; the latest user turn is always kept.
-pub fn find_cut_point(entries: &[(String, Message)], keep_recent_tokens: u64) -> Option<String> {
+pub fn find_cut_point(entries: &[(String, Message)], keep_recent_tokens: f64) -> Option<String> {
     let is_turn_start =
         |message: &Message| matches!(message, Message::User { .. } | Message::Custom { .. });
     let mut kept = 0;
@@ -147,7 +173,7 @@ pub fn find_cut_point(entries: &[(String, Message)], keep_recent_tokens: u64) ->
     for index in (0..entries.len()).rev() {
         kept += estimate_tokens(&entries[index].1);
         cut = index;
-        if kept >= keep_recent_tokens && is_turn_start(&entries[index].1) {
+        if kept as f64 >= keep_recent_tokens && is_turn_start(&entries[index].1) {
             break;
         }
     }
@@ -204,23 +230,24 @@ impl CompactionResult {
     }
 }
 
-/// `runCompaction`.
+/// `runCompaction`. `Err` only when the session file cannot be written
+/// (the TS agent let that escape too).
 pub async fn run_compaction(
     agent: &Rc<Agent>,
     reason: CompactionReason,
     signal: &AbortSignal,
     instructions: Option<String>,
     settings: &CompactionSettings,
-) -> CompactionResult {
+) -> Result<CompactionResult, String> {
     let entries = agent.context_entries();
     let tokens_before = context_tokens(&entries);
     let keep = if reason == CompactionReason::Overflow {
-        0
+        0.0
     } else {
         settings.keep_recent_tokens
     };
     let Some(first_kept_entry_id) = find_cut_point(&entries, keep) else {
-        return CompactionResult::failed("Nothing to compact");
+        return Ok(CompactionResult::failed("Nothing to compact"));
     };
     agent.emit(json!({ "type": "compaction_start", "reason": reason.as_str() }));
     // `beforeCompact` of features (M5) may replace or cancel the summary.
@@ -279,22 +306,22 @@ pub async fn run_compaction(
         Err(error) => {
             agent.emit(json!({ "type": "compaction_end", "reason": reason.as_str(),
                 "aborted": signal.aborted(), "errorMessage": error }));
-            return CompactionResult::failed(error);
+            return Ok(CompactionResult::failed(error));
         }
     };
-    let entry_id = agent.append_compaction(&summary, &first_kept_entry_id, tokens_before, None);
+    let entry_id = agent.append_compaction(&summary, &first_kept_entry_id, tokens_before, None)?;
     agent.emit(json!({ "type": "compaction_end", "reason": reason.as_str(),
         "result": { "summary": summary, "tokensBefore": tokens_before, "entryId": entry_id } }));
     // `afterCompact` of features (M5).
     if settings.warm_cache && reason != CompactionReason::Overflow {
         warm_cache(agent);
     }
-    CompactionResult {
+    Ok(CompactionResult {
         ok: true,
         error: None,
         tokens_before: Some(tokens_before),
         summary: Some(summary),
-    }
+    })
 }
 
 /// `warmCache`: prime the provider cache with the compacted prefix, only
@@ -311,7 +338,9 @@ pub fn warm_cache(agent: &Rc<Agent>) {
         return;
     }
     let agent = agent.clone();
-    tokio::task::spawn_local(async move {
+    // `void warmCache(agent)` ran at once up to its first await: the status
+    // and the request's context snapshot come before the caller goes on.
+    crate::spawn_eager(async move {
         let controller = AbortController::new();
         let timer = {
             let controller = controller.clone();

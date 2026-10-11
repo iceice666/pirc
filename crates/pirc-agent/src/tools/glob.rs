@@ -5,6 +5,8 @@
 
 /// Most alternatives a brace pattern expands to.
 const MAX_ALTERNATIVES: usize = 4096;
+/// Bun matches nothing for a pattern with more brace groups than this.
+const MAX_BRACE_GROUPS: usize = 10;
 
 pub struct Glob {
     negated: bool,
@@ -20,20 +22,51 @@ impl Glob {
             negated = !negated;
             chars = &chars[1..];
         }
+        let alternatives = if brace_groups(chars) > MAX_BRACE_GROUPS {
+            None
+        } else {
+            expand(chars)
+        };
         Self {
             negated,
-            alternatives: expand(chars),
+            alternatives,
         }
     }
 
     pub fn is_match(&self, path: &str) -> bool {
         let path: Vec<char> = path.chars().collect();
-        let matched = self
-            .alternatives
-            .as_ref()
-            .is_some_and(|all| all.iter().any(|pattern| matches(pattern, 0, &path, 0)));
+        let matched = self.alternatives.as_ref().is_some_and(|all| {
+            all.iter()
+                .any(|pattern| Matcher::new(pattern, &path).matches(0, 0))
+        });
         matched != self.negated
     }
+}
+
+/// Closed brace groups in the pattern (escapes and classes skipped).
+fn brace_groups(p: &[char]) -> usize {
+    let mut open = 0usize;
+    let mut groups = 0;
+    let mut i = 0;
+    while i < p.len() {
+        match p[i] {
+            '\\' => i += 1,
+            '[' => {
+                if let Some(end) = class_end(p, i) {
+                    i = end;
+                    continue;
+                }
+            }
+            '{' => open += 1,
+            '}' if open > 0 => {
+                open -= 1;
+                groups += 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    groups
 }
 
 /// End (exclusive) of the class starting at `start` (`[`), if it closes.
@@ -127,52 +160,87 @@ fn brace_parts(p: &[char], open: usize) -> (Vec<&[char]>, Option<usize>) {
     (parts, None)
 }
 
-fn matches(p: &[char], pi: usize, s: &[char], si: usize) -> bool {
-    if pi == p.len() {
-        return si == s.len();
+/// Matching with memoized states: each (pattern position, path position)
+/// is decided once, so stars cannot backtrack exponentially.
+struct Matcher<'a> {
+    p: &'a [char],
+    s: &'a [char],
+    /// 0 unknown, 1 no, 2 yes; indexed `pi * (s.len() + 1) + si`.
+    memo: Vec<u8>,
+}
+
+impl<'a> Matcher<'a> {
+    fn new(p: &'a [char], s: &'a [char]) -> Self {
+        Self {
+            p,
+            s,
+            memo: vec![0; (p.len() + 1) * (s.len() + 1)],
+        }
     }
-    match p[pi] {
-        '*' => {
-            let globstar = p.get(pi + 1) == Some(&'*')
-                && (pi == 0 || p[pi - 1] == '/')
-                && (pi + 2 == p.len() || p[pi + 2] == '/');
-            if globstar {
-                if pi + 2 == p.len() {
-                    return true;
+
+    fn matches(&mut self, pi: usize, si: usize) -> bool {
+        let slot = pi * (self.s.len() + 1) + si;
+        match self.memo[slot] {
+            1 => return false,
+            2 => return true,
+            _ => {}
+        }
+        let found = self.decide(pi, si);
+        self.memo[slot] = if found { 2 } else { 1 };
+        found
+    }
+
+    fn decide(&mut self, pi: usize, si: usize) -> bool {
+        let (p, s) = (self.p, self.s);
+        if pi == p.len() {
+            return si == s.len();
+        }
+        match p[pi] {
+            '*' => {
+                let globstar = p.get(pi + 1) == Some(&'*')
+                    && (pi == 0 || p[pi - 1] == '/')
+                    && (pi + 2 == p.len() || p[pi + 2] == '/');
+                if globstar {
+                    if pi + 2 == p.len() {
+                        return true;
+                    }
+                    // `**/`: zero or more whole segments.
+                    let rest = pi + 3;
+                    if self.matches(rest, si) {
+                        return true;
+                    }
+                    return (si..s.len()).any(|j| s[j] == '/' && self.matches(rest, j + 1));
                 }
-                // `**/`: zero or more whole segments.
-                let rest = pi + 3;
-                if matches(p, rest, s, si) {
-                    return true;
+                let mut next = pi + 1;
+                while p.get(next) == Some(&'*') {
+                    next += 1;
                 }
-                return (si..s.len()).any(|j| s[j] == '/' && matches(p, rest, s, j + 1));
+                let mut k = si;
+                loop {
+                    if self.matches(next, k) {
+                        return true;
+                    }
+                    if k == s.len() || s[k] == '/' {
+                        return false;
+                    }
+                    k += 1;
+                }
             }
-            let mut next = pi + 1;
-            while p.get(next) == Some(&'*') {
-                next += 1;
-            }
-            let mut k = si;
-            loop {
-                if matches(p, next, s, k) {
-                    return true;
-                }
-                if k == s.len() || s[k] == '/' {
+            '?' => si < s.len() && s[si] != '/' && self.matches(pi + 1, si + 1),
+            '[' => {
+                let Some(end) = class_end(p, pi) else {
                     return false;
-                }
-                k += 1;
+                };
+                si < s.len() && in_class(&p[pi + 1..end - 1], s[si]) && self.matches(end, si + 1)
             }
+            '\\' => {
+                pi + 1 < p.len()
+                    && si < s.len()
+                    && s[si] == p[pi + 1]
+                    && self.matches(pi + 2, si + 1)
+            }
+            c => si < s.len() && s[si] == c && self.matches(pi + 1, si + 1),
         }
-        '?' => si < s.len() && s[si] != '/' && matches(p, pi + 1, s, si + 1),
-        '[' => {
-            let Some(end) = class_end(p, pi) else {
-                return false;
-            };
-            si < s.len() && in_class(&p[pi + 1..end - 1], s[si]) && matches(p, end, s, si + 1)
-        }
-        '\\' => {
-            pi + 1 < p.len() && si < s.len() && s[si] == p[pi + 1] && matches(p, pi + 2, s, si + 1)
-        }
-        c => si < s.len() && s[si] == c && matches(p, pi + 1, s, si + 1),
     }
 }
 
@@ -207,6 +275,24 @@ fn in_class(body: &[char], c: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backtracking_patterns_stay_fast() {
+        let started = std::time::Instant::now();
+        let name = "a".repeat(60);
+        assert!(!Glob::new("*a*a*a*a*a*a*a*a*a*b").is_match(&name));
+        assert!(Glob::new("*a*a*a*a*a*a*a*a*a*").is_match(&name));
+        let deep = "d/".repeat(30) + "x";
+        assert!(Glob::new("**/**/**/**/**/**/**/**/x").is_match(&deep));
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    }
+
+    #[test]
+    fn more_than_ten_brace_groups_match_nothing() {
+        let groups = |n: usize| "{a,b}".repeat(n);
+        assert!(Glob::new(&groups(10)).is_match(&"a".repeat(10)));
+        assert!(!Glob::new(&groups(11)).is_match(&"a".repeat(11)));
+    }
 
     /// Recorded from `new Bun.Glob(pattern).match(path)` (Bun 1.4).
     const CASES: &[(&str, &str, bool)] = &[

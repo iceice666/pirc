@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 /// Credential stores and private data under `$HOME` that agents never
 /// read (`SENSITIVE_HOME_PATHS`); the auto-mode rules use them too.
-pub const SENSITIVE_HOME_PATHS: [&str; 39] = [
+pub const SENSITIVE_HOME_PATHS: [&str; 40] = [
     ".ssh",
     ".gnupg",
     ".aws",
@@ -49,6 +49,7 @@ pub const SENSITIVE_HOME_PATHS: [&str; 39] = [
     "Library/Application Support/Firefox",
     "Library/Application Support/BraveSoftware",
     "Library/Application Support/Arc",
+    "Library/Application Support/Microsoft Edge",
 ];
 
 /// Registry credentials builds read (`BUILD_CREDENTIAL_HOME_PATHS`).
@@ -354,6 +355,27 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap().display().to_string();
         (dir, root)
+    }
+
+    /// The list is `SENSITIVE_HOME_PATHS` of `sandbox-policy.ts`, entry for
+    /// entry.
+    #[test]
+    fn sensitive_paths_match_the_typescript_list() {
+        let source = include_str!("../../../apps/gateway/src/sandbox-policy.ts");
+        let start = source
+            .find("export const SENSITIVE_HOME_PATHS = [")
+            .expect("the TS list");
+        let list = &source[start..];
+        let list = &list[..list.find("];").unwrap()];
+        let entries: Vec<&str> = list
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim();
+                line.strip_prefix('\'')
+                    .and_then(|rest| rest.strip_suffix("',"))
+            })
+            .collect();
+        assert_eq!(entries, SENSITIVE_HOME_PATHS);
     }
 
     #[test]
