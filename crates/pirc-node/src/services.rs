@@ -11,10 +11,11 @@
 //! task: `main` holds it until [`Services::close`] returns). Route handlers
 //! and link hooks get the [`Node`] itself.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use pirc_config::{Env, NodeConfig};
-use tokio::sync::Notify;
+use tokio::sync::{Notify, watch};
 
 use crate::agent_gateway::AgentGateway;
 use crate::branch_cache::BranchCache;
@@ -27,7 +28,7 @@ use crate::models::ModelStore;
 use crate::router::Router;
 use crate::runner::RunnerManager;
 use crate::sandbox::Sandbox;
-use crate::store::Db;
+use crate::store::{Db, Store};
 use crate::streams::Streams;
 use crate::terminals::Terminals;
 use crate::write_broker::WriteBroker;
@@ -69,6 +70,9 @@ pub struct Services {
     pub sandbox: Arc<dyn Sandbox>,
     // layout (the M6 stub; M8 replaces it)
     pub browser: Arc<dyn BrowserService>,
+    // core: the link's stop (TS `stopped` and `socket.terminate()`).
+    closing: AtomicBool,
+    terminate: watch::Sender<bool>,
 }
 
 /// The node is shared by every task of the multi-threaded runtime.
@@ -82,9 +86,8 @@ impl Services {
     ///
     /// 1. Refuse a TS-era `gateway.sqlite` and open the store
     ///    ([`Db::open`]); refuse state whose workspaces belong to the other
-    ///    role ("State contains workspaces incompatible with pirc-node
-    ///    chat..."; port role-executables.test.ts's "persisted state
-    ///    cannot change executable roles" here), without changing them.
+    ///    role ("State contains workspaces incompatible with ..."), without
+    ///    changing them.
     /// 2. `sync_workspaces`, the chat node's top-level chats
     ///    (`chat::ensure_top_level_chats`), `recover_startup` (logged).
     /// 3. Build the components (`Arc::new_cyclic`), start the sandbox probe
@@ -93,8 +96,92 @@ impl Services {
     ///    `config.json` model and role keys, start the inference socket
     ///    and put its config into `models` before the link connects.
     pub async fn start(config: NodeConfig, env: Env) -> Result<Node, String> {
-        let _ = (config, env);
-        todo!("core: build the node")
+        crate::link::endpoint(&config.daemon_url)?;
+        let legacy = config.state_dir.join("gateway.sqlite");
+        if legacy != config.database_path {
+            crate::store::refuse_typescript_database(&legacy)?;
+        }
+        let db = Db::open(&config.database_path)?;
+        {
+            let connection = db.lock();
+            let failed = |error: crate::error::ApiError| error.message;
+            // The role is fixed across restarts: never expose the other
+            // role's persisted workspaces.
+            crate::store::check_role(
+                &connection.list_workspaces().map_err(failed)?,
+                config.chat(),
+            )?;
+            connection
+                .sync_workspaces(&config.node_id, &config.workspaces)
+                .map_err(failed)?;
+            if config.chat() {
+                crate::chat::ensure_top_level_chats(&config, &connection).map_err(failed)?;
+            }
+            let recovery = connection.recover_startup().map_err(failed)?;
+            crate::log::info(&format!(
+                "node startup recovery complete: {}",
+                serde_json::json!({ "recovery": recovery })
+            ));
+        }
+        let sandbox = crate::sandbox::create(&config, &env);
+        let events = EventHub::new(config.event_buffer_size);
+        let router = Router::new(
+            crate::app::routes(&config)
+                .into_iter()
+                .chain(crate::panels::routes()),
+        );
+        let (terminate, _) = watch::channel(false);
+        let node = Arc::new_cyclic(|weak: &WeakNode| Services {
+            config,
+            env,
+            db,
+            events,
+            models: ModelStore::new(),
+            link: LinkSender::new(),
+            activity: Notify::new(),
+            router,
+            writes: WriteBroker::new(weak.clone()),
+            branches: BranchCache::new(),
+            agent_gateway: AgentGateway::new(weak.clone()),
+            inference: InferenceServer::new(weak.clone()),
+            runners: RunnerManager::new(weak.clone()),
+            terminals: Terminals::new(weak.clone()),
+            streams: Streams::new(weak.clone()),
+            mirror: MemoryMirror::new(weak.clone()),
+            sandbox,
+            browser: Arc::new(crate::browser::UnavailableBrowser),
+            closing: AtomicBool::new(false),
+            terminate,
+        });
+        // Mandatory: say at start-up whether agents can start at all.
+        let probe = node.sandbox.clone();
+        tokio::spawn(async move {
+            match probe.check().await {
+                crate::sandbox::SandboxStatus::Active { description } => {
+                    crate::log::info(&format!("agent sandbox ready: {description}"));
+                }
+                crate::sandbox::SandboxStatus::Unavailable { reason } => {
+                    crate::log::error(&format!(
+                        "agent sandbox unavailable, no agent can start: {reason}"
+                    ));
+                }
+            }
+        });
+        warn_legacy_config(&node.config);
+        let inference = node.inference.start().await?;
+        // Even before registration, never fall back to direct provider inference.
+        node.models.set_inference(Some(inference));
+        Ok(node)
+    }
+
+    /// Whether the node is closing: the link does not reconnect.
+    pub fn closing(&self) -> bool {
+        self.closing.load(Ordering::Acquire)
+    }
+
+    /// Resolves when the link must go (`socket.terminate()`).
+    pub fn terminated(&self) -> watch::Receiver<bool> {
+        self.terminate.subscribe()
     }
 
     /// `close` of `startNode` and Fastify's `onClose` (owner: **core**):
@@ -103,6 +190,52 @@ impl Services {
     /// mirror, close the inference socket, stop every runner (grace
     /// `config.shutdown_grace_ms`), shut the browser down.
     pub async fn close(&self) {
-        todo!("core: close the node")
+        // TS's order: no reconnect from now on, then the streams, the agent
+        // gateway, the mirror and inference, then the socket.
+        self.closing.store(true, Ordering::Release);
+        self.streams.close_all();
+        self.agent_gateway.disconnect();
+        self.mirror.disconnect();
+        self.inference.close().await;
+        self.terminate.send_replace(true);
+        // Fastify's `onClose`.
+        self.terminals.shutdown();
+        self.runners.shutdown().await;
+        self.browser.shutdown().await;
+    }
+}
+
+/// `legacyModelKeys` and `legacyRoleConfig`: settings the gateway or role
+/// files took over, left in `config.json` (an unreadable file is reported
+/// when an agent starts, not here).
+fn warn_legacy_config(config: &NodeConfig) {
+    let Ok(text) = std::fs::read_to_string(config.config_dir.join("config.json")) else {
+        return;
+    };
+    let Ok(serde_json::Value::Object(raw)) = serde_json::from_str::<serde_json::Value>(&text)
+    else {
+        return;
+    };
+    let keys: Vec<&str> = ["providers", "defaultModel"]
+        .into_iter()
+        .filter(|key| raw.contains_key(*key))
+        .collect();
+    if !keys.is_empty() {
+        crate::log::warn(&format!(
+            "config.json provider settings are ignored: providers come from the gateway \
+             (models.json); keys: {}",
+            keys.join(", ")
+        ));
+    }
+    let kinds = raw
+        .get("features")
+        .and_then(|features| features.get("agentTeam"))
+        .and_then(|team| team.get("kinds"))
+        .is_some();
+    if raw.contains_key("roles") || kinds {
+        crate::log::warn(
+            "config.json roles and features.agentTeam.kinds are ignored: define roles as \
+             markdown files in roles/<name>.md",
+        );
     }
 }

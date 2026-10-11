@@ -11,43 +11,207 @@
 //!   most [`INSTRUCTIONS_MAX_CHARS`] UTF-16 units, written 0600 through a
 //!   temporary file and rename; empty removes the file.
 
-use std::path::PathBuf;
+use std::fs::{DirBuilder, OpenOptions};
+use std::io::Write;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+use std::path::{Path, PathBuf};
 
-use pirc_config::NodeConfig;
+use pirc_config::{CHAT_WORKSPACE_ID, NodeConfig};
+use rusqlite::Connection;
 
-use crate::error::ApiResult;
-use crate::store::Workspace;
+use crate::error::{ApiError, ApiResult};
+use crate::store::{Store, Workspace, WorkspaceKind};
+use crate::util::{head16, hex, random_bytes};
 
 pub const INSTRUCTIONS_FILE: &str = "instructions.md";
 pub const INSTRUCTIONS_MAX_CHARS: usize = 8000;
 
+/// A file-system failure the caller cannot fix: logged, answered 500 (TS
+/// threw a plain error).
+fn io_failure(what: &str, path: &Path, error: std::io::Error) -> ApiError {
+    crate::log::error(&format!("{what} {}: {error}", path.display()));
+    ApiError::internal()
+}
+
+/// `mkdirSync(dir, { recursive: true, mode: 0o700 })`.
+fn make_dir(dir: &Path) -> ApiResult<()> {
+    DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)
+        .map_err(|error| io_failure("creating", dir, error))
+}
+
 /// `chatWorkspaceDir`: created if needed, canonical.
 pub fn chat_workspace_dir(config: &NodeConfig, workspace_id: &str) -> ApiResult<PathBuf> {
-    let _ = (config, workspace_id);
-    todo!("core: chatWorkspaceDir")
+    let dir = config.state_dir.join("chat").join(workspace_id);
+    make_dir(&dir)?;
+    dir.canonicalize()
+        .map_err(|error| io_failure("resolving", &dir, error))
+}
+
+/// `ensureTopLevelChats`: the top-level chat workspace, for chats outside
+/// any project.
+pub fn ensure_top_level_chats(config: &NodeConfig, db: &Connection) -> ApiResult<Workspace> {
+    let dir = chat_workspace_dir(config, CHAT_WORKSPACE_ID)?;
+    db.ensure_chat_workspace(
+        CHAT_WORKSPACE_ID,
+        &config.node_id,
+        "Chats",
+        &dir.to_string_lossy(),
+    )
+}
+
+/// `path.basename`: the last non-empty `/`-separated part.
+fn basename(text: &str) -> &str {
+    text.split('/')
+        .rfind(|part| !part.is_empty())
+        .unwrap_or_default()
 }
 
 /// `sessionRoot`: where the session's agent, terminals and panels work.
 pub fn session_root(workspace: &Workspace, session_id: &str) -> ApiResult<PathBuf> {
-    let _ = (workspace, session_id);
-    todo!("core: sessionRoot")
+    let root = PathBuf::from(&workspace.canonical_path);
+    if workspace.kind != WorkspaceKind::Chat {
+        return Ok(root);
+    }
+    let dir = root.join("sessions").join(basename(session_id));
+    make_dir(&dir)?;
+    Ok(dir)
 }
 
 /// `projectInstructionsPath`: a chat workspace's instructions file.
 pub fn project_instructions_path(workspace: &Workspace) -> Option<PathBuf> {
-    let _ = workspace;
-    todo!("core: projectInstructionsPath")
+    (workspace.kind == WorkspaceKind::Chat)
+        .then(|| Path::new(&workspace.canonical_path).join(INSTRUCTIONS_FILE))
+}
+
+/// `String.prototype.trim`: JS whitespace, which includes the BOM.
+pub fn js_trim(text: &str) -> &str {
+    text.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
 }
 
 /// `readProjectInstructions`: trimmed and cut to the limit; `""` for none.
 pub fn read_project_instructions(workspace: &Workspace) -> String {
-    let _ = workspace;
-    todo!("core: readProjectInstructions")
+    let Some(file) = project_instructions_path(workspace) else {
+        return String::new();
+    };
+    match std::fs::read(&file) {
+        Ok(bytes) => head16(
+            js_trim(&String::from_utf8_lossy(&bytes)),
+            INSTRUCTIONS_MAX_CHARS,
+        )
+        .to_owned(),
+        Err(_) => String::new(),
+    }
 }
 
 /// `writeProjectInstructions`: the stored text (413 `payload_too_large`
 /// "Instructions are limited to 8000 characters").
 pub fn write_project_instructions(workspace: &Workspace, text: &str) -> ApiResult<String> {
-    let _ = (workspace, text);
-    todo!("core: writeProjectInstructions")
+    let Some(file) = project_instructions_path(workspace) else {
+        return Err(ApiError::bad_request(
+            "Only chat projects have instructions",
+        ));
+    };
+    let value = js_trim(&text.replace("\r\n", "\n")).to_owned();
+    if value.encode_utf16().count() > INSTRUCTIONS_MAX_CHARS {
+        return Err(ApiError::new(
+            413,
+            "payload_too_large",
+            format!("Instructions are limited to {INSTRUCTIONS_MAX_CHARS} characters"),
+        ));
+    }
+    if let Some(parent) = file.parent() {
+        make_dir(parent)?;
+    }
+    if value.is_empty() {
+        return match std::fs::remove_file(&file) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                Err(io_failure("removing", &file, error))
+            }
+            _ => Ok(String::new()),
+        };
+    }
+    let mut temp = file.clone().into_os_string();
+    temp.push(format!(".{}.tmp", hex(&random_bytes::<6>())));
+    let temp = PathBuf::from(temp);
+    let written = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&temp)
+        .and_then(|mut out| out.write_all(format!("{value}\n").as_bytes()))
+        .and_then(|()| std::fs::rename(&temp, &file));
+    if let Err(error) = written {
+        let _ = std::fs::remove_file(&temp);
+        return Err(io_failure("writing", &file, error));
+    }
+    Ok(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Map;
+
+    use super::*;
+
+    fn chat(dir: &Path) -> Workspace {
+        Workspace {
+            id: "p".into(),
+            host_id: "n".into(),
+            display_name: "P".into(),
+            canonical_path: dir.to_string_lossy().into_owned(),
+            defaults: Map::new(),
+            kind: WorkspaceKind::Chat,
+        }
+    }
+
+    #[test]
+    fn session_roots_and_instructions() {
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = chat(dir.path());
+        let root = session_root(&workspace, "session_1").unwrap();
+        assert_eq!(root, dir.path().join("sessions/session_1"));
+        assert!(root.is_dir());
+        assert_eq!(basename("a/b/"), "b");
+        let directory = Workspace {
+            kind: WorkspaceKind::Directory,
+            ..workspace.clone()
+        };
+        assert_eq!(session_root(&directory, "s").unwrap(), dir.path());
+        assert_eq!(project_instructions_path(&directory), None);
+        assert_eq!(read_project_instructions(&directory), "");
+        assert_eq!(
+            write_project_instructions(&directory, "x")
+                .unwrap_err()
+                .status,
+            400
+        );
+
+        assert_eq!(read_project_instructions(&workspace), "");
+        assert_eq!(
+            write_project_instructions(&workspace, "  Be brief.\r\nAlways.  ").unwrap(),
+            "Be brief.\nAlways."
+        );
+        let file = dir.path().join(INSTRUCTIONS_FILE);
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "Be brief.\nAlways.\n"
+        );
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(read_project_instructions(&workspace), "Be brief.\nAlways.");
+        let long = "x".repeat(INSTRUCTIONS_MAX_CHARS + 1);
+        let error = write_project_instructions(&workspace, &long).unwrap_err();
+        assert_eq!(
+            (error.status, error.message.as_str()),
+            (413, "Instructions are limited to 8000 characters")
+        );
+        assert_eq!(write_project_instructions(&workspace, " \n ").unwrap(), "");
+        assert!(!file.exists());
+    }
 }
