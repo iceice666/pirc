@@ -61,15 +61,36 @@ pub fn preflight(source: &str) -> Result<Preflight, PtcError> {
             ),
         ));
     }
-    // A panic in the parser or transformer is a bug there; the script is
-    // refused instead of taking the agent down.
-    std::panic::catch_unwind(|| {
-        let js = strip_types(&format!("async function {MAIN}() {{\n{source}\n}}"))?;
-        let manifest = check(&js)?;
-        Ok(Preflight { js, manifest })
-    })
-    .unwrap_or_else(|_| Err(invalid("Syntax error: the TypeScript transform failed")))
+    // oxc's parser, transformer, printer and the walk below recurse without
+    // a depth limit, so deeply nested code (`((((…`, `!!!!…`) within the
+    // size budget would overflow the caller's stack and abort the agent
+    // (TS refused it: "Maximum call stack size exceeded"). They run on a
+    // thread whose stack holds the deepest source the budget allows. A panic
+    // there is a bug in oxc; the script is refused instead of taking the
+    // agent down.
+    let wrapped = format!("async function {MAIN}() {{\n{source}\n}}");
+    let spawned = std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .name("ptc-preflight".to_owned())
+            .stack_size(PREFLIGHT_STACK_BYTES)
+            .spawn_scoped(scope, || {
+                let js = strip_types(&wrapped)?;
+                let manifest = check(&js)?;
+                Ok(Preflight { js, manifest })
+            })
+            .map(|handle| handle.join())
+    });
+    match spawned {
+        Ok(Ok(outcome)) => outcome,
+        Ok(Err(_)) => Err(invalid("Syntax error: the TypeScript transform failed")),
+        Err(_) => Err(invalid("Syntax error: Maximum call stack size exceeded")),
+    }
 }
+
+/// Stack of the preflight thread: room for any source within
+/// `SOURCE_BYTES` nested as deeply as it can be (tested below). Address
+/// space only, until used.
+const PREFLIGHT_STACK_BYTES: usize = 1 << 30;
 
 /// TypeScript to JavaScript (`Bun.Transpiler({ loader: 'ts' })`), as a
 /// script: no imports or exports, sloppy mode unless the code opts in.
@@ -342,6 +363,38 @@ mod tests {
 
     fn refused(code: &str) -> PtcError {
         preflight(code).unwrap_err()
+    }
+
+    /// Sources at the size budget nested as deeply as they can be: refused
+    /// or accepted, never a stack overflow that aborts the agent.
+    #[test]
+    fn deep_nesting_within_the_budget_does_not_overflow() {
+        let budget = budgets::SOURCE_BYTES - 64;
+        let shapes: [(&str, &str, &str); 9] = [
+            ("return ", "(", ")"),
+            ("return ", "[", "]"),
+            ("", "{", "}"),
+            ("return ", "!", ""),
+            ("return ", "-", ""),
+            ("return ", "a=>", ""),
+            ("return ", "a?", ":0"),
+            ("", "if(a)", ""),
+            ("return ", "`${", "}`"),
+        ];
+        for (prefix, open, close) in shapes {
+            let mut depth = budget / (open.len() + close.len());
+            // Nested blocks take oxc quadratic time (under a second in a
+            // release build, half a minute unoptimized).
+            if cfg!(debug_assertions) && matches!(open, "{" | "if(a)") {
+                depth /= 8;
+            }
+            let source = format!("{prefix}{}1{};", open.repeat(depth), close.repeat(depth));
+            let outcome = preflight(&source);
+            assert!(
+                outcome.is_ok() || outcome.as_ref().unwrap_err().code == "InvalidArguments",
+                "{open}: {outcome:?}"
+            );
+        }
     }
 
     #[test]
