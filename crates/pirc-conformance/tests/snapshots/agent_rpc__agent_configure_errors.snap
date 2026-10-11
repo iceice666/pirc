@@ -1,0 +1,22 @@
+---
+source: crates/pirc-conformance/tests/agent_rpc.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": [],
+    "step": "not a configure message: stdout"
+  },
+  {
+    "observed": 1,
+    "step": "not a configure message: exit code"
+  },
+  {
+    "observed": [],
+    "step": "an invalid catalog: stdout"
+  },
+  {
+    "observed": 1,
+    "step": "an invalid catalog: exit code"
+  }
+]

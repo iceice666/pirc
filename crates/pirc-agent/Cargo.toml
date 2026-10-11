@@ -19,7 +19,7 @@ pirc-protocol = { path = "../pirc-protocol" }
 
 [dev-dependencies]
 tempfile = "3"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full", "test-util"] }
 
 [lints]
 workspace = true

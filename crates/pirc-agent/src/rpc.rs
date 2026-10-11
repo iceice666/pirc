@@ -2,41 +2,778 @@
 //! and events on stdout, and `RpcUi`, whose dialogs are
 //! `extension_ui_request`s answered by `extension_ui_response`.
 
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, VecDeque};
+use std::io::Write as _;
 use std::rc::Rc;
+use std::time::Duration;
 
-use serde_json::Value;
+use pirc_protocol::{Message, UserBlock};
+use serde_json::{Map, Value, json};
+use tokio::sync::{Notify, mpsc, oneshot};
 
-use crate::agent::Agent;
+use crate::LocalBoxFuture;
+use crate::agent::{Agent, Delivery, NameSource, Queue};
+use crate::channels::NodeChannels;
+use crate::ui::{Choice, DialogOptions, NotifyLevel, Ui};
 
 /// Writes one JSON value per stdout line, in call order.
 pub type Write = Rc<dyn Fn(Value)>;
 
+/// `process.stdout.write(`${JSON.stringify(value)}\n`)`: one line, written
+/// (and flushed) before this returns, so lines keep their call order.
+/// Errors (the node went away) are ignored; stdin then ends too.
+pub fn stdout_write() -> Write {
+    Rc::new(|value: Value| {
+        let mut line = serde_json::to_vec(&value).unwrap_or_default();
+        line.push(b'\n');
+        let mut stdout = std::io::stdout().lock();
+        let _ = stdout.write_all(&line).and_then(|()| stdout.flush());
+    })
+}
+
+type Responders = Rc<RefCell<HashMap<String, oneshot::Sender<Value>>>>;
+
 /// `RpcUi`: dialogs are serialized so only one is open.
 pub struct RpcUi {
     write: Write,
+    pending: Responders,
+    /// Dialogs waiting for their turn, in call order.
+    queue: RefCell<VecDeque<u64>>,
+    active: Cell<Option<u64>>,
+    next_ticket: Cell<u64>,
+    turn: Notify,
+}
+
+/// Gives the dialog turn up (or the place in the queue) when a dialog ends
+/// or is dropped.
+struct Turn<'a> {
+    ui: &'a RpcUi,
+    ticket: u64,
+}
+
+impl Drop for Turn<'_> {
+    fn drop(&mut self) {
+        let ui = self.ui;
+        if ui.active.get() == Some(self.ticket) {
+            ui.active.set(None);
+        } else {
+            ui.queue
+                .borrow_mut()
+                .retain(|ticket| *ticket != self.ticket);
+        }
+        ui.turn.notify_waiters();
+    }
+}
+
+/// An `extension_ui_request` still waiting; dropping it forgets it and
+/// tells the client the dialog is gone.
+struct Open {
+    pending: Responders,
+    write: Write,
+    id: String,
+}
+
+impl Drop for Open {
+    fn drop(&mut self) {
+        if self.pending.borrow_mut().remove(&self.id).is_some() {
+            cancel_request(&self.write, &self.id);
+        }
+    }
+}
+
+fn cancel_request(write: &Write, target: &str) {
+    write(
+        json!({ "type": "extension_ui_request", "id": crate::random_uuid(),
+        "method": "cancel", "targetId": target }),
+    );
+}
+
+fn cancelled() -> Value {
+    json!({ "cancelled": true })
+}
+
+/// JavaScript truthiness.
+fn truthy(value: Option<&Value>) -> bool {
+    match value {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(value)) => *value,
+        Some(Value::Number(number)) => number.as_f64().is_some_and(|n| n != 0.0 && !n.is_nan()),
+        Some(Value::String(text)) => !text.is_empty(),
+        Some(_) => true,
+    }
+}
+
+fn string_value(response: &Value) -> Option<String> {
+    if truthy(response.get("cancelled")) {
+        return None;
+    }
+    response
+        .get("value")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
 }
 
 impl RpcUi {
     pub fn new(write: Write) -> Rc<Self> {
-        let _ = write;
-        todo!("M4 rpc: RpcUi::new")
+        Rc::new(Self {
+            write,
+            pending: Rc::new(RefCell::new(HashMap::new())),
+            queue: RefCell::new(VecDeque::new()),
+            active: Cell::new(None),
+            next_ticket: Cell::new(0),
+            turn: Notify::new(),
+        })
+    }
+
+    /// Queue a dialog now (call order decides the turn) and resolve with
+    /// the client's response, `{cancelled: true}` when aborted or cancelled,
+    /// or `{cancelled: true, timedOut: true}`.
+    fn dialog(
+        &self,
+        request: Map<String, Value>,
+        opts: DialogOptions,
+    ) -> LocalBoxFuture<'_, Value> {
+        let ticket = self.next_ticket.get();
+        self.next_ticket.set(ticket + 1);
+        self.queue.borrow_mut().push_back(ticket);
+        let turn = Turn { ui: self, ticket };
+        Box::pin(async move {
+            loop {
+                let notified = self.turn.notified();
+                tokio::pin!(notified);
+                notified.as_mut().enable();
+                if self.active.get().is_none() && self.queue.borrow().front() == Some(&ticket) {
+                    self.queue.borrow_mut().pop_front();
+                    self.active.set(Some(ticket));
+                    break;
+                }
+                notified.await;
+            }
+            let response = self.run(request, opts).await;
+            drop(turn);
+            response
+        })
+    }
+
+    async fn run(&self, request: Map<String, Value>, opts: DialogOptions) -> Value {
+        let DialogOptions {
+            signal,
+            timeout_ms,
+            tool_call_id,
+        } = opts;
+        if signal.as_ref().is_some_and(|signal| signal.aborted()) {
+            return cancelled();
+        }
+        let id = crate::random_uuid();
+        let (sender, receiver) = oneshot::channel();
+        self.pending.borrow_mut().insert(id.clone(), sender);
+        let open = Open {
+            pending: self.pending.clone(),
+            write: self.write.clone(),
+            id: id.clone(),
+        };
+        if let Some(signal) = &signal {
+            let pending = self.pending.clone();
+            let write = self.write.clone();
+            let target = id.clone();
+            signal.on_abort(move || {
+                let sender = pending.borrow_mut().remove(&target);
+                if let Some(sender) = sender {
+                    let _ = sender.send(cancelled());
+                    // Tell the client the dialog is gone so it can close its card.
+                    cancel_request(&write, &target);
+                }
+            });
+        }
+        let timeout = timeout_ms.filter(|ms| *ms > 0);
+        let mut message = Map::new();
+        message.insert("type".to_owned(), json!("extension_ui_request"));
+        message.insert("id".to_owned(), json!(id));
+        message.extend(request);
+        if let Some(ms) = timeout {
+            message.insert("timeout".to_owned(), json!(ms));
+        }
+        // The ptc operation that asks, so clients can show it waiting there.
+        if let Some(tool_call_id) = tool_call_id.filter(|id| !id.is_empty()) {
+            message.insert("toolCallId".to_owned(), json!(tool_call_id));
+        }
+        let timer = async {
+            match timeout {
+                Some(ms) => tokio::time::sleep(Duration::from_millis(ms)).await,
+                None => std::future::pending().await,
+            }
+        };
+        (self.write)(Value::Object(message));
+        let response = tokio::select! {
+            response = receiver => response.unwrap_or_else(|_| cancelled()),
+            () = timer => {
+                self.pending.borrow_mut().remove(&id);
+                json!({ "cancelled": true, "timedOut": true })
+            }
+        };
+        drop(open);
+        response
     }
 
     /// `respond`: an `extension_ui_response`.
     pub fn respond(&self, response: &Value) {
-        let _ = (response, &self.write);
-        todo!("M4 rpc: RpcUi::respond")
+        let Some(id) = response.get("id").and_then(Value::as_str) else {
+            return;
+        };
+        let sender = self.pending.borrow_mut().remove(id);
+        if let Some(sender) = sender {
+            let _ = sender.send(response.clone());
+        }
     }
 
     /// `cancelAll`.
     pub fn cancel_all(&self) {
-        todo!("M4 rpc: RpcUi::cancel_all")
+        let senders: Vec<_> = self.pending.borrow_mut().drain().collect();
+        for (_, sender) in senders {
+            let _ = sender.send(cancelled());
+        }
+    }
+}
+
+fn request(method: &str, fields: Vec<(&str, Value)>) -> Map<String, Value> {
+    let mut map = Map::new();
+    map.insert("method".to_owned(), json!(method));
+    for (key, value) in fields {
+        map.insert(key.to_owned(), value);
+    }
+    map
+}
+
+impl Ui for RpcUi {
+    fn select<'a>(
+        &'a self,
+        title: &'a str,
+        options: &'a [String],
+        opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<String>> {
+        let dialog = self.dialog(
+            request(
+                "select",
+                vec![("title", json!(title)), ("options", json!(options))],
+            ),
+            opts,
+        );
+        Box::pin(async move { string_value(&dialog.await) })
+    }
+
+    fn choose<'a>(
+        &'a self,
+        title: &'a str,
+        options: &'a [Choice],
+        multiple: bool,
+        opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<Vec<String>>> {
+        let labels: Vec<&str> = options.iter().map(|o| o.label.as_str()).collect();
+        let descriptions: Vec<&str> = options
+            .iter()
+            .map(|o| o.description.as_deref().unwrap_or(""))
+            .collect();
+        let mut fields = vec![
+            ("title", json!(title)),
+            ("options", json!(labels)),
+            ("optionDescriptions", json!(descriptions)),
+        ];
+        if multiple {
+            fields.push(("multiple", json!(true)));
+        }
+        let dialog = self.dialog(request("select", fields), opts);
+        Box::pin(async move {
+            let response = dialog.await;
+            if truthy(response.get("cancelled")) {
+                return None;
+            }
+            if let Some(values) = response.get("values").and_then(Value::as_array) {
+                return Some(
+                    values
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned)
+                        .collect(),
+                );
+            }
+            response
+                .get("value")
+                .and_then(Value::as_str)
+                .map(|value| vec![value.to_owned()])
+        })
+    }
+
+    fn confirm<'a>(
+        &'a self,
+        title: &'a str,
+        message: &'a str,
+        opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<bool>> {
+        let dialog = self.dialog(
+            request(
+                "confirm",
+                vec![("title", json!(title)), ("message", json!(message))],
+            ),
+            opts,
+        );
+        Box::pin(async move {
+            let response = dialog.await;
+            if truthy(response.get("cancelled")) {
+                None
+            } else {
+                Some(truthy(response.get("confirmed")))
+            }
+        })
+    }
+
+    fn input<'a>(
+        &'a self,
+        title: &'a str,
+        placeholder: Option<&'a str>,
+        opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<String>> {
+        let mut fields = vec![("title", json!(title))];
+        if let Some(placeholder) = placeholder {
+            fields.push(("placeholder", json!(placeholder)));
+        }
+        let dialog = self.dialog(request("input", fields), opts);
+        Box::pin(async move { string_value(&dialog.await) })
+    }
+
+    fn editor<'a>(
+        &'a self,
+        title: &'a str,
+        prefill: Option<&'a str>,
+        opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<String>> {
+        let mut fields = vec![("title", json!(title))];
+        if let Some(prefill) = prefill {
+            fields.push(("prefill", json!(prefill)));
+        }
+        let dialog = self.dialog(request("editor", fields), opts);
+        Box::pin(async move { string_value(&dialog.await) })
+    }
+
+    fn notify(&self, message: &str, level: NotifyLevel) {
+        (self.write)(
+            json!({ "type": "extension_ui_request", "id": crate::random_uuid(),
+            "method": "notify", "message": message, "notifyType": level.as_str() }),
+        );
+    }
+
+    fn set_status(&self, key: &str, text: Option<&str>) {
+        let mut message = json!({ "type": "extension_ui_request", "id": crate::random_uuid(),
+            "method": "setStatus", "statusKey": key });
+        if let Some(text) = text {
+            message["statusText"] = json!(text);
+        }
+        (self.write)(message);
+    }
+
+    fn set_widget(&self, key: &str, lines: Option<&[String]>) {
+        let mut message = Map::new();
+        message.insert("type".to_owned(), json!("extension_ui_request"));
+        message.insert("id".to_owned(), json!(crate::random_uuid()));
+        message.insert("method".to_owned(), json!("setWidget"));
+        message.insert("widgetKey".to_owned(), json!(key));
+        if let Some(lines) = lines {
+            message.insert("widgetLines".to_owned(), json!(lines));
+        }
+        message.insert("widgetPlacement".to_owned(), json!("aboveEditor"));
+        (self.write)(Value::Object(message));
+    }
+}
+
+/// `String(value)` for what JSON can hold (`undefined` when absent).
+pub(crate) fn js_string(value: Option<&Value>) -> String {
+    match value {
+        None => "undefined".to_owned(),
+        Some(Value::Null) => "null".to_owned(),
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Bool(value)) => value.to_string(),
+        Some(Value::Number(number)) => js_number(number),
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| match item {
+                Value::Null => String::new(),
+                item => js_string(Some(item)),
+            })
+            .collect::<Vec<_>>()
+            .join(","),
+        Some(Value::Object(_)) => "[object Object]".to_owned(),
+    }
+}
+
+fn js_number(number: &serde_json::Number) -> String {
+    if let Some(value) = number.as_i64() {
+        return value.to_string();
+    }
+    if let Some(value) = number.as_u64() {
+        return value.to_string();
+    }
+    let value = number.as_f64().unwrap_or(f64::NAN);
+    if value.fract() == 0.0 && value.abs() < 1e21 {
+        format!("{value:.0}")
+    } else {
+        value.to_string()
+    }
+}
+
+/// `images(command)`: image blocks the command carries.
+fn images(command: &Value) -> Vec<UserBlock> {
+    let Some(items) = command.get("images").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    items
+        .iter()
+        .filter(|image| image.get("type").and_then(Value::as_str) == Some("image"))
+        .filter_map(|image| {
+            let data = image.get("data")?.as_str()?;
+            let mime_type = match image.get("mimeType") {
+                None | Some(Value::Null) => "image/png".to_owned(),
+                Some(other) => js_string(Some(other)),
+            };
+            Some(UserBlock::Image {
+                data: data.to_owned(),
+                mime_type,
+            })
+        })
+        .collect()
+}
+
+/// Largest `get_context` answer on the RPC line (512 KiB).
+const CONTEXT_MAX_BYTES: f64 = 512.0 * 1024.0;
+
+/// The agent's RPC surface as `handleCommand` drives it: [`Agent`], or a
+/// stand-in in tests.
+pub(crate) trait Commands: 'static {
+    fn refresh_models(&self) -> LocalBoxFuture<'_, ()>;
+    fn is_running(&self) -> bool;
+    fn prompt(self: &Rc<Self>, text: String, images: Vec<UserBlock>) -> Result<(), String>;
+    fn steer(self: &Rc<Self>, text: String, images: Vec<UserBlock>);
+    fn follow_up(self: &Rc<Self>, text: String, images: Vec<UserBlock>);
+    fn abort(&self);
+    fn idle(&self) -> LocalBoxFuture<'_, ()>;
+    fn send_now(self: &Rc<Self>, queue: Queue, index: usize, text: &str) -> Result<(), String>;
+    fn clear_queue(&self) -> Value;
+    fn state(&self) -> Value;
+    fn all_messages(&self) -> Vec<Message>;
+    fn compact(
+        self: &Rc<Self>,
+        instructions: Option<String>,
+    ) -> LocalBoxFuture<'_, Result<Value, String>>;
+    fn command_list(&self) -> Vec<Value>;
+    fn available_models(&self) -> Vec<Value>;
+    fn set_model(&self, provider: &str, id: &str) -> Result<(), String>;
+    fn set_thinking(&self, level: &str) -> Result<(), String>;
+    fn set_role(&self, name: &str) -> Result<(), String>;
+    fn set_name(&self, name: &str, source: NameSource);
+    fn last_context(&self) -> Option<Value>;
+    fn panel_state(&self) -> Value;
+    fn deliver(self: &Rc<Self>, delivery: Delivery, trigger_turn: bool, follow_up: bool);
+}
+
+impl Commands for Agent {
+    fn refresh_models(&self) -> LocalBoxFuture<'_, ()> {
+        Box::pin(Agent::refresh_models(self))
+    }
+    fn is_running(&self) -> bool {
+        Agent::is_running(self)
+    }
+    fn prompt(self: &Rc<Self>, text: String, images: Vec<UserBlock>) -> Result<(), String> {
+        Agent::prompt(self, text, images)
+    }
+    fn steer(self: &Rc<Self>, text: String, images: Vec<UserBlock>) {
+        Agent::steer(self, text, images);
+    }
+    fn follow_up(self: &Rc<Self>, text: String, images: Vec<UserBlock>) {
+        Agent::follow_up(self, text, images);
+    }
+    fn abort(&self) {
+        Agent::abort(self);
+    }
+    fn idle(&self) -> LocalBoxFuture<'_, ()> {
+        Box::pin(Agent::idle(self))
+    }
+    fn send_now(self: &Rc<Self>, queue: Queue, index: usize, text: &str) -> Result<(), String> {
+        Agent::send_now(self, queue, index, text)
+    }
+    fn clear_queue(&self) -> Value {
+        Agent::clear_queue(self)
+    }
+    fn state(&self) -> Value {
+        Agent::state(self)
+    }
+    fn all_messages(&self) -> Vec<Message> {
+        Agent::all_messages(self)
+    }
+    fn compact(
+        self: &Rc<Self>,
+        instructions: Option<String>,
+    ) -> LocalBoxFuture<'_, Result<Value, String>> {
+        Box::pin(Agent::compact(self, instructions))
+    }
+    fn command_list(&self) -> Vec<Value> {
+        Agent::command_list(self)
+    }
+    fn available_models(&self) -> Vec<Value> {
+        Agent::available_models(self)
+    }
+    fn set_model(&self, provider: &str, id: &str) -> Result<(), String> {
+        Agent::set_model(self, provider, id)
+    }
+    fn set_thinking(&self, level: &str) -> Result<(), String> {
+        Agent::set_thinking(self, level)
+    }
+    fn set_role(&self, name: &str) -> Result<(), String> {
+        Agent::set_role(self, name)
+    }
+    fn set_name(&self, name: &str, source: NameSource) {
+        Agent::set_name(self, name, source);
+    }
+    fn last_context(&self) -> Option<Value> {
+        Agent::last_context(self)
+    }
+    fn panel_state(&self) -> Value {
+        Agent::panel_state(self)
+    }
+    fn deliver(self: &Rc<Self>, delivery: Delivery, trigger_turn: bool, follow_up: bool) {
+        Agent::deliver(self, delivery, trigger_turn, follow_up);
     }
 }
 
 /// `handleCommand`: one RPC command; `Ok(Some(data))` is the response's
 /// `data`, `Err` its `error`.
 pub async fn handle_command(agent: &Rc<Agent>, command: &Value) -> Result<Option<Value>, String> {
-    let _ = (agent, command);
-    todo!("M4 rpc: handleCommand")
+    dispatch(agent, command).await
 }
+
+pub(crate) async fn dispatch<A: Commands>(
+    agent: &Rc<A>,
+    command: &Value,
+) -> Result<Option<Value>, String> {
+    let kind = command.get("type").and_then(Value::as_str);
+    let message = command
+        .get("message")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_owned();
+    if matches!(
+        kind,
+        Some("prompt" | "set_model" | "get_available_models" | "compact")
+    ) {
+        agent.refresh_models().await;
+    }
+    match kind {
+        Some("prompt") => {
+            if agent.is_running() {
+                match command.get("streamingBehavior").and_then(Value::as_str) {
+                    Some("followUp") => agent.follow_up(message, images(command)),
+                    Some("steer") => agent.steer(message, images(command)),
+                    _ => return Err("Agent is already running; use steer or follow_up".to_owned()),
+                }
+            } else {
+                agent.prompt(message, images(command))?;
+            }
+            Ok(None)
+        }
+        Some("steer") => {
+            agent.steer(message, images(command));
+            Ok(None)
+        }
+        Some("follow_up") => {
+            agent.follow_up(message, images(command));
+            Ok(None)
+        }
+        Some("abort") => {
+            agent.abort();
+            agent.idle().await;
+            Ok(None)
+        }
+        Some("send_now") => {
+            let queue = match command.get("queue").and_then(Value::as_str) {
+                Some("steering") => Queue::Steering,
+                Some("followUp") => Queue::FollowUp,
+                _ => return Err("send_now needs queue: steering or followUp".to_owned()),
+            };
+            let index = command
+                .get("index")
+                .and_then(Value::as_f64)
+                .filter(|index| index.fract() == 0.0 && *index >= 0.0)
+                .ok_or("send_now needs a non-negative integer index")?;
+            // Saturates: an index past the queue is "no longer queued".
+            agent.send_now(queue, index as usize, &message)?;
+            Ok(None)
+        }
+        Some("clear_queue") => Ok(Some(agent.clear_queue())),
+        Some("get_state") => Ok(Some(agent.state())),
+        Some("get_messages") => Ok(Some(json!({ "messages": agent.all_messages() }))),
+        Some("compact") => {
+            let instructions = command
+                .get("customInstructions")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            agent.compact(instructions).await.map(Some)
+        }
+        Some("get_commands") => Ok(Some(json!({ "commands": agent.command_list() }))),
+        Some("get_available_models") => Ok(Some(json!({ "models": agent.available_models() }))),
+        Some("set_model") => {
+            agent.set_model(
+                &js_string(command.get("provider")),
+                &js_string(command.get("modelId")),
+            )?;
+            Ok(None)
+        }
+        Some("set_thinking_level") => {
+            agent.set_thinking(&js_string(command.get("level")))?;
+            Ok(None)
+        }
+        Some("set_role") => {
+            // A delegated session's role, before its task arrives (node/runner.ts deliver).
+            agent.set_role(&js_string(command.get("role")))?;
+            Ok(None)
+        }
+        Some("set_session_name") => {
+            let name = match command.get("name") {
+                None | Some(Value::Null) => String::new(),
+                name => js_string(name),
+            };
+            agent.set_name(&name, NameSource::User);
+            Ok(None)
+        }
+        Some("get_context") => {
+            // Large prompts use the same node-local disk snapshot, never overflow the RPC line.
+            let limit = match command.get("maxBytes").and_then(Value::as_f64) {
+                Some(max) => max.clamp(0.0, CONTEXT_MAX_BYTES),
+                None => CONTEXT_MAX_BYTES,
+            };
+            let context = agent.last_context().filter(|context| {
+                serde_json::to_vec(context).is_ok_and(|bytes| (bytes.len() as f64) < limit)
+            });
+            Ok(Some(context.unwrap_or(Value::Null)))
+        }
+        Some("get_panel_state") => Ok(Some(agent.panel_state())),
+        Some("deliver") => {
+            // A message from the gateway (a delegated task, news of a delegation):
+            // shown in the chat, never the user's words, and it wakes the agent.
+            let pushed = command.get("message");
+            let field = |name: &str| pushed.and_then(|pushed| pushed.get(name));
+            let (Some(custom_type), Some(content)) = (
+                field("customType").and_then(Value::as_str),
+                field("content").and_then(Value::as_str),
+            ) else {
+                return Err("deliver needs message.customType and message.content".to_owned());
+            };
+            let details = field("details")
+                .filter(|details| details.is_object() || details.is_array())
+                .cloned();
+            agent.deliver(
+                Delivery {
+                    custom_type: custom_type.to_owned(),
+                    content: content.to_owned(),
+                    display: true,
+                    details,
+                },
+                true,
+                true,
+            );
+            Ok(None)
+        }
+        // Feature commands (`feature.rpc`) arrive with M5.
+        _ => Err(format!(
+            "Unsupported command: {}",
+            js_string(command.get("type"))
+        )),
+    }
+}
+
+/// `line.trim()` is empty (JavaScript's whitespace, BOM included).
+pub(crate) fn blank(line: &str) -> bool {
+    line.chars().all(|c| c.is_whitespace() || c == '\u{feff}')
+}
+
+/// `serveRpc`: serve JSONL RPC until the input ends. `Err` is what would
+/// have been thrown out of the loop (a `null` command line), which ends the
+/// process without its shutdown.
+pub async fn serve_rpc(
+    agent: Rc<Agent>,
+    ui: Rc<RpcUi>,
+    channels: Rc<NodeChannels>,
+    write: Write,
+    lines: &mut mpsc::UnboundedReceiver<String>,
+) -> Result<(), String> {
+    serve(agent, ui, channels, write, lines).await
+}
+
+pub(crate) async fn serve<A: Commands>(
+    agent: Rc<A>,
+    ui: Rc<RpcUi>,
+    channels: Rc<NodeChannels>,
+    write: Write,
+    lines: &mut mpsc::UnboundedReceiver<String>,
+) -> Result<(), String> {
+    while let Some(line) = lines.recv().await {
+        if blank(&line) {
+            continue;
+        }
+        let Ok(command) = serde_json::from_str::<Value>(&line) else {
+            write(
+                json!({ "type": "response", "command": "parse", "success": false,
+                "error": "Invalid JSON" }),
+            );
+            continue;
+        };
+        if command.is_null() {
+            return Err("null is not an object (evaluating 'command.type')".to_owned());
+        }
+        let kind = command.get("type").and_then(Value::as_str).unwrap_or("");
+        match kind {
+            "extension_ui_response" => {
+                ui.respond(&command);
+                continue;
+            }
+            // The team channel is M5.
+            "team_result" => continue,
+            _ if channels.route(kind, &command) => continue,
+            _ => {}
+        }
+        let agent = agent.clone();
+        let write = write.clone();
+        tokio::task::spawn_local(async move {
+            let outcome = dispatch(&agent, &command).await;
+            write(response(&command, outcome));
+        });
+        // Like the TS event loop, let the command start before the next line.
+        tokio::task::yield_now().await;
+    }
+    Ok(())
+}
+
+/// The `response` line for a command's outcome.
+pub(crate) fn response(command: &Value, outcome: Result<Option<Value>, String>) -> Value {
+    let mut out = Map::new();
+    out.insert("type".to_owned(), json!("response"));
+    if let Some(id) = command.get("id") {
+        out.insert("id".to_owned(), id.clone());
+    }
+    if let Some(kind) = command.get("type") {
+        out.insert("command".to_owned(), kind.clone());
+    }
+    match outcome {
+        Ok(data) => {
+            out.insert("success".to_owned(), json!(true));
+            if let Some(data) = data {
+                out.insert("data".to_owned(), data);
+            }
+        }
+        Err(error) => {
+            out.insert("success".to_owned(), json!(false));
+            out.insert("error".to_owned(), json!(error));
+        }
+    }
+    Value::Object(out)
+}
+
+#[cfg(test)]
+mod tests;
