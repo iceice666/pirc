@@ -259,7 +259,8 @@ pub struct Answers {
     /// Write lease paths refused (all others are granted).
     pub refuse_leases: Vec<String>,
     /// Dialog answers in order: fields merged into `extension_ui_response`
-    /// (`{"confirmed": true}`, `{"value": "x"}`, `{"cancelled": true}`).
+    /// (`{"confirmed": true}`, `{"value": "x"}`, `{"cancelled": true}`), or
+    /// `null` to leave that dialog unanswered.
     pub dialogs: VecDeque<Value>,
     /// Gateway operation results by `op` (`{"ok": true, "result": …}` or an
     /// error object), else `{"ok": false, "error": {"code": "not_found"}}`.
@@ -628,6 +629,10 @@ impl AgentRun {
                         .dialogs
                         .pop_front()
                         .unwrap_or_else(|| json!({ "cancelled": true }));
+                    // `null`: left open for the test to answer or cancel.
+                    if reply.is_null() {
+                        return;
+                    }
                     reply["type"] = json!("extension_ui_response");
                     reply["id"] = line["id"].clone();
                     Some(reply)
