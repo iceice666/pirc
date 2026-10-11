@@ -112,8 +112,9 @@ pub struct ResolvedModel {
     pub model: pirc_protocol::Model,
 }
 
-/// Runs on the final reply just before its `message_end`.
-pub type BeforeEnd = Box<dyn FnMut(&AssistantMessage)>;
+/// Runs on the final reply just before its `message_end`; an error ends
+/// the call without that `message_end` (TS: a throw out of `beforeEnd`).
+pub type BeforeEnd = Box<dyn FnMut(&AssistantMessage) -> Result<(), String>>;
 
 /// Options of one model call (`stream`'s options).
 #[derive(Default)]
@@ -815,25 +816,24 @@ impl Agent {
         }
     }
 
-    /// `fallBack`: switch to the next fallback model; false when none.
-    fn fall_back(&self, reason: &str) -> bool {
+    /// `fallBack`: switch to the next fallback model; false when none. A
+    /// failure to record the switch ends the call (TS: `setModel` throws).
+    fn fall_back(&self, reason: &str) -> Result<bool, String> {
         let Some((provider, id)) = self.next_fallback() else {
-            return false;
+            return Ok(false);
         };
         let from = self
             .model_ref
             .borrow()
             .as_ref()
             .map_or_else(|| "none".to_owned(), |(p, m)| format!("{p}/{m}"));
-        if self.set_model(&provider, &id).is_err() {
-            return false;
-        }
+        self.set_model(&provider, &id)?;
         let (reason, _) = slice16(reason, 200);
         self.ui.notify(
             &format!("Model {from} failed ({reason}); switching to {provider}/{id}"),
             NotifyLevel::Warning,
         );
-        true
+        Ok(true)
     }
 
     /// `setRole`: start this session in one of the workspace's roles.
@@ -1157,13 +1157,25 @@ impl Agent {
         *self.controller.borrow_mut() = Some(controller.clone());
         self.emit(json!({ "type": "agent_start" }));
         // `beforeAgentStart` of features (M5) runs here.
-        let pending = if self.hooks.has(HookName::BeforePrompt) {
-            Some(initial)
+        // Only a user item awaits (`beforePrompt` hooks run before it), so
+        // the items before the first one are admitted at once either way.
+        let mut now = initial;
+        let later = if self.hooks.has(HookName::BeforePrompt) {
+            let first_user = now
+                .iter()
+                .position(|item| matches!(item, QueueItem::User { .. }))
+                .unwrap_or(now.len());
+            now.split_off(first_user)
         } else {
-            if let Err(error) = self.admit_now(initial) {
+            Vec::new()
+        };
+        let pending = match self.admit_now(now) {
+            Ok(()) if !later.is_empty() => Some(later),
+            Ok(()) => None,
+            Err(error) => {
                 self.start_failed(&error);
+                None
             }
-            None
         };
         let agent = self.clone();
         tokio::task::spawn_local(async move {
@@ -1175,18 +1187,9 @@ impl Agent {
             let error = match outcome {
                 Ok(Ok(())) => None,
                 Ok(Err(error)) => Some(error),
-                Err(panic) => Some(
-                    panic
-                        .try_into_panic()
-                        .ok()
-                        .and_then(|panic| {
-                            panic
-                                .downcast_ref::<String>()
-                                .cloned()
-                                .or_else(|| panic.downcast_ref::<&str>().map(|s| (*s).to_owned()))
-                        })
-                        .unwrap_or_else(|| "unknown error".to_owned()),
-                ),
+                // The payload may quote session content and is stored by
+                // the node; it stays in the panic message on stderr.
+                Err(_) => Some("internal error".to_owned()),
             };
             if let Some(error) = error {
                 let message = format!("Agent loop crashed: {error}");
@@ -1501,7 +1504,7 @@ impl Agent {
         let mut resolved = match self.resolve_model(None) {
             Ok(resolved) => resolved,
             Err(error) => {
-                if options.no_retries || !self.fall_back(&error) {
+                if options.no_retries || !self.fall_back(&error)? {
                     return Err(error);
                 }
                 self.resolve_model(None)?
@@ -1591,7 +1594,7 @@ impl Agent {
                 && !message.content.iter().any(
                     |part| matches!(part, AssistantContent::Text { text, .. } if !text.is_empty()),
                 );
-            if retryable && self.fall_back(message.error_message.as_deref().unwrap_or("error")) {
+            if retryable && self.fall_back(message.error_message.as_deref().unwrap_or("error"))? {
                 if emit {
                     self.emit_end(&message);
                 }
@@ -1602,8 +1605,11 @@ impl Agent {
             }
             let retry = retryable && attempt < RETRY_DELAYS.len();
             if !retry {
-                if let Some(before_end) = options.before_end.as_mut() {
-                    before_end(&message);
+                if let Some(before_end) = options.before_end.as_mut()
+                    && let Err(error) = before_end(&message)
+                {
+                    self.flush_panel();
+                    return Err(error);
                 }
                 if emit {
                     self.emit_end(&message);
@@ -1690,19 +1696,17 @@ impl Agent {
                 compaction::is_context_overflow(reply) && !retried && settings.enabled
             };
             let persisted = Rc::new(Cell::new(false));
-            let failure: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
-            let (marker, failed) = (persisted.clone(), failure.clone());
+            let marker = persisted.clone();
             let agent = self.clone();
             let retried = overflow_retried;
             let settings_enabled = settings.enabled;
             let before_end: BeforeEnd = Box::new(move |reply| {
                 if compaction::is_context_overflow(reply) && !retried && settings_enabled {
-                    return;
+                    return Ok(());
                 }
-                match agent.append(EntryData::Message(Message::Assistant(reply.clone()))) {
-                    Ok(_) => marker.set(true),
-                    Err(error) => *failed.borrow_mut() = Some(error),
-                }
+                agent.append(EntryData::Message(Message::Assistant(reply.clone())))?;
+                marker.set(true);
+                Ok(())
             });
             let prompt = self.system_prompt();
             let message = self
@@ -1715,9 +1719,6 @@ impl Agent {
                     },
                 )
                 .await?;
-            if let Some(error) = failure.borrow_mut().take() {
-                return Err(error);
-            }
             if !persisted.get() && compacts_instead(&message, overflow_retried) {
                 overflow_retried = true;
                 self.emit(json!({ "type": "turn_end" }));

@@ -6,7 +6,8 @@
 //!    write / danger, or `unknown`. The user's deny-list
 //!    (`features.autoMode.deny`) is matched first and always means danger.
 //! 2. `unknown` actions would go to a model classifier; that is M5's, so
-//!    they are treated as writes (as with `useModel: false`).
+//!    they are treated as writes: with `useModel: true` (the default) as a
+//!    classifier failure, warned about once as in TS.
 //! 3. `danger` needs a human: with a UI the user confirms; headless agents
 //!    are refused.
 //! 4. Anything that may write takes the node's write lease first: only the
@@ -37,6 +38,16 @@ use rules::{Classification, RuleContext, Verdict, classify_shell, compile_deny, 
 /// settings are all-or-nothing, so a broken one elsewhere restores the
 /// defaults.
 pub fn auto_mode_enabled(features: &Map<String, Value>) -> bool {
+    auto_mode_flag(features, "enabled")
+}
+
+/// `autoModeSettings(features).useModel` (default true).
+pub fn auto_mode_use_model(features: &Map<String, Value>) -> bool {
+    auto_mode_flag(features, "useModel")
+}
+
+/// A boolean auto-mode setting that defaults to true.
+fn auto_mode_flag(features: &Map<String, Value>, flag: &str) -> bool {
     let settings = match features.get("autoMode") {
         None | Some(Value::Null) => return true,
         Some(Value::Object(settings)) => settings,
@@ -70,10 +81,7 @@ pub fn auto_mode_enabled(features: &Map<String, Value>) -> bool {
     if !valid {
         return true;
     }
-    settings
-        .get("enabled")
-        .and_then(Value::as_bool)
-        .unwrap_or(true)
+    settings.get(flag).and_then(Value::as_bool).unwrap_or(true)
 }
 
 /// `autoModeDeny(features)`: the user's deny-list, read on its own so a
@@ -174,7 +182,11 @@ pub struct AutoMode {
     /// Per tty task: writes are judged one at a time, in order.
     input_gates: RefCell<HashMap<String, Rc<tokio::sync::Mutex<()>>>>,
     warned_deny: RefCell<String>,
+    warned_failure: std::cell::Cell<bool>,
 }
+
+/// Why the model classifier cannot answer yet.
+const CLASSIFIER_MISSING: &str = "the model classifier is not available in this build";
 
 impl AutoMode {
     pub fn new() -> Self {
@@ -356,15 +368,29 @@ impl AutoMode {
         if rules.verdict != Verdict::Unknown {
             return decided(rules);
         }
-        Decision {
+        let fallback = |reason| Decision {
             classification: Classification {
                 verdict: Verdict::Write,
-                reason: format!("{} (model check disabled)", rules.reason),
+                reason,
                 denied: false,
                 writes: None,
             },
             source: Source::Fallback,
+        };
+        if !auto_mode_use_model(&host.config().features) {
+            return fallback(format!("{} (model check disabled)", rules.reason));
         }
+        // The model classifier is M5's: until then it is always unavailable,
+        // which TS reports once and treats as a write.
+        if !self.warned_failure.replace(true) {
+            host.ui().notify(
+                &format!(
+                    "Auto mode: classifier unavailable ({CLASSIFIER_MISSING}); treating unclear shell actions as writes"
+                ),
+                NotifyLevel::Warning,
+            );
+        }
+        fallback(format!("{}; classifier unavailable", rules.reason))
     }
 
     /// `gate`: `Ok(Some(refusal))` for the model, `Ok(None)` when the call

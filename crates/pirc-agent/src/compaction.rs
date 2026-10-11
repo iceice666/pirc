@@ -56,18 +56,68 @@ fn to_number(value: &Value) -> f64 {
         Value::Null => 0.0,
         Value::Bool(value) => f64::from(u8::from(*value)),
         Value::Number(number) => number.as_f64().unwrap_or(f64::NAN),
-        Value::String(text) => {
-            let text = text.trim();
-            if text.is_empty() {
-                0.0
-            } else {
-                text.parse().unwrap_or(f64::NAN)
-            }
-        }
-        Value::Array(items) if items.is_empty() => 0.0,
-        Value::Array(items) if items.len() == 1 => to_number(&items[0]),
-        Value::Array(_) | Value::Object(_) => f64::NAN,
+        Value::String(text) => string_to_number(text),
+        // Arrays go through `ToString` first; objects are NaN.
+        Value::Array(_) => string_to_number(&crate::tools::js::string_of(value)),
+        Value::Object(_) => f64::NAN,
     }
+}
+
+/// JavaScript `StringToNumber`: JS whitespace trimmed, empty is 0,
+/// `Infinity` with an optional sign, `0x`/`0o`/`0b` integers, else a decimal
+/// literal; anything else is NaN.
+fn string_to_number(text: &str) -> f64 {
+    let text = crate::messages::js::trim(text);
+    if text.is_empty() {
+        return 0.0;
+    }
+    let (sign, unsigned) = match text.as_bytes()[0] {
+        b'+' => (1.0, &text[1..]),
+        b'-' => (-1.0, &text[1..]),
+        _ => (1.0, text),
+    };
+    if unsigned == "Infinity" {
+        return sign * f64::INFINITY;
+    }
+    let radix = match unsigned.get(..2) {
+        Some("0x" | "0X") => Some(16),
+        Some("0o" | "0O") => Some(8),
+        Some("0b" | "0B") => Some(2),
+        _ => None,
+    };
+    if let Some(radix) = radix {
+        // No sign before a radix prefix.
+        let digits = &unsigned[2..];
+        if unsigned.len() != text.len() || digits.is_empty() {
+            return f64::NAN;
+        }
+        return digits
+            .chars()
+            .try_fold(0.0f64, |n, c| {
+                c.to_digit(radix)
+                    .map(|d| n * f64::from(radix) + f64::from(d))
+            })
+            .unwrap_or(f64::NAN);
+    }
+    // A decimal literal: digits, at most one dot, an optional exponent.
+    let (mantissa, exponent) = match unsigned.find(['e', 'E']) {
+        Some(at) => (&unsigned[..at], Some(&unsigned[at + 1..])),
+        None => (unsigned, None),
+    };
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    let mantissa_ok = match mantissa.split_once('.') {
+        Some((whole, fraction)) => {
+            (whole.is_empty() || digits(whole))
+                && (fraction.is_empty() || digits(fraction))
+                && !(whole.is_empty() && fraction.is_empty())
+        }
+        None => digits(mantissa),
+    };
+    let exponent_ok = exponent.is_none_or(|e| digits(e.strip_prefix(['+', '-']).unwrap_or(e)));
+    if !mantissa_ok || !exponent_ok {
+        return f64::NAN;
+    }
+    text.parse().unwrap_or(f64::NAN)
 }
 
 impl CompactionSettings {
@@ -379,4 +429,52 @@ pub fn warm_cache(agent: &Rc<Agent>) {
         timer.abort();
         ui.set_status("cache-safe-compaction", None);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::to_number;
+
+    #[test]
+    fn to_number_follows_javascript() {
+        let cases = [
+            (json!(null), 0.0),
+            (json!(true), 1.0),
+            (json!(" 12 "), 12.0),
+            (json!(""), 0.0),
+            (json!("\u{a0}\u{feff}7\n"), 7.0),
+            (json!("1e3"), 1000.0),
+            (json!("-.5"), -0.5),
+            (json!("5."), 5.0),
+            (json!("+Infinity"), f64::INFINITY),
+            (json!("-Infinity"), f64::NEG_INFINITY),
+            (json!("0x1F"), 31.0),
+            (json!("0o17"), 15.0),
+            (json!("0b101"), 5.0),
+            (json!([]), 0.0),
+            (json!(["8"]), 8.0),
+            (json!([null]), 0.0),
+            (json!([[3]]), 3.0),
+        ];
+        for (value, expected) in cases {
+            assert_eq!(to_number(&value), expected, "{value}");
+        }
+        for value in [
+            json!("inf"),
+            json!("infinity"),
+            json!("NaN"),
+            json!("-0x10"),
+            json!("0x"),
+            json!("."),
+            json!("1e"),
+            json!("1_000"),
+            json!([true]),
+            json!([1, 2]),
+            json!({}),
+        ] {
+            assert!(to_number(&value).is_nan(), "{value}");
+        }
+    }
 }

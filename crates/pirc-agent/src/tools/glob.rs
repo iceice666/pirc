@@ -7,11 +7,18 @@
 const MAX_ALTERNATIVES: usize = 4096;
 /// Bun matches nothing for a pattern with more brace groups than this.
 const MAX_BRACE_GROUPS: usize = 10;
+/// Most characters all brace alternatives together may hold.
+const MAX_EXPANDED_CHARS: usize = 1 << 22;
+/// Most matcher steps (active states x path characters, summed over the
+/// alternatives) one `is_match` may take; past it the path does not match,
+/// so a pathological pattern costs bounded time per file.
+const MAX_STEPS: usize = 1 << 20;
 
 pub struct Glob {
     negated: bool,
-    /// Brace-free alternatives; `None` when the pattern can match nothing.
-    alternatives: Option<Vec<Vec<char>>>,
+    /// Compiled brace-free alternatives; `None` when the pattern can match
+    /// nothing.
+    alternatives: Option<Vec<Vec<Token>>>,
 }
 
 impl Glob {
@@ -25,7 +32,7 @@ impl Glob {
         let alternatives = if brace_groups(chars) > MAX_BRACE_GROUPS {
             None
         } else {
-            expand(chars)
+            expand(chars).map(|all| all.iter().map(|p| compile(p)).collect())
         };
         Self {
             negated,
@@ -35,16 +42,33 @@ impl Glob {
 
     pub fn is_match(&self, path: &str) -> bool {
         let path: Vec<char> = path.chars().collect();
-        let matched = self.alternatives.as_ref().is_some_and(|all| {
-            all.iter()
-                .any(|pattern| Matcher::new(pattern, &path).matches(0, 0))
-        });
+        let mut budget = MAX_STEPS;
+        let matched = self
+            .alternatives
+            .as_ref()
+            .is_some_and(|all| all.iter().any(|tokens| matches(tokens, &path, &mut budget)));
         matched != self.negated
     }
 }
 
+/// For every index `j`, where a class body scanned from `j` closes: the
+/// first `]` at or after `j` that no `\\` escapes (`usize::MAX` if none).
+/// One backward pass, so finding class ends is linear.
+fn closes(p: &[char]) -> Vec<usize> {
+    let mut close = vec![usize::MAX; p.len() + 2];
+    for j in (0..p.len()).rev() {
+        close[j] = match p[j] {
+            '\\' => close[j + 2],
+            ']' => j,
+            _ => close[j + 1],
+        };
+    }
+    close
+}
+
 /// Closed brace groups in the pattern (escapes and classes skipped).
 fn brace_groups(p: &[char]) -> usize {
+    let close = closes(p);
     let mut open = 0usize;
     let mut groups = 0;
     let mut i = 0;
@@ -52,7 +76,7 @@ fn brace_groups(p: &[char]) -> usize {
         match p[i] {
             '\\' => i += 1,
             '[' => {
-                if let Some(end) = class_end(p, i) {
+                if let Some(end) = class_end(p, &close, i) {
                     i = end;
                     continue;
                 }
@@ -69,32 +93,33 @@ fn brace_groups(p: &[char]) -> usize {
     groups
 }
 
-/// End (exclusive) of the class starting at `start` (`[`), if it closes.
-fn class_end(p: &[char], start: usize) -> Option<usize> {
-    let mut i = start + 1;
-    if matches!(p.get(i), Some('!' | '^')) {
-        i += 1;
+/// End (exclusive) of the class starting at `start` (`[`), if it closes;
+/// `close` is [`closes`] of `p`.
+fn class_end(p: &[char], close: &[usize], start: usize) -> Option<usize> {
+    let mut first = start + 1;
+    if matches!(p.get(first), Some('!' | '^')) {
+        first += 1;
     }
-    let first = i;
-    while i < p.len() {
-        match p[i] {
-            '\\' => i += 2,
-            ']' if i > first => return Some(i + 1),
-            _ => i += 1,
-        }
-    }
-    None
+    // A `]` right after the opening is part of the body.
+    let from = if p.get(first) == Some(&']') {
+        first + 1
+    } else {
+        first
+    };
+    let end = *close.get(from)?;
+    (end != usize::MAX).then(|| end + 1)
 }
 
 /// The brace-free patterns `p` stands for.
 fn expand(p: &[char]) -> Option<Vec<Vec<char>>> {
+    let close = closes(p);
     let mut i = 0;
     while i < p.len() {
         match p[i] {
             '\\' => i += 2,
-            '[' => i = class_end(p, i).unwrap_or(i + 1),
+            '[' => i = class_end(p, &close, i).unwrap_or(i + 1),
             '{' => {
-                let (parts, close) = brace_parts(p, i);
+                let (parts, close) = brace_parts(p, &close, i);
                 let prefix = &p[..i];
                 let (parts, suffix): (Vec<&[char]>, &[char]) = match close {
                     Some(close) => (parts, &p[close + 1..]),
@@ -105,15 +130,17 @@ fn expand(p: &[char]) -> Option<Vec<Vec<char>>> {
                 };
                 let tails = expand(suffix)?;
                 let mut out = Vec::new();
+                let mut total = 0usize;
                 for part in parts {
                     for middle in expand(part)? {
                         for tail in &tails {
-                            if out.len() >= MAX_ALTERNATIVES {
+                            if out.len() >= MAX_ALTERNATIVES || total >= MAX_EXPANDED_CHARS {
                                 return Some(out);
                             }
                             let mut pattern = prefix.to_vec();
                             pattern.extend(&middle);
                             pattern.extend(tail);
+                            total += pattern.len();
                             out.push(pattern);
                         }
                     }
@@ -127,7 +154,11 @@ fn expand(p: &[char]) -> Option<Vec<Vec<char>>> {
 }
 
 /// The top-level alternatives of the brace at `open` and its closing index.
-fn brace_parts(p: &[char], open: usize) -> (Vec<&[char]>, Option<usize>) {
+fn brace_parts<'p>(
+    p: &'p [char],
+    close: &[usize],
+    open: usize,
+) -> (Vec<&'p [char]>, Option<usize>) {
     let mut parts = Vec::new();
     let mut depth = 0;
     let mut start = open + 1;
@@ -139,7 +170,7 @@ fn brace_parts(p: &[char], open: usize) -> (Vec<&[char]>, Option<usize>) {
                 continue;
             }
             '[' => {
-                i = class_end(p, i).unwrap_or(i + 1);
+                i = class_end(p, close, i).unwrap_or(i + 1);
                 continue;
             }
             '{' => depth += 1,
@@ -160,88 +191,159 @@ fn brace_parts(p: &[char], open: usize) -> (Vec<&[char]>, Option<usize>) {
     (parts, None)
 }
 
-/// Matching with memoized states: each (pattern position, path position)
-/// is decided once, so stars cannot backtrack exponentially.
-struct Matcher<'a> {
-    p: &'a [char],
-    s: &'a [char],
-    /// 0 unknown, 1 no, 2 yes; indexed `pi * (s.len() + 1) + si`.
-    memo: Vec<u8>,
+/// One step of a compiled alternative.
+#[derive(Debug)]
+enum Token {
+    Char(char),
+    /// `?`: one character other than `/`.
+    Any,
+    /// `[...]` with its body.
+    Class(Vec<char>),
+    /// `*` (a run of them): any characters other than `/`.
+    Star,
+    /// `**/`: zero or more whole segments.
+    Segments,
+    /// A trailing `**`: everything that is left.
+    Rest,
+    /// What can match nothing (an unclosed class, a trailing `\\`).
+    Never,
 }
 
-impl<'a> Matcher<'a> {
-    fn new(p: &'a [char], s: &'a [char]) -> Self {
-        Self {
-            p,
-            s,
-            memo: vec![0; (p.len() + 1) * (s.len() + 1)],
-        }
-    }
-
-    fn matches(&mut self, pi: usize, si: usize) -> bool {
-        let slot = pi * (self.s.len() + 1) + si;
-        match self.memo[slot] {
-            1 => return false,
-            2 => return true,
-            _ => {}
-        }
-        let found = self.decide(pi, si);
-        self.memo[slot] = if found { 2 } else { 1 };
-        found
-    }
-
-    fn decide(&mut self, pi: usize, si: usize) -> bool {
-        let (p, s) = (self.p, self.s);
-        if pi == p.len() {
-            return si == s.len();
-        }
+/// Compiles a brace-free pattern.
+fn compile(p: &[char]) -> Vec<Token> {
+    let close = closes(p);
+    let mut tokens = Vec::new();
+    let mut pi = 0;
+    while pi < p.len() {
         match p[pi] {
             '*' => {
                 let globstar = p.get(pi + 1) == Some(&'*')
                     && (pi == 0 || p[pi - 1] == '/')
                     && (pi + 2 == p.len() || p[pi + 2] == '/');
-                if globstar {
-                    if pi + 2 == p.len() {
-                        return true;
+                if globstar && pi + 2 == p.len() {
+                    tokens.push(Token::Rest);
+                    pi += 2;
+                } else if globstar {
+                    tokens.push(Token::Segments);
+                    pi += 3;
+                } else {
+                    tokens.push(Token::Star);
+                    while p.get(pi) == Some(&'*') {
+                        pi += 1;
                     }
-                    // `**/`: zero or more whole segments.
-                    let rest = pi + 3;
-                    if self.matches(rest, si) {
-                        return true;
-                    }
-                    return (si..s.len()).any(|j| s[j] == '/' && self.matches(rest, j + 1));
-                }
-                let mut next = pi + 1;
-                while p.get(next) == Some(&'*') {
-                    next += 1;
-                }
-                let mut k = si;
-                loop {
-                    if self.matches(next, k) {
-                        return true;
-                    }
-                    if k == s.len() || s[k] == '/' {
-                        return false;
-                    }
-                    k += 1;
                 }
             }
-            '?' => si < s.len() && s[si] != '/' && self.matches(pi + 1, si + 1),
-            '[' => {
-                let Some(end) = class_end(p, pi) else {
-                    return false;
-                };
-                si < s.len() && in_class(&p[pi + 1..end - 1], s[si]) && self.matches(end, si + 1)
+            '?' => {
+                tokens.push(Token::Any);
+                pi += 1;
             }
-            '\\' => {
-                pi + 1 < p.len()
-                    && si < s.len()
-                    && s[si] == p[pi + 1]
-                    && self.matches(pi + 2, si + 1)
+            '[' => match class_end(p, &close, pi) {
+                Some(end) => {
+                    tokens.push(Token::Class(p[pi + 1..end - 1].to_vec()));
+                    pi = end;
+                }
+                None => {
+                    tokens.push(Token::Never);
+                    break;
+                }
+            },
+            '\\' => match p.get(pi + 1) {
+                Some(&c) => {
+                    tokens.push(Token::Char(c));
+                    pi += 2;
+                }
+                None => {
+                    tokens.push(Token::Never);
+                    break;
+                }
+            },
+            c => {
+                tokens.push(Token::Char(c));
+                pi += 1;
             }
-            c => si < s.len() && s[si] == c && self.matches(pi + 1, si + 1),
         }
     }
+    tokens
+}
+
+/// Runs the tokens over the path as a set of active positions, one path
+/// character at a time: no recursion, no table, and a mismatch ends as soon
+/// as no position is left. `budget` counts the steps all alternatives of
+/// one `is_match` may still take.
+fn matches(tokens: &[Token], s: &[char], budget: &mut usize) -> bool {
+    let n = tokens.len();
+    // States `0..=n` are token positions; `n + 1 + at` is "inside the
+    // segments of the `**/` at `at`", which may only move on after a `/`.
+    let inside = |at: usize| n + 1 + at;
+    let mut current: Vec<usize> = Vec::new();
+    let mut next: Vec<usize> = Vec::new();
+    let mut seen = vec![usize::MAX; 2 * n + 2];
+    // Adds `state` and what a position reaches without consuming (stars may
+    // match nothing, `**/` zero segments); true when a trailing `**` is
+    // reached.
+    let add = |state: usize, round: usize, set: &mut Vec<usize>, seen: &mut Vec<usize>| -> bool {
+        let mut state = state;
+        loop {
+            if seen[state] == round {
+                return false;
+            }
+            seen[state] = round;
+            set.push(state);
+            if state > n {
+                return false;
+            }
+            match tokens.get(state) {
+                Some(Token::Rest) => return true,
+                Some(Token::Star | Token::Segments) => state += 1,
+                _ => return false,
+            }
+        }
+    };
+    if add(0, 0, &mut current, &mut seen) {
+        return true;
+    }
+    for (si, &c) in s.iter().enumerate() {
+        let round = si + 1;
+        next.clear();
+        for &state in &current {
+            if *budget == 0 {
+                return false;
+            }
+            *budget -= 1;
+            let at = if state > n { state - n - 1 } else { state };
+            let token = if state > n {
+                Some(&Token::Segments)
+            } else {
+                tokens.get(at)
+            };
+            let advance = match token {
+                None | Some(Token::Never | Token::Rest) => false,
+                Some(Token::Char(want)) => c == *want,
+                Some(Token::Any) => c != '/',
+                Some(Token::Class(body)) => in_class(body, c),
+                Some(Token::Star) => {
+                    if c != '/' && add(at, round, &mut next, &mut seen) {
+                        return true;
+                    }
+                    false
+                }
+                Some(Token::Segments) => {
+                    if add(inside(at), round, &mut next, &mut seen) {
+                        return true;
+                    }
+                    c == '/'
+                }
+            };
+            if advance && add(at + 1, round, &mut next, &mut seen) {
+                return true;
+            }
+        }
+        if next.is_empty() {
+            return false;
+        }
+        std::mem::swap(&mut current, &mut next);
+    }
+    current.contains(&n)
 }
 
 /// Whether `c` is in the class body (between `[` and `]`).
@@ -284,6 +386,37 @@ mod tests {
         assert!(Glob::new("*a*a*a*a*a*a*a*a*a*").is_match(&name));
         let deep = "d/".repeat(30) + "x";
         assert!(Glob::new("**/**/**/**/**/**/**/**/x").is_match(&deep));
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    }
+
+    #[test]
+    fn long_globstar_chains_do_not_overflow_the_stack() {
+        // About 90 KB of `**/`, matched on a thread with a small stack.
+        let pattern = "**/".repeat(30_000) + "zz";
+        let found = std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(move || {
+                let glob = Glob::new(&pattern);
+                (glob.is_match("a/b/zz"), glob.is_match("a/b/z"))
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+        assert_eq!(found, (true, false));
+    }
+
+    #[test]
+    fn huge_patterns_stay_fast() {
+        let started = std::time::Instant::now();
+        let braces = "{a,b}".repeat(10) + &"x".repeat(100_000);
+        assert!(!Glob::new(&braces).is_match("abababababx"));
+        let classes = Glob::new(&"[".repeat(50_000));
+        assert!(!classes.is_match("a/b/c"));
+        let wide = Glob::new(&("{a,b}".repeat(10) + &"x".repeat(1000)));
+        let long = "c".repeat(4000);
+        for _ in 0..100 {
+            assert!(!wide.is_match(&long));
+        }
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
 

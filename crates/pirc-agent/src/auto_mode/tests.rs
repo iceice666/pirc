@@ -338,3 +338,31 @@ fn reads_the_settings_like_zod() {
         vec!["a", "b"]
     );
 }
+
+#[tokio::test]
+async fn without_the_model_classifier_unclear_actions_write_and_warn_once() {
+    // `useModel` defaults to true; the classifier is M5's, so TS's
+    // classifier-failure path applies: one warning, then plain writes.
+    let host = host(json!({}), false);
+    let auto = AutoMode::new();
+    for _ in 0..2 {
+        let action = auto
+            .action_for(&host, "bash", &args(json!({ "command": "python3 x.py" })))
+            .unwrap();
+        let decision = auto.classify(&host, &action);
+        assert_eq!(decision.source, Source::Fallback);
+        assert_eq!(decision.classification.verdict, Verdict::Write);
+        assert!(
+            decision
+                .classification
+                .reason
+                .ends_with("; classifier unavailable")
+        );
+    }
+    assert_eq!(
+        *host.ui.notes.borrow(),
+        vec![format!(
+            "Auto mode: classifier unavailable ({CLASSIFIER_MISSING}); treating unclear shell actions as writes"
+        )]
+    );
+}

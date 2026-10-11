@@ -283,8 +283,8 @@ async fn main(args: Vec<String>) -> Result<(), String> {
                 crash_on(served);
                 serving = false;
             }
-            _ = terminate.recv() => std::process::exit(128 + 15),
-            _ = interrupt.recv() => std::process::exit(128 + 2),
+            _ = terminate.recv() => exit(128 + 15),
+            _ = interrupt.recv() => exit(128 + 2),
         }
     }
 }
@@ -295,8 +295,15 @@ async fn main(args: Vec<String>) -> Result<(), String> {
 fn crash_on(served: Result<(), String>) {
     if let Err(error) = served {
         eprintln!("error: {error}");
-        std::process::exit(1);
+        exit(1);
     }
+}
+
+/// `process::exit` runs no destructors, so the shells' process groups are
+/// killed first: no command outlives the agent.
+fn exit(code: i32) -> ! {
+    crate::tools::bash::kill_live_groups();
+    std::process::exit(code)
 }
 
 /// `!values.headless`: a flag or a non-empty value.

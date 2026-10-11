@@ -49,6 +49,55 @@ pub fn kill_group(pid: Option<u32>, signal: Signal) {
     }
 }
 
+/// Process groups of shells still running, for [`kill_live_groups`].
+static LIVE_GROUPS: std::sync::Mutex<Vec<i32>> = std::sync::Mutex::new(Vec::new());
+
+/// Kills the shell's process group when [`run_shell`] ends, including when
+/// it is dropped before it finishes (a cancelled or panicking caller), so
+/// no command outlives its run. TS has no such path: its promise always
+/// runs to the end. Only the group is signalled: the shell leads it, so
+/// its pid is never signalled on its own after being reaped (and reused).
+struct GroupGuard(Option<i32>);
+
+impl GroupGuard {
+    fn new(pid: Option<u32>) -> Self {
+        let pgid = pid
+            .and_then(|pid| i32::try_from(pid).ok())
+            .filter(|pid| *pid > 0);
+        if let Some(pgid) = pgid {
+            LIVE_GROUPS
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(pgid);
+        }
+        Self(pgid)
+    }
+}
+
+impl Drop for GroupGuard {
+    fn drop(&mut self) {
+        if let Some(pgid) = self.0.take() {
+            LIVE_GROUPS
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .retain(|live| *live != pgid);
+            let _ = kill(Pid::from_raw(-pgid), Signal::SIGKILL);
+        }
+    }
+}
+
+/// Kills the process groups of every shell still running: for exits that
+/// skip destructors (`process::exit`).
+pub fn kill_live_groups() {
+    for pgid in LIVE_GROUPS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .drain(..)
+    {
+        let _ = kill(Pid::from_raw(-pgid), Signal::SIGKILL);
+    }
+}
+
 /// `ShellResult`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShellResult {
@@ -125,9 +174,13 @@ pub async fn run_shell(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0)
+        .kill_on_drop(true)
         .spawn()
         .map_err(|error| fs_error(&error, "posix_spawn", Some(shell)))?;
     let pid = child.id();
+    // The shell exited (or the caller dropped us); orphaned descendants must
+    // not linger.
+    let _group = GroupGuard::new(pid);
     let mut stdout = child.stdout.take();
     let mut stderr = child.stderr.take();
     let mut output = String::new();
@@ -212,8 +265,6 @@ pub async fn run_shell(
             }
         }
     }
-    // The shell exited; orphaned descendants must not linger.
-    kill_group(pid, Signal::SIGKILL);
     let (text, cut) = truncate_output(&output, options.max_bytes);
     Ok(ShellResult {
         output: text,

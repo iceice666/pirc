@@ -607,6 +607,49 @@ async fn aborts_shell_commands_and_caps_output() {
 }
 
 #[tokio::test]
+async fn dropping_a_shell_run_kills_its_process_group() {
+    let f = Fixture::new();
+    let ws = f.ws();
+    let pid_file = std::path::Path::new(&ws).join("child.pid");
+    let command = format!("sleep 30 & echo $! > '{}'; wait", pid_file.display());
+    let (shell, never) = (bash(), AbortSignal::never());
+    let run = run_shell(
+        &shell,
+        &command,
+        ShellOptions {
+            cwd: &ws,
+            env: &[],
+            timeout_ms: 60_000,
+            max_bytes: 1000,
+            signal: &never,
+            on_output: None,
+        },
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(500), run)
+            .await
+            .is_err()
+    );
+    let pid: i32 = std::fs::read_to_string(&pid_file)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    // Gone (a zombie is reaped by its new parent right away).
+    let alive = || {
+        nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None)
+            != Err(nix::errno::Errno::ESRCH)
+    };
+    for _ in 0..50 {
+        if !alive() {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    panic!("the background sleep outlived its dropped shell run");
+}
+
+#[tokio::test]
 async fn reports_a_missing_shell_like_bun() {
     let f = Fixture::new();
     let tool = BashTool::with_shell("/nonexistent/bash");

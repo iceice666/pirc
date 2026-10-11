@@ -672,18 +672,29 @@ impl FindTool {
     async fn run(&self, args: Map<String, Value>, ctx: ToolContext) -> Result<ToolResult, String> {
         let root = ctx.guard.resolve(string_or(&args, "path", "."), false)?;
         let glob = Glob::new(require_string(&args, "pattern")?);
+        // TS walked synchronously and could not be stopped; an abort here
+        // ends the walk, as grep's does.
+        let aborted = Arc::new(AtomicBool::new(false));
+        {
+            let aborted = aborted.clone();
+            ctx.signal
+                .on_abort(move || aborted.store(true, Ordering::Relaxed));
+        }
         let mut matches = blocking(move || {
             let mut matches = Vec::new();
-            let _ = walk(&root, 200_000, |file| {
+            walk(&root, 200_000, |file| {
+                if aborted.load(Ordering::Relaxed) {
+                    return Err("Aborted".to_owned());
+                }
                 let relative = js::relative(&root, &file);
                 if glob.is_match(&relative) {
                     matches.push(relative);
                 }
                 Ok(matches.len() < 500)
-            });
-            matches
+            })
+            .map(|()| matches)
         })
-        .await;
+        .await?;
         matches.sort_by(|a, b| js::compare16(a, b));
         let text = if matches.is_empty() {
             "No matches".to_owned()
