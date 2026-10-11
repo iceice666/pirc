@@ -353,9 +353,184 @@ impl Router {
     /// - The response body is relayed as is; `None` becomes `body: null`
     ///   (`body = null` for an empty Fastify reply).
     pub async fn handle(&self, node: &Node, request: NodeHttpRequest) -> NodeHttpResponse {
-        let _ = (node, request);
-        todo!("core: Fastify's request handling around Router::find")
+        let (path, query) = match request.url.split_once('?') {
+            Some((path, query)) => (path, Some(query)),
+            None => (request.url.as_str(), None),
+        };
+        let found = self.find(request.method, path);
+        // find-my-way refuses a parameter over 100 characters before any
+        // hook runs.
+        if let Some((route, _)) = &found
+            && route.param_too_long(path)
+        {
+            return reply(
+                414,
+                Some(serde_json::json!({
+                    "error": "Bad Request",
+                    "code": "FST_ERR_MAX_PARAM_LENGTH",
+                    "message": format!("'{path}' is exceeding the max param length"),
+                    "statusCode": 414,
+                })),
+            );
+        }
+        // The `onRequest` hook, which Fastify runs for its 404 handler too.
+        if !node.config.allowed_users.contains(&request.user) {
+            return error_reply(&ApiError::forbidden("User is not allowed on this node"));
+        }
+        let Some((route, params)) = found else {
+            return reply(
+                404,
+                Some(serde_json::json!({
+                    "message": format!("Route {}:{} not found", method_name(request.method), request.url),
+                    "error": "Not Found",
+                    "statusCode": 404,
+                })),
+            );
+        };
+        let body = match request_body(&request, node.config.upload_max_bytes) {
+            Ok(body) => body,
+            Err(error) => return error_reply(&error),
+        };
+        let routed = Request {
+            method: request.method,
+            path: path.to_owned(),
+            query: query
+                .map(|query| {
+                    url::form_urlencoded::parse(query.as_bytes())
+                        .into_owned()
+                        .collect()
+                })
+                .unwrap_or_default(),
+            params,
+            user: request.user,
+            body,
+        };
+        // In a task of its own: a panic is a 500, not a lost response, and
+        // the handler runs to its end as Fastify's did.
+        match tokio::spawn(route.call(node.clone(), routed)).await {
+            Ok(Ok(response)) => reply(response.status, response.body),
+            Ok(Err(error)) => error_reply(&error),
+            Err(error) => {
+                crate::log::error(&format!(
+                    "{} {path} failed: {error}",
+                    method_name(request.method)
+                ));
+                error_reply(&ApiError::internal())
+            }
+        }
     }
+}
+
+impl Route {
+    /// Whether a parameter segment of `path` (this route's) is over
+    /// find-my-way's `maxParamLength` (100), as the gateway counts it.
+    fn param_too_long(&self, path: &str) -> bool {
+        path.strip_prefix('/').is_some_and(|rest| {
+            self.segments
+                .iter()
+                .zip(rest.split('/'))
+                .any(|(segment, part)| matches!(segment, Segment::Param(_)) && part.len() > 100)
+        })
+    }
+}
+
+fn reply(status: u16, body: Option<Value>) -> NodeHttpResponse {
+    NodeHttpResponse {
+        status,
+        // An empty reply is relayed as `body: null` (`handleRequest`).
+        body: Some(body.unwrap_or(Value::Null)),
+    }
+}
+
+fn error_reply(error: &ApiError) -> NodeHttpResponse {
+    reply(error.status, Some(error.body()))
+}
+
+fn method_name(method: HttpMethod) -> &'static str {
+    match method {
+        HttpMethod::Get => "GET",
+        HttpMethod::Post => "POST",
+        HttpMethod::Patch => "PATCH",
+        HttpMethod::Put => "PUT",
+        HttpMethod::Delete => "DELETE",
+    }
+}
+
+/// The body as Fastify gave it to the route (`app.inject` with the frame's
+/// `payload` or `bodyBase64`):
+///
+/// - GET bodies are never parsed.
+/// - `payload` was injected as JSON, so it is JSON (`null` is no body).
+/// - `bodyBase64` goes through the parser of its content type: JSON for
+///   `application/json` (empty or invalid: Fastify's parser error, which the
+///   node's error handler answers as 500), raw bytes for anything else.
+/// - Over `limit` bytes: 413, Fastify's `bodyLimit`.
+fn request_body(request: &NodeHttpRequest, limit: usize) -> ApiResult<Body> {
+    if request.method == HttpMethod::Get {
+        return Ok(Body::None);
+    }
+    if let Some(encoded) = &request.body_base64 {
+        let bytes = decode_base64(encoded);
+        if bytes.len() > limit {
+            return Err(ApiError::payload_too_large());
+        }
+        let content_type = request
+            .content_type
+            .clone()
+            .unwrap_or_else(|| "application/octet-stream".to_owned());
+        let media = content_type
+            .split(';')
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+        if media == "application/json" {
+            return serde_json::from_slice(&bytes)
+                .map(Body::Json)
+                .map_err(|_| ApiError::internal());
+        }
+        return Ok(Body::Raw {
+            bytes,
+            content_type,
+        });
+    }
+    match &request.payload {
+        None | Some(Value::Null) => Ok(Body::None),
+        Some(value) => {
+            if value.to_string().len() > limit {
+                return Err(ApiError::payload_too_large());
+            }
+            Ok(Body::Json(value.clone()))
+        }
+    }
+}
+
+/// `Buffer.from(text, 'base64')`: lenient, as Node's decoder is. Both
+/// alphabets are accepted, other characters skipped, and decoding stops at
+/// the first `=`; a trailing lone character is dropped.
+fn decode_base64(text: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(text.len() * 3 / 4);
+    let mut buffer: u32 = 0;
+    let mut bits = 0;
+    for byte in text.bytes() {
+        let value = match byte {
+            b'A'..=b'Z' => byte - b'A',
+            b'a'..=b'z' => byte - b'a' + 26,
+            b'0'..=b'9' => byte - b'0' + 52,
+            b'+' | b'-' => 62,
+            b'/' | b'_' => 63,
+            b'=' => break,
+            _ => continue,
+        };
+        buffer = (buffer << 6) | u32::from(value);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buffer >> bits) as u8);
+            buffer &= (1 << bits) - 1;
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -407,6 +582,90 @@ mod tests {
         assert!(found(HttpMethod::Delete, "/api/sessions/s").is_some());
         assert_eq!(percent_decode("%E4%BD%A0%zz%"), "你%zz%");
         assert_eq!(percent_decode("%FF"), "%FF");
+    }
+
+    fn relayed(
+        method: HttpMethod,
+        payload: Option<Value>,
+        raw: Option<(&str, Option<&str>)>,
+    ) -> NodeHttpRequest {
+        NodeHttpRequest {
+            method,
+            url: "/api/x".into(),
+            user: "u".into(),
+            payload,
+            body_base64: raw.map(|(body, _)| body.to_owned()),
+            content_type: raw.and_then(|(_, content_type)| content_type.map(str::to_owned)),
+        }
+    }
+
+    #[test]
+    fn bodies_as_fastify_parsed_them() {
+        use serde_json::json;
+        let body = |request: NodeHttpRequest| request_body(&request, 10);
+        assert_eq!(
+            body(relayed(HttpMethod::Post, Some(json!({ "a": 1 })), None)),
+            Ok(Body::Json(json!({ "a": 1 })))
+        );
+        assert_eq!(body(relayed(HttpMethod::Post, None, None)), Ok(Body::None));
+        assert_eq!(
+            body(relayed(HttpMethod::Post, Some(Value::Null), None)),
+            Ok(Body::None)
+        );
+        assert_eq!(
+            body(relayed(HttpMethod::Get, Some(json!({ "a": 1 })), None)),
+            Ok(Body::None)
+        );
+        assert_eq!(
+            body(relayed(
+                HttpMethod::Post,
+                Some(json!({ "a": "0123456789" })),
+                None
+            )),
+            Err(ApiError::payload_too_large())
+        );
+        assert_eq!(
+            body(relayed(HttpMethod::Post, None, Some(("aGVsbG8K", None)))),
+            Ok(Body::Raw {
+                bytes: b"hello\n".to_vec(),
+                content_type: "application/octet-stream".into()
+            })
+        );
+        assert_eq!(
+            body(relayed(
+                HttpMethod::Post,
+                None,
+                Some(("e30=", Some("application/json; charset=utf-8")))
+            )),
+            Ok(Body::Json(json!({})))
+        );
+        for broken in ["", "eyJ3"] {
+            assert_eq!(
+                body(relayed(
+                    HttpMethod::Post,
+                    None,
+                    Some((broken, Some("application/json")))
+                )),
+                Err(ApiError::internal())
+            );
+        }
+        assert_eq!(
+            body(relayed(
+                HttpMethod::Post,
+                None,
+                Some(("aGVsbG8gd29ybGQ=", Some("text/plain")))
+            )),
+            Err(ApiError::payload_too_large())
+        );
+        assert_eq!(decode_base64("aGVs\nbG8"), b"hello");
+        assert_eq!(decode_base64("_-8="), [0xff, 0xef]);
+        assert_eq!(decode_base64("YQ==YQ"), b"a");
+        assert_eq!(method_name(HttpMethod::Patch), "PATCH");
+        let route = Route::new(HttpMethod::Get, "/api/sessions/:id", |_, _| async {
+            Ok(Response::empty(204))
+        });
+        assert!(!route.param_too_long(&format!("/api/sessions/{}", "s".repeat(100))));
+        assert!(route.param_too_long(&format!("/api/sessions/{}", "s".repeat(101))));
     }
 
     #[test]

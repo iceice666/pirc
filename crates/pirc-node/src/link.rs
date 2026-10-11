@@ -25,11 +25,27 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
-use pirc_protocol::{INFERENCE_BUFFER_MAX_BYTES, NODE_FRAME_MAX_BYTES, NodeMessage};
-use tokio::sync::mpsc;
+use futures_util::{FutureExt, SinkExt, StreamExt};
+use pirc_protocol::{
+    GatewayMessage, INFERENCE_BUFFER_MAX_BYTES, NODE_FRAME_MAX_BYTES, NODE_PROTOCOL_VERSION,
+    NodeMessage, PROTOCOL_MISMATCH_CLOSE, RegisteredWorkspace, Registration, SessionActivity,
+    SessionRun, TerminalKind, WorkspaceKind, WorkspaceRole,
+};
+use serde_json::Value;
+use tokio::sync::{mpsc, watch};
+use tokio_tungstenite::Connector;
+use tokio_tungstenite::connect_async_tls_with_config;
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::http::HeaderValue;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use tokio_tungstenite::tungstenite::protocol::{CloseFrame, WebSocketConfig};
+use url::Url;
 
 use crate::services::Node;
+use crate::store::{RunStatus, Store};
 
 /// Reconnect delay after the socket closes, whatever the reason (TS).
 pub const RECONNECT_MS: u64 = 3_000;
@@ -223,8 +239,471 @@ fn frame(message: &NodeMessage) -> String {
 ///   [`RECONNECT_MS`] unless the node is closing (4426 is logged as a
 ///   protocol mismatch first).
 pub async fn run(node: Node) {
-    let _ = node;
-    todo!("core: the node link client")
+    let endpoint = match endpoint(&node.config.daemon_url) {
+        Ok(endpoint) => endpoint,
+        Err(error) => {
+            crate::log::error(&error);
+            return;
+        }
+    };
+    let link = node.link.clone();
+    let _events = node.events.subscribe_all(Arc::new(move |event| {
+        if link.is_registered() {
+            link.send(&NodeMessage::Event {
+                session_id: event.session_id.clone(),
+                event: event.to_map(),
+            });
+        }
+    }));
+    let activity = tokio::spawn(coalesce_activity(node.clone()));
+    let mut terminated = node.terminated();
+    loop {
+        if node.closing() {
+            break;
+        }
+        connect(&node, &endpoint, &mut terminated).await;
+        if node.closing() || *terminated.borrow() {
+            break;
+        }
+        tokio::select! {
+            () = tokio::time::sleep(Duration::from_millis(RECONNECT_MS)) => {}
+            () = stopped(&mut terminated) => break,
+        }
+    }
+    activity.abort();
+}
+
+/// `new URL('/node/connect', daemonUrl)`, refusing credentials, a query or
+/// a fragment ("Invalid daemon URL").
+pub fn endpoint(daemon_url: &str) -> Result<Url, String> {
+    let invalid = || "Invalid daemon URL".to_owned();
+    let url = Url::parse(daemon_url)
+        .and_then(|base| base.join("/node/connect"))
+        .map_err(|_| invalid())?;
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some_and(|query| !query.is_empty())
+        || url.fragment().is_some_and(|fragment| !fragment.is_empty())
+    {
+        return Err(invalid());
+    }
+    Ok(url)
+}
+
+/// The TLS settings of `wss://`: rustls with ring and the platform's roots.
+fn tls() -> Result<Arc<rustls::ClientConfig>, String> {
+    use rustls_platform_verifier::BuilderVerifierExt;
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .map_err(|error| error.to_string())?
+        .with_platform_verifier()
+        .map_err(|error| error.to_string())?
+        .with_no_client_auth();
+    Ok(Arc::new(config))
+}
+
+/// One connection, from the handshake until the socket closes or the node
+/// terminates it.
+async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<bool>) {
+    let mut request = match endpoint.as_str().into_client_request() {
+        Ok(request) => request,
+        Err(error) => {
+            crate::log::error(&format!("node transport failure: {error}"));
+            return;
+        }
+    };
+    let headers = request.headers_mut();
+    for (name, value) in [
+        ("x-pirc-node-id", node.config.node_id.clone()),
+        (
+            "authorization",
+            format!("Bearer {}", node.config.node_token),
+        ),
+    ] {
+        match HeaderValue::from_str(&value) {
+            Ok(value) => {
+                headers.insert(name, value);
+            }
+            Err(_) => {
+                crate::log::error("node transport failure: invalid node credentials header");
+                return;
+            }
+        }
+    }
+    let connector = if endpoint.scheme() == "wss" {
+        match tls() {
+            Ok(config) => Some(Connector::Rustls(config)),
+            Err(error) => {
+                crate::log::error(&format!("node transport failure: TLS: {error}"));
+                return;
+            }
+        }
+    } else {
+        Some(Connector::Plain)
+    };
+    let config = WebSocketConfig::default()
+        .max_message_size(Some(NODE_FRAME_MAX_BYTES))
+        .max_frame_size(Some(NODE_FRAME_MAX_BYTES));
+    let opened = tokio::select! {
+        opened = connect_async_tls_with_config(request, Some(config), true, connector) => opened,
+        () = stopped(terminated) => return,
+    };
+    let socket = match opened {
+        Ok((socket, _)) => socket,
+        Err(error) => {
+            crate::log::warn(&format!("node transport failure: {error}"));
+            return;
+        }
+    };
+    let (mut sink, mut stream) = socket.split();
+    let mut queue = node.link.open();
+    let id = queue.id;
+    node.link.send(&NodeMessage::Register(registration(node)));
+    let start = tokio::time::Instant::now() + Duration::from_millis(HEARTBEAT_MS);
+    let mut heartbeat = tokio::time::interval_at(start, Duration::from_millis(HEARTBEAT_MS));
+    let mut registered = false;
+    let mut close_code: Option<u16> = None;
+    let mut close_reason = String::new();
+    // After our own close frame, nothing more is read or sent but the
+    // closing handshake.
+    let mut closing = false;
+    loop {
+        tokio::select! {
+            frame = queue.recv(), if !closing => {
+                let Some(frame) = frame else { break };
+                let sent = sink.send(Message::text(frame.clone())).await;
+                queue.written(&frame);
+                if let Err(error) = sent {
+                    crate::log::warn(&format!("node transport failure: {error}"));
+                    break;
+                }
+            }
+            _ = heartbeat.tick(), if !closing => {
+                node.link.send(&NodeMessage::Heartbeat);
+            }
+            () = stopped(terminated) => {
+                // `socket.terminate()`: no close frame.
+                break;
+            }
+            message = stream.next() => {
+                let text = match message {
+                    None => break,
+                    Some(Err(error)) => {
+                        crate::log::warn(&format!("node transport failure: {error}"));
+                        break;
+                    }
+                    Some(Ok(Message::Close(frame))) => {
+                        if let Some(frame) = frame {
+                            close_code = Some(frame.code.into());
+                            close_reason = frame.reason.to_string();
+                        }
+                        if closing {
+                            break;
+                        }
+                        continue;
+                    }
+                    Some(Ok(Message::Text(text))) => text.to_string(),
+                    // `raw.toString()`: binary frames are read as text too.
+                    Some(Ok(Message::Binary(bytes))) => String::from_utf8_lossy(&bytes).into_owned(),
+                    Some(Ok(_)) => continue,
+                };
+                if closing {
+                    continue;
+                }
+                let Ok(value) = serde_json::from_str::<Value>(&text) else {
+                    closing = true;
+                    let frame = CloseFrame {
+                        code: CloseCode::Invalid,
+                        reason: "invalid JSON".into(),
+                    };
+                    if sink.send(Message::Close(Some(frame))).await.is_err() {
+                        break;
+                    }
+                    continue;
+                };
+                let Some(message) = gateway_message(value) else {
+                    continue;
+                };
+                handle(node, id, &mut registered, message);
+            }
+        }
+    }
+    drop(sink);
+    drop(stream);
+    if !node.link.close(id) {
+        return;
+    }
+    node.agent_gateway.disconnect();
+    node.mirror.disconnect();
+    node.inference.disconnect();
+    node.streams.close_all();
+    if close_code == Some(PROTOCOL_MISMATCH_CLOSE) {
+        crate::log::error(&format!(
+            "daemon rejected this node protocol version; upgrade the daemon and node together: {close_reason}"
+        ));
+    }
+}
+
+/// A frame the link schema accepts, else `None` (ignored).
+fn gateway_message(value: Value) -> Option<GatewayMessage> {
+    let message = serde_json::from_value::<GatewayMessage>(value).ok()?;
+    within_limits(&message).then_some(message)
+}
+
+/// JS string length (UTF-16 units).
+fn length(text: &str) -> usize {
+    text.encode_utf16().count()
+}
+
+fn request_id(id: &str) -> bool {
+    (1..=100).contains(&length(id))
+}
+
+/// The refinements of `daemonMessageSchema` that serde does not express.
+fn within_limits(message: &GatewayMessage) -> bool {
+    match message {
+        GatewayMessage::ModelDelta { request_id: id, .. }
+        | GatewayMessage::ModelEnd { request_id: id, .. }
+        | GatewayMessage::ModelError { request_id: id, .. }
+        | GatewayMessage::AgentResponse { request_id: id, .. } => request_id(id),
+        GatewayMessage::MemoryMirrorAck { ledger_key, .. } => {
+            ledger_key.len() == 16
+                && ledger_key
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        }
+        GatewayMessage::Request {
+            request_id: id,
+            data,
+        } => {
+            request_id(id)
+                && data.url.starts_with("/api/")
+                && length(&data.url) <= 8192
+                && !data.user.is_empty()
+                && data
+                    .content_type
+                    .as_ref()
+                    .is_none_or(|content_type| length(content_type) <= 200)
+        }
+        GatewayMessage::TerminalOpen {
+            stream_id,
+            user,
+            session_id,
+            terminal_id,
+            ..
+        } => {
+            request_id(stream_id)
+                && !user.is_empty()
+                && !session_id.is_empty()
+                && !terminal_id.is_empty()
+        }
+        GatewayMessage::RegistrationError { .. }
+        | GatewayMessage::Registered { .. }
+        | GatewayMessage::Models { .. }
+        | GatewayMessage::HeartbeatAck
+        | GatewayMessage::TerminalInput { .. }
+        | GatewayMessage::TerminalClose { .. } => true,
+    }
+}
+
+/// One frame from the gateway on socket `id`.
+fn handle(node: &Node, id: u64, registered: &mut bool, message: GatewayMessage) {
+    match message {
+        GatewayMessage::RegistrationError {
+            status,
+            code,
+            message,
+        } => {
+            crate::log::error(&format!("{message} (status {status}, code {code})"));
+            return;
+        }
+        GatewayMessage::Registered {
+            models, mirrors, ..
+        } => {
+            *registered = true;
+            node.link.set_registered(id);
+            node.agent_gateway.connect();
+            node.mirror.connect(mirrors.unwrap_or_default());
+            send_activity(node);
+            let providers: Vec<String> = models.providers.keys().cloned().collect();
+            node.models.set(models, node.models.inference());
+            crate::log::info(&format!(
+                "registered with daemon {}; providers: {}",
+                node.config.daemon_url,
+                providers.join(", ")
+            ));
+            return;
+        }
+        _ => {}
+    }
+    if !*registered {
+        return;
+    }
+    match message {
+        frame @ (GatewayMessage::ModelDelta { .. }
+        | GatewayMessage::ModelEnd { .. }
+        | GatewayMessage::ModelError { .. }) => node.inference.receive(frame),
+        GatewayMessage::Models { models } => {
+            let providers: Vec<String> = models.providers.keys().cloned().collect();
+            node.models.set(models, node.models.inference());
+            crate::log::info(&format!(
+                "models updated by daemon; new agents use them; providers: {}",
+                providers.join(", ")
+            ));
+        }
+        GatewayMessage::Request { request_id, data } => {
+            let node = node.clone();
+            tokio::spawn(async move {
+                let data = node.router.handle(&node, data).await;
+                node.link.send(&NodeMessage::Response { request_id, data });
+            });
+        }
+        GatewayMessage::TerminalOpen {
+            stream_id,
+            user,
+            session_id,
+            terminal_id,
+            kind,
+        } => node.streams.open(
+            &stream_id,
+            kind.unwrap_or(TerminalKind::Terminal),
+            &user,
+            &session_id,
+            &terminal_id,
+        ),
+        GatewayMessage::TerminalInput { stream_id, message } => {
+            node.streams.input(&stream_id, message);
+        }
+        GatewayMessage::TerminalClose { stream_id } => node.streams.close(&stream_id),
+        GatewayMessage::AgentResponse {
+            request_id,
+            status,
+            body,
+        } => node.agent_gateway.receive(&request_id, status, body),
+        GatewayMessage::MemoryMirrorAck {
+            ledger_key,
+            watermark,
+        } => node.mirror.receive(&ledger_key, watermark),
+        GatewayMessage::HeartbeatAck
+        | GatewayMessage::RegistrationError { .. }
+        | GatewayMessage::Registered { .. } => {}
+    }
+}
+
+/// The `register` frame: protocol, role and this node's workspaces, each
+/// directory workspace with the roles its agents can start in.
+fn registration(node: &Node) -> Registration {
+    let workspaces = node.db.lock().list_workspaces().unwrap_or_default();
+    Registration {
+        role: node.config.role,
+        protocol: Some(i64::from(NODE_PROTOCOL_VERSION)),
+        workspaces: workspaces
+            .into_iter()
+            .filter(|workspace| workspace.host_id == node.config.node_id)
+            .map(|workspace| {
+                let roles = (workspace.kind == WorkspaceKind::Directory)
+                    .then(|| workspace_roles(&node.config, &workspace.canonical_path))
+                    .flatten();
+                RegisteredWorkspace {
+                    id: workspace.id,
+                    display_name: workspace.display_name,
+                    kind: Some(workspace.kind),
+                    roles,
+                }
+            })
+            .collect(),
+    }
+}
+
+/// `roleBriefs(loadRoles(root))`, or `None` (logged) when they do not load:
+/// a delegation then cannot pick a role there.
+pub fn workspace_roles(config: &pirc_config::NodeConfig, root: &str) -> Option<Vec<WorkspaceRole>> {
+    let dirs = pirc_agent::roles::role_dirs(&config.config_dir.to_string_lossy(), root);
+    match pirc_agent::roles::read_roles(&dirs) {
+        Ok(roles) => Some(
+            pirc_agent::roles::role_briefs(&roles)
+                .into_iter()
+                .map(|brief| WorkspaceRole {
+                    name: brief.name,
+                    description: brief.description,
+                    models: brief.models,
+                    thinking: brief.thinking,
+                    tools: brief.tools,
+                    source: brief.source,
+                    overrides: brief.overrides,
+                })
+                .collect(),
+        ),
+        Err(error) => {
+            crate::log::warn(&format!("roles of {root}: {error}"));
+            None
+        }
+    }
+}
+
+/// Every open run and every write-lease holder, whole.
+fn activity(node: &Node) -> Vec<SessionActivity> {
+    let mut sessions: Vec<SessionActivity> = Vec::new();
+    let runs = node.db.lock().active_runs().unwrap_or_default();
+    for (session_id, status) in runs {
+        let run = match status {
+            RunStatus::Queued => SessionRun::Queued,
+            RunStatus::Running => SessionRun::Running,
+            RunStatus::WaitingInput => SessionRun::WaitingInput,
+            RunStatus::Stopping => SessionRun::Stopping,
+            _ => continue,
+        };
+        // A later run of the same session replaces an earlier one (TS's map).
+        match sessions.iter_mut().find(|entry| entry.id == session_id) {
+            Some(entry) => entry.run = Some(run),
+            None => sessions.push(SessionActivity {
+                id: session_id,
+                run: Some(run),
+                write_lease: None,
+            }),
+        }
+    }
+    for holder in node.writes.holders() {
+        match sessions.iter_mut().find(|entry| entry.id == holder) {
+            Some(entry) => entry.write_lease = Some(true),
+            None => sessions.push(SessionActivity {
+                id: holder,
+                run: None,
+                write_lease: Some(true),
+            }),
+        }
+    }
+    sessions
+}
+
+fn send_activity(node: &Node) {
+    if node.link.is_registered() {
+        node.link.send(&NodeMessage::Activity {
+            sessions: activity(node),
+        });
+    }
+}
+
+/// `activityChanged`: one timer of [`ACTIVITY_COALESCE_MS`] from the first
+/// change; changes while it runs go out with it.
+async fn coalesce_activity(node: Node) {
+    loop {
+        node.activity.notified().await;
+        tokio::time::sleep(Duration::from_millis(ACTIVITY_COALESCE_MS)).await;
+        // Changes during the window are in this frame: their stored
+        // notification must not start another timer.
+        let _ = node.activity.notified().now_or_never();
+        send_activity(&node);
+    }
+}
+
+/// Resolves once the node terminates the link.
+async fn stopped(terminated: &mut watch::Receiver<bool>) {
+    if terminated.wait_for(|stop| *stop).await.is_err() {
+        // The node is gone: nothing will ever stop the link but this.
+        std::future::pending::<()>().await;
+    }
 }
 
 #[cfg(test)]

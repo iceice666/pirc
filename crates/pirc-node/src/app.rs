@@ -40,6 +40,34 @@ pub fn apply_session_name(
     epoch: i64,
     data: &serde_json::Value,
 ) -> crate::error::ApiResult<()> {
-    let _ = (node, session_id, epoch, data);
-    todo!("core: applySessionName")
+    use crate::store::{NameSource, Store};
+    let name = data["name"]
+        .as_str()
+        .map(|name| crate::util::head16(crate::chat::js_trim(name), 200))
+        .unwrap_or_default();
+    if name.is_empty() {
+        return Ok(());
+    }
+    let auto = data["source"] == "auto";
+    {
+        let db = node.db.lock();
+        if auto {
+            if !db.auto_rename_session(session_id, name)? {
+                return Ok(());
+            }
+        } else {
+            let session = db.get_session(session_id)?;
+            if session.name == name && session.name_source == NameSource::User {
+                return Ok(());
+            }
+            db.rename_session(session_id, name)?;
+        }
+    }
+    node.events.publish(
+        session_id,
+        epoch,
+        "session_renamed",
+        serde_json::json!({ "name": name, "source": if auto { "auto" } else { "user" } }),
+    );
+    Ok(())
 }
