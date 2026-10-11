@@ -377,23 +377,28 @@ impl Runner {
             dialog.insert("toolCallId".into(), json!(tool_call_id));
         }
         let ttl = node.config.interaction_ttl_ms;
-        let interaction = node
-            .db
-            .lock()
-            .create_interaction(
-                &self.session_id,
-                self.epoch,
-                &rpc_id,
-                "confirm",
-                &dialog,
-                now_ms().saturating_add(i64::try_from(ttl).unwrap_or(i64::MAX)),
-            )
-            .map_err(|error| error.message)?;
-        self.publish(
-            "interaction_created",
-            serde_json::to_value(&interaction).unwrap_or_default(),
-        );
-        let _ = self.update_current_run(RunStatus::WaitingInput);
+        {
+            // Created and announced as one step for snapshots, like an
+            // agent's own dialog (`Runner::state_at`).
+            let _view = self.view();
+            let interaction = node
+                .db
+                .lock()
+                .create_interaction(
+                    &self.session_id,
+                    self.epoch,
+                    &rpc_id,
+                    "confirm",
+                    &dialog,
+                    now_ms().saturating_add(i64::try_from(ttl).unwrap_or(i64::MAX)),
+                )
+                .map_err(|error| error.message)?;
+            self.publish(
+                "interaction_created",
+                serde_json::to_value(&interaction).unwrap_or_default(),
+            );
+            let _ = self.update_current_run(RunStatus::WaitingInput);
+        }
         let (answer, answered) = oneshot::channel();
         {
             let mut inner = self.lock();

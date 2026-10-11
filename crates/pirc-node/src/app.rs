@@ -751,8 +751,30 @@ async fn snapshot(node: Node, request: Request) -> ApiResult<Response> {
     };
     // Read after the RPCs: the runner may have started and bumped the epoch.
     let session = node.db.lock().get_session(&session_id)?;
+    let sandbox = match &active {
+        Some(runner) if runner.alive() => runner.sandbox_status(),
+        _ => Value::Null,
+    };
+    // The live state, the pending dialogs, the run and the watermark as of
+    // one point between two agent lines, the watermark last (TS read them
+    // in one tick after its awaits).
+    let read = |state: crate::runner::ReducedState| -> ApiResult<_> {
+        let db = node.db.lock();
+        let interactions = db.pending_interactions(&session_id)?;
+        let run = db.latest_run(&session_id)?;
+        drop(db);
+        let watermark = node.events.watermark(&session_id, session.runner_epoch);
+        Ok((state, interactions, run, watermark))
+    };
+    let (state, interactions, run, watermark) = match &active {
+        Some(runner) => runner.state_at(read)?,
+        None => read(crate::runner::ReducedState::default())?,
+    };
     // History comes from the session file, not the agent: it is there with
     // no runner at all, and a long transcript never has to fit one line.
+    // Read after the watermark: the agent writes each message before
+    // announcing it, so the file is never behind the watermark (it may be
+    // ahead, as in TS).
     let branch = node
         .branches
         .read(Path::new(&claimed.private_session_path))
@@ -766,26 +788,6 @@ async fn snapshot(node: Node, request: Request) -> ApiResult<Response> {
     if agent.is_none() {
         agent = next_agent_settings(&node, &session, &branch);
     }
-    let (interactions, run) = {
-        let db = node.db.lock();
-        (
-            db.pending_interactions(&session_id)?,
-            db.latest_run(&session_id)?,
-        )
-    };
-    let sandbox = match &active {
-        Some(runner) if runner.alive() => runner.sandbox_status(),
-        _ => Value::Null,
-    };
-    // The state and the watermark as of one point between two agent lines
-    // (TS reduced and published in one step); the watermark last, as TS.
-    let (state, watermark) = match &active {
-        Some(runner) => runner.state_at(&node.events, session.runner_epoch),
-        None => (
-            crate::runner::ReducedState::default(),
-            node.events.watermark(&session_id, session.runner_epoch),
-        ),
-    };
     Ok(Response::json(json!({
         "session": session,
         "history": history,

@@ -20,7 +20,6 @@ use tokio::task::AbortHandle;
 use super::framing::{JsonlParser, line};
 use super::reducer::ReducedState;
 use crate::error::{ApiError, ApiResult};
-use crate::events::{Cursor, EventHub};
 use crate::sandbox::Prepared;
 use crate::services::{Node, WeakNode};
 use crate::store::{RunStatus, RunnerState, SessionRow, Store, Workspace, WorkspaceKind};
@@ -128,13 +127,16 @@ impl Runner {
         self.lock().state.clone()
     }
 
-    /// The reduced state and the session stream's watermark in `epoch`,
-    /// read between two agent lines: every event the state reflects is at
-    /// or before the watermark, and every later one after it.
-    pub fn state_at(&self, events: &EventHub, epoch: i64) -> (ReducedState, Cursor) {
+    /// The reduced state, and whatever `read` takes from the store and
+    /// the event hub, as of one point between two agent lines (and two node
+    /// dialogs): every event the state, the store rows and the watermark
+    /// read in `read` reflect is at or before that watermark, and every
+    /// later one after it. TS built a snapshot in one tick; here `read`
+    /// must not block on anything but the store and the hub.
+    pub fn state_at<R>(&self, read: impl FnOnce(ReducedState) -> R) -> R {
         let _view = self.view();
         let state = self.lock().state.clone();
-        (state, events.watermark(&self.session_id, epoch))
+        read(state)
     }
 
     pub(super) fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -143,7 +145,9 @@ impl Runner {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    fn view(&self) -> MutexGuard<'_, ()> {
+    /// Held while one agent line is reduced, booked and published, and
+    /// while a node dialog is created: see [`Runner::state_at`].
+    pub(super) fn view(&self) -> MutexGuard<'_, ()> {
         self.view
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
