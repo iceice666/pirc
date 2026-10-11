@@ -1388,7 +1388,10 @@ impl Agent {
         }
     }
 
-    fn flush_panel(&self) {
+    /// Emit the coalesced `panel_changed` events now: where the TS agent's
+    /// microtask ran, or after a feature's work outside a run (team
+    /// events).
+    pub fn flush_panel(&self) {
         for _ in 0..self.scheduled_flushes.replace(0) {
             let sections = std::mem::take(&mut *self.changed_sections.borrow_mut());
             self.emit(json!({ "type": "panel_changed", "sections": sections }));

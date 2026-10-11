@@ -186,13 +186,23 @@ fn stdin_lines() -> mpsc::UnboundedReceiver<String> {
 /// that TS would have let escape (printed, exit 1).
 async fn main(args: Vec<String>) -> Result<(), String> {
     let args = parse_args(&args);
-    // Tool allowlist (restricted kinds). Team members' coordination tools are M5.
+    // Tool allowlist (team kinds); team members always keep their coordination tools.
+    let team_member = crate::features::team::channel::process_child_mode()
+        == Some(crate::features::team::channel::ChildMode::Team);
     let allowed_tools = string(&args.tools).map(|tools| {
-        tools
+        let mut allowed: Vec<String> = tools
             .split(',')
             .filter(|tool| !tool.is_empty())
             .map(str::to_owned)
-            .collect::<Vec<_>>()
+            .collect();
+        if team_member {
+            allowed.extend(
+                crate::features::team::TEAM_TOOL_NAMES
+                    .iter()
+                    .map(|name| (*name).to_owned()),
+            );
+        }
+        allowed
     });
     let session_dir = match &args.session_dir {
         Some(Arg::Value(dir)) => Some(dir.clone()),
