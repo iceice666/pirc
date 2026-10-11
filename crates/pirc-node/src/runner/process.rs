@@ -30,10 +30,9 @@ use crate::util::{head16, now_ms, prefix_uuid, uuid};
 pub(super) const NODE_DIALOG_PREFIX: &str = "node-sandbox-";
 const DIALOG_METHODS: [&str; 4] = ["select", "confirm", "input", "editor"];
 
-/// A line for the agent's stdin, with whether it was written.
+/// A line for the agent's stdin.
 pub(super) struct Outbound {
     pub line: String,
-    pub written: Option<oneshot::Sender<bool>>,
 }
 
 /// A side request of the agent in flight (`AbortController`s of TS).
@@ -122,12 +121,7 @@ impl Runner {
 
     /// Queue a line for the agent's stdin (TS `stdin.write`).
     pub(super) fn write(&self, value: &Value) -> bool {
-        self.stdin
-            .send(Outbound {
-                line: line(value),
-                written: None,
-            })
-            .is_ok()
+        self.stdin.send(Outbound { line: line(value) }).is_ok()
     }
 
     /// A side-channel answer: dropped once the agent is gone.
@@ -221,13 +215,11 @@ impl Runner {
         for (key, value) in answer {
             response.insert(key.clone(), value.clone());
         }
-        let (written, done) = oneshot::channel();
-        let sent = self.stdin.send(Outbound {
-            line: line(&Value::Object(response)),
-            written: Some(written),
-        });
-        if sent.is_err() || !done.await.unwrap_or(false) {
-            return Err(ApiError::internal());
+        // Queued, not awaited: the route publishes `interaction_answered`
+        // right after this returns, before the agent can possibly reply
+        // (TS's write callback also came before any reply).
+        if !self.write(&Value::Object(response)) {
+            return Err(runner_unavailable());
         }
         self.update_current_run(RunStatus::Running)
     }
@@ -624,12 +616,13 @@ pub(super) struct Spawn {
 
 /// `new PiRunner(...)`: spawn the agent and wire its pipes. The runner is
 /// ready for requests when this returns; its lines are handled from then on.
-pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
-    let Spawn {
-        session,
-        workspace,
-        prepared,
-    } = spawn;
+/// The agent's process in its sandbox, and its epoch.
+fn spawn_child(
+    node: &Node,
+    session: &SessionRow,
+    workspace: &Workspace,
+    prepared: &Prepared,
+) -> ApiResult<(tokio::process::Child, i64)> {
     let (epoch, trust) = {
         let db = node.db.lock();
         let epoch = db.increment_epoch(&session.id)?;
@@ -641,7 +634,7 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
         };
         (epoch, trust.unwrap_or_default())
     };
-    let root = session_root(&workspace, &session.id)?;
+    let root = session_root(workspace, &session.id)?;
     let mut command = prepared.command().map_err(|error| {
         ApiError::runner_unavailable(format!("Runner is not available: {error}"))
     })?;
@@ -681,7 +674,7 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
     // .pirc/config.json hooks, env and allowedPaths unless they still match.
     set("PIRC_PROJECT_TRUST", trust);
     // Only for protecting it: the agent gets the text on its configure line.
-    if let Some(instructions) = crate::chat::project_instructions_path(&workspace) {
+    if let Some(instructions) = crate::chat::project_instructions_path(workspace) {
         set(
             "PIRC_PROJECT_INSTRUCTIONS",
             instructions.to_string_lossy().into_owned(),
@@ -717,9 +710,25 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
         // Its own process group, so stopping srt also stops what it sandboxes.
         .process_group(0)
         .kill_on_drop(false);
-    let mut child = command.spawn().map_err(|error| {
+    let child = command.spawn().map_err(|error| {
         ApiError::runner_unavailable(format!("Runner is not available: {error}"))
     })?;
+    Ok((child, epoch))
+}
+
+pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
+    let Spawn {
+        session,
+        workspace,
+        prepared,
+    } = spawn;
+    let (mut child, epoch) = match spawn_child(node, &session, &workspace, &prepared) {
+        Ok(spawned) => spawned,
+        Err(error) => {
+            prepared.cleanup();
+            return Err(error);
+        }
+    };
     let pid = child.id();
     let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
     let (exited, _) = watch::channel(false);
@@ -750,9 +759,14 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
     }
     runner.write(&Value::Object(configure));
 
-    node.db
+    // The agent runs: from here on a store failure is logged, not a failed start.
+    if let Err(error) = node
+        .db
         .lock()
-        .set_runner_state(&session.id, RunnerState::Ready)?;
+        .set_runner_state(&session.id, RunnerState::Ready)
+    {
+        crate::log::error(&format!("runner start: {error}"));
+    }
     runner.publish("runner_ready", json!({ "sandbox": { "active": true } }));
     // In the timeline, and in the snapshot for clients that connect later.
     for warning in &runner.prepared.warnings {
@@ -770,8 +784,10 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
     }
     // A user-chosen name stops the agent from generating one. Written before
     // any prompt, so the agent sees it first.
-    let current = node.db.lock().get_session(&session.id)?;
-    if current.name_source == crate::store::NameSource::User {
+    let current = node.db.lock().get_session(&session.id);
+    if let Ok(current) = current
+        && current.name_source == crate::store::NameSource::User
+    {
         let mut rename = Map::new();
         rename.insert("type".into(), json!("set_session_name"));
         rename.insert("name".into(), json!(current.name));
@@ -810,18 +826,9 @@ async fn write_stdin(
     mut lines: mpsc::UnboundedReceiver<Outbound>,
 ) {
     while let Some(outbound) = lines.recv().await {
-        let ok = stdin.write_all(outbound.line.as_bytes()).await.is_ok();
-        if let Some(written) = outbound.written {
-            let _ = written.send(ok);
-        }
-        if !ok {
+        if stdin.write_all(outbound.line.as_bytes()).await.is_err() {
             // `stdin.writable` is false from now on.
             lines.close();
-            while let Ok(outbound) = lines.try_recv() {
-                if let Some(written) = outbound.written {
-                    let _ = written.send(false);
-                }
-            }
             return;
         }
     }

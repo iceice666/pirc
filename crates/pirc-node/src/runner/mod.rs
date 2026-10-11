@@ -44,7 +44,26 @@
 //!
 //! Golden cases: `rpc-framing.test.ts` (framing), `events-reducer.test.ts`
 //! (reducer), and the runner parts of `app.integration.test.ts`,
-//! `gateway-agent.integration.test.ts`, `sandbox.integration.test.ts`.
+//! `gateway-agent.integration.test.ts`, `sandbox.integration.test.ts`
+//! (through the conformance scenarios).
+//!
+//! Where the port differs, on purpose:
+//!
+//! - Lines go to the agent's stdin through one writer task, in order; a
+//!   failed write closes stdin for good (TS's `stdin.writable`).
+//!   `answer` returns once its line is queued, so the route's
+//!   `interaction_answered` always precedes the agent's reply.
+//! - On exit the group is killed first, then the agent's last stdout lines
+//!   are handled (up to a second), then the exit: `runner_exit` always comes
+//!   after the agent's last events (TS's `exit` could overtake `data`).
+//! - After a fatal framing error the agent's further output is not read (TS
+//!   kept parsing until the exit, publishing more errors or events).
+//! - A spawn failure fails the start (503 `runner_unavailable`, the sandbox
+//!   cleaned up, the runner state `failed`); TS published `runner_ready`
+//!   and then `runner_error` from the child's `error` event. Store failures
+//!   after the agent runs are logged rather than failing the start.
+//! - Starts run in their own task: a start goes on when its asker (a
+//!   relayed request) goes away.
 
 pub mod framing;
 mod host;
@@ -265,7 +284,14 @@ impl RunnerManager {
                     let id = session_id.to_owned();
                     let node = node.clone();
                     tokio::spawn(async move {
-                        let result = start(&node, &id).await;
+                        use futures_util::FutureExt;
+                        // A panic must not leave the slot behind.
+                        let result = std::panic::AssertUnwindSafe(start(&node, &id))
+                            .catch_unwind()
+                            .await
+                            .unwrap_or_else(|_| {
+                                Err(ApiError::runner_unavailable("Runner is not available"))
+                            });
                         {
                             let mut state = node.runners.lock();
                             state.starting.remove(&id);
@@ -725,6 +751,26 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn js_helpers() {
+        assert!(!truthy(None));
+        assert!(!truthy(Some(&json!(0))));
+        assert!(!truthy(Some(&json!(""))));
+        assert!(truthy(Some(&json!(true))));
+        assert!(truthy(Some(&json!({}))));
+        let response = |error: Value| {
+            let mut map = Map::new();
+            map.insert("error".into(), error);
+            map
+        };
+        assert_eq!(error_text(&Map::new(), "fallback"), "fallback");
+        assert_eq!(error_text(&response(Value::Null), "fallback"), "fallback");
+        assert_eq!(error_text(&response(json!("no")), "fallback"), "no");
+        assert_eq!(basename("dir/notes.txt"), "notes.txt");
+        assert_eq!(basename("a/b/"), "b");
+        assert_eq!(basename("../.."), "..");
+    }
 
     #[test]
     fn command_payloads() {

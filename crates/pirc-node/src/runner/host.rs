@@ -174,9 +174,28 @@ mod tests {
         )
     }
 
+    /// TS runs `/bin/bash` too; hosts without it (NixOS) cannot run these.
+    fn no_bash() -> bool {
+        !Path::new("/bin/bash").exists()
+    }
+
     #[tokio::test]
     async fn runs_without_the_node_secrets() {
         let (_tx, abort) = watch::channel(false);
+        if no_bash() {
+            // The spawn error is the output.
+            let result = run_on_host(
+                &env(),
+                "true",
+                Path::new("/"),
+                Duration::from_secs(1),
+                abort,
+            )
+            .await;
+            assert_eq!(result["exitCode"], Value::Null);
+            assert!(result["output"].as_str().unwrap().ends_with('\n'));
+            return;
+        }
         let result = run_on_host(
             &env(),
             "echo out; echo err >&2; echo \"[$PIRC_NODE_TOKEN]\"; exit 3",
@@ -193,6 +212,9 @@ mod tests {
 
     #[tokio::test]
     async fn times_out_aborts_and_truncates() {
+        if no_bash() {
+            return;
+        }
         let (_tx, abort) = watch::channel(false);
         let result = run_on_host(
             &env(),
