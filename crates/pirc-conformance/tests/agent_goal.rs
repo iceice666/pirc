@@ -331,3 +331,36 @@ async fn agent_goal_off() {
         );
     }
 }
+
+/// An unfinished todo is not nagged about while the goal goes on to
+/// another round; the last round gets the reminder.
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_goal_with_todo() {
+    let Some(mut agent) = AgentRun::start(
+        AgentOptions {
+            config: json!({ "features": { "goal": { "defaultMaxRounds": 2 } } }),
+            ..AgentOptions::default()
+        }
+        .features("todo,goal"),
+    )
+    .await
+    else {
+        return;
+    };
+    let mut r = Recorder::new(&agent);
+    let mut m = Masker::new();
+    command(&mut agent, &mut m, &mut r, "a todo", "/todo add step").await;
+    agent.push([
+        ModelReply::Text("Round one.".to_owned()),
+        ModelReply::Text("Round two.".to_owned()),
+        ModelReply::Text("Reminded.".to_owned()),
+    ]);
+    command(&mut agent, &mut m, &mut r, "set", "/goal set Todo").await;
+    settle_events(&mut agent, &mut m, &mut r, "round 1").await;
+    settle(&mut agent, &mut m, &mut r, "round 2").await;
+    then(&mut agent, &mut m, &mut r, "paused at the limit", |line| {
+        notified(line, "Goal paused")
+    })
+    .await;
+    insta::assert_json_snapshot!("agent_goal_with_todo", r.into_value());
+}
