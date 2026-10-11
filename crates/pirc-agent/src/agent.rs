@@ -912,6 +912,12 @@ impl Agent {
         self.capabilities.borrow().clone()
     }
 
+    /// Replace the gateway's policy (`agent.capabilities = …`): a chat
+    /// reads its current one from the gateway.
+    pub fn set_capabilities(&self, capabilities: Capabilities) {
+        *self.capabilities.borrow_mut() = capabilities;
+    }
+
     /// The path guard (`guard`).
     pub fn path_guard(&self) -> Rc<PathGuard> {
         self.guard.clone()
