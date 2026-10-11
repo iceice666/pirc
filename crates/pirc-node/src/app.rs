@@ -222,6 +222,18 @@ fn new_workspace(body: &Value) -> ApiResult<NewWorkspace> {
     })
 }
 
+/// The requested directory: `~/rest` is `path.join(home, rest)`, where
+/// (unlike `path.resolve`) an absolute `rest` (`~//etc`) stays under home.
+fn requested_path(home: &Path, path: &str) -> PathBuf {
+    match path.strip_prefix("~/") {
+        Some(rest) => PathBuf::from(pirc_policy::resolve_path(
+            &home.to_string_lossy(),
+            rest.trim_start_matches('/'),
+        )),
+        None => PathBuf::from(path),
+    }
+}
+
 /// A workspace id: `workspace_<uuid>` with underscores (ids stay one word).
 fn workspace_id() -> String {
     prefix_uuid("workspace").replace('-', "_")
@@ -263,10 +275,7 @@ async fn create_workspace(node: Node, request: Request) -> ApiResult<Response> {
     let home = home_dir
         .canonicalize()
         .map_err(|error| io_failure("resolving", &home_dir, error))?;
-    let requested = match path.strip_prefix("~/") {
-        Some(rest) => PathBuf::from(pirc_policy::resolve_path(&home.to_string_lossy(), rest)),
-        None => PathBuf::from(&path),
-    };
+    let requested = requested_path(&home, &path);
     if !requested.is_absolute() {
         return Err(ApiError::bad_request(
             "Workspace must use an absolute path or ~/path",
@@ -600,13 +609,31 @@ async fn finish_deletion(
     workspace: Workspace,
     deletions: Arc<Deletions>,
 ) -> ApiResult<()> {
-    let result = remove_session(&node, &session, &workspace).await;
-    deletions
-        .0
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .remove(&session.id);
-    result
+    // Removed on drop, so a panicking cleanup does not leave a finished
+    // deletion that every retry would join (TS: `.finally(...)`).
+    let _entry = DeletionEntry {
+        deletions,
+        session_id: session.id.clone(),
+    };
+    remove_session(&node, &session, &workspace).await
+}
+
+/// Removes a session's [`Deletions`] entry when dropped. The entry is
+/// inserted under the map's lock before the task can take it, so the
+/// removal never precedes the insertion.
+struct DeletionEntry {
+    deletions: Arc<Deletions>,
+    session_id: String,
+}
+
+impl Drop for DeletionEntry {
+    fn drop(&mut self) {
+        self.deletions
+            .0
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(&self.session_id);
+    }
 }
 
 async fn remove_session(node: &Node, session: &SessionRow, workspace: &Workspace) -> ApiResult<()> {
@@ -793,6 +820,14 @@ fn next_agent_settings(
 
 /// `deliverBody`: strict, with the lengths and patterns serde cannot check.
 fn delivery(body: &Value) -> ApiResult<Delivery> {
+    // `.optional()` refuses `null`, which serde would read as `None`.
+    if let Value::Object(map) = body
+        && ["details", "role", "model", "thinking"]
+            .iter()
+            .any(|key| map.get(*key).is_some_and(Value::is_null))
+    {
+        return Err(ApiError::invalid_input());
+    }
     let delivery: Delivery = parse(body)?;
     let role_ok = delivery.role.as_deref().is_none_or(|role| {
         let mut chars = role.chars();
@@ -1281,6 +1316,42 @@ mod tests {
     }
 
     #[test]
+    fn home_paths_join_as_node_did() {
+        let home = Path::new("/home/u");
+        for (path, expected) in [
+            ("~/p", "/home/u/p"),
+            ("~//etc", "/home/u/etc"),
+            ("~///etc/x", "/home/u/etc/x"),
+            ("~/../v", "/home/v"),
+            ("/abs", "/abs"),
+            ("rel", "rel"),
+        ] {
+            assert_eq!(
+                requested_path(home, path),
+                PathBuf::from(expected),
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn deletion_entries_go_even_on_panic() {
+        let deletions = Arc::new(Deletions::default());
+        let finished: Deletion = async { Ok(()) }.boxed().shared();
+        deletions.0.lock().unwrap().insert("s".into(), finished);
+        let entry = DeletionEntry {
+            deletions: deletions.clone(),
+            session_id: "s".into(),
+        };
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let _entry = entry;
+            panic!("cleanup failed");
+        }));
+        assert!(panicked.is_err());
+        assert!(deletions.0.lock().unwrap().is_empty());
+    }
+
+    #[test]
     fn command_payloads_as_zod_outputs_them() {
         let payload = command_payload(&json!({ "type": "prompt", "message": "hi",
             "uploadIds": ["u"], "extra": true }))
@@ -1339,6 +1410,10 @@ mod tests {
             json!({ "customType": "scheduled-run", "content": "" }),
             json!({ "customType": "scheduled-run", "content": "c", "role": "Bad" }),
             json!({ "customType": "scheduled-run", "content": "c", "thinking": "x" }),
+            json!({ "customType": "scheduled-run", "content": "c", "details": null }),
+            json!({ "customType": "scheduled-run", "content": "c", "role": null }),
+            json!({ "customType": "scheduled-run", "content": "c", "model": null }),
+            json!({ "customType": "scheduled-run", "content": "c", "thinking": null }),
         ] {
             assert!(delivery(&bad).is_err(), "{bad}");
         }

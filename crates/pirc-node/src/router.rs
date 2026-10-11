@@ -9,7 +9,8 @@
 //! and merged by core: `app::routes()` (core) and `panels::routes()`
 //! (panels), so neither edits the other's file.
 //!
-//! Matching follows find-my-way as Fastify configures it: the method and
+//! Matching follows find-my-way as Fastify configures it: the path is
+//! decoded first (`decode_uri`; a bad escape is a 400), then the method and
 //! every `/`-separated segment must match, `:name` matches one non-empty
 //! segment (percent-decoded into [`Request::params`]), a static segment wins
 //! over a parameter at the first place they differ, and a trailing slash is
@@ -77,14 +78,20 @@ impl Request {
             .map(|(_, value)| value.as_str())
     }
 
-    /// The query as an object of strings (what zod saw as `request.query`;
-    /// a repeated key keeps its first value).
+    /// The query as an object (what zod saw as `request.query`): strings,
+    /// and an array of them for a repeated key, as Fastify's parser gave,
+    /// so a single-value schema refuses it.
     pub fn query_object(&self) -> Value {
         let mut object = Map::new();
         for (key, value) in &self.query {
-            object
-                .entry(key.clone())
-                .or_insert_with(|| Value::String(value.clone()));
+            let value = Value::String(value.clone());
+            match object.get_mut(key) {
+                None => {
+                    object.insert(key.clone(), value);
+                }
+                Some(Value::Array(values)) => values.push(value),
+                Some(first) => *first = Value::Array(vec![first.take(), value]),
+            }
         }
         Value::Object(object)
     }
@@ -297,6 +304,39 @@ fn percent_decode(text: &str) -> String {
     String::from_utf8(out).unwrap_or_else(|_| text.to_owned())
 }
 
+/// find-my-way's `safeDecodeURI` of a path (no query): `decodeURI`, except
+/// that `%25` stays too. Escapes of `# $ % & + , / : ; = ? @` stay as
+/// written (a parameter decodes them, [`percent_decode`]; no static segment
+/// holds them), others decode, so `/api/%73essions` is `/api/sessions`.
+/// `None` when an escape is malformed or does not decode to UTF-8, where
+/// `decodeURI` threw. (find-my-way calls `decodeURI` only when an escape
+/// outside that set is present, but a malformed escape is always outside
+/// it, so the outcome is the same.)
+fn decode_uri(path: &str) -> Option<String> {
+    if !path.contains('%') {
+        return Some(path.to_owned());
+    }
+    let bytes = path.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != b'%' {
+            out.push(bytes[index]);
+            index += 1;
+            continue;
+        }
+        let hex = |at: usize| bytes.get(at).and_then(|b| (*b as char).to_digit(16));
+        let byte = (hex(index + 1)? * 16 + hex(index + 2)?) as u8;
+        if b"#$%&+,/:;=?@".contains(&byte) {
+            out.extend_from_slice(&bytes[index..index + 3]);
+        } else {
+            out.push(byte);
+        }
+        index += 3;
+    }
+    String::from_utf8(out).ok()
+}
+
 /// The node's routes.
 #[derive(Default)]
 pub struct Router {
@@ -318,7 +358,8 @@ impl Router {
         Self { routes }
     }
 
-    /// The route for `method` and `path` (no query), with its parameters.
+    /// The route for `method` and `path` (no query, through [`decode_uri`]),
+    /// with its parameters.
     pub fn find(&self, method: HttpMethod, path: &str) -> Option<(&Route, Vec<(String, String)>)> {
         self.routes
             .iter()
@@ -357,18 +398,32 @@ impl Router {
             Some((path, query)) => (path, Some(query)),
             None => (request.url.as_str(), None),
         };
-        let found = self.find(request.method, path);
+        // find-my-way decodes the path first; a bad escape is Fastify's
+        // `onBadUrl` answer, before any hook runs. Its message quotes the
+        // whole url, query included.
+        let Some(decoded) = decode_uri(path) else {
+            return reply(
+                400,
+                Some(serde_json::json!({
+                    "error": "Bad Request",
+                    "code": "FST_ERR_BAD_URL",
+                    "message": format!("'{}' is not a valid url component", request.url),
+                    "statusCode": 400,
+                })),
+            );
+        };
+        let found = self.find(request.method, &decoded);
         // find-my-way refuses a parameter over 100 characters before any
-        // hook runs.
+        // hook runs, quoting the decoded path.
         if let Some((route, _)) = &found
-            && route.param_too_long(path)
+            && route.param_too_long(&decoded)
         {
             return reply(
                 414,
                 Some(serde_json::json!({
                     "error": "Bad Request",
                     "code": "FST_ERR_MAX_PARAM_LENGTH",
-                    "message": format!("'{path}' is exceeding the max param length"),
+                    "message": format!("'{decoded}' is exceeding the max param length"),
                     "statusCode": 414,
                 })),
             );
@@ -422,14 +477,18 @@ impl Router {
 }
 
 impl Route {
-    /// Whether a parameter segment of `path` (this route's) is over
-    /// find-my-way's `maxParamLength` (100), as the gateway counts it.
+    /// Whether a parameter segment of `path` (this route's, decoded) is
+    /// over find-my-way's `maxParamLength` (100), which it compares with the
+    /// decoded parameter's JS length (UTF-16 units).
     fn param_too_long(&self, path: &str) -> bool {
         path.strip_prefix('/').is_some_and(|rest| {
             self.segments
                 .iter()
                 .zip(rest.split('/'))
-                .any(|(segment, part)| matches!(segment, Segment::Param(_)) && part.len() > 100)
+                .any(|(segment, part)| {
+                    matches!(segment, Segment::Param(_))
+                        && percent_decode(part).encode_utf16().count() > 100
+                })
         })
     }
 }
@@ -669,6 +728,74 @@ mod tests {
     }
 
     #[test]
+    fn decodes_paths_as_find_my_way() {
+        // Golden cases from Fastify 5.12.5 / find-my-way 9.9.0 `inject`.
+        assert_eq!(
+            decode_uri("/api/%73essions/x").as_deref(),
+            Some("/api/sessions/x")
+        );
+        assert_eq!(
+            decode_uri("/api/sessions/a%2Fb%25c%3f%40/s").as_deref(),
+            Some("/api/sessions/a%2Fb%25c%3f%40/s")
+        );
+        assert_eq!(
+            decode_uri("/api/sessions/%E4%BD%A0").as_deref(),
+            Some("/api/sessions/你")
+        );
+        for bad in [
+            "/api/sessions/%FF/snapshot",
+            "/api/sessions/%zz/snapshot",
+            "/api/sessions/a%/snapshot",
+            "/api/sessions/a%4",
+            "/api/sessions/%C3%2F",
+            "/api/sessions/%C3a",
+        ] {
+            assert_eq!(decode_uri(bad), None, "{bad}");
+        }
+        let router = Router::new([
+            route(HttpMethod::Get, "/api/sessions/:id/snapshot"),
+            route(HttpMethod::Get, "/api/sessions/chats/snapshot"),
+        ]);
+        let found = |path: &str| {
+            router
+                .find(HttpMethod::Get, &decode_uri(path).unwrap())
+                .map(|(route, params)| (route.pattern, params))
+        };
+        assert_eq!(
+            found("/api/%73essions/x/snapshot"),
+            Some((
+                "/api/sessions/:id/snapshot",
+                vec![("id".to_owned(), "x".to_owned())]
+            ))
+        );
+        assert_eq!(
+            found("/api/sessions/%63hats/snapshot").map(|f| f.0),
+            Some("/api/sessions/chats/snapshot")
+        );
+        assert_eq!(
+            found("/api/sessions/a%2Fb%25c%3f/snapshot").map(|f| f.1),
+            Some(vec![("id".to_owned(), "a/b%c?".to_owned())])
+        );
+        assert_eq!(
+            found("/api/sessions/%2541/snapshot").map(|f| f.1),
+            Some(vec![("id".to_owned(), "%41".to_owned())])
+        );
+        // `maxParamLength` counts the decoded parameter's UTF-16 units.
+        let route = &router.routes[0];
+        let long = |count| {
+            decode_uri(&format!(
+                "/api/sessions/{}/snapshot",
+                "%E4%BD%A0".repeat(count)
+            ))
+            .unwrap()
+        };
+        assert!(!route.param_too_long(&long(100)));
+        assert!(route.param_too_long(&long(101)));
+        assert!(!route.param_too_long(&format!("/api/sessions/{}/snapshot", "%2F".repeat(100))));
+        assert!(route.param_too_long(&format!("/api/sessions/{}/snapshot", "%2F".repeat(101))));
+    }
+
+    #[test]
     #[should_panic(expected = "registered twice")]
     fn refuses_duplicates() {
         Router::new([
@@ -689,7 +816,23 @@ mod tests {
         };
         assert_eq!(request.param("id"), Some("s"));
         assert_eq!(request.query("a"), Some("1"));
-        assert_eq!(request.query_object(), serde_json::json!({ "a": "1" }));
+        assert_eq!(
+            request.query_object(),
+            serde_json::json!({ "a": ["1", "2"] })
+        );
+        let three = Request {
+            query: vec![
+                ("a".into(), "1".into()),
+                ("b".into(), "x".into()),
+                ("a".into(), "2".into()),
+                ("a".into(), "3".into()),
+            ],
+            ..request.clone()
+        };
+        assert_eq!(
+            three.query_object(),
+            serde_json::json!({ "a": ["1", "2", "3"], "b": "x" })
+        );
         assert_eq!(request.json(), &Value::Null);
         assert_eq!(
             request.parse_body::<Map<String, Value>>(),
