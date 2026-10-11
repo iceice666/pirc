@@ -207,7 +207,16 @@ Done 2026-10-11 (the gate below stays open until cutover). All seventeen built-i
 
 ### M6 Node and chat roles
 
-- [ ] One executable for both roles; the role selection (subcommand or `PIRC_CHAT`) is decided with the user before this milestone starts.
+Decided with the user before starting (2026-10-11):
+
+- **Role selection: a subcommand.** `pirc-node chat` runs the chat role, next to the internal `agent` and `ptc-guest` subcommands; `PIRC_CHAT` stays removed and the role is not taken from `argv[0]`. `pirc-node` without a subcommand runs the coding node.
+- **Sandbox: a native Linux backend plus an srt-compatible mode.** By default the agent runs under spike C's bubblewrap, filtering proxy and in-sandbox bridge (an internal `pirc-node` helper subcommand); a runtime network approval widens the proxy's allowlist directly instead of writing to a control fd. `PIRC_SANDBOX_SRT` keeps naming an external srt-compatible CLI (`--settings`, `--control-fd 3`, `--`) as the development stand-in, which the conformance harness's fake srt uses. `sessionPolicy` (pure logic) moves to `pirc-policy` now, with `sandbox-policy.test.ts` as golden cases. srt's filesystem argument generation, macOS, SOCKS5 and the escape tests stay in M7; on other platforms agents do not start (503, as when the sandbox is unavailable).
+- **Browser: reported unavailable until M8.** The browser settings are parsed, but the browser service is a stub: agents get `PIRC_BROWSER=0`, `browser_request` answers 403 "The browser is not available on this node", browser streams close with 4403. The recording route only reads files and is ported. A node with Chromium installed therefore has no browser until M8.
+- **Acceptance:** the existing suite plus new node scenarios recorded from the TS build (git, files, panel state and context, memory panel, terminals with their limits and `PIRC_TERMINALS=0`, uploads, interactions, deliver, session delete and rename, control, activity, reconnect, `models` frames, `agent_request`, `memory_mirror` and its ack, sandbox approvals through the fake srt, and a chat node: `pirc-chat` for TS, `pirc-node chat` for Rust) pass with the Rust gateway, the Rust node and the Rust agent, run by `bun run check` (`test:conformance:rust-node`). The pure-logic TS tests are ported as golden cases: `rpc-framing`, `node-secrets`, `events-reducer`, `memory-mirror`, `node-recap`, the node half of `inference-transport`, and `sandbox-policy`.
+- **`unsafe`:** the workspace keeps `unsafe_code = "forbid"`; the PTY (`setsid`, `TIOCSCTTY`) and passing fd 3 to srt use third-party crates that hold the `unsafe` (`portable-pty`, `command-fds` or similar), as `nix` already does.
+- **Store and cadence:** the node gets its own fresh SQLite schema with only the tables it uses (no TS-era database is read, as in M2). Scenarios are recorded from TS first, then a layout commit, then parallel worktrees, with reviews through several lenses and one commit per sub-item, as in M4 and M5.
+
+- [ ] One executable for both roles (`pirc-node chat` selects the chat role).
 - [ ] Node link (register, 15 s heartbeat, 3 s reconnect, loopback-only `ws://`), request router replacing `app.inject`.
 - [ ] Runner: spawn, epochs, snapshots, reducer, interactions; RPC framing (LF only, line cap); inference Unix socket; write broker; secrets/env allowlist.
 - [ ] Panels: files (realpath containment), git, context, memory panel; terminals (limits, scrollback, process-group kill); memory mirror; recap; chat workspace layout.
@@ -242,4 +251,4 @@ Acceptance: full M0 scenario suite passes with Rust gateway + Rust node + Rust a
 
 ## Open questions
 
-- How the merged `pirc-node` selects the chat role (before M6).
+- None open; the chat role's selection was decided before M6.
