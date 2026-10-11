@@ -765,11 +765,18 @@ pub(crate) async fn serve<A: Commands>(
         match kind {
             "extension_ui_response" => {
                 ui.respond(&command);
+                // What the answer resolved runs before the next line, as TS
+                // ran its microtasks between stdin lines: a dialog that lost
+                // a race is cancelled before a late answer to it is read.
+                tokio::task::yield_now().await;
                 continue;
             }
             // The team channel is M5.
             "team_result" => continue,
-            _ if channels.route(kind, &command) => continue,
+            _ if channels.route(kind, &command) => {
+                tokio::task::yield_now().await;
+                continue;
+            }
             _ => {}
         }
         let agent = agent.clone();
