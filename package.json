@@ -18,7 +18,7 @@
     "format:check": "prettier --check .",
     "version:check": "bun scripts/version.ts check",
     "version:bump": "bun scripts/version.ts bump",
-    "check": "bun run version:check && bun run catalog:check && bun run format:check && bun run check:rust && bun run typecheck && bun run test && bun run build && bun run test:compiled && bun run test:conformance && bun run test:conformance:rust-gateway",
+    "check": "bun run version:check && bun run catalog:check && bun run format:check && bun run check:rust && bun run typecheck && bun run test && bun run build && bun run test:compiled && bun run test:conformance && bun run test:conformance:rust-gateway && bun run test:conformance:rust-agent",
     "check:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && env -u PIRC_CONFORMANCE_BIN_DIR -u PIRC_CONFORMANCE_REQUIRED cargo test --workspace",
     "dev:chat": "bun run --filter @pirc/gateway dev:chat",
     "test:compiled": "bun run --filter @pirc/gateway test:compiled",
@@ -26,6 +26,7 @@
     "test:conformance:rust-gateway": "cargo build -p pirc-gateway && PIRC_CONFORMANCE_REQUIRED=1 PIRC_CONFORMANCE_BIN_DIR=apps/gateway/dist PIRC_CONFORMANCE_GATEWAY_BIN=target/debug/pirc-gateway INSTA_UPDATE=no cargo test -p pirc-conformance",
     "catalog:check": "bun scripts/model-catalog.ts --check",
     "catalog:update": "bun scripts/model-catalog.ts",
+    "test:conformance:rust-agent": "cargo build -p pirc-node && PIRC_CONFORMANCE_REQUIRED=1 PIRC_CONFORMANCE_BIN_DIR=apps/gateway/dist PIRC_CONFORMANCE_AGENT_BIN=target/debug/pirc-node INSTA_UPDATE=no cargo test -p pirc-conformance --test 'agent_*'",
     "size:check": "bun scripts/binary-size.ts",
     "conformance:record": "PIRC_CONFORMANCE_REQUIRED=1 PIRC_CONFORMANCE_BIN_DIR=apps/gateway/dist INSTA_UPDATE=always cargo test -p pirc-conformance"
   },
