@@ -228,11 +228,13 @@ Acceptance: full M0 scenario suite passes with Rust gateway + Rust node + Rust a
 
 ### M7 Native sandbox
 
-Starting point: M6's native backend (`crates/pirc-node/src/sandbox/linux.rs`) mounts each existing policy path by its `readAllowed`/`writeAllowed` verdict and proxies HTTP/CONNECT only. Its module documentation lists what it does not enforce yet: missing deny paths (no stubs, so an absent `.pirc`, `.git/hooks` or `.git/config` can be created), symlinked spellings, the mandatory deny scan, rules under `/proc` and `/dev`, uid 0, SOCKS5 (ssh, ftp, rsync), resolved-address checks; `allowLocalBinding` and `allowUnixSockets` have no effect on Linux. Denied domains are already checked by its proxy.
+Starting point: M6's native backend (`crates/pirc-node/src/sandbox/linux.rs`) mounts each existing policy path by its `readAllowed`/`writeAllowed` verdict and proxies HTTP/CONNECT only. Its module documentation lists what it does not enforce yet: missing deny paths (no stubs, so an absent `.pirc`, `.git/hooks` or `.git/config` can be created), symlinked spellings, the mandatory deny scan, rules under `/proc` and `/dev`, uid 0, SOCKS5 (ssh, ftp, rsync), resolved-address checks; `allowLocalBinding` and `allowUnixSockets` have no effect on Linux. Denied domains are already checked by its proxy. The M6 review fixes added: every directory between a writable root and a path the agent may not write is a mount point, so protected paths cannot be renamed away (security audit S7; srt still has the hole); per-session (64) and node-wide (512) caps on proxy connections, which share the node's fd table, with the soft `RLIMIT_NOFILE` raised to the hard limit at start-up.
 
 - [ ] Linux: port srt's filesystem argument generation (symlinks, missing paths, `/` expansion, mandatory deny scan; Apache-2.0 notice) on spike C's base; read denials, write allowlist, read-only `.pirc/`, `.git/hooks`, `.git/config`, rc files; `--cap-drop ALL` and the uid-0 and missing-`CAP_SETFCAP` cases; the network proxy with SOCKS5, denied domains, local binding and runtime approval; no seccomp, as today (`allowAllUnixSockets`).
 - [ ] macOS: SBPL generation and the same proxy; test on a macOS node.
-- [ ] Port `sandbox-policy.test.ts`, `sandbox.integration`, `sandbox-srt.integration`; add escape tests.
+- [ ] Port `sandbox-policy.test.ts`, `sandbox.integration`, `sandbox-srt.integration`; add escape tests (rename-style bypasses are covered for existing paths: extend them to missing paths and symlinked ancestors), and one real `pirc-node agent` start under the native backend (CI runs only the fake srt).
+- [ ] Panel git off the host's trust (security audit S8): run it inside the sandbox, or with config the agent cannot write, so repository filters cannot run as the node account.
+- [ ] PTY master opened `O_CLOEXEC` atomically (security audit S9).
 - [ ] Harden `pirc-node ptc-guest` (security audit S6): `PR_SET_NO_NEW_PRIVS`, a seccomp filter for stdio, memory, futex, clock and exit, `RLIMIT_AS`/`RLIMIT_NOFILE`, inherited fds closed.
 
 **Gate:** a dedicated security review (recorded under `plans/security-audit.md` or a new audit) before any release.
