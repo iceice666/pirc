@@ -728,6 +728,7 @@ impl BrowserTool {
                     ],
                     details: Some(subset(&shot, &["url", "title"])),
                     is_error: false,
+                    is_error_set: false,
                     data: Some(data),
                 })
             }

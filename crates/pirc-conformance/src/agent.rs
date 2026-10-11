@@ -58,6 +58,19 @@ pub enum ModelReply {
     /// test lets it go, so a side request (a session title) ends at a
     /// known point of the transcript.
     Gated(Gate, Box<ModelReply>),
+    /// A reply made from the request as it arrives (a memory worker cites
+    /// the entry ids its prompt shows).
+    Computed(Responder),
+}
+
+/// Makes a [`ModelReply::Computed`] reply from the request body.
+#[derive(Clone)]
+pub struct Responder(Arc<dyn Fn(&Value) -> ModelReply + Send + Sync>);
+
+impl std::fmt::Debug for Responder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Responder")
+    }
 }
 
 impl ModelReply {
@@ -68,6 +81,11 @@ impl ModelReply {
     /// `reply`, held until `gate` opens.
     pub fn gated(gate: &Gate, reply: ModelReply) -> Self {
         Self::Gated(gate.clone(), Box::new(reply))
+    }
+
+    /// The reply `make` gives for the request body.
+    pub fn computed(make: impl Fn(&Value) -> ModelReply + Send + Sync + 'static) -> Self {
+        Self::Computed(Responder(Arc::new(make)))
     }
 }
 
@@ -189,8 +207,9 @@ fn reply_lines(reply: &ModelReply, model: &str) -> (Vec<Value>, bool) {
             return (lines, true);
         }
         ModelReply::Raw(events) => lines.extend(events.iter().cloned()),
-        // The handler waits for the gate first.
+        // The handler waits for the gate and computes the reply first.
         ModelReply::Gated(_, inner) => return reply_lines(inner, model),
+        ModelReply::Computed(_) => unreachable!("computed before its lines"),
     }
     (lines, false)
 }
@@ -247,6 +266,7 @@ async fn inference(
         );
     }
     let request: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+    let body = request.clone();
     let model = request["modelId"]
         .as_str()
         .unwrap_or("fake-model")
@@ -264,10 +284,16 @@ async fn inference(
             .or_else(|| state.replies.pop_front())
             .unwrap_or_else(|| ModelReply::Text("default reply".to_owned()))
     };
-    while let ModelReply::Gated(gate, inner) = reply {
-        gate.0.notified().await;
-        reply = *inner;
-    }
+    let reply = loop {
+        reply = match reply {
+            ModelReply::Gated(gate, inner) => {
+                gate.0.notified().await;
+                *inner
+            }
+            ModelReply::Computed(Responder(make)) => make(&body),
+            reply => break reply,
+        };
+    };
     let (lines, hang) = reply_lines(&reply, &model);
     let stream =
         futures_util::stream::unfold((lines.into_iter(), hang), |(mut lines, hang)| async move {
@@ -314,6 +340,8 @@ pub struct Answers {
     /// Sandbox request results in order, whatever the `op`; none queued is
     /// not answered.
     pub sandbox: VecDeque<Value>,
+    /// Gateway results by `op` taken one at a time, before `gateway`.
+    pub gateway_queue: HashMap<String, VecDeque<Value>>,
 }
 
 /// How the agent is started.
@@ -332,6 +360,12 @@ pub struct AgentOptions {
     pub args: Vec<String>,
     /// The public model catalog (default: one `fake` provider).
     pub models: Option<Value>,
+    /// Run on the workspace after its files are written, before the agent
+    /// starts (a git repository).
+    pub prepare: Option<fn(&Path)>,
+    /// The session directory's name under the run's root (default
+    /// `session`): another name starts a fresh session on a restart.
+    pub session: Option<&'static str>,
 }
 
 impl AgentOptions {
@@ -353,6 +387,8 @@ impl Default for AgentOptions {
             configure: json!({}),
             args: Vec::new(),
             models: None,
+            prepare: None,
+            session: None,
         }
     }
 }
@@ -477,7 +513,7 @@ impl AgentRun {
         };
         let (workspace, session_dir, config_dir, home) = (
             make("workspace"),
-            make("session"),
+            make(options.session.unwrap_or("session")),
             make("config"),
             make("home"),
         );
@@ -485,6 +521,9 @@ impl AgentRun {
             let path = workspace.join(file);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(path, content).unwrap();
+        }
+        if let Some(prepare) = options.prepare {
+            prepare(&workspace);
         }
         let mut config = json!({ "features": { "autoMode": { "useModel": false } } });
         merge(&mut config, &options.config);
@@ -645,6 +684,17 @@ impl AgentRun {
         Some(line)
     }
 
+    /// Lines until none arrives for `quiet` (background work that ends
+    /// without a line of its own).
+    pub async fn drain(&mut self, quiet: Duration) -> Vec<Value> {
+        let mut seen: Vec<Value> = self.backlog.drain(..).collect();
+        while let Ok(Some(line)) = tokio::time::timeout(quiet, self.lines.recv()).await {
+            self.answer(&line).await;
+            seen.push(line);
+        }
+        seen
+    }
+
     /// Lines until one satisfies `done` (included).
     pub async fn until(&mut self, mut done: impl FnMut(&Value) -> bool) -> Vec<Value> {
         let mut seen = Vec::new();
@@ -714,10 +764,16 @@ impl AgentRun {
                 }
                 Some("gateway_request") => {
                     let op = line["op"].as_str().unwrap_or_default();
-                    let mut reply = answers.gateway.get(op).cloned().unwrap_or_else(|| {
-                        json!({ "ok": false, "error": { "code": "not_found",
+                    let queued = answers
+                        .gateway_queue
+                        .get_mut(op)
+                        .and_then(VecDeque::pop_front);
+                    let mut reply = queued
+                        .or_else(|| answers.gateway.get(op).cloned())
+                        .unwrap_or_else(|| {
+                            json!({ "ok": false, "error": { "code": "not_found",
                             "message": "No such operation", "status": 404 } })
-                    });
+                        });
                     reply["type"] = json!("gateway_response");
                     reply["id"] = line["id"].clone();
                     Some(reply)

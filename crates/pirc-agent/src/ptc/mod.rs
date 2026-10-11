@@ -745,6 +745,7 @@ impl PtcTool {
             content,
             details: Some(Value::Object(details)),
             is_error: report.status != "completed",
+            is_error_set: false,
             data: None,
         })
     }

@@ -29,6 +29,9 @@ pub struct ToolResult {
     pub content: Vec<UserBlock>,
     pub details: Option<Value>,
     pub is_error: bool,
+    /// The tool set `isError` itself, so a `false` is shown too (TS
+    /// `{ isError: cond }` rather than an absent flag).
+    pub is_error_set: bool,
     /// Typed fields for `ptc` scripts (`resultSchema`); never shown to the
     /// model or stored by itself.
     pub data: Option<Map<String, Value>>,
@@ -73,8 +76,8 @@ impl ToolResult {
         if let Some(details) = &self.details {
             out.insert("details".to_owned(), details.clone());
         }
-        if self.is_error {
-            out.insert("isError".to_owned(), Value::Bool(true));
+        if self.is_error || self.is_error_set {
+            out.insert("isError".to_owned(), Value::Bool(self.is_error));
         }
         if let Some(data) = &self.data {
             out.insert("data".to_owned(), Value::Object(data.clone()));
