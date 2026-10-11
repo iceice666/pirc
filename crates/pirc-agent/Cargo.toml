@@ -7,12 +7,20 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+base64 = "0.22"
 getrandom = "0.3"
+hmac = "0.12"
 indexmap.workspace = true
+# kill(2) of a shell command's process group, without unsafe code.
+nix = { version = "0.31", features = ["signal"] }
 regex-lite = "0.1"
+# ECMAScript regular expressions: grep patterns, hook matchers, the
+# auto-mode deny-list and schema patterns are JavaScript regexes.
+regress = "0.12"
+sha2 = "0.10"
 serde.workspace = true
 serde_json.workspace = true
-sha2 = "0.10"
+# Role and skill front matter (Bun.YAML).
 yaml-rust2 = { version = "0.13", default-features = false }
 tokio = { version = "1", features = ["io-std", "io-util", "macros", "net", "process", "rt", "signal", "sync", "time"] }
 

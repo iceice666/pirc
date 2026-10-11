@@ -1275,11 +1275,15 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 name = "pirc-agent"
 version = "0.3.0"
 dependencies = [
+ "base64 0.22.1",
  "getrandom 0.3.4",
+ "hmac",
  "indexmap",
+ "nix",
  "pirc-policy",
  "pirc-protocol",
  "regex-lite",
+ "regress",
  "serde",
  "serde_json",
  "sha2",
@@ -1586,6 +1590,15 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+
+[[package]]
+name = "regress"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32eef8b209c3c1c15dbad02c1f30f9539f00dc7253e0cbcdaae442a50a09d7c1"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "reqwest"
