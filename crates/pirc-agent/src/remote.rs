@@ -22,10 +22,10 @@ use crate::LocalBoxFuture;
 use crate::messages::empty_usage;
 use crate::stream::{StreamFn, StreamRequest};
 
-pub const INFERENCE_REQUEST_MAX_BYTES: usize = 8 * 1024 * 1024;
-pub const INFERENCE_BUFFER_MAX_BYTES: usize = 16 * 1024 * 1024;
-pub const INFERENCE_STREAM_MAX_BYTES: usize = 256 * 1024 * 1024;
-pub const INFERENCE_TIMEOUT_MS: u64 = 10 * 60_000;
+pub use pirc_protocol::{
+    INFERENCE_BUFFER_MAX_BYTES, INFERENCE_REQUEST_MAX_BYTES, INFERENCE_STREAM_MAX_BYTES,
+    INFERENCE_TIMEOUT_MS,
+};
 /// `fetchRemoteModels`' `AbortSignal.timeout`.
 const MODELS_TIMEOUT_MS: u64 = 10_000;
 

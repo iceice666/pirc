@@ -1,11 +1,14 @@
 //! The sandbox path policy (`apps/gateway/src/sandbox-policy.ts`) and the
 //! file tools' view of it (`PathGuard`, `truncateOutput` in
-//! `apps/gateway/src/agent/sandbox.ts`). The node's session policy and srt
-//! settings follow with the node (M6) and the native sandbox (M7).
+//! `apps/gateway/src/agent/sandbox.ts`), and the node's per-session policy
+//! ([`session`], M6). srt's settings and their enforcement live with the
+//! node's sandbox backends (M6, M7).
 
 use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+pub mod session;
 
 /// Credential stores and private data under `$HOME` that agents never
 /// read (`SENSITIVE_HOME_PATHS`); the auto-mode rules use them too.

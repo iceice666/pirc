@@ -6,6 +6,19 @@ use serde_json::{Map, Value};
 
 use crate::models::ThinkingLevel;
 
+/// Wire limits (`inference-wire.ts`), shared by the agent (client), the
+/// node (its Unix-socket server and the link relay) and the gateway.
+/// One `POST /inference` body.
+pub const INFERENCE_REQUEST_MAX_BYTES: usize = 8 * 1024 * 1024;
+/// One NDJSON line, and what may wait unsent in a buffer.
+pub const INFERENCE_BUFFER_MAX_BYTES: usize = 16 * 1024 * 1024;
+/// Everything one stream may carry.
+pub const INFERENCE_STREAM_MAX_BYTES: usize = 256 * 1024 * 1024;
+/// Streams in flight per node (the node's socket answers 429 beyond).
+pub const INFERENCE_MAX_REQUESTS: usize = 32;
+/// How long one request may run.
+pub const INFERENCE_TIMEOUT_MS: u64 = 10 * 60_000;
+
 /// One model request, as an agent's node forwards it (`model_start`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

@@ -216,6 +216,8 @@ Decided with the user before starting (2026-10-11):
 - **`unsafe`:** the workspace keeps `unsafe_code = "forbid"`; the PTY (`setsid`, `TIOCSCTTY`) and passing fd 3 to srt use third-party crates that hold the `unsafe` (`portable-pty`, `command-fds` or similar), as `nix` already does.
 - **Store and cadence:** the node gets its own fresh SQLite schema with only the tables it uses (no TS-era database is read, as in M2). Scenarios are recorded from TS first, then a layout commit, then parallel worktrees, with reviews through several lenses and one commit per sub-item, as in M4 and M5.
 
+Layout: `crates/pirc-node` became a library plus the binary, with the ownership table in its `lib.rs`; four workers port in parallel: core (store queries, router, link client, `app`/`chat` routes, start-up and shutdown), runner (runner, reducer, framing, inference socket, write broker, agent gateway, branch cache, recap, `pirc_config::env_allowlist`), panels (panel routes, git and files, terminals, stream mux, memory mirror) and sandbox (the srt wrapper, the native Linux backend and its `sandbox-bridge` helper, `pirc_policy::session`).
+
 - [ ] One executable for both roles (`pirc-node chat` selects the chat role).
 - [ ] Node link (register, 15 s heartbeat, 3 s reconnect, loopback-only `ws://`), request router replacing `app.inject`.
 - [ ] Runner: spawn, epochs, snapshots, reducer, interactions; RPC framing (LF only, line cap); inference Unix socket; write broker; secrets/env allowlist.

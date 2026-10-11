@@ -1,19 +1,58 @@
 [package]
 name = "pirc-node"
-description = "pirc node: coding and chat agents, shells and workspaces (Rust rewrite, not usable yet)"
+description = "pirc node: coding and chat agents, shells and workspaces (Rust rewrite, in progress)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+
+# A library too, so integration tests reach the node's internals.
+[lib]
+name = "pirc_node"
+path = "src/lib.rs"
 
 [[bin]]
 name = "pirc-node"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "0.22"
+# srt's control channel on the agent's fd 3 (sandbox/srt.rs), without
+# unsafe code of our own.
+command-fds = { version = "0.3", features = ["tokio"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+getrandom = "0.3"
+indexmap.workspace = true
+# kill(2) of process groups (agents, host commands, terminals), O_NOFOLLOW
+# opens (recap), getuid (the sandbox policy's host sockets).
+nix = { version = "0.31", features = ["fs", "process", "signal", "user"] }
+# Panel terminals: setsid and TIOCSCTTY before exec, as the agent's
+# background tasks (no unsafe code of our own).
+pty-process = { version = "0.5", features = ["async"] }
+regex-lite = "0.1"
+rusqlite = { version = "0.37", features = ["bundled"] }
+# The node link's `wss://`: rustls with ring (no aws-lc), the platform's
+# roots as the gateway's reqwest uses them.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-platform-verifier = "0.7"
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+subtle = "2"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "handshake", "__rustls-tls"] }
+url = "2"
+
 pirc-agent = { path = "../pirc-agent" }
+pirc-config = { path = "../pirc-config" }
+pirc-policy = { path = "../pirc-policy" }
+pirc-protocol = { path = "../pirc-protocol" }
 # `pirc-node ptc-guest`: the QuickJS process of one `ptc` script.
 pirc-ptc = { path = "../pirc-ptc" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["full", "test-util"] }
 
 [lints]
 workspace = true
