@@ -1,6 +1,6 @@
 # Rust rewrite of the server executables
 
-Status: M0, M1 and M2 done 2026-10-10; M3, M4 and M5 done 2026-10-11 (M3's real-provider smoke test moved to M5's gate, which stays open until cutover); M6 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
+Status: M0, M1 and M2 done 2026-10-10; M3, M4, M5 and M6 done 2026-10-11 (M3's real-provider smoke test moved to M5's gate, which stays open until cutover); M7 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
 
 Paths are relative to `apps/gateway/src/` unless noted.
 
@@ -218,13 +218,21 @@ Decided with the user before starting (2026-10-11):
 
 Layout: `crates/pirc-node` became a library plus the binary, with the ownership table in its `lib.rs`; four workers port in parallel: core (store queries, router, link client, `app`/`chat` routes, start-up and shutdown), runner (runner, reducer, framing, inference socket, write broker, agent gateway, branch cache, recap, `pirc_config::env_allowlist`), panels (panel routes, git and files, terminals, stream mux, memory mirror) and sandbox (the srt wrapper, the native Linux backend and its `sandbox-bridge` helper, `pirc_policy::session`).
 
-- [ ] One executable for both roles (`pirc-node chat` selects the chat role).
-- [ ] Node link (register, 15 s heartbeat, 3 s reconnect, loopback-only `ws://`), request router replacing `app.inject`.
-- [ ] Runner: spawn, epochs, snapshots, reducer, interactions; RPC framing (LF only, line cap); inference Unix socket; write broker; secrets/env allowlist.
-- [ ] Panels: files (realpath containment), git, context, memory panel; terminals (limits, scrollback, process-group kill); memory mirror; recap; chat workspace layout.
-- [ ] Sandbox trait wired to the M1 spike implementation (Linux). TS srt may be used only as a development stand-in.
+- [x] One executable for both roles (`pirc-node chat` selects the chat role).
+- [x] Node link (register, 15 s heartbeat, 3 s reconnect, loopback-only `ws://`), request router replacing `app.inject`.
+- [x] Runner: spawn, epochs, snapshots, reducer, interactions; RPC framing (LF only, line cap); inference Unix socket; write broker; secrets/env allowlist.
+- [x] Panels: files (realpath containment), git, context, memory panel; terminals (limits, scrollback, process-group kill); memory mirror; recap; chat workspace layout.
+- [x] Sandbox trait wired to the M1 spike implementation (Linux). TS srt may be used only as a development stand-in.
 
 Acceptance: full M0 scenario suite passes with Rust gateway + Rust node + Rust agent.
+
+Done 2026-10-11. `pirc-node` and `pirc-node chat` run the Rust node; the whole conformance suite passes with the Rust gateway, the Rust node and the Rust agent (`bun run test:conformance:rust-node`, part of `bun run check`). 20 new scenarios recorded from the TS build (`crates/pirc-conformance/tests/node_*.rs`: panels, sessions and commands, interactions, terminals, workspaces and project trust, the chat role and its start-up refusals, and the node's half of the link with activity, `agent_request`, recap, inference errors and cancels, the memory mirror and sandbox approvals through the fake srt) pass against both nodes; the harness gained `PIRC_CONFORMANCE_NODE_BIN` and chat nodes. The TS golden cases named above are Rust unit tests; the native backend has its own tests under bubblewrap (`crates/pirc-node/tests/sandbox_native.rs`; bubblewrap is now in the dev shell). Reviewed through security, concurrency, core and feature lenses, then a second round on the fixes. Release sizes: `pirc-gateway` 11.84 MiB, `pirc-node` 16.41 MiB.
+
+- Gateway fixes found by the new scenarios: `registered` is queued before a node can be relayed to (a request could overtake it, and nodes drop frames before `registered`); a workspace added from the web is listed by `/api/nodes` with the node's whole answer, as TS did.
+- TS's single thread is emulated where the review showed it matters: a runner reduces, books and publishes each agent line as one step, and a snapshot reads its live state, dialogs, run and watermark between two lines (history after them); `interaction_answered` precedes the agent's reply; a new runner waits for the old one's exit to finish; network approvals are applied under the runner's lock.
+- Rust-only safeguards: new starts are refused (503) while the node shuts down, which waits for the starts in flight; the soft `RLIMIT_NOFILE` is raised to the hard limit, as Bun did; Unix socket paths longer than `sockaddr_un` are reached through `/proc/self/fd` (Bun handled them); the inference socket bounds chunk sizes and keeps its counters in drop guards; no single-pid kill after the agent was reaped; a withdrawn sandbox request never shows a dialog or spawns its command; the native proxy is capped per session (64) and per node (512).
+- Accepted gaps: Bun and zod error texts where they are not client-visible contracts (start-up, config, spawn); a second signal exits 128+n; log lines are text; equal timestamps break ties by insertion order; the link refuses frames TS's schema accepted with fractional watermarks or statuses past 16 bits; inference requests with fractional numbers are refused, one HTTP request per inference connection; the RPC framing counts each invalid UTF-8 byte once and treats nesting past 128 or lone surrogates as fatal; the reducer coerces unexpected types with JS `String()`; a failed agent spawn answers 503 instead of `runner_ready` then `runner_error`; after the group is killed the agent's last stdout lines are handled for up to a second before `runner_exit`; the branch cache compares modification times in nanoseconds; recap excludes only node-local markers (a node has no schedule or delegation tables); git's stderr is read alongside stdout; a stream that fails to open unexpectedly closes 4400 "Internal server error"; `config.json` of `null` counts as empty. Host exec stays in the node's session (TS used `setsid`; a command opening `/dev/tty` reaches the node's terminal when it runs in one), left for after cutover.
+- The browser is the M6 stub (403 to the agent, 4403 to streams). The native sandbox's gaps and the review's sandbox findings (S7–S9 in `plans/security-audit.md`: rename bypass of protected paths in srt and TS, panel git trusting agent-writable repository config, the PTY master briefly inheritable) are M7's.
 
 ### M7 Native sandbox
 
