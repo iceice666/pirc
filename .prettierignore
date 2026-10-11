@@ -19,3 +19,5 @@ crates/pirc-providers/catalog.json
 crates/pirc-providers/tests/parity/fixtures/
 # pi-ai's OAuth callback page, kept verbatim.
 crates/pirc-providers/src/backends/oauth/page.html
+# The ptc guest's SDK prelude: guest.ts's template text, kept verbatim.
+crates/pirc-ptc/src/prelude.js

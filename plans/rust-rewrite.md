@@ -1,6 +1,6 @@
 # Rust rewrite of the server executables
 
-Status: M0, M1 and M2 done 2026-10-10; M3 and M4 done 2026-10-11 (M3's real-provider smoke test moved to M5's gate); M5 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
+Status: M0, M1 and M2 done 2026-10-10; M3, M4 and M5 done 2026-10-11 (M3's real-provider smoke test moved to M5's gate, which stays open until cutover); M6 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
 
 Paths are relative to `apps/gateway/src/` unless noted.
 
@@ -191,10 +191,17 @@ Decided with the user before starting (2026-10-11):
 - **PTC tests:** only `agent-ptc.test.ts` and `ptc-runtime.test.ts` (plus `ptc-signatures.test.ts` where M4 did not cover it). The `ptc-m1-*`/`ptc-m4-*` evaluation harness stays in TS and runs at the gate against the TS baseline and the Rust build.
 - **Cadence as in M4:** transcripts recorded from TS first, then a layout commit with the `Feature` trait and interfaces, then parallel worktrees for the features, with loop integration done by the parent; reviews through several lenses; one commit per sub-item. Order: the trait and the simpler features, the classifier, the PTC runtime, then memory, background tasks, team and assistant.
 
-- [ ] `Feature` trait; todo, goal, title, recap, skills, project instructions, ask-question, web search, compact, role, schedules, sandbox approvals, browser.
-- [ ] Auto-mode classifier (the rules moved to M4), porting `agent-auto-mode.test.ts` as golden cases.
-- [ ] PTC runtime (its surface moved to M4) on `rquickjs` (spike B; use `AsyncContext::async_with`, not the deprecated macro) in a killable `ptc-guest` child with empty environment; same limits (operations, concurrency, time, heap, source size), broker checks and refusal semantics; port `agent-ptc.test.ts` and `ptc-runtime.test.ts`.
-- [ ] Memory (observational and workspace), background tasks, team/subagents, assistant.
+- [x] `Feature` trait; todo, goal, title, recap, skills, project instructions, ask-question, web search, compact, role, schedules, sandbox approvals, browser.
+- [x] Auto-mode classifier (the rules moved to M4), porting `agent-auto-mode.test.ts` as golden cases.
+- [x] PTC runtime (its surface moved to M4) on `rquickjs` (spike B; use `AsyncContext::async_with`, not the deprecated macro) in a killable `ptc-guest` child with empty environment; same limits (operations, concurrency, time, heap, source size), broker checks and refusal semantics; port `agent-ptc.test.ts` and `ptc-runtime.test.ts`.
+- [x] Memory (observational and workspace), background tasks, team/subagents, assistant.
+
+Done 2026-10-11 (the gate below stays open until cutover). All seventeen built-in features, the classifier and the PTC runtime run in `pirc-node agent`; QuickJS and oxc live in `crates/pirc-ptc` (guest behind its default `guest` feature, `pirc-node ptc-guest`). 128 new agent transcripts recorded from the TS agent (`crates/pirc-conformance/tests/agent_*.rs`, 149 with M4's; the `_ptc` files drive feature tools through scripts) replay against the Rust agent, and the M0 `session` scenario (`session_agent_events` included) passes with the TS gateway, the TS node and the Rust agent; `bun run check` runs both (`test:conformance:rust-agent`). `ptc-runtime.test.ts` is ported as `crates/pirc-agent/tests/ptc_runtime.rs`; `ptc-signatures.test.ts` was already covered by M4. Reviewed through security, loop, feature and stateful-feature lenses, then a second round on the fixes. Release sizes: `pirc-gateway` 11.83 MiB, `pirc-node` 10.12 MiB.
+
+- The TS agent's microtask order is emulated where transcripts showed it matters: `crate::tick` (one microtask), `crate::set_timeout_zero` (`setTimeout(…, 0)` in order), a one-feature run admitting before the command's response, `flush_panel` where TS's coalescing microtask ran, a yield after side-channel answers. Elsewhere the order of `panel_changed` lines and responses may differ from TS.
+- Rust-only safeguards: ptc preflight runs on its own 256 MiB stack (oxc recursion would otherwise abort the agent on a deeply nested script within the size budget; TS refused those with "Maximum call stack size exceeded" and Rust may accept them); the guest dies with its agent (parent-death signal) and is killed when its stdout ends; `AbortSignal::any` holds dependents weakly; leftover background and team process groups are killed.
+- Accepted gaps: oxc syntax-error texts and printed line numbers (multi-property objects are broken over lines); quickjs-ng instead of Bellard's QuickJS (stack formats, OOM and stack-overflow messages, `performance`/`queueMicrotask` globals); `AsyncContext::async_with` is not used (the guest drives the job queue itself, as `guest.ts` did, to report idleness); lone surrogates crossing the realm become U+FFFD; the guest exits by itself after `done` and refuses a terminal stdin; the TS catch around a throwing static rule and a throwing stream function has no Rust path; title input cut at 2,000 UTF-16 units keeps surrogate pairs whole; `/constructor`-like slash names are prompts; team `team_cancel` comes after an abort's response, and a child's last stdout lines are awaited up to 1 s before its exit; background piped tasks use `setpgid` (Bun's `detached` made a session); goal timer errors and malformed gateway or node answers fail with Rust's own texts; memory parses only the `YYYY-MM-DDTHH:MM` local date form for drop order; a preflight still blocks the agent while it runs (one pathological 64 KiB shape takes about 20 s; TS blocked too).
+- The native guest loses the WASM layer TS's QuickJS ran in; recorded as S6 in `plans/security-audit.md`, to be hardened (no_new_privs, seccomp, rlimits) with M7.
 
 **Gate:** before cutover, re-run the PTC and task-time evaluations against the TS baseline (`docs/evaluations/ptc/`). Paid runs need the user's approval. The real-provider smoke test deferred from M3 (each wire API and subscription login: one text turn and one tool call) runs with them.
 
@@ -213,6 +220,7 @@ Acceptance: full M0 scenario suite passes with Rust gateway + Rust node + Rust a
 - [ ] Linux: port srt's filesystem argument generation (symlinks, missing paths, `/` expansion, mandatory deny scan; Apache-2.0 notice) on spike C's base; read denials, write allowlist, read-only `.pirc/`, `.git/hooks`, `.git/config`, rc files; `--cap-drop ALL` and the uid-0 and missing-`CAP_SETFCAP` cases; the network proxy with SOCKS5, denied domains, local binding and runtime approval; no seccomp, as today (`allowAllUnixSockets`).
 - [ ] macOS: SBPL generation and the same proxy; test on a macOS node.
 - [ ] Port `sandbox-policy.test.ts`, `sandbox.integration`, `sandbox-srt.integration`; add escape tests.
+- [ ] Harden `pirc-node ptc-guest` (security audit S6): `PR_SET_NO_NEW_PRIVS`, a seccomp filter for stdio, memory, futex, clock and exit, `RLIMIT_AS`/`RLIMIT_NOFILE`, inherited fds closed.
 
 **Gate:** a dedicated security review (recorded under `plans/security-audit.md` or a new audit) before any release.
 
