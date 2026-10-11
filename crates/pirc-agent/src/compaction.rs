@@ -52,7 +52,7 @@ fn truthy(value: &Value) -> bool {
 }
 
 /// JavaScript `ToNumber`, as arithmetic and comparisons apply it.
-fn to_number(value: &Value) -> f64 {
+pub(crate) fn to_number(value: &Value) -> f64 {
     match value {
         Value::Null => 0.0,
         Value::Bool(value) => f64::from(u8::from(*value)),

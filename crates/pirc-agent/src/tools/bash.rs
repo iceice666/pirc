@@ -57,10 +57,11 @@ static LIVE_GROUPS: std::sync::Mutex<Vec<i32>> = std::sync::Mutex::new(Vec::new(
 /// no command outlives its run. TS has no such path: its promise always
 /// runs to the end. Only the group is signalled: the shell leads it, so
 /// its pid is never signalled on its own after being reaped (and reused).
-struct GroupGuard(Option<i32>);
+/// Background tasks hold one too.
+pub(crate) struct GroupGuard(Option<i32>);
 
 impl GroupGuard {
-    fn new(pid: Option<u32>) -> Self {
+    pub(crate) fn new(pid: Option<u32>) -> Self {
         let pgid = pid
             .and_then(|pid| i32::try_from(pid).ok())
             .filter(|pid| *pid > 0);
@@ -155,6 +156,16 @@ impl StreamDecoder {
         }
         self.pending = rest.to_vec();
         out
+    }
+
+    /// The end of the stream (`decode()` without `stream`): an incomplete
+    /// sequence held back becomes U+FFFD.
+    pub(crate) fn finish(&mut self) -> String {
+        if std::mem::take(&mut self.pending).is_empty() {
+            String::new()
+        } else {
+            "\u{FFFD}".to_owned()
+        }
     }
 }
 

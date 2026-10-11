@@ -1531,7 +1531,10 @@ impl Agent {
         }
     }
 
-    fn flush_panel(&self) {
+    /// Emit the coalesced `panel_changed` lines now: where a TS microtask
+    /// queued by `panelChanged` would have run (a feature's code ending a
+    /// synchronous stretch).
+    pub fn flush_panel(&self) {
         for _ in 0..self.scheduled_flushes.replace(0) {
             let sections = std::mem::take(&mut *self.changed_sections.borrow_mut());
             self.emit(json!({ "type": "panel_changed", "sections": sections }));
@@ -1721,6 +1724,11 @@ impl Agent {
         // even a feature without one is an await), so with features
         // everything is admitted in the run task.
         let with_features = !self.features.is_empty();
+        // Microtasks queued before `run()` (a feature's `panelChanged` that
+        // led to this run) run at its first await, before admission.
+        if with_features {
+            self.flush_panel();
+        }
         // Only a user item awaits (`beforePrompt` hooks run before it), so
         // the items before the first one are admitted at once either way.
         let mut now = initial;
