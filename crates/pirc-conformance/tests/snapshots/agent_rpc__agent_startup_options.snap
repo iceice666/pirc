@@ -1,0 +1,89 @@
+---
+source: crates/pirc-conformance/tests/agent_rpc.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": [
+      {
+        "name": "Named at start",
+        "source": "user",
+        "type": "session_name_changed"
+      },
+      {
+        "id": "<uuid:1>",
+        "message": "This workspace's .pirc/config.json sets hooks, env or allowedPaths; they were ignored because the workspace is not trusted (or they changed since it was trusted). Review and trust them in the workspace's Settings.",
+        "method": "notify",
+        "notifyType": "warning",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "get_state",
+        "data": {
+          "completionWaiting": [],
+          "isCompacting": false,
+          "isStreaming": false,
+          "messageCount": 0,
+          "model": {
+            "contextWindow": 2000,
+            "id": "small-model",
+            "name": "small-model",
+            "provider": "fake",
+            "reasoning": false
+          },
+          "pendingMessageCount": 0,
+          "sessionFile": "<tmp>/session/session.jsonl",
+          "sessionId": "<hex16:1>",
+          "sessionName": "Named at start",
+          "sessionNameSource": "user",
+          "thinkingLevel": "high"
+        },
+        "id": "c1",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "startup and state"
+  },
+  {
+    "observed": [
+      {
+        "cwd": "<tmp>/workspace",
+        "id": "<entry:1>",
+        "parentId": null,
+        "sessionId": "<hex16:1>",
+        "timestamp": "<epoch-ms>",
+        "type": "session",
+        "version": 1
+      },
+      {
+        "id": "<entry:2>",
+        "modelId": "small-model",
+        "parentId": "<entry:1>",
+        "provider": "fake",
+        "timestamp": "<epoch-ms>",
+        "type": "model_change"
+      },
+      {
+        "id": "<entry:3>",
+        "parentId": "<entry:2>",
+        "thinkingLevel": "high",
+        "timestamp": "<epoch-ms>",
+        "type": "thinking_level_change"
+      },
+      {
+        "id": "<entry:4>",
+        "name": "Named at start",
+        "parentId": "<entry:3>",
+        "source": "user",
+        "timestamp": "<epoch-ms>",
+        "type": "session_info"
+      }
+    ],
+    "step": "session file"
+  },
+  {
+    "observed": 0,
+    "step": "exit code"
+  }
+]

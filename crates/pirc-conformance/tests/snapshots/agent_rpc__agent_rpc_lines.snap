@@ -1,0 +1,99 @@
+---
+source: crates/pirc-conformance/tests/agent_rpc.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": [
+      {
+        "error": "Unsupported command: undefined",
+        "success": false,
+        "type": "response"
+      },
+      {
+        "error": "Unsupported command: undefined",
+        "success": false,
+        "type": "response"
+      },
+      {
+        "error": "Unsupported command: undefined",
+        "success": false,
+        "type": "response"
+      }
+    ],
+    "step": "lines that are not objects"
+  },
+  {
+    "observed": [
+      {
+        "followUp": [],
+        "steering": [],
+        "type": "queue_update"
+      },
+      {
+        "command": "clear_queue",
+        "data": {
+          "followUp": [],
+          "steering": []
+        },
+        "id": null,
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "unanswered responses, then a command with a null id"
+  },
+  {
+    "observed": {
+      "command": "get_context",
+      "data": null,
+      "id": "c1",
+      "success": true,
+      "type": "response"
+    },
+    "step": "context with maxBytes 0"
+  },
+  {
+    "observed": {
+      "command": "set_model",
+      "error": "Unknown model undefined/undefined",
+      "id": "c2",
+      "success": false,
+      "type": "response"
+    },
+    "step": "set_model with missing fields"
+  },
+  {
+    "observed": {
+      "command": "set_session_name",
+      "id": "c3",
+      "success": true,
+      "type": "response"
+    },
+    "step": "set_session_name with null"
+  },
+  {
+    "observed": {
+      "command": "deliver",
+      "error": "deliver needs message.customType and message.content",
+      "id": "c4",
+      "success": false,
+      "type": "response"
+    },
+    "step": "deliver with a string message"
+  },
+  {
+    "observed": [
+      {
+        "name": "",
+        "source": "user",
+        "type": "session_name_changed"
+      }
+    ],
+    "step": "lines still unread, then the end of output"
+  },
+  {
+    "observed": 1,
+    "step": "exit code"
+  }
+]
