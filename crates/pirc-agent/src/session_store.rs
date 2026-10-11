@@ -1,14 +1,25 @@
 //! The append-only `session.jsonl` (`agent/session-store.ts`), kept
 //! field-for-field compatible with the TS agent's v1 (the TS node reads it
 //! while the Rust agent runs under it; plans/rust-rewrite.md, M4).
+//!
+//! Every entry has a stable id and parent id; the active branch is the chain
+//! ending at the most recently appended (or last read) entry.
 
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::io::Write as _;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+use std::path::{Path, PathBuf};
 
 use pirc_protocol::Message;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
+
+use crate::messages::js;
 
 /// Session entry of one `ptc` operation (`OPERATION_ENTRY`).
 pub const OPERATION_ENTRY: &str = "ptc.operation";
+/// The `ptc` script store after a completed script changed it (`PTC_STORE_ENTRY`).
+pub const PTC_STORE_ENTRY: &str = "ptc.store";
 /// `SESSION_FILE`.
 pub const SESSION_FILE: &str = "session.jsonl";
 
@@ -42,65 +53,856 @@ pub enum EntryData {
         name: String,
         source: Option<String>,
     },
-    /// An entry type this version does not know, kept as it was read.
+    /// An entry type this version does not know (or a known one with fields
+    /// it cannot read), kept as it was read without `id`, `parentId` and
+    /// `timestamp`.
     Other(Map<String, Value>),
+}
+
+impl EntryData {
+    /// The entry's `type`.
+    pub fn type_name(&self) -> &str {
+        match self {
+            Self::Session { .. } => "session",
+            Self::Message(_) => "message",
+            Self::Custom { .. } => "custom",
+            Self::Compaction { .. } => "compaction",
+            Self::ModelChange { .. } => "model_change",
+            Self::ThinkingLevelChange { .. } => "thinking_level_change",
+            Self::SessionInfo { .. } => "session_info",
+            Self::Other(map) => map.get("type").and_then(Value::as_str).unwrap_or(""),
+        }
+    }
+
+    /// The fields as TS writes them: `type` first, then the entry's fields
+    /// in the order the TS agent builds them.
+    fn to_map(&self) -> Map<String, Value> {
+        let mut map = Map::new();
+        let mut put = |key: &str, value: Value| {
+            map.insert(key.to_owned(), value);
+        };
+        if !matches!(self, Self::Other(_)) {
+            put("type", Value::from(self.type_name()));
+        }
+        match self {
+            Self::Session { session_id, cwd } => {
+                put("version", Value::from(1));
+                put("sessionId", Value::from(session_id.as_str()));
+                put("cwd", Value::from(cwd.as_str()));
+            }
+            Self::Message(message) => {
+                put(
+                    "message",
+                    serde_json::to_value(message).unwrap_or(Value::Null),
+                );
+            }
+            Self::Custom { custom_type, data } => {
+                put("customType", Value::from(custom_type.as_str()));
+                put("data", data.clone());
+            }
+            Self::Compaction {
+                summary,
+                first_kept_entry_id,
+                tokens_before,
+                details,
+            } => {
+                put("summary", Value::from(summary.as_str()));
+                put(
+                    "firstKeptEntryId",
+                    Value::from(first_kept_entry_id.as_str()),
+                );
+                put("tokensBefore", Value::from(*tokens_before));
+                if let Some(details) = details {
+                    put("details", details.clone());
+                }
+            }
+            Self::ModelChange { provider, model_id } => {
+                put("provider", Value::from(provider.as_str()));
+                put("modelId", Value::from(model_id.as_str()));
+            }
+            Self::ThinkingLevelChange { thinking_level } => {
+                put("thinkingLevel", Value::from(thinking_level.as_str()));
+            }
+            Self::SessionInfo { name, source } => {
+                put("name", Value::from(name.as_str()));
+                if let Some(source) = source {
+                    put("source", Value::from(source.as_str()));
+                }
+            }
+            Self::Other(other) => {
+                for (key, value) in other {
+                    put(key, value.clone());
+                }
+            }
+        }
+        map
+    }
+
+    /// Read the fields of an entry (without `id`, `parentId`, `timestamp`).
+    fn from_map(map: Map<String, Value>) -> Self {
+        Self::typed(&map).unwrap_or(Self::Other(map))
+    }
+
+    fn typed(map: &Map<String, Value>) -> Option<Self> {
+        let text = |key: &str| map.get(key).and_then(Value::as_str).map(str::to_owned);
+        Some(match map.get("type")?.as_str()? {
+            "session" => Self::Session {
+                session_id: text("sessionId")?,
+                cwd: text("cwd")?,
+            },
+            "message" => Self::Message(Message::deserialize(map.get("message")?).ok()?),
+            "custom" => Self::Custom {
+                custom_type: text("customType")?,
+                data: map.get("data").cloned().unwrap_or(Value::Null),
+            },
+            "compaction" => Self::Compaction {
+                summary: text("summary")?,
+                first_kept_entry_id: text("firstKeptEntryId")?,
+                tokens_before: map.get("tokensBefore").and_then(number_u64)?,
+                details: map.get("details").cloned(),
+            },
+            "model_change" => Self::ModelChange {
+                provider: text("provider")?,
+                model_id: text("modelId")?,
+            },
+            "thinking_level_change" => Self::ThinkingLevelChange {
+                thinking_level: text("thinkingLevel")?,
+            },
+            "session_info" => Self::SessionInfo {
+                name: text("name")?,
+                source: match map.get("source") {
+                    None => None,
+                    Some(value) => Some(value.as_str()?.to_owned()),
+                },
+            },
+            _ => return None,
+        })
+    }
+}
+
+fn number_u64(value: &Value) -> Option<u64> {
+    value
+        .as_u64()
+        .or_else(|| value.as_f64().filter(|n| *n >= 0.0).map(|n| n as u64))
 }
 
 /// `SessionEntry`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SessionEntry {
+    /// Empty for a line that had no string id (TS: `undefined`).
     pub id: String,
     pub parent_id: Option<String>,
     pub timestamp: u64,
     pub data: EntryData,
 }
 
+impl SessionEntry {
+    /// The JSON TS writes: `{...entry, id, parentId, timestamp}`.
+    pub fn to_value(&self) -> Value {
+        let mut map = self.data.to_map();
+        map.insert("id".to_owned(), Value::from(self.id.as_str()));
+        map.insert(
+            "parentId".to_owned(),
+            self.parent_id.as_deref().map_or(Value::Null, Value::from),
+        );
+        map.insert("timestamp".to_owned(), Value::from(self.timestamp));
+        Value::Object(map)
+    }
+
+    /// One parsed line. A JSON value that is not an object is kept as an
+    /// entry without id, as TS kept it; `null` is an error, as it was in TS.
+    pub fn from_value(value: Value) -> Result<Self, String> {
+        let mut map = match value {
+            Value::Object(map) => map,
+            Value::Null => return Err("null is not an object (evaluating 'entry.id')".to_owned()),
+            _ => {
+                return Ok(Self {
+                    id: String::new(),
+                    parent_id: None,
+                    timestamp: 0,
+                    data: EntryData::Other(Map::new()),
+                });
+            }
+        };
+        let id = match map.shift_remove("id") {
+            Some(Value::String(id)) => id,
+            _ => String::new(),
+        };
+        let parent_id = match map.shift_remove("parentId") {
+            Some(Value::String(parent)) => Some(parent),
+            _ => None,
+        };
+        let timestamp = map
+            .shift_remove("timestamp")
+            .as_ref()
+            .and_then(number_u64)
+            .unwrap_or(0);
+        Ok(Self {
+            id,
+            parent_id,
+            timestamp,
+            data: EntryData::from_map(map),
+        })
+    }
+
+    /// The message of a `message` entry.
+    pub fn message(&self) -> Option<&Message> {
+        match &self.data {
+            EntryData::Message(message) => Some(message),
+            _ => None,
+        }
+    }
+}
+
+impl Serialize for SessionEntry {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.to_value().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for SessionEntry {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::from_value(Value::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+/// `parseEntries(text)`: one entry per JSON line; lines that do not parse
+/// (a torn final line after a crash) are skipped.
+pub fn parse_entries(text: &str) -> Result<Vec<SessionEntry>, String> {
+    let mut entries = Vec::new();
+    for line in text.split('\n') {
+        if js::trim(line).is_empty() {
+            continue;
+        }
+        if let Ok(value) = serde_json::from_str::<Value>(line) {
+            entries.push(SessionEntry::from_value(value)?);
+        }
+    }
+    Ok(entries)
+}
+
+/// `chainOf(byId, leafId)`: entries on the chain ending at `leaf`, root
+/// first. (A parent cycle, which TS would follow forever, ends the chain.)
+fn chain_of<'a>(
+    by_id: &HashMap<String, usize>,
+    entries: &'a [SessionEntry],
+    leaf: Option<&str>,
+) -> Vec<&'a SessionEntry> {
+    let lookup = |id: Option<&str>| {
+        id.filter(|id| !id.is_empty())
+            .and_then(|id| by_id.get(id))
+            .map(|&index| &entries[index])
+    };
+    let mut chain = Vec::new();
+    let mut cursor = lookup(leaf);
+    while let Some(entry) = cursor {
+        if chain.len() > entries.len() {
+            break;
+        }
+        chain.push(entry);
+        cursor = lookup(entry.parent_id.as_deref());
+    }
+    chain.reverse();
+    chain
+}
+
+fn index_of(entries: &[SessionEntry]) -> HashMap<String, usize> {
+    entries
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| (entry.id.clone(), index))
+        .collect()
+}
+
+/// `readSessionBranch(dir)`: a session's active branch without opening a
+/// store (never writes).
+pub fn read_session_branch(dir: &Path) -> Result<Vec<SessionEntry>, String> {
+    let file = dir.join(SESSION_FILE);
+    if !file.exists() {
+        return Ok(Vec::new());
+    }
+    let entries = parse_entries(&js::read_text(&file)?)?;
+    let by_id = index_of(&entries);
+    let leaf = entries.last().map(|entry| entry.id.as_str());
+    Ok(chain_of(&by_id, &entries, leaf)
+        .into_iter()
+        .cloned()
+        .collect())
+}
+
+fn summary_message(summary: &str, tokens_before: u64, timestamp: u64) -> Message {
+    Message::CompactionSummary {
+        summary: summary.to_owned(),
+        tokens_before,
+        timestamp,
+    }
+}
+
+/// `historyOf(branch)`: every message on a branch (for UI history),
+/// compacted ones included, with compaction summaries where they happened.
+pub fn history_of(branch: &[SessionEntry]) -> Vec<Message> {
+    branch
+        .iter()
+        .filter_map(|entry| match &entry.data {
+            EntryData::Message(message) => Some(message.clone()),
+            EntryData::Compaction {
+                summary,
+                tokens_before,
+                ..
+            } => Some(summary_message(summary, *tokens_before, entry.timestamp)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// `historyWithOperations(branch)`: `historyOf` plus each `ptc` operation,
+/// in session order, as a tool result with `parentToolCallId` and `args`
+/// (as JSON, since such a message is not a model [`Message`]).
+pub fn history_with_operations(branch: &[SessionEntry]) -> Vec<Value> {
+    let mut out = Vec::new();
+    for entry in branch {
+        if let EntryData::Custom { custom_type, data } = &entry.data
+            && custom_type == OPERATION_ENTRY
+        {
+            let Some(data) = data.as_object() else {
+                continue;
+            };
+            let (Some(tool_call_id), Some(parent_tool_call_id), Some(tool_name), Some(content)) = (
+                data.get("toolCallId").and_then(Value::as_str),
+                data.get("parentToolCallId").and_then(Value::as_str),
+                data.get("toolName").and_then(Value::as_str),
+                data.get("content").filter(|content| content.is_array()),
+            ) else {
+                continue;
+            };
+            let mut message = Map::new();
+            message.insert("role".to_owned(), Value::from("toolResult"));
+            message.insert("toolCallId".to_owned(), Value::from(tool_call_id));
+            message.insert("toolName".to_owned(), Value::from(tool_name));
+            message.insert(
+                "parentToolCallId".to_owned(),
+                Value::from(parent_tool_call_id),
+            );
+            let args = data
+                .get("args")
+                .filter(|args| args.is_object() || args.is_array())
+                .cloned()
+                .unwrap_or_else(|| Value::Object(Map::new()));
+            message.insert("args".to_owned(), args);
+            message.insert("content".to_owned(), content.clone());
+            if let Some(details) = data.get("details") {
+                message.insert("details".to_owned(), details.clone());
+            }
+            message.insert(
+                "isError".to_owned(),
+                Value::from(data.get("isError") == Some(&Value::Bool(true))),
+            );
+            let timestamp = match data.get("timestamp") {
+                Some(Value::Number(number)) => Value::Number(number.clone()),
+                _ => Value::from(entry.timestamp),
+            };
+            message.insert("timestamp".to_owned(), timestamp);
+            out.push(Value::Object(message));
+        } else {
+            out.extend(
+                history_of(std::slice::from_ref(entry))
+                    .iter()
+                    .map(|message| serde_json::to_value(message).unwrap_or(Value::Null)),
+            );
+        }
+    }
+    out
+}
+
+/// `contextEntriesOf(branch)`: what the model sees, the latest compaction
+/// summary, then messages from its `firstKeptEntryId` on, with entry ids.
+pub fn context_entries_of(branch: &[SessionEntry]) -> Vec<(String, Message)> {
+    let mut start = 0;
+    let mut out = Vec::new();
+    for (index, entry) in branch.iter().enumerate().rev() {
+        let EntryData::Compaction {
+            summary,
+            first_kept_entry_id,
+            tokens_before,
+            ..
+        } = &entry.data
+        else {
+            continue;
+        };
+        start = branch
+            .iter()
+            .position(|item| item.id == *first_kept_entry_id)
+            .unwrap_or(index + 1);
+        out.push((
+            entry.id.clone(),
+            summary_message(summary, *tokens_before, entry.timestamp),
+        ));
+        break;
+    }
+    for entry in &branch[start.min(branch.len())..] {
+        if let EntryData::Message(message) = &entry.data {
+            out.push((entry.id.clone(), message.clone()));
+        }
+    }
+    out
+}
+
 /// `SessionStore`.
 pub struct SessionStore {
     pub dir: PathBuf,
     pub file: PathBuf,
+    entries: Vec<SessionEntry>,
+    by_id: HashMap<String, usize>,
+    leaf_id: Option<String>,
 }
 
 impl SessionStore {
     /// Open (or create, 0700) the directory and read its session.
     pub fn open(dir: PathBuf, cwd: &str) -> Result<Self, String> {
-        let _ = (dir, cwd);
-        todo!("M4 store: SessionStore::open")
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&dir)
+            .map_err(|error| js::node_error(&error, "mkdir", Some(&dir)))?;
+        let file = dir.join(SESSION_FILE);
+        let mut store = Self {
+            dir,
+            file,
+            entries: Vec::new(),
+            by_id: HashMap::new(),
+            leaf_id: None,
+        };
+        if store.file.exists() {
+            for entry in parse_entries(&js::read_text(&store.file)?)? {
+                store.leaf_id = Some(entry.id.clone());
+                store.by_id.insert(entry.id.clone(), store.entries.len());
+                store.entries.push(entry);
+            }
+        }
+        if store.entries.is_empty() {
+            store.append(EntryData::Session {
+                session_id: crate::random_hex(8),
+                cwd: cwd.to_owned(),
+            })?;
+        }
+        Ok(store)
     }
 
     pub fn session_id(&self) -> String {
-        todo!("M4 store: sessionId")
+        match self.entries.first().map(|entry| &entry.data) {
+            Some(EntryData::Session { session_id, .. }) => session_id.clone(),
+            _ => "unknown".to_owned(),
+        }
     }
 
     /// `isNew`: only the header so far.
     pub fn is_new(&self) -> bool {
-        todo!("M4 store: isNew")
+        self.entries.len() <= 1
     }
 
     /// `append(entry)`: written (0600) before it is returned.
     pub fn append(&mut self, data: EntryData) -> Result<SessionEntry, String> {
-        let _ = data;
-        todo!("M4 store: append")
+        let id = loop {
+            let id = crate::random_hex(4);
+            if !self.by_id.contains_key(&id) {
+                break id;
+            }
+        };
+        let entry = SessionEntry {
+            id: id.clone(),
+            // An empty leaf id (a line without one) is TS's `undefined`.
+            parent_id: self.leaf_id.clone().filter(|leaf| !leaf.is_empty()),
+            timestamp: crate::now_ms(),
+            data,
+        };
+        let line = format!("{}\n", js::stringify(&entry.to_value()));
+        std::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .mode(0o600)
+            .open(&self.file)
+            .and_then(|mut file| file.write_all(line.as_bytes()))
+            .map_err(|error| js::node_error(&error, "open", Some(&self.file)))?;
+        self.by_id.insert(id.clone(), self.entries.len());
+        self.entries.push(entry.clone());
+        self.leaf_id = Some(id);
+        Ok(entry)
     }
 
     pub fn get(&self, id: &str) -> Option<&SessionEntry> {
-        let _ = id;
-        todo!("M4 store: get")
+        self.by_id.get(id).map(|&index| &self.entries[index])
     }
 
     /// Entries on the active branch, root first.
     pub fn branch(&self) -> Vec<SessionEntry> {
-        todo!("M4 store: branch")
+        chain_of(&self.by_id, &self.entries, self.leaf_id.as_deref())
+            .into_iter()
+            .cloned()
+            .collect()
+    }
+
+    /// `latest(type)`: the last entry of this `type` on the branch.
+    pub fn latest(&self, type_name: &str) -> Option<SessionEntry> {
+        chain_of(&self.by_id, &self.entries, self.leaf_id.as_deref())
+            .into_iter()
+            .rev()
+            .find(|entry| entry.data.type_name() == type_name)
+            .cloned()
+    }
+
+    /// `customEntries(customType)`: the branch's custom entries of a type.
+    pub fn custom_entries(&self, custom_type: &str) -> Vec<SessionEntry> {
+        chain_of(&self.by_id, &self.entries, self.leaf_id.as_deref())
+            .into_iter()
+            .filter(|entry| {
+                matches!(&entry.data, EntryData::Custom { custom_type: kind, .. } if kind == custom_type)
+            })
+            .cloned()
+            .collect()
     }
 
     /// Every message on the branch (UI history), compacted ones included.
     pub fn all_messages(&self) -> Vec<Message> {
-        todo!("M4 store: allMessages")
+        history_of(&self.branch())
     }
 
     /// What the model sees: the latest compaction summary, then messages
     /// from its `firstKeptEntryId` on, with their entry ids.
     pub fn context_entries(&self) -> Vec<(String, Message)> {
-        todo!("M4 store: contextEntries")
+        context_entries_of(&self.branch())
+    }
+
+    /// `contextMessages()`.
+    pub fn context_messages(&self) -> Vec<Message> {
+        self.context_entries()
+            .into_iter()
+            .map(|(_, message)| message)
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn user(text: &str) -> EntryData {
+        EntryData::Message(Message::User {
+            content: pirc_protocol::UserContent::Text(text.to_owned()),
+            timestamp: 1,
+        })
+    }
+
+    fn lines(store: &SessionStore) -> Vec<Value> {
+        std::fs::read_to_string(&store.file)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect()
+    }
+
+    fn keys(value: &Value) -> Vec<&str> {
+        value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect()
+    }
+
+    #[test]
+    fn writes_the_ts_shape_of_every_entry() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("a/session");
+        let mut store = SessionStore::open(dir.clone(), "/work").unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            std::fs::metadata(&store.file).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert!(store.is_new());
+        assert_eq!(store.session_id().len(), 16);
+        store.append(user("hi")).unwrap();
+        store
+            .append(EntryData::Custom {
+                custom_type: "todo".into(),
+                data: json!({"items": []}),
+            })
+            .unwrap();
+        store
+            .append(EntryData::Compaction {
+                summary: "s".into(),
+                first_kept_entry_id: "x".into(),
+                tokens_before: 5,
+                details: Some(json!({"files": 1.0})),
+            })
+            .unwrap();
+        store
+            .append(EntryData::ModelChange {
+                provider: "p".into(),
+                model_id: "m".into(),
+            })
+            .unwrap();
+        store
+            .append(EntryData::ThinkingLevelChange {
+                thinking_level: "high".into(),
+            })
+            .unwrap();
+        store
+            .append(EntryData::SessionInfo {
+                name: "n".into(),
+                source: Some("user".into()),
+            })
+            .unwrap();
+        assert!(!store.is_new());
+        let written = lines(&store);
+        let shapes: Vec<Vec<&str>> = written.iter().map(keys).collect();
+        let tail = ["id", "parentId", "timestamp"];
+        let with = |fields: &[&'static str]| [fields, &tail[..]].concat();
+        assert_eq!(
+            shapes,
+            vec![
+                with(&["type", "version", "sessionId", "cwd"]),
+                with(&["type", "message"]),
+                with(&["type", "customType", "data"]),
+                with(&[
+                    "type",
+                    "summary",
+                    "firstKeptEntryId",
+                    "tokensBefore",
+                    "details"
+                ]),
+                with(&["type", "provider", "modelId"]),
+                with(&["type", "thinkingLevel"]),
+                with(&["type", "name", "source"]),
+            ]
+        );
+        assert_eq!(written[0]["version"], 1);
+        assert_eq!(written[0]["parentId"], Value::Null);
+        assert_eq!(written[0]["cwd"], "/work");
+        for pair in written.windows(2) {
+            assert_eq!(pair[1]["parentId"], pair[0]["id"]);
+        }
+        // Numbers are written as JSON.stringify writes them.
+        let raw = std::fs::read_to_string(&store.file).unwrap();
+        assert!(raw.contains(r#""details":{"files":1}"#));
+        assert!(raw.ends_with('\n'));
+    }
+
+    #[test]
+    fn reads_every_shape_ts_wrote_and_skips_torn_lines() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("session");
+        std::fs::create_dir(&dir).unwrap();
+        let text = [
+            r#"{"type":"session","version":1,"sessionId":"abc","cwd":"/w","id":"e1","parentId":null,"timestamp":1}"#,
+            r#"{"type":"message","message":{"role":"user","content":"hello","timestamp":2},"id":"e2","parentId":"e1","timestamp":2}"#,
+            r#"{"type":"label","target":"e2","id":"e3","parentId":"e2","timestamp":3}"#,
+            "",
+            "   ",
+            r#"{"type":"session_info","name":"n","id":"e4","parentId":"e3","timestamp":4}"#,
+            r#"{"type":"message","message":{"role":"assistant","#,
+        ]
+        .join("\n");
+        std::fs::write(dir.join(SESSION_FILE), text).unwrap();
+        let mut store = SessionStore::open(dir.clone(), "/elsewhere").unwrap();
+        assert_eq!(store.session_id(), "abc");
+        assert!(!store.is_new());
+        let branch = store.branch();
+        assert_eq!(
+            branch.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(),
+            ["e1", "e2", "e3", "e4"]
+        );
+        let EntryData::Other(other) = &branch[2].data else {
+            panic!("unknown types are kept");
+        };
+        assert_eq!(other.get("target"), Some(&json!("e2")));
+        assert_eq!(branch[2].data.type_name(), "label");
+        // Re-serialized, an unknown entry is what was read.
+        assert_eq!(
+            branch[2].to_value(),
+            json!({"type":"label","target":"e2","id":"e3","parentId":"e2","timestamp":3})
+        );
+        assert_eq!(
+            branch[3].data,
+            EntryData::SessionInfo {
+                name: "n".into(),
+                source: None
+            }
+        );
+        assert_eq!(store.latest("session_info").unwrap().id, "e4");
+        assert_eq!(store.all_messages().len(), 1);
+        let next = store.append(user("again")).unwrap();
+        assert_eq!(next.parent_id.as_deref(), Some("e4"));
+        assert_eq!(store.get(&next.id).unwrap().data, user("again"));
+        // As in TS, the entry appended after a torn line without its newline
+        // joins that line, so a reopened store no longer sees it.
+        let reopened = SessionStore::open(dir.clone(), "/elsewhere").unwrap();
+        assert_eq!(reopened.branch().len(), 4);
+        assert!(reopened.get(&next.id).is_none());
+        drop(reopened);
+        let mut store = SessionStore::open(dir.clone(), "/elsewhere").unwrap();
+        let last = store.append(user("third")).unwrap();
+        let reopened = SessionStore::open(dir, "/elsewhere").unwrap();
+        assert_eq!(reopened.branch().len(), 5);
+        assert_eq!(
+            reopened.get(&last.id).unwrap().parent_id.as_deref(),
+            Some("e4")
+        );
+    }
+
+    #[test]
+    fn a_trailing_line_without_an_id_leaves_an_empty_branch_as_in_ts() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("s");
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::write(
+            dir.join(SESSION_FILE),
+            "{\"type\":\"session\",\"version\":1,\"sessionId\":\"a\",\"cwd\":\"/\",\"id\":\"e1\",\"parentId\":null,\"timestamp\":1}\n5\n",
+        )
+        .unwrap();
+        let store = SessionStore::open(dir.clone(), "/").unwrap();
+        assert!(store.branch().is_empty());
+        std::fs::write(dir.join(SESSION_FILE), "null\n").unwrap();
+        assert!(SessionStore::open(dir, "/").is_err());
+    }
+
+    fn entry(id: &str, parent: Option<&str>, data: EntryData) -> SessionEntry {
+        SessionEntry {
+            id: id.into(),
+            parent_id: parent.map(str::to_owned),
+            timestamp: 7,
+            data,
+        }
+    }
+
+    #[test]
+    fn context_starts_at_the_latest_compaction() {
+        let compaction = |kept: &str| EntryData::Compaction {
+            summary: format!("up to {kept}"),
+            first_kept_entry_id: kept.into(),
+            tokens_before: 10,
+            details: None,
+        };
+        let branch = vec![
+            entry("a", None, user("one")),
+            entry("b", Some("a"), user("two")),
+            entry("c", Some("b"), compaction("b")),
+            entry("d", Some("c"), user("three")),
+            entry("e", Some("d"), compaction("d")),
+            entry("f", Some("e"), user("four")),
+        ];
+        let context = context_entries_of(&branch);
+        let ids: Vec<&str> = context.iter().map(|(id, _)| id.as_str()).collect();
+        assert_eq!(ids, ["e", "d", "f"]);
+        assert_eq!(
+            context[0].1,
+            Message::CompactionSummary {
+                summary: "up to d".into(),
+                tokens_before: 10,
+                timestamp: 7
+            }
+        );
+        // A kept id not on the branch keeps what follows the compaction.
+        let lost = vec![
+            entry("a", None, user("one")),
+            entry("b", Some("a"), compaction("zz")),
+            entry("c", Some("b"), user("two")),
+        ];
+        let ids: Vec<String> = context_entries_of(&lost)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        assert_eq!(ids, ["b", "c"]);
+        // UI history keeps everything, with the summaries in place.
+        let history = history_of(&branch);
+        assert_eq!(history.len(), 6);
+        assert!(matches!(history[2], Message::CompactionSummary { .. }));
+    }
+
+    #[test]
+    fn history_nests_ptc_operations_before_their_result() {
+        let op = |data: Value| EntryData::Custom {
+            custom_type: OPERATION_ENTRY.into(),
+            data,
+        };
+        let branch = vec![
+            entry("a", None, user("go")),
+            entry(
+                "b",
+                Some("a"),
+                op(json!({
+                    "parentToolCallId": "call_1", "toolCallId": "op_1", "toolName": "read",
+                    "args": {"path": "x"}, "content": [{"type": "text", "text": "x"}],
+                    "isError": false, "timestamp": 3
+                })),
+            ),
+            entry(
+                "c",
+                Some("b"),
+                op(
+                    json!({"toolCallId": "op_2", "parentToolCallId": "call_1", "toolName": "ls",
+                    "args": "bad", "content": [], "details": {"d": 1}}),
+                ),
+            ),
+            entry("d", Some("c"), op(json!({"toolCallId": "op_3"}))),
+            entry("e", Some("d"), op(Value::Null)),
+            entry(
+                "f",
+                Some("e"),
+                EntryData::Custom {
+                    custom_type: "todo".into(),
+                    data: json!({}),
+                },
+            ),
+        ];
+        let history = history_with_operations(&branch);
+        assert_eq!(
+            history,
+            vec![
+                json!({"role": "user", "content": "go", "timestamp": 1}),
+                json!({"role": "toolResult", "toolCallId": "op_1", "toolName": "read",
+                    "parentToolCallId": "call_1", "args": {"path": "x"},
+                    "content": [{"type": "text", "text": "x"}], "isError": false, "timestamp": 3}),
+                json!({"role": "toolResult", "toolCallId": "op_2", "toolName": "ls",
+                    "parentToolCallId": "call_1", "args": {}, "content": [],
+                    "details": {"d": 1}, "isError": false, "timestamp": 7}),
+            ]
+        );
+        assert_eq!(
+            keys(&history[2]),
+            [
+                "role",
+                "toolCallId",
+                "toolName",
+                "parentToolCallId",
+                "args",
+                "content",
+                "details",
+                "isError",
+                "timestamp"
+            ]
+        );
+    }
+
+    #[test]
+    fn read_session_branch_never_writes() {
+        let root = tempfile::tempdir().unwrap();
+        assert!(read_session_branch(root.path()).unwrap().is_empty());
+        assert!(!root.path().join(SESSION_FILE).exists());
+        let mut store = SessionStore::open(root.path().to_owned(), "/w").unwrap();
+        store.append(user("x")).unwrap();
+        let branch = read_session_branch(root.path()).unwrap();
+        assert_eq!(branch, store.branch());
+        // Round trip through serde.
+        let value = serde_json::to_value(&branch[1]).unwrap();
+        assert_eq!(
+            serde_json::from_value::<SessionEntry>(value).unwrap(),
+            branch[1]
+        );
     }
 }

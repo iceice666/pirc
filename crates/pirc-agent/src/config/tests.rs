@@ -1,0 +1,637 @@
+//! Ports of the config side of `agent-project-trust.test.ts`,
+//! `agent-core.test.ts`, `assistant-prompts.test.ts`,
+//! `agent-project-instructions.test.ts` and `memory-config.test.ts`, with
+//! golden values recorded from the TS agent.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use serde_json::{Value, json};
+
+use super::*;
+use crate::context::join_prompt;
+
+fn env_of(vars: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> + use<> {
+    let vars: Vec<(String, String)> = vars
+        .iter()
+        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+        .collect();
+    move |name: &str| {
+        vars.iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.clone())
+    }
+}
+
+fn models() -> Models {
+    serde_json::from_value(json!({"providers": {
+        "fake": {"api": "openai-completions", "baseUrl": "http://127.0.0.1:1/v1",
+                 "models": [{"id": "fake-model"}]},
+        "other": {"api": "openai-completions", "baseUrl": "http://127.0.0.1:1/v1",
+                  "models": [{"id": "o1"}]}
+    }}))
+    .unwrap()
+}
+
+fn text(path: &Path) -> String {
+    path.display().to_string()
+}
+
+struct Setup {
+    _root: tempfile::TempDir,
+    root: PathBuf,
+    workspace: PathBuf,
+    config_dir: PathBuf,
+}
+
+/// A workspace whose `.pirc/config.json` is `project`, and an empty node config dir.
+fn workspace_with(project: Value) -> Setup {
+    let dir = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(dir.path()).unwrap();
+    let workspace = root.join("ws");
+    fs::create_dir_all(workspace.join(".pirc")).unwrap();
+    fs::write(
+        workspace.join(".pirc/config.json"),
+        serde_json::to_string(&project).unwrap(),
+    )
+    .unwrap();
+    let config_dir = root.join("config");
+    fs::create_dir(&config_dir).unwrap();
+    Setup {
+        _root: dir,
+        root,
+        workspace,
+        config_dir,
+    }
+}
+
+fn hash_of(workspace: &Path) -> String {
+    project_trust_hash(&project_trust_fields(
+        &read_project_config(&text(workspace)).unwrap(),
+    ))
+}
+
+fn load(setup: &Setup, workspace: &Path, extra: &[(&str, &str)]) -> AgentConfig {
+    let config_dir = text(&setup.config_dir);
+    let mut vars = vec![("PIRC_CONFIG_DIR", config_dir.as_str())];
+    vars.extend_from_slice(extra);
+    load_agent_config(&text(workspace), models(), &env_of(&vars)).unwrap()
+}
+
+fn env_lookup<'a>(config: &'a AgentConfig, name: &str) -> Option<&'a str> {
+    config
+        .env
+        .iter()
+        .find(|(key, _)| key == name)
+        .map(|(_, value)| value.as_str())
+}
+
+fn project(extra: &str) -> Value {
+    json!({
+        "defaultModel": {"provider": "fake", "id": "fake-model"},
+        "env": {"PROJECT_VAR": "from-project"},
+        "allowedPaths": [extra],
+        "hooks": {"sessionStart": [{"command": "echo started"}]}
+    })
+}
+
+#[test]
+fn ignores_hooks_env_and_allowed_paths_until_their_hash_is_trusted() {
+    let extra = tempfile::tempdir().unwrap();
+    let extra = text(&fs::canonicalize(extra.path()).unwrap());
+    let setup = workspace_with(project(&extra));
+    let untrusted = load(&setup, &setup.workspace, &[]);
+    assert_eq!(env_lookup(&untrusted, "PROJECT_VAR"), None);
+    assert!(untrusted.hooks.session_start.is_empty());
+    assert!(!untrusted.allowed_paths.contains(&extra));
+    assert_eq!(untrusted.warnings, [UNTRUSTED_PROJECT_WARNING]);
+    // defaultModel is not trust-gated.
+    assert_eq!(
+        untrusted.default_model,
+        Some(ModelRef {
+            provider: "fake".into(),
+            id: "fake-model".into(),
+            thinking: None
+        })
+    );
+    // A malformed hash is no trust at all.
+    let bogus = load(&setup, &setup.workspace, &[("PIRC_PROJECT_TRUST", "yes")]);
+    assert_eq!(env_lookup(&bogus, "PROJECT_VAR"), None);
+
+    let hash = hash_of(&setup.workspace);
+    let trusted = load(&setup, &setup.workspace, &[("PIRC_PROJECT_TRUST", &hash)]);
+    assert_eq!(env_lookup(&trusted, "PROJECT_VAR"), Some("from-project"));
+    assert_eq!(
+        trusted
+            .hooks
+            .session_start
+            .iter()
+            .map(|hook| hook.command.as_str())
+            .collect::<Vec<_>>(),
+        ["echo started"]
+    );
+    assert_eq!(trusted.hooks.session_start[0].timeout_ms, 10_000);
+    assert!(trusted.allowed_paths.contains(&extra));
+    assert!(trusted.warnings.is_empty());
+}
+
+#[test]
+fn ignores_the_config_again_once_it_changes_after_being_trusted() {
+    let extra = "/tmp/pirc-extra-x";
+    let setup = workspace_with(project(extra));
+    let trusted_hash = hash_of(&setup.workspace);
+    // Formatting and key order do not matter; values do.
+    fs::write(
+        setup.workspace.join(".pirc/config.json"),
+        serde_json::to_string_pretty(&json!({
+            "hooks": {"sessionStart": [{"command": "echo started"}]},
+            "allowedPaths": [extra],
+            "env": {"PROJECT_VAR": "from-project"}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(hash_of(&setup.workspace), trusted_hash);
+    let mut changed = project(extra);
+    changed["env"] = json!({"PROJECT_VAR": "x", "LD_PRELOAD": "/tmp/evil.so"});
+    fs::write(
+        setup.workspace.join(".pirc/config.json"),
+        changed.to_string(),
+    )
+    .unwrap();
+    assert_ne!(hash_of(&setup.workspace), trusted_hash);
+    let config = load(
+        &setup,
+        &setup.workspace,
+        &[("PIRC_PROJECT_TRUST", &trusted_hash)],
+    );
+    assert!(config.env.is_empty());
+    assert!(config.hooks.session_start.is_empty());
+    assert!(!config.allowed_paths.contains(&extra.to_owned()));
+    assert_eq!(config.warnings, [UNTRUSTED_PROJECT_WARNING]);
+}
+
+#[test]
+fn needs_no_trust_when_the_project_sets_none_of_the_gated_fields() {
+    let setup = workspace_with(json!({"defaultModel": {"provider": "fake", "id": "fake-model"}}));
+    assert!(load(&setup, &setup.workspace, &[]).warnings.is_empty());
+}
+
+/// Recorded from the TS `projectTrustHash` (Bun 1.4.2): keys in UTF-16
+/// order, numbers as JS writes them.
+#[test]
+fn hashes_like_the_ts_agent() {
+    let setup = workspace_with(json!({
+        "env": {"Z": "z", "é": "1", "😀": "e", "\u{ffff}": "f", "A": "a"},
+        "allowedPaths": ["../x", "~/y"],
+        "hooks": {
+            "beforeTool": [{"command": "c", "matcher": "bash", "timeoutMs": 5.0}],
+            "sessionStart": [{"command": "echo \"hi\"\n"}]
+        }
+    }));
+    assert_eq!(
+        hash_of(&setup.workspace),
+        "0fc336b589900fc10621b2b74baa902d862d0f2795faaf40f8e2679d851128ab"
+    );
+}
+
+#[test]
+fn loads_a_team_childs_project_config_from_the_parents_root_not_its_cwd() {
+    let setup = workspace_with(json!({"env": {"FROM": "root"}}));
+    let sub = setup.workspace.join("sub");
+    fs::create_dir_all(sub.join(".pirc")).unwrap();
+    fs::write(
+        sub.join(".pirc/config.json"),
+        json!({"env": {"FROM": "sub"}, "hooks": {"sessionStart": [{"command": "evil"}]}})
+            .to_string(),
+    )
+    .unwrap();
+    let trust = hash_of(&setup.workspace);
+    let workspace = text(&setup.workspace);
+    let child = load(
+        &setup,
+        &sub,
+        &[
+            ("PIRC_TEAM_AGENT", "worker"),
+            ("PIRC_PROJECT_ROOT", &workspace),
+            ("PIRC_PROJECT_TRUST", &trust),
+        ],
+    );
+    assert_eq!(child.env, [("FROM".to_owned(), "root".to_owned())]);
+    assert!(child.hooks.session_start.is_empty());
+    assert_eq!(child.project_root, workspace);
+    assert!(
+        child
+            .protected_paths
+            .contains(&format!("{workspace}/.pirc"))
+    );
+    assert!(
+        child
+            .protected_paths
+            .contains(&format!("{}/.pirc", text(&sub)))
+    );
+    // Only team children take PIRC_PROJECT_ROOT; even then the sub config needs its own trust.
+    let top = load(
+        &setup,
+        &sub,
+        &[
+            ("PIRC_PROJECT_ROOT", &workspace),
+            ("PIRC_PROJECT_TRUST", &trust),
+        ],
+    );
+    assert_eq!(top.project_root, text(&sub));
+    assert!(top.env.is_empty());
+    assert!(top.hooks.session_start.is_empty());
+    // An untrusted child warns nobody (its parent did).
+    let untrusted_child = load(
+        &setup,
+        &sub,
+        &[
+            ("PIRC_TEAM_AGENT", "worker"),
+            ("PIRC_PROJECT_ROOT", &workspace),
+        ],
+    );
+    assert!(untrusted_child.warnings.is_empty());
+    assert!(untrusted_child.env.is_empty());
+}
+
+#[test]
+fn merges_trusted_project_config_and_prompts_from_pirc() {
+    let setup = workspace_with(json!({"env": {"PIRC_TEST_VAR": "from-project"}}));
+    fs::write(
+        setup.workspace.join(".pirc/AGENTS.md"),
+        "PROJECT-PROMPT\n\n",
+    )
+    .unwrap();
+    fs::write(
+        setup.config_dir.join("config.json"),
+        json!({
+            "env": {"PIRC_TEST_VAR": "global", "G": "g"},
+            "allowedPaths": ["~/notes", "rel"],
+            "hooks": {"beforeTool": [{"command": "global", "matcher": "bash", "timeoutMs": 500}]},
+            "limits": {"maxTurns": 7},
+            "features": {"todo": {"enabled": false}},
+            "sandbox": {"anything": true},
+            "unknown": 1
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let trust = hash_of(&setup.workspace);
+    let config = load(&setup, &setup.workspace, &[("PIRC_PROJECT_TRUST", &trust)]);
+    assert_eq!(
+        config.env,
+        [
+            ("PIRC_TEST_VAR".to_owned(), "from-project".to_owned()),
+            ("G".to_owned(), "g".to_owned())
+        ]
+    );
+    let prompt = join_prompt(&config.system_prompt);
+    assert!(prompt.starts_with("You are pirc, a coding agent"));
+    assert!(prompt.ends_with("\n\nPROJECT-PROMPT"));
+    let project = config.system_prompt.last().unwrap();
+    assert_eq!(project.id, "agents:project");
+    assert_eq!(project.title, "AGENTS.md (project)");
+    assert_eq!(
+        project.source,
+        format!("{}/.pirc/AGENTS.md", text(&setup.workspace))
+    );
+    assert_eq!(config.system_prompt.len(), 2);
+    assert_eq!(config.limits.max_turns, 7);
+    assert_eq!(config.limits.bash_timeout_ms, 120_000);
+    assert_eq!(
+        config.features,
+        *json!({"todo": {"enabled": false}}).as_object().unwrap()
+    );
+    assert_eq!(
+        config.hooks.before_tool,
+        [HookConfig {
+            command: "global".into(),
+            matcher: Some("bash".into()),
+            timeout_ms: 500
+        }]
+    );
+    assert_eq!(config.allowed_paths[0], text(&setup.workspace));
+    assert_eq!(
+        config.allowed_paths[1],
+        js::path_join(&[&js::home_dir(), "notes"])
+    );
+    assert_eq!(
+        config.allowed_paths[2],
+        format!("{}/rel", text(&setup.config_dir))
+    );
+    assert_eq!(config.workspace_kind, WorkspaceKind::Directory);
+    // The user's own ~/.agents/skills (this machine's) is configuration too.
+    let skills = crate::skills::skill_read_paths(&crate::skills::skill_roots(
+        &text(&setup.config_dir),
+        &text(&setup.workspace),
+    ));
+    let mut expected = vec![
+        format!("{}/.pirc", text(&setup.workspace)),
+        format!("{}/.pirc", text(&setup.workspace)),
+        format!("{}/.git/hooks", text(&setup.workspace)),
+    ];
+    expected.extend(skills.iter().cloned());
+    expected.extend([
+        format!("{}/roles", text(&setup.config_dir)),
+        format!("{}/SOUL.md", text(&setup.config_dir)),
+        format!("{}/CHAT.md", text(&setup.config_dir)),
+    ]);
+    assert_eq!(config.protected_paths, expected);
+    assert!(config.allowed_paths.ends_with(&skills));
+    assert_eq!(
+        config.role_dirs,
+        crate::roles::role_dirs(&text(&setup.config_dir), &text(&setup.workspace))
+    );
+    assert!(!config.sandboxed);
+    // Unsandboxed without a node policy: credential stores only.
+    assert_eq!(
+        config.path_policy.allow_write,
+        config
+            .allowed_paths
+            .iter()
+            .map(|path| pirc_policy::real_resolve(path))
+            .collect::<Vec<_>>()
+    );
+    assert!(!config.path_policy.deny_read.is_empty());
+}
+
+#[test]
+fn applies_the_node_sandbox_policy_it_is_given() {
+    let setup = workspace_with(json!({}));
+    let policy = json!({
+        "denyRead": ["/state"],
+        "allowRead": ["/state/s"],
+        "allowWrite": ["/ws", "/state/s"],
+        "denyWrite": ["/ws/.pirc"],
+        "sharedWrite": ["/tmp"],
+        "ignored": true
+    })
+    .to_string();
+    let config = load(
+        &setup,
+        &setup.workspace,
+        &[("PIRC_SANDBOX", "srt"), ("PIRC_SANDBOX_POLICY", &policy)],
+    );
+    assert!(config.sandboxed);
+    assert_eq!(
+        config.path_policy,
+        PathPolicy {
+            deny_read: vec!["/state".into()],
+            allow_read: vec!["/state/s".into()],
+            allow_write: vec!["/ws".into(), "/state/s".into()],
+            deny_write: vec!["/ws/.pirc".into()],
+            shared_write: Some(vec!["/tmp".into()]),
+        }
+    );
+    // Unsandboxed, the node's read rules apply and the configured paths are writable.
+    let unsandboxed = load(
+        &setup,
+        &setup.workspace,
+        &[("PIRC_SANDBOX_POLICY", &policy)],
+    );
+    assert_eq!(unsandboxed.path_policy.deny_read, ["/state"]);
+    assert_eq!(
+        unsandboxed.path_policy.allow_write,
+        unsandboxed.allowed_paths
+    );
+    assert!(unsandboxed.path_policy.deny_write.is_empty());
+    assert_eq!(unsandboxed.path_policy.shared_write, None);
+    for bad in [
+        "{",
+        "null",
+        r#"{"denyRead": []}"#,
+        r#"{"denyRead":[],"allowRead":[],"allowWrite":[],"denyWrite":[],"sharedWrite":null}"#,
+    ] {
+        let config_dir = text(&setup.config_dir);
+        let error = load_agent_config(
+            &text(&setup.workspace),
+            models(),
+            &env_of(&[
+                ("PIRC_CONFIG_DIR", &config_dir),
+                ("PIRC_SANDBOX_POLICY", bad),
+            ]),
+        )
+        .unwrap_err();
+        assert_eq!(error, "PIRC_SANDBOX_POLICY is not a valid path policy");
+    }
+}
+
+#[test]
+fn separates_chat_rules_and_persona_from_all_coding_agents_files() {
+    let setup = workspace_with(json!({}));
+    let dir = &setup.config_dir;
+    let workspace = &setup.workspace;
+    fs::write(dir.join("SOUL.md"), "Unique persona").unwrap();
+    fs::write(dir.join("CHAT.md"), "Unique chat rules\r\n").unwrap();
+    for root in [dir.clone(), workspace.clone(), workspace.join(".pirc")] {
+        fs::write(
+            root.join("AGENTS.md"),
+            format!("Coding rules {}", text(&root)),
+        )
+        .unwrap();
+    }
+    let chat_env = [("PIRC_WORKSPACE_KIND", "chat")];
+    let chat = load(&setup, workspace, &chat_env);
+    let prompt = join_prompt(&chat.system_prompt);
+    assert!(prompt.starts_with("Unique persona\n\nThis chat"));
+    assert!(prompt.ends_with("Unique chat rules"));
+    assert!(!prompt.contains("Coding rules"));
+    assert!(
+        chat.protected_paths
+            .contains(&format!("{}/SOUL.md", text(dir)))
+    );
+    assert_eq!(chat.workspace_kind, WorkspaceKind::Chat);
+    assert_eq!(
+        chat.system_prompt[0].source,
+        format!("{}/SOUL.md", text(dir))
+    );
+    let work = load(&setup, workspace, &[("PIRC_WORKSPACE_KIND", "directory")]);
+    assert_eq!(
+        join_prompt(&work.system_prompt)
+            .matches("Coding rules")
+            .count(),
+        3
+    );
+    assert!(!join_prompt(&work.system_prompt).contains("Unique"));
+    fs::remove_file(dir.join("SOUL.md")).unwrap();
+    let builtin = load(&setup, workspace, &chat_env);
+    assert!(join_prompt(&builtin.system_prompt).contains("the user's personal assistant"));
+    assert_eq!(builtin.system_prompt[0].source, "built-in");
+    fs::write(dir.join("SOUL.md"), "x".repeat(9000)).unwrap();
+    assert!(
+        join_prompt(&load(&setup, workspace, &chat_env).system_prompt)
+            .starts_with(&format!("{}\n\n", "x".repeat(8000)))
+    );
+    // A directory where the prompt should be is no prompt.
+    fs::remove_file(dir.join("CHAT.md")).unwrap();
+    fs::create_dir(dir.join("CHAT.md")).unwrap();
+    assert_eq!(load(&setup, workspace, &chat_env).system_prompt.len(), 2);
+}
+
+#[test]
+fn protects_a_chat_projects_instructions_file() {
+    let setup = workspace_with(json!({}));
+    let file = text(&setup.workspace.join("instructions.md"));
+    let chat = load(
+        &setup,
+        &setup.workspace,
+        &[
+            ("PIRC_WORKSPACE_KIND", "chat"),
+            ("PIRC_PROJECT_INSTRUCTIONS", &file),
+        ],
+    );
+    assert_eq!(chat.protected_paths.last(), Some(&file));
+    let directory = load(
+        &setup,
+        &setup.workspace,
+        &[("PIRC_PROJECT_INSTRUCTIONS", &file)],
+    );
+    assert!(!directory.protected_paths.contains(&file));
+}
+
+#[test]
+fn adds_skill_locations_as_readable_protected_configuration() {
+    let setup = workspace_with(json!({}));
+    let skills = setup.config_dir.join("skills");
+    fs::create_dir_all(skills.join("pdf")).unwrap();
+    fs::write(
+        skills.join("pdf/SKILL.md"),
+        "---\nname: pdf\ndescription: PDFs.\n---\n",
+    )
+    .unwrap();
+    let config = load(&setup, &setup.workspace, &[]);
+    for path in [text(&skills), text(&skills.join("pdf"))] {
+        assert!(config.allowed_paths.contains(&path), "{path}");
+        assert!(config.protected_paths.contains(&path), "{path}");
+    }
+}
+
+#[test]
+fn warns_about_memory_settings_at_load() {
+    let setup = workspace_with(json!({}));
+    fs::write(
+        setup.config_dir.join("config.json"),
+        json!({"features": {"observationalMemory": {"enabled": false, "oldOption": "private-value"}}})
+            .to_string(),
+    )
+    .unwrap();
+    let config = load(&setup, &setup.workspace, &[]);
+    assert_eq!(config.warnings.len(), 1);
+    assert!(config.warnings[0].contains("unknown field (ignored)"));
+    assert!(!config.warnings[0].contains("private-value"));
+}
+
+/// `ZodError.message` texts recorded from the TS agent (zod 3.25.76).
+#[test]
+fn rejects_invalid_config_with_zods_issues() {
+    let setup = workspace_with(json!({}));
+    let cases = [
+        (
+            json!({"limits": {"maxTurns": 0, "completionWaitMs": 1e12}, "env": {"A": 1}, "hooks": null, "allowedPaths": "x"}),
+            json!({}),
+            "[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"string\",\n    \"path\": [\n      \"allowedPaths\"\n    ],\n    \"message\": \"Expected array, received string\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"number\",\n    \"path\": [\n      \"env\",\n      \"A\"\n    ],\n    \"message\": \"Expected string, received number\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"null\",\n    \"path\": [\n      \"hooks\"\n    ],\n    \"message\": \"Expected object, received null\"\n  },\n  {\n    \"code\": \"too_small\",\n    \"minimum\": 0,\n    \"type\": \"number\",\n    \"inclusive\": false,\n    \"exact\": false,\n    \"message\": \"Number must be greater than 0\",\n    \"path\": [\n      \"limits\",\n      \"maxTurns\"\n    ]\n  },\n  {\n    \"code\": \"too_big\",\n    \"maximum\": 86400000,\n    \"type\": \"number\",\n    \"inclusive\": true,\n    \"exact\": false,\n    \"message\": \"Number must be less than or equal to 86400000\",\n    \"path\": [\n      \"limits\",\n      \"completionWaitMs\"\n    ]\n  }\n]",
+        ),
+        (
+            json!({}),
+            json!({"foo": 1, "defaultModel": {"provider": "p", "thinking": "big"}, "hooks": {"beforeTool": [{"command": "", "timeoutMs": 1.5}]}}),
+            "[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"defaultModel\",\n      \"id\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"received\": \"big\",\n    \"code\": \"invalid_enum_value\",\n    \"options\": [\n      \"off\",\n      \"minimal\",\n      \"low\",\n      \"medium\",\n      \"high\",\n      \"xhigh\"\n    ],\n    \"path\": [\n      \"defaultModel\",\n      \"thinking\"\n    ],\n    \"message\": \"Invalid enum value. Expected 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh', received 'big'\"\n  },\n  {\n    \"code\": \"too_small\",\n    \"minimum\": 1,\n    \"type\": \"string\",\n    \"inclusive\": true,\n    \"exact\": false,\n    \"message\": \"String must contain at least 1 character(s)\",\n    \"path\": [\n      \"hooks\",\n      \"beforeTool\",\n      0,\n      \"command\"\n    ]\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"integer\",\n    \"received\": \"float\",\n    \"message\": \"Expected integer, received float\",\n    \"path\": [\n      \"hooks\",\n      \"beforeTool\",\n      0,\n      \"timeoutMs\"\n    ]\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"foo\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized key(s) in object: 'foo'\"\n  }\n]",
+        ),
+        (
+            json!([]),
+            json!({}),
+            "[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"array\",\n    \"path\": [],\n    \"message\": \"Expected object, received array\"\n  }\n]",
+        ),
+    ];
+    for (global, project, expected) in cases {
+        fs::write(setup.config_dir.join("config.json"), global.to_string()).unwrap();
+        fs::write(
+            setup.workspace.join(".pirc/config.json"),
+            project.to_string(),
+        )
+        .unwrap();
+        let config_dir = text(&setup.config_dir);
+        let error = load_agent_config(
+            &text(&setup.workspace),
+            models(),
+            &env_of(&[("PIRC_CONFIG_DIR", &config_dir)]),
+        )
+        .unwrap_err();
+        assert_eq!(error, expected);
+    }
+    fs::write(setup.config_dir.join("config.json"), "{").unwrap();
+    let error = load_agent_config(
+        &text(&setup.workspace),
+        models(),
+        &env_of(&[("PIRC_CONFIG_DIR", &text(&setup.config_dir))]),
+    )
+    .unwrap_err();
+    assert_eq!(
+        error,
+        format!(
+            "Invalid JSON in {}/config.json: JSON Parse error: Unexpected EOF",
+            text(&setup.config_dir)
+        )
+    );
+    let _ = &setup.root;
+}
+
+fn entry(data: EntryData) -> SessionEntry {
+    SessionEntry {
+        id: "x".into(),
+        parent_id: None,
+        timestamp: 0,
+        data,
+    }
+}
+
+#[test]
+fn session_settings_prefer_the_latest_recorded_change() {
+    let catalog = models();
+    let fallback = ModelRef {
+        provider: "other".into(),
+        id: "o1".into(),
+        thinking: Some(ThinkingLevel::High),
+    };
+    let pair = |p: &str, i: &str| Some((p.to_owned(), i.to_owned()));
+    // Nothing recorded: the default model and its level.
+    assert_eq!(
+        session_settings(&[], Some(&fallback), &catalog),
+        (pair("other", "o1"), ThinkingLevel::High)
+    );
+    // No default: the first configured model, medium.
+    assert_eq!(
+        session_settings(&[], None, &catalog),
+        (pair("fake", "fake-model"), ThinkingLevel::Medium)
+    );
+    let branch = [
+        entry(EntryData::ModelChange {
+            provider: "a".into(),
+            model_id: "1".into(),
+        }),
+        entry(EntryData::ThinkingLevelChange {
+            thinking_level: "low".into(),
+        }),
+        entry(EntryData::ModelChange {
+            provider: "b".into(),
+            model_id: "2".into(),
+        }),
+    ];
+    assert_eq!(
+        session_settings(&branch, Some(&fallback), &catalog),
+        (pair("b", "2"), ThinkingLevel::Low)
+    );
+    // An unknown recorded level is medium, not the default's.
+    let odd = [entry(EntryData::ThinkingLevelChange {
+        thinking_level: "max".into(),
+    })];
+    assert_eq!(
+        session_settings(&odd, Some(&fallback), &catalog).1,
+        ThinkingLevel::Medium
+    );
+    let empty: Models = serde_json::from_value(json!({})).unwrap();
+    assert_eq!(
+        session_settings(&[], None, &empty),
+        (None, ThinkingLevel::Medium)
+    );
+}
