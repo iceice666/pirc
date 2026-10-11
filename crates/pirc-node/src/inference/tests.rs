@@ -394,3 +394,63 @@ async fn limits_the_requests_in_flight_and_refused_starts_do_not_cancel() {
             .is_err()
     );
 }
+
+// A chunk size that would overflow, or a malformed size line, ends the
+// request without a panic, and the counters come back down.
+#[tokio::test]
+async fn malformed_chunk_sizes_leak_no_counters() {
+    let (relay, sent, _dir) = relay(Duration::from_secs(600), |_, _| {}).await;
+    let head = format!(
+        "POST /inference HTTP/1.1\r\nAuthorization: Bearer {}\r\nTransfer-Encoding: chunked\r\n\r\n",
+        relay.config.token
+    );
+    let overflow = format!("{head}1\r\nX\r\nffffffffffffffff\r\nY");
+    assert_eq!(
+        raw(&relay.config, overflow.as_bytes()).await,
+        (
+            413,
+            "{\"type\":\"model_error\",\"code\":\"limit_exceeded\"}\n".to_owned()
+        )
+    );
+    for size in ["00000000000000001", "+1", "", "1x"] {
+        let mut stream = UnixStream::connect(&relay.config.socket_path)
+            .await
+            .unwrap();
+        let request = format!("{head}{size}\r\nX\r\n0\r\n\r\n");
+        stream.write_all(request.as_bytes()).await.unwrap();
+        let mut response = Vec::new();
+        stream.read_to_end(&mut response).await.unwrap();
+        assert!(response.is_empty(), "{size:?}");
+    }
+    until(|| relay.connections.load(Ordering::Acquire) == 0).await;
+    assert_eq!(relay.lock().receiving, 0);
+    assert!(sent.lock().unwrap().is_empty());
+    relay.close().await;
+}
+
+// Shutdown still writes a stream's final `unavailable` (TS ended each
+// response before closing the connections).
+#[tokio::test]
+async fn close_flushes_the_final_error() {
+    let (relay, sent, _dir) = relay(Duration::from_secs(600), |_, _| {}).await;
+    let body = serde_json::to_value(project(&request(AbortController::new().signal())))
+        .unwrap()
+        .to_string();
+    let mut stream = UnixStream::connect(&relay.config.socket_path)
+        .await
+        .unwrap();
+    stream
+        .write_all(&post(&relay.config, "/inference", &body))
+        .await
+        .unwrap();
+    until(|| sent.lock().unwrap().len() == 1).await;
+    relay.close().await;
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).await.unwrap();
+    let text = String::from_utf8_lossy(&response);
+    assert!(
+        text.contains("{\"type\":\"model_error\",\"code\":\"unavailable\"}"),
+        "{text}"
+    );
+    assert!(text.ends_with("0\r\n\r\n"), "{text}");
+}

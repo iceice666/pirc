@@ -55,6 +55,13 @@ const MAX_CONNECTIONS: usize = 64;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// Node's default `maxHeaderSize`.
 const HEAD_MAX_BYTES: usize = 16 * 1024;
+/// A pause after a failed `accept` (fd exhaustion must not spin a worker).
+const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
+/// How long a closing connection may still write (a stream's final
+/// `model_error`; TS ended responses before `closeAllConnections`).
+const CLOSE_FLUSH: Duration = Duration::from_millis(100);
+/// Hex digits of a chunk size (Node's parser refuses more than a `u64`).
+const CHUNK_SIZE_MAX_DIGITS: usize = 16;
 
 pub struct InferenceServer {
     node: WeakNode,
@@ -360,15 +367,35 @@ impl Relay {
     }
 }
 
+/// One counted connection: uncounted when its task ends, panics or is
+/// dropped.
+struct Connection(Arc<Relay>);
+
+impl Drop for Connection {
+    fn drop(&mut self) {
+        self.0.connections.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+/// A request whose body is being read (`receiving`), counted the same way.
+struct Receiving<'a>(&'a Relay);
+
+impl Drop for Receiving<'_> {
+    fn drop(&mut self) {
+        self.0.lock().receiving -= 1;
+    }
+}
+
 async fn accept(relay: Arc<Relay>, listener: UnixListener) {
     let mut shutdown = relay.shutdown.subscribe();
     loop {
-        let stream = tokio::select! {
-            accepted = listener.accept() => match accepted {
-                Ok((stream, _)) => stream,
-                Err(_) => continue,
-            },
+        let accepted = tokio::select! {
+            accepted = listener.accept() => accepted,
             _ = shutdown.wait_for(|closing| *closing) => return,
+        };
+        let Ok((stream, _)) = accepted else {
+            tokio::time::sleep(ACCEPT_BACKOFF).await;
+            continue;
         };
         // Over the limit, Node destroys the new socket at once.
         if relay.connections.fetch_add(1, Ordering::AcqRel) >= MAX_CONNECTIONS {
@@ -376,16 +403,23 @@ async fn accept(relay: Arc<Relay>, listener: UnixListener) {
             drop(stream);
             continue;
         }
-        let relay = relay.clone();
+        let counted = Connection(relay.clone());
         tokio::spawn(async move {
+            let relay = counted.0.clone();
             let mut shutdown = relay.shutdown.subscribe();
             let mut stream = stream;
-            tokio::select! {
-                () = serve(&relay, &mut stream) => {}
-                // `closeAllConnections` (streams were failed first).
-                _ = shutdown.wait_for(|closing| *closing) => {}
+            let serving = serve(&relay, &mut stream);
+            tokio::pin!(serving);
+            let closing = tokio::select! {
+                () = &mut serving => false,
+                _ = shutdown.wait_for(|closing| *closing) => true,
+            };
+            // `closeAllConnections` (streams were failed first): what they
+            // still have to write gets a moment.
+            if closing {
+                let _ = tokio::time::timeout(CLOSE_FLUSH, &mut serving).await;
             }
-            relay.connections.fetch_sub(1, Ordering::AcqRel);
+            drop(counted);
         });
     }
 }
@@ -559,12 +593,19 @@ async fn read_body(
         };
         let size_text = String::from_utf8_lossy(&buffer[..line_end]).into_owned();
         let size_text = size_text.split(';').next().unwrap_or_default().trim();
+        if size_text.is_empty()
+            || size_text.len() > CHUNK_SIZE_MAX_DIGITS
+            || !size_text.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err(BodyError::Broken);
+        }
         let size = usize::from_str_radix(size_text, 16).map_err(|_| BodyError::Broken)?;
         buffer.drain(..line_end + 2);
         if size == 0 {
             return Ok(body);
         }
-        if body.len() + size > INFERENCE_REQUEST_MAX_BYTES {
+        // Never `body.len() + size`: an agent-chosen size could overflow.
+        if size > INFERENCE_REQUEST_MAX_BYTES - body.len() {
             return Err(BodyError::TooLarge);
         }
         while buffer.len() < size + 2 {
@@ -630,8 +671,9 @@ async fn serve(relay: &Arc<Relay>, stream: &mut UnixStream) {
     if !admitted {
         return error(stream, 429, InferenceErrorCode::LimitExceeded).await;
     }
+    let receiving = Receiving(relay);
     let body = tokio::time::timeout_at(deadline, read_body(stream, &head, buffer)).await;
-    relay.lock().receiving -= 1;
+    drop(receiving);
     let body = match body {
         Ok(Ok(body)) => body,
         Ok(Err(BodyError::TooLarge)) => {
