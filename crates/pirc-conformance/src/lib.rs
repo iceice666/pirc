@@ -13,7 +13,7 @@ mod fake_llm;
 mod fake_push;
 mod normalize;
 
-pub use agent::{AgentOptions, AgentRun, Answers, ModelReply, Recorder, fake_models};
+pub use agent::{AgentOptions, AgentRun, Answers, Gate, ModelReply, Recorder, fake_models};
 pub use client::{Api, Connection, Response, WebSocket};
 pub use cluster::{
     Cluster, GatewayOptions, HOST, LoneNode, NODE_ID, NODE_TOKEN, ORIGIN, USER, WORKSPACE_ID,

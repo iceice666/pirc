@@ -208,6 +208,21 @@ pub struct Agent {
     running_scripts: RefCell<Vec<ScriptCapabilities>>,
 }
 
+/// The features' start of a run: `start_features`' outcome and the
+/// prompt sections they added.
+type StartResult = (Result<(), String>, Vec<PromptSection>);
+
+/// What of a run's start is left for the run task.
+enum Start {
+    /// No features: the queued items still to admit when `beforePrompt`
+    /// hooks made admitting wait.
+    Admit(Option<Vec<QueueItem>>),
+    /// The features' start, under way.
+    Starting(LocalBoxFuture<'static, StartResult>),
+    /// The features' start, done before the command was answered.
+    Started(StartResult),
+}
+
 /// Told whether a human is being asked (`onHumanWait`).
 pub type HumanWaitListener = Rc<dyn Fn(bool)>;
 
@@ -1040,6 +1055,12 @@ impl Agent {
         self.capabilities.borrow().clone()
     }
 
+    /// Replace the gateway's policy (`agent.capabilities = …`): a chat
+    /// reads its current one from the gateway.
+    pub fn set_capabilities(&self, capabilities: Capabilities) {
+        *self.capabilities.borrow_mut() = capabilities;
+    }
+
     /// The path guard (`guard`).
     pub fn path_guard(&self) -> Rc<PathGuard> {
         self.guard.clone()
@@ -1722,16 +1743,38 @@ impl Agent {
                 None
             }
         };
+        let start = if with_features {
+            // TS answers the command one microtask after `run()` started,
+            // and `run()` awaits each feature's `beforeAgentStart` once
+            // before admitting: with a single feature whose hook needs no
+            // I/O, the admitted messages precede the response.
+            let agent = self.clone();
+            let mut started: LocalBoxFuture<'static, StartResult> = Box::pin(async move {
+                let mut extra_prompt = Vec::new();
+                let result = agent
+                    .start_features(pending.unwrap_or_default(), &mut extra_prompt)
+                    .await;
+                (result, extra_prompt)
+            });
+            if self.features.len() == 1 {
+                let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+                match started.as_mut().poll(&mut context) {
+                    std::task::Poll::Ready(result) => Start::Started(result),
+                    std::task::Poll::Pending => Start::Starting(started),
+                }
+            } else {
+                Start::Starting(started)
+            }
+        } else {
+            Start::Admit(pending)
+        };
         let agent = self.clone();
         tokio::task::spawn_local(async move {
             let run = agent.clone();
             let signal = controller.signal();
             // A panic is a bug; it ends the run like a crash.
             let outcome =
-                tokio::task::spawn_local(
-                    async move { run.run(signal, pending, with_features).await },
-                )
-                .await;
+                tokio::task::spawn_local(async move { run.run(signal, start).await }).await;
             let error = match outcome {
                 Ok(Ok(())) => None,
                 Ok(Err(error)) => Some(error),
@@ -2264,24 +2307,27 @@ impl Agent {
         self.emit(json!({ "type": "message_end", "message": value }));
     }
 
-    /// The run after its start (`run`): `pending` are the queued items
-    /// still to admit when `beforePrompt` hooks made admitting wait.
-    async fn run(
-        self: &Rc<Self>,
-        signal: AbortSignal,
-        pending: Option<Vec<QueueItem>>,
-        with_features: bool,
-    ) -> Result<(), String> {
+    /// The run after its start (`run`): `start` says what of the start is
+    /// still to do.
+    async fn run(self: &Rc<Self>, signal: AbortSignal, start: Start) -> Result<(), String> {
         let mut extra_prompt = Vec::new();
-        if with_features {
-            let items = pending.unwrap_or_default();
-            if let Err(error) = self.start_features(items, &mut extra_prompt).await {
+        let started = match start {
+            Start::Admit(pending) => {
+                if let Some(items) = pending
+                    && let Err(error) = self.admit(items).await
+                {
+                    self.start_failed(&error);
+                }
+                None
+            }
+            Start::Starting(started) => Some(started.await),
+            Start::Started(result) => Some(result),
+        };
+        if let Some((result, extra)) = started {
+            extra_prompt = extra;
+            if let Err(error) = result {
                 self.start_failed(&error);
             }
-        } else if let Some(items) = pending
-            && let Err(error) = self.admit(items).await
-        {
-            self.start_failed(&error);
         }
         *self.run_prompt.borrow_mut() = trim_sections(&extra_prompt);
         let max_turns = self.config.limits.max_turns;
@@ -3112,6 +3158,18 @@ impl AgentHost for Agent {
     }
     fn direct_tool_list(&self) -> Vec<Rc<dyn Tool>> {
         self.direct_tools()
+    }
+    fn resolve_model(&self, reference: Option<(String, String)>) -> Result<ResolvedModel, String> {
+        Agent::resolve_model(self, reference)
+    }
+    fn stream_function(&self) -> Option<Rc<dyn StreamFn>> {
+        Some(Agent::stream_function(self))
+    }
+    fn context_entries(&self) -> Vec<(String, Message)> {
+        Agent::context_entries(self)
+    }
+    fn branch(&self) -> Vec<SessionEntry> {
+        Agent::branch(self)
     }
 }
 

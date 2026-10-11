@@ -5,9 +5,11 @@
 //! 1. Static rules ([`rules::classify_shell`]) sort the action into read /
 //!    write / danger, or `unknown`. The user's deny-list
 //!    (`features.autoMode.deny`) is matched first and always means danger.
-//! 2. `unknown` actions would go to a model classifier; that is M5's, so
-//!    they are treated as writes: with `useModel: true` (the default) as a
-//!    classifier failure, warned about once as in TS.
+//! 2. `unknown` actions go to a model classifier ([`classifier`]; models
+//!    from `features.autoMode`, else observational memory's, then the
+//!    session model). It sees the human's recent requests and critical
+//!    observational-memory notes the human is the source of, never tool
+//!    output. If no model answers, the action is treated as a write.
 //! 3. `danger` needs a human: with a UI the user confirms; headless agents
 //!    are refused.
 //! 4. Anything that may write takes the node's write lease first: only the
@@ -18,6 +20,7 @@
 //! they belong to, so a command cannot be smuggled in one harmless-looking
 //! fragment at a time.
 
+pub mod classifier;
 pub mod rules;
 
 use std::cell::RefCell;
@@ -26,62 +29,149 @@ use std::rc::Rc;
 
 use indexmap::IndexMap;
 use pirc_policy::resolve_path;
+use pirc_protocol::ThinkingLevel;
 use serde_json::{Map, Value};
 
 use crate::host::AgentHost;
 use crate::signal::AbortSignal;
 use crate::tools::js::{self, JsRegex};
 use crate::ui::{DialogOptions, NotifyLevel};
+use classifier::{ClassifyResult, ModelChoice, classify_with_model};
 use rules::{Classification, RuleContext, Verdict, classify_shell, compile_deny, deny_match};
 
-/// Whether auto mode is enabled (`autoModeSettings(features).enabled`): the
-/// settings are all-or-nothing, so a broken one elsewhere restores the
-/// defaults.
+/// `AutoModeSettings`: `features.autoMode` without the deny-list.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AutoModeSettings {
+    /// false: no danger checks or model calls; shell actions only decide
+    /// the write lease (unclear ⇒ write). The deny-list still applies.
+    pub enabled: bool,
+    /// Send statically unclear actions to a model; false treats them as
+    /// writes.
+    pub use_model: bool,
+    /// Show the classifier critical observational-memory notes (the
+    /// human's earlier constraints and decisions).
+    pub use_memory: bool,
+    /// Classifier model; defaults to observational memory's model, then
+    /// the session model.
+    pub model: Option<ModelChoice>,
+    pub fallback_models: Vec<ModelChoice>,
+    pub timeout_ms: u64,
+}
+
+impl Default for AutoModeSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            use_model: true,
+            use_memory: true,
+            model: None,
+            fallback_models: Vec::new(),
+            timeout_ms: 30_000,
+        }
+    }
+}
+
+/// `modelChoice.safeParse(value)`.
+fn model_choice(value: &Value) -> Option<ModelChoice> {
+    let Value::Object(choice) = value else {
+        return None;
+    };
+    let text = |key: &str| match choice.get(key) {
+        Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+        _ => None,
+    };
+    let thinking = match choice.get("thinking") {
+        None => None,
+        Some(level @ Value::String(_)) => {
+            Some(serde_json::from_value::<ThinkingLevel>(level.clone()).ok()?)
+        }
+        Some(_) => return None,
+    };
+    Some(ModelChoice {
+        provider: text("provider")?,
+        id: text("id")?,
+        thinking,
+    })
+}
+
+/// `z.array(modelChoice)`: `None` when any item is invalid.
+fn model_choices(value: &Value) -> Option<Vec<ModelChoice>> {
+    value.as_array()?.iter().map(model_choice).collect()
+}
+
+/// `autoModeSettings(features)`: all-or-nothing, so a broken setting
+/// elsewhere restores the defaults.
+pub fn auto_mode_settings(features: &Map<String, Value>) -> AutoModeSettings {
+    let defaults = AutoModeSettings::default();
+    let settings = match features.get("autoMode") {
+        Some(Value::Object(settings)) => settings,
+        _ => return defaults,
+    };
+    let mut parsed = defaults.clone();
+    for (key, value) in settings {
+        let valid = match key.as_str() {
+            "enabled" => value.as_bool().map(|flag| parsed.enabled = flag),
+            "useModel" => value.as_bool().map(|flag| parsed.use_model = flag),
+            "useMemory" => value.as_bool().map(|flag| parsed.use_memory = flag),
+            "model" => model_choice(value).map(|choice| parsed.model = Some(choice)),
+            "fallbackModels" => {
+                model_choices(value).map(|choices| parsed.fallback_models = choices)
+            }
+            "timeoutMs" => value
+                .as_f64()
+                .filter(|ms| ms.fract() == 0.0 && *ms > 0.0 && *ms <= 120_000.0)
+                .map(|ms| parsed.timeout_ms = ms as u64),
+            _ => Some(()),
+        };
+        if valid.is_none() {
+            return defaults;
+        }
+    }
+    parsed
+}
+
+/// Whether auto mode is enabled (`autoModeSettings(features).enabled`).
 pub fn auto_mode_enabled(features: &Map<String, Value>) -> bool {
-    auto_mode_flag(features, "enabled")
+    auto_mode_settings(features).enabled
 }
 
 /// `autoModeSettings(features).useModel` (default true).
 pub fn auto_mode_use_model(features: &Map<String, Value>) -> bool {
-    auto_mode_flag(features, "useModel")
+    auto_mode_settings(features).use_model
 }
 
-/// A boolean auto-mode setting that defaults to true.
-fn auto_mode_flag(features: &Map<String, Value>, flag: &str) -> bool {
-    let settings = match features.get("autoMode") {
-        None | Some(Value::Null) => return true,
-        Some(Value::Object(settings)) => settings,
-        Some(_) => return true,
-    };
-    let thinking = ["off", "minimal", "low", "medium", "high", "xhigh"];
-    let model_choice = |value: &Value| {
-        let Value::Object(choice) = value else {
-            return false;
-        };
-        let text = |key: &str| matches!(choice.get(key), Some(Value::String(s)) if !s.is_empty());
-        text("provider")
-            && text("id")
-            && match choice.get("thinking") {
-                None => true,
-                Some(Value::String(level)) => thinking.contains(&level.as_str()),
-                Some(_) => false,
-            }
-    };
-    let valid = settings.iter().all(|(key, value)| match key.as_str() {
-        "enabled" | "useModel" | "useMemory" => value.is_boolean(),
-        "model" => model_choice(value),
-        "fallbackModels" => value
-            .as_array()
-            .is_some_and(|items| items.iter().all(model_choice)),
-        "timeoutMs" => value
-            .as_f64()
-            .is_some_and(|ms| ms.fract() == 0.0 && ms > 0.0 && ms <= 120_000.0),
-        _ => true,
-    });
-    if !valid {
-        return true;
+/// `classifierChoices`: auto mode's own models, else observational
+/// memory's (the session model is appended later).
+pub fn classifier_choices(features: &Map<String, Value>) -> Vec<ModelChoice> {
+    let settings = auto_mode_settings(features);
+    if settings.model.is_some() || !settings.fallback_models.is_empty() {
+        return settings
+            .model
+            .into_iter()
+            .chain(settings.fallback_models)
+            .collect();
     }
-    settings.get(flag).and_then(Value::as_bool).unwrap_or(true)
+    // `memoryModels.safeParse(features.observationalMemory ?? {})`.
+    let memory = match features.get("observationalMemory") {
+        None | Some(Value::Null) => return Vec::new(),
+        Some(Value::Object(memory)) => memory,
+        Some(_) => return Vec::new(),
+    };
+    let model = match memory.get("model") {
+        None => None,
+        Some(value) => match model_choice(value) {
+            Some(choice) => Some(choice),
+            None => return Vec::new(),
+        },
+    };
+    let fallbacks = match memory.get("fallbackModels") {
+        None => Vec::new(),
+        Some(value) => match model_choices(value) {
+            Some(choices) => choices,
+            None => return Vec::new(),
+        },
+    };
+    model.into_iter().chain(fallbacks).collect()
 }
 
 /// `autoModeDeny(features)`: the user's deny-list, read on its own so a
@@ -130,6 +220,8 @@ pub struct Decision {
     pub source: Source,
 }
 
+/// Model verdicts kept (read/write only).
+const CACHE_LIMIT: usize = 256;
 /// Unsubmitted tty input kept per task (the current line).
 const INPUT_LINE_LIMIT: usize = 4_096;
 const INPUT_TASK_LIMIT: usize = 64;
@@ -177,6 +269,9 @@ fn id_of(args: &Map<String, Value>) -> String {
 /// `AutoMode`.
 #[derive(Default)]
 pub struct AutoMode {
+    /// Model verdicts that need no human (read/write), by kind + cwd +
+    /// action.
+    cache: RefCell<IndexMap<String, Decision>>,
     /// Per tty task: what was typed since the last Enter (or Ctrl-C).
     lines: RefCell<IndexMap<String, PendingLine>>,
     /// Per tty task: writes are judged one at a time, in order.
@@ -184,9 +279,6 @@ pub struct AutoMode {
     warned_deny: RefCell<String>,
     warned_failure: std::cell::Cell<bool>,
 }
-
-/// Why the model classifier cannot answer yet.
-const CLASSIFIER_MISSING: &str = "the model classifier is not available in this build";
 
 impl AutoMode {
     pub fn new() -> Self {
@@ -340,9 +432,15 @@ impl AutoMode {
         lines.insert(id, PendingLine { text, truncated });
     }
 
-    /// `classify`: the decision for an action. The model classifier is
-    /// M5's: an unclear action is treated as a write.
-    pub fn classify(&self, host: &dyn AgentHost, action: &ShellAction) -> Decision {
+    /// `classify`: the decision for an action. `Err` when `signal` was
+    /// aborted while the classifier model was asked.
+    pub async fn classify(
+        &self,
+        host: &dyn AgentHost,
+        action: &ShellAction,
+        signal: &AbortSignal,
+    ) -> Result<Decision, String> {
+        let settings = auto_mode_settings(&host.config().features);
         let rules = self.rules_verdict(host, action);
         let decided = |classification| Decision {
             classification,
@@ -350,11 +448,11 @@ impl AutoMode {
         };
         // The deny-list is the user's own rule: it holds even with auto mode off.
         if rules.denied {
-            return decided(rules);
+            return Ok(decided(rules));
         }
-        if !auto_mode_enabled(&host.config().features) {
+        if !settings.enabled {
             // Lease decision only: anything that is not clearly read-only writes.
-            return if matches!(rules.verdict, Verdict::Read | Verdict::Write) {
+            return Ok(if matches!(rules.verdict, Verdict::Read | Verdict::Write) {
                 decided(rules)
             } else {
                 decided(Classification {
@@ -363,10 +461,10 @@ impl AutoMode {
                     denied: false,
                     writes: None,
                 })
-            };
+            });
         }
         if rules.verdict != Verdict::Unknown {
-            return decided(rules);
+            return Ok(decided(rules));
         }
         let fallback = |reason| Decision {
             classification: Classification {
@@ -377,20 +475,67 @@ impl AutoMode {
             },
             source: Source::Fallback,
         };
-        if !auto_mode_use_model(&host.config().features) {
-            return fallback(format!("{} (model check disabled)", rules.reason));
+        if !settings.use_model {
+            return Ok(fallback(format!("{} (model check disabled)", rules.reason)));
         }
-        // The model classifier is M5's: until then it is always unavailable,
-        // which TS reports once and treats as a write.
-        if !self.warned_failure.replace(true) {
-            host.ui().notify(
-                &format!(
-                    "Auto mode: classifier unavailable ({CLASSIFIER_MISSING}); treating unclear shell actions as writes"
-                ),
-                NotifyLevel::Warning,
-            );
+        // Rules (and the deny-list) run before the cache, so a cached model
+        // verdict never outlives a newly added deny pattern.
+        let kind = match action.kind {
+            ActionKind::Command => "command",
+            ActionKind::Script => "script",
+            ActionKind::Input => "input",
+        };
+        let key = format!("{kind}\0{}\0{}", action.cwd, action.text);
+        if let Some(cached) = self.cache.borrow().get(&key) {
+            return Ok(cached.clone());
         }
-        fallback(format!("{}; classifier unavailable", rules.reason))
+        let result = classify_with_model(
+            host,
+            action,
+            &rules.reason,
+            &classifier_choices(&host.config().features),
+            signal,
+            settings.timeout_ms,
+            settings.use_memory,
+        )
+        .await?;
+        let (verdict, reason) = match result {
+            ClassifyResult::Ok {
+                verdict, reason, ..
+            } => (verdict, reason),
+            ClassifyResult::Failed(error) => {
+                if !self.warned_failure.replace(true) {
+                    host.ui().notify(
+                        &format!(
+                            "Auto mode: classifier unavailable ({error}); treating unclear shell actions as writes"
+                        ),
+                        NotifyLevel::Warning,
+                    );
+                }
+                return Ok(fallback(format!(
+                    "{}; classifier unavailable",
+                    rules.reason
+                )));
+            }
+        };
+        self.warned_failure.set(false);
+        let decision = Decision {
+            classification: Classification {
+                verdict,
+                reason,
+                denied: false,
+                writes: None,
+            },
+            source: Source::Model,
+        };
+        if verdict != Verdict::Danger {
+            let mut cache = self.cache.borrow_mut();
+            if cache.len() >= CACHE_LIMIT {
+                cache.shift_remove_index(0);
+            }
+            cache.insert(key, decision.clone());
+        }
+        Ok(decision)
     }
 
     /// `gate`: `Ok(Some(refusal))` for the model, `Ok(None)` when the call
@@ -438,7 +583,7 @@ impl AutoMode {
         let Some(action) = self.action_for(host, tool, args) else {
             return Ok(None);
         };
-        let decision = self.classify(host, &action);
+        let decision = self.classify(host, &action, signal).await?;
         if decision.classification.verdict == Verdict::Danger
             && let Some(refusal) = self
                 .approve(host, &action, &decision.classification.reason, signal)

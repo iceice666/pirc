@@ -1,0 +1,73 @@
+---
+source: crates/pirc-conformance/tests/agent_todo.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": [
+      {
+        "id": "<uuid:1>",
+        "message": "Invalid todo history; corrupted snapshots were skipped.",
+        "method": "notify",
+        "notifyType": "warning",
+        "type": "extension_ui_request"
+      },
+      {
+        "id": "<uuid:2>",
+        "method": "setWidget",
+        "type": "extension_ui_request",
+        "widgetKey": "local-todo",
+        "widgetLines": [
+          "TODO · 1/2",
+          "✓ kept",
+          "☐ [x] blocked"
+        ],
+        "widgetPlacement": "aboveEditor"
+      },
+      {
+        "command": "get_state",
+        "data": {
+          "completionWaiting": [],
+          "isCompacting": false,
+          "isStreaming": false,
+          "messageCount": 0,
+          "model": {
+            "contextWindow": 100000,
+            "id": "fake-model",
+            "name": "Fake model",
+            "provider": "fake",
+            "reasoning": true
+          },
+          "pendingMessageCount": 0,
+          "sessionFile": "<tmp>/session/session.jsonl",
+          "sessionId": "<hex16:1>",
+          "sessionName": null,
+          "sessionNameSource": null,
+          "thinkingLevel": "low"
+        },
+        "id": "c1",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "startup"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:3>",
+        "message": "#1 [Completed] kept\n#2 [Pending] [Category: x] blocked; depends on: #1",
+        "method": "notify",
+        "notifyType": "info",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/todo list"
+  }
+]
