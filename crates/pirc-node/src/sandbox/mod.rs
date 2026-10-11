@@ -79,7 +79,8 @@ pub trait Sandbox: Send + Sync {
     fn check(&self) -> BoxFuture<'_, SandboxStatus>;
 
     /// A session's sandbox, or 503 [`unavailable_error`]. The caller calls
-    /// [`Prepared::cleanup`] when the agent exits or fails to start.
+    /// [`Prepared::cleanup`] when the agent exits or fails to start
+    /// (dropping it does too).
     fn prepare(&self, input: PrepareInput) -> BoxFuture<'_, ApiResult<Prepared>>;
 }
 
@@ -173,6 +174,15 @@ impl Prepared {
         if let Some(cleanup) = cleanup {
             cleanup();
         }
+    }
+}
+
+/// A `Prepared` dropped without [`Prepared::cleanup`] (a panic between
+/// `prepare` and the runner taking it) still stops the native proxy and
+/// removes its files.
+impl Drop for Prepared {
+    fn drop(&mut self) {
+        self.cleanup();
     }
 }
 
@@ -270,6 +280,8 @@ mod tests {
             || {},
         );
         assert!(!closed.has_control());
+        drop(prepared);
+        assert_eq!(cleaned.load(Ordering::SeqCst), 1, "cleaned once");
         assert_eq!(
             closed.approve_domains(&[]).unwrap_err(),
             "The sandbox's control channel is closed"
@@ -278,5 +290,28 @@ mod tests {
             unavailable_error("no bwrap").message,
             "Agents on this node must run in the sandbox, and it is unavailable: no bwrap"
         );
+    }
+
+    #[test]
+    fn dropping_a_prepared_sandbox_cleans_it_up() {
+        let cleaned = Arc::new(AtomicUsize::new(0));
+        let counter = cleaned.clone();
+        let prepared = Prepared::new(
+            PathBuf::from("/bin/srt"),
+            Vec::new(),
+            Vec::new(),
+            SessionPolicy::default(),
+            Vec::new(),
+            None,
+            move || {
+                counter.fetch_add(1, Ordering::SeqCst);
+            },
+        );
+        let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let _owned = prepared;
+            panic!("spawn failed");
+        }));
+        assert!(unwound.is_err());
+        assert_eq!(cleaned.load(Ordering::SeqCst), 1);
     }
 }
