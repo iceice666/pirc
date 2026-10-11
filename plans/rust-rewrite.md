@@ -160,6 +160,12 @@ Progress notes:
 
 Runs as the session agent under a TS node (same `configure` + JSONL RPC).
 
+Decided with the user before starting (2026-10-11):
+
+- **Acceptance without features:** the M0 `session_agent_events` snapshot depends on M5 features (todo, background, goal, memory panel; their tools and prompt sections), so M4 is accepted on agent-level JSONL RPC transcripts recorded from the TS agent with its built-in features turned off by a development-only switch (`PIRC_AGENT_FEATURES=none`; a small change to `apps/` that production never sets). The harness plays the node: it starts the agent directly, sends `configure`, serves the inference socket with scripted replies and answers side-channel requests. Full M0 agent-event parity is M5's.
+- **Session format:** `session.jsonl` v1 stays field-for-field compatible, because the TS node reads it (branch cache, recap) while the Rust agent runs under it. A new format can be weighed at M6.
+- **Cadence as in M3:** transcripts recorded from TS first, then a layout commit with the `pirc-agent` crate's interfaces, then parallel worktrees (store/messages/config; RPC, side channels and the remote provider; tools and hooks), with the loop and compaction done by the parent; reviews through several lenses; one commit per sub-item.
+
 - [ ] Message types, session store (fresh format allowed, but keep the tree with `id`/`parentId`), config, roles.
 - [ ] RPC server, `configure`, remote provider over the node's Unix socket, side channels (`gateway_*`, `extension_ui_*`, write lease, sandbox, browser).
 - [ ] Loop, queues (prompt/steer/follow-up), retry, cancellation, compaction with matching token estimation and thresholds.
