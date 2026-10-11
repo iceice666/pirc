@@ -11,6 +11,12 @@ use feature_support::{Masker, command, notified, settle, settle_events, then, to
 use pirc_conformance::{AgentOptions, AgentRun, ModelReply, Recorder};
 use serde_json::{Value, json};
 
+/// The hanging reply's text arrived (its last event): nothing more comes
+/// until the agent gives up the request.
+fn streaming(line: &Value) -> bool {
+    line["type"] == "message_update" && line["assistantMessageEvent"]["type"] == "text_delta"
+}
+
 fn goal_options(config: Value) -> AgentOptions {
     AgentOptions {
         config,
@@ -130,10 +136,7 @@ async fn agent_goal_interrupted() {
     // An aborted round pauses the goal.
     agent.push([ModelReply::Hang("Working".to_owned())]);
     command(&mut agent, &mut m, &mut r, "set", "/goal set Long job").await;
-    then(&mut agent, &mut m, &mut r, "round 1 streams", |line| {
-        line["type"] == "message_update"
-    })
-    .await;
+    then(&mut agent, &mut m, &mut r, "round 1 streams", streaming).await;
     let response = agent.call(json!({ "type": "abort" })).await;
     m.note(&mut r, "abort", response);
     then(&mut agent, &mut m, &mut r, "paused", |line| {
@@ -156,10 +159,7 @@ async fn agent_goal_interrupted() {
         ModelReply::Hang("Round two".to_owned()),
     ]);
     command(&mut agent, &mut m, &mut r, "resume again", "/goal resume").await;
-    then(&mut agent, &mut m, &mut r, "round streams", |line| {
-        line["type"] == "message_update"
-    })
-    .await;
+    then(&mut agent, &mut m, &mut r, "round streams", streaming).await;
     agent
         .send(json!({ "type": "steer", "message": "change course" }))
         .await;
@@ -173,10 +173,7 @@ async fn agent_goal_interrupted() {
         .await;
     m.note(&mut r, "send_now", response);
     settle_events(&mut agent, &mut m, &mut r, "interrupted round").await;
-    then(&mut agent, &mut m, &mut r, "next round streams", |line| {
-        line["type"] == "message_update"
-    })
-    .await;
+    then(&mut agent, &mut m, &mut r, "next round streams", streaming).await;
     let response = agent.call(json!({ "type": "abort" })).await;
     m.note(&mut r, "abort the next round", response);
     then(&mut agent, &mut m, &mut r, "paused once more", |line| {
@@ -199,7 +196,7 @@ async fn agent_goal_restored() {
     first
         .send(json!({ "type": "prompt", "message": "/goal set Survive" }))
         .await;
-    first.until(|line| line["type"] == "message_update").await;
+    first.until(streaming).await;
     let written = std::fs::read_to_string(first.session_dir.join("session.jsonl")).unwrap();
     drop(first);
     // The first agent's temporary workspace differs per run.
@@ -311,9 +308,7 @@ async fn agent_goal_off() {
         command(&mut agent, &mut m, &mut r, "set", "/goal set Something").await;
         if name == "unusable settings" {
             // Defaults instead: no round limit.
-            then(&mut agent, &mut m, &mut r, "the round streams", |line| {
-                line["type"] == "message_update"
-            })
+            then(&mut agent, &mut m, &mut r, "the round streams", streaming)
             .await;
             let response = agent.call(json!({ "type": "abort" })).await;
             m.note(&mut r, "abort", response);

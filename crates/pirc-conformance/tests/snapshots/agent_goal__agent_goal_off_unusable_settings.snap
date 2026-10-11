@@ -685,6 +685,14 @@ expression: r.into_value()
           "type": "text_start"
         },
         "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "Working",
+          "type": "text_delta"
+        },
+        "type": "message_update"
       }
     ],
     "step": "the round streams"
