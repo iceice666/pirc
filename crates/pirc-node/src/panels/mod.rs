@@ -187,7 +187,7 @@ pub fn routes() -> Vec<Route> {
             |node, request| async move {
                 let local = local(&node, &request)?;
                 let path = request
-                    .query("path")
+                    .single_query("path")?
                     .filter(|path| RECORDING_PATH.is_match(path))
                     .ok_or_else(ApiError::invalid_input)?
                     .to_owned();
@@ -476,7 +476,7 @@ fn optional_string(
     min: usize,
     max: usize,
 ) -> ApiResult<Option<String>> {
-    match request.query(name) {
+    match request.single_query(name)? {
         None => Ok(None),
         Some(value) if (min..=max).contains(&len16(value)) => Ok(Some(value.to_owned())),
         Some(_) => Err(ApiError::invalid_input()),
@@ -485,7 +485,7 @@ fn optional_string(
 
 /// `z.enum(['1','0','true','false']).optional()`, true for `1` and `true`.
 fn flag(request: &Request, name: &str) -> ApiResult<bool> {
-    match request.query(name) {
+    match request.single_query(name)? {
         None => Ok(false),
         Some("1" | "true") => Ok(true),
         Some("0" | "false") => Ok(false),
@@ -495,7 +495,7 @@ fn flag(request: &Request, name: &str) -> ApiResult<bool> {
 
 /// `z.coerce.number().int().min(min).max(max).default(fallback)`.
 fn coerce_int(request: &Request, name: &str, min: f64, max: f64, fallback: f64) -> ApiResult<f64> {
-    let Some(text) = request.query(name) else {
+    let Some(text) = request.single_query(name)? else {
         return Ok(fallback);
     };
     let number = js_number_of_str(text);

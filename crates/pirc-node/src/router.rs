@@ -78,6 +78,18 @@ impl Request {
             .map(|(_, value)| value.as_str())
     }
 
+    /// A query parameter a schema reads as one value: `None` when absent,
+    /// 400 `invalid_input` when repeated (Fastify's parser gave an array,
+    /// which `z.string()` refuses and `z.coerce.number()` makes `NaN`).
+    pub fn single_query(&self, name: &str) -> ApiResult<Option<&str>> {
+        let mut values = self.query.iter().filter(|(key, _)| key == name);
+        let first = values.next().map(|(_, value)| value.as_str());
+        if values.next().is_some() {
+            return Err(ApiError::invalid_input());
+        }
+        Ok(first)
+    }
+
     /// The query as an object (what zod saw as `request.query`): strings,
     /// and an array of them for a repeated key, as Fastify's parser gave,
     /// so a single-value schema refuses it.
@@ -816,6 +828,8 @@ mod tests {
         };
         assert_eq!(request.param("id"), Some("s"));
         assert_eq!(request.query("a"), Some("1"));
+        assert_eq!(request.single_query("a").unwrap_err().status, 400);
+        assert_eq!(request.single_query("b").unwrap(), None);
         assert_eq!(
             request.query_object(),
             serde_json::json!({ "a": ["1", "2"] })
