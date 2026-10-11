@@ -1,0 +1,72 @@
+---
+source: crates/pirc-conformance/tests/node_terminals.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Terminals are disabled on this node"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/:id/terminals",
+    "status": 403,
+    "step": "list"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Terminals are disabled on this node"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 403,
+    "step": "open"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Terminals are disabled on this node"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 403,
+    "step": "open without control"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Terminals are disabled on this node"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals/nope/close",
+    "status": 403,
+    "step": "close"
+  },
+  {
+    "observed": {
+      "closed": {
+        "code": 4403,
+        "reason": "Terminals are disabled on this node"
+      },
+      "frames": []
+    },
+    "step": "attach"
+  }
+]
