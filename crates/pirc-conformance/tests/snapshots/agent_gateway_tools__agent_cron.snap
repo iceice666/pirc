@@ -1,0 +1,857 @@
+---
+source: crates/pirc-conformance/tests/agent_gateway_tools.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": {
+      "command": "get_commands",
+      "data": {
+        "commands": [
+          {
+            "description": "Scheduled tasks: /cron [list | pause|resume|delete|run <id>]",
+            "name": "cron",
+            "source": "extension"
+          }
+        ]
+      },
+      "id": "c1",
+      "success": true,
+      "type": "response"
+    },
+    "step": "commands"
+  },
+  {
+    "observed": [
+      {
+        "args": {},
+        "id": "<uuid:1>",
+        "op": "schedule.list",
+        "type": "gateway_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "list"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:2>",
+        "message": "Schedules (default time zone Asia/Taipei):\n- s1 “CI check” [active] in Test on work: cron \"0 9 * * 1-5\" (Asia/Taipei); next 2026-09-30 09:00 (Asia/Taipei); model fake/fake-model; thinking low; notifications: problems\n  prompt: Check the CI dashboard.\n  last run r1 (2026-09-29 09:00 (Asia/Taipei)): completed — All green. [5000 characters; read it with action result id=r1]\n- s2 “Once” [paused] in w: at 2026-10-01 10:00\n  prompt: Do it once.",
+        "method": "notify",
+        "notifyType": "info",
+        "type": "extension_ui_request"
+      }
+    ],
+    "step": "list: notice"
+  },
+  {
+    "observed": [
+      {
+        "args": {},
+        "id": "<uuid:3>",
+        "op": "schedule.list",
+        "type": "gateway_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c3",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "list explicitly"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:4>",
+        "message": "Schedules (default time zone Asia/Taipei):\n- s1 “CI check” [active] in Test on work: cron \"0 9 * * 1-5\" (Asia/Taipei); next 2026-09-30 09:00 (Asia/Taipei); model fake/fake-model; thinking low; notifications: problems\n  prompt: Check the CI dashboard.\n  last run r1 (2026-09-29 09:00 (Asia/Taipei)): completed — All green. [5000 characters; read it with action result id=r1]\n- s2 “Once” [paused] in w: at 2026-10-01 10:00\n  prompt: Do it once.",
+        "method": "notify",
+        "notifyType": "info",
+        "type": "extension_ui_request"
+      }
+    ],
+    "step": "list explicitly: notice"
+  },
+  {
+    "observed": [
+      {
+        "args": {
+          "id": "s1"
+        },
+        "id": "<uuid:5>",
+        "op": "schedule.pause",
+        "type": "gateway_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c4",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "pause"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:6>",
+        "message": "Paused “CI check”.",
+        "method": "notify",
+        "notifyType": "info",
+        "type": "extension_ui_request"
+      }
+    ],
+    "step": "pause: notice"
+  },
+  {
+    "observed": [
+      {
+        "args": {
+          "id": "s1"
+        },
+        "id": "<uuid:7>",
+        "op": "schedule.resume",
+        "type": "gateway_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c5",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "resume"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:8>",
+        "message": "Resumed “CI check”.",
+        "method": "notify",
+        "notifyType": "info",
+        "type": "extension_ui_request"
+      }
+    ],
+    "step": "resume: notice"
+  },
+  {
+    "observed": [
+      {
+        "args": {
+          "id": "s1"
+        },
+        "id": "<uuid:9>",
+        "op": "schedule.run",
+        "type": "gateway_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c6",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "run"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:10>",
+        "message": "Started run r9 of s1 (running).",
+        "method": "notify",
+        "notifyType": "info",
+        "type": "extension_ui_request"
+      }
+    ],
+    "step": "run: notice"
+  },
+  {
+    "observed": [
+      {
+        "args": {
+          "id": "s7"
+        },
+        "id": "<uuid:11>",
+        "op": "schedule.delete",
+        "type": "gateway_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c7",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "delete an unknown schedule"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:12>",
+        "message": "No schedule s7",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      }
+    ],
+    "step": "delete an unknown schedule: notice"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:13>",
+        "message": "Usage: /cron pause <id>",
+        "method": "notify",
+        "notifyType": "warning",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c8",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "without an id"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:14>",
+        "message": "/cron — list schedules\n/cron pause <id> | resume <id> | delete <id> | run <id>\nAsk the agent to create or change a schedule; you approve it in the chat.",
+        "method": "notify",
+        "notifyType": "info",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c9",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "an unknown verb"
+  },
+  {
+    "observed": [
+      {
+        "args": {},
+        "id": "<uuid:15>",
+        "op": "schedule.list",
+        "type": "gateway_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c10",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "the gateway unreachable"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:16>",
+        "message": "The gateway cannot be reached right now.",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      }
+    ],
+    "step": "unreachable: notice"
+  },
+  {
+    "observed": [
+      {
+        "args": {},
+        "id": "<uuid:17>",
+        "op": "schedule.list",
+        "type": "gateway_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c11",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "no schedules"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:18>",
+        "message": "No schedules. Default time zone: UTC.",
+        "method": "notify",
+        "notifyType": "info",
+        "type": "extension_ui_request"
+      }
+    ],
+    "step": "no schedules: notice"
+  },
+  {
+    "observed": [
+      {
+        "type": "agent_start"
+      },
+      {
+        "message": {
+          "content": "Show the schedule tool",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "Show the schedule tool",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "command": "prompt",
+        "id": "c12",
+        "success": true,
+        "type": "response"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "id": "d1",
+          "toolName": "ptc_docs",
+          "type": "toolcall_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"names\":[\"schedule\"]}",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "arguments": {
+              "names": [
+                "schedule"
+              ]
+            },
+            "id": "d1",
+            "name": "ptc_docs",
+            "type": "toolCall"
+          },
+          "type": "toolcall_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "names": [
+                  "schedule"
+                ]
+              },
+              "id": "d1",
+              "name": "ptc_docs",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "args": {
+          "names": [
+            "schedule"
+          ]
+        },
+        "toolCallId": "d1",
+        "toolName": "ptc_docs",
+        "type": "tool_execution_start"
+      },
+      {
+        "isError": false,
+        "result": {
+          "content": [
+            {
+              "text": "{\"registryVersion\":\"<hex16:1>\",\"contractVersion\":1,\"items\":[{\"name\":\"schedule\",\"category\":\"schedule\",\"uiLabel\":\"Schedule\",\"contractVersion\":1,\"description\":\"Run a task later, or repeatedly, as a new agent session: the user's scheduled tasks (cron). Each run starts fresh in the chosen workspace with only the prompt, so write the prompt to stand on its own. Nobody watches a run live; the user reads its final message in the schedule's history.\\n\\nActions:\\n\\n- list: the schedules you may manage, with ids and their last run.\\n- create: propose a schedule. It exists only once the user approves it in this chat. Give cron (5 fields: minute hour day-of-month month day-of-week, e.g. `0 9 * * 1-5`) for a repeating one, or at (e.g. \\\"2026-10-01T09:00\\\") for a single run.\\n- update: propose a change to one (id plus the fields to change); the user approves it too.\\n- pause / resume / delete: take effect at once (id).\\n- result: a run's final message (id of the run, like r1a2b3c4d), in 12000-character chunks; call again with offset set to the reported next offset until none is given.\\n\\nTimes are read in timezone (IANA, e.g. \\\"Asia/Taipei\\\"); it defaults to the gateway's. Today is <today>.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"action\":{\"type\":\"string\",\"enum\":[\"list\",\"create\",\"update\",\"pause\",\"resume\",\"delete\",\"result\"]},\"id\":{\"type\":\"string\",\"description\":\"The schedule (like s1a2b3c4d) for update, pause, resume and delete; the run (like r1a2b3c4d) for result\"},\"offset\":{\"type\":\"integer\",\"minimum\":0,\"description\":\"With result: first result character to return (default 0)\"},\"prompt\":{\"type\":\"string\",\"description\":\"What the scheduled agent should do, standing on its own\"},\"title\":{\"type\":\"string\",\"description\":\"A short title; it names each run session\"},\"cron\":{\"type\":\"string\",\"description\":\"Repeat: 5-field cron expression\"},\"at\":{\"type\":\"string\",\"description\":\"Once: ISO 8601 time; without an offset it is read in timezone\"},\"timezone\":{\"type\":\"string\",\"description\":\"IANA time zone for cron and at\"},\"workspace\":{\"type\":\"string\",\"description\":\"Where it runs (workspace id or name). Default: this workspace. Only the assistant may pick another one.\"},\"notify\":{\"type\":\"string\",\"enum\":[\"all\",\"problems\",\"none\"],\"description\":\"Push notifications: every run (all, the default), only runs that fail, are missed or wait for the user (problems), or none. Pick problems for frequent schedules.\"}},\"required\":[\"action\"],\"additionalProperties\":false},\"resultSchema\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"list\"},\"timezone\":{\"type\":\"string\"},\"schedules\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"when\":{\"type\":\"string\",\"description\":\"The cron expression or one-off time, as text\"},\"status\":{\"type\":\"string\"},\"nextRun\":{\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"thinking\":{\"type\":\"string\"},\"notify\":{\"type\":\"string\"},\"prompt\":{\"type\":\"string\"},\"lastRun\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"status\":{\"type\":\"string\"},\"due\":{\"type\":\"string\"},\"result\":{\"type\":\"string\"},\"resultChars\":{\"type\":\"integer\"}},\"required\":[\"id\",\"status\",\"due\"],\"additionalProperties\":false}},\"required\":[\"id\",\"title\",\"workspace\",\"when\",\"status\",\"prompt\"],\"additionalProperties\":false}}},\"required\":[\"text\",\"action\",\"timezone\",\"schedules\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"create\"},\"proposalId\":{\"type\":\"string\",\"description\":\"The user approves it in the chat; it does not exist until then\"},\"title\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"proposalId\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"update\"},\"proposalId\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"proposalId\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"pause\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"nextRun\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"id\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"resume\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"nextRun\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"id\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"delete\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"id\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"result\"},\"id\":{\"type\":\"string\",\"description\":\"The run\"},\"schedule\":{\"type\":\"string\"},\"status\":{\"type\":\"string\"},\"session\":{\"type\":\"string\"},\"result\":{\"type\":\"string\",\"description\":\"This chunk of the result\"},\"resultOffset\":{\"type\":\"integer\"},\"resultChars\":{\"type\":\"integer\"},\"nextOffset\":{\"type\":[\"integer\",\"null\"],\"description\":\"Where the next chunk starts, or null at the end\"}},\"required\":[\"text\",\"action\",\"id\",\"schedule\",\"status\",\"result\",\"resultOffset\",\"resultChars\",\"nextOffset\"],\"additionalProperties\":false}]},\"errors\":[\"ApprovalDenied\",\"CapabilityUnavailable\",\"InvalidArguments\",\"QuotaExceeded\",\"Cancelled\",\"Timeout\",\"OperationFailed\"],\"effects\":[\"external\",\"write\"],\"concurrency\":\"exclusive-write\",\"readActions\":[\"list\",\"result\"],\"approval\":\"action-dependent\",\"suspension\":[\"approval\"],\"examples\":[\"const result = await tools.schedule({ action: \\\"…\\\" });\"]}],\"truncated\":false,\"nextCursor\":null}",
+              "type": "text"
+            }
+          ]
+        },
+        "toolCallId": "d1",
+        "toolName": "ptc_docs",
+        "type": "tool_execution_end"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "{\"registryVersion\":\"<hex16:1>\",\"contractVersion\":1,\"items\":[{\"name\":\"schedule\",\"category\":\"schedule\",\"uiLabel\":\"Schedule\",\"contractVersion\":1,\"description\":\"Run a task later, or repeatedly, as a new agent session: the user's scheduled tasks (cron). Each run starts fresh in the chosen workspace with only the prompt, so write the prompt to stand on its own. Nobody watches a run live; the user reads its final message in the schedule's history.\\n\\nActions:\\n\\n- list: the schedules you may manage, with ids and their last run.\\n- create: propose a schedule. It exists only once the user approves it in this chat. Give cron (5 fields: minute hour day-of-month month day-of-week, e.g. `0 9 * * 1-5`) for a repeating one, or at (e.g. \\\"2026-10-01T09:00\\\") for a single run.\\n- update: propose a change to one (id plus the fields to change); the user approves it too.\\n- pause / resume / delete: take effect at once (id).\\n- result: a run's final message (id of the run, like r1a2b3c4d), in 12000-character chunks; call again with offset set to the reported next offset until none is given.\\n\\nTimes are read in timezone (IANA, e.g. \\\"Asia/Taipei\\\"); it defaults to the gateway's. Today is <today>.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"action\":{\"type\":\"string\",\"enum\":[\"list\",\"create\",\"update\",\"pause\",\"resume\",\"delete\",\"result\"]},\"id\":{\"type\":\"string\",\"description\":\"The schedule (like s1a2b3c4d) for update, pause, resume and delete; the run (like r1a2b3c4d) for result\"},\"offset\":{\"type\":\"integer\",\"minimum\":0,\"description\":\"With result: first result character to return (default 0)\"},\"prompt\":{\"type\":\"string\",\"description\":\"What the scheduled agent should do, standing on its own\"},\"title\":{\"type\":\"string\",\"description\":\"A short title; it names each run session\"},\"cron\":{\"type\":\"string\",\"description\":\"Repeat: 5-field cron expression\"},\"at\":{\"type\":\"string\",\"description\":\"Once: ISO 8601 time; without an offset it is read in timezone\"},\"timezone\":{\"type\":\"string\",\"description\":\"IANA time zone for cron and at\"},\"workspace\":{\"type\":\"string\",\"description\":\"Where it runs (workspace id or name). Default: this workspace. Only the assistant may pick another one.\"},\"notify\":{\"type\":\"string\",\"enum\":[\"all\",\"problems\",\"none\"],\"description\":\"Push notifications: every run (all, the default), only runs that fail, are missed or wait for the user (problems), or none. Pick problems for frequent schedules.\"}},\"required\":[\"action\"],\"additionalProperties\":false},\"resultSchema\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"list\"},\"timezone\":{\"type\":\"string\"},\"schedules\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"when\":{\"type\":\"string\",\"description\":\"The cron expression or one-off time, as text\"},\"status\":{\"type\":\"string\"},\"nextRun\":{\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"thinking\":{\"type\":\"string\"},\"notify\":{\"type\":\"string\"},\"prompt\":{\"type\":\"string\"},\"lastRun\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"status\":{\"type\":\"string\"},\"due\":{\"type\":\"string\"},\"result\":{\"type\":\"string\"},\"resultChars\":{\"type\":\"integer\"}},\"required\":[\"id\",\"status\",\"due\"],\"additionalProperties\":false}},\"required\":[\"id\",\"title\",\"workspace\",\"when\",\"status\",\"prompt\"],\"additionalProperties\":false}}},\"required\":[\"text\",\"action\",\"timezone\",\"schedules\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"create\"},\"proposalId\":{\"type\":\"string\",\"description\":\"The user approves it in the chat; it does not exist until then\"},\"title\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"proposalId\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"update\"},\"proposalId\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"proposalId\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"pause\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"nextRun\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"id\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"resume\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"nextRun\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"id\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"delete\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"id\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"result\"},\"id\":{\"type\":\"string\",\"description\":\"The run\"},\"schedule\":{\"type\":\"string\"},\"status\":{\"type\":\"string\"},\"session\":{\"type\":\"string\"},\"result\":{\"type\":\"string\",\"description\":\"This chunk of the result\"},\"resultOffset\":{\"type\":\"integer\"},\"resultChars\":{\"type\":\"integer\"},\"nextOffset\":{\"type\":[\"integer\",\"null\"],\"description\":\"Where the next chunk starts, or null at the end\"}},\"required\":[\"text\",\"action\",\"id\",\"schedule\",\"status\",\"result\",\"resultOffset\",\"resultChars\",\"nextOffset\"],\"additionalProperties\":false}]},\"errors\":[\"ApprovalDenied\",\"CapabilityUnavailable\",\"InvalidArguments\",\"QuotaExceeded\",\"Cancelled\",\"Timeout\",\"OperationFailed\"],\"effects\":[\"external\",\"write\"],\"concurrency\":\"exclusive-write\",\"readActions\":[\"list\",\"result\"],\"approval\":\"action-dependent\",\"suspension\":[\"approval\"],\"examples\":[\"const result = await tools.schedule({ action: \\\"…\\\" });\"]}],\"truncated\":false,\"nextCursor\":null}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "d1",
+          "toolName": "ptc_docs"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "{\"registryVersion\":\"<hex16:1>\",\"contractVersion\":1,\"items\":[{\"name\":\"schedule\",\"category\":\"schedule\",\"uiLabel\":\"Schedule\",\"contractVersion\":1,\"description\":\"Run a task later, or repeatedly, as a new agent session: the user's scheduled tasks (cron). Each run starts fresh in the chosen workspace with only the prompt, so write the prompt to stand on its own. Nobody watches a run live; the user reads its final message in the schedule's history.\\n\\nActions:\\n\\n- list: the schedules you may manage, with ids and their last run.\\n- create: propose a schedule. It exists only once the user approves it in this chat. Give cron (5 fields: minute hour day-of-month month day-of-week, e.g. `0 9 * * 1-5`) for a repeating one, or at (e.g. \\\"2026-10-01T09:00\\\") for a single run.\\n- update: propose a change to one (id plus the fields to change); the user approves it too.\\n- pause / resume / delete: take effect at once (id).\\n- result: a run's final message (id of the run, like r1a2b3c4d), in 12000-character chunks; call again with offset set to the reported next offset until none is given.\\n\\nTimes are read in timezone (IANA, e.g. \\\"Asia/Taipei\\\"); it defaults to the gateway's. Today is <today>.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"action\":{\"type\":\"string\",\"enum\":[\"list\",\"create\",\"update\",\"pause\",\"resume\",\"delete\",\"result\"]},\"id\":{\"type\":\"string\",\"description\":\"The schedule (like s1a2b3c4d) for update, pause, resume and delete; the run (like r1a2b3c4d) for result\"},\"offset\":{\"type\":\"integer\",\"minimum\":0,\"description\":\"With result: first result character to return (default 0)\"},\"prompt\":{\"type\":\"string\",\"description\":\"What the scheduled agent should do, standing on its own\"},\"title\":{\"type\":\"string\",\"description\":\"A short title; it names each run session\"},\"cron\":{\"type\":\"string\",\"description\":\"Repeat: 5-field cron expression\"},\"at\":{\"type\":\"string\",\"description\":\"Once: ISO 8601 time; without an offset it is read in timezone\"},\"timezone\":{\"type\":\"string\",\"description\":\"IANA time zone for cron and at\"},\"workspace\":{\"type\":\"string\",\"description\":\"Where it runs (workspace id or name). Default: this workspace. Only the assistant may pick another one.\"},\"notify\":{\"type\":\"string\",\"enum\":[\"all\",\"problems\",\"none\"],\"description\":\"Push notifications: every run (all, the default), only runs that fail, are missed or wait for the user (problems), or none. Pick problems for frequent schedules.\"}},\"required\":[\"action\"],\"additionalProperties\":false},\"resultSchema\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"list\"},\"timezone\":{\"type\":\"string\"},\"schedules\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"when\":{\"type\":\"string\",\"description\":\"The cron expression or one-off time, as text\"},\"status\":{\"type\":\"string\"},\"nextRun\":{\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"thinking\":{\"type\":\"string\"},\"notify\":{\"type\":\"string\"},\"prompt\":{\"type\":\"string\"},\"lastRun\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"status\":{\"type\":\"string\"},\"due\":{\"type\":\"string\"},\"result\":{\"type\":\"string\"},\"resultChars\":{\"type\":\"integer\"}},\"required\":[\"id\",\"status\",\"due\"],\"additionalProperties\":false}},\"required\":[\"id\",\"title\",\"workspace\",\"when\",\"status\",\"prompt\"],\"additionalProperties\":false}}},\"required\":[\"text\",\"action\",\"timezone\",\"schedules\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"create\"},\"proposalId\":{\"type\":\"string\",\"description\":\"The user approves it in the chat; it does not exist until then\"},\"title\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"proposalId\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"update\"},\"proposalId\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"proposalId\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"pause\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"nextRun\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"id\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"resume\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"nextRun\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"id\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"delete\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"id\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"result\"},\"id\":{\"type\":\"string\",\"description\":\"The run\"},\"schedule\":{\"type\":\"string\"},\"status\":{\"type\":\"string\"},\"session\":{\"type\":\"string\"},\"result\":{\"type\":\"string\",\"description\":\"This chunk of the result\"},\"resultOffset\":{\"type\":\"integer\"},\"resultChars\":{\"type\":\"integer\"},\"nextOffset\":{\"type\":[\"integer\",\"null\"],\"description\":\"Where the next chunk starts, or null at the end\"}},\"required\":[\"text\",\"action\",\"id\",\"schedule\",\"status\",\"result\",\"resultOffset\",\"resultChars\",\"nextOffset\"],\"additionalProperties\":false}]},\"errors\":[\"ApprovalDenied\",\"CapabilityUnavailable\",\"InvalidArguments\",\"QuotaExceeded\",\"Cancelled\",\"Timeout\",\"OperationFailed\"],\"effects\":[\"external\",\"write\"],\"concurrency\":\"exclusive-write\",\"readActions\":[\"list\",\"result\"],\"approval\":\"action-dependent\",\"suspension\":[\"approval\"],\"examples\":[\"const result = await tools.schedule({ action: \\\"…\\\" });\"]}],\"truncated\":false,\"nextCursor\":null}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "d1",
+          "toolName": "ptc_docs"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "type": "text_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "Docume",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "nted.",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "content": "Documented.",
+          "contentIndex": 0,
+          "type": "text_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "Documented.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "agent_end",
+        "willRetry": false
+      },
+      {
+        "type": "agent_settled"
+      }
+    ],
+    "step": "docs: events"
+  },
+  {
+    "observed": [
+      {
+        "messages": [
+          {
+            "content": "Show the schedule tool",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:2>",
+        "systemPrompt": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- schedule: schedule\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\n### Other capabilities\n\nCall these with the arguments shown. Each result has `text`; `ptc_docs({ names: [...] })` documents its typed fields if a script needs more.\n\n`tools.schedule(args: { action: \"list\" | \"create\" | \"update\" | \"pause\" | \"resume\" | \"delete\" | \"result\"; id?: string; offset?: number; prompt?: string; title?: string; cron?: string; at?: string; timezone?: string; workspace?: string; notify?: \"all\" | \"problems\" | \"none\" })` — Run a task later, or repeatedly, as a new agent session: the user's scheduled tasks (cron).\n\nCurrent working directory: <tmp>/workspace",
+        "thinking": "low",
+        "tools": [
+          {
+            "description": "Run a TypeScript async function body that calls capabilities. Every operation (files, shell commands, web, questions to the user, …) is a capability callable from here; the core ones may also be direct tools. Use a script to combine several operations, loop, or filter results before they reach you.\n\n- `await tools.<name>(args)` returns the result data and throws a `PtcError` on failure: `code` is ApprovalDenied, CapabilityUnavailable, InvalidArguments, QuotaExceeded, Cancelled, Timeout or OperationFailed; `outcome` says whether it ran (`not_started`, `failed`, `cancelled`, `unknown`); `data` holds the typed fields of a failed result when there are any. A `bash` command that exits non-zero is not a failure here: check its `exitCode`.\n- Result data is `text` (the formatted output) plus typed fields, e.g. `read` → `content`, `nextOffset`; `bash` → `output`, `exitCode`; `grep` → `matches`. Use the fields instead of parsing `text`.\n- `await tools.call(\"<name>\", args)` returns `{ ok: true, data }` or `{ ok: false, error: { code, message, outcome } }` instead of throwing.\n- Capability names must be literals (`tools.read(…)`, `tools.call(\"read\", …)`); never `tools[name]`. A script using an unavailable capability is rejected before anything runs.\n- `await tools.par(items, async (item, index) => …, { concurrency })` maps with up to 8 at a time and keeps order. At the first failure it starts no more items, cancels the operations its items still have running and throws that failure. Writes and commands still run one at a time. At most 8 operations run at once (more wait their turn), 200 operations and 200 `tools.par` calls per `ptc` call.\n- `return` what you need: strings are shown as is, other values as JSON. `console.log` output is shown too. Both are bounded, so filter large results in the script.\n- Images (e.g. `browser_screenshot`, `read` of a picture) come back as `images: [{ handle, mimeType, bytes }]`. To see one, `await attachments.add(result.images[0])`: it is attached to this `ptc` result (at most 4, together 512 KiB).\n- `store(key, value)` / `load(key)` keep small JSON values across `ptc` calls in this session (kept only when the script completes; `undefined` deletes).\n- The script runs in an isolated interpreter with no filesystem, network, processes, imports or timers: only `tools`, `attachments`, `store` and `load`.\n\nThe core signatures in the system prompt are complete; other listed capabilities show their arguments only: use `ptc_docs` for their result fields, or for a capability named without a signature. Default timeout 120 s (`timeout` in seconds, max 3600), not counting time spent waiting for the user. Nothing is retried automatically, and operations that already ran are not undone when a later one fails.",
+            "name": "ptc",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "description": "Body of an async TypeScript function, e.g. `const { text } = await tools.read({ path: \"README.md\" }); return text.split(\"\\n\").length;`",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "timeout": {
+                  "description": "Active-time budget in seconds (default 120)",
+                  "exclusiveMinimum": 0,
+                  "maximum": 3600,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Look up the capabilities `ptc` scripts can call. `{}` lists categories and names; `{ category }` gives one-line summaries (continue with the returned `cursor`); `{ names: [...] }` (1–8) gives argument schemas, results, errors, effects and approval behavior. Read-only. Docs already in the conversation stay valid until a call fails with StaleContract.",
+            "name": "ptc_docs",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "category": {
+                  "description": "A category from the index",
+                  "type": "string"
+                },
+                "cursor": {
+                  "description": "nextCursor of the previous page (with category)",
+                  "type": "string"
+                },
+                "names": {
+                  "description": "Capabilities to document in full",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "registryVersion": {
+                  "description": "registryVersion you already have; a mismatch fails with StaleContract",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "description": "Read a file. Text is returned with line numbers (`offset` is 1-based, default limit 2000 lines). Images (png/jpg/gif/webp) are returned as images.",
+            "name": "read",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "limit": {
+                  "description": "Maximum lines to return",
+                  "type": "number"
+                },
+                "offset": {
+                  "description": "1-based first line",
+                  "type": "number"
+                },
+                "path": {
+                  "description": "File path, relative to the workspace or absolute",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Create or overwrite a file with the given content. Parent directories are created.",
+            "name": "write",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "content": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "content"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true. Read the file first.",
+            "name": "edit",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "newText": {
+                  "type": "string"
+                },
+                "oldText": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "replaceAll": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "path",
+                "oldText",
+                "newText"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "List a directory (directories end with /).",
+            "name": "ls",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "description": "Default: workspace root",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "description": "Search file contents with a JavaScript regular expression. Returns `path:line: text`. Optional `glob` filters files.",
+            "name": "grep",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "glob": {
+                  "type": "string"
+                },
+                "ignoreCase": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "description": "Maximum matches (default 200)",
+                  "type": "number"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "pattern": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Find files by glob pattern (e.g. `**/*.ts`). Skips .git, node_modules, dist, target, result.",
+            "name": "find",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "description": "Directory to search (default workspace)",
+                  "type": "string"
+                },
+                "pattern": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Run a bash command in the workspace. stdout and stderr are combined. Default timeout 120s (`timeout` in seconds).",
+            "name": "bash",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "timeout": {
+                  "description": "Timeout in seconds",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "command"
+              ],
+              "type": "object"
+            }
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "content": "Show the schedule tool",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "names": [
+                    "schedule"
+                  ]
+                },
+                "id": "d1",
+                "name": "ptc_docs",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "{\"registryVersion\":\"<hex16:1>\",\"contractVersion\":1,\"items\":[{\"name\":\"schedule\",\"category\":\"schedule\",\"uiLabel\":\"Schedule\",\"contractVersion\":1,\"description\":\"Run a task later, or repeatedly, as a new agent session: the user's scheduled tasks (cron). Each run starts fresh in the chosen workspace with only the prompt, so write the prompt to stand on its own. Nobody watches a run live; the user reads its final message in the schedule's history.\\n\\nActions:\\n\\n- list: the schedules you may manage, with ids and their last run.\\n- create: propose a schedule. It exists only once the user approves it in this chat. Give cron (5 fields: minute hour day-of-month month day-of-week, e.g. `0 9 * * 1-5`) for a repeating one, or at (e.g. \\\"2026-10-01T09:00\\\") for a single run.\\n- update: propose a change to one (id plus the fields to change); the user approves it too.\\n- pause / resume / delete: take effect at once (id).\\n- result: a run's final message (id of the run, like r1a2b3c4d), in 12000-character chunks; call again with offset set to the reported next offset until none is given.\\n\\nTimes are read in timezone (IANA, e.g. \\\"Asia/Taipei\\\"); it defaults to the gateway's. Today is <today>.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"action\":{\"type\":\"string\",\"enum\":[\"list\",\"create\",\"update\",\"pause\",\"resume\",\"delete\",\"result\"]},\"id\":{\"type\":\"string\",\"description\":\"The schedule (like s1a2b3c4d) for update, pause, resume and delete; the run (like r1a2b3c4d) for result\"},\"offset\":{\"type\":\"integer\",\"minimum\":0,\"description\":\"With result: first result character to return (default 0)\"},\"prompt\":{\"type\":\"string\",\"description\":\"What the scheduled agent should do, standing on its own\"},\"title\":{\"type\":\"string\",\"description\":\"A short title; it names each run session\"},\"cron\":{\"type\":\"string\",\"description\":\"Repeat: 5-field cron expression\"},\"at\":{\"type\":\"string\",\"description\":\"Once: ISO 8601 time; without an offset it is read in timezone\"},\"timezone\":{\"type\":\"string\",\"description\":\"IANA time zone for cron and at\"},\"workspace\":{\"type\":\"string\",\"description\":\"Where it runs (workspace id or name). Default: this workspace. Only the assistant may pick another one.\"},\"notify\":{\"type\":\"string\",\"enum\":[\"all\",\"problems\",\"none\"],\"description\":\"Push notifications: every run (all, the default), only runs that fail, are missed or wait for the user (problems), or none. Pick problems for frequent schedules.\"}},\"required\":[\"action\"],\"additionalProperties\":false},\"resultSchema\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"list\"},\"timezone\":{\"type\":\"string\"},\"schedules\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"when\":{\"type\":\"string\",\"description\":\"The cron expression or one-off time, as text\"},\"status\":{\"type\":\"string\"},\"nextRun\":{\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"thinking\":{\"type\":\"string\"},\"notify\":{\"type\":\"string\"},\"prompt\":{\"type\":\"string\"},\"lastRun\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"status\":{\"type\":\"string\"},\"due\":{\"type\":\"string\"},\"result\":{\"type\":\"string\"},\"resultChars\":{\"type\":\"integer\"}},\"required\":[\"id\",\"status\",\"due\"],\"additionalProperties\":false}},\"required\":[\"id\",\"title\",\"workspace\",\"when\",\"status\",\"prompt\"],\"additionalProperties\":false}}},\"required\":[\"text\",\"action\",\"timezone\",\"schedules\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"create\"},\"proposalId\":{\"type\":\"string\",\"description\":\"The user approves it in the chat; it does not exist until then\"},\"title\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"proposalId\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"update\"},\"proposalId\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"proposalId\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"pause\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"nextRun\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"id\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"resume\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"nextRun\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"id\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"delete\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"required\":[\"text\",\"action\",\"id\",\"title\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"The formatted output (what a person reading the result would see)\"},\"images\":{\"type\":\"array\",\"description\":\"Images the operation returned, kept by the host: pass one to attachments.add() to show it to the model with the ptc result\",\"items\":{\"type\":\"object\",\"properties\":{\"handle\":{\"type\":\"string\",\"description\":\"Opaque attachment handle\"},\"mimeType\":{\"type\":\"string\"},\"bytes\":{\"type\":\"integer\"}},\"required\":[\"handle\",\"mimeType\",\"bytes\"],\"additionalProperties\":false}},\"action\":{\"const\":\"result\"},\"id\":{\"type\":\"string\",\"description\":\"The run\"},\"schedule\":{\"type\":\"string\"},\"status\":{\"type\":\"string\"},\"session\":{\"type\":\"string\"},\"result\":{\"type\":\"string\",\"description\":\"This chunk of the result\"},\"resultOffset\":{\"type\":\"integer\"},\"resultChars\":{\"type\":\"integer\"},\"nextOffset\":{\"type\":[\"integer\",\"null\"],\"description\":\"Where the next chunk starts, or null at the end\"}},\"required\":[\"text\",\"action\",\"id\",\"schedule\",\"status\",\"result\",\"resultOffset\",\"resultChars\",\"nextOffset\"],\"additionalProperties\":false}]},\"errors\":[\"ApprovalDenied\",\"CapabilityUnavailable\",\"InvalidArguments\",\"QuotaExceeded\",\"Cancelled\",\"Timeout\",\"OperationFailed\"],\"effects\":[\"external\",\"write\"],\"concurrency\":\"exclusive-write\",\"readActions\":[\"list\",\"result\"],\"approval\":\"action-dependent\",\"suspension\":[\"approval\"],\"examples\":[\"const result = await tools.schedule({ action: \\\"…\\\" });\"]}],\"truncated\":false,\"nextCursor\":null}",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "d1",
+            "toolName": "ptc_docs"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:2>",
+        "systemPrompt": "<unchanged>",
+        "thinking": "low",
+        "tools": "<unchanged>"
+      }
+    ],
+    "step": "docs: model requests"
+  }
+]

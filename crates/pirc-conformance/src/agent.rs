@@ -303,6 +303,13 @@ pub struct Answers {
     /// Gateway operation results by `op` (`{"ok": true, "result": …}` or an
     /// error object), else `{"ok": false, "error": {"code": "not_found"}}`.
     pub gateway: HashMap<String, Value>,
+    /// Browser operation results by `op`, used in order (`{"ok": true,
+    /// "result": …}` or `{"ok": false, "error": …}`). An operation with
+    /// nothing queued is not answered (the agent waits, as for a human).
+    pub browser: HashMap<String, VecDeque<Value>>,
+    /// Sandbox request results in order, whatever the `op`; none queued is
+    /// not answered.
+    pub sandbox: VecDeque<Value>,
 }
 
 /// How the agent is started.
@@ -579,6 +586,23 @@ impl AgentRun {
         std::mem::take(&mut self.inference.lock().unwrap().requests)
     }
 
+    /// How many inference requests arrived and were not taken yet.
+    pub fn pending_requests(&self) -> usize {
+        self.inference.lock().unwrap().requests.len()
+    }
+
+    /// Wait until an inference request arrived (one not taken yet).
+    pub async fn wait_for_request(&self) {
+        let deadline = tokio::time::Instant::now() + TIMEOUT;
+        while self.pending_requests() == 0 {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "timed out waiting for an inference request"
+            );
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    }
+
     /// Replace the catalog `/models` serves.
     pub fn set_models(&self, models: Value) {
         self.inference.lock().unwrap().models = models;
@@ -694,6 +718,23 @@ impl AgentRun {
                     reply["id"] = line["id"].clone();
                     Some(reply)
                 }
+                Some("browser_request") => {
+                    let op = line["op"].as_str().unwrap_or_default();
+                    answers
+                        .browser
+                        .get_mut(op)
+                        .and_then(VecDeque::pop_front)
+                        .map(|mut reply| {
+                            reply["type"] = json!("browser_response");
+                            reply["id"] = line["id"].clone();
+                            reply
+                        })
+                }
+                Some("sandbox_request") => answers.sandbox.pop_front().map(|mut reply| {
+                    reply["type"] = json!("sandbox_response");
+                    reply["id"] = line["id"].clone();
+                    reply
+                }),
                 Some("extension_ui_request")
                     if matches!(
                         line["method"].as_str(),
