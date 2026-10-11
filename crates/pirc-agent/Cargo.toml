@@ -26,6 +26,8 @@ tokio = { version = "1", features = ["io-std", "io-util", "macros", "net", "proc
 
 pirc-policy = { path = "../pirc-policy" }
 pirc-protocol = { path = "../pirc-protocol" }
+# The preflight and shared contracts only: QuickJS lives in the guest.
+pirc-ptc = { path = "../pirc-ptc", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

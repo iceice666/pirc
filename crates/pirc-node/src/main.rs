@@ -12,6 +12,9 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some("agent") => pirc_agent::run_agent(args.collect()),
+        // Internal: one `ptc` script, started by an agent (empty environment,
+        // its stdin and stdout as the channel).
+        Some("ptc-guest") => pirc_ptc::guest::run(),
         _ => {
             eprintln!(
                 "pirc-node (Rust) only runs `pirc-node agent` so far; run the TypeScript build. See plans/rust-rewrite.md."

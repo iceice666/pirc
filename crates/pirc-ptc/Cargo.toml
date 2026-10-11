@@ -1,0 +1,30 @@
+[package]
+name = "pirc-ptc"
+description = "PTC scripts: the preflight (TypeScript stripping, literal capability names) and the QuickJS guest"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = ["guest"]
+# The `ptc-guest` process (QuickJS). The agent needs only the preflight and
+# the shared contracts, so it builds without it.
+guest = ["dep:rquickjs", "dep:nix"]
+
+[dependencies]
+# TypeScript type stripping and the preflight's AST checks (Bun.Transpiler
+# and acorn in TS); see spikes/ptc-size.
+oxc = { version = "0.153", features = ["semantic", "transformer", "codegen", "ast_visit"] }
+# Native QuickJS, the engine TS ran as WASM (quickjs-emscripten).
+rquickjs = { version = "0.14", optional = true }
+serde_json.workspace = true
+
+# The guest's parent-death signal (Linux): it dies with its agent even inside
+# a regular expression, which QuickJS cannot interrupt. Already linked by the
+# agent for process-group kills.
+[target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.31", features = ["process", "signal"], optional = true }
+
+[lints]
+workspace = true

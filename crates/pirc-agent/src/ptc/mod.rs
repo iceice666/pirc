@@ -3,7 +3,7 @@
 //! system prompt's capability index, the `ptc` and `ptc_docs` tools and
 //! argument validation. The script runtime is M5's.
 
-pub mod contracts;
+pub use pirc_ptc::contracts;
 pub mod registry;
 pub mod schema;
 pub mod signatures;
