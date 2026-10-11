@@ -1,0 +1,528 @@
+---
+source: crates/pirc-conformance/tests/node_sessions.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "error": {
+        "code": "stale_interaction",
+        "message": "Interaction belongs to an inactive runner"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/interactions/interaction_missing/answer",
+    "status": 409,
+    "step": "answer before any agent runs"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c1",
+        "payload": {
+          "message": "ask",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:1>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:1>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "prompt"
+  },
+  {
+    "observed": [
+      "runner_ready",
+      "notification",
+      "pi_event:extension_ui_request",
+      "notification",
+      "pi_event:extension_ui_request",
+      "pi_event:panel_changed",
+      "notification",
+      "pi_event:extension_ui_request",
+      "pi_event:agent_start",
+      "pi_event:message_start:user",
+      "pi_event:message_end:user",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_update:toolcall_start",
+      "pi_event:message_update:toolcall_delta",
+      "pi_event:message_update:toolcall_delta",
+      "pi_event:message_update:toolcall_delta",
+      "pi_event:message_update:toolcall_end",
+      "pi_event:message_end:assistant",
+      "pi_event:panel_changed",
+      "pi_event:tool_execution_start",
+      "pi_event:tool_execution_start",
+      "interaction_created"
+    ],
+    "step": "events until the dialog opens"
+  },
+  {
+    "observed": {
+      "expiresAt": "<epoch-ms>",
+      "id": "interaction_<uuid:3>",
+      "kind": "select",
+      "request": {
+        "id": "<uuid:4>",
+        "method": "select",
+        "multiple": true,
+        "optionDescriptions": [
+          "",
+          "",
+          ""
+        ],
+        "options": [
+          "red",
+          "blue",
+          "Other (type your own answer)"
+        ],
+        "title": "Color?",
+        "toolCallId": "<uuid:5>:op1",
+        "type": "extension_ui_request"
+      },
+      "rpcId": "<uuid:4>",
+      "runnerEpoch": 1,
+      "sessionId": "session_<uuid:6>",
+      "status": "pending"
+    },
+    "step": "interaction_created"
+  },
+  {
+    "observed": {
+      "agent": {
+        "model": {
+          "id": "fake-model",
+          "provider": "fake"
+        },
+        "thinkingLevel": "low"
+      },
+      "history": [
+        {
+          "content": "ask",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "canonicalProvider": "fake",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "code": "const r = await tools.call(\"ask_user_question\", {\"questions\":[{\"question\":\"Color?\",\"multiSelect\":true,\"options\":[{\"label\":\"red\"},{\"label\":\"blue\"}]}]});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
+              },
+              "id": "q",
+              "name": "ptc",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 60,
+            "output": 10,
+            "totalTokens": 110
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "expiresAt": "<epoch-ms>",
+          "id": "interaction_<uuid:3>",
+          "kind": "select",
+          "request": {
+            "id": "<uuid:4>",
+            "method": "select",
+            "multiple": true,
+            "optionDescriptions": [
+              "",
+              "",
+              ""
+            ],
+            "options": [
+              "red",
+              "blue",
+              "Other (type your own answer)"
+            ],
+            "title": "Color?",
+            "toolCallId": "<uuid:5>:op1",
+            "type": "extension_ui_request"
+          },
+          "rpcId": "<uuid:4>",
+          "runnerEpoch": 1,
+          "sessionId": "session_<uuid:6>",
+          "status": "pending"
+        }
+      ],
+      "operations": [
+        {
+          "args": {
+            "questions": [
+              {
+                "multiSelect": true,
+                "options": [
+                  {
+                    "label": "red"
+                  },
+                  {
+                    "label": "blue"
+                  }
+                ],
+                "question": "Color?"
+              }
+            ]
+          },
+          "parentToolCallId": "q",
+          "toolCallId": "<uuid:5>:op1",
+          "toolName": "ask_user_question"
+        }
+      ],
+      "partialMessage": null,
+      "partialOutputLost": false,
+      "queue": {
+        "followUp": [],
+        "steering": []
+      },
+      "run": {
+        "createdAt": "<epoch-ms>",
+        "endedAt": null,
+        "failureReason": null,
+        "id": "run_<uuid:7>",
+        "startedAt": "<epoch-ms>",
+        "status": "waiting_input"
+      },
+      "runnerState": "ready",
+      "sandbox": {
+        "active": true
+      }
+    },
+    "step": "snapshot with the dialog open"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Interaction not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/interactions/:interactionId/answer",
+    "status": 404,
+    "step": "answer an unknown interaction"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/interactions/:interactionId/answer",
+    "status": 409,
+    "step": "answer with a stale generation"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/interactions/:interactionId/answer",
+    "status": 400,
+    "step": "answer without a generation"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/interactions/:interactionId/answer",
+    "status": 400,
+    "step": "answer with an invalid answer"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/interactions/:interactionId/answer",
+    "status": 400,
+    "step": "answer without an answer"
+  },
+  {
+    "body": {
+      "interactionId": "interaction_<uuid:3>",
+      "status": "answered"
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/interactions/:interactionId/answer",
+    "status": 200,
+    "step": "answer"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "stale_interaction",
+        "message": "Interaction is no longer answerable"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/interactions/:interactionId/answer",
+    "status": 409,
+    "step": "answer twice"
+  },
+  {
+    "observed": [
+      "pi_event:extension_ui_request",
+      "interaction_answered",
+      "pi_event:tool_execution_end",
+      "pi_event:tool_execution_end",
+      "pi_event:message_start:toolResult",
+      "pi_event:message_end:toolResult",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_update:text_start",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_end",
+      "pi_event:message_end:assistant",
+      "pi_event:panel_changed",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:agent_end",
+      "pi_event:agent_settled"
+    ],
+    "step": "events after the answer"
+  },
+  {
+    "observed": [
+      {
+        "interactionId": "interaction_<uuid:3>"
+      }
+    ],
+    "step": "interaction_answered"
+  },
+  {
+    "observed": {
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"answers\":[{\"question\":\"Color?\",\"selected\":[\"red\",\"blue\"]}]}",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "toolCallId": "q"
+    },
+    "step": "the question tool's result in history"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "stale_interaction",
+        "message": "Interaction is no longer answerable"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/interactions/:interactionId/answer",
+    "status": 409,
+    "step": "answer after the run settled"
+  },
+  {
+    "observed": [
+      "pi_event:agent_start",
+      "pi_event:message_start:user",
+      "pi_event:message_end:user",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_update:toolcall_start",
+      "pi_event:message_update:toolcall_delta",
+      "pi_event:message_update:toolcall_delta",
+      "pi_event:message_update:toolcall_delta",
+      "pi_event:message_update:toolcall_end",
+      "pi_event:message_end:assistant",
+      "pi_event:panel_changed",
+      "pi_event:tool_execution_start",
+      "pi_event:tool_execution_start",
+      "interaction_created"
+    ],
+    "step": "events until the second dialog opens"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c3",
+        "payload": {
+          "type": "stop"
+        },
+        "payloadHash": "<sha256:2>",
+        "result": {
+          "command": "abort",
+          "data": {
+            "cleared": {
+              "followUp": [],
+              "steering": []
+            }
+          },
+          "id": "rpc_<uuid:8>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "stop with the dialog open"
+  },
+  {
+    "observed": [
+      "pi_event:extension_ui_request",
+      "pi_event:queue_update",
+      "interaction_answered",
+      "pi_event:tool_execution_end",
+      "pi_event:tool_execution_end",
+      "pi_event:message_start:toolResult",
+      "pi_event:message_end:toolResult",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:agent_end",
+      "pi_event:agent_settled"
+    ],
+    "step": "events after stop"
+  },
+  {
+    "observed": [
+      {
+        "cancelled": true,
+        "interactionId": "interaction_<uuid:9>"
+      }
+    ],
+    "step": "interaction_answered on stop"
+  },
+  {
+    "observed": [],
+    "step": "interactions after stop"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "stale_interaction",
+        "message": "Interaction is no longer answerable"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/interactions/:interactionId/answer",
+    "status": 409,
+    "step": "answer the withdrawn dialog"
+  },
+  {
+    "body": {
+      "interactionId": "interaction_<uuid:10>",
+      "status": "answered"
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/interactions/:interactionId/answer",
+    "status": 200,
+    "step": "cancel the dialog"
+  },
+  {
+    "observed": [
+      "pi_event:extension_ui_request",
+      "interaction_answered",
+      "pi_event:tool_execution_end",
+      "pi_event:tool_execution_end",
+      "pi_event:message_start:toolResult",
+      "pi_event:message_end:toolResult",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_update:text_start",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_end",
+      "pi_event:message_end:assistant",
+      "pi_event:panel_changed",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:agent_end",
+      "pi_event:agent_settled"
+    ],
+    "step": "events after cancelling"
+  },
+  {
+    "observed": {
+      "content": [
+        {
+          "text": "{\"status\":\"cancelled\",\"answers\":[]}",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "toolCallId": "q3"
+    },
+    "step": "the cancelled question's result"
+  }
+]

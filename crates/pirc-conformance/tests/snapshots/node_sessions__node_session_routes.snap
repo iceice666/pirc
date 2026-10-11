@@ -1,0 +1,703 @@
+---
+source: crates/pirc-conformance/tests/node_sessions.rs
+assertion_line: 373
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "New session",
+        "nameSource": "auto",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 201,
+    "step": "create session"
+  },
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "First name",
+        "nameSource": "user",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/:id",
+    "status": 200,
+    "step": "rename"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/:id",
+    "status": 400,
+    "step": "rename to blanks"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/:id",
+    "status": 400,
+    "step": "rename to an empty name"
+  },
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+        "nameSource": "user",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/:id",
+    "status": 200,
+    "step": "rename to 200 characters"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/:id",
+    "status": 400,
+    "step": "rename to 201 characters"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/:id",
+    "status": 400,
+    "step": "rename to a number"
+  },
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+        "nameSource": "user",
+        "nodeId": "test",
+        "pinnedAt": "<epoch-ms>",
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/:id",
+    "status": 200,
+    "step": "pin"
+  },
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "Second name",
+        "nameSource": "user",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/:id",
+    "status": 200,
+    "step": "rename and unpin"
+  },
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "Second name",
+        "nameSource": "user",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": "<epoch-ms>",
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/:id",
+    "status": 200,
+    "step": "settle"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/sessions/:id",
+    "status": 400,
+    "step": "nothing to update"
+  },
+  {
+    "observed": {
+      "createdAt": "<epoch-ms>",
+      "id": "session_<uuid:1>",
+      "name": "Second name",
+      "nameSource": "user",
+      "nodeId": "test",
+      "pinnedAt": null,
+      "runStatus": null,
+      "runnerEpoch": 0,
+      "runnerState": "stopped",
+      "settledAt": "<epoch-ms>",
+      "unread": false,
+      "updatedAt": "<epoch-ms>",
+      "workspaceId": "test:test"
+    },
+    "step": "the listed session after the renames"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Only chats can be deleted"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/sessions/:id",
+    "status": 400,
+    "step": "delete a session of a directory workspace"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/sessions/session_missing",
+    "status": 404,
+    "step": "delete an unknown session"
+  },
+  {
+    "body": {
+      "lease": null
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/:id/control",
+    "status": 200,
+    "step": "control before anyone takes it"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 409,
+    "step": "a command before taking control"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "browser",
+        "expiresAt": "<epoch-ms>",
+        "generation": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/acquire",
+    "status": 200,
+    "step": "acquire control (browser)"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "browser",
+        "expired": false,
+        "expiresAt": "<epoch-ms>",
+        "generation": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/:id/control",
+    "status": 200,
+    "step": "control while held"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "browser",
+        "expiresAt": "<epoch-ms>",
+        "generation": 2
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/acquire",
+    "status": 200,
+    "step": "the holder acquires again"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Another client holds control"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/acquire",
+    "status": 409,
+    "step": "another client acquires"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Another client holds control"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/acquire",
+    "status": 409,
+    "step": "another client acquires with force: false"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/acquire",
+    "status": 400,
+    "step": "an empty client id"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/acquire",
+    "status": 400,
+    "step": "a 201-character client id"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/acquire",
+    "status": 400,
+    "step": "no client id"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/heartbeat",
+    "status": 409,
+    "step": "heartbeat with the superseded generation"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/heartbeat",
+    "status": 409,
+    "step": "heartbeat from another client"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/heartbeat",
+    "status": 400,
+    "step": "heartbeat without a generation"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/heartbeat",
+    "status": 400,
+    "step": "heartbeat with generation 0"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "browser",
+        "expiresAt": "<epoch-ms>",
+        "generation": 2
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/heartbeat",
+    "status": 200,
+    "step": "heartbeat"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "stale",
+        "payload": {
+          "level": "high",
+          "type": "set_thinking"
+        },
+        "payloadHash": "<sha256:1>",
+        "result": {
+          "command": "set_thinking_level",
+          "id": "rpc_<uuid:2>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:1>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "the holder's command"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "phone",
+        "expiresAt": "<epoch-ms>",
+        "generation": 3
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/acquire",
+    "status": 200,
+    "step": "another client takes control with force"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 409,
+    "step": "a command from the client that lost control"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 400,
+    "step": "a command without a generation"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/release",
+    "status": 409,
+    "step": "the client that lost control releases"
+  },
+  {
+    "body": null,
+    "request": "POST /api/sessions/:id/control/release",
+    "status": 204,
+    "step": "the holder releases"
+  },
+  {
+    "body": {
+      "lease": null
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/:id/control",
+    "status": 200,
+    "step": "control after release"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/release",
+    "status": 409,
+    "step": "release again"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 409,
+    "step": "a command after release"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "phone",
+        "expiresAt": "<epoch-ms>",
+        "generation": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/control/acquire",
+    "status": 200,
+    "step": "acquire again after release"
+  },
+  {
+    "observed": {
+      "agent": {
+        "model": {
+          "id": "fake-model",
+          "provider": "fake"
+        },
+        "thinkingLevel": "high"
+      },
+      "run": null,
+      "runnerState": "ready",
+      "sandbox": {
+        "active": true
+      }
+    },
+    "step": "the holder's command started an agent: the snapshot reports it"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_missing/control",
+    "status": 404,
+    "step": "unknown session control"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_missing/snapshot",
+    "status": 404,
+    "step": "unknown session snapshot"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "User is not allowed on this node"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 403,
+    "step": "a user the gateway allows but the node does not creates a session"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/:id/snapshot",
+    "status": 403,
+    "step": "that user reads this session"
+  }
+]

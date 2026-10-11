@@ -1,0 +1,1787 @@
+---
+source: crates/pirc-conformance/tests/node_sessions.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": {
+      "agent": {
+        "model": {
+          "id": "fake-model",
+          "provider": "fake"
+        },
+        "thinkingLevel": "low"
+      },
+      "history": [],
+      "interactions": [],
+      "operations": [],
+      "partialMessage": null,
+      "partialOutputLost": false,
+      "queue": {
+        "followUp": [],
+        "steering": []
+      },
+      "run": null,
+      "runnerState": "stopped",
+      "sandbox": null
+    },
+    "step": "before any prompt: no runner, the settings the first agent will use"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c1",
+        "payload": {
+          "message": "p1",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:1>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:1>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "prompt (held mid-reply)"
+  },
+  {
+    "observed": [
+      "runner_ready",
+      "notification",
+      "pi_event:extension_ui_request",
+      "notification",
+      "pi_event:extension_ui_request",
+      "pi_event:panel_changed",
+      "notification",
+      "pi_event:extension_ui_request",
+      "pi_event:agent_start",
+      "pi_event:message_start:user",
+      "pi_event:message_end:user",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_update:text_start",
+      "pi_event:message_update:text_delta"
+    ],
+    "step": "events until the first delta"
+  },
+  {
+    "observed": {
+      "agent": {
+        "model": {
+          "id": "fake-model",
+          "provider": "fake"
+        },
+        "thinkingLevel": "low"
+      },
+      "history": [
+        {
+          "content": "p1",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        }
+      ],
+      "interactions": [],
+      "operations": [],
+      "partialMessage": {
+        "base": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "content": {
+          "0": {
+            "text": "First a",
+            "type": "text"
+          }
+        }
+      },
+      "partialOutputLost": false,
+      "queue": {
+        "followUp": [],
+        "steering": []
+      },
+      "run": {
+        "createdAt": "<epoch-ms>",
+        "endedAt": null,
+        "failureReason": null,
+        "id": "run_<uuid:3>",
+        "startedAt": "<epoch-ms>",
+        "status": "running"
+      },
+      "runnerState": "ready",
+      "sandbox": {
+        "active": true
+      }
+    },
+    "step": "snapshot while the reply streams"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "Session already has an active run"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 409,
+    "step": "a second prompt while running"
+  },
+  {
+    "body": {
+      "command": {
+        "error": "Session already has an active run",
+        "id": "c2",
+        "payload": {
+          "message": "p2",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:2>",
+        "result": null,
+        "sessionId": "session_<uuid:2>",
+        "status": "rejected"
+      },
+      "duplicate": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 200,
+    "step": "the refused prompt's id again"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c3",
+        "payload": {
+          "message": "s1",
+          "type": "steer"
+        },
+        "payloadHash": "<sha256:3>",
+        "result": {
+          "command": "steer",
+          "id": "rpc_<uuid:4>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "steer"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c4",
+        "payload": {
+          "message": "f1",
+          "type": "follow_up"
+        },
+        "payloadHash": "<sha256:4>",
+        "result": {
+          "command": "follow_up",
+          "id": "rpc_<uuid:5>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "follow_up"
+  },
+  {
+    "observed": [
+      {
+        "data": {
+          "followUp": [],
+          "steering": [
+            "s1"
+          ],
+          "type": "queue_update"
+        },
+        "epoch": 0,
+        "sequence": 17,
+        "sessionId": "session_<uuid:2>",
+        "timestamp": "<epoch-ms>",
+        "type": "pi_event"
+      },
+      {
+        "data": {
+          "followUp": [
+            "f1"
+          ],
+          "steering": [
+            "s1"
+          ],
+          "type": "queue_update"
+        },
+        "epoch": 0,
+        "sequence": 18,
+        "sessionId": "session_<uuid:2>",
+        "timestamp": "<epoch-ms>",
+        "type": "pi_event"
+      }
+    ],
+    "step": "events for the queued messages"
+  },
+  {
+    "observed": {
+      "followUp": [
+        "f1"
+      ],
+      "steering": [
+        "s1"
+      ]
+    },
+    "step": "queue in the snapshot"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 400,
+    "step": "send_now with a negative index"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 400,
+    "step": "send_now with an unknown queue"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 400,
+    "step": "send_now without a message"
+  },
+  {
+    "body": {
+      "command": {
+        "error": "That message is no longer queued",
+        "id": "c8",
+        "payload": {
+          "index": 3,
+          "message": "s1",
+          "queue": "steering",
+          "type": "send_now"
+        },
+        "payloadHash": "<sha256:5>",
+        "result": {
+          "command": "send_now",
+          "error": "That message is no longer queued",
+          "id": "rpc_<uuid:6>",
+          "success": false,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "rejected"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 503,
+    "step": "send_now for a message no longer queued"
+  },
+  {
+    "body": {
+      "command": {
+        "error": "That message is no longer queued",
+        "id": "c9",
+        "payload": {
+          "index": 0,
+          "message": "other",
+          "queue": "steering",
+          "type": "send_now"
+        },
+        "payloadHash": "<sha256:6>",
+        "result": {
+          "command": "send_now",
+          "error": "That message is no longer queued",
+          "id": "rpc_<uuid:7>",
+          "success": false,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "rejected"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 503,
+    "step": "send_now naming another text"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 400,
+    "step": "an unknown command type"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 400,
+    "step": "an empty prompt"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c12",
+        "payload": {
+          "type": "clear_queue"
+        },
+        "payloadHash": "<sha256:7>",
+        "result": {
+          "command": "clear_queue",
+          "data": {
+            "followUp": [
+              "f1"
+            ],
+            "steering": [
+              "s1"
+            ]
+          },
+          "id": "rpc_<uuid:8>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "clear_queue"
+  },
+  {
+    "observed": {
+      "followUp": [],
+      "steering": []
+    },
+    "step": "queue after clear_queue"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c15",
+        "payload": {
+          "index": 0,
+          "message": "f2",
+          "queue": "followUp",
+          "type": "send_now"
+        },
+        "payloadHash": "<sha256:8>",
+        "result": {
+          "command": "send_now",
+          "id": "rpc_<uuid:9>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "send_now the queued follow-up (interrupts the reply)"
+  },
+  {
+    "observed": [
+      "pi_event:queue_update",
+      "pi_event:queue_update",
+      "pi_event:queue_update",
+      "pi_event:queue_update",
+      "pi_event:message_end:assistant",
+      "pi_event:panel_changed",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:queue_update",
+      "pi_event:message_start:custom",
+      "pi_event:message_end:custom",
+      "pi_event:message_start:user",
+      "pi_event:message_end:user",
+      "pi_event:message_start:user",
+      "pi_event:message_end:user",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_update:text_start",
+      "pi_event:message_update:text_delta"
+    ],
+    "step": "events from send_now until the next reply streams"
+  },
+  {
+    "observed": [
+      {
+        "content": "p1",
+        "role": "user"
+      },
+      {
+        "content": "[Your previous response was interrupted by the user before it produced any text.]",
+        "role": "user"
+      },
+      {
+        "content": "f2",
+        "role": "user"
+      },
+      {
+        "content": "s2",
+        "role": "user"
+      }
+    ],
+    "step": "the next model request carries the sent message first"
+  },
+  {
+    "observed": {
+      "agent": {
+        "model": {
+          "id": "fake-model",
+          "provider": "fake"
+        },
+        "thinkingLevel": "low"
+      },
+      "history": [
+        {
+          "content": "p1",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [],
+          "errorMessage": "Inference request cancelled",
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "aborted",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "input": 0,
+            "output": 0,
+            "totalTokens": 0
+          }
+        },
+        {
+          "content": "[Your previous response was interrupted by the user before it produced any text.]",
+          "customType": "interrupted",
+          "display": false,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "content": "f2",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "content": "s2",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        }
+      ],
+      "interactions": [],
+      "operations": [],
+      "partialMessage": {
+        "base": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "content": {
+          "0": {
+            "text": "Second ",
+            "type": "text"
+          }
+        }
+      },
+      "partialOutputLost": false,
+      "queue": {
+        "followUp": [],
+        "steering": []
+      },
+      "run": {
+        "createdAt": "<epoch-ms>",
+        "endedAt": null,
+        "failureReason": null,
+        "id": "run_<uuid:3>",
+        "startedAt": "<epoch-ms>",
+        "status": "running"
+      },
+      "runnerState": "ready",
+      "sandbox": {
+        "active": true
+      }
+    },
+    "step": "snapshot during the second reply"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c17",
+        "payload": {
+          "type": "stop"
+        },
+        "payloadHash": "<sha256:9>",
+        "result": {
+          "command": "abort",
+          "data": {
+            "cleared": {
+              "followUp": [
+                "f3"
+              ],
+              "steering": []
+            }
+          },
+          "id": "rpc_<uuid:10>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "stop"
+  },
+  {
+    "observed": [
+      "pi_event:queue_update",
+      "pi_event:queue_update",
+      "pi_event:message_end:assistant",
+      "pi_event:panel_changed",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:agent_end",
+      "pi_event:agent_settled"
+    ],
+    "step": "events until the stopped run settles"
+  },
+  {
+    "observed": {
+      "agent": {
+        "model": {
+          "id": "fake-model",
+          "provider": "fake"
+        },
+        "thinkingLevel": "low"
+      },
+      "history": [
+        {
+          "content": "p1",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [],
+          "errorMessage": "Inference request cancelled",
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "aborted",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "input": 0,
+            "output": 0,
+            "totalTokens": 0
+          }
+        },
+        {
+          "content": "[Your previous response was interrupted by the user before it produced any text.]",
+          "customType": "interrupted",
+          "display": false,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "content": "f2",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "content": "s2",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [],
+          "errorMessage": "Inference request cancelled",
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "aborted",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "input": 0,
+            "output": 0,
+            "totalTokens": 0
+          }
+        }
+      ],
+      "interactions": [],
+      "operations": [],
+      "partialMessage": null,
+      "partialOutputLost": false,
+      "queue": {
+        "followUp": [],
+        "steering": []
+      },
+      "run": {
+        "createdAt": "<epoch-ms>",
+        "endedAt": "<epoch-ms>",
+        "failureReason": null,
+        "id": "run_<uuid:3>",
+        "startedAt": "<epoch-ms>",
+        "status": "succeeded"
+      },
+      "runnerState": "ready",
+      "sandbox": {
+        "active": true
+      }
+    },
+    "step": "snapshot after stop"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c18",
+        "payload": {
+          "type": "stop"
+        },
+        "payloadHash": "<sha256:9>",
+        "result": {
+          "command": "abort",
+          "data": {
+            "cleared": {
+              "followUp": [],
+              "steering": []
+            }
+          },
+          "id": "rpc_<uuid:11>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "stop while idle"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c19",
+        "payload": {
+          "type": "clear_queue"
+        },
+        "payloadHash": "<sha256:7>",
+        "result": {
+          "command": "clear_queue",
+          "data": {
+            "followUp": [],
+            "steering": []
+          },
+          "id": "rpc_<uuid:12>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "clear_queue while idle"
+  },
+  {
+    "body": {
+      "command": {
+        "error": "That message is no longer queued",
+        "id": "c20",
+        "payload": {
+          "index": 0,
+          "message": "x",
+          "queue": "steering",
+          "type": "send_now"
+        },
+        "payloadHash": "<sha256:10>",
+        "result": {
+          "command": "send_now",
+          "error": "That message is no longer queued",
+          "id": "rpc_<uuid:13>",
+          "success": false,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "rejected"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 503,
+    "step": "send_now while idle and nothing queued"
+  },
+  {
+    "observed": [
+      "pi_event:queue_update",
+      "pi_event:queue_update",
+      "pi_event:agent_start",
+      "pi_event:message_start:user",
+      "pi_event:message_end:user",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_update:text_start",
+      "pi_event:message_update:text_delta",
+      "pi_event:queue_update",
+      "pi_event:queue_update",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_end",
+      "pi_event:message_end:assistant",
+      "pi_event:panel_changed",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:queue_update",
+      "pi_event:message_start:user",
+      "pi_event:message_end:user",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_update:text_start",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_end",
+      "pi_event:message_end:assistant",
+      "pi_event:panel_changed",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:queue_update",
+      "pi_event:message_start:user",
+      "pi_event:message_end:user",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_update:text_start",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_end",
+      "pi_event:message_end:assistant",
+      "pi_event:panel_changed",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:agent_end",
+      "pi_event:agent_settled"
+    ],
+    "step": "events from the queued prompt's run (steer, then follow-up)"
+  },
+  {
+    "observed": [
+      [
+        {
+          "content": "p1",
+          "role": "user"
+        },
+        {
+          "content": "[Your previous response was interrupted by the user before it produced any text.]",
+          "role": "user"
+        },
+        {
+          "content": "f2",
+          "role": "user"
+        },
+        {
+          "content": "s2",
+          "role": "user"
+        },
+        {
+          "content": "p3",
+          "role": "user"
+        }
+      ],
+      [
+        {
+          "content": "p1",
+          "role": "user"
+        },
+        {
+          "content": "[Your previous response was interrupted by the user before it produced any text.]",
+          "role": "user"
+        },
+        {
+          "content": "f2",
+          "role": "user"
+        },
+        {
+          "content": "s2",
+          "role": "user"
+        },
+        {
+          "content": "p3",
+          "role": "user"
+        },
+        {
+          "content": "Third answer.",
+          "role": "assistant"
+        },
+        {
+          "content": "s4",
+          "role": "user"
+        }
+      ],
+      [
+        {
+          "content": "p1",
+          "role": "user"
+        },
+        {
+          "content": "[Your previous response was interrupted by the user before it produced any text.]",
+          "role": "user"
+        },
+        {
+          "content": "f2",
+          "role": "user"
+        },
+        {
+          "content": "s2",
+          "role": "user"
+        },
+        {
+          "content": "p3",
+          "role": "user"
+        },
+        {
+          "content": "Third answer.",
+          "role": "assistant"
+        },
+        {
+          "content": "s4",
+          "role": "user"
+        },
+        {
+          "content": "Steered.",
+          "role": "assistant"
+        },
+        {
+          "content": "f4",
+          "role": "user"
+        }
+      ]
+    ],
+    "step": "model requests of that run"
+  },
+  {
+    "body": {
+      "command": {
+        "error": "Unknown model fake/missing",
+        "id": "c24",
+        "payload": {
+          "modelId": "missing",
+          "provider": "fake",
+          "type": "set_model"
+        },
+        "payloadHash": "<sha256:11>",
+        "result": {
+          "command": "set_model",
+          "error": "Unknown model fake/missing",
+          "id": "rpc_<uuid:14>",
+          "success": false,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "rejected"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 503,
+    "step": "set_model to an unknown model"
+  },
+  {
+    "body": {
+      "command": {
+        "error": "Unknown model nobody/fake-model",
+        "id": "c25",
+        "payload": {
+          "modelId": "fake-model",
+          "provider": "nobody",
+          "type": "set_model"
+        },
+        "payloadHash": "<sha256:12>",
+        "result": {
+          "command": "set_model",
+          "error": "Unknown model nobody/fake-model",
+          "id": "rpc_<uuid:15>",
+          "success": false,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "rejected"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 503,
+    "step": "set_model to an unknown provider"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 400,
+    "step": "set_model without a model id"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c27",
+        "payload": {
+          "modelId": "other-model",
+          "provider": "fake",
+          "type": "set_model"
+        },
+        "payloadHash": "<sha256:13>",
+        "result": {
+          "command": "set_model",
+          "id": "rpc_<uuid:16>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "set_model"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 400,
+    "step": "set_thinking to an unknown level"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c29",
+        "payload": {
+          "level": "high",
+          "type": "set_thinking"
+        },
+        "payloadHash": "<sha256:14>",
+        "result": {
+          "command": "set_thinking_level",
+          "id": "rpc_<uuid:17>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "set_thinking"
+  },
+  {
+    "observed": {
+      "model": {
+        "id": "other-model",
+        "provider": "fake"
+      },
+      "thinkingLevel": "high"
+    },
+    "step": "model and thinking level of the live agent"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "dup",
+        "payload": {
+          "level": "medium",
+          "type": "set_thinking"
+        },
+        "payloadHash": "<sha256:15>",
+        "result": {
+          "command": "set_thinking_level",
+          "id": "rpc_<uuid:18>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "a command"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "dup",
+        "payload": {
+          "level": "medium",
+          "type": "set_thinking"
+        },
+        "payloadHash": "<sha256:15>",
+        "result": {
+          "command": "set_thinking_level",
+          "id": "rpc_<uuid:18>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 200,
+    "step": "the same id and payload"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "commandId was already used with a different payload"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 409,
+    "step": "the same id with another payload"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "dup",
+        "payload": {
+          "level": "medium",
+          "type": "set_thinking"
+        },
+        "payloadHash": "<sha256:15>",
+        "result": {
+          "command": "set_thinking_level",
+          "id": "rpc_<uuid:18>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 200,
+    "step": "the same id and payload with keys reordered"
+  },
+  {
+    "observed": {
+      "name": "Live rename",
+      "nameSource": "user",
+      "status": 200
+    },
+    "step": "rename with a live agent (PATCH /api/sessions/:id)"
+  },
+  {
+    "observed": [
+      {
+        "data": {
+          "name": "Live rename",
+          "source": "user"
+        },
+        "epoch": 0,
+        "sequence": 95,
+        "sessionId": "session_<uuid:2>",
+        "timestamp": "<epoch-ms>",
+        "type": "session_renamed"
+      }
+    ],
+    "step": "the rename's events"
+  },
+  {
+    "observed": [
+      "pi_event:agent_start",
+      "pi_event:message_start:user",
+      "pi_event:message_end:user",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_update:text_start",
+      "pi_event:message_update:text_delta",
+      {
+        "code": null,
+        "signal": "SIGKILL"
+      }
+    ],
+    "step": "events when the agent is killed"
+  },
+  {
+    "observed": {
+      "agent": {
+        "model": {
+          "id": "other-model",
+          "provider": "fake"
+        },
+        "thinkingLevel": "high"
+      },
+      "history": [
+        {
+          "content": "p1",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [],
+          "errorMessage": "Inference request cancelled",
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "aborted",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "input": 0,
+            "output": 0,
+            "totalTokens": 0
+          }
+        },
+        {
+          "content": "[Your previous response was interrupted by the user before it produced any text.]",
+          "customType": "interrupted",
+          "display": false,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "content": "f2",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "content": "s2",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [],
+          "errorMessage": "Inference request cancelled",
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "aborted",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "input": 0,
+            "output": 0,
+            "totalTokens": 0
+          }
+        },
+        {
+          "content": "p3",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "canonicalProvider": "fake",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "Third answer.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 60,
+            "output": 10,
+            "totalTokens": 110
+          }
+        },
+        {
+          "content": "s4",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "canonicalProvider": "fake",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "Steered.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 60,
+            "output": 10,
+            "totalTokens": 110
+          }
+        },
+        {
+          "content": "f4",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "canonicalProvider": "fake",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "Followed.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 60,
+            "output": 10,
+            "totalTokens": 110
+          }
+        },
+        {
+          "content": "p4",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        }
+      ],
+      "interactions": [],
+      "operations": [],
+      "partialMessage": null,
+      "partialOutputLost": false,
+      "queue": {
+        "followUp": [],
+        "steering": []
+      },
+      "run": {
+        "createdAt": "<epoch-ms>",
+        "endedAt": "<epoch-ms>",
+        "failureReason": "Runner exited (SIGKILL)",
+        "id": "run_<uuid:19>",
+        "startedAt": "<epoch-ms>",
+        "status": "interrupted"
+      },
+      "runnerState": "failed",
+      "sandbox": null
+    },
+    "step": "snapshot without a runner: history from the session file, settings the next agent will use"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c32",
+        "payload": {
+          "message": "p5",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:16>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:20>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "prompt after the runner died"
+  },
+  {
+    "observed": [
+      "runner_ready",
+      "notification",
+      "pi_event:extension_ui_request",
+      "notification",
+      "pi_event:extension_ui_request",
+      "pi_event:panel_changed",
+      "notification",
+      "pi_event:extension_ui_request",
+      "pi_event:agent_start",
+      "pi_event:message_start:user",
+      "pi_event:message_end:user",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_update:text_start",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_end",
+      "pi_event:message_end:assistant",
+      "pi_event:panel_changed",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:agent_end",
+      "pi_event:agent_settled"
+    ],
+    "step": "events of the next runner's run"
+  },
+  {
+    "observed": [
+      {
+        "content": "p1",
+        "role": "user"
+      },
+      {
+        "content": "[Your previous response was interrupted by the user before it produced any text.]",
+        "role": "user"
+      },
+      {
+        "content": "f2",
+        "role": "user"
+      },
+      {
+        "content": "s2",
+        "role": "user"
+      },
+      {
+        "content": "p3",
+        "role": "user"
+      },
+      {
+        "content": "Third answer.",
+        "role": "assistant"
+      },
+      {
+        "content": "s4",
+        "role": "user"
+      },
+      {
+        "content": "Steered.",
+        "role": "assistant"
+      },
+      {
+        "content": "f4",
+        "role": "user"
+      },
+      {
+        "content": "Followed.",
+        "role": "assistant"
+      },
+      {
+        "content": "p4",
+        "role": "user"
+      },
+      {
+        "content": "p5",
+        "role": "user"
+      }
+    ],
+    "step": "its model request continues the transcript"
+  },
+  {
+    "observed": {
+      "state": {
+        "agent": {
+          "model": {
+            "id": "other-model",
+            "provider": "fake"
+          },
+          "thinkingLevel": "high"
+        },
+        "history": [
+          {
+            "content": "p1",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [],
+            "errorMessage": "Inference request cancelled",
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "aborted",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "input": 0,
+              "output": 0,
+              "totalTokens": 0
+            }
+          },
+          {
+            "content": "[Your previous response was interrupted by the user before it produced any text.]",
+            "customType": "interrupted",
+            "display": false,
+            "role": "custom",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "f2",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "s2",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [],
+            "errorMessage": "Inference request cancelled",
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "aborted",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "input": 0,
+              "output": 0,
+              "totalTokens": 0
+            }
+          },
+          {
+            "content": "p3",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "canonicalProvider": "fake",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "Third answer.",
+                "type": "text"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 60,
+              "output": 10,
+              "totalTokens": 110
+            }
+          },
+          {
+            "content": "s4",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "canonicalProvider": "fake",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "Steered.",
+                "type": "text"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 60,
+              "output": 10,
+              "totalTokens": 110
+            }
+          },
+          {
+            "content": "f4",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "canonicalProvider": "fake",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "Followed.",
+                "type": "text"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 60,
+              "output": 10,
+              "totalTokens": 110
+            }
+          },
+          {
+            "content": "p4",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "content": "p5",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "canonicalProvider": "fake",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "Back again.",
+                "type": "text"
+              }
+            ],
+            "model": "other-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 60,
+              "output": 10,
+              "totalTokens": 110
+            }
+          }
+        ],
+        "interactions": [],
+        "operations": [],
+        "partialMessage": null,
+        "partialOutputLost": false,
+        "queue": {
+          "followUp": [],
+          "steering": []
+        },
+        "run": {
+          "createdAt": "<epoch-ms>",
+          "endedAt": "<epoch-ms>",
+          "failureReason": null,
+          "id": "run_<uuid:21>",
+          "startedAt": "<epoch-ms>",
+          "status": "succeeded"
+        },
+        "runnerState": "ready",
+        "sandbox": {
+          "active": true
+        }
+      },
+      "watermark epoch changed": false
+    },
+    "step": "the snapshot after it"
+  }
+]

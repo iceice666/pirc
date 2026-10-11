@@ -1,0 +1,636 @@
+---
+source: crates/pirc-conformance/tests/node_terminals.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "terminals": []
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/:id/terminals",
+    "status": 200,
+    "step": "list before any terminal"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 409,
+    "step": "open without control"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 400,
+    "step": "open without a generation"
+  },
+  {
+    "body": {
+      "terminal": {
+        "cols": 100,
+        "createdAt": "<epoch-ms>",
+        "cwd": "<tmp>/workspace",
+        "exitCode": null,
+        "exited": false,
+        "id": "<terminal-1>",
+        "rows": 30,
+        "sessionId": "session_<uuid:1>",
+        "title": "sh"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 201,
+    "step": "open a 100x30 terminal"
+  },
+  {
+    "body": {
+      "terminal": {
+        "cols": 20,
+        "createdAt": "<epoch-ms>",
+        "cwd": "<tmp>/workspace",
+        "exitCode": null,
+        "exited": false,
+        "id": "<terminal-2>",
+        "rows": 200,
+        "sessionId": "session_<uuid:1>",
+        "title": "sh"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 201,
+    "step": "open a 5x1000 terminal (clamped)"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 400,
+    "step": "open with a non-numeric size"
+  },
+  {
+    "body": {
+      "terminals": [
+        {
+          "cols": 100,
+          "createdAt": "<epoch-ms>",
+          "cwd": "<tmp>/workspace",
+          "exitCode": null,
+          "exited": false,
+          "id": "<terminal-1>",
+          "rows": 30,
+          "sessionId": "session_<uuid:1>",
+          "title": "sh"
+        },
+        {
+          "cols": 20,
+          "createdAt": "<epoch-ms>",
+          "cwd": "<tmp>/workspace",
+          "exitCode": null,
+          "exited": false,
+          "id": "<terminal-2>",
+          "rows": 200,
+          "sessionId": "session_<uuid:1>",
+          "title": "sh"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/:id/terminals",
+    "status": 200,
+    "step": "list"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/:id/terminals",
+    "status": 403,
+    "step": "another user lists"
+  },
+  {
+    "observed": {
+      "frame": {
+        "terminal": {
+          "cols": 100,
+          "createdAt": "<epoch-ms>",
+          "cwd": "<tmp>/workspace",
+          "exitCode": null,
+          "exited": false,
+          "id": "<terminal-1>",
+          "rows": 30,
+          "sessionId": "session_<uuid:1>",
+          "title": "sh"
+        },
+        "type": "ready"
+      },
+      "replay holds": []
+    },
+    "step": "attach: the ready frame"
+  },
+  {
+    "observed": {
+      "code": "lost_control",
+      "message": "Take control to type here",
+      "type": "error"
+    },
+    "step": "input without control fields"
+  },
+  {
+    "observed": {
+      "code": "lost_control",
+      "message": "Take control to type here",
+      "type": "error"
+    },
+    "step": "input with a stale generation"
+  },
+  {
+    "observed": {
+      "NOPE-2 ran": false,
+      "other frames": []
+    },
+    "step": "typed command: its output arrives"
+  },
+  {
+    "observed": {
+      "dir": "workspace",
+      "term": "xterm-256color-1"
+    },
+    "step": "the shell's working directory and terminal variables"
+  },
+  {
+    "observed": true,
+    "step": "resize to 120x40, then stty size"
+  },
+  {
+    "observed": "5x500",
+    "step": "resize to 10000x1 (clamped), then stty size"
+  },
+  {
+    "body": {
+      "terminals": [
+        {
+          "cols": 500,
+          "createdAt": "<epoch-ms>",
+          "cwd": "<tmp>/workspace",
+          "exitCode": null,
+          "exited": false,
+          "id": "<terminal-1>",
+          "rows": 5,
+          "sessionId": "session_<uuid:1>",
+          "title": "sh"
+        },
+        {
+          "cols": 20,
+          "createdAt": "<epoch-ms>",
+          "cwd": "<tmp>/workspace",
+          "exitCode": null,
+          "exited": false,
+          "id": "<terminal-2>",
+          "rows": 200,
+          "sessionId": "session_<uuid:1>",
+          "title": "sh"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/:id/terminals",
+    "status": 200,
+    "step": "list after the resizes"
+  },
+  {
+    "observed": "5x500",
+    "step": "a resize with non-numeric sizes keeps the size"
+  },
+  {
+    "observed": {
+      "OVER-4 ran": false,
+      "PASTE-2 ran": false,
+      "other frames": []
+    },
+    "step": "an unknown message type, then input of 65537 characters, then a command"
+  },
+  {
+    "observed": {
+      "frame": {
+        "terminal": {
+          "cols": 500,
+          "createdAt": "<epoch-ms>",
+          "cwd": "<tmp>/workspace",
+          "exitCode": null,
+          "exited": false,
+          "id": "<terminal-1>",
+          "rows": 5,
+          "sessionId": "session_<uuid:1>",
+          "title": "sh"
+        },
+        "type": "ready"
+      },
+      "replay holds": [
+        "MARK-42",
+        "SIZE-40x120",
+        "AFTER-6"
+      ]
+    },
+    "step": "attach a second socket: scrollback replay"
+  },
+  {
+    "observed": true,
+    "step": "output reaches both sockets"
+  },
+  {
+    "observed": {
+      "closed": {
+        "code": 4403,
+        "reason": "Session belongs to another user"
+      },
+      "frames": []
+    },
+    "step": "another user attaches"
+  },
+  {
+    "observed": {
+      "closed": {
+        "code": 4404,
+        "reason": "Terminal not found"
+      },
+      "frames": []
+    },
+    "step": "attach an unknown terminal"
+  },
+  {
+    "observed": {
+      "closed": {
+        "code": 1000,
+        "reason": "terminal exited"
+      },
+      "frames": [
+        {
+          "exitCode": 3,
+          "type": "exit"
+        }
+      ]
+    },
+    "step": "exit 3: frames and close"
+  },
+  {
+    "observed": {
+      "closed": {
+        "code": 1000,
+        "reason": "terminal exited"
+      },
+      "frames": [
+        {
+          "exitCode": 3,
+          "type": "exit"
+        }
+      ]
+    },
+    "step": "exit 3: the second socket"
+  },
+  {
+    "body": {
+      "terminals": [
+        {
+          "cols": 500,
+          "createdAt": "<epoch-ms>",
+          "cwd": "<tmp>/workspace",
+          "exitCode": 3,
+          "exited": true,
+          "id": "<terminal-1>",
+          "rows": 5,
+          "sessionId": "session_<uuid:1>",
+          "title": "sh"
+        },
+        {
+          "cols": 20,
+          "createdAt": "<epoch-ms>",
+          "cwd": "<tmp>/workspace",
+          "exitCode": null,
+          "exited": false,
+          "id": "<terminal-2>",
+          "rows": 200,
+          "sessionId": "session_<uuid:1>",
+          "title": "sh"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/:id/terminals",
+    "status": 200,
+    "step": "list after the exit"
+  },
+  {
+    "observed": {
+      "frame": {
+        "terminal": {
+          "cols": 500,
+          "createdAt": "<epoch-ms>",
+          "cwd": "<tmp>/workspace",
+          "exitCode": 3,
+          "exited": true,
+          "id": "<terminal-1>",
+          "rows": 5,
+          "sessionId": "session_<uuid:1>",
+          "title": "sh"
+        },
+        "type": "ready"
+      },
+      "replay holds": [
+        "MARK-42",
+        "BOTH-8"
+      ]
+    },
+    "step": "attach the exited terminal: ready"
+  },
+  {
+    "observed": {
+      "exitCode": 3,
+      "type": "exit"
+    },
+    "step": "attach the exited terminal: then"
+  },
+  {
+    "body": {
+      "terminal": {
+        "cols": 80,
+        "createdAt": "<epoch-ms>",
+        "cwd": "<tmp>/workspace",
+        "exitCode": null,
+        "exited": false,
+        "id": "<terminal-3>",
+        "rows": 24,
+        "sessionId": "session_<uuid:1>",
+        "title": "sh"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 201,
+    "step": "open a third"
+  },
+  {
+    "body": {
+      "terminal": {
+        "cols": 80,
+        "createdAt": "<epoch-ms>",
+        "cwd": "<tmp>/workspace",
+        "exitCode": null,
+        "exited": false,
+        "id": "<terminal-4>",
+        "rows": 24,
+        "sessionId": "session_<uuid:1>",
+        "title": "sh"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 201,
+    "step": "open a fourth"
+  },
+  {
+    "body": {
+      "terminal": {
+        "cols": 80,
+        "createdAt": "<epoch-ms>",
+        "cwd": "<tmp>/workspace",
+        "exitCode": null,
+        "exited": false,
+        "id": "<terminal-5>",
+        "rows": 24,
+        "sessionId": "session_<uuid:1>",
+        "title": "sh"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 201,
+    "step": "open a fifth (4 live)"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "At most 4 terminals per session"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 409,
+    "step": "a fifth live terminal"
+  },
+  {
+    "observed": [
+      {
+        "exited": false,
+        "id": "<terminal-2>"
+      },
+      {
+        "exited": false,
+        "id": "<terminal-3>"
+      },
+      {
+        "exited": false,
+        "id": "<terminal-4>"
+      },
+      {
+        "exited": false,
+        "id": "<terminal-5>"
+      }
+    ],
+    "step": "the list: the exited terminal is gone"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals/<terminal-2>/close",
+    "status": 400,
+    "step": "close without control fields"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals/<terminal-2>/close",
+    "status": 409,
+    "step": "close with a stale generation"
+  },
+  {
+    "body": null,
+    "request": "POST /api/sessions/:id/terminals/<terminal-2>/close",
+    "status": 204,
+    "step": "close"
+  },
+  {
+    "observed": {
+      "closed": {
+        "code": 1000,
+        "reason": "terminal exited"
+      },
+      "frames": [
+        {
+          "exitCode": null,
+          "type": "exit"
+        }
+      ]
+    },
+    "step": "the attached socket of the closed terminal"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Terminal not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals/<terminal-2>/close",
+    "status": 404,
+    "step": "close it again"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Terminal not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals/nope/close",
+    "status": 404,
+    "step": "close an unknown terminal"
+  },
+  {
+    "body": {
+      "terminal": {
+        "cols": 80,
+        "createdAt": "<epoch-ms>",
+        "cwd": "<tmp>/workspace",
+        "exitCode": null,
+        "exited": false,
+        "id": "<terminal-6>",
+        "rows": 24,
+        "sessionId": "session_<uuid:1>",
+        "title": "sh"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 201,
+    "step": "open again after closing one"
+  },
+  {
+    "observed": {
+      "closed": {
+        "code": 4404,
+        "reason": "Terminal not found"
+      },
+      "frames": []
+    },
+    "step": "attach the closed terminal"
+  },
+  {
+    "body": null,
+    "request": "POST /api/sessions/:id/control/release",
+    "status": 204,
+    "step": "release control"
+  },
+  {
+    "observed": {
+      "GONE-10 ran": false,
+      "frame": {
+        "code": "lost_control",
+        "message": "Take control to type here",
+        "type": "error"
+      }
+    },
+    "step": "input after control was released"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/terminals",
+    "status": 409,
+    "step": "open without control"
+  },
+  {
+    "observed": 4,
+    "step": "terminals without control: still listed"
+  }
+]

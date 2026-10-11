@@ -1,0 +1,310 @@
+---
+source: crates/pirc-conformance/tests/node_sessions.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c1",
+        "payload": {
+          "message": "hello",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:1>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:1>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "prompt"
+  },
+  {
+    "observed": [
+      "runner_ready",
+      "notification",
+      "pi_event:extension_ui_request",
+      "notification",
+      "pi_event:extension_ui_request",
+      "pi_event:panel_changed",
+      "notification",
+      "pi_event:extension_ui_request",
+      "pi_event:agent_start",
+      "pi_event:message_start:user",
+      "pi_event:message_end:user",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_end:assistant",
+      "pi_event:panel_changed",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:agent_end",
+      "pi_event:agent_settled"
+    ],
+    "step": "events of the failing run"
+  },
+  {
+    "observed": [
+      {
+        "assistant": {
+          "content": [],
+          "errorMessage": "Model provider request failed.",
+          "stopReason": "error"
+        }
+      }
+    ],
+    "step": "assistant messages and retries of the failing run"
+  },
+  {
+    "observed": {
+      "agent": {
+        "model": {
+          "id": "fake-model",
+          "provider": "fake"
+        },
+        "thinkingLevel": "low"
+      },
+      "history": [
+        {
+          "content": "hello",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "canonicalProvider": "fake",
+          "completedAt": "<epoch-ms>",
+          "content": [],
+          "errorMessage": "Model provider request failed.",
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "error",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "input": 0,
+            "output": 0,
+            "totalTokens": 0
+          }
+        }
+      ],
+      "interactions": [],
+      "operations": [],
+      "partialMessage": null,
+      "partialOutputLost": false,
+      "queue": {
+        "followUp": [],
+        "steering": []
+      },
+      "run": {
+        "createdAt": "<epoch-ms>",
+        "endedAt": "<epoch-ms>",
+        "failureReason": "Model provider request failed.",
+        "id": "run_<uuid:3>",
+        "startedAt": "<epoch-ms>",
+        "status": "failed"
+      },
+      "runnerState": "ready",
+      "sandbox": {
+        "active": true
+      }
+    },
+    "step": "snapshot after the failed run"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "c2",
+        "payload": {
+          "message": "again",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:2>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:4>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:2>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/:id/commands",
+    "status": 202,
+    "step": "prompt"
+  },
+  {
+    "observed": [
+      "pi_event:agent_start",
+      "pi_event:message_start:user",
+      "pi_event:message_end:user",
+      "pi_event:turn_start",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_end:assistant",
+      "pi_event:auto_retry_start",
+      "pi_event:panel_changed",
+      "pi_event:auto_retry_end",
+      "pi_event:message_start:assistant",
+      "pi_event:panel_changed",
+      "pi_event:message_update:text_start",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_delta",
+      "pi_event:message_update:text_end",
+      "pi_event:message_end:assistant",
+      "pi_event:panel_changed",
+      "pi_event:turn_end",
+      "pi_event:panel_changed",
+      "pi_event:agent_end",
+      "pi_event:agent_settled"
+    ],
+    "step": "events of the retried run"
+  },
+  {
+    "observed": [
+      {
+        "assistant": {
+          "content": [],
+          "errorMessage": "Model provider rate limit reached.",
+          "stopReason": "error"
+        }
+      },
+      {
+        "attempt": 1,
+        "delayMs": 2000,
+        "errorMessage": "Model provider rate limit reached.",
+        "maxAttempts": 3,
+        "type": "auto_retry_start"
+      },
+      {
+        "attempt": 1,
+        "success": true,
+        "type": "auto_retry_end"
+      },
+      {
+        "assistant": {
+          "content": [
+            {
+              "text": "Recovered.",
+              "type": "text"
+            }
+          ],
+          "errorMessage": null,
+          "stopReason": "stop"
+        }
+      }
+    ],
+    "step": "assistant messages and retries of the retried run"
+  },
+  {
+    "observed": {
+      "agent": {
+        "model": {
+          "id": "fake-model",
+          "provider": "fake"
+        },
+        "thinkingLevel": "low"
+      },
+      "history": [
+        {
+          "content": "hello",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "canonicalProvider": "fake",
+          "completedAt": "<epoch-ms>",
+          "content": [],
+          "errorMessage": "Model provider request failed.",
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "error",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "input": 0,
+            "output": 0,
+            "totalTokens": 0
+          }
+        },
+        {
+          "content": "again",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        {
+          "api": "openai-completions",
+          "canonicalProvider": "fake",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "Recovered.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 60,
+            "output": 10,
+            "totalTokens": 110
+          }
+        }
+      ],
+      "interactions": [],
+      "operations": [],
+      "partialMessage": null,
+      "partialOutputLost": false,
+      "queue": {
+        "followUp": [],
+        "steering": []
+      },
+      "run": {
+        "createdAt": "<epoch-ms>",
+        "endedAt": "<epoch-ms>",
+        "failureReason": null,
+        "id": "run_<uuid:5>",
+        "startedAt": "<epoch-ms>",
+        "status": "succeeded"
+      },
+      "runnerState": "ready",
+      "sandbox": {
+        "active": true
+      }
+    },
+    "step": "snapshot after the recovered run"
+  },
+  {
+    "observed": 3,
+    "step": "model requests"
+  }
+]
