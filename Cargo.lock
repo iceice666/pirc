@@ -1248,6 +1248,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
+name = "pirc-agent"
+version = "0.3.0"
+dependencies = [
+ "getrandom 0.3.4",
+ "indexmap",
+ "pirc-policy",
+ "pirc-protocol",
+ "regex-lite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "pirc-config"
 version = "0.3.0"
 dependencies = [
@@ -1319,6 +1334,18 @@ dependencies = [
 [[package]]
 name = "pirc-node"
 version = "0.3.0"
+dependencies = [
+ "pirc-agent",
+]
+
+[[package]]
+name = "pirc-policy"
+version = "0.3.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "pirc-protocol"

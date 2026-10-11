@@ -1,0 +1,17 @@
+[package]
+name = "pirc-policy"
+description = "Sandbox path policy and the file tools' path guard (Rust rewrite, in progress)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

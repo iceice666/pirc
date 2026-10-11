@@ -10,5 +10,8 @@ publish.workspace = true
 name = "pirc-node"
 path = "src/main.rs"
 
+[dependencies]
+pirc-agent = { path = "../pirc-agent" }
+
 [lints]
 workspace = true
