@@ -184,7 +184,14 @@ Acceptance: recorded RPC transcripts replay with equivalent events; fake-llm end
 
 ### M5 Agent features, auto mode and PTC
 
-- [ ] `Feature` trait; todo, goal, title, recap, skills, project instructions, ask-question, web search, compact, role, schedules, sandbox approvals.
+Decided with the user before starting (2026-10-11):
+
+- **Acceptance:** agent-level JSONL RPC transcripts recorded from the TS agent with chosen features on (`PIRC_AGENT_FEATURES` grows from `none` to a comma-separated list of feature names; still development-only) replay against the Rust agent; the M0 `session_agent_events` snapshot passes with the TS gateway, the TS node and the Rust agent (`PIRC_AGENT_COMMAND`); `agent-auto-mode.test.ts`, `agent-ptc.test.ts` and `ptc-runtime.test.ts` are ported as golden cases.
+- **The browser feature** (`features/browser.ts`, the agent's browser tools over the side channel ported in M4) is ported in M5; M8 is the node's CDP side only.
+- **PTC tests:** only `agent-ptc.test.ts` and `ptc-runtime.test.ts` (plus `ptc-signatures.test.ts` where M4 did not cover it). The `ptc-m1-*`/`ptc-m4-*` evaluation harness stays in TS and runs at the gate against the TS baseline and the Rust build.
+- **Cadence as in M4:** transcripts recorded from TS first, then a layout commit with the `Feature` trait and interfaces, then parallel worktrees for the features, with loop integration done by the parent; reviews through several lenses; one commit per sub-item. Order: the trait and the simpler features, the classifier, the PTC runtime, then memory, background tasks, team and assistant.
+
+- [ ] `Feature` trait; todo, goal, title, recap, skills, project instructions, ask-question, web search, compact, role, schedules, sandbox approvals, browser.
 - [ ] Auto-mode classifier (the rules moved to M4), porting `agent-auto-mode.test.ts` as golden cases.
 - [ ] PTC runtime (its surface moved to M4) on `rquickjs` (spike B; use `AsyncContext::async_with`, not the deprecated macro) in a killable `ptc-guest` child with empty environment; same limits (operations, concurrency, time, heap, source size), broker checks and refusal semantics; port `agent-ptc.test.ts` and `ptc-runtime.test.ts`.
 - [ ] Memory (observational and workspace), background tasks, team/subagents, assistant.
