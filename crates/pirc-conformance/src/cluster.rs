@@ -37,6 +37,11 @@ const REQUIRED_VARIABLE: &str = "PIRC_CONFORMANCE_REQUIRED";
 /// Another gateway executable to test against the nodes of the bin dir (the
 /// Rust gateway against the TS node while the rewrite is in progress).
 const GATEWAY_VARIABLE: &str = "PIRC_CONFORMANCE_GATEWAY_BIN";
+/// Another node executable (the Rust `pirc-node`, M6). It runs the chat
+/// role as `<bin> chat`; the bin dir's TS build has `pirc-chat` for it.
+const NODE_VARIABLE: &str = "PIRC_CONFORMANCE_NODE_BIN";
+/// The top-level chats workspace of a chat node, as the gateway names it.
+pub const CHATS_WORKSPACE_ID: &str = "test:chats";
 
 /// Replaces the sandbox runtime: answers the node's probe and runs the agent unconfined.
 const FAKE_SRT: &str = r#"#!/bin/sh
@@ -64,6 +69,30 @@ pub struct GatewayOptions {
     /// The node's agents run without their built-in features
     /// (`PIRC_AGENT_FEATURES=none`; plans/rust-rewrite.md, M4).
     pub agent_core_only: bool,
+    /// The node runs the chat role (`pirc-chat`, or `pirc-node chat`): no
+    /// configured workspaces, the top-level chats workspace
+    /// [`CHATS_WORKSPACE_ID`] instead of [`WORKSPACE_ID`].
+    pub chat_node: bool,
+    /// Extra or overriding node environment variables.
+    pub node_env: Vec<(&'static str, String)>,
+}
+
+/// How a node is started: see the fields of [`GatewayOptions`] with the same names.
+#[derive(Clone, Debug, Default)]
+pub struct NodeOptions {
+    pub agent_core_only: bool,
+    pub chat_node: bool,
+    pub env: Vec<(&'static str, String)>,
+}
+
+impl GatewayOptions {
+    fn node(&self) -> NodeOptions {
+        NodeOptions {
+            agent_core_only: self.agent_core_only,
+            chat_node: self.chat_node,
+            env: self.node_env.clone(),
+        }
+    }
 }
 
 /// A running gateway (and node) with a fake model provider.
@@ -140,6 +169,7 @@ impl Cluster {
         let gateway = Process::spawn(
             "gateway",
             &gateway_bin(bin_dir),
+            &[],
             &root,
             &dir_in(&root, "gateway-home"),
             &env,
@@ -152,7 +182,7 @@ impl Cluster {
                 bin_dir,
                 &root,
                 &format!("ws://127.0.0.1:{port}"),
-                options.agent_core_only,
+                &options.node(),
             ))
         };
 
@@ -174,7 +204,7 @@ impl Cluster {
         bin_dir: &Path,
         root: &Path,
         gateway_url: &str,
-        agent_core_only: bool,
+        options: &NodeOptions,
     ) -> Process {
         let workspace = dir_in(root, "workspace");
         fs::write(Path::new(&workspace).join("README.md"), "conformance\n").unwrap();
@@ -197,17 +227,20 @@ impl Cluster {
             ("PIRC_ALLOWED_USERS", USER.to_owned()),
             ("PIRC_STATE_DIR", dir_in(root, "node-state")),
             ("PIRC_CONFIG_DIR", config_dir),
-            (
-                "PIRC_WORKSPACES",
-                json!([{ "id": "test", "path": workspace, "displayName": "Test",
-                    "defaults": {} }])
-                .to_string(),
-            ),
             ("PIRC_SANDBOX_SRT", srt.display().to_string()),
             ("PIRC_BROWSER", "false".to_owned()),
             ("PIRC_SHUTDOWN_GRACE_MS", "200".to_owned()),
         ];
-        if agent_core_only {
+        // A chat node refuses configured workspaces.
+        if !options.chat_node {
+            env.push((
+                "PIRC_WORKSPACES",
+                json!([{ "id": "test", "path": workspace, "displayName": "Test",
+                    "defaults": {} }])
+                .to_string(),
+            ));
+        }
+        if options.agent_core_only {
             env.push(("PIRC_AGENT_FEATURES", "none".to_owned()));
         }
         // The node's agents are the executable of `PIRC_CONFORMANCE_AGENT_BIN`
@@ -216,9 +249,12 @@ impl Cluster {
             env.push(("PIRC_AGENT_COMMAND", agent.display().to_string()));
             env.push(("PIRC_AGENT_ARGS", r#"["agent"]"#.to_owned()));
         }
+        override_env(&mut env, options.env.clone());
+        let (program, args) = node_command(bin_dir, options.chat_node);
         Process::spawn(
             "node",
-            &bin_dir.join("pirc-node"),
+            &program,
+            &args,
             root,
             &dir_in(root, "node-home"),
             &env,
@@ -334,11 +370,21 @@ impl LoneNode {
     /// Start a node against `ws://127.0.0.1:<gateway_port>`, or `None` (test
     /// skipped) when `PIRC_CONFORMANCE_BIN_DIR` is unset.
     pub fn start(gateway_port: u16) -> Option<Self> {
+        Self::start_with(gateway_port, NodeOptions::default())
+    }
+
+    /// [`LoneNode::start`] with other node options.
+    pub fn start_with(gateway_port: u16, options: NodeOptions) -> Option<Self> {
         let bin_dir = bin_dir()?;
         let (dir, root) = run_dir();
         let url = format!("ws://127.0.0.1:{gateway_port}");
-        let process = Cluster::spawn_node(&bin_dir, &root, &url, false);
+        let process = Cluster::spawn_node(&bin_dir, &root, &url, &options);
         Some(Self { process, dir })
+    }
+
+    /// The node's exit status, once it has exited.
+    pub fn exited(&mut self) -> Option<std::process::ExitStatus> {
+        self.process.exited()
     }
 
     /// Values that differ between runs, to be replaced in recorded transcripts.
@@ -407,10 +453,23 @@ pub(crate) fn bin_dir() -> Option<PathBuf> {
 
 /// The gateway under test: `PIRC_CONFORMANCE_GATEWAY_BIN`, else the bin dir's.
 fn gateway_bin(bin_dir: &Path) -> PathBuf {
-    let Some(path) = std::env::var_os(GATEWAY_VARIABLE) else {
-        return bin_dir.join("pirc-gateway");
-    };
-    let path = PathBuf::from(path);
+    override_bin(GATEWAY_VARIABLE).unwrap_or_else(|| bin_dir.join("pirc-gateway"))
+}
+
+/// The node under test and its arguments: `PIRC_CONFORMANCE_NODE_BIN` (with
+/// `chat` for the chat role), else the bin dir's `pirc-node` or `pirc-chat`.
+fn node_command(bin_dir: &Path, chat: bool) -> (PathBuf, Vec<&'static str>) {
+    match override_bin(NODE_VARIABLE) {
+        Some(bin) if chat => (bin, vec!["chat"]),
+        Some(bin) => (bin, Vec::new()),
+        None if chat => (bin_dir.join("pirc-chat"), Vec::new()),
+        None => (bin_dir.join("pirc-node"), Vec::new()),
+    }
+}
+
+/// The executable a variable names, relative to the repository root unless absolute.
+fn override_bin(variable: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(std::env::var_os(variable)?);
     let path = if path.is_absolute() {
         path
     } else {
@@ -418,8 +477,10 @@ fn gateway_bin(bin_dir: &Path) -> PathBuf {
             .join("../..")
             .join(path)
     };
-    path.canonicalize()
-        .unwrap_or_else(|error| panic!("{GATEWAY_VARIABLE} {}: {error}", path.display()))
+    Some(
+        path.canonicalize()
+            .unwrap_or_else(|error| panic!("{variable} {}: {error}", path.display())),
+    )
 }
 
 fn dir_in(root: &Path, name: &str) -> String {
@@ -457,6 +518,7 @@ impl Process {
     fn spawn(
         name: &'static str,
         program: &Path,
+        args: &[&str],
         root: &Path,
         home: &str,
         env: &[(&'static str, String)],
@@ -464,6 +526,7 @@ impl Process {
         let log = root.join(format!("{name}.log"));
         let file = File::create(&log).unwrap();
         let child = Command::new(program)
+            .args(args)
             .current_dir(root)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
