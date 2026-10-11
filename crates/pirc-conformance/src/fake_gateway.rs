@@ -123,6 +123,50 @@ impl NodeLink {
             .expect("send to node");
     }
 
+    /// Send `text` as is, unchecked: a frame the node should refuse or ignore.
+    pub async fn send_raw(&mut self, text: &str) {
+        self.socket
+            .send(Message::text(text.to_owned()))
+            .await
+            .expect("send to node");
+    }
+
+    /// Close the link from the gateway's side with `code`, and wait until
+    /// the node has answered the close (frames meanwhile go to `skipped`).
+    pub async fn close(&mut self, code: u16, reason: &str) {
+        use tokio_tungstenite::tungstenite::protocol::CloseFrame;
+        self.socket
+            .send(Message::Close(Some(CloseFrame {
+                code: code.into(),
+                reason: reason.to_owned().into(),
+            })))
+            .await
+            .expect("close the node link");
+        let _ = self.closed().await;
+    }
+
+    /// Wait for the node to close the link: its close code and reason.
+    /// Frames before the close go to `skipped`.
+    pub async fn closed(&mut self) -> Option<(u16, String)> {
+        loop {
+            let message = tokio::time::timeout(TIMEOUT, self.socket.next())
+                .await
+                .expect("timed out waiting for the node to close the link");
+            match message {
+                Some(Ok(Message::Text(text))) => {
+                    let frame: Value = serde_json::from_str(&text).expect("JSON frame");
+                    assert_node_frame(&frame);
+                    self.skipped.push(frame);
+                }
+                Some(Ok(Message::Close(frame))) => {
+                    return frame.map(|frame| (frame.code.into(), frame.reason.to_string()));
+                }
+                Some(Ok(_)) => {}
+                Some(Err(_)) | None => return None,
+            }
+        }
+    }
+
     /// Send `request` frame `id` and wait for the node's response to it.
     pub async fn request(&mut self, id: &str, data: Value) -> Value {
         self.send(&serde_json::json!({ "type": "request", "requestId": id, "data": data }))

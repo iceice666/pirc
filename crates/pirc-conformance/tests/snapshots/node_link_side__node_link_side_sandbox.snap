@@ -1,0 +1,292 @@
+---
+source: crates/pirc-conformance/tests/node_link_side.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": {
+      "expiresAt": "<epoch-ms>",
+      "id": "interaction_<uuid:1>",
+      "kind": "confirm",
+      "request": {
+        "id": "node-sandbox-<uuid:2>",
+        "message": "The agent asks to reach api.example.com from its sandbox.\n\nReason: fetch the schema\n\nApproving allows these hosts for the rest of this session.",
+        "method": "confirm",
+        "title": "Allow network access?",
+        "toolCallId": "<uuid:3>:op1",
+        "type": "extension_ui_request"
+      },
+      "rpcId": "node-sandbox-<uuid:2>",
+      "runnerEpoch": 1,
+      "sessionId": "session_<uuid:4>",
+      "status": "pending"
+    },
+    "step": "the node's own question (an interaction_created event)"
+  },
+  {
+    "observed": {
+      "sessions": [
+        {
+          "id": "session_<uuid:4>",
+          "run": "waiting_input"
+        }
+      ],
+      "type": "activity"
+    },
+    "step": "activity: the run waits for the human"
+  },
+  {
+    "observed": [
+      {
+        "expiresAt": "<epoch-ms>",
+        "id": "interaction_<uuid:1>",
+        "kind": "confirm",
+        "request": {
+          "id": "node-sandbox-<uuid:2>",
+          "message": "The agent asks to reach api.example.com from its sandbox.\n\nReason: fetch the schema\n\nApproving allows these hosts for the rest of this session.",
+          "method": "confirm",
+          "title": "Allow network access?",
+          "toolCallId": "<uuid:3>:op1",
+          "type": "extension_ui_request"
+        },
+        "rpcId": "node-sandbox-<uuid:2>",
+        "runnerEpoch": 1,
+        "sessionId": "session_<uuid:4>",
+        "status": "pending"
+      }
+    ],
+    "step": "the snapshot's interactions"
+  },
+  {
+    "observed": {
+      "body": {
+        "interactionId": "interaction_<uuid:1>",
+        "status": "answered"
+      },
+      "status": 200
+    },
+    "step": "approve"
+  },
+  {
+    "observed": {
+      "interactionId": "interaction_<uuid:1>"
+    },
+    "step": "interaction_answered"
+  },
+  {
+    "observed": {
+      "content": [
+        {
+          "text": "[{\"ok\":true,\"contractVersion\":1,\"operationId\":\"<uuid:3>:op1\",\"data\":{\"text\":\"Allowed for this session: api.example.com.\",\"granted\":[\"api.example.com\"],\"denied\":[],\"unrestricted\":false},\"attachments\":[],\"truncated\":false}]",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "toolName": "ptc"
+    },
+    "step": "the agent's result"
+  },
+  {
+    "observed": [
+      {
+        "allowPty": true,
+        "filesystem (inside the run directory)": {
+          "allowGitConfig": false,
+          "allowRead": [
+            "<tmp>/workspace",
+            "<tmp>/node-state/sessions/pi_<uuid:5>",
+            "<tmp>/node-state/workspace-memory",
+            "<tmp>/node-state/i-<random>",
+            "<tmp>/node-state/sandbox/bin"
+          ],
+          "allowWrite": [
+            "<tmp>/workspace",
+            "<tmp>/node-state/sessions/pi_<uuid:5>",
+            "<tmp>/node-state/workspace-memory"
+          ],
+          "denyRead": [
+            "<tmp>/node-state",
+            "<tmp>/node-state/sessions",
+            "<tmp>/node-state/uploads",
+            "<tmp>/node-state/browser"
+          ],
+          "denyWrite": [
+            "<tmp>/workspace/.pirc",
+            "<tmp>/workspace/.git/hooks",
+            "<tmp>/workspace/.git/config",
+            "<tmp>/node-config",
+            "<tmp>/node-config/SOUL.md",
+            "<tmp>/node-config/CHAT.md",
+            "<tmp>/node-state/sandbox/bin"
+          ]
+        },
+        "keys": [
+          "allowPty",
+          "filesystem",
+          "network"
+        ],
+        "network": {
+          "allowAllUnixSockets": true,
+          "allowLocalBinding": true,
+          "allowedDomains": [
+            "github.com",
+            "*.github.com",
+            "*.githubusercontent.com",
+            "ghcr.io",
+            "gitlab.com",
+            "codeberg.org",
+            "registry.npmjs.org",
+            "registry.yarnpkg.com",
+            "bun.sh",
+            "jsr.io",
+            "npm.jsr.io",
+            "pypi.org",
+            "files.pythonhosted.org",
+            "crates.io",
+            "*.crates.io",
+            "static.rust-lang.org",
+            "proxy.golang.org",
+            "sum.golang.org",
+            "cache.nixos.org",
+            "channels.nixos.org",
+            "releases.nixos.org",
+            "tarballs.nixos.org",
+            "*.cachix.org",
+            "repo.maven.apache.org",
+            "repo1.maven.org",
+            "plugins.gradle.org",
+            "services.gradle.org",
+            "dl.google.com",
+            "rubygems.org",
+            "index.rubygems.org",
+            "api.example.com"
+          ],
+          "deniedDomains": []
+        }
+      }
+    ],
+    "step": "the line the node wrote to srt's control fd: the settings with the approved domain"
+  },
+  {
+    "observed": {
+      "body": {
+        "error": {
+          "code": "stale_interaction",
+          "message": "Interaction is no longer answerable"
+        }
+      },
+      "status": 409
+    },
+    "step": "answering it again"
+  },
+  {
+    "observed": {
+      "body": {
+        "error": {
+          "code": "not_found",
+          "message": "Interaction not found"
+        }
+      },
+      "status": 404
+    },
+    "step": "answering an unknown interaction"
+  },
+  {
+    "observed": {
+      "content": [
+        {
+          "text": "[{\"ok\":true,\"contractVersion\":1,\"operationId\":\"<uuid:6>:op1\",\"data\":{\"text\":\"Allowed for this session: github.com.\",\"granted\":[\"github.com\"],\"denied\":[],\"unrestricted\":false},\"attachments\":[],\"truncated\":false},{\"ok\":true,\"contractVersion\":1,\"operationId\":\"<uuid:6>:op2\",\"data\":{\"text\":\"Allowed for this session: api.example.com.\",\"granted\":[\"api.example.com\"],\"denied\":[],\"unrestricted\":false},\"attachments\":[],\"truncated\":false},{\"ok\":false,\"contractVersion\":1,\"operationId\":\"<uuid:6>:op3\",\"error\":{\"code\":\"OperationFailed\",\"message\":\"Not a domain: bad domain\",\"outcome\":\"unknown\",\"operationId\":\"<uuid:6>:op3\"}},{\"ok\":false,\"contractVersion\":1,\"operationId\":\"<uuid:6>:op4\",\"error\":{\"code\":\"OperationFailed\",\"message\":\"Name one to ten domains\",\"outcome\":\"unknown\",\"operationId\":\"<uuid:6>:op4\"}}]",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "toolName": "ptc"
+    },
+    "step": "allowed already, or invalid"
+  },
+  {
+    "observed": {
+      "body": {
+        "interactionId": "interaction_<uuid:7>",
+        "status": "answered"
+      },
+      "status": 200
+    },
+    "step": "decline"
+  },
+  {
+    "observed": {
+      "content": [
+        {
+          "text": "[{\"ok\":false,\"contractVersion\":1,\"operationId\":\"<uuid:8>:op1\",\"error\":{\"code\":\"ApprovalDenied\",\"message\":\"The user did not allow evil.example.net. Do not try to reach them another way.\",\"outcome\":\"not_started\",\"operationId\":\"<uuid:8>:op1\",\"data\":{\"text\":\"The user did not allow evil.example.net. Do not try to reach them another way.\",\"granted\":[],\"denied\":[\"evil.example.net\"],\"unrestricted\":false}}}]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- sandbox_allow_domains: declined by the user",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "toolName": "ptc"
+    },
+    "step": "the agent's result for a declined domain"
+  },
+  {
+    "observed": {
+      "id": "node-sandbox-<uuid:9>",
+      "message": "$ touch denied.txt\n\nin <tmp>/workspace\n\nReason: nix build\n\nIt runs with this node account's full access (without the node's own secrets).",
+      "method": "confirm",
+      "title": "Run a command outside the sandbox?",
+      "toolCallId": "<uuid:10>:op1",
+      "type": "extension_ui_request"
+    },
+    "step": "the node's question for a command"
+  },
+  {
+    "observed": {
+      "sessions": [
+        {
+          "id": "session_<uuid:4>",
+          "run": "waiting_input",
+          "writeLease": true
+        }
+      ],
+      "type": "activity"
+    },
+    "step": "activity: waiting, with the workspace's write lease"
+  },
+  {
+    "observed": {
+      "content": [
+        {
+          "text": "[{\"ok\":false,\"contractVersion\":1,\"operationId\":\"<uuid:10>:op1\",\"error\":{\"code\":\"ApprovalDenied\",\"message\":\"The user did not approve running this outside the sandbox. Do not try to get around it; ask them how to proceed.\",\"outcome\":\"not_started\",\"operationId\":\"<uuid:10>:op1\"}}]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- unsandboxed_bash: declined by the user",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "toolName": "ptc"
+    },
+    "step": "the agent's result for a declined command"
+  },
+  {
+    "observed": {
+      "content": [
+        {
+          "text": "[{\"ok\":false,\"contractVersion\":1,\"operationId\":\"<uuid:11>:op1\",\"error\":{\"code\":\"OperationFailed\",\"message\":\"cwd must be a directory inside <tmp>/workspace\",\"outcome\":\"unknown\",\"operationId\":\"<uuid:11>:op1\"}}]",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "toolName": "ptc"
+    },
+    "step": "a cwd outside the workspace"
+  },
+  {
+    "observed": false,
+    "step": "no question for it"
+  },
+  {
+    "observed": 1,
+    "step": "declines write nothing to the control fd"
+  },
+  {
+    "observed": true,
+    "step": "the declined command did not run"
+  }
+]

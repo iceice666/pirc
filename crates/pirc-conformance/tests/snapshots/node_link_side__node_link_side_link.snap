@@ -1,0 +1,483 @@
+---
+source: crates/pirc-conformance/tests/node_link_side.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": {
+      "sessions": [],
+      "type": "activity"
+    },
+    "step": "after registered, the node first sends its activity (no sessions yet)"
+  },
+  {
+    "observed": {
+      "body": {
+        "project": {
+          "allowedPaths": [],
+          "empty": true,
+          "env": {},
+          "hash": "<sha256:1>",
+          "hooks": {
+            "afterTool": [],
+            "agentSettled": [],
+            "beforePrompt": [],
+            "beforeTool": [],
+            "sessionStart": []
+          },
+          "trusted": false,
+          "trustedHash": null
+        }
+      },
+      "status": 200
+    },
+    "step": "a request after registered is answered"
+  },
+  {
+    "observed": {
+      "body": {
+        "project": {
+          "allowedPaths": [],
+          "empty": true,
+          "env": {},
+          "hash": "<sha256:1>",
+          "hooks": {
+            "afterTool": [],
+            "agentSettled": [],
+            "beforePrompt": [],
+            "beforeTool": [],
+            "sessionStart": []
+          },
+          "trusted": false,
+          "trustedHash": null
+        }
+      },
+      "status": 200
+    },
+    "step": "a request with unknown keys is answered"
+  },
+  {
+    "observed": [
+      {
+        "case": "an image upload (bodyBase64 and contentType)",
+        "exchange": {
+          "request": {
+            "bodyBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            "contentType": "image/png",
+            "method": "POST",
+            "url": "/api/sessions/session_<uuid:1>/uploads",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": null,
+              "upload": {
+                "byteSize": 70,
+                "filename": null,
+                "id": "upload_<uuid:2>",
+                "kind": "image",
+                "mimeType": "image/png"
+              }
+            },
+            "status": 201
+          }
+        }
+      },
+      {
+        "case": "an image upload without a content type (application/octet-stream)",
+        "exchange": {
+          "request": {
+            "bodyBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            "method": "POST",
+            "url": "/api/sessions/session_<uuid:1>/uploads",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": null,
+              "upload": {
+                "byteSize": 70,
+                "filename": null,
+                "id": "upload_<uuid:3>",
+                "kind": "image",
+                "mimeType": "image/png"
+              }
+            },
+            "status": 201
+          }
+        }
+      },
+      {
+        "case": "an image declared as another image type",
+        "exchange": {
+          "request": {
+            "bodyBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            "contentType": "image/jpeg",
+            "method": "POST",
+            "url": "/api/sessions/session_<uuid:1>/uploads",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": {
+                "code": "invalid_input",
+                "message": "Declared Content-Type does not match image content"
+              }
+            },
+            "status": 400
+          }
+        }
+      },
+      {
+        "case": "a generic file upload",
+        "exchange": {
+          "request": {
+            "bodyBase64": "aGVsbG8K",
+            "contentType": "text/plain",
+            "method": "POST",
+            "url": "/api/sessions/session_<uuid:1>/uploads?filename=dir%2Fnotes.txt",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": null,
+              "upload": {
+                "byteSize": 6,
+                "filename": "notes.txt",
+                "id": "upload_<uuid:4>",
+                "kind": "file",
+                "mimeType": "text/plain"
+              }
+            },
+            "status": 201
+          }
+        }
+      },
+      {
+        "case": "a generic file without a filename",
+        "exchange": {
+          "request": {
+            "bodyBase64": "aGVsbG8K",
+            "contentType": "text/plain",
+            "method": "POST",
+            "url": "/api/sessions/session_<uuid:1>/uploads",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": {
+                "code": "invalid_input",
+                "message": "filename is required for non-image uploads"
+              }
+            },
+            "status": 400
+          }
+        }
+      },
+      {
+        "case": "an empty upload",
+        "exchange": {
+          "request": {
+            "bodyBase64": "",
+            "contentType": "image/png",
+            "method": "POST",
+            "url": "/api/sessions/session_<uuid:1>/uploads",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": {
+                "code": "payload_too_large",
+                "message": "Upload exceeds configured limit"
+              }
+            },
+            "status": 413
+          }
+        }
+      },
+      {
+        "case": "an upload as a JSON payload",
+        "exchange": {
+          "request": {
+            "method": "POST",
+            "payload": {
+              "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+            },
+            "url": "/api/sessions/session_<uuid:1>/uploads",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": {
+                "code": "invalid_input",
+                "message": "Upload body must be raw bytes"
+              }
+            },
+            "status": 400
+          }
+        }
+      },
+      {
+        "case": "an unknown route",
+        "exchange": {
+          "request": {
+            "method": "GET",
+            "url": "/api/nope",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": "Not Found",
+              "message": "Route GET:/api/nope not found",
+              "statusCode": 404
+            },
+            "status": 404
+          }
+        }
+      },
+      {
+        "case": "an unknown method on a known path",
+        "exchange": {
+          "request": {
+            "method": "PUT",
+            "payload": {},
+            "url": "/api/sessions",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": "Not Found",
+              "message": "Route PUT:/api/sessions not found",
+              "statusCode": 404
+            },
+            "status": 404
+          }
+        }
+      },
+      {
+        "case": "a user the node does not allow",
+        "exchange": {
+          "request": {
+            "method": "GET",
+            "url": "/api/sessions",
+            "user": "mallory@example.com"
+          },
+          "response": {
+            "body": {
+              "error": {
+                "code": "forbidden",
+                "message": "User is not allowed on this node"
+              }
+            },
+            "status": 403
+          }
+        }
+      },
+      {
+        "case": "a user the node does not allow, on an unknown route",
+        "exchange": {
+          "request": {
+            "method": "GET",
+            "url": "/api/nope",
+            "user": "mallory@example.com"
+          },
+          "response": {
+            "body": {
+              "error": {
+                "code": "forbidden",
+                "message": "User is not allowed on this node"
+              }
+            },
+            "status": 403
+          }
+        }
+      },
+      {
+        "case": "a JSON body that does not parse",
+        "exchange": {
+          "request": {
+            "bodyBase64": "eyJ3b3Jrc3BhY2VJZCI6",
+            "contentType": "application/json",
+            "method": "POST",
+            "url": "/api/sessions",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": {
+                "code": "internal_error",
+                "message": "Internal server error"
+              }
+            },
+            "status": 500
+          }
+        }
+      },
+      {
+        "case": "an empty JSON body",
+        "exchange": {
+          "request": {
+            "bodyBase64": "",
+            "contentType": "application/json",
+            "method": "POST",
+            "url": "/api/sessions",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": {
+                "code": "internal_error",
+                "message": "Internal server error"
+              }
+            },
+            "status": 500
+          }
+        }
+      },
+      {
+        "case": "a JSON body as bodyBase64",
+        "exchange": {
+          "request": {
+            "bodyBase64": "eyJ3b3Jrc3BhY2VJZCI6ICJub3BlIn0=",
+            "contentType": "application/json",
+            "method": "POST",
+            "url": "/api/sessions",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": {
+                "code": "not_found",
+                "message": "Workspace not found"
+              }
+            },
+            "status": 404
+          }
+        }
+      },
+      {
+        "case": "no payload where a body is required",
+        "exchange": {
+          "request": {
+            "method": "POST",
+            "url": "/api/sessions",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": {
+                "code": "invalid_input",
+                "message": "Invalid request"
+              }
+            },
+            "status": 400
+          }
+        }
+      },
+      {
+        "case": "an unknown session",
+        "exchange": {
+          "request": {
+            "method": "GET",
+            "url": "/api/sessions/session_nope/snapshot",
+            "user": "test@example.com"
+          },
+          "response": {
+            "body": {
+              "error": {
+                "code": "not_found",
+                "message": "Session not found"
+              }
+            },
+            "status": 404
+          }
+        }
+      }
+    ],
+    "step": "relayed requests"
+  },
+  {
+    "observed": [],
+    "step": "requests sent before registered, or refused by the link schema, never got an answer"
+  },
+  {
+    "observed": {
+      "close": {
+        "code": 1007,
+        "reason": "invalid JSON"
+      }
+    },
+    "step": "invalid JSON: the node closes the link"
+  },
+  {
+    "observed": {
+      "not before 2.5 s": true,
+      "register is the same as before": true,
+      "type": "register"
+    },
+    "step": "the node connects again and registers"
+  },
+  {
+    "observed": {
+      "sessions": [],
+      "type": "activity"
+    },
+    "step": "after registering again, the activity (the earlier session has no run)"
+  },
+  {
+    "observed": {
+      "modelId": "second-model",
+      "providerName": "second",
+      "thinking": "high"
+    },
+    "step": "a new session's model request uses the catalog of the second registered"
+  },
+  {
+    "observed": {
+      "body": {
+        "error": {
+          "code": "conflict",
+          "message": "commandId was already used with a different payload"
+        }
+      },
+      "status": 409
+    },
+    "step": "command ids are the node's, not the session's: reusing one in another session"
+  },
+  {
+    "observed": {
+      "modelId": "third-model",
+      "providerName": "third",
+      "thinking": "medium"
+    },
+    "step": "after a models frame, a new session's model request uses the new default"
+  },
+  {
+    "observed": {
+      "modelId": "second-model",
+      "providerName": "second",
+      "thinking": "high"
+    },
+    "step": "the earlier session's running agent keeps its model"
+  },
+  {
+    "observed": {
+      "not before 2.5 s": true,
+      "type": "register",
+      "workspaces": [
+        {
+          "displayName": "Test",
+          "id": "test",
+          "kind": "directory",
+          "roles": [
+            {
+              "description": "General-purpose agent with the default model and all tools.",
+              "name": "general"
+            }
+          ]
+        }
+      ]
+    },
+    "step": "the gateway closes the link: the node connects again and registers"
+  }
+]
