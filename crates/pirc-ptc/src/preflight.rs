@@ -83,14 +83,19 @@ pub fn preflight(source: &str) -> Result<Preflight, PtcError> {
     match spawned {
         Ok(Ok(outcome)) => outcome,
         Ok(Err(_)) => Err(invalid("Syntax error: the TypeScript transform failed")),
-        Err(_) => Err(invalid("Syntax error: Maximum call stack size exceeded")),
+        // Not the script's fault (address-space limits, out of threads).
+        Err(error) => Err(PtcError::new(
+            "OperationFailed",
+            format!("Script runtime failed: could not start the preflight ({error})"),
+        )),
     }
 }
 
 /// Stack of the preflight thread: room for any source within
-/// `SOURCE_BYTES` nested as deeply as it can be (tested below). Address
-/// space only, until used.
-const PREFLIGHT_STACK_BYTES: usize = 1 << 30;
+/// `SOURCE_BYTES` nested as deeply as it can be (tested below; every shape
+/// measured fits in 64 MiB). Address space only, until used, but counted
+/// against `RLIMIT_AS` and strict overcommit, so no larger than needed.
+const PREFLIGHT_STACK_BYTES: usize = 256 << 20;
 
 /// TypeScript to JavaScript (`Bun.Transpiler({ loader: 'ts' })`), as a
 /// script: no imports or exports, sloppy mode unless the code opts in.
