@@ -87,3 +87,35 @@ async fn agent_line_order() {
     r.note("abort while streaming", json!(order));
     insta::assert_json_snapshot!("agent_line_order", r.into_value());
 }
+
+/// With a `beforePrompt` hook only a user message waits for the hook: a
+/// delivered custom message is still admitted before the response.
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_line_order_with_hooks() {
+    let options = AgentOptions {
+        config: json!({
+            "hooks": { "beforePrompt": [{ "command": "echo PROMPT-HOOK-CONTEXT" }] },
+        }),
+        ..AgentOptions::default()
+    };
+    let Some(mut agent) = AgentRun::start(options).await else {
+        return;
+    };
+    let mut r = Recorder::new(&agent);
+    agent.push([ModelReply::Text("Delivered.".to_owned())]);
+    agent
+        .command(
+            json!({ "type": "deliver", "message": { "customType": "note",
+            "content": "From the gateway" } }),
+        )
+        .await;
+    let order = lines_until_settled(&mut agent).await;
+    r.note("deliver while idle", json!(order));
+    agent.push([ModelReply::Text("Hi.".to_owned())]);
+    agent
+        .command(json!({ "type": "prompt", "message": "Hello" }))
+        .await;
+    let order = lines_until_settled(&mut agent).await;
+    r.note("prompt while idle", json!(order));
+    insta::assert_json_snapshot!("agent_line_order_with_hooks", r.into_value());
+}
