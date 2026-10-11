@@ -303,6 +303,10 @@ pub struct Answers {
     /// Gateway operation results by `op` (`{"ok": true, "result": …}` or an
     /// error object), else `{"ok": false, "error": {"code": "not_found"}}`.
     pub gateway: HashMap<String, Value>,
+    /// A team child's `team_call`s to its parent, answered in order: fields
+    /// merged into `team_result` (`{"result": …}` or `{"error": "…"}`).
+    /// `{"hold": true}`, `null` or an empty queue leaves the call open.
+    pub team: VecDeque<Value>,
 }
 
 /// How the agent is started.
@@ -694,6 +698,14 @@ impl AgentRun {
                     reply["id"] = line["id"].clone();
                     Some(reply)
                 }
+                Some("team_call") => match answers.team.pop_front() {
+                    Some(mut reply) if !reply.is_null() && reply["hold"] != true => {
+                        reply["type"] = json!("team_result");
+                        reply["id"] = line["id"].clone();
+                        Some(reply)
+                    }
+                    _ => None,
+                },
                 Some("extension_ui_request")
                     if matches!(
                         line["method"].as_str(),
