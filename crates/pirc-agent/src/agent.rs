@@ -5,6 +5,7 @@
 //! called them (`crate::feature`).
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::rc::{Rc, Weak};
 use std::time::Duration;
 
@@ -29,7 +30,7 @@ use crate::messages::empty_usage;
 use crate::ptc::{self, CapabilityRegistry, DIRECT_CAPABILITIES, WRAPPER_NAMES};
 use crate::roles::{AgentRole, expand_models, read_roles};
 use crate::rpc::Write;
-use crate::session_store::{EntryData, SessionEntry, SessionStore};
+use crate::session_store::{EntryData, OPERATION_ENTRY, SessionEntry, SessionStore};
 use crate::signal::{AbortController, AbortSignal};
 use crate::stream::{StreamFn, StreamRequest};
 use crate::tools::{AcquireWrite, HumanWait, Tool, ToolContext, ToolResult};
@@ -187,8 +188,10 @@ pub struct Agent {
     changed_sections: RefCell<Vec<String>>,
     /// Flushes the TS agent would have queued as microtasks by now.
     scheduled_flushes: Cell<usize>,
-    /// The direct tool call running now (`operationScope`); dialogs carry it.
-    current_operation: RefCell<Option<String>>,
+    /// Operations still running (`activeOperations`). Work an operation
+    /// started may outlive it and keep its scope ([`OPERATION_SCOPE`]); only
+    /// a live operation is named on a dialog.
+    active_operations: RefCell<HashSet<String>>,
     features: Vec<Rc<dyn Feature>>,
     /// Wakes [`Agent::wait_for_completion`] (`completionWake`).
     completion_wake: Notify,
@@ -413,7 +416,7 @@ impl TrackingUi {
             return (opts, HumanWait::none());
         };
         if opts.tool_call_id.is_none() {
-            opts.tool_call_id = agent.current_operation.borrow().clone();
+            opts.tool_call_id = agent.current_operation();
         }
         (opts, agent.human_wait())
     }
@@ -489,6 +492,40 @@ impl Ui for TrackingUi {
     }
 }
 
+/// Ends a [`Agent::run_operation`] for observers when dropped, also when
+/// the operation's future is dropped before it finished.
+struct OperationEnd {
+    agent: Weak<Agent>,
+    parent_tool_call_id: String,
+    operation_id: String,
+    name: String,
+    shown: Value,
+    signal: AbortSignal,
+    result: Option<ToolResult>,
+}
+
+impl Drop for OperationEnd {
+    fn drop(&mut self) {
+        let Some(agent) = self.agent.upgrade() else {
+            return;
+        };
+        let result = self.result.take().unwrap_or_else(|| {
+            ToolResult::error(if self.signal.aborted() {
+                "Cancelled"
+            } else {
+                "The operation failed unexpectedly"
+            })
+        });
+        agent.end_operation(
+            &self.parent_tool_call_id,
+            &self.operation_id,
+            &self.name,
+            std::mem::take(&mut self.shown),
+            result,
+        );
+    }
+}
+
 /// Clears `compacting` when dropped.
 struct CompactingGuard<'a>(&'a RefCell<Option<AbortController>>);
 
@@ -498,16 +535,115 @@ impl Drop for CompactingGuard<'_> {
     }
 }
 
-/// How far a capability call got (`OperationStage`).
+/// How far a capability call got (`OperationStage`): `Executed` means the
+/// tool ran (its result may still be an error); the others mean it never
+/// started.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OperationStage {
     Unavailable,
     Invalid,
     Denied,
+    /// Held back by its caller ([`OperationOptions::withheld`]), e.g. after
+    /// an earlier refusal.
+    Withheld,
     Refused,
     Cancelled,
     Threw,
     Executed,
+}
+
+/// `OperationOptions`.
+#[derive(Clone, Default)]
+pub struct OperationOptions {
+    /// Runs once the call has passed every check, with the name and
+    /// arguments it will run with, right before the tool executes (a ptc
+    /// execution takes its write slot here). `Err` stops the call as
+    /// cancelled.
+    pub before_execute: Option<BeforeExecute>,
+    /// Checked before approval is asked and again right before the tool
+    /// runs: a reason to hold the call back (a ptc script after one of its
+    /// operations was refused), or `None`.
+    pub withheld: Option<Withheld>,
+}
+
+/// [`OperationOptions::before_execute`].
+pub type BeforeExecute =
+    Rc<dyn Fn(String, Map<String, Value>) -> crate::LocalBoxFuture<'static, Result<(), ()>>>;
+/// [`OperationOptions::withheld`].
+pub type Withheld = Rc<dyn Fn(&str, &Map<String, Value>) -> Option<String>>;
+
+/// `OperationOutcome`: how an operation ended. `hook_output`: what
+/// `afterTool` hooks printed (also appended to the result), so a ptc result
+/// can show it to the model even when the script drops the text.
+#[derive(Clone, Debug)]
+pub struct OperationOutcome {
+    pub stage: OperationStage,
+    pub result: ToolResult,
+    pub hook_output: Option<String>,
+}
+
+tokio::task_local! {
+    /// The `ptc` operation (or direct core call) running in this task's
+    /// current future (`operationScope`): dialogs it opens are linked to it.
+    static OPERATION_SCOPE: String;
+}
+
+/// Longest argument string kept in operation events and session entries,
+/// and the total (`RECORDED_STRING_CHARS`, `RECORDED_ARGS_CHARS`).
+const RECORDED_STRING_CHARS: usize = 16_384;
+const RECORDED_ARGS_CHARS: usize = 65_536;
+
+/// `recordedArgs(args)`: arguments as recorded for an operation, long
+/// strings cut and the whole bounded.
+pub fn recorded_args(args: &Map<String, Value>) -> Value {
+    fn cut(value: &Value, depth: usize) -> Value {
+        match value {
+            Value::String(text) => {
+                let length = crate::tools::js::len16(text);
+                if length > RECORDED_STRING_CHARS {
+                    let (head, _) = slice16(text, 4096);
+                    Value::String(format!("{head}…[{length} characters, truncated]"))
+                } else {
+                    value.clone()
+                }
+            }
+            Value::Array(_) | Value::Object(_) if depth >= 4 => {
+                let json = crate::tools::js::stringify(value);
+                let length = crate::tools::js::len16(&json);
+                if length > 1024 {
+                    let (head, _) = slice16(&json, 1024);
+                    Value::String(format!("{head}…[{length} characters, truncated]"))
+                } else {
+                    value.clone()
+                }
+            }
+            Value::Array(items) => {
+                let mut out: Vec<Value> = items
+                    .iter()
+                    .take(200)
+                    .map(|item| cut(item, depth + 1))
+                    .collect();
+                if items.len() > 200 {
+                    out.push(json!(format!("…[{} more items]", items.len() - 200)));
+                }
+                Value::Array(out)
+            }
+            Value::Object(object) => Value::Object(
+                object
+                    .iter()
+                    .map(|(key, item)| (key.clone(), cut(item, depth + 1)))
+                    .collect(),
+            ),
+            _ => value.clone(),
+        }
+    }
+    let bounded = cut(&Value::Object(args.clone()), 0);
+    let size = crate::tools::js::len16(&crate::tools::js::stringify(&bounded));
+    if size <= RECORDED_ARGS_CHARS {
+        bounded
+    } else {
+        json!({ "truncated": true, "characters": size })
+    }
 }
 
 impl Agent {
@@ -579,7 +715,7 @@ impl Agent {
                 name_source: Cell::new(None),
                 changed_sections: RefCell::new(Vec::new()),
                 scheduled_flushes: Cell::new(0),
-                current_operation: RefCell::new(None),
+                active_operations: RefCell::new(HashSet::new()),
                 features: options.features,
                 completion_wake: Notify::new(),
                 completion_waiting: RefCell::new(Vec::new()),
@@ -605,7 +741,7 @@ impl Agent {
             let weak: Weak<Agent> = Rc::downgrade(&agent);
             weak
         };
-        for tool in ptc::model_tools(host) {
+        for tool in ptc::model_tools(host, Rc::downgrade(&agent)) {
             agent
                 .wrappers
                 .borrow_mut()
@@ -853,6 +989,13 @@ impl Agent {
         self.human_wait_listeners
             .borrow_mut()
             .retain(|(listener, _)| *listener != id);
+    }
+
+    /// `currentOperation`: the operation running in this task's current
+    /// future, if it is still live (dialogs are linked to it).
+    pub fn current_operation(&self) -> Option<String> {
+        let id = OPERATION_SCOPE.try_with(Clone::clone).ok()?;
+        self.active_operations.borrow().contains(&id).then_some(id)
     }
 
     /// Record a running `ptc` execution's capabilities (`runningScripts.add`).
@@ -2437,39 +2580,165 @@ impl Agent {
         }
     }
 
-    /// `invokeOperation`: availability, then the policy chain.
-    async fn invoke_operation(
+    /// `invokeOperation`: availability, then the policy chain (argument
+    /// validation, hooks, validation of hook-rewritten arguments, auto mode
+    /// and the write lease), then the tool. `stage` tells how far it got.
+    pub async fn invoke_operation(
         &self,
         name: &str,
         raw_args: Map<String, Value>,
         signal: &AbortSignal,
         tool_call_id: &str,
         on_update: Rc<dyn Fn(ToolResult)>,
-    ) -> (OperationStage, ToolResult) {
+        options: OperationOptions,
+    ) -> OperationOutcome {
+        let unavailable = |text: String| OperationOutcome {
+            stage: OperationStage::Unavailable,
+            result: ToolResult::error(text),
+            hook_output: None,
+        };
         let tool = self.get_tool(name);
         if tool.is_none()
             && let Some(capability) = capability_for_tool(name)
             && self.tools.borrow().contains_key(name)
         {
-            return (
-                OperationStage::Unavailable,
-                ToolResult::error(format!(
-                    "The {capability} capability is disabled for this project; {name} is unavailable. Ask the user to enable it in the project settings if needed."
-                )),
-            );
+            return unavailable(format!(
+                "The {capability} capability is disabled for this project; {name} is unavailable. Ask the user to enable it in the project settings if needed."
+            ));
         }
         let Some(tool) = tool else {
-            return (
-                OperationStage::Unavailable,
-                ToolResult::error(format!("Unknown tool: {name}")),
-            );
+            return unavailable(format!("Unknown tool: {name}"));
         };
-        self.run_tool(&tool, raw_args, signal, tool_call_id, on_update)
+        self.run_tool(&tool, raw_args, signal, tool_call_id, on_update, options)
             .await
     }
 
+    /// `runOperation`: one `ptc` operation, observable like a direct call
+    /// (docs/evaluations/ptc/ptc-only.md §6): `tool_execution_*` events under
+    /// the capability's name, linked to the `ptc` call by
+    /// `parentToolCallId`, and a `ptc.operation` session entry with the
+    /// result as the tool returned it (never a `message`: the model sees
+    /// only what the script returns). Dialogs it opens carry its id.
+    pub async fn run_operation(
+        &self,
+        parent_tool_call_id: &str,
+        name: &str,
+        args: Map<String, Value>,
+        signal: &AbortSignal,
+        operation_id: &str,
+        options: OperationOptions,
+    ) -> OperationOutcome {
+        // What observers and the session see of the arguments: bounded, since
+        // a script can pass large arguments without the model writing them
+        // out (the operation gets them in full).
+        let shown = recorded_args(&args);
+        self.emit(
+            json!({ "type": "tool_execution_start", "toolCallId": operation_id,
+            "toolName": name, "args": shown, "parentToolCallId": parent_tool_call_id }),
+        );
+        let last_update = Rc::new(Cell::new(0u64));
+        let weak = self.weak.clone();
+        let (call_id, tool_name, update_args, parent) = (
+            operation_id.to_owned(),
+            name.to_owned(),
+            shown.clone(),
+            parent_tool_call_id.to_owned(),
+        );
+        let on_update: Rc<dyn Fn(ToolResult)> = Rc::new(move |partial: ToolResult| {
+            let now = now_ms();
+            if now.saturating_sub(last_update.get()) < 100 {
+                return;
+            }
+            last_update.set(now);
+            if let Some(agent) = weak.upgrade() {
+                agent.emit(
+                    json!({ "type": "tool_execution_update", "toolCallId": call_id,
+                    "toolName": tool_name, "args": update_args,
+                    "partialResult": partial.observed().to_json(), "parentToolCallId": parent }),
+                );
+            }
+        });
+        self.active_operations
+            .borrow_mut()
+            .insert(operation_id.to_owned());
+        // Always ended for observers, even if the operation's future is
+        // dropped (the TS `finally`).
+        let ended = OperationEnd {
+            agent: self.weak.clone(),
+            parent_tool_call_id: parent_tool_call_id.to_owned(),
+            operation_id: operation_id.to_owned(),
+            name: name.to_owned(),
+            shown,
+            signal: signal.clone(),
+            result: None,
+        };
+        let outcome = OPERATION_SCOPE
+            .scope(
+                operation_id.to_owned(),
+                self.invoke_operation(name, args, signal, operation_id, on_update, options),
+            )
+            .await;
+        let mut ended = ended;
+        ended.result = Some(outcome.result.clone());
+        drop(ended);
+        outcome
+    }
+
+    /// The end of [`Agent::run_operation`]: the `ptc.operation` entry, the
+    /// `tool_execution_end` event and the `operation_recorded` hooks.
+    fn end_operation(
+        &self,
+        parent_tool_call_id: &str,
+        operation_id: &str,
+        name: &str,
+        shown: Value,
+        result: ToolResult,
+    ) {
+        self.active_operations.borrow_mut().remove(operation_id);
+        let result = result.observed();
+        let content = if result.content.is_empty() {
+            vec![text_block("(no output)")]
+        } else {
+            result.content.clone()
+        };
+        let mut entry = Map::new();
+        entry.insert("parentToolCallId".to_owned(), json!(parent_tool_call_id));
+        entry.insert("toolCallId".to_owned(), json!(operation_id));
+        entry.insert("toolName".to_owned(), json!(name));
+        entry.insert("args".to_owned(), shown);
+        entry.insert(
+            "content".to_owned(),
+            serde_json::to_value(&content).unwrap_or_default(),
+        );
+        if let Some(details) = &result.details {
+            entry.insert("details".to_owned(), details.clone());
+        }
+        entry.insert("isError".to_owned(), json!(result.is_error));
+        entry.insert("timestamp".to_owned(), json!(now_ms()));
+        let entry = Value::Object(entry);
+        // Written before it is announced, like messages: a snapshot is never
+        // behind the events.
+        if let Err(error) = self.append(EntryData::Custom {
+            custom_type: OPERATION_ENTRY.to_owned(),
+            data: entry.clone(),
+        }) {
+            eprintln!("could not record operation {operation_id}: {error}");
+        }
+        self.emit(
+            json!({ "type": "tool_execution_end", "toolCallId": operation_id,
+            "toolName": name, "result": result.to_json(), "isError": result.is_error,
+            "parentToolCallId": parent_tool_call_id }),
+        );
+        if let Some(agent) = self.weak.upgrade() {
+            for feature in self.features.clone() {
+                feature.operation_recorded(&agent, &entry);
+            }
+        }
+    }
+
     /// `runTool`: validation, `beforeTool` hooks, validation of rewritten
-    /// arguments, auto mode and the write lease, the tool, `afterTool`.
+    /// arguments, the caller's hold (`withheld`), auto mode and the write
+    /// lease, `beforeExecute`, the tool, `afterTool`.
     async fn run_tool(
         &self,
         tool: &Rc<dyn Tool>,
@@ -2477,9 +2746,14 @@ impl Agent {
         signal: &AbortSignal,
         tool_call_id: &str,
         on_update: Rc<dyn Fn(ToolResult)>,
-    ) -> (OperationStage, ToolResult) {
+        options: OperationOptions,
+    ) -> OperationOutcome {
         let name = tool.name().to_owned();
-        let fail = |stage, text: String| (stage, ToolResult::error(text));
+        let fail = |stage, text: String| OperationOutcome {
+            stage,
+            result: ToolResult::error(text),
+            hook_output: None,
+        };
         let cancelled = || {
             fail(
                 OperationStage::Cancelled,
@@ -2523,6 +2797,17 @@ impl Agent {
         {
             return fail(OperationStage::Invalid, problem);
         }
+        let held = || {
+            options
+                .withheld
+                .as_ref()
+                .and_then(|withheld| withheld(&name, &args))
+        };
+        if let Some(reason) = held() {
+            return fail(OperationStage::Withheld, reason);
+        }
+        // Auto mode judges the final (hook-rewritten) arguments and takes the
+        // write lease.
         let refusal = match self.auto_mode.gate(self, &name, &args, signal).await {
             Ok(refusal) => refusal,
             Err(error) => {
@@ -2532,6 +2817,8 @@ impl Agent {
                 return fail(OperationStage::Refused, error);
             }
         };
+        // An approval cancelled with the call is not a denial, and never
+        // consent.
         if signal.aborted() {
             return cancelled();
         }
@@ -2540,6 +2827,18 @@ impl Agent {
                 OperationStage::Denied,
                 format!("Blocked by auto mode: {refusal}"),
             );
+        }
+        if let Some(before) = &options.before_execute
+            && before(name.clone(), args.clone()).await.is_err()
+        {
+            return cancelled();
+        }
+        // Nothing runs once the call was cancelled, wherever it was waiting.
+        if signal.aborted() {
+            return cancelled();
+        }
+        if let Some(reason) = held() {
+            return fail(OperationStage::Withheld, reason);
         }
         let ctx = self.tool_context(tool_call_id, signal, on_update);
         let (stage, mut result) = match tool.execute(args.clone(), ctx).await {
@@ -2550,6 +2849,7 @@ impl Agent {
                 (OperationStage::Threw, ToolResult::error(error))
             }
         };
+        let mut hook_output = None;
         if self.hooks.has(HookName::AfterTool) {
             let output: String = result
                 .content
@@ -2565,7 +2865,7 @@ impl Agent {
             data.insert("args".to_owned(), Value::Object(args));
             data.insert("isError".to_owned(), json!(result.is_error));
             data.insert("output".to_owned(), json!(output));
-            let hook_output: Vec<String> = self
+            let printed: Vec<String> = self
                 .hooks
                 .run(HookName::AfterTool, data, Some(&name))
                 .await
@@ -2573,13 +2873,19 @@ impl Agent {
                 .filter(|item| item.exit_code == Some(0) && !js_trim(&item.stdout).is_empty())
                 .map(|item| js_trim(&item.stdout).to_owned())
                 .collect();
-            if !hook_output.is_empty() {
+            if !printed.is_empty() {
+                let printed = printed.join("\n");
                 result
                     .content
-                    .push(text_block(format!("\n[hook]\n{}", hook_output.join("\n"))));
+                    .push(text_block(format!("\n[hook]\n{printed}")));
+                hook_output = Some(printed);
             }
         }
-        (stage, result)
+        OperationOutcome {
+            stage,
+            result,
+            hook_output,
+        }
     }
 
     /// `invokeModelTool`: only the model-facing tools exist at this level.
@@ -2596,26 +2902,47 @@ impl Agent {
             && !self.available_tools().is_empty()
         {
             return self
-                .run_tool(&wrapper, arguments, signal, id, on_update)
+                .run_tool(
+                    &wrapper,
+                    arguments,
+                    signal,
+                    id,
+                    on_update,
+                    OperationOptions::default(),
+                )
                 .await
-                .1;
+                .result;
         }
+        // A direct core capability: the same policy chain as a ptc
+        // operation, in an operation scope so the dialogs it opens name its
+        // call; typed data stays here. A core capability disabled by policy
+        // gets the same explanation as from a script.
         let direct = self.direct_tools().iter().any(|tool| tool.name() == name)
             || (DIRECT_CAPABILITIES.contains(&name)
                 && self.tools.borrow().contains_key(name)
                 && capability_for_tool(name).is_some());
         if direct {
             let args = lenient_args(self.get_tool(name).as_ref(), &arguments);
-            let previous = self.current_operation.replace(Some(id.to_owned()));
+            self.active_operations.borrow_mut().insert(id.to_owned());
             let forward = on_update.clone();
             let observed: Rc<dyn Fn(ToolResult)> =
                 Rc::new(move |partial: ToolResult| forward(partial.observed()));
-            let result = self
-                .invoke_operation(name, args, signal, id, observed)
+            let result = OPERATION_SCOPE
+                .scope(
+                    id.to_owned(),
+                    self.invoke_operation(
+                        name,
+                        args,
+                        signal,
+                        id,
+                        observed,
+                        OperationOptions::default(),
+                    ),
+                )
                 .await
-                .1
+                .result
                 .observed();
-            *self.current_operation.borrow_mut() = previous;
+            self.active_operations.borrow_mut().remove(id);
             return result;
         }
         let text = if self.get_tool(name).is_some() {

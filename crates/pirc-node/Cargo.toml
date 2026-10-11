@@ -12,6 +12,8 @@ path = "src/main.rs"
 
 [dependencies]
 pirc-agent = { path = "../pirc-agent" }
+# `pirc-node ptc-guest`: the QuickJS process of one `ptc` script.
+pirc-ptc = { path = "../pirc-ptc" }
 
 [lints]
 workspace = true

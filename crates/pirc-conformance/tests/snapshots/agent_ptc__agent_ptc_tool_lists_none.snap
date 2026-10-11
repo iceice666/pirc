@@ -1,0 +1,995 @@
+---
+source: crates/pirc-conformance/tests/agent_ptc.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": {
+      "command": "prompt",
+      "id": "c1",
+      "success": true,
+      "type": "response"
+    },
+    "step": "scripts: response"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:1>",
+        "message": "Tool list: code ignored; ptc and ptc_docs come with any capability",
+        "method": "notify",
+        "notifyType": "warning",
+        "type": "extension_ui_request"
+      },
+      {
+        "type": "agent_start"
+      },
+      {
+        "message": {
+          "content": "run scripts",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "run scripts",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "id": "t1",
+          "toolName": "ptc",
+          "type": "toolcall_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"code\":\"return (await tools.read({ path: 'a.txt' })).text;\"}",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "arguments": {
+              "code": "return (await tools.read({ path: 'a.txt' })).text;"
+            },
+            "id": "t1",
+            "name": "ptc",
+            "type": "toolCall"
+          },
+          "type": "toolcall_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 1,
+          "id": "t2",
+          "toolName": "ptc",
+          "type": "toolcall_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 1,
+          "delta": "{\"code\":\"return await tools.bash({ command: 'touch x' });\"}",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 1,
+          "toolCall": {
+            "arguments": {
+              "code": "return await tools.bash({ command: 'touch x' });"
+            },
+            "id": "t2",
+            "name": "ptc",
+            "type": "toolCall"
+          },
+          "type": "toolcall_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "code": "return (await tools.read({ path: 'a.txt' })).text;"
+              },
+              "id": "t1",
+              "name": "ptc",
+              "type": "toolCall"
+            },
+            {
+              "arguments": {
+                "code": "return await tools.bash({ command: 'touch x' });"
+              },
+              "id": "t2",
+              "name": "ptc",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "args": {
+          "code": "return (await tools.read({ path: 'a.txt' })).text;"
+        },
+        "toolCallId": "t1",
+        "toolName": "ptc",
+        "type": "tool_execution_start"
+      },
+      {
+        "isError": true,
+        "result": {
+          "content": [
+            {
+              "text": "Unknown tool: ptc. The tools are none.",
+              "type": "text"
+            }
+          ],
+          "isError": true
+        },
+        "toolCallId": "t1",
+        "toolName": "ptc",
+        "type": "tool_execution_end"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "Unknown tool: ptc. The tools are none.",
+              "type": "text"
+            }
+          ],
+          "isError": true,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "t1",
+          "toolName": "ptc"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "Unknown tool: ptc. The tools are none.",
+              "type": "text"
+            }
+          ],
+          "isError": true,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "t1",
+          "toolName": "ptc"
+        },
+        "type": "message_end"
+      },
+      {
+        "args": {
+          "code": "return await tools.bash({ command: 'touch x' });"
+        },
+        "toolCallId": "t2",
+        "toolName": "ptc",
+        "type": "tool_execution_start"
+      },
+      {
+        "isError": true,
+        "result": {
+          "content": [
+            {
+              "text": "Unknown tool: ptc. The tools are none.",
+              "type": "text"
+            }
+          ],
+          "isError": true
+        },
+        "toolCallId": "t2",
+        "toolName": "ptc",
+        "type": "tool_execution_end"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "Unknown tool: ptc. The tools are none.",
+              "type": "text"
+            }
+          ],
+          "isError": true,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "t2",
+          "toolName": "ptc"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "Unknown tool: ptc. The tools are none.",
+              "type": "text"
+            }
+          ],
+          "isError": true,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "t2",
+          "toolName": "ptc"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "type": "text_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "o",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "k",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "content": "ok",
+          "contentIndex": 0,
+          "type": "text_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "agent_end",
+        "willRetry": false
+      },
+      {
+        "type": "agent_settled"
+      }
+    ],
+    "step": "scripts: events"
+  },
+  {
+    "observed": [
+      {
+        "messages": [
+          {
+            "content": "run scripts",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\nCurrent working directory: <tmp>/workspace",
+        "thinking": "low",
+        "tools": []
+      },
+      {
+        "messages": [
+          {
+            "content": "run scripts",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "return (await tools.read({ path: 'a.txt' })).text;"
+                },
+                "id": "t1",
+                "name": "ptc",
+                "type": "toolCall"
+              },
+              {
+                "arguments": {
+                  "code": "return await tools.bash({ command: 'touch x' });"
+                },
+                "id": "t2",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "Unknown tool: ptc. The tools are none.",
+                "type": "text"
+              }
+            ],
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "t1",
+            "toolName": "ptc"
+          },
+          {
+            "content": [
+              {
+                "text": "Unknown tool: ptc. The tools are none.",
+                "type": "text"
+              }
+            ],
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "t2",
+            "toolName": "ptc"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "<unchanged>",
+        "thinking": "low",
+        "tools": "<unchanged>"
+      }
+    ],
+    "step": "scripts: model requests"
+  },
+  {
+    "observed": {
+      "command": "prompt",
+      "id": "c2",
+      "success": true,
+      "type": "response"
+    },
+    "step": "a direct bash: response"
+  },
+  {
+    "observed": [
+      {
+        "type": "agent_start"
+      },
+      {
+        "message": {
+          "content": "go",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "go",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "id": "t3",
+          "toolName": "bash",
+          "type": "toolcall_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"command\":\"touch x\"}",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "arguments": {
+              "command": "touch x"
+            },
+            "id": "t3",
+            "name": "bash",
+            "type": "toolCall"
+          },
+          "type": "toolcall_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "command": "touch x"
+              },
+              "id": "t3",
+              "name": "bash",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "args": {
+          "command": "touch x"
+        },
+        "toolCallId": "t3",
+        "toolName": "bash",
+        "type": "tool_execution_start"
+      },
+      {
+        "isError": true,
+        "result": {
+          "content": [
+            {
+              "text": "Unknown tool: bash. The tools are none.",
+              "type": "text"
+            }
+          ],
+          "isError": true
+        },
+        "toolCallId": "t3",
+        "toolName": "bash",
+        "type": "tool_execution_end"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "Unknown tool: bash. The tools are none.",
+              "type": "text"
+            }
+          ],
+          "isError": true,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "t3",
+          "toolName": "bash"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "Unknown tool: bash. The tools are none.",
+              "type": "text"
+            }
+          ],
+          "isError": true,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "t3",
+          "toolName": "bash"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "type": "text_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "o",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "k",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "content": "ok",
+          "contentIndex": 0,
+          "type": "text_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "agent_end",
+        "willRetry": false
+      },
+      {
+        "type": "agent_settled"
+      }
+    ],
+    "step": "a direct bash: events"
+  },
+  {
+    "observed": [
+      {
+        "messages": [
+          {
+            "content": "run scripts",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "return (await tools.read({ path: 'a.txt' })).text;"
+                },
+                "id": "t1",
+                "name": "ptc",
+                "type": "toolCall"
+              },
+              {
+                "arguments": {
+                  "code": "return await tools.bash({ command: 'touch x' });"
+                },
+                "id": "t2",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "Unknown tool: ptc. The tools are none.",
+                "type": "text"
+              }
+            ],
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "t1",
+            "toolName": "ptc"
+          },
+          {
+            "content": [
+              {
+                "text": "Unknown tool: ptc. The tools are none.",
+                "type": "text"
+              }
+            ],
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "t2",
+            "toolName": "ptc"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": "go",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "<unchanged>",
+        "thinking": "low",
+        "tools": "<unchanged>"
+      },
+      {
+        "messages": [
+          {
+            "content": "run scripts",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "return (await tools.read({ path: 'a.txt' })).text;"
+                },
+                "id": "t1",
+                "name": "ptc",
+                "type": "toolCall"
+              },
+              {
+                "arguments": {
+                  "code": "return await tools.bash({ command: 'touch x' });"
+                },
+                "id": "t2",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "Unknown tool: ptc. The tools are none.",
+                "type": "text"
+              }
+            ],
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "t1",
+            "toolName": "ptc"
+          },
+          {
+            "content": [
+              {
+                "text": "Unknown tool: ptc. The tools are none.",
+                "type": "text"
+              }
+            ],
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "t2",
+            "toolName": "ptc"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": "go",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "command": "touch x"
+                },
+                "id": "t3",
+                "name": "bash",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "Unknown tool: bash. The tools are none.",
+                "type": "text"
+              }
+            ],
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "t3",
+            "toolName": "bash"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "<unchanged>",
+        "thinking": "low",
+        "tools": "<unchanged>"
+      }
+    ],
+    "step": "a direct bash: model requests"
+  },
+  {
+    "observed": false,
+    "step": "x exists"
+  },
+  {
+    "observed": 0,
+    "step": "exit code"
+  }
+]
