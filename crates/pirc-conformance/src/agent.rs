@@ -4,10 +4,11 @@
 //! model replies, and has its side-channel requests (write leases, gateway
 //! operations, dialogs) answered by the test.
 //!
-//! The TS agent runs with its built-in features off (`PIRC_AGENT_FEATURES=
-//! none`): these transcripts are the M4 target of the agent port
-//! (plans/rust-rewrite.md). `PIRC_CONFORMANCE_AGENT_BIN` runs another
-//! agent executable (the Rust one) with the same arguments.
+//! The agent runs with its built-in features off (`PIRC_AGENT_FEATURES=
+//! none`, the M4 target of the agent port, plans/rust-rewrite.md) unless a
+//! scenario turns some on ([`AgentOptions::features`], M5).
+//! `PIRC_CONFORMANCE_AGENT_BIN` runs another agent executable (the Rust
+//! one) with the same arguments.
 
 use std::collections::{HashMap, VecDeque};
 use std::convert::Infallible;
@@ -281,6 +282,16 @@ pub struct AgentOptions {
     pub args: Vec<String>,
     /// The public model catalog (default: one `fake` provider).
     pub models: Option<Value>,
+}
+
+impl AgentOptions {
+    /// Run with these built-in features (`PIRC_AGENT_FEATURES`, a
+    /// comma-separated list of feature names such as `todo,goal`).
+    pub fn features(mut self, names: &str) -> Self {
+        self.env
+            .push(("PIRC_AGENT_FEATURES".to_owned(), names.to_owned()));
+        self
+    }
 }
 
 impl Default for AgentOptions {

@@ -48,10 +48,20 @@ export function builtinFeatures(): Feature[] {
 }
 
 /**
- * The features an agent process runs. `PIRC_AGENT_FEATURES=none` (development
- * only: the Rust port's agent-level conformance transcripts, plans/rust-rewrite.md
- * M4) runs the core alone; production never sets it.
+ * The features an agent process runs. Development only, for the Rust port's
+ * agent-level conformance transcripts (plans/rust-rewrite.md M4, M5):
+ * `PIRC_AGENT_FEATURES=none` runs the core alone, and a comma-separated list
+ * of feature names (`todo,goal`) runs only those, in their usual order.
+ * Unset or `all` runs every feature; production never sets it.
  */
 export function processFeatures(env: NodeJS.ProcessEnv = process.env): Feature[] {
-  return env.PIRC_AGENT_FEATURES === 'none' ? [] : builtinFeatures();
+  const setting = env.PIRC_AGENT_FEATURES?.trim();
+  if (!setting || setting === 'all') return builtinFeatures();
+  if (setting === 'none') return [];
+  const wanted = new Set(setting.split(',').map((name) => name.trim()));
+  const features = builtinFeatures();
+  const unknown = [...wanted].filter((name) => !features.some((f) => f.name === name));
+  if (unknown.length)
+    throw new Error(`PIRC_AGENT_FEATURES: unknown features ${unknown.join(', ')}`);
+  return features.filter((feature) => wanted.has(feature.name));
 }
