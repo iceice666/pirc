@@ -11,7 +11,7 @@ use pirc_protocol::{AGENT_OP_MAX_LENGTH, AGENT_REQUEST_MAX_BYTES, valid_agent_op
 use serde_json::{Map, Value, json};
 use tokio::sync::{oneshot, watch};
 
-use super::process::{NODE_DIALOG_PREFIX, Runner, SideRequest, session_root};
+use super::process::{Inner, NODE_DIALOG_PREFIX, Runner, SideRequest, session_root};
 use super::reducer::js_string;
 use crate::browser::BrowserTarget;
 use crate::services::Node;
@@ -25,6 +25,13 @@ const MAX_GATEWAY_REQUESTS: usize = 8;
 const MAX_BROWSER_REQUESTS: usize = 4;
 /// Sandbox requests (approvals, unsandboxed commands) one session may have in flight.
 const MAX_SANDBOX_REQUESTS: usize = 4;
+
+/// A sandbox request's task's handle on it: its id, and its entry's abort
+/// channel (also the entry's identity).
+pub(super) struct Side {
+    pub id: String,
+    pub abort: Arc<watch::Sender<bool>>,
+}
 
 /// `typeof id === 'string' && id && id.length <= 100`.
 fn request_id(message: &Map<String, Value>) -> Option<String> {
@@ -330,7 +337,7 @@ impl Runner {
         inner.browser_requests.insert(
             id,
             SideRequest {
-                abort,
+                abort: Arc::new(abort),
                 dialog: None,
                 task: Some(task.abort_handle()),
             },
@@ -342,13 +349,22 @@ impl Runner {
     /// is sandboxed and may be steered by what it reads, so its own
     /// dialogs cannot grant anything). No when unanswered within the
     /// interaction TTL, withdrawn by the agent, or the runner stops.
+    ///
+    /// TS opened the dialog synchronously while handling the request, so a
+    /// `sandbox_cancel` always found it. Here the dialog opens in the
+    /// request's task, possibly after the cancel: a request already
+    /// withdrawn (its entry gone or replaced) is answered no without a
+    /// dialog, and one withdrawn while the dialog opens has it withdrawn.
     async fn confirm_from_node(
         &self,
-        request: &str,
+        side: &Side,
         title: &str,
         message: &str,
         tool_call_id: Option<String>,
     ) -> Result<bool, String> {
+        if !self.side_live(&self.lock(), side) {
+            return Ok(false);
+        }
         let node = self.node().ok_or("The node is closing")?;
         let rpc_id = format!("{NODE_DIALOG_PREFIX}{}", uuid());
         let mut dialog = Map::new();
@@ -370,7 +386,7 @@ impl Runner {
                 &rpc_id,
                 "confirm",
                 &dialog,
-                now_ms() + ttl as i64,
+                now_ms().saturating_add(i64::try_from(ttl).unwrap_or(i64::MAX)),
             )
             .map_err(|error| error.message)?;
         self.publish(
@@ -381,16 +397,18 @@ impl Runner {
         let (answer, answered) = oneshot::channel();
         {
             let mut inner = self.lock();
-            if inner.closed {
+            if !self.side_live(&inner, side) {
                 drop(inner);
-                // The runner already stopped: withdraw at once.
+                // The runner stopped or the agent withdrew the request
+                // while the dialog opened: withdraw it at once.
                 self.lock().node_dialogs.insert(rpc_id.clone(), answer);
                 self.withdraw(&rpc_id);
                 return Ok(false);
             }
             inner.node_dialogs.insert(rpc_id.clone(), answer);
-            if let Some(side) = inner.sandbox_requests.get_mut(request) {
-                side.dialog = Some(rpc_id.clone());
+            // Linked under the same lock: a later cancel withdraws it.
+            if let Some(entry) = inner.sandbox_requests.get_mut(&side.id) {
+                entry.dialog = Some(rpc_id.clone());
             }
         }
         drop(node);
@@ -403,6 +421,17 @@ impl Runner {
                 Ok(false)
             }
         }
+    }
+
+    /// Whether `side` is still in flight: the runner runs, the agent has not
+    /// withdrawn it, and no later request took over its id.
+    fn side_live(&self, inner: &Inner, side: &Side) -> bool {
+        !inner.closed
+            && !*side.abort.borrow()
+            && inner
+                .sandbox_requests
+                .get(&side.id)
+                .is_some_and(|entry| Arc::ptr_eq(&entry.abort, &side.abort))
     }
 
     fn sandbox_fail(&self, id: &str, code: &str, message: &str) {
@@ -506,21 +535,24 @@ impl Runner {
                     "Approving allows these hosts for the rest of this session.".to_owned(),
                 ]
                 .join("\n\n");
-                self.start_sandbox(id, move |runner, request| async move {
+                self.start_sandbox(id, move |runner, side| async move {
                     let confirmed = runner
-                        .confirm_from_node(&request, "Allow network access?", &text, tool_call_id)
+                        .confirm_from_node(&side, "Allow network access?", &text, tool_call_id)
                         .await?;
                     if !confirmed {
-                        runner.sandbox_ok(&request, json!({ "granted": [], "denied": missing }));
+                        runner.sandbox_ok(&side.id, json!({ "granted": [], "denied": missing }));
                         return Ok(());
                     }
-                    let approved: Vec<String> = {
+                    {
                         let mut inner = runner.lock();
                         inner.approved_domains.extend(missing.iter().cloned());
-                        inner.approved_domains.iter().cloned().collect()
-                    };
-                    runner.prepared.approve_domains(&approved)?;
-                    runner.sandbox_ok(&request, json!({ "granted": domains }));
+                        let approved: Vec<String> =
+                            inner.approved_domains.iter().cloned().collect();
+                        // Under the lock: both backends replace the whole
+                        // set, so an older, smaller one must never land last.
+                        runner.prepared.approve_domains(&approved)?;
+                    }
+                    runner.sandbox_ok(&side.id, json!({ "granted": domains }));
                     Ok(())
                 });
             }
@@ -570,10 +602,10 @@ impl Runner {
                         .to_owned(),
                 ]
                 .join("\n\n");
-                self.start_sandbox(id, move |runner, request| async move {
+                self.start_sandbox(id, move |runner, side| async move {
                     let confirmed = runner
                         .confirm_from_node(
-                            &request,
+                            &side,
                             "Run a command outside the sandbox?",
                             &text,
                             tool_call_id,
@@ -581,18 +613,15 @@ impl Runner {
                         .await?;
                     if !confirmed {
                         runner.sandbox_fail(
-                            &request,
+                            &side.id,
                             "denied",
                             "The user did not approve running this outside the sandbox",
                         );
                         return Ok(());
                     }
-                    let abort = runner
-                        .lock()
-                        .sandbox_requests
-                        .get(&request)
-                        .map(|side| side.abort.subscribe());
-                    let abort = abort.unwrap_or_else(|| watch::channel(true).1);
+                    // Already true when the agent withdrew the request after
+                    // the yes: `run_on_host` then spawns nothing.
+                    let abort = side.abort.subscribe();
                     let env = runner
                         .node()
                         .map(|node| node.env.clone())
@@ -605,7 +634,7 @@ impl Runner {
                         abort,
                     )
                     .await;
-                    runner.sandbox_ok(&request, result);
+                    runner.sandbox_ok(&side.id, result);
                     Ok(())
                 });
             }
@@ -618,24 +647,37 @@ impl Runner {
     /// error is `sandbox_error`.
     fn start_sandbox<F, Fut>(self: &Arc<Self>, id: String, work: F)
     where
-        F: FnOnce(Arc<Runner>, String) -> Fut + Send + 'static,
+        F: FnOnce(Arc<Runner>, Side) -> Fut + Send + 'static,
         Fut: std::future::Future<Output = Result<(), String>> + Send,
     {
-        let (abort, _) = watch::channel(false);
+        let side = Side {
+            id,
+            abort: Arc::new(watch::channel(false).0),
+        };
         self.lock().sandbox_requests.insert(
-            id.clone(),
+            side.id.clone(),
             SideRequest {
-                abort,
+                abort: side.abort.clone(),
                 dialog: None,
                 task: None,
             },
         );
         let runner = self.clone();
         tokio::spawn(async move {
-            if let Err(error) = work(runner.clone(), id.clone()).await {
+            let (id, abort) = (side.id.clone(), side.abort.clone());
+            if let Err(error) = work(runner.clone(), side).await {
                 runner.sandbox_fail(&id, "sandbox_error", &error);
             }
-            runner.lock().sandbox_requests.remove(&id);
+            // Only its own entry: a later request may have taken the id
+            // (TS deleted that one too, leaving it uncancellable).
+            let mut inner = runner.lock();
+            if inner
+                .sandbox_requests
+                .get(&id)
+                .is_some_and(|entry| Arc::ptr_eq(&entry.abort, &abort))
+            {
+                inner.sandbox_requests.remove(&id);
+            }
         });
     }
 }

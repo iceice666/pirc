@@ -93,12 +93,22 @@ pub async fn run_on_host(
         .stderr(Stdio::piped())
         .process_group(0);
     let (mut timed_out, mut aborted) = (false, false);
-    let exit_code = match spawned.spawn() {
-        Err(error) => {
+    // Withdrawn before it started (between the human's yes and here): never
+    // spawned. TS could not get here aborted (one thread).
+    let withdrawn = *abort.borrow_and_update() || abort.has_changed().is_err();
+    let started = if withdrawn {
+        aborted = true;
+        None
+    } else {
+        Some(spawned.spawn())
+    };
+    let exit_code = match started {
+        None => None,
+        Some(Err(error)) => {
             collector.head.push_str(&format!("{error}\n"));
             None
         }
-        Ok(mut child) => {
+        Some(Ok(mut child)) => {
             let pid = child.id();
             let mut stdout = child.stdout.take();
             let mut stderr = child.stderr.take();
@@ -259,6 +269,38 @@ mod tests {
             1_000_000 + "\n\n[… output truncated …]\n\n".len()
         );
         assert_eq!(result["exitCode"], 0);
+    }
+
+    // A request withdrawn between the human's yes and the spawn runs nothing.
+    #[tokio::test]
+    async fn never_spawns_a_withdrawn_command() {
+        let marker = std::env::temp_dir().join(format!("pirc-withdrawn-{}", std::process::id()));
+        let command = format!("touch {}", marker.display());
+        let (tx, abort) = watch::channel(false);
+        tx.send_replace(true);
+        let result = run_on_host(
+            &env(),
+            &command,
+            Path::new("/"),
+            Duration::from_secs(10),
+            abort,
+        )
+        .await;
+        assert_eq!(result["aborted"], true);
+        assert_eq!(result["exitCode"], Value::Null);
+        assert_eq!(result["output"], "");
+        // A closed channel (its sender gone) is a withdrawal too.
+        let abort = watch::channel(false).1;
+        let result = run_on_host(
+            &env(),
+            &command,
+            Path::new("/"),
+            Duration::from_secs(10),
+            abort,
+        )
+        .await;
+        assert_eq!(result["aborted"], true);
+        assert!(!marker.exists());
     }
 
     #[test]

@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -19,6 +20,7 @@ use tokio::task::AbortHandle;
 use super::framing::{JsonlParser, line};
 use super::reducer::ReducedState;
 use crate::error::{ApiError, ApiResult};
+use crate::events::{Cursor, EventHub};
 use crate::sandbox::Prepared;
 use crate::services::{Node, WeakNode};
 use crate::store::{RunStatus, RunnerState, SessionRow, Store, Workspace, WorkspaceKind};
@@ -37,8 +39,12 @@ pub(super) struct Outbound {
 
 /// A side request of the agent in flight (`AbortController`s of TS).
 pub(super) struct SideRequest {
-    /// Turned true by `sandbox_cancel`, `browser_cancel` or the exit.
-    pub abort: watch::Sender<bool>,
+    /// Turned true by `sandbox_cancel`, `browser_cancel` or the exit. Shared
+    /// with the request's task: a later request reusing the id replaces the
+    /// entry without closing this channel (a closed channel reads as an
+    /// abort, and TS did not abort a replaced request). The `Arc` is also
+    /// the entry's identity.
+    pub abort: Arc<watch::Sender<bool>>,
     /// A node dialog it waits on, withdrawn with it.
     pub dialog: Option<String>,
     pub task: Option<AbortHandle>,
@@ -71,7 +77,25 @@ pub struct Runner {
     pub(super) prepared: Prepared,
     stdin: mpsc::UnboundedSender<Outbound>,
     pub(super) inner: Mutex<Inner>,
+    /// Held while one agent line is handled, and while a snapshot reads the
+    /// reduced state with the stream's watermark: TS reduced and published
+    /// in one synchronous step, so a snapshot's state and watermark always
+    /// agreed (an event is either in both or in neither). Taken before
+    /// `inner`, the store and the hub, never while holding them.
+    view: Mutex<()>,
+    /// Set once `wait` reaped the agent: its pid may belong to another
+    /// process from then on.
+    reaped: AtomicBool,
     exited: watch::Sender<bool>,
+}
+
+/// Marks the end of `exit` when dropped.
+struct Exited<'a>(&'a watch::Sender<bool>);
+
+impl Drop for Exited<'_> {
+    fn drop(&mut self) {
+        self.0.send_replace(true);
+    }
 }
 
 fn runner_unavailable() -> ApiError {
@@ -104,10 +128,32 @@ impl Runner {
         self.lock().state.clone()
     }
 
+    /// The reduced state and the session stream's watermark in `epoch`,
+    /// read between two agent lines: every event the state reflects is at
+    /// or before the watermark, and every later one after it.
+    pub fn state_at(&self, events: &EventHub, epoch: i64) -> (ReducedState, Cursor) {
+        let _view = self.view();
+        let state = self.lock().state.clone();
+        (state, events.watermark(&self.session_id, epoch))
+    }
+
     pub(super) fn lock(&self) -> MutexGuard<'_, Inner> {
         self.inner
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn view(&self) -> MutexGuard<'_, ()> {
+        self.view
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Resolves once `exit` has run to its end (teardown, bookkeeping,
+    /// `runner_exit`, the manager's `onExit`).
+    pub(super) async fn wait_exited(&self) {
+        let mut exited = self.exited.subscribe();
+        let _ = exited.wait_for(|exited| *exited).await;
     }
 
     pub(super) fn node(&self) -> Option<Node> {
@@ -200,9 +246,25 @@ impl Runner {
 
     /// `answer`: a node dialog is resolved here, anything else goes to the
     /// agent as `extension_ui_response`; the run is running again.
-    pub(super) async fn answer(&self, rpc_id: &str, answer: &Map<String, Value>) -> ApiResult<()> {
+    /// `interaction_answered` is published before the answer is handed on:
+    /// the writer task may give the line to the agent at once, and TS's
+    /// order (the event before anything the agent does next) must hold on
+    /// a multi-threaded runtime too.
+    pub(super) async fn answer(
+        &self,
+        rpc_id: &str,
+        interaction_id: &str,
+        answer: &Map<String, Value>,
+    ) -> ApiResult<()> {
+        let answered = || {
+            self.publish(
+                "interaction_answered",
+                json!({ "interactionId": interaction_id }),
+            );
+        };
         let dialog = self.lock().node_dialogs.remove(rpc_id);
         if let Some(dialog) = dialog {
+            answered();
             let _ = dialog.send(answer.get("confirmed") == Some(&Value::Bool(true)));
             return self.update_current_run(RunStatus::Running);
         }
@@ -215,9 +277,9 @@ impl Runner {
         for (key, value) in answer {
             response.insert(key.clone(), value.clone());
         }
-        // Queued, not awaited: the route publishes `interaction_answered`
-        // right after this returns, before the agent can possibly reply
-        // (TS's write callback also came before any reply).
+        // The interaction is already claimed: a write failing after this
+        // (stdin closed in between) changes nothing that matters.
+        answered();
         if !self.write(&Value::Object(response)) {
             return Err(runner_unavailable());
         }
@@ -230,7 +292,12 @@ impl Runner {
             if killpg(Pid::from_raw(pid), signal).is_ok() {
                 return;
             }
-            let _ = kill(Pid::from_raw(pid), signal);
+            // The bare pid only while the agent is unreaped: afterwards it
+            // may be an unrelated process's (TS's `child.kill()` was a
+            // no-op once Node had seen the exit).
+            if !self.reaped.load(Ordering::Acquire) {
+                let _ = kill(Pid::from_raw(pid), signal);
+            }
         }
     }
 
@@ -243,29 +310,34 @@ impl Runner {
     }
 
     /// `stop(grace)`: ask the agent to abort, then SIGTERM, SIGKILL after
-    /// `grace`, and give up waiting after twice `grace`.
+    /// `grace`, and give up waiting after twice `grace`. Once the agent is
+    /// gone, returns only after its `exit` ran to its end (TS resolved on
+    /// the child's `exit` event, after the runner's own teardown), so the
+    /// caller never races the exit's bookkeeping.
     pub(super) async fn stop(&self, grace: Duration) {
-        if self.lock().closed {
-            return;
-        }
-        let mut abort = Map::new();
-        abort.insert("type".into(), json!("abort"));
-        let _ = tokio::time::timeout(grace, self.request(abort)).await;
-        self.kill(Signal::SIGTERM);
         let mut exited = self.exited.subscribe();
-        if self.lock().closed {
-            return;
-        }
-        let waited = tokio::time::timeout(grace, exited.wait_for(|exited| *exited))
-            .await
-            .is_ok();
-        if waited {
-            return;
-        }
         if !self.lock().closed {
-            self.kill(Signal::SIGKILL);
+            let mut abort = Map::new();
+            abort.insert("type".into(), json!("abort"));
+            let _ = tokio::time::timeout(grace, self.request(abort)).await;
+            if !self.lock().closed {
+                self.kill(Signal::SIGTERM);
+            }
+            let waited = tokio::time::timeout(grace, exited.wait_for(|exited| *exited))
+                .await
+                .is_ok();
+            if !waited {
+                if !self.lock().closed {
+                    self.kill(Signal::SIGKILL);
+                }
+                let _ = tokio::time::timeout(grace, exited.wait_for(|exited| *exited)).await;
+            }
         }
-        let _ = tokio::time::timeout(grace, exited.wait_for(|exited| *exited)).await;
+        // An exit under way (`closed` is its first step) is synchronous and
+        // short: wait for its end.
+        if self.lock().closed {
+            let _ = exited.wait_for(|exited| *exited).await;
+        }
     }
 
     /// A node dialog is withdrawn (unanswered in time, cancelled by the
@@ -315,6 +387,9 @@ impl Runner {
                 inner.current_run.clone(),
             )
         };
+        // `ensure` and `stop` wait for this: it must come even if a step
+        // below panics.
+        let _exited = Exited(&self.exited);
         // Whatever the agent left in its group (a busy ptc script process
         // after a crash, which cannot notice its parent is gone) goes with it.
         self.kill(Signal::SIGKILL);
@@ -356,7 +431,6 @@ impl Runner {
             self.publish("runner_exit", json!({ "code": code, "signal": signal }));
             node.runners.exited(self);
         }
-        self.exited.send_replace(true);
     }
 
     /// `handleValue`: one line from the agent. An `Err` is fatal (TS threw
@@ -414,9 +488,11 @@ impl Runner {
                         }
                     }
                 }
+                // The agent's number: `as` saturates, and the sum saturates
+                // too (TS added floats; a huge timeout never expires).
                 let timeout = match message.get("timeout").and_then(Value::as_f64) {
                     Some(timeout) if timeout > 0.0 => timeout as i64,
-                    _ => node.config.interaction_ttl_ms as i64,
+                    _ => i64::try_from(node.config.interaction_ttl_ms).unwrap_or(i64::MAX),
                 };
                 let interaction = node
                     .db
@@ -427,7 +503,7 @@ impl Runner {
                         &id,
                         &method,
                         &message,
-                        now_ms() + timeout,
+                        now_ms().saturating_add(timeout),
                     )
                     .map_err(thrown)?;
                 self.publish(
@@ -741,6 +817,8 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
         prepared,
         stdin: stdin_tx,
         inner: Mutex::default(),
+        view: Mutex::default(),
+        reaped: AtomicBool::new(false),
         exited,
     });
     if let Some(stdin) = child.stdin.take() {
@@ -777,6 +855,7 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
             "message": warning,
             "notifyType": "warning",
         });
+        let _view = runner.view();
         if let Value::Object(notice) = &notice {
             runner.lock().state.reduce(notice);
         }
@@ -814,10 +893,8 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
     let stderr = child.stderr.take();
     let max_line = node.config.rpc_max_line_bytes;
     let reading = tokio::spawn(read_stdout(runner.clone(), stdout, max_line));
-    if let Some(stderr) = stderr {
-        tokio::spawn(read_stderr(runner.clone(), stderr));
-    }
-    tokio::spawn(wait_exit(runner.clone(), child, reading));
+    let errors = stderr.map(|stderr| tokio::spawn(read_stderr(runner.clone(), stderr)));
+    tokio::spawn(wait_exit(runner.clone(), child, reading, errors));
     Ok(runner)
 }
 
@@ -849,7 +926,12 @@ async fn read_stdout(
             Ok(0) | Err(_) => break,
             Ok(read) => read,
         };
-        if let Err(error) = parser.push(&buffer[..read], |value| runner.handle_value(value)) {
+        let handled = parser.push(&buffer[..read], |value| {
+            // One line at a time, as one step for snapshots (see `view`).
+            let _view = runner.view();
+            runner.handle_value(value)
+        });
+        if let Err(error) = handled {
             // Fatal: the agent is killed. Lines it still writes are not read.
             runner.fail(&error);
             return;
@@ -875,16 +957,33 @@ async fn read_stderr(runner: Arc<Runner>, mut stderr: tokio::process::ChildStder
 
 /// The agent exited: its group is killed, then its last stdout lines are
 /// handled (up to a second), then the exit (TS's `exit` event could come
-/// before the last `data`; here the lines always come first).
+/// before the last `data`; here the lines always come first). The readers
+/// are then stopped: a process outside the group holding the pipes open
+/// must not feed lines in after `runner_exit`.
 async fn wait_exit(
     runner: Arc<Runner>,
     mut child: tokio::process::Child,
-    reading: tokio::task::JoinHandle<()>,
+    mut reading: tokio::task::JoinHandle<()>,
+    mut errors: Option<tokio::task::JoinHandle<()>>,
 ) {
     use std::os::unix::process::ExitStatusExt;
     let status = child.wait().await;
+    // Reaped (or `wait` failed: then no bare-pid signal either, the safe side).
+    runner.reaped.store(true, Ordering::Release);
     runner.kill(Signal::SIGKILL);
-    let _ = tokio::time::timeout(Duration::from_secs(1), reading).await;
+    let drained = tokio::time::Instant::now() + Duration::from_secs(1);
+    let readers = std::iter::once(&mut reading).chain(errors.as_mut());
+    for reader in readers {
+        if tokio::time::timeout_at(drained, &mut *reader)
+            .await
+            .is_err()
+        {
+            // Cancelled at its next read, never inside a line; awaited, so
+            // nothing is handled once the exit starts.
+            reader.abort();
+            let _ = reader.await;
+        }
+    }
     let (code, signal) = match status {
         Ok(status) => (
             status.code(),

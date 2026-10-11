@@ -51,8 +51,16 @@
 //!
 //! - Lines go to the agent's stdin through one writer task, in order; a
 //!   failed write closes stdin for good (TS's `stdin.writable`).
-//!   `answer` returns once its line is queued, so the route's
-//!   `interaction_answered` always precedes the agent's reply.
+//!   `answer` publishes `interaction_answered` before the answer's line is
+//!   queued (or a node dialog resolved), so the event always precedes
+//!   whatever the agent does next.
+//! - TS ran on one thread; steps it took at once stay atomic here: an agent
+//!   line is reduced and published as one step for snapshots
+//!   ([`Runner::state_at`]), a new runner waits for the old one's exit to
+//!   finish, and `stop` returns after it.
+//! - Shutdown (the node's `closing`) refuses new starts (503
+//!   `runner_unavailable`) and waits for the starts in flight before
+//!   stopping every runner (TS let a start in flight outlive it).
 //! - On exit the group is killed first, then the agent's last stdout lines
 //!   are handled (up to a second), then the exit: `runner_exit` always comes
 //!   after the agent's last events (TS's `exit` could overtake `data`).
@@ -266,43 +274,32 @@ impl RunnerManager {
     async fn ensure(&self, session_id: &str) -> ApiResult<Arc<Runner>> {
         let node = self.node()?;
         node.db.lock().require_session_available(session_id)?;
-        let mut starting = {
-            let mut state = self.lock();
-            if let Some(runner) = state.runners.get(session_id)
-                && runner.alive()
-            {
-                return Ok(runner.clone());
-            }
-            match state.starting.get(session_id) {
-                Some(starting) => starting.clone(),
-                None => {
-                    let (done, starting) = watch::channel(None);
-                    state
-                        .starting
-                        .insert(session_id.to_owned(), starting.clone());
-                    // Its own task: a start goes on when its asker goes away.
-                    let id = session_id.to_owned();
-                    let node = node.clone();
-                    tokio::spawn(async move {
-                        use futures_util::FutureExt;
-                        // A panic must not leave the slot behind.
-                        let result = std::panic::AssertUnwindSafe(start(&node, &id))
-                            .catch_unwind()
-                            .await
-                            .unwrap_or_else(|_| {
-                                Err(ApiError::runner_unavailable("Runner is not available"))
-                            });
-                        {
-                            let mut state = node.runners.lock();
-                            state.starting.remove(&id);
-                            if let Ok(runner) = &result {
-                                state.runners.insert(id, runner.clone());
-                            }
-                        }
-                        done.send_replace(Some(result));
-                    });
-                    starting
+        let mut starting = loop {
+            let exiting = {
+                let mut state = self.lock();
+                // Checked under the manager's lock: `shutdown` sees every
+                // start that got past it.
+                if node.closing() {
+                    return Err(ApiError::runner_unavailable("Runner is not available"));
                 }
+                match state.runners.get(session_id).cloned() {
+                    Some(runner) if runner.alive() => return Ok(runner),
+                    // Its exit is under way (TS's was one synchronous step):
+                    // the new agent starts after the old teardown (state,
+                    // `runner_exit`, leases), which would otherwise hit it.
+                    Some(runner) => runner,
+                    None => break Self::start_slot(&mut state, &node, session_id),
+                }
+            };
+            exiting.wait_exited().await;
+            // `onExit` removed it; never spin on one left behind.
+            let mut state = self.lock();
+            if state
+                .runners
+                .get(session_id)
+                .is_some_and(|current| Arc::ptr_eq(current, &exiting))
+            {
+                state.runners.remove(session_id);
             }
         };
         let result = starting
@@ -310,6 +307,37 @@ impl RunnerManager {
             .await
             .map_err(|_| ApiError::runner_unavailable("Runner is not available"))?;
         result.clone().expect("a finished start")
+    }
+
+    /// The session's start in flight, or a new one (under the manager's lock).
+    fn start_slot(state: &mut Managed, node: &Node, session_id: &str) -> Starting {
+        if let Some(starting) = state.starting.get(session_id) {
+            return starting.clone();
+        }
+        let (done, starting) = watch::channel(None);
+        state
+            .starting
+            .insert(session_id.to_owned(), starting.clone());
+        // Its own task: a start goes on when its asker goes away.
+        let id = session_id.to_owned();
+        let node = node.clone();
+        tokio::spawn(async move {
+            use futures_util::FutureExt;
+            // A panic must not leave the slot behind.
+            let result = std::panic::AssertUnwindSafe(start(&node, &id))
+                .catch_unwind()
+                .await
+                .unwrap_or_else(|_| Err(ApiError::runner_unavailable("Runner is not available")));
+            {
+                let mut state = node.runners.lock();
+                state.starting.remove(&id);
+                if let Ok(runner) = &result {
+                    state.runners.insert(id, runner.clone());
+                }
+            }
+            done.send_replace(Some(result));
+        });
+        starting
     }
 
     /// `dispatch`: start the agent if needed and send the command (the
@@ -480,13 +508,16 @@ impl RunnerManager {
 
     /// `answer`: 409 `stale_interaction` unless the session's live runner
     /// is in `epoch`; a node dialog is resolved locally, else
-    /// `extension_ui_response` goes to the agent. The interaction is
-    /// already claimed by the route.
+    /// `extension_ui_response` goes to the agent. The interaction
+    /// (`interaction_id`) is already claimed by the route;
+    /// `interaction_answered` is published here, before the answer reaches
+    /// the agent or the node dialog.
     pub async fn answer(
         &self,
         session_id: &str,
         epoch: i64,
         rpc_id: &str,
+        interaction_id: &str,
         answer: &Map<String, Value>,
     ) -> ApiResult<()> {
         let runner = self.get(session_id);
@@ -497,7 +528,7 @@ impl RunnerManager {
                 "Interaction belongs to an inactive runner epoch",
             ));
         };
-        runner.answer(rpc_id, answer).await
+        runner.answer(rpc_id, interaction_id, answer).await
     }
 
     /// `stopSession` (chat deletion): wait for a start in flight, stop the
@@ -526,12 +557,18 @@ impl RunnerManager {
         Ok(())
     }
 
-    /// Stop every runner, in parallel (node shutdown).
+    /// Stop every runner, in parallel (node shutdown). Called once the
+    /// node is `closing`, so no start begins after the starts in flight,
+    /// which are waited for and their runners stopped too.
     pub async fn shutdown(&self) {
         let Ok(node) = self.node() else {
             return;
         };
         let grace = Duration::from_millis(node.config.shutdown_grace_ms);
+        let starting: Vec<Starting> = self.lock().starting.values().cloned().collect();
+        for mut starting in starting {
+            let _ = starting.wait_for(Option::is_some).await;
+        }
         let runners: Vec<Arc<Runner>> = self.lock().runners.values().cloned().collect();
         futures_util::future::join_all(runners.iter().map(|runner| runner.stop(grace))).await;
     }
