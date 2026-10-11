@@ -7,6 +7,7 @@
 //! is what threw in TS; the agent handles it as TS handled the throw at
 //! that call site (a warning, a failed start, a crashed loop).
 
+use std::borrow::Cow;
 use std::rc::Rc;
 
 use pirc_protocol::{AssistantMessage, Message};
@@ -83,9 +84,22 @@ pub struct CompactContext<'a> {
 /// model.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FeatureCommand {
-    /// May be namespaced (`om:status`).
-    pub name: &'static str,
-    pub description: &'static str,
+    /// May be namespaced (`om:status`). Owned when a feature makes its
+    /// commands from data (`skill:<name>` for each installed skill).
+    pub name: Cow<'static, str>,
+    pub description: Cow<'static, str>,
+}
+
+impl FeatureCommand {
+    pub fn new(
+        name: impl Into<Cow<'static, str>>,
+        description: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+        }
+    }
 }
 
 /// `Feature`. One instance per agent process; state lives in the feature
