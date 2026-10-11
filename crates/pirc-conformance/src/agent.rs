@@ -298,7 +298,7 @@ pub struct Answers {
     pub refuse_leases: Vec<String>,
     /// Dialog answers in order: fields merged into `extension_ui_response`
     /// (`{"confirmed": true}`, `{"value": "x"}`, `{"cancelled": true}`).
-    /// `{"hold": true}` leaves that dialog unanswered.
+    /// `{"hold": true}` or `null` leaves that dialog unanswered.
     pub dialogs: VecDeque<Value>,
     /// Gateway operation results by `op` (`{"ok": true, "result": …}` or an
     /// error object), else `{"ok": false, "error": {"code": "not_found"}}`.
@@ -704,7 +704,8 @@ impl AgentRun {
                         .dialogs
                         .pop_front()
                         .unwrap_or_else(|| json!({ "cancelled": true }));
-                    if reply["hold"] == true {
+                    // `null` or `{"hold": true}`: left open for the test to answer or cancel.
+                    if reply.is_null() || reply["hold"] == true {
                         None
                     } else {
                         reply["type"] = json!("extension_ui_response");

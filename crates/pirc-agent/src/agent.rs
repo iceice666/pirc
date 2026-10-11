@@ -2786,6 +2786,18 @@ impl AgentHost for Agent {
     fn direct_tool_list(&self) -> Vec<Rc<dyn Tool>> {
         self.direct_tools()
     }
+    fn resolve_model(&self, reference: Option<(String, String)>) -> Result<ResolvedModel, String> {
+        Agent::resolve_model(self, reference)
+    }
+    fn stream_function(&self) -> Option<Rc<dyn StreamFn>> {
+        Some(Agent::stream_function(self))
+    }
+    fn context_entries(&self) -> Vec<(String, Message)> {
+        Agent::context_entries(self)
+    }
+    fn branch(&self) -> Vec<SessionEntry> {
+        Agent::branch(self)
+    }
 }
 
 #[cfg(test)]
