@@ -208,7 +208,9 @@ while IFS= read -r line; do
       emit '{"type":"response","id":"'"$id"'","command":"prompt","success":true}'
       printf '%s\n' "$line" >> "$dir/prompts"
       case $FAKE_MODE in
-        report) settle "done by $PIRC_TEAM_AGENT" ;;
+        # A pause, so the prompt's response is read (and the send recorded
+        # as accepted) before the report: in one read both orders are TS's.
+        report) sleep 0.1; settle "done by $PIRC_TEAM_AGENT" ;;
         call)
           emit '{"type":"agent_start"}'
           emit '{"type":"team_call","id":"call-1","operation":"board_post","args":{"topic":"t","body":"from child"}}'
