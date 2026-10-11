@@ -5,6 +5,7 @@
 //! so the same scenarios run against the TypeScript build (whose behavior the
 //! committed snapshots record) and the Rust build that replaces it.
 
+mod agent;
 mod client;
 mod cluster;
 mod fake_gateway;
@@ -12,6 +13,7 @@ mod fake_llm;
 mod fake_push;
 mod normalize;
 
+pub use agent::{AgentOptions, AgentRun, Answers, ModelReply, Recorder, fake_models};
 pub use client::{Api, Connection, Response, WebSocket};
 pub use cluster::{
     Cluster, GatewayOptions, HOST, LoneNode, NODE_ID, NODE_TOKEN, ORIGIN, USER, WORKSPACE_ID,

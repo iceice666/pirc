@@ -362,7 +362,7 @@ fn is_gateway_answer(response: &Response) -> bool {
 }
 
 /// Executables under test, or `None` when the suite is not requested.
-fn bin_dir() -> Option<PathBuf> {
+pub(crate) fn bin_dir() -> Option<PathBuf> {
     let Some(dir) = std::env::var_os(BIN_DIR_VARIABLE) else {
         // Not a silent pass where the suite must run.
         assert!(
