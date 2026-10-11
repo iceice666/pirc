@@ -75,8 +75,9 @@ impl HooksConfig {
         HOOK_EVENTS.iter().all(|event| self.list(event).is_empty())
     }
 
-    /// As zod returns it: every event, each hook `{command, matcher?, timeoutMs}`.
-    fn to_value(&self) -> Value {
+    /// As zod returns it: every event, each hook `{command, matcher?, timeoutMs}`
+    /// (also the node's project-config summary).
+    pub fn to_value(&self) -> Value {
         let mut map = Map::new();
         for event in HOOK_EVENTS {
             let hooks = self
