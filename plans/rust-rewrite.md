@@ -228,6 +228,8 @@ Acceptance: full M0 scenario suite passes with Rust gateway + Rust node + Rust a
 
 ### M7 Native sandbox
 
+Starting point: M6's native backend (`crates/pirc-node/src/sandbox/linux.rs`) mounts each existing policy path by its `readAllowed`/`writeAllowed` verdict and proxies HTTP/CONNECT only. Its module documentation lists what it does not enforce yet: missing deny paths (no stubs, so an absent `.pirc`, `.git/hooks` or `.git/config` can be created), symlinked spellings, the mandatory deny scan, rules under `/proc` and `/dev`, uid 0, SOCKS5 (ssh, ftp, rsync), resolved-address checks; `allowLocalBinding` and `allowUnixSockets` have no effect on Linux. Denied domains are already checked by its proxy.
+
 - [ ] Linux: port srt's filesystem argument generation (symlinks, missing paths, `/` expansion, mandatory deny scan; Apache-2.0 notice) on spike C's base; read denials, write allowlist, read-only `.pirc/`, `.git/hooks`, `.git/config`, rc files; `--cap-drop ALL` and the uid-0 and missing-`CAP_SETFCAP` cases; the network proxy with SOCKS5, denied domains, local binding and runtime approval; no seccomp, as today (`allowAllUnixSockets`).
 - [ ] macOS: SBPL generation and the same proxy; test on a macOS node.
 - [ ] Port `sandbox-policy.test.ts`, `sandbox.integration`, `sandbox-srt.integration`; add escape tests.

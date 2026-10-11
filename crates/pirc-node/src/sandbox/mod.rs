@@ -26,6 +26,7 @@
 //! and state inside a writable path.
 
 pub mod bridge;
+mod common;
 pub mod linux;
 pub mod srt;
 pub mod unavailable;
@@ -186,8 +187,29 @@ pub fn unavailable_error(reason: &str) -> ApiError {
 /// `config.sandbox.srt` is set, else [`linux`] on Linux, else
 /// [`unavailable`].
 pub fn create(config: &NodeConfig, env: &Env) -> Arc<dyn Sandbox> {
-    let _ = (config, env);
-    todo!("sandbox: choose the backend")
+    if let Some(srt) = &config.sandbox.srt {
+        return Arc::new(srt::SrtSandbox::new(
+            srt.clone(),
+            config.clone(),
+            env.clone(),
+        ));
+    }
+    if cfg!(target_os = "linux") {
+        // The bridge runs this very executable inside the sandbox.
+        return match std::env::current_exe() {
+            Ok(helper) => Arc::new(linux::NativeSandbox::new(
+                config.clone(),
+                env.clone(),
+                helper,
+            )),
+            Err(error) => Arc::new(unavailable::UnavailableSandbox::new(format!(
+                "cannot find this executable for the sandbox bridge: {error}"
+            ))),
+        };
+    }
+    Arc::new(unavailable::UnavailableSandbox::new(
+        unavailable::PLATFORM_REASON,
+    ))
 }
 
 #[cfg(test)]
