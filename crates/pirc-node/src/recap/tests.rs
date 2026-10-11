@@ -404,3 +404,23 @@ fn sampled_sessions_match_a_recomputed_length() {
     assert!(length <= 5000, "{length}");
     assert!(length > 4000, "{length}");
 }
+
+// runner.ts: anything collectRecap threw that was not an ApiError.
+#[test]
+fn store_failures_are_recap_failed() {
+    let fixture = Fixture::new();
+    fixture
+        .db
+        .lock()
+        .execute_batch("ALTER TABLE sessions RENAME TO sessions_gone")
+        .unwrap();
+    let error = fixture.collect(json!({})).unwrap_err();
+    assert_eq!(
+        (error.status, &*error.code, &*error.message),
+        (
+            500,
+            "recap_failed",
+            "Could not collect workspace recap evidence"
+        )
+    );
+}

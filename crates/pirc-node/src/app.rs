@@ -766,7 +766,6 @@ async fn snapshot(node: Node, request: Request) -> ApiResult<Response> {
     if agent.is_none() {
         agent = next_agent_settings(&node, &session, &branch);
     }
-    let state = active.as_ref().map(|runner| runner.state());
     let (interactions, run) = {
         let db = node.db.lock();
         (
@@ -778,7 +777,15 @@ async fn snapshot(node: Node, request: Request) -> ApiResult<Response> {
         Some(runner) if runner.alive() => runner.sandbox_status(),
         _ => Value::Null,
     };
-    let state = state.unwrap_or_default();
+    // The state and the watermark as of one point between two agent lines
+    // (TS reduced and published in one step); the watermark last, as TS.
+    let (state, watermark) = match &active {
+        Some(runner) => runner.state_at(&node.events, session.runner_epoch),
+        None => (
+            crate::runner::ReducedState::default(),
+            node.events.watermark(&session_id, session.runner_epoch),
+        ),
+    };
     Ok(Response::json(json!({
         "session": session,
         "history": history,
@@ -791,7 +798,7 @@ async fn snapshot(node: Node, request: Request) -> ApiResult<Response> {
         "widgets": state.widgets,
         "statuses": state.statuses,
         "agent": agent,
-        "watermark": node.events.watermark(&session_id, session.runner_epoch),
+        "watermark": watermark,
         "partialOutputLost": session.partial_output_lost,
         "sandbox": sandbox,
     })))
@@ -1134,15 +1141,16 @@ async fn answer(node: Node, request: Request) -> ApiResult<Response> {
         epoch,
         &Value::Object(answer.clone()),
     )?;
+    // Publishes `interaction_answered` before the answer goes on.
     node.runners
-        .answer(&session.id, epoch, &interaction.rpc_id, &answer)
+        .answer(
+            &session.id,
+            epoch,
+            &interaction.rpc_id,
+            &interaction.id,
+            &answer,
+        )
         .await?;
-    node.events.publish(
-        &session.id,
-        epoch,
-        "interaction_answered",
-        json!({ "interactionId": interaction.id }),
-    );
     Ok(Response::json(
         json!({ "interactionId": interaction.id, "status": "answered" }),
     ))
