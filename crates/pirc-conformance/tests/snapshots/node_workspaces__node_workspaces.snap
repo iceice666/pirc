@@ -1,0 +1,715 @@
+---
+source: crates/pirc-conformance/tests/node_workspaces.rs
+expression: t.into_value()
+---
+[
+  {
+    "body": {
+      "workspaces": [
+        {
+          "defaults": {},
+          "displayName": "Test",
+          "hostId": "test",
+          "id": "test:test",
+          "kind": "directory"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 200,
+    "step": "the configured workspace before any is added"
+  },
+  {
+    "body": {
+      "workspace": {
+        "defaults": {},
+        "displayName": "Project",
+        "hostId": "test",
+        "id": "test:<workspace:1>",
+        "kind": "directory"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 201,
+    "step": "add ~/proj: expanded against the node's HOME, 201"
+  },
+  {
+    "body": {
+      "workspace": {
+        "defaults": {},
+        "displayName": "Plain",
+        "hostId": "test",
+        "id": "test:<workspace:2>",
+        "kind": "directory"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 201,
+    "step": "an absolute path inside HOME, display name trimmed"
+  },
+  {
+    "body": {
+      "workspace": {
+        "defaults": {},
+        "displayName": "Roled",
+        "hostId": "test",
+        "id": "test:<workspace:3>",
+        "kind": "directory"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 201,
+    "step": "a workspace with its own role (.pirc/roles/reviewer.md)"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Workspace must use an absolute path or ~/path"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 400,
+    "step": "a relative path: refused, 400"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Workspace must use an absolute path or ~/path"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 400,
+    "step": "~ alone is not expanded: a relative path, 400"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Workspace directory must already exist"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 400,
+    "step": "a missing directory: 400"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Workspace path must be a directory"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 400,
+    "step": "a file, not a directory: 400"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Workspace must stay within the node home directory"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 403,
+    "step": "HOME itself: outside HOME, 403"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Workspace must stay within the node home directory"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 403,
+    "step": "outside HOME (the configured workspace's directory): 403"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "Workspace ID or path is already registered"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 409,
+    "step": "a path already added: 409"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "Workspace ID or path is already registered"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 409,
+    "step": "a symlink to a path already added (canonicalized): 409"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Workspace must not contain or sit inside <tmp>/node-home/srv/state (pirc's state or a credential store)"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 403,
+    "step": "a directory inside the node's state directory: 403"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Workspace must not contain or sit inside <tmp>/node-home/srv/state (pirc's state or a credential store)"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 403,
+    "step": "a directory holding the node's state directory: 403"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Workspace must not contain or sit inside <tmp>/node-home/.ssh (pirc's state or a credential store)"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 403,
+    "step": "a credential store (~/.ssh): 403"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Workspace must not contain or sit inside <tmp>/node-home/.config/gcloud (pirc's state or a credential store)"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 403,
+    "step": "a directory holding credential stores (~/.config holds .config/gh): 403"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 400,
+    "step": "an empty display name: the gateway's 400"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "This node does not host chats (pirc-chat)"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces",
+    "status": 403,
+    "step": "a chat project on a coding node: 403"
+  },
+  {
+    "body": {
+      "workspaces": [
+        {
+          "defaults": {},
+          "displayName": "Plain",
+          "hostId": "test",
+          "id": "test:<workspace:2>",
+          "kind": "directory"
+        },
+        {
+          "defaults": {},
+          "displayName": "Project",
+          "hostId": "test",
+          "id": "test:<workspace:1>",
+          "kind": "directory"
+        },
+        {
+          "defaults": {},
+          "displayName": "Roled",
+          "hostId": "test",
+          "id": "test:<workspace:3>",
+          "kind": "directory"
+        },
+        {
+          "defaults": {},
+          "displayName": "Test",
+          "hostId": "test",
+          "id": "test:test",
+          "kind": "directory"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces",
+    "status": 200,
+    "step": "the added workspaces are listed"
+  },
+  {
+    "observed": [
+      {
+        "displayName": "Test",
+        "id": "test",
+        "kind": "directory",
+        "roles": [
+          {
+            "description": "General-purpose agent with the default model and all tools.",
+            "name": "general"
+          }
+        ]
+      },
+      {
+        "canonicalPath": "<tmp>/node-home/proj",
+        "defaults": {},
+        "displayName": "Project",
+        "hostId": "test",
+        "id": "<workspace:1>",
+        "kind": "directory",
+        "roles": [
+          {
+            "description": "General-purpose agent with the default model and all tools.",
+            "name": "general"
+          }
+        ]
+      },
+      {
+        "canonicalPath": "<tmp>/node-home/plain",
+        "defaults": {},
+        "displayName": "Plain",
+        "hostId": "test",
+        "id": "<workspace:2>",
+        "kind": "directory",
+        "roles": [
+          {
+            "description": "General-purpose agent with the default model and all tools.",
+            "name": "general"
+          }
+        ]
+      },
+      {
+        "canonicalPath": "<tmp>/node-home/roled",
+        "defaults": {},
+        "displayName": "Roled",
+        "hostId": "test",
+        "id": "<workspace:3>",
+        "kind": "directory",
+        "roles": [
+          {
+            "description": "General-purpose agent with the default model and all tools.",
+            "name": "general"
+          },
+          {
+            "description": "Reviews changes.",
+            "name": "reviewer",
+            "source": "workspace"
+          }
+        ]
+      }
+    ],
+    "step": "the node's workspaces as registration reports them, with their roles"
+  },
+  {
+    "body": {
+      "project": {
+        "allowedPaths": [
+          "../shared"
+        ],
+        "empty": false,
+        "env": {
+          "GIT_SSH_COMMAND": "ssh -i key"
+        },
+        "hash": "<sha256:1>",
+        "hooks": {
+          "afterTool": [],
+          "agentSettled": [],
+          "beforePrompt": [],
+          "beforeTool": [],
+          "sessionStart": [
+            {
+              "command": "echo hook ran >&2; exit 3",
+              "timeoutMs": 10000
+            }
+          ]
+        },
+        "trusted": false,
+        "trustedHash": null
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces/test%3A<workspace:1>/project-config",
+    "status": 200,
+    "step": "project config of ~/proj: untrusted, defaults filled in"
+  },
+  {
+    "observed": true,
+    "step": "the hash is sha256 of \"pirc-project-trust-v1\\n\" and the canonical JSON of allowedPaths, env and hooks"
+  },
+  {
+    "body": {
+      "project": {
+        "allowedPaths": [],
+        "empty": true,
+        "env": {},
+        "hash": "<sha256:2>",
+        "hooks": {
+          "afterTool": [],
+          "agentSettled": [],
+          "beforePrompt": [],
+          "beforeTool": [],
+          "sessionStart": []
+        },
+        "trusted": false,
+        "trustedHash": null
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces/test%3Atest/project-config",
+    "status": 200,
+    "step": "the configured workspace has no project config: empty"
+  },
+  {
+    "observed": [
+      {
+        "message": "This workspace's .pirc/config.json sets hooks, env or allowedPaths; they were ignored because the workspace is not trusted (or they changed since it was trusted). Review and trust them in the workspace's Settings.",
+        "notifyType": "warning"
+      }
+    ],
+    "step": "an agent in the untrusted workspace warns that the config was ignored"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "The project config changed since it was shown; review it again before trusting it"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces/test%3A<workspace:1>/project-trust",
+    "status": 409,
+    "step": "trust with a hash that was never shown: 409"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces/test%3A<workspace:1>/project-trust",
+    "status": 400,
+    "step": "trust with a malformed hash: the gateway's 400"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces/test%3A<workspace:1>/project-trust",
+    "status": 400,
+    "step": "trust with an extra key: 400"
+  },
+  {
+    "body": {
+      "project": {
+        "allowedPaths": [
+          "../shared"
+        ],
+        "empty": false,
+        "env": {
+          "GIT_SSH_COMMAND": "ssh -i key"
+        },
+        "hash": "<sha256:1>",
+        "hooks": {
+          "afterTool": [],
+          "agentSettled": [],
+          "beforePrompt": [],
+          "beforeTool": [],
+          "sessionStart": [
+            {
+              "command": "echo hook ran >&2; exit 3",
+              "timeoutMs": 10000
+            }
+          ]
+        },
+        "trusted": true,
+        "trustedHash": "<sha256:1>"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces/test%3A<workspace:1>/project-trust",
+    "status": 200,
+    "step": "trust the hash shown: trusted"
+  },
+  {
+    "observed": [
+      {
+        "message": "Hook sessionStart exited 3: echo hook ran >&2; exit 3\nhook ran",
+        "notifyType": "warning"
+      }
+    ],
+    "step": "an agent in the trusted workspace: no warning, and the trusted sessionStart hook runs"
+  },
+  {
+    "body": {
+      "project": {
+        "allowedPaths": [],
+        "empty": false,
+        "env": {
+          "GIT_SSH_COMMAND": "ssh -o ProxyCommand=evil"
+        },
+        "hash": "<sha256:3>",
+        "hooks": {
+          "afterTool": [],
+          "agentSettled": [],
+          "beforePrompt": [],
+          "beforeTool": [],
+          "sessionStart": []
+        },
+        "trusted": false,
+        "trustedHash": "<sha256:1>"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces/test%3A<workspace:1>/project-config",
+    "status": 200,
+    "step": "the config changed after trusting: not trusted, the old hash kept"
+  },
+  {
+    "body": {
+      "project": {
+        "allowedPaths": [],
+        "empty": false,
+        "env": {
+          "GIT_SSH_COMMAND": "ssh -o ProxyCommand=evil"
+        },
+        "hash": "<sha256:3>",
+        "hooks": {
+          "afterTool": [],
+          "agentSettled": [],
+          "beforePrompt": [],
+          "beforeTool": [],
+          "sessionStart": []
+        },
+        "trusted": false,
+        "trustedHash": null
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces/test%3A<workspace:1>/project-trust",
+    "status": 200,
+    "step": "untrust"
+  },
+  {
+    "body": {
+      "project": {
+        "empty": true,
+        "error": "Invalid JSON in <tmp>/node-home/proj/.pirc/config.json: <parser message>",
+        "hash": null,
+        "trusted": false,
+        "trustedHash": null
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces/test%3A<workspace:1>/project-config",
+    "status": 200,
+    "step": "an invalid config is reported, with no hash"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "The project config is invalid: Invalid JSON in <tmp>/node-home/proj/.pirc/config.json: <parser message>"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/workspaces/test%3A<workspace:1>/project-trust",
+    "status": 400,
+    "step": "an invalid config cannot be trusted: 400"
+  },
+  {
+    "body": {
+      "project": {
+        "empty": true,
+        "error": "<schema message>",
+        "hash": null,
+        "trusted": false,
+        "trustedHash": null
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces/test%3A<workspace:1>/project-config",
+    "status": 200,
+    "step": "a config with an unknown key is invalid (strict)"
+  },
+  {
+    "body": {
+      "project": {
+        "allowedPaths": [],
+        "empty": true,
+        "env": {},
+        "hash": "<sha256:2>",
+        "hooks": {
+          "afterTool": [],
+          "agentSettled": [],
+          "beforePrompt": [],
+          "beforeTool": [],
+          "sessionStart": []
+        },
+        "trusted": false,
+        "trustedHash": null
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces/test%3A<workspace:1>/project-config",
+    "status": 200,
+    "step": "a config with only a default model: nothing to trust (empty)"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Workspace not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces/test%3Anope/project-config",
+    "status": 404,
+    "step": "project config of an unknown workspace: 404"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Only chat projects have instructions"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workspaces/test%3Atest/instructions",
+    "status": 400,
+    "step": "instructions of a directory workspace: 400"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "node_offline",
+        "message": "The chat node is offline or not registered"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/assistant/prompts",
+    "status": 503,
+    "step": "assistant prompts without a chat node: 503"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Only chats can be deleted"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/sessions/session_<uuid:1>",
+    "status": 400,
+    "step": "deleting a session of a directory workspace: 400"
+  }
+]

@@ -1,0 +1,326 @@
+---
+source: crates/pirc-conformance/tests/node_workspaces.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": {
+      "request": "POST /api/workspaces",
+      "response": {
+        "body": {
+          "workspace": {
+            "canonicalPath": "<tmp>/node-home/proj",
+            "defaults": {},
+            "displayName": "Project",
+            "hostId": "test",
+            "id": "<workspace:1>",
+            "kind": "directory",
+            "roles": [
+              {
+                "description": "General-purpose agent with the default model and all tools.",
+                "name": "general"
+              }
+            ]
+          }
+        },
+        "status": 201
+      }
+    },
+    "step": "add ~/proj: the node's answer has the canonical path and roles"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces",
+      "response": {
+        "body": {
+          "workspace": {
+            "canonicalPath": "<tmp>/node-home/roled",
+            "defaults": {},
+            "displayName": "Roled",
+            "hostId": "test",
+            "id": "<workspace:2>",
+            "kind": "directory",
+            "roles": [
+              {
+                "description": "General-purpose agent with the default model and all tools.",
+                "name": "general"
+              },
+              {
+                "description": "Reviews changes.",
+                "name": "reviewer",
+                "source": "workspace"
+              }
+            ]
+          }
+        },
+        "status": 201
+      }
+    },
+    "step": "a workspace with its own role"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces",
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Invalid request"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "no path and no kind: 400"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces",
+      "response": {
+        "body": {
+          "error": {
+            "code": "forbidden",
+            "message": "This node does not host chats (pirc-chat)"
+          }
+        },
+        "status": 403
+      }
+    },
+    "step": "a chat project on a coding node: 403"
+  },
+  {
+    "observed": {
+      "request": "GET /api/workspaces/test/project-config",
+      "response": {
+        "body": {
+          "error": {
+            "code": "forbidden",
+            "message": "User is not allowed on this node"
+          }
+        },
+        "status": 403
+      }
+    },
+    "step": "a user the node does not allow: 403"
+  },
+  {
+    "observed": {
+      "request": "GET /api/workspaces/<workspace:1>/project-config",
+      "response": {
+        "body": {
+          "project": {
+            "allowedPaths": [],
+            "empty": false,
+            "env": {
+              "A": "1"
+            },
+            "hash": "<sha256:1>",
+            "hooks": {
+              "afterTool": [],
+              "agentSettled": [],
+              "beforePrompt": [],
+              "beforeTool": [],
+              "sessionStart": []
+            },
+            "trusted": false,
+            "trustedHash": null
+          }
+        },
+        "status": 200
+      }
+    },
+    "step": "project config"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces/<workspace:1>/project-trust",
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "hash must be a sha256 hex digest"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "trust with a malformed hash: the node's own 400"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces/<workspace:1>/project-trust",
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "hash must be a sha256 hex digest"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "trust with an upper-case hash: 400"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces/<workspace:1>/project-trust",
+      "response": {
+        "body": {
+          "project": {
+            "allowedPaths": [],
+            "empty": false,
+            "env": {
+              "A": "1"
+            },
+            "hash": "<sha256:1>",
+            "hooks": {
+              "afterTool": [],
+              "agentSettled": [],
+              "beforePrompt": [],
+              "beforeTool": [],
+              "sessionStart": []
+            },
+            "trusted": true,
+            "trustedHash": "<sha256:1>"
+          }
+        },
+        "status": 200
+      }
+    },
+    "step": "trust"
+  },
+  {
+    "observed": {
+      "request": "GET /api/workspaces/<workspace:1>/project-config",
+      "response": {
+        "body": {
+          "project": {
+            "allowedPaths": [],
+            "empty": false,
+            "env": {
+              "A": "1"
+            },
+            "hash": "<sha256:1>",
+            "hooks": {
+              "afterTool": [],
+              "agentSettled": [],
+              "beforePrompt": [],
+              "beforeTool": [],
+              "sessionStart": []
+            },
+            "trusted": true,
+            "trustedHash": "<sha256:1>"
+          }
+        },
+        "status": 200
+      }
+    },
+    "step": "trust kept on the node"
+  },
+  {
+    "observed": {
+      "request": "GET /api/workspaces/test/instructions",
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Only chat projects have instructions"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "instructions of a directory workspace: the node's 400"
+  },
+  {
+    "observed": {
+      "request": "PATCH /api/workspaces/test/instructions",
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Only chat projects have instructions"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "set instructions of a directory workspace: 400"
+  },
+  {
+    "observed": {
+      "request": "GET /api/workspaces/nope/project-config",
+      "response": {
+        "body": {
+          "error": {
+            "code": "not_found",
+            "message": "Workspace not found"
+          }
+        },
+        "status": 404
+      }
+    },
+    "step": "project config of an unknown workspace: 404"
+  },
+  {
+    "observed": {
+      "request": "GET /api/assistant/prompts",
+      "response": {
+        "body": "<no such route>",
+        "status": 404
+      }
+    },
+    "step": "assistant prompts on a coding node: not a route, 404"
+  },
+  {
+    "observed": {
+      "request": "PUT /api/assistant/prompts/soul",
+      "response": {
+        "body": "<no such route>",
+        "status": 404
+      }
+    },
+    "step": "set an assistant prompt on a coding node: 404"
+  },
+  {
+    "observed": {
+      "request": "POST /api/sessions",
+      "response": {
+        "body": {
+          "session": {
+            "createdAt": "<epoch-ms>",
+            "id": "session_<uuid:1>",
+            "name": "New session",
+            "nameSource": "auto",
+            "nodeId": null,
+            "pinnedAt": null,
+            "runStatus": null,
+            "runnerEpoch": 0,
+            "runnerState": "stopped",
+            "settledAt": null,
+            "unread": false,
+            "updatedAt": "<epoch-ms>",
+            "workspaceId": "test"
+          }
+        },
+        "status": 201
+      }
+    },
+    "step": "a session in the configured workspace"
+  },
+  {
+    "observed": {
+      "request": "DELETE /api/sessions/session_<uuid:1>",
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Only chats can be deleted"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "deleting it: only chats can be deleted, 400"
+  }
+]
