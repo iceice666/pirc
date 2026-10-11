@@ -93,14 +93,39 @@ impl Link {
 }
 
 /// A registered node as `/api/nodes` lists it.
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug)]
 pub struct ConnectedNode {
     pub id: String,
     pub role: NodeRole,
     pub workspaces: Vec<RegisteredWorkspace>,
     pub connected_at: i64,
     pub last_seen_at: i64,
+    /// The node's whole answer for each workspace added through
+    /// `POST /api/workspaces` since it registered, by id: the TS gateway
+    /// listed that answer as it was (with `canonicalPath`, `defaults` and
+    /// `hostId`), and registered workspaces with their frame's fields only.
+    pub added: HashMap<String, Value>,
+}
+
+impl Serialize for ConnectedNode {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let workspaces: Vec<Value> = self
+            .workspaces
+            .iter()
+            .map(|workspace| match self.added.get(&workspace.id) {
+                Some(raw) => raw.clone(),
+                None => serde_json::to_value(workspace).unwrap_or(Value::Null),
+            })
+            .collect();
+        let mut node = serializer.serialize_struct("ConnectedNode", 5)?;
+        node.serialize_field("id", &self.id)?;
+        node.serialize_field("role", &self.role)?;
+        node.serialize_field("workspaces", &workspaces)?;
+        node.serialize_field("connectedAt", &self.connected_at)?;
+        node.serialize_field("lastSeenAt", &self.last_seen_at)?;
+        node.end()
+    }
 }
 
 /// The browser side of a relayed terminal or browser stream.
@@ -207,7 +232,14 @@ impl NodeRegistry {
         self.lock().connections.len()
     }
 
-    pub fn add_workspace(&self, node_id: &str, workspace: RegisteredWorkspace) -> ApiResult<()> {
+    /// `raw` is the node's answer the workspace was parsed from, listed
+    /// as it is (see [`ConnectedNode::added`]).
+    pub fn add_workspace(
+        &self,
+        node_id: &str,
+        workspace: RegisteredWorkspace,
+        raw: Value,
+    ) -> ApiResult<()> {
         let mut state = self.lock();
         let node = &mut state
             .connections
@@ -215,6 +247,7 @@ impl NodeRegistry {
             .ok_or_else(node_offline)?
             .node;
         if !node.workspaces.iter().any(|item| item.id == workspace.id) {
+            node.added.insert(workspace.id.clone(), raw);
             node.workspaces.push(workspace);
         }
         Ok(())
@@ -763,6 +796,7 @@ impl LinkSession {
             workspaces: parsed.workspaces,
             connected_at: stamp,
             last_seen_at: stamp,
+            added: HashMap::new(),
         };
         registry.lock().connections.insert(
             self.node_id.clone(),

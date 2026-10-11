@@ -467,7 +467,8 @@ pub async fn create_workspace(
         &[(workspace.id.clone(), workspace.display_name.clone(), kind)],
     )?;
     let local_id = workspace.id.clone();
-    app.nodes.add_workspace(&node_id, workspace)?;
+    app.nodes
+        .add_workspace(&node_id, workspace, remote["workspace"].clone())?;
     app.directory_changed();
     let stored = app
         .db
