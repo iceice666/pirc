@@ -18,7 +18,7 @@
     "format:check": "prettier --check .",
     "version:check": "bun scripts/version.ts check",
     "version:bump": "bun scripts/version.ts bump",
-    "check": "bun run version:check && bun run catalog:check && bun run format:check && bun run check:rust && bun run typecheck && bun run test && bun run build && bun run test:compiled && bun run test:conformance && bun run test:conformance:rust-gateway && bun run test:conformance:rust-agent",
+    "check": "bun run version:check && bun run catalog:check && bun run format:check && bun run check:rust && bun run typecheck && bun run test && bun run build && bun run test:compiled && bun run test:conformance && bun run test:conformance:rust-gateway && bun run test:conformance:rust-agent && bun run test:conformance:rust-node",
     "check:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && env -u PIRC_CONFORMANCE_BIN_DIR -u PIRC_CONFORMANCE_REQUIRED cargo test --workspace",
     "dev:chat": "bun run --filter @pirc/gateway dev:chat",
     "test:compiled": "bun run --filter @pirc/gateway test:compiled",

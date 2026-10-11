@@ -65,7 +65,10 @@
             rustc
             clippy
             rustfmt
-          ];
+          ]
+          # The node's native sandbox tests run the agent under it
+          # (crates/pirc-node/tests/sandbox_native.rs; they skip without it).
+          ++ lib.optionals stdenv.isLinux [ bubblewrap ];
           shellHook = ''
             echo "pirc development shell (Bun $(bun --version))"
           '';
