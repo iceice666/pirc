@@ -51,6 +51,16 @@ pub fn spawn_eager(future: impl Future<Output = ()> + 'static) {
     }
 }
 
+/// `setTimeout(work, 0)`: `work` runs as a task after the runtime polled
+/// its drivers, behind what is runnable now, and timeouts set earlier run
+/// first (a later timeout never overtakes an earlier one).
+pub fn set_timeout_zero(work: impl Future<Output = ()> + 'static) {
+    tokio::task::spawn_local(async move {
+        tokio::task::yield_now().await;
+        work.await;
+    });
+}
+
 /// One microtask tick: the task goes to the back of the ready queue at
 /// once, behind what is already runnable (tasks spawned or woken before
 /// it), as a JavaScript `await` lets the queued microtasks run first.

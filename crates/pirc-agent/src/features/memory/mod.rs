@@ -1322,9 +1322,7 @@ impl Feature for MemoryFeature {
         state.auto_compacting.set(true);
         agent.flush_panel();
         let agent = agent.clone();
-        // `setTimeout(…, 0)`.
-        tokio::task::spawn_local(async move {
-            tokio::task::yield_now().await;
+        crate::set_timeout_zero(async move {
             if agent.is_running() || agent.is_compacting() {
                 state.auto_compacting.set(false);
                 notify(&agent, &config, "automatic compaction deferred");

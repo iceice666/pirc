@@ -77,10 +77,12 @@ const DEFAULTS: Settings = Settings {
     default_max_rounds: None,
 };
 
-/// A JSON number that is an integer (`z.number().int()`).
+/// A JSON number that is an integer (`z.number().int()`), however large:
+/// one past `i64` saturates, and `valid_max_rounds` refuses what is not a
+/// safe integer when it is used, as TS did.
 fn integer(value: &Value) -> Option<i64> {
     let number = value.as_f64()?;
-    (number.fract() == 0.0 && number.abs() < 9.3e18).then_some(number as i64)
+    (number.is_finite() && number.fract() == 0.0).then_some(number as i64)
 }
 
 fn parse_settings(value: Option<&Value>) -> Settings {
@@ -304,7 +306,9 @@ impl State {
         }
         self.scheduled.set(true);
         let (state, agent) = (self.clone(), agent.clone());
-        tokio::task::spawn_local(async move {
+        // Behind timeouts set earlier while settling: memory's automatic
+        // compaction starts first, and the round waits for it.
+        crate::set_timeout_zero(async move {
             state.try_continue(&agent);
         });
     }
