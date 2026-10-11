@@ -24,8 +24,9 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 getrandom = "0.3"
 indexmap.workspace = true
 # kill(2) of process groups (agents, host commands, terminals), O_NOFOLLOW
-# opens (recap), getuid (the sandbox policy's host sockets).
-nix = { version = "0.31", features = ["fs", "process", "signal", "user"] }
+# opens (recap), getuid (the sandbox policy's host sockets), the fd limit
+# raised at start-up (node.rs).
+nix = { version = "0.31", features = ["fs", "process", "resource", "signal", "user"] }
 # Panel terminals: setsid and TIOCSCTTY before exec, as the agent's
 # background tasks (no unsafe code of our own).
 pty-process = { version = "0.5", features = ["async"] }

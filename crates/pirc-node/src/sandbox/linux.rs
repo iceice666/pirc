@@ -21,7 +21,8 @@
 //!   starts are not mounted over (srt puts `/dev/null` stubs there), so a
 //!   missing `<workspace>/.pirc`, `.git/hooks` or `.git/config` can be
 //!   created by the agent; symlinked spellings of denied paths are not
-//!   covered either.
+//!   covered either. (Existing ones cannot be renamed away: their writable
+//!   ancestors are mount points, see [`filesystem_args`].)
 //! - No mandatory deny scan: dangerous files (`.bashrc`, nested
 //!   `.git/hooks`, ...) anywhere below a write root other than the listed
 //!   paths stay writable.
@@ -117,6 +118,17 @@ fn kernel_path(path: &str) -> bool {
 /// (a deny-write inside a denied region cannot re-expose it, as the spike's
 /// fixed order could). srt's own algorithm (symlinks, missing paths,
 /// mandatory deny scan) is M7's; see the module documentation.
+///
+/// A mount only covers the dentry it sits on, and renaming a directory
+/// that merely *contains* mount points is allowed (the mounts move with
+/// it; only a mount point itself is `EBUSY`). So a read-only
+/// `<ws>/.git/config` would be bypassed by `mv .git .git.bak; mkdir .git`
+/// (the host then sees a `.git/config` the agent wrote, and the Git panel
+/// runs its filters). Every path the agent may not write whose parent is
+/// writable is therefore a mount point, and so is each of its ancestors
+/// whose own parent is writable ([`pinned`]): none of them can be renamed,
+/// removed or replaced. srt binds the protected files only, so the srt
+/// backend (and the TS build) keep this hole (security audit S7).
 pub fn filesystem_args(paths: &PathPolicy) -> Vec<String> {
     let mut points: Vec<String> = paths
         .allow_write
@@ -140,6 +152,8 @@ pub fn filesystem_args(paths: &PathPolicy) -> Vec<String> {
             }
         }
     }
+    let pinned = pinned(paths, &points);
+    points.extend(pinned.iter().cloned());
     let depth = |path: &str| path.matches('/').count();
     points.sort_by(|a, b| depth(a).cmp(&depth(b)).then_with(|| a.cmp(b)));
     points.dedup();
@@ -170,7 +184,9 @@ pub fn filesystem_args(paths: &PathPolicy) -> Vec<String> {
             .filter(|(mounted, _)| is_inside(&point, mounted))
             .max_by_key(|(mounted, _)| mounted.len())
             .map_or(root_mount, |(_, access)| *access);
-        if want != around {
+        // A pinned point inside a region of its own verdict (a directory on
+        // the way to a protected path) is bound onto itself.
+        if want != around || pinned.contains(&point) {
             match want {
                 Access::Hidden if Path::new(&point).is_dir() => {
                     push(&["--tmpfs", &point]);
@@ -187,6 +203,36 @@ pub fn filesystem_args(paths: &PathPolicy) -> Vec<String> {
         args.extend(["--remount-ro".to_owned(), point]);
     }
     args
+}
+
+/// The paths that must be mount points so nothing the agent may not write
+/// can be renamed away (see [`filesystem_args`]): each existing point the
+/// agent may not write, and every ancestor of it, whose parent directory is
+/// writable. Ancestors exist since the point does.
+fn pinned(paths: &PathPolicy, points: &[String]) -> Vec<String> {
+    let writable_parent = |path: &Path| {
+        path.parent()
+            .and_then(Path::to_str)
+            .is_some_and(|parent| access(paths, parent) == Access::Writable)
+    };
+    let mut pinned: Vec<String> = Vec::new();
+    for point in points {
+        if access(paths, point) == Access::Writable {
+            continue;
+        }
+        for path in Path::new(point).ancestors() {
+            if path == Path::new("/") {
+                break;
+            }
+            let Some(text) = path.to_str() else {
+                continue;
+            };
+            if writable_parent(path) && !kernel_path(text) && !pinned.iter().any(|p| p == text) {
+                pinned.push(text.to_owned());
+            }
+        }
+    }
+    pinned
 }
 
 /// bubblewrap's arguments up to the command, in srt's order (namespaces,
@@ -244,6 +290,8 @@ pub struct NativeSandbox {
     /// The `pirc-node` executable that has the `sandbox-bridge` subcommand.
     helper: PathBuf,
     probe: ProbeCache,
+    /// Connections every session's proxy may still open together.
+    connections: Arc<tokio::sync::Semaphore>,
 }
 
 impl NativeSandbox {
@@ -253,6 +301,7 @@ impl NativeSandbox {
             env,
             helper,
             probe: ProbeCache::default(),
+            connections: Arc::new(tokio::sync::Semaphore::new(proxy::MAX_NODE_CONNECTIONS)),
         }
     }
 
@@ -361,7 +410,11 @@ impl Sandbox for NativeSandbox {
                 policy.network.allowed_domains.clone(),
                 policy.network.denied_domains.clone(),
             ));
-            let proxy = tokio::spawn(proxy::serve(listener, allowlist.clone()));
+            let proxy = tokio::spawn(proxy::serve(
+                listener,
+                allowlist.clone(),
+                self.connections.clone(),
+            ));
             let tmp_text = tmp.display().to_string();
             let mut agent: Vec<OsString> = vec![self.config.agent_command.clone().into()];
             agent.extend(self.config.agent_args.iter().map(OsString::from));
@@ -465,6 +518,10 @@ mod tests {
             "--ro-bind",
             &p("state/i-1"),
             &p("state/i-1"),
+            // Pinned, so `.git` cannot be renamed away from `config`.
+            "--bind",
+            &p("ws/.git"),
+            &p("ws/.git"),
             // Hidden inside hidden: nothing to do. The session dir comes back.
             "--bind",
             &p("state/sessions/s1"),
@@ -481,6 +538,63 @@ mod tests {
         .to_vec();
         // `home/.bashrc` is read-only, as `/` already is; `ws/.pirc` and
         // `missing` do not exist (M7).
+        assert_eq!(args, expected);
+    }
+
+    #[test]
+    fn every_writable_directory_above_a_protected_path_is_a_mount_point() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap().display().to_string();
+        let p = |rest: &str| format!("{root}/{rest}");
+        for dir in ["home/.config/.pirc", "home/a/b", "home/.ssh/keys", "ro/x"] {
+            fs::create_dir_all(p(dir)).unwrap();
+        }
+        fs::write(p("home/a/b/c"), "").unwrap();
+        fs::write(p("ro/x/y"), "").unwrap();
+        let paths = PathPolicy {
+            deny_read: vec![p("home/.ssh")],
+            allow_write: vec![p("home")],
+            deny_write: vec![
+                p("home/.config/.pirc"),
+                p("home/a/b/c"),
+                p("home/.ssh"),
+                // Inside a hidden directory, or with a read-only parent:
+                // nothing to rename.
+                p("home/.ssh/keys"),
+                p("ro/x/y"),
+            ],
+            ..PathPolicy::default()
+        };
+        let args = filesystem_args(&paths);
+        let expected: Vec<String> = [
+            "--ro-bind",
+            "/",
+            "/",
+            "--bind",
+            &p("home"),
+            &p("home"),
+            "--bind",
+            &p("home/.config"),
+            &p("home/.config"),
+            "--tmpfs",
+            &p("home/.ssh"),
+            "--bind",
+            &p("home/a"),
+            &p("home/a"),
+            "--ro-bind",
+            &p("home/.config/.pirc"),
+            &p("home/.config/.pirc"),
+            "--bind",
+            &p("home/a/b"),
+            &p("home/a/b"),
+            "--ro-bind",
+            &p("home/a/b/c"),
+            &p("home/a/b/c"),
+            "--remount-ro",
+            &p("home/.ssh"),
+        ]
+        .map(String::from)
+        .to_vec();
         assert_eq!(args, expected);
     }
 

@@ -15,12 +15,24 @@ use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, UnixListener, UnixStream};
+use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
 /// Longest request head (srt answered 431 past Node's limit).
 const MAX_HEAD: usize = 64 * 1024;
-/// Connections one session may hold open through the proxy.
-const MAX_CONNECTIONS: usize = 256;
+/// Connections one session may hold open through the proxy. Each costs
+/// the node two fds (client and upstream): srt's proxy lived in the
+/// session's own process, this one shares the node's fd table.
+const MAX_CONNECTIONS: usize = 64;
+/// Connections all sessions' proxies may hold open together: 1024 fds,
+/// small next to the soft `RLIMIT_NOFILE` the node raises to its hard limit
+/// at start-up (systemd's default hard limit is 524288), so sandboxed
+/// agents cannot starve the link, the database, terminals or other
+/// sessions' spawns of fds.
+pub const MAX_NODE_CONNECTIONS: usize = 512;
+/// Pause after a failed `accept` (`EMFILE` and the like), so the loop does
+/// not spin while the condition lasts.
+const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
 /// How long a client may take to send its request head, and the proxy to
 /// reach the destination.
 const TIMEOUT: Duration = Duration::from_secs(30);
@@ -104,7 +116,7 @@ fn matches(host: &str, port: u16, entry: &str) -> bool {
 /// `host` and `port` of an `http://` URL (or a CONNECT authority made into
 /// one), canonical: lowercase, IPv4 normalized, no trailing dot. IPv6
 /// literals and anything unusual are refused (no entry can name them).
-fn destination(url: &str, default_port: u16) -> Option<(String, u16)> {
+fn destination(url: &str) -> Option<(String, u16)> {
     let parsed = url::Url::parse(url).ok()?;
     if parsed.scheme() != "http" || !parsed.username().is_empty() || parsed.password().is_some() {
         return None;
@@ -118,26 +130,54 @@ fn destination(url: &str, default_port: u16) -> Option<(String, u16)> {
         && host
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-' || b == b'_');
-    valid.then(|| (host, parsed.port().unwrap_or(default_port)))
+    // `port()` is `None` for the scheme's default (80): that is the port.
+    valid.then(|| (host, parsed.port_or_known_default().unwrap_or(80)))
+}
+
+/// Where a request goes: an `http://` absolute-form target, or a CONNECT
+/// authority, which must carry its port explicitly (`host:80` tunnels to
+/// 80, not to the default 443).
+fn request_destination(connect: bool, target: &str) -> Option<(String, u16)> {
+    if !connect {
+        let http = target
+            .get(..7)
+            .is_some_and(|s| s.eq_ignore_ascii_case("http://"));
+        return destination(target).filter(|_| http);
+    }
+    let (_, port) = target.rsplit_once(':')?;
+    let explicit = !port.is_empty() && port.len() <= 5 && port.bytes().all(|b| b.is_ascii_digit());
+    let port = port
+        .parse::<u16>()
+        .ok()
+        .filter(|port| explicit && *port > 0)?;
+    // The URL parser canonicalizes the host; its port must be the same one.
+    destination(&format!("http://{target}/")).filter(|(_, parsed)| *parsed == port)
 }
 
 /// Serve the session's proxy until the task is aborted (the session's
-/// cleanup), which also ends every connection.
-pub async fn serve(listener: UnixListener, allowlist: Arc<Allowlist>) {
+/// cleanup), which also ends every connection. `node` bounds the
+/// connections of every session's proxy together.
+pub async fn serve(listener: UnixListener, allowlist: Arc<Allowlist>, node: Arc<Semaphore>) {
     let mut connections = JoinSet::new();
     loop {
         tokio::select! {
             accepted = listener.accept() => {
                 let Ok((client, _)) = accepted else {
+                    tokio::time::sleep(ACCEPT_BACKOFF).await;
                     continue;
                 };
                 if connections.len() >= MAX_CONNECTIONS {
                     drop(client);
                     continue;
                 }
+                let Ok(permit) = node.clone().try_acquire_owned() else {
+                    drop(client);
+                    continue;
+                };
                 let allowlist = allowlist.clone();
                 connections.spawn(async move {
                     let _ = handle(client, &allowlist).await;
+                    drop(permit);
                 });
             }
             Some(_) = connections.join_next(), if !connections.is_empty() => {}
@@ -184,25 +224,11 @@ async fn handle(mut client: UnixStream, allowlist: &Allowlist) -> std::io::Resul
         request.next().unwrap_or("HTTP/1.1"),
     );
     let connect = method.eq_ignore_ascii_case("CONNECT");
-    let (url, default_port) = if connect {
-        (format!("http://{target}/"), 443)
-    } else {
-        (target.to_owned(), 80)
-    };
-    let scheme_ok = connect
-        || target
-            .get(..7)
-            .is_some_and(|s| s.eq_ignore_ascii_case("http://"));
-    let Some((host, port)) = destination(&url, default_port).filter(|_| scheme_ok) else {
+    let Some((host, port)) = request_destination(connect, target) else {
         return client
             .write_all(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n")
             .await;
     };
-    if connect && !target.contains(':') {
-        return client
-            .write_all(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n")
-            .await;
-    }
     if !allowlist.allows(&host, port) {
         return client.write_all(DENIED).await;
     }
@@ -286,17 +312,43 @@ mod tests {
     #[test]
     fn destinations_are_canonical() {
         assert_eq!(
-            destination("http://GitHub.COM./x", 80),
+            destination("http://GitHub.COM./x"),
             Some(("github.com".into(), 80))
         );
         assert_eq!(
-            destination("http://127.1:8080/", 80),
+            destination("http://127.1:8080/"),
             Some(("127.0.0.1".into(), 8080))
         );
-        assert_eq!(destination("http://[::1]/", 80), None);
-        assert_eq!(destination("http://user@a.com/", 80), None);
-        assert_eq!(destination("https://a.com/", 80), None);
-        assert_eq!(destination("http://a%00b.com/", 80), None);
+        assert_eq!(destination("http://[::1]/"), None);
+        assert_eq!(destination("http://user@a.com/"), None);
+        assert_eq!(destination("https://a.com/"), None);
+        assert_eq!(destination("http://a%00b.com/"), None);
+    }
+
+    #[test]
+    fn connect_takes_the_authoritys_explicit_port() {
+        let to = |target: &str| request_destination(true, target);
+        assert_eq!(to("example.com:80"), Some(("example.com".into(), 80)));
+        assert_eq!(to("Example.com:443"), Some(("example.com".into(), 443)));
+        assert_eq!(to("127.1:8080"), Some(("127.0.0.1".into(), 8080)));
+        for bad in [
+            "example.com",
+            "example.com:",
+            "example.com:0",
+            "example.com:+80",
+            "example.com:65536",
+            "example.com:80/x",
+            "[::1]:443",
+            "user@example.com:443",
+        ] {
+            assert_eq!(to(bad), None, "{bad}");
+        }
+        assert_eq!(
+            request_destination(false, "HTTP://a.com/x"),
+            Some(("a.com".into(), 80))
+        );
+        assert_eq!(request_destination(false, "/relative"), None);
+        assert_eq!(request_destination(false, "ftp://a.com/"), None);
     }
 
     async fn upstream() -> u16 {
@@ -335,9 +387,11 @@ mod tests {
 
     async fn ask(socket: &std::path::Path, request: &str) -> String {
         let mut stream = UnixStream::connect(socket).await.unwrap();
-        stream.write_all(request.as_bytes()).await.unwrap();
+        // A connection over a cap is closed unread: write and read errors
+        // leave an empty answer.
+        let _ = stream.write_all(request.as_bytes()).await;
         let mut out = String::new();
-        stream.read_to_string(&mut out).await.unwrap();
+        let _ = stream.read_to_string(&mut out).await;
         out
     }
 
@@ -347,7 +401,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let socket = dir.path().join("proxy.sock");
         let list = Arc::new(Allowlist::new(vec!["localhost".into()], Vec::new()));
-        let task = tokio::spawn(serve(UnixListener::bind(&socket).unwrap(), list.clone()));
+        let task = tokio::spawn(serve(
+            UnixListener::bind(&socket).unwrap(),
+            list.clone(),
+            Arc::new(Semaphore::new(MAX_NODE_CONNECTIONS)),
+        ));
 
         let reply = ask(
             &socket,
@@ -403,5 +461,50 @@ mod tests {
         let closed = ask(&socket, "GET http://localhost:1/ HTTP/1.1\r\n\r\n").await;
         assert!(closed.starts_with("HTTP/1.1 502"), "{closed}");
         task.abort();
+    }
+
+    #[tokio::test]
+    async fn every_sessions_proxy_shares_the_nodes_connection_cap() {
+        let port = upstream().await;
+        let dir = tempfile::tempdir().unwrap();
+        let node = Arc::new(Semaphore::new(1));
+        let list = Arc::new(Allowlist::new(vec!["127.0.0.1".into()], Vec::new()));
+        let (a, b) = (dir.path().join("a.sock"), dir.path().join("b.sock"));
+        let tasks = [&a, &b].map(|socket| {
+            tokio::spawn(serve(
+                UnixListener::bind(socket).unwrap(),
+                list.clone(),
+                node.clone(),
+            ))
+        });
+        // Session a holds the node's only connection open...
+        let mut held = UnixStream::connect(&a).await.unwrap();
+        held.write_all(format!("CONNECT 127.0.0.1:{port} HTTP/1.1\r\n\r\n").as_bytes())
+            .await
+            .unwrap();
+        let mut established = [0u8; 39];
+        held.read_exact(&mut established).await.unwrap();
+        assert_eq!(&established, b"HTTP/1.1 200 Connection Established\r\n\r\n");
+        // ...so session b's is closed unanswered.
+        let refused = ask(&b, "GET http://127.0.0.1:1/ HTTP/1.1\r\n\r\n").await;
+        assert_eq!(refused, "");
+        drop(held);
+        // The permit comes back once the tunnel ends.
+        let mut reply = String::new();
+        for _ in 0..50 {
+            reply = ask(
+                &b,
+                &format!("GET http://127.0.0.1:{port}/ HTTP/1.1\r\n\r\n"),
+            )
+            .await;
+            if !reply.is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert!(reply.starts_with("HTTP/1.1 200 OK"), "{reply}");
+        for task in tasks {
+            task.abort();
+        }
     }
 }
