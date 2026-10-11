@@ -2,13 +2,24 @@
 //! the workspace's `.pirc/config.json` (trust-gated), the system prompt's
 //! files, path policy and limits. Providers come from the gateway.
 
+mod memory;
+pub mod schema;
+
+use std::path::Path;
+
+use indexmap::IndexMap;
 use pirc_policy::PathPolicy;
 use pirc_protocol::{ModelRef, Models, ThinkingLevel};
 use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
 
 use crate::context::PromptSection;
-use crate::roles::RoleDir;
-use crate::session_store::SessionEntry;
+use crate::messages::js;
+use crate::roles::{RoleDir, RolePreset};
+use crate::session_store::{EntryData, SessionEntry};
+use schema::{Checker, PathPart};
+
+pub use memory::memory_config_warning;
 
 /// One hook (`hookSchema`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,6 +37,65 @@ pub struct HooksConfig {
     pub before_tool: Vec<HookConfig>,
     pub after_tool: Vec<HookConfig>,
     pub agent_settled: Vec<HookConfig>,
+}
+
+/// The hook events, in `hooksSchema` order.
+pub const HOOK_EVENTS: [&str; 5] = [
+    "sessionStart",
+    "beforePrompt",
+    "beforeTool",
+    "afterTool",
+    "agentSettled",
+];
+
+impl HooksConfig {
+    /// The hooks of one event (`hooks[event]`).
+    pub fn list(&self, event: &str) -> &[HookConfig] {
+        match event {
+            "sessionStart" => &self.session_start,
+            "beforePrompt" => &self.before_prompt,
+            "beforeTool" => &self.before_tool,
+            "afterTool" => &self.after_tool,
+            "agentSettled" => &self.agent_settled,
+            _ => &[],
+        }
+    }
+
+    fn list_mut(&mut self, event: &str) -> &mut Vec<HookConfig> {
+        match event {
+            "sessionStart" => &mut self.session_start,
+            "beforePrompt" => &mut self.before_prompt,
+            "beforeTool" => &mut self.before_tool,
+            "afterTool" => &mut self.after_tool,
+            _ => &mut self.agent_settled,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        HOOK_EVENTS.iter().all(|event| self.list(event).is_empty())
+    }
+
+    /// As zod returns it: every event, each hook `{command, matcher?, timeoutMs}`.
+    fn to_value(&self) -> Value {
+        let mut map = Map::new();
+        for event in HOOK_EVENTS {
+            let hooks = self
+                .list(event)
+                .iter()
+                .map(|hook| {
+                    let mut item = Map::new();
+                    item.insert("command".into(), Value::from(hook.command.as_str()));
+                    if let Some(matcher) = &hook.matcher {
+                        item.insert("matcher".into(), Value::from(matcher.as_str()));
+                    }
+                    item.insert("timeoutMs".into(), Value::from(hook.timeout_ms));
+                    Value::Object(item)
+                })
+                .collect();
+            map.insert(event.to_owned(), Value::Array(hooks));
+        }
+        Value::Object(map)
+    }
 }
 
 /// `limitsSchema`.
@@ -87,14 +157,569 @@ pub struct AgentConfig {
     pub workspace_kind: WorkspaceKind,
 }
 
+/// `defaultConfigDir(env)`: `$PIRC_CONFIG_DIR`, default `~/.config/.pirc`.
+pub fn default_config_dir(env: &dyn Fn(&str) -> Option<String>) -> String {
+    env("PIRC_CONFIG_DIR").unwrap_or_else(|| js::path_join(&[&js::home_dir(), ".config", ".pirc"]))
+}
+
+/// `expandHome(value)`.
+pub fn expand_home(value: &str) -> String {
+    if value == "~" {
+        js::home_dir()
+    } else if let Some(rest) = value.strip_prefix("~/") {
+        js::path_join(&[&js::home_dir(), rest])
+    } else {
+        value.to_owned()
+    }
+}
+
+/// `readJson(file)`: `{}` when missing.
+fn read_json(file: &str) -> Result<Value, String> {
+    let path = Path::new(file);
+    if !path.exists() {
+        return Ok(Value::Object(Map::new()));
+    }
+    let text = js::read_text(path)?;
+    serde_json::from_str(&text).map_err(|error| {
+        let reason = if error.is_eof() {
+            "Unexpected EOF".to_owned()
+        } else {
+            error.to_string()
+        };
+        format!("Invalid JSON in {file}: JSON Parse error: {reason}")
+    })
+}
+
+/// `readText(file)`: trimmed, empty when missing.
+fn read_text(file: &str) -> Result<String, String> {
+    let path = Path::new(file);
+    if !path.exists() {
+        return Ok(String::new());
+    }
+    Ok(js::trim(&js::read_text(path)?).to_owned())
+}
+
+/// `PROMPT_MAX_CHARS` of a chat's persona and rules.
+const PROMPT_MAX_CHARS: usize = 8000;
+
+/// `readAssistantPrompt(file)`: follows links, never reads a device or FIFO.
+pub fn read_assistant_prompt(file: &str) -> Result<String, String> {
+    let path = Path::new(file);
+    match std::fs::metadata(path) {
+        Ok(meta) if !meta.is_file() => return Ok(String::new()),
+        Ok(_) => {}
+        Err(error) if error.raw_os_error() == Some(2) => return Ok(String::new()),
+        Err(error) => return Err(js::node_error(&error, "stat", Some(path))),
+    }
+    let text = match std::fs::read(path) {
+        Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
+        Err(error) if error.raw_os_error() == Some(2) => return Ok(String::new()),
+        Err(error) => return Err(js::node_error(&error, "open", Some(path))),
+    };
+    let text = text.replace("\r\n", "\n");
+    Ok(js::utf16_prefix(js::trim(&text), PROMPT_MAX_CHARS))
+}
+
+/// The node's settings (`globalSchema`).
+struct GlobalConfig {
+    allowed_paths: Vec<String>,
+    env: Vec<(String, String)>,
+    hooks: HooksConfig,
+    limits: Limits,
+    features: Map<String, Value>,
+}
+
+fn hook(checker: &mut Checker, value: &Value) -> Option<HookConfig> {
+    let map = checker.object(Some(value))?;
+    let command = checker.key(map, "command", |c, v| c.string(v, Some(1)));
+    let matcher = checker.key(map, "matcher", |c, v| {
+        v.and_then(|v| c.string(Some(v), None))
+    });
+    let timeout_ms = checker.key(map, "timeoutMs", |c, v| match v {
+        None => Some(10_000),
+        Some(_) => c.positive_int(v, Some(600_000.0)),
+    });
+    Some(HookConfig {
+        command: command?,
+        matcher,
+        timeout_ms: timeout_ms?,
+    })
+}
+
+/// `hooksSchema` (`.default({})`).
+fn hooks(checker: &mut Checker, value: Option<&Value>) -> HooksConfig {
+    let mut out = HooksConfig::default();
+    if value.is_none() {
+        return out;
+    }
+    let Some(map) = checker.object(value) else {
+        return out;
+    };
+    for event in HOOK_EVENTS {
+        checker.key(map, event, |c, v| {
+            if v.is_none() {
+                return;
+            }
+            if let Some(items) = c.array(v) {
+                for (index, item) in items.iter().enumerate() {
+                    if let Some(parsed) = c.at(PathPart::Index(index), |c| hook(c, item)) {
+                        out.list_mut(event).push(parsed);
+                    }
+                }
+            }
+        });
+    }
+    out
+}
+
+/// `limitsSchema` (`.default({})`).
+fn limits(checker: &mut Checker, value: Option<&Value>) -> Limits {
+    let mut out = Limits::default();
+    if value.is_none() {
+        return out;
+    }
+    let Some(map) = checker.object(value) else {
+        return out;
+    };
+    let fields: [(&str, &mut u64, Option<f64>); 5] = [
+        ("bashTimeoutMs", &mut out.bash_timeout_ms, None),
+        ("ptcTimeoutMs", &mut out.ptc_timeout_ms, None),
+        ("toolOutputBytes", &mut out.tool_output_bytes, None),
+        ("maxTurns", &mut out.max_turns, None),
+        (
+            "completionWaitMs",
+            &mut out.completion_wait_ms,
+            Some(86_400_000.0),
+        ),
+    ];
+    for (key, slot, max) in fields {
+        checker.key(map, key, |c, v| {
+            if v.is_some()
+                && let Some(number) = c.positive_int(v, max)
+            {
+                *slot = number;
+            }
+        });
+    }
+    out
+}
+
+/// `.default([])` / `.default({})` fields.
+fn defaulted<T: Default>(
+    checker: &mut Checker,
+    map: &Map<String, Value>,
+    key: &str,
+    parse: impl FnOnce(&mut Checker, Option<&Value>) -> T,
+) -> T {
+    checker.key(map, key, |c, v| {
+        if v.is_none() {
+            T::default()
+        } else {
+            parse(c, v)
+        }
+    })
+}
+
+fn parse_global(raw: &Value) -> Result<GlobalConfig, String> {
+    let mut checker = Checker::default();
+    let Some(map) = checker.object(Some(raw)) else {
+        return Err(schema::error_message(&checker.issues));
+    };
+    let allowed_paths = defaulted(&mut checker, map, "allowedPaths", Checker::string_array);
+    let env = defaulted(&mut checker, map, "env", Checker::string_record);
+    let hooks = checker.key(map, "hooks", hooks);
+    let limits = checker.key(map, "limits", limits);
+    let features = defaulted(&mut checker, map, "features", |c, v| {
+        c.object(v).cloned().unwrap_or_default()
+    });
+    if !checker.issues.is_empty() {
+        return Err(schema::error_message(&checker.issues));
+    }
+    Ok(GlobalConfig {
+        allowed_paths,
+        env,
+        hooks,
+        limits,
+        features,
+    })
+}
+
+/// `modelRefSchema`.
+fn model_ref(checker: &mut Checker, value: Option<&Value>) -> Option<ModelRef> {
+    let map = checker.object(value)?;
+    let provider = checker.key(map, "provider", |c, v| c.string(v, None));
+    let id = checker.key(map, "id", |c, v| c.string(v, None));
+    let thinking = checker.key(map, "thinking", |c, v| {
+        v.and_then(|_| c.enumeration(v, &THINKING_LEVELS))
+            .and_then(|level| thinking_level(&level))
+    });
+    Some(ModelRef {
+        provider: provider?,
+        id: id?,
+        thinking,
+    })
+}
+
+/// `thinkingLevels`.
+pub const THINKING_LEVELS: [&str; 6] = ["off", "minimal", "low", "medium", "high", "xhigh"];
+
+/// A thinking level by name.
+pub fn thinking_level(name: &str) -> Option<ThinkingLevel> {
+    serde_json::from_value(Value::from(name)).ok()
+}
+
+/// The project's `.pirc/config.json` (`ProjectConfig`): it may only extend
+/// paths, env and hooks and choose a default model.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ProjectConfig {
+    pub default_model: Option<ModelRef>,
+    pub allowed_paths: Vec<String>,
+    pub env: Vec<(String, String)>,
+    pub hooks: HooksConfig,
+}
+
+/// `projectSchema.parse(raw)`.
+pub fn parse_project_config(raw: &Value) -> Result<ProjectConfig, String> {
+    let mut checker = Checker::default();
+    let Some(map) = checker.object(Some(raw)) else {
+        return Err(schema::error_message(&checker.issues));
+    };
+    let default_model = checker.key(map, "defaultModel", |c, v| v.and_then(|_| model_ref(c, v)));
+    let allowed_paths = defaulted(&mut checker, map, "allowedPaths", Checker::string_array);
+    let env = defaulted(&mut checker, map, "env", Checker::string_record);
+    let hooks = checker.key(map, "hooks", hooks);
+    checker.strict(map, &["defaultModel", "allowedPaths", "env", "hooks"]);
+    if !checker.issues.is_empty() {
+        return Err(schema::error_message(&checker.issues));
+    }
+    Ok(ProjectConfig {
+        default_model,
+        allowed_paths,
+        env,
+        hooks,
+    })
+}
+
+/// `readProjectConfig(root)`: `<root>/.pirc/config.json`, parsed.
+pub fn read_project_config(root: &str) -> Result<ProjectConfig, String> {
+    parse_project_config(&read_json(&js::path_join(&[root, ".pirc", "config.json"]))?)
+}
+
+/// `ProjectTrustFields`: the project config fields that run code or widen
+/// access, honoured only when the user trusted exactly these values.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ProjectTrustFields {
+    pub hooks: HooksConfig,
+    pub env: Vec<(String, String)>,
+    pub allowed_paths: Vec<String>,
+}
+
+/// `projectTrustFields(project)`.
+pub fn project_trust_fields(project: &ProjectConfig) -> ProjectTrustFields {
+    ProjectTrustFields {
+        hooks: project.hooks.clone(),
+        env: project.env.clone(),
+        allowed_paths: project.allowed_paths.clone(),
+    }
+}
+
+/// `canonicalJson(value)`: keys sorted (UTF-16 order), no blanks.
+fn canonical_json(value: &Value) -> String {
+    match value {
+        Value::Array(items) => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(canonical_json)
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        Value::Object(map) => {
+            let mut entries: Vec<(&String, &Value)> = map.iter().collect();
+            entries.sort_by(|(a, _), (b, _)| js::compare_utf16(a, b));
+            format!(
+                "{{{}}}",
+                entries
+                    .into_iter()
+                    .map(|(key, item)| format!(
+                        "{}:{}",
+                        js::string_literal(key),
+                        canonical_json(item)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        }
+        other => js::stringify(other),
+    }
+}
+
+fn env_value(env: &[(String, String)]) -> Value {
+    Value::Object(
+        env.iter()
+            .map(|(key, value)| (key.clone(), Value::from(value.as_str())))
+            .collect(),
+    )
+}
+
+/// `projectTrustHash(fields)`: sha256 of the canonical JSON of the fields.
+pub fn project_trust_hash(fields: &ProjectTrustFields) -> String {
+    let mut map = Map::new();
+    map.insert(
+        "allowedPaths".into(),
+        Value::from(fields.allowed_paths.clone()),
+    );
+    map.insert("env".into(), env_value(&fields.env));
+    map.insert("hooks".into(), fields.hooks.to_value());
+    let canonical = canonical_json(&Value::Object(map));
+    let digest = Sha256::digest(format!("pirc-project-trust-v1\n{canonical}").as_bytes());
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// `projectTrustEmpty(fields)`: no hooks, env or allowed paths.
+pub fn project_trust_empty(fields: &ProjectTrustFields) -> bool {
+    fields.allowed_paths.is_empty() && fields.env.is_empty() && fields.hooks.is_empty()
+}
+
+/// `parseTrustHash(value)`: 64 lowercase hex digits, else nothing.
+pub fn parse_trust_hash(value: Option<&str>) -> Option<String> {
+    value
+        .filter(|hash| {
+            hash.len() == 64
+                && hash
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        })
+        .map(str::to_owned)
+}
+
+/// `UNTRUSTED_PROJECT_WARNING`.
+pub const UNTRUSTED_PROJECT_WARNING: &str = "This workspace's .pirc/config.json sets hooks, env or allowedPaths; they were ignored because the workspace is not trusted (or they changed since it was trusted). Review and trust them in the workspace's Settings.";
+
+const BASE_PROMPT: &str = "You are pirc, a coding agent operating inside a user's workspace through tools.
+Work carefully: read before editing, keep changes minimal and verified, and report blockers honestly.
+File tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.";
+
+/// For chats: the working directory is the chat's own, not a project.
+const CHAT_IDENTITY: &str =
+    "You are pirc, the user's personal assistant, chatting with them on one of their machines.
+Answer directly; use tools when they help, and report what you did and any blockers honestly.";
+const CHAT_ENVIRONMENT: &str = "This chat has its own private working directory; file tools write only to it and explicitly allowed paths, and read anywhere except credential stores and pirc's private state.";
+
+/// `parsePathPolicy(PIRC_SANDBOX_POLICY)`.
+fn parse_path_policy(value: Option<&str>) -> Result<Option<PathPolicy>, String> {
+    let Some(text) = value.filter(|text| !text.is_empty()) else {
+        return Ok(None);
+    };
+    let invalid = || "PIRC_SANDBOX_POLICY is not a valid path policy".to_owned();
+    let raw: Value = serde_json::from_str(text).map_err(|_| invalid())?;
+    let mut checker = Checker::default();
+    let map = checker.object(Some(&raw)).ok_or_else(invalid)?;
+    let list = |c: &mut Checker, key: &str| c.key(map, key, |c, v| c.string_array(v));
+    let policy = PathPolicy {
+        deny_read: list(&mut checker, "denyRead"),
+        allow_read: list(&mut checker, "allowRead"),
+        allow_write: list(&mut checker, "allowWrite"),
+        deny_write: list(&mut checker, "denyWrite"),
+        shared_write: checker.key(map, "sharedWrite", |c, v| v.map(|_| c.string_array(v))),
+    };
+    if !checker.issues.is_empty() {
+        return Err(invalid());
+    }
+    Ok(Some(policy))
+}
+
+/// `{...a, ...b}` of string records: a key keeps its first place.
+fn merge_env(base: &[(String, String)], extra: &[(String, String)]) -> Vec<(String, String)> {
+    let mut merged: IndexMap<String, String> = base.iter().cloned().collect();
+    for (key, value) in extra {
+        merged.insert(key.clone(), value.clone());
+    }
+    merged.into_iter().collect()
+}
+
+fn truthy_env(env: &dyn Fn(&str) -> Option<String>, name: &str) -> Option<String> {
+    env(name).filter(|value| !value.is_empty())
+}
+
 /// `loadAgentConfig(workspace, models, env)`.
 pub fn load_agent_config(
     workspace: &str,
     models: Models,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<AgentConfig, String> {
-    let _ = (workspace, models, env);
-    todo!("M4 store: loadAgentConfig")
+    let config_dir = default_config_dir(env);
+    let global = parse_global(&read_json(&js::path_join(&[&config_dir, "config.json"]))?)?;
+    // Project config comes from the session's workspace only: a team child
+    // in another directory keeps its parent's (H4).
+    let child = truthy_env(env, "PIRC_TEAM_AGENT").is_some();
+    let project_root = match truthy_env(env, "PIRC_PROJECT_ROOT") {
+        Some(root) if child => js::path_resolve(&[&root]),
+        _ => workspace.to_owned(),
+    };
+    let project_dir = js::path_join(&[&project_root, ".pirc"]);
+    let parsed = read_project_config(&project_root)?;
+    // hooks / env / allowedPaths only when the user trusted exactly these values (H3).
+    let fields = project_trust_fields(&parsed);
+    let trusted_hash = parse_trust_hash(env("PIRC_PROJECT_TRUST").as_deref());
+    let untrusted = !project_trust_empty(&fields)
+        && trusted_hash.as_deref() != Some(project_trust_hash(&fields).as_str());
+    let project = if untrusted {
+        ProjectConfig {
+            default_model: parsed.default_model.clone(),
+            ..ProjectConfig::default()
+        }
+    } else {
+        parsed
+    };
+    let mut warnings = Vec::new();
+    if untrusted && !child {
+        warnings.push(UNTRUSTED_PROJECT_WARNING.to_owned());
+    }
+    if let Some(warning) = memory_config_warning(&global.features) {
+        warnings.push(warning);
+    }
+    let resolve_paths = |items: &[String], base: &str| -> Vec<String> {
+        items
+            .iter()
+            .map(|item| js::path_resolve(&[base, &expand_home(item)]))
+            .collect()
+    };
+    // Skills are read by the file tools but are configuration, like .pirc/.
+    let skill_paths =
+        crate::skills::skill_read_paths(&crate::skills::skill_roots(&config_dir, &project_root));
+    let mut allowed_paths = vec![workspace.to_owned()];
+    allowed_paths.extend(resolve_paths(&global.allowed_paths, &config_dir));
+    allowed_paths.extend(resolve_paths(&project.allowed_paths, &project_root));
+    allowed_paths.extend(skill_paths.iter().cloned());
+    let mut hooks = global.hooks.clone();
+    for event in HOOK_EVENTS {
+        hooks
+            .list_mut(event)
+            .extend(project.hooks.list(event).iter().cloned());
+    }
+    let workspace_kind = if env("PIRC_WORKSPACE_KIND").as_deref() == Some("chat") {
+        WorkspaceKind::Chat
+    } else {
+        WorkspaceKind::Directory
+    };
+    let writable: Vec<String> = allowed_paths
+        .into_iter()
+        .collect::<indexmap::IndexSet<_>>()
+        .into_iter()
+        .collect();
+    let sandboxed = env("PIRC_SANDBOX").as_deref() == Some("srt");
+    let node_policy = parse_path_policy(env("PIRC_SANDBOX_POLICY").as_deref())?;
+    // The node's read rules always; its write rules only when srt enforces
+    // them (unsandboxed, the configured allowedPaths still apply).
+    let path_policy = match node_policy {
+        Some(node) => PathPolicy {
+            deny_read: node.deny_read,
+            allow_read: node.allow_read,
+            allow_write: if sandboxed {
+                node.allow_write
+            } else {
+                writable.clone()
+            },
+            deny_write: if sandboxed {
+                node.deny_write
+            } else {
+                Vec::new()
+            },
+            shared_write: if sandboxed { node.shared_write } else { None },
+        },
+        None => pirc_policy::default_path_policy(&writable, &js::home_dir()),
+    };
+    let prompts = if workspace_kind == WorkspaceKind::Chat {
+        let soul_file = js::path_join(&[&config_dir, "SOUL.md"]);
+        let chat_file = js::path_join(&[&config_dir, "CHAT.md"]);
+        let soul = read_assistant_prompt(&soul_file)?;
+        vec![
+            if soul.is_empty() {
+                PromptSection::new("soul", "Persona", "built-in", CHAT_IDENTITY)
+            } else {
+                PromptSection::new("soul", "Persona", &soul_file, soul)
+            },
+            PromptSection::new("chat-env", "Chat environment", "built-in", CHAT_ENVIRONMENT),
+            PromptSection::new(
+                "chat-md",
+                "Chat rules",
+                &chat_file,
+                read_assistant_prompt(&chat_file)?,
+            ),
+        ]
+    } else {
+        let mut sections = vec![PromptSection::new(
+            "base",
+            "Coding instructions",
+            "built-in",
+            BASE_PROMPT,
+        )];
+        for (dir, kind) in [
+            (config_dir.as_str(), "global"),
+            (workspace, "workspace"),
+            (project_dir.as_str(), "project"),
+        ] {
+            let file = js::path_join(&[dir, "AGENTS.md"]);
+            let text = read_text(&file)?;
+            sections.push(PromptSection::new(
+                &format!("agents:{kind}"),
+                &format!("AGENTS.md ({kind})"),
+                &file,
+                text,
+            ));
+        }
+        sections
+    };
+    let system_prompt: Vec<PromptSection> = prompts
+        .into_iter()
+        .filter(|section| !section.text.is_empty())
+        .collect();
+    let default_model = project
+        .default_model
+        .clone()
+        .or_else(|| models.default_model.clone());
+    let mut protected_paths = vec![
+        project_dir.clone(),
+        js::path_join(&[workspace, ".pirc"]),
+        // A hook runs as the user on the next commit.
+        js::path_join(&[workspace, ".git", "hooks"]),
+    ];
+    protected_paths.extend(skill_paths);
+    // The node's role files and chat prompts: only the user writes them.
+    protected_paths.push(js::path_join(&[&config_dir, "roles"]));
+    protected_paths.push(js::path_join(&[&config_dir, "SOUL.md"]));
+    protected_paths.push(js::path_join(&[&config_dir, "CHAT.md"]));
+    // A chat project's instructions: only the user edits them, from the web.
+    if workspace_kind == WorkspaceKind::Chat
+        && let Some(file) = truthy_env(env, "PIRC_PROJECT_INSTRUCTIONS")
+    {
+        protected_paths.push(js::path_resolve(&[&file]));
+    }
+    Ok(AgentConfig {
+        role_dirs: crate::roles::role_dirs(&config_dir, &project_root),
+        config_dir,
+        workspace: workspace.to_owned(),
+        models,
+        default_model,
+        allowed_paths: writable,
+        protected_paths,
+        project_root,
+        warnings,
+        path_policy,
+        sandboxed,
+        env: merge_env(&global.env, &project.env),
+        hooks,
+        limits: global.limits,
+        features: global.features,
+        system_prompt,
+        workspace_kind,
+    })
+}
+
+/// `configRoles(config)`: the roles this agent's workspace defines.
+pub fn config_roles(config: &AgentConfig) -> Result<IndexMap<String, RolePreset>, String> {
+    crate::roles::read_roles(&config.role_dirs)
 }
 
 /// `sessionSettings(branch, config)`: the latest recorded model and
@@ -104,6 +729,28 @@ pub fn session_settings(
     default_model: Option<&ModelRef>,
     models: &Models,
 ) -> (Option<(String, String)>, ThinkingLevel) {
-    let _ = (branch, default_model, models);
-    todo!("M4 store: sessionSettings")
+    let change = branch.iter().rev().find_map(|entry| match &entry.data {
+        EntryData::ModelChange { provider, model_id } => Some((provider.clone(), model_id.clone())),
+        _ => None,
+    });
+    let level = branch.iter().rev().find_map(|entry| match &entry.data {
+        EntryData::ThinkingLevelChange { thinking_level } => Some(thinking_level.clone()),
+        _ => None,
+    });
+    let model = change
+        .or_else(|| default_model.map(|fallback| (fallback.provider.clone(), fallback.id.clone())))
+        .or_else(|| {
+            let (name, provider) = models.providers.first()?;
+            let first = provider.models.first()?;
+            (!name.is_empty()).then(|| (name.clone(), first.id.clone()))
+        });
+    let thinking = match level {
+        Some(level) => thinking_level(&level),
+        None => default_model.and_then(|fallback| fallback.thinking),
+    }
+    .unwrap_or(ThinkingLevel::Medium);
+    (model, thinking)
 }
+
+#[cfg(test)]
+mod tests;

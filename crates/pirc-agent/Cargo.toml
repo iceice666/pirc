@@ -12,6 +12,8 @@ indexmap.workspace = true
 regex-lite = "0.1"
 serde.workspace = true
 serde_json.workspace = true
+sha2 = "0.10"
+yaml-rust2 = { version = "0.13", default-features = false }
 tokio = { version = "1", features = ["io-std", "io-util", "macros", "net", "process", "rt", "signal", "sync", "time"] }
 
 pirc-policy = { path = "../pirc-policy" }
