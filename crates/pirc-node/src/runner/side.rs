@@ -1,0 +1,661 @@
+//! The agent's side channels (`grantWrite`, `forwardGateway`,
+//! `handleBrowser`, `handleSandbox`, `confirmFromNode` of `PiRunner`). The
+//! runner names the session, so an agent only ever acts as its own.
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
+
+use pirc_agent::messages::js::{stringify, trim, utf16_len, utf16_prefix};
+use pirc_protocol::{AGENT_OP_MAX_LENGTH, AGENT_REQUEST_MAX_BYTES, valid_agent_op};
+use serde_json::{Map, Value, json};
+use tokio::sync::{oneshot, watch};
+
+use super::process::{NODE_DIALOG_PREFIX, Runner, SideRequest, session_root};
+use super::reducer::js_string;
+use crate::browser::BrowserTarget;
+use crate::services::Node;
+use crate::store::{RunStatus, Store};
+use crate::util::{now_ms, uuid};
+use crate::write_broker::WriteGrant;
+
+/// Gateway requests one session may have in flight.
+const MAX_GATEWAY_REQUESTS: usize = 8;
+/// Browser requests one session may have in flight (handoff waits count).
+const MAX_BROWSER_REQUESTS: usize = 4;
+/// Sandbox requests (approvals, unsandboxed commands) one session may have in flight.
+const MAX_SANDBOX_REQUESTS: usize = 4;
+
+/// `typeof id === 'string' && id && id.length <= 100`.
+fn request_id(message: &Map<String, Value>) -> Option<String> {
+    match message.get("id") {
+        Some(Value::String(id)) if !id.is_empty() && utf16_len(id) <= 100 => Some(id.clone()),
+        _ => None,
+    }
+}
+
+/// `Buffer.byteLength(JSON.stringify(args))`.
+fn json_bytes(value: &Value) -> usize {
+    stringify(value).len()
+}
+
+/// `path.resolve` of an absolute path.
+fn lexical(path: &Path) -> PathBuf {
+    let mut out = PathBuf::from("/");
+    for component in path.components() {
+        match component {
+            std::path::Component::Normal(part) => out.push(part),
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+impl Runner {
+    /// Answer the agent's `write_lease_request` from the node-wide broker.
+    pub(super) fn grant_write(
+        &self,
+        node: &Node,
+        message: &Map<String, Value>,
+    ) -> Result<(), String> {
+        let Some(Value::String(id)) = message.get("id") else {
+            return Ok(());
+        };
+        let mut response = Map::new();
+        response.insert("type".into(), json!("write_lease_response"));
+        response.insert("id".into(), json!(id));
+        match message.get("path").and_then(Value::as_str) {
+            Some(path) if Path::new(path).is_absolute() => {
+                let canonical =
+                    std::fs::canonicalize(path).unwrap_or_else(|_| lexical(Path::new(path)));
+                match node.writes.acquire(&self.session_id, &canonical) {
+                    WriteGrant::Granted => {
+                        response.insert("granted".into(), json!(true));
+                    }
+                    WriteGrant::Refused { holder, path } => {
+                        let holder = match node.db.lock().get_session(&holder) {
+                            Ok(session) => format!("\"{}\" ({holder})", session.name),
+                            // Session row gone; keep the id.
+                            Err(_) => holder,
+                        };
+                        response.insert("granted".into(), json!(false));
+                        response.insert(
+                            "error".into(),
+                            json!(format!(
+                                "{path} is being written by session {holder}; wait until its run finishes"
+                            )),
+                        );
+                    }
+                }
+            }
+            _ => {
+                response.insert("granted".into(), json!(false));
+                response.insert(
+                    "error".into(),
+                    json!("write_lease_request needs an absolute path"),
+                );
+            }
+        }
+        self.reply(Value::Object(response));
+        Ok(())
+    }
+
+    fn gateway_reply(&self, id: &str, response: Value) {
+        let mut reply = json!({ "type": "gateway_response", "id": id });
+        if let (Value::Object(reply), Value::Object(response)) = (&mut reply, response) {
+            reply.extend(response);
+        }
+        self.reply(reply);
+    }
+
+    fn gateway_fail(
+        &self,
+        id: &str,
+        status: u16,
+        code: &str,
+        message: &str,
+        details: Option<Value>,
+    ) {
+        let mut error = json!({ "status": status, "code": code, "message": message });
+        if let Some(details) = details {
+            error["details"] = details;
+        }
+        self.gateway_reply(id, json!({ "ok": false, "error": error }));
+    }
+
+    /// Pass the agent's `gateway_request` to the gateway (or answer
+    /// `recap.collect` here).
+    pub(super) fn forward_gateway(self: &Arc<Self>, message: &Map<String, Value>) {
+        let Some(id) = request_id(message) else {
+            return;
+        };
+        let op = match message.get("op") {
+            Some(Value::String(op))
+                if utf16_len(op) <= AGENT_OP_MAX_LENGTH && valid_agent_op(op) =>
+            {
+                op.clone()
+            }
+            _ => {
+                return self.gateway_fail(
+                    &id,
+                    400,
+                    "invalid_input",
+                    "A gateway operation is named like area.action",
+                    None,
+                );
+            }
+        };
+        let args = match message.get("args") {
+            None | Some(Value::Null) => json!({}),
+            Some(args) => args.clone(),
+        };
+        if json_bytes(&args) > AGENT_REQUEST_MAX_BYTES {
+            return self.gateway_fail(
+                &id,
+                413,
+                "payload_too_large",
+                "Gateway request arguments are too large",
+                None,
+            );
+        }
+        {
+            let mut inner = self.lock();
+            if inner.gateway_requests >= MAX_GATEWAY_REQUESTS {
+                drop(inner);
+                return self.gateway_fail(
+                    &id,
+                    429,
+                    "too_many_requests",
+                    "Too many gateway requests are in flight",
+                    None,
+                );
+            }
+            inner.gateway_requests += 1;
+        }
+        let runner = self.clone();
+        tokio::spawn(async move {
+            // Local-only: historical evidence never passes through the
+            // gateway transport. The runner binds identity; the caller
+            // cannot supply a workspace or source path.
+            if op == "recap.collect" {
+                let collected = match runner.node() {
+                    Some(node) => {
+                        let session = runner.session_id.clone();
+                        tokio::task::spawn_blocking(move || {
+                            crate::recap::collect_recap(&node, &session, &args)
+                        })
+                        .await
+                        .ok()
+                    }
+                    None => None,
+                };
+                match collected {
+                    Some(Ok(result)) => {
+                        runner.gateway_reply(&id, json!({ "ok": true, "result": result }));
+                    }
+                    Some(Err(error)) => {
+                        runner.gateway_fail(&id, error.status, &error.code, &error.message, None);
+                    }
+                    None => runner.gateway_fail(
+                        &id,
+                        500,
+                        "recap_failed",
+                        "Could not collect workspace recap evidence",
+                        None,
+                    ),
+                }
+                runner.lock().gateway_requests -= 1;
+                return;
+            }
+            let answer = match runner.node() {
+                Some(node) => {
+                    node.agent_gateway
+                        .request(&runner.session_id, &op, args)
+                        .await
+                }
+                None => crate::agent_gateway::agent_error(
+                    503,
+                    "gateway_offline",
+                    "This node is not connected to the gateway",
+                    None,
+                ),
+            };
+            runner.lock().gateway_requests -= 1;
+            let body = &answer.body;
+            if (200..300).contains(&answer.status) {
+                let result = match body.get("result") {
+                    None | Some(Value::Null) => Value::Null,
+                    Some(result) => result.clone(),
+                };
+                return runner.gateway_reply(&id, json!({ "ok": true, "result": result }));
+            }
+            let error = body.get("error");
+            let code = error
+                .and_then(|error| error.get("code"))
+                .and_then(Value::as_str)
+                .unwrap_or("internal_error");
+            let text = error
+                .and_then(|error| error.get("message"))
+                .and_then(Value::as_str)
+                .map_or_else(
+                    || format!("The gateway answered {}", answer.status),
+                    str::to_owned,
+                );
+            let details = error.and_then(|error| error.get("details")).cloned();
+            runner.gateway_fail(&id, answer.status, code, &text, details);
+        });
+    }
+
+    fn browser_fail(&self, id: &str, status: u16, code: &str, message: &str) {
+        self.reply(json!({ "type": "browser_response", "id": id, "ok": false,
+            "error": { "status": status, "code": code, "message": message } }));
+    }
+
+    /// Answer the agent's `browser_request` from the node's browser.
+    pub(super) fn handle_browser(
+        self: &Arc<Self>,
+        message: &Map<String, Value>,
+    ) -> Result<(), String> {
+        let Some(id) = request_id(message) else {
+            return Ok(());
+        };
+        let Some(node) = self.node() else {
+            return Ok(());
+        };
+        if !node.browser.enabled() {
+            let error = crate::browser::unavailable();
+            self.browser_fail(&id, error.status, &error.code, &error.message);
+            return Ok(());
+        }
+        let op = match message.get("op").and_then(Value::as_str) {
+            Some(op)
+                if (1..=40).contains(&op.len())
+                    && op.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') =>
+            {
+                op.to_owned()
+            }
+            _ => {
+                self.browser_fail(&id, 400, "invalid_input", "Unknown browser operation");
+                return Ok(());
+            }
+        };
+        let args = match message.get("args") {
+            Some(args @ (Value::Object(_) | Value::Array(_))) => args.clone(),
+            _ => json!({}),
+        };
+        if json_bytes(&args) > AGENT_REQUEST_MAX_BYTES {
+            self.browser_fail(
+                &id,
+                413,
+                "payload_too_large",
+                "Browser request arguments are too large",
+            );
+            return Ok(());
+        }
+        if self.lock().browser_requests.len() >= MAX_BROWSER_REQUESTS {
+            self.browser_fail(
+                &id,
+                429,
+                "too_many_requests",
+                "Too many browser requests are in flight",
+            );
+            return Ok(());
+        }
+        let root =
+            session_root(&self.workspace, &self.session_id).map_err(|error| error.message)?;
+        let target = BrowserTarget {
+            session_id: self.session_id.clone(),
+            workspace_id: self.workspace.id.clone(),
+            root,
+        };
+        let (abort, _) = watch::channel(false);
+        let runner = self.clone();
+        let request = id.clone();
+        let mut inner = self.lock();
+        let task = tokio::spawn(async move {
+            let Some(node) = runner.node() else {
+                return;
+            };
+            match node.browser.handle(target, op, args).await {
+                Ok(result) => runner.reply(
+                    json!({ "type": "browser_response", "id": request, "ok": true, "result": result }),
+                ),
+                Err(error) => runner.browser_fail(&request, error.status, &error.code, &error.message),
+            }
+            runner.lock().browser_requests.remove(&request);
+        });
+        inner.browser_requests.insert(
+            id,
+            SideRequest {
+                abort,
+                dialog: None,
+                task: Some(task.abort_handle()),
+            },
+        );
+        Ok(())
+    }
+
+    /// `confirmFromNode`: ask the human, from the node itself (the agent
+    /// is sandboxed and may be steered by what it reads, so its own
+    /// dialogs cannot grant anything). No when unanswered within the
+    /// interaction TTL, withdrawn by the agent, or the runner stops.
+    async fn confirm_from_node(
+        &self,
+        request: &str,
+        title: &str,
+        message: &str,
+        tool_call_id: Option<String>,
+    ) -> Result<bool, String> {
+        let node = self.node().ok_or("The node is closing")?;
+        let rpc_id = format!("{NODE_DIALOG_PREFIX}{}", uuid());
+        let mut dialog = Map::new();
+        dialog.insert("type".into(), json!("extension_ui_request"));
+        dialog.insert("id".into(), json!(rpc_id));
+        dialog.insert("method".into(), json!("confirm"));
+        dialog.insert("title".into(), json!(title));
+        dialog.insert("message".into(), json!(message));
+        if let Some(tool_call_id) = tool_call_id {
+            dialog.insert("toolCallId".into(), json!(tool_call_id));
+        }
+        let ttl = node.config.interaction_ttl_ms;
+        let interaction = node
+            .db
+            .lock()
+            .create_interaction(
+                &self.session_id,
+                self.epoch,
+                &rpc_id,
+                "confirm",
+                &dialog,
+                now_ms() + ttl as i64,
+            )
+            .map_err(|error| error.message)?;
+        self.publish(
+            "interaction_created",
+            serde_json::to_value(&interaction).unwrap_or_default(),
+        );
+        let _ = self.update_current_run(RunStatus::WaitingInput);
+        let (answer, answered) = oneshot::channel();
+        {
+            let mut inner = self.lock();
+            if inner.closed {
+                drop(inner);
+                // The runner already stopped: withdraw at once.
+                self.lock().node_dialogs.insert(rpc_id.clone(), answer);
+                self.withdraw(&rpc_id);
+                return Ok(false);
+            }
+            inner.node_dialogs.insert(rpc_id.clone(), answer);
+            if let Some(side) = inner.sandbox_requests.get_mut(request) {
+                side.dialog = Some(rpc_id.clone());
+            }
+        }
+        drop(node);
+        match tokio::time::timeout(Duration::from_millis(ttl), answered).await {
+            Ok(Ok(confirmed)) => Ok(confirmed),
+            // Withdrawn (the dialog's sender went with it).
+            Ok(Err(_)) => Ok(false),
+            Err(_) => {
+                self.withdraw(&rpc_id);
+                Ok(false)
+            }
+        }
+    }
+
+    fn sandbox_fail(&self, id: &str, code: &str, message: &str) {
+        self.reply(json!({ "type": "sandbox_response", "id": id, "ok": false,
+            "error": { "code": code, "message": message } }));
+    }
+
+    fn sandbox_ok(&self, id: &str, result: Value) {
+        self.reply(json!({ "type": "sandbox_response", "id": id, "ok": true, "result": result }));
+    }
+
+    /// The agent's `sandbox_request`: `network` (allow more domains for
+    /// this session) or `exec` (run one command outside the sandbox). Both
+    /// need the human's yes, asked by the node.
+    pub(super) fn handle_sandbox(
+        self: &Arc<Self>,
+        message: &Map<String, Value>,
+    ) -> Result<(), String> {
+        let Some(id) = request_id(message) else {
+            return Ok(());
+        };
+        let args = match message.get("args") {
+            Some(args @ (Value::Object(_) | Value::Array(_))) => args.clone(),
+            _ => json!({}),
+        };
+        if json_bytes(&args) > AGENT_REQUEST_MAX_BYTES {
+            self.sandbox_fail(
+                &id,
+                "payload_too_large",
+                "Sandbox request arguments are too large",
+            );
+            return Ok(());
+        }
+        if self.lock().sandbox_requests.len() >= MAX_SANDBOX_REQUESTS {
+            self.sandbox_fail(
+                &id,
+                "too_many_requests",
+                "Too many sandbox requests are in flight",
+            );
+            return Ok(());
+        }
+        let reason = match args.get("reason") {
+            Some(Value::String(reason)) if !trim(reason).is_empty() => {
+                utf16_prefix(trim(reason), 500)
+            }
+            _ => "(no reason given)".to_owned(),
+        };
+        // Only a link for the client (the ptc operation asking); it grants nothing.
+        let tool_call_id = self.running_operation(message.get("toolCallId"));
+        match message.get("op").and_then(Value::as_str) {
+            Some("network") => {
+                let mut domains: Vec<String> = Vec::new();
+                if let Some(Value::Array(items)) = args.get("domains") {
+                    for item in items {
+                        let domain = trim(&js_string(Some(item))).to_lowercase();
+                        if !domains.contains(&domain) {
+                            domains.push(domain);
+                        }
+                    }
+                }
+                if domains.is_empty() || domains.len() > 10 {
+                    self.sandbox_fail(&id, "invalid_input", "Name one to ten domains");
+                    return Ok(());
+                }
+                if let Some(bad) = domains
+                    .iter()
+                    .find(|domain| !pirc_policy::session::valid_domain(domain))
+                {
+                    self.sandbox_fail(&id, "invalid_input", &format!("Not a domain: {bad}"));
+                    return Ok(());
+                }
+                if !self.prepared.has_control() {
+                    self.sandbox_fail(
+                        &id,
+                        "sandbox_error",
+                        "The sandbox's control channel is closed",
+                    );
+                    return Ok(());
+                }
+                let missing: Vec<String> = {
+                    let inner = self.lock();
+                    let allowed = &self.prepared.policy.network.allowed_domains;
+                    domains
+                        .iter()
+                        .filter(|domain| {
+                            !allowed.contains(domain) && !inner.approved_domains.contains(*domain)
+                        })
+                        .cloned()
+                        .collect()
+                };
+                if missing.is_empty() {
+                    self.sandbox_ok(&id, json!({ "granted": domains }));
+                    return Ok(());
+                }
+                let text = [
+                    format!(
+                        "The agent asks to reach {} from its sandbox.",
+                        missing.join(", ")
+                    ),
+                    format!("Reason: {reason}"),
+                    "Approving allows these hosts for the rest of this session.".to_owned(),
+                ]
+                .join("\n\n");
+                self.start_sandbox(id, move |runner, request| async move {
+                    let confirmed = runner
+                        .confirm_from_node(&request, "Allow network access?", &text, tool_call_id)
+                        .await?;
+                    if !confirmed {
+                        runner.sandbox_ok(&request, json!({ "granted": [], "denied": missing }));
+                        return Ok(());
+                    }
+                    let approved: Vec<String> = {
+                        let mut inner = runner.lock();
+                        inner.approved_domains.extend(missing.iter().cloned());
+                        inner.approved_domains.iter().cloned().collect()
+                    };
+                    runner.prepared.approve_domains(&approved)?;
+                    runner.sandbox_ok(&request, json!({ "granted": domains }));
+                    Ok(())
+                });
+            }
+            Some("exec") => {
+                let command = args
+                    .get("command")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned();
+                if trim(&command).is_empty() || utf16_len(&command) > 20_000 {
+                    self.sandbox_fail(
+                        &id,
+                        "invalid_input",
+                        "command must be a non-empty string (at most 20000 characters)",
+                    );
+                    return Ok(());
+                }
+                let root = session_root(&self.workspace, &self.session_id)
+                    .map_err(|error| error.message)?;
+                let root = pirc_policy::real_resolve(&root.to_string_lossy());
+                let relative = match args.get("cwd") {
+                    Some(Value::String(cwd)) if !cwd.is_empty() => cwd.clone(),
+                    _ => ".".to_owned(),
+                };
+                let cwd = pirc_policy::real_resolve(
+                    &lexical(&Path::new(&root).join(relative)).to_string_lossy(),
+                );
+                let is_dir = std::fs::metadata(&cwd).is_ok_and(|stat| stat.is_dir());
+                if !pirc_policy::is_inside(&cwd, &root) || !is_dir {
+                    self.sandbox_fail(
+                        &id,
+                        "invalid_input",
+                        &format!("cwd must be a directory inside {root}"),
+                    );
+                    return Ok(());
+                }
+                let timeout = args
+                    .get("timeoutMs")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(120_000.0)
+                    .clamp(1000.0, 3_600_000.0);
+                let text = [
+                    format!("$ {command}"),
+                    format!("in {cwd}"),
+                    format!("Reason: {reason}"),
+                    "It runs with this node account's full access (without the node's own secrets)."
+                        .to_owned(),
+                ]
+                .join("\n\n");
+                self.start_sandbox(id, move |runner, request| async move {
+                    let confirmed = runner
+                        .confirm_from_node(
+                            &request,
+                            "Run a command outside the sandbox?",
+                            &text,
+                            tool_call_id,
+                        )
+                        .await?;
+                    if !confirmed {
+                        runner.sandbox_fail(
+                            &request,
+                            "denied",
+                            "The user did not approve running this outside the sandbox",
+                        );
+                        return Ok(());
+                    }
+                    let abort = runner
+                        .lock()
+                        .sandbox_requests
+                        .get(&request)
+                        .map(|side| side.abort.subscribe());
+                    let abort = abort.unwrap_or_else(|| watch::channel(true).1);
+                    let env = runner
+                        .node()
+                        .map(|node| node.env.clone())
+                        .unwrap_or_default();
+                    let result = super::host::run_on_host(
+                        &env,
+                        &command,
+                        Path::new(&cwd),
+                        Duration::from_millis(timeout as u64),
+                        abort,
+                    )
+                    .await;
+                    runner.sandbox_ok(&request, result);
+                    Ok(())
+                });
+            }
+            _ => self.sandbox_fail(&id, "invalid_input", "Unknown sandbox operation"),
+        }
+        Ok(())
+    }
+
+    /// `start(work)`: the request is in flight until `work` ends; a thrown
+    /// error is `sandbox_error`.
+    fn start_sandbox<F, Fut>(self: &Arc<Self>, id: String, work: F)
+    where
+        F: FnOnce(Arc<Runner>, String) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<(), String>> + Send,
+    {
+        let (abort, _) = watch::channel(false);
+        self.lock().sandbox_requests.insert(
+            id.clone(),
+            SideRequest {
+                abort,
+                dialog: None,
+                task: None,
+            },
+        );
+        let runner = self.clone();
+        tokio::spawn(async move {
+            if let Err(error) = work(runner.clone(), id.clone()).await {
+                runner.sandbox_fail(&id, "sandbox_error", &error);
+            }
+            runner.lock().sandbox_requests.remove(&id);
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_ids_and_paths() {
+        let message = |id: Value| {
+            let mut map = Map::new();
+            map.insert("id".into(), id);
+            map
+        };
+        assert_eq!(request_id(&message(json!("a"))), Some("a".into()));
+        assert_eq!(request_id(&message(json!(""))), None);
+        assert_eq!(request_id(&message(json!("x".repeat(101)))), None);
+        assert_eq!(request_id(&message(json!(1))), None);
+        assert_eq!(lexical(Path::new("/a/./b/../c")), PathBuf::from("/a/c"));
+        assert_eq!(json_bytes(&json!({ "a": "é" })), 10);
+    }
+}
