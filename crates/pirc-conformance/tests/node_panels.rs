@@ -687,7 +687,18 @@ fn context_summary(body: &Value) -> Value {
         "agentRunning": body["agentRunning"],
         "source": body["source"],
         "snapshot keys": inner,
-        "usage": snapshot.get("usage"),
+        // The working directory section holds the run directory's path, so
+        // its size and the totals it counts towards depend on where the
+        // repository is checked out.
+        "usage": snapshot.get("usage").map(|usage| {
+            let mut usage = usage.clone();
+            for path in ["/buckets/system", "/estimatedInput", "/scale"] {
+                if let Some(value) = usage.pointer_mut(path) {
+                    *value = json!("<depends on the run directory>");
+                }
+            }
+            usage
+        }),
         "capabilities": snapshot.get("capabilities").map(|c| match c {
             Value::Array(items) => json!(format!("<{} items>", items.len())),
             Value::Object(object) => json!(object.keys().collect::<Vec<_>>()),
@@ -697,7 +708,10 @@ fn context_summary(body: &Value) -> Value {
             .iter()
             .map(|s| {
                 let mut s = s.clone();
-                if let Some(text) = s.get("text").and_then(Value::as_str) {
+                if s["id"] == "cwd" {
+                    s["text"] = json!("<depends on the run directory>");
+                    s["estimatedTokens"] = json!("<depends on the run directory>");
+                } else if let Some(text) = s.get("text").and_then(Value::as_str) {
                     s["text"] = json!(format!("<{} chars>", text.chars().count()));
                 }
                 s

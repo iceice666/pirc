@@ -533,10 +533,10 @@ expression: p.into_value()
           "title": "Capabilities"
         },
         {
-          "estimatedTokens": 28,
+          "estimatedTokens": "<depends on the run directory>",
           "id": "cwd",
           "source": "built-in",
-          "text": "<110 chars>",
+          "text": "<depends on the run directory>",
           "title": "Working directory"
         }
       ],
@@ -647,13 +647,13 @@ expression: p.into_value()
         "buckets": {
           "memory": 0,
           "messages": 3,
-          "system": 2719,
+          "system": "<depends on the run directory>",
           "tools": 1907
         },
-        "estimatedInput": 4629,
+        "estimatedInput": "<depends on the run directory>",
         "remaining": 99900,
         "reportedInput": 100,
-        "scale": 0.02160293799956794
+        "scale": "<depends on the run directory>"
       }
     },
     "step": "context with a live agent"
