@@ -164,20 +164,22 @@ Decided with the user before starting (2026-10-11):
 
 - **Acceptance without features:** the M0 `session_agent_events` snapshot depends on M5 features (todo, background, goal, memory panel; their tools and prompt sections), so M4 is accepted on agent-level JSONL RPC transcripts recorded from the TS agent with its built-in features turned off by a development-only switch (`PIRC_AGENT_FEATURES=none`; a small change to `apps/` that production never sets). The harness plays the node: it starts the agent directly, sends `configure`, serves the inference socket with scripted replies and answers side-channel requests. Full M0 agent-event parity is M5's.
 - **Session format:** `session.jsonl` v1 stays field-for-field compatible, because the TS node reads it (branch cache, recap) while the Rust agent runs under it. A new format can be weighed at M6.
+- **PTC surface and auto-mode rules move into M4:** the model sees `ptc`, `ptc_docs` and the capability index in every request, and every `bash` call passes the auto-mode rules (deny-list and write-lease decision) even with auto mode off. M4 therefore ports the capability registry, signatures, index prompt, the `ptc`/`ptc_docs` tool definitions with `ptc_docs` lookups, and `auto-mode/rules.ts` (with `auto-mode-rules.test.ts` as golden cases). The PTC runtime (rquickjs, `ptc-guest`) and the model classifier stay in M5; transcripts run with `features.autoMode.useModel: false`.
 - **Cadence as in M3:** transcripts recorded from TS first, then a layout commit with the `pirc-agent` crate's interfaces, then parallel worktrees (store/messages/config; RPC, side channels and the remote provider; tools and hooks), with the loop and compaction done by the parent; reviews through several lenses; one commit per sub-item.
 
 - [ ] Message types, session store (fresh format allowed, but keep the tree with `id`/`parentId`), config, roles.
 - [ ] RPC server, `configure`, remote provider over the node's Unix socket, side channels (`gateway_*`, `extension_ui_*`, write lease, sandbox, browser).
 - [ ] Loop, queues (prompt/steer/follow-up), retry, cancellation, compaction with matching token estimation and thresholds.
 - [ ] Core tools: `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash`; user hooks (`hooks.ts`).
+- [ ] PTC surface (capability registry, signatures, index prompt, `ptc`/`ptc_docs` definitions and `ptc_docs` lookups) and the auto-mode rules (`auto-mode/rules.ts`, golden cases from `auto-mode-rules.test.ts`).
 
 Acceptance: recorded RPC transcripts replay with equivalent events; fake-llm end-to-end scenarios pass.
 
 ### M5 Agent features, auto mode and PTC
 
 - [ ] `Feature` trait; todo, goal, title, recap, skills, project instructions, ask-question, web search, compact, role, schedules, sandbox approvals.
-- [ ] Auto-mode rules and classifier, porting `auto-mode-rules.test.ts` and `agent-auto-mode.test.ts` as golden cases.
-- [ ] PTC on `rquickjs` (spike B; use `AsyncContext::async_with`, not the deprecated macro) in a killable `ptc-guest` child with empty environment; same limits (operations, concurrency, time, heap, source size), broker checks and refusal semantics; port `agent-ptc.test.ts` and `ptc-runtime.test.ts`.
+- [ ] Auto-mode classifier (the rules moved to M4), porting `agent-auto-mode.test.ts` as golden cases.
+- [ ] PTC runtime (its surface moved to M4) on `rquickjs` (spike B; use `AsyncContext::async_with`, not the deprecated macro) in a killable `ptc-guest` child with empty environment; same limits (operations, concurrency, time, heap, source size), broker checks and refusal semantics; port `agent-ptc.test.ts` and `ptc-runtime.test.ts`.
 - [ ] Memory (observational and workspace), background tasks, team/subagents, assistant.
 
 **Gate:** before cutover, re-run the PTC and task-time evaluations against the TS baseline (`docs/evaluations/ptc/`). Paid runs need the user's approval. The real-provider smoke test deferred from M3 (each wire API and subscription login: one text turn and one tool call) runs with them.
