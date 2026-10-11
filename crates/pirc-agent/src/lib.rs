@@ -22,6 +22,7 @@ pub mod hooks;
 pub mod host;
 pub mod messages;
 pub mod ptc;
+pub mod redact;
 pub mod remote;
 pub mod roles;
 pub mod rpc;
