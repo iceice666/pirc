@@ -1905,6 +1905,7 @@ dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
  "hmac",
+ "icu_normalizer",
  "indexmap",
  "nix",
  "pirc-policy",

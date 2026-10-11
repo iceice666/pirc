@@ -10,6 +10,8 @@ publish.workspace = true
 base64 = "0.22"
 getrandom = "0.3"
 hmac = "0.12"
+# NFKC for the assistant's quote check (`String.prototype.normalize`), as the gateway's memory.
+icu_normalizer = { version = "2", default-features = false, features = ["compiled_data"] }
 indexmap.workspace = true
 # kill(2) of a shell command's process group, without unsafe code.
 nix = { version = "0.31", features = ["signal"] }
