@@ -16,6 +16,9 @@ pub struct ApiError {
     pub message: String,
     /// Boxed: errors travel in every `Result`, and a `Value` is large.
     pub details: Option<Box<Value>>,
+    /// A database failure's SQLite text: never sent, but start-up reports
+    /// it (TS exited with the SQLite error itself).
+    cause: Option<std::sync::Arc<str>>,
 }
 
 impl ApiError {
@@ -29,6 +32,7 @@ impl ApiError {
             code: code.into(),
             message: message.into(),
             details: None,
+            cause: None,
         }
     }
 
@@ -83,7 +87,18 @@ impl ApiError {
     /// A database failure: logged, answered as [`ApiError::internal`].
     pub fn database(error: rusqlite::Error) -> Self {
         crate::log::error(&format!("database: {error}"));
-        Self::internal()
+        Self {
+            cause: Some(error.to_string().into()),
+            ..Self::internal()
+        }
+    }
+
+    /// What start-up reports: a database failure's SQLite text, else the
+    /// message.
+    pub fn startup_text(&self) -> String {
+        self.cause
+            .as_deref()
+            .map_or_else(|| self.message.clone(), str::to_owned)
     }
 
     /// `{error:{code,message,details?}}`.
@@ -129,5 +144,15 @@ mod tests {
             json!({ "error": { "code": "stale_interaction", "message": "gone",
                 "details": { "current": 2 } } })
         );
+        let database = ApiError::database(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE),
+            Some("UNIQUE constraint failed: workspaces.canonical_path".into()),
+        ));
+        assert_eq!(database.body(), ApiError::internal().body());
+        assert_eq!(
+            database.startup_text(),
+            "UNIQUE constraint failed: workspaces.canonical_path"
+        );
+        assert_eq!(ApiError::conflict("c").startup_text(), "c");
     }
 }

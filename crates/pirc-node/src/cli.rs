@@ -36,9 +36,12 @@ pub fn parse(args: Vec<String>) -> Command {
         return Command::Run(NodeRole::Node);
     };
     match command.as_str() {
-        "chat" => match args.next() {
+        // `pirc-chat --help` / `--version` worked as the top level's.
+        "chat" => match args.next().as_deref() {
             None => Command::Run(NodeRole::Chat),
-            Some(extra) => Command::Unknown(extra),
+            Some("version" | "--version") => Command::Version,
+            Some("help" | "--help" | "-h") => Command::Help,
+            Some(extra) => Command::Unknown(extra.to_owned()),
         },
         "version" | "--version" => Command::Version,
         "help" | "--help" | "-h" => Command::Help,
@@ -63,6 +66,12 @@ mod tests {
         assert_eq!(parse_str(&["chat"]), Command::Run(NodeRole::Chat));
         assert_eq!(parse_str(&["chat", "x"]), Command::Unknown("x".into()));
         assert_eq!(parse_str(&["--version"]), Command::Version);
+        for version in ["version", "--version"] {
+            assert_eq!(parse_str(&["chat", version]), Command::Version);
+        }
+        for help in ["help", "--help", "-h"] {
+            assert_eq!(parse_str(&["chat", help]), Command::Help);
+        }
         assert_eq!(parse_str(&["version", "x"]), Command::Version);
         for help in ["help", "--help", "-h"] {
             assert_eq!(parse_str(&[help]), Command::Help);

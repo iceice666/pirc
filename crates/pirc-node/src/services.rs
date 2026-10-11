@@ -104,7 +104,8 @@ impl Services {
         let db = Db::open(&config.database_path)?;
         {
             let connection = db.lock();
-            let failed = |error: crate::error::ApiError| error.message;
+            // A store failure exits with its SQLite text, as TS did.
+            let failed = |error: crate::error::ApiError| error.startup_text();
             // The role is fixed across restarts: never expose the other
             // role's persisted workspaces.
             crate::store::check_role(
