@@ -3,6 +3,14 @@
 
 pub mod bash;
 pub mod files;
+mod glob;
+pub mod js;
+pub mod prompts;
+pub mod result_schema;
+#[cfg(test)]
+pub(crate) mod testing;
+#[cfg(test)]
+mod tests;
 
 use std::rc::Rc;
 
@@ -121,5 +129,119 @@ pub trait Tool {
 
 /// `builtinTools()`: read, write, edit, bash, ls, find, grep.
 pub fn builtin_tools() -> Vec<Rc<dyn Tool>> {
-    todo!("M4 tools: builtinTools")
+    vec![
+        Rc::new(files::ReadTool::new()),
+        Rc::new(files::WriteTool::new()),
+        Rc::new(files::EditTool::new()),
+        Rc::new(bash::BashTool::new()),
+        Rc::new(files::LsTool::new()),
+        Rc::new(files::FindTool::new()),
+        Rc::new(files::GrepTool::new()),
+    ]
+}
+
+/// `impl Tool` for a struct with a `spec: ToolSpec` field and an
+/// `async fn run(&self, args, ctx) -> Result<ToolResult, String>`.
+macro_rules! spec_tool {
+    ($ty:ty, ptc: $ptc:expr) => {
+        impl $crate::tools::Tool for $ty {
+            fn name(&self) -> &str {
+                self.spec.name
+            }
+            fn description(&self) -> &str {
+                &self.spec.description
+            }
+            fn parameters(&self) -> &serde_json::Map<String, serde_json::Value> {
+                &self.spec.parameters
+            }
+            fn ptc(&self) -> bool {
+                $ptc
+            }
+            fn result_schema(&self) -> Option<&serde_json::Value> {
+                self.spec.result_schema.as_ref()
+            }
+            fn execute<'a>(
+                &'a self,
+                args: serde_json::Map<String, serde_json::Value>,
+                ctx: $crate::tools::ToolContext,
+            ) -> $crate::LocalBoxFuture<'a, Result<$crate::tools::ToolResult, String>> {
+                Box::pin(self.run(args, ctx))
+            }
+        }
+    };
+}
+pub(crate) use spec_tool;
+
+/// A tool's fixed definition: what the model and `ptc_docs` see.
+pub struct ToolSpec {
+    pub name: &'static str,
+    pub description: String,
+    pub parameters: Map<String, Value>,
+    pub result_schema: Option<Value>,
+}
+
+impl ToolSpec {
+    /// A spec whose description is `prompts/tools/<name>.md`; `parameters`
+    /// and `result_schema` are JSON objects.
+    pub fn new(name: &'static str, parameters: Value, result_schema: Option<Value>) -> Self {
+        let Value::Object(parameters) = parameters else {
+            panic!("the parameters of {name} are an object");
+        };
+        Self {
+            name,
+            description: prompts::fixed_prompt(name),
+            parameters,
+            result_schema,
+        }
+    }
+}
+
+/// `typed(value, data, {details, isError})`: a text result with `data`.
+pub fn typed(
+    value: impl Into<String>,
+    data: Value,
+    details: Option<Value>,
+    is_error: bool,
+) -> ToolResult {
+    ToolResult {
+        details,
+        is_error,
+        data: match data {
+            Value::Object(map) => Some(map),
+            _ => None,
+        },
+        ..ToolResult::text(value)
+    }
+}
+
+/// `requireString(args, key)`.
+pub fn require_string<'a>(args: &'a Map<String, Value>, key: &str) -> Result<&'a str, String> {
+    match args.get(key) {
+        Some(Value::String(value)) if !value.is_empty() => Ok(value),
+        _ => Err(format!("{key} must be a non-empty string")),
+    }
+}
+
+/// `optionalNumber(args, key)`.
+pub fn optional_number(args: &Map<String, Value>, key: &str) -> Result<Option<f64>, String> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(n)) => Ok(n.as_f64()),
+        Some(_) => Err(format!("{key} must be a number")),
+    }
+}
+
+/// A non-empty string argument, else the default (`typeof v === 'string' && v ? v : d`).
+pub fn string_or<'a>(args: &'a Map<String, Value>, key: &str, default: &'a str) -> &'a str {
+    match args.get(key) {
+        Some(Value::String(value)) if !value.is_empty() => value,
+        _ => default,
+    }
+}
+
+/// Run blocking file-system work off the event loop.
+pub(crate) async fn blocking<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> T {
+    tokio::task::spawn_blocking(work)
+        .await
+        .expect("blocking file-system work")
 }

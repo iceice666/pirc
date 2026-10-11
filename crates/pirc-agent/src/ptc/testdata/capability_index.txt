@@ -1,0 +1,29 @@
+## Capabilities
+
+Call `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.
+
+When an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).
+
+These are all the capabilities of this session: anything not listed here does not exist, so do not look for it.
+
+- files: edit, find, grep, ls, read, write
+- shell: bash
+
+### Signatures in scripts
+
+Complete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.
+
+`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: "text"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: "image"; path: string; mimeType: string; bytes: number }`
+  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)
+`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`
+  Create or overwrite a file with the given content.
+`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`
+  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.
+`tools.ls(args?: { path?: string }): { entries: { name: string; type: "file" | "directory" | "symlink" | "other" }[]; total: number; truncated: boolean }`
+  List a directory (directories end with /). (path: Default: workspace root)
+`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`
+  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))
+`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`
+  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))
+`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`
+  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.
