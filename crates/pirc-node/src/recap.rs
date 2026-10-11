@@ -82,6 +82,17 @@ pub(crate) struct Scope {
     rows: Vec<(String, String)>,
 }
 
+/// A store failure: TS answered anything thrown that was not an
+/// `ApiError` with 500 `recap_failed` (not the routes' `internal_error`).
+fn recap_failed(error: rusqlite::Error) -> ApiError {
+    crate::log::error(&format!("recap: {error}"));
+    ApiError::new(
+        500,
+        "recap_failed",
+        "Could not collect workspace recap evidence",
+    )
+}
+
 pub(crate) fn scope(db: &Connection, session_id: &str, args: &Value, now: i64) -> ApiResult<Scope> {
     let days = days(args)
         .ok_or_else(|| ApiError::bad_request("Recap accepts only days (integer 1–90)"))?;
@@ -91,7 +102,8 @@ pub(crate) fn scope(db: &Connection, session_id: &str, args: &Value, now: i64) -
             [session_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .optional()?
+        .optional()
+        .map_err(recap_failed)?
         .ok_or_else(|| ApiError::not_found("Session not found"))?;
     let (kind, root): (String, String) = db
         .query_row(
@@ -99,7 +111,8 @@ pub(crate) fn scope(db: &Connection, session_id: &str, args: &Value, now: i64) -
             [&workspace_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .optional()?
+        .optional()
+        .map_err(recap_failed)?
         .ok_or_else(|| ApiError::not_found("Workspace not found"))?;
     if kind != "directory" {
         return Err(ApiError::bad_request(
@@ -111,17 +124,21 @@ pub(crate) fn scope(db: &Connection, session_id: &str, args: &Value, now: i64) -
     };
     let until = now;
     let since = until - days * DAY_MS;
-    let mut statement = db.prepare(
-        "SELECT id, private_session_path FROM sessions
+    let mut statement = db
+        .prepare(
+            "SELECT id, private_session_path FROM sessions
          WHERE workspace_id = ? AND owner_user = ? AND id <> ? AND updated_at >= ?
          ORDER BY updated_at DESC, id DESC LIMIT 21",
-    )?;
+        )
+        .map_err(recap_failed)?;
     let rows = statement
         .query_map(
             rusqlite::params![workspace_id, owner, session_id, since],
             |row| Ok((row.get(0)?, row.get(1)?)),
-        )?
-        .collect::<Result<Vec<(String, String)>, _>>()?;
+        )
+        .map_err(recap_failed)?
+        .collect::<Result<Vec<(String, String)>, _>>()
+        .map_err(recap_failed)?;
     Ok(Scope {
         workspace_id,
         root,
