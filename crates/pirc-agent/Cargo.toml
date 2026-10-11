@@ -30,8 +30,16 @@ pirc-protocol = { path = "../pirc-protocol" }
 pirc-ptc = { path = "../pirc-ptc", default-features = false }
 
 [dev-dependencies]
+# The runtime tests' binary is its own `ptc-guest`.
+pirc-ptc = { path = "../pirc-ptc" }
 tempfile = "3"
 tokio = { version = "1", features = ["full", "test-util"] }
+
+# Scripts run in a real guest process: the test binary dispatches
+# `ptc-guest` to the guest itself, so it has its own `main`.
+[[test]]
+name = "ptc_runtime"
+harness = false
 
 [lints]
 workspace = true
