@@ -54,6 +54,12 @@ pub const RECONNECT_MS: u64 = 3_000;
 pub const HEARTBEAT_MS: u64 = 15_000;
 /// Run and lease changes within this window go out as one `activity` frame.
 pub const ACTIVITY_COALESCE_MS: u64 = 100;
+/// How long the link waits for the gateway's answer to its own close frame
+/// before dropping the socket. `ws` would wait 30 s, but the TS node ran on
+/// Bun, whose client closed the connection right after the close frame (the
+/// recorded reconnect after "invalid JSON" came well within the gateway's
+/// 20 s); a short grace keeps the handshake for a gateway that answers.
+pub const CLOSE_HANDSHAKE_MS: u64 = 1_000;
 /// Browser live-view frames are skipped while this much is queued on the link.
 pub const BROWSER_FRAME_BACKLOG_BYTES: usize = 4 * 1024 * 1024;
 
@@ -366,10 +372,14 @@ async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<b
     let mut close_code: Option<u16> = None;
     let mut close_reason = String::new();
     // After our own close frame, nothing more is read or sent but the
-    // closing handshake.
+    // closing handshake, which the gateway gets [`CLOSE_HANDSHAKE_MS`] to
+    // finish.
     let mut closing = false;
+    let handshake = tokio::time::sleep(Duration::MAX);
+    tokio::pin!(handshake);
     loop {
         tokio::select! {
+            () = &mut handshake, if closing => break,
             frame = queue.recv(), if !closing => {
                 let Some(frame) = frame else { break };
                 let sent = sink.send(Message::text(frame.clone())).await;
@@ -413,6 +423,9 @@ async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<b
                 }
                 let Ok(value) = serde_json::from_str::<Value>(&text) else {
                     closing = true;
+                    handshake
+                        .as_mut()
+                        .reset(tokio::time::Instant::now() + Duration::from_millis(CLOSE_HANDSHAKE_MS));
                     let frame = CloseFrame {
                         code: CloseCode::Invalid,
                         reason: "invalid JSON".into(),
