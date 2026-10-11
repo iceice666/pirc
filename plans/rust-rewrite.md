@@ -1,6 +1,6 @@
 # Rust rewrite of the server executables
 
-Status: M0, M1 and M2 done 2026-10-10; M3's four sub-items done 2026-10-11, its real-provider smoke test (gate) pending. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
+Status: M0, M1 and M2 done 2026-10-10; M3 done 2026-10-11 (its real-provider smoke test moved to M5's gate); M4 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
 
 Paths are relative to `apps/gateway/src/` unless noted.
 
@@ -132,6 +132,8 @@ Done 2026-10-10. With `PIRC_CONFORMANCE_GATEWAY_BIN=target/debug/pirc-gateway` e
 
 ### M3 Model backends (removes pi-ai)
 
+Done 2026-10-11.
+
 Decided with the user before starting (2026-10-11):
 
 - **OAuth runs in the gateway process** (tokio tasks with abort), not in an `oauth-worker` subprocess: the subprocess isolated third-party pi-ai code, and the Rust code reads no gateway environment. Behavior is kept: prompt/manual/select prompts, the 10-minute deadline, serialized refresh, generation checks.
@@ -144,6 +146,8 @@ Decided with the user before starting (2026-10-11):
 - [x] Catalog snapshot script and embedded catalog.
 
 **Gate:** real-provider smoke tests cost money and need the user's approval and credentials.
+
+Decided with the user (2026-10-11): the real-provider smoke test is deferred to M5's gate and run together with its paid evaluations; M3 is done without it.
 
 Progress notes:
 
@@ -170,7 +174,7 @@ Acceptance: recorded RPC transcripts replay with equivalent events; fake-llm end
 - [ ] PTC on `rquickjs` (spike B; use `AsyncContext::async_with`, not the deprecated macro) in a killable `ptc-guest` child with empty environment; same limits (operations, concurrency, time, heap, source size), broker checks and refusal semantics; port `agent-ptc.test.ts` and `ptc-runtime.test.ts`.
 - [ ] Memory (observational and workspace), background tasks, team/subagents, assistant.
 
-**Gate:** before cutover, re-run the PTC and task-time evaluations against the TS baseline (`docs/evaluations/ptc/`). Paid runs need the user's approval.
+**Gate:** before cutover, re-run the PTC and task-time evaluations against the TS baseline (`docs/evaluations/ptc/`). Paid runs need the user's approval. The real-provider smoke test deferred from M3 (each wire API and subscription login: one text turn and one tool call) runs with them.
 
 ### M6 Node and chat roles
 
