@@ -96,12 +96,7 @@ impl Feature for BrowserFeature {
 
 /// `AbortSignal.any(signals)`: a signal aborted when any of them is.
 fn any_signal(signals: &[&AbortSignal]) -> AbortSignal {
-    let combined = AbortController::new();
-    for signal in signals {
-        let weak = combined.clone();
-        signal.on_abort(move || weak.abort());
-    }
-    combined.signal()
+    AbortSignal::any(signals)
 }
 
 /// `String(value ?? '')`.

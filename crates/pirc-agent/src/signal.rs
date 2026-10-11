@@ -1,14 +1,23 @@
 //! `AbortController` / `AbortSignal` for the single-threaded agent.
 
 use std::cell::{Cell, RefCell};
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 use tokio::sync::Notify;
 
 struct State {
     aborted: Cell<bool>,
     notify: Notify,
-    listeners: RefCell<Vec<Box<dyn FnOnce()>>>,
+    listeners: RefCell<Vec<Listener>>,
+}
+
+/// What runs on abort, in the order added.
+enum Listener {
+    Call(Box<dyn FnOnce()>),
+    /// A dependent signal, held weakly (as `AbortSignal.any` holds its
+    /// dependents): once it is gone, the entry is pruned instead of
+    /// accumulating on a long-lived signal.
+    Child(Weak<State>),
 }
 
 /// Aborts its [`AbortSignal`] (`AbortController`).
@@ -46,7 +55,14 @@ impl AbortController {
         self.0.notify.notify_waiters();
         let listeners = std::mem::take(&mut *self.0.listeners.borrow_mut());
         for listener in listeners {
-            listener();
+            match listener {
+                Listener::Call(call) => call(),
+                Listener::Child(child) => {
+                    if let Some(state) = child.upgrade() {
+                        AbortController(state).abort();
+                    }
+                }
+            }
         }
     }
 
@@ -54,12 +70,7 @@ impl AbortController {
     /// with its own `abort`).
     pub fn child_of(parent: &AbortSignal) -> Self {
         let child = Self::new();
-        let weak = Rc::downgrade(&child.0);
-        parent.on_abort(move || {
-            if let Some(state) = weak.upgrade() {
-                AbortController(state).abort();
-            }
-        });
+        parent.add_child(&child);
         child
     }
 }
@@ -79,8 +90,35 @@ impl AbortSignal {
         if self.aborted() {
             listener();
         } else {
-            self.0.listeners.borrow_mut().push(Box::new(listener));
+            self.push(Listener::Call(Box::new(listener)));
         }
+    }
+
+    /// `AbortSignal.any(signals)`: aborted once any of them is, without
+    /// keeping anything alive on them.
+    pub fn any(signals: &[&AbortSignal]) -> AbortSignal {
+        let combined = AbortController::new();
+        for signal in signals {
+            signal.add_child(&combined);
+        }
+        combined.signal()
+    }
+
+    fn add_child(&self, child: &AbortController) {
+        if self.aborted() {
+            child.abort();
+        } else {
+            self.push(Listener::Child(Rc::downgrade(&child.0)));
+        }
+    }
+
+    fn push(&self, listener: Listener) {
+        let mut listeners = self.0.listeners.borrow_mut();
+        listeners.retain(|entry| match entry {
+            Listener::Child(child) => child.strong_count() > 0,
+            Listener::Call(_) => true,
+        });
+        listeners.push(listener);
     }
 
     /// Resolves once aborted.
@@ -98,6 +136,23 @@ impl AbortSignal {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dependents_do_not_accumulate_on_a_long_lived_signal() {
+        let lifetime = AbortController::new();
+        for _ in 0..1000 {
+            let call = AbortController::new();
+            let combined = AbortSignal::any(&[&lifetime.signal(), &call.signal()]);
+            assert!(!combined.aborted());
+        }
+        assert!(lifetime.0.listeners.borrow().len() <= 1);
+        let call = AbortController::new();
+        let combined = AbortSignal::any(&[&lifetime.signal(), &call.signal()]);
+        lifetime.abort();
+        assert!(combined.aborted());
+        let late = AbortSignal::any(&[&lifetime.signal()]);
+        assert!(late.aborted());
+    }
 
     #[tokio::test]
     async fn aborts_once_and_reaches_children() {

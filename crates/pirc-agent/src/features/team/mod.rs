@@ -496,10 +496,7 @@ fn event_of(message: &Message) -> Option<Json> {
 
 /// `AbortSignal.any([a, b])`.
 fn any(a: &AbortSignal, b: &AbortSignal) -> AbortSignal {
-    let controller = AbortController::child_of(a);
-    let weak = controller.clone();
-    b.on_abort(move || weak.abort());
-    controller.signal()
+    AbortSignal::any(&[a, b])
 }
 
 /// The feature's state (the TS feature's closure).
@@ -621,7 +618,16 @@ impl State {
             std::path::Path::new(&js::dirname(&agent.session_file().display().to_string()))
                 .join("team")
                 .join(&crate::random_uuid()[..8]);
-        let mut env: IndexMap<String, String> = std::env::vars().collect();
+        // `process.env`: a variable that is not UTF-8 is converted lossily
+        // instead of panicking (`std::env::vars`).
+        let mut env: IndexMap<String, String> = std::env::vars_os()
+            .map(|(key, value)| {
+                (
+                    key.to_string_lossy().into_owned(),
+                    value.to_string_lossy().into_owned(),
+                )
+            })
+            .collect();
         env.extend(config.env.iter().cloned());
         let options = TeamOptions {
             directory,
@@ -1371,8 +1377,8 @@ impl Feature for TeamFeature {
             })
             .collect();
         // Recent broker traffic (bodies clipped); full history is agent_inbox.
-        let records = team.records();
-        let events: Vec<Value> = records[records.len().saturating_sub(40)..]
+        let events: Vec<Value> = team
+            .recent_records(40)
             .iter()
             .map(|record| {
                 let mut event = Map::new();

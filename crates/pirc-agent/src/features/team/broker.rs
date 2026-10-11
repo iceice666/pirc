@@ -472,7 +472,9 @@ pub type TeamAcquireWrite =
 pub type SandboxRelay =
     Rc<dyn Fn(String, Value, AbortSignal) -> LocalBoxFuture<'static, Result<Value, String>>>;
 pub type OnChange = Rc<dyn Fn(&Value)>;
-type WaitEnd = (String, Option<Json>);
+/// Why a wait ended, the question it stopped for, and the member's
+/// status and session file at that moment (`finish` read them).
+type WaitEnd = (String, Option<Json>, String, Option<Value>);
 pub type RolesFn = Rc<dyn Fn() -> Result<IndexMap<String, RolePreset>, String>>;
 
 /// `TeamOptions`.
@@ -587,6 +589,12 @@ impl Team {
     /// All broker records, oldest first.
     pub fn records(&self) -> Vec<Json> {
         self.records.borrow().clone()
+    }
+
+    /// The last `count` records (the panel's recent traffic).
+    pub fn recent_records(&self, count: usize) -> Vec<Json> {
+        let records = self.records.borrow();
+        records[records.len().saturating_sub(count)..].to_vec()
     }
 
     pub fn agent_names(&self) -> Vec<String> {
@@ -766,7 +774,8 @@ impl Team {
 
     fn finish_waiter(&self, waiter: &Rc<Waiter>, reason: String, question: Option<Json>) {
         if let Some(sender) = waiter.sender.borrow_mut().take() {
-            let _ = sender.send((reason, question));
+            let (status, file) = self.wait_snapshot(&waiter.agent);
+            let _ = sender.send((reason, question, status, file));
         }
         self.waiters.borrow_mut().retain(|w| !Rc::ptr_eq(w, waiter));
     }
@@ -839,7 +848,8 @@ impl Team {
             ));
         };
         let timeout = match args.get("timeout") {
-            None => 60.0,
+            // `args.timeout ?? 60`.
+            None | Some(Value::Null) => 60.0,
             Some(Value::Number(n)) => n.as_f64().unwrap_or(f64::NAN),
             Some(_) => f64::NAN,
         };
@@ -864,19 +874,23 @@ impl Team {
         let never = AbortSignal::never();
         let abort = signal.as_ref().unwrap_or(&never);
         let duration = std::time::Duration::from_secs_f64(timeout);
-        let (reason, question) = tokio::select! {
-            finished = receiver => finished.unwrap_or(("closed".to_owned(), None)),
-            () = tokio::time::sleep(duration) => ("timeout".to_owned(), None),
-            () = abort.cancelled() => ("cancelled".to_owned(), None),
+        let now = |reason: &str| {
+            let (status, file) = self.wait_snapshot(&name);
+            (reason.to_owned(), None, status, file)
         };
+        let (reason, question, status, session_file) = tokio::select! {
+            finished = receiver => finished.unwrap_or_else(|_| now("closed")),
+            () = tokio::time::sleep(duration) => now("timeout"),
+            () = abort.cancelled() => now("cancelled"),
+        };
+        drop(member);
         self.waiters
             .borrow_mut()
             .retain(|w| !Rc::ptr_eq(w, &waiter));
-        let member = member.borrow();
         let mut out = Json::new();
         out.insert("agent".to_owned(), json!(name));
         out.insert("reason".to_owned(), json!(reason));
-        out.insert("status".to_owned(), json!(member.status));
+        out.insert("status".to_owned(), json!(status));
         if let Some(question) = &question {
             if let Some(id) = question.get("id") {
                 out.insert("question_id".to_owned(), id.clone());
@@ -885,10 +899,21 @@ impl Team {
                 out.insert("question_to".to_owned(), to.clone());
             }
         }
-        if let Some(file) = &member.session_file {
-            out.insert("sessionFile".to_owned(), file.clone());
+        if let Some(file) = session_file {
+            out.insert("sessionFile".to_owned(), file);
         }
         Ok(Value::Object(out))
+    }
+
+    /// A member's status and session file now.
+    fn wait_snapshot(&self, name: &str) -> (String, Option<Value>) {
+        match self.member(name) {
+            Some(member) => {
+                let member = member.borrow();
+                (member.status.clone(), member.session_file.clone())
+            }
+            None => ("stopped".to_owned(), None),
+        }
     }
 
     fn reaches(&self, from: &str, who: &str, seen: &mut Vec<String>) -> bool {

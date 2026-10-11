@@ -135,7 +135,12 @@ impl ChildProcess {
             }
             exited.set();
             use std::os::unix::process::ExitStatusExt;
-            let code = status.and_then(|status| status.code());
+            // Bun's `proc.exited` is 128 + n for a process killed by signal n.
+            let code = status.and_then(|status| {
+                status
+                    .code()
+                    .or_else(|| status.signal().map(|signal| 128 + signal))
+            });
             let signal = status
                 .and_then(|status| status.signal())
                 .and_then(|signal| Signal::try_from(signal).ok())
