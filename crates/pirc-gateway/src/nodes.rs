@@ -798,6 +798,16 @@ impl LinkSession {
             last_seen_at: stamp,
             added: HashMap::new(),
         };
+        // `registered` is queued before the node can be found for relays:
+        // a node drops every frame that comes before it (the TS gateway sent
+        // synchronously, so no request could overtake it).
+        let frame = json!({
+            "type": "registered",
+            "nodeId": self.node_id,
+            "models": self.app.public_models(),
+            "mirrors": self.app.mirror_watermarks(&self.node_id),
+        });
+        self.send(frame);
         registry.lock().connections.insert(
             self.node_id.clone(),
             Connection {
@@ -806,13 +816,6 @@ impl LinkSession {
             },
         );
         self.app.on_node_register(&node);
-        let frame = json!({
-            "type": "registered",
-            "nodeId": self.node_id,
-            "models": self.app.public_models(),
-            "mirrors": self.app.mirror_watermarks(&self.node_id),
-        });
-        self.send(frame);
     }
 
     fn dispatch(&mut self, message: NodeMessage) {
