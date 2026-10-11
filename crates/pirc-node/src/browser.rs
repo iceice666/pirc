@@ -1,0 +1,136 @@
+//! The agent browser's seam (`node/browser.ts` `BrowserManager`). Until M8
+//! the node has no browser: [`UnavailableBrowser`] reports it unavailable
+//! whatever the settings say (plans/rust-rewrite.md, M6 decisions), so
+//! agents get `PIRC_BROWSER=0`, a `browser_request` is answered 403
+//! "The browser is not available on this node", and a browser stream closes
+//! with 4403 and the same reason. M8 implements [`BrowserService`] with the
+//! CDP client.
+//!
+//! Layout: implemented here (the stub). The runner calls
+//! [`BrowserService::handle`] for `browser_request`s (dropping the future is
+//! `browser_cancel`); streams call [`BrowserService::attach`] and
+//! [`BrowserService::input`]; core calls `close_session` on chat deletion
+//! and `shutdown` on close.
+
+use std::future::Future;
+use std::path::PathBuf;
+use std::pin::Pin;
+use std::sync::Arc;
+
+use serde_json::Value;
+
+use crate::error::{ApiError, ApiResult};
+
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// Where a request comes from: the session its agent or viewer belongs to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BrowserTarget {
+    pub session_id: String,
+    pub workspace_id: String,
+    /// `chat::session_root` of the session (recordings go under it).
+    pub root: PathBuf,
+}
+
+/// Where a stream's frames go (`terminal_frame` on the link).
+pub type FrameSink = Arc<dyn Fn(Value) + Send + Sync>;
+/// Stops a viewer's frames.
+pub type Detach = Box<dyn FnOnce() + Send>;
+
+pub trait BrowserService: Send + Sync {
+    /// Whether agents get a browser (`PIRC_BROWSER` and an executable).
+    fn enabled(&self) -> bool;
+
+    /// An agent's `browser_request` (`op` already checked against
+    /// `^[a-z_]{1,40}$`, `args` against the size limit): its result, or the
+    /// error the agent gets.
+    fn handle(
+        &self,
+        target: BrowserTarget,
+        op: String,
+        args: Value,
+    ) -> BoxFuture<'_, ApiResult<Value>>;
+
+    /// A viewer of the session's browser: frames go to `send` until the
+    /// returned function runs. Called only when [`BrowserService::enabled`].
+    fn attach(&self, session_id: &str, send: FrameSink) -> Detach;
+
+    /// A viewer's message (lease already checked, except `log_image`): a
+    /// frame to send back, if any.
+    fn input(
+        &self,
+        target: BrowserTarget,
+        message: Value,
+    ) -> BoxFuture<'_, ApiResult<Option<Value>>>;
+
+    /// Close a deleted session's tabs.
+    fn close_session(&self, session_id: &str) -> BoxFuture<'_, ()>;
+
+    /// Node shutdown.
+    fn shutdown(&self) -> BoxFuture<'_, ()>;
+}
+
+/// The answer to everything a node without a browser is asked.
+pub fn unavailable() -> ApiError {
+    ApiError::forbidden("The browser is not available on this node")
+}
+
+/// The M6 node's browser: none.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UnavailableBrowser;
+
+impl BrowserService for UnavailableBrowser {
+    fn enabled(&self) -> bool {
+        false
+    }
+
+    fn handle(&self, _: BrowserTarget, _: String, _: Value) -> BoxFuture<'_, ApiResult<Value>> {
+        Box::pin(async { Err(unavailable()) })
+    }
+
+    fn attach(&self, _: &str, _: FrameSink) -> Detach {
+        Box::new(|| {})
+    }
+
+    fn input(&self, _: BrowserTarget, _: Value) -> BoxFuture<'_, ApiResult<Option<Value>>> {
+        Box::pin(async { Err(unavailable()) })
+    }
+
+    fn close_session(&self, _: &str) -> BoxFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn shutdown(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async {})
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn answers_unavailable() {
+        let browser: Arc<dyn BrowserService> = Arc::new(UnavailableBrowser);
+        assert!(!browser.enabled());
+        let target = BrowserTarget {
+            session_id: "s".into(),
+            workspace_id: "w".into(),
+            root: PathBuf::from("/w"),
+        };
+        let error = browser
+            .handle(target.clone(), "open".into(), Value::Null)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.body(),
+            serde_json::json!({ "error": { "code": "forbidden",
+                "message": "The browser is not available on this node" } })
+        );
+        assert_eq!(error.status, 403);
+        assert!(browser.input(target, Value::Null).await.is_err());
+        browser.attach("s", Arc::new(|_| {}))();
+        browser.close_session("s").await;
+        browser.shutdown().await;
+    }
+}

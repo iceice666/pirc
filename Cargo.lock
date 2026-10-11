@@ -321,6 +321,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "command-fds"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b60b5124979fccd9addd89d8b97a1d6eebb4950694520c75ddd722535ea443f"
+dependencies = [
+ "nix",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "compact_str"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1930,8 +1941,11 @@ dependencies = [
  "chrono-tz",
  "iana-time-zone",
  "indexmap",
+ "pirc-protocol",
+ "regex-lite",
  "serde_json",
  "tempfile",
+ "url",
 ]
 
 [[package]]
@@ -1996,8 +2010,30 @@ dependencies = [
 name = "pirc-node"
 version = "0.3.0"
 dependencies = [
+ "base64 0.22.1",
+ "command-fds",
+ "futures-util",
+ "getrandom 0.3.4",
+ "indexmap",
+ "nix",
  "pirc-agent",
+ "pirc-config",
+ "pirc-policy",
+ "pirc-protocol",
  "pirc-ptc",
+ "pty-process",
+ "regex-lite",
+ "rusqlite",
+ "rustls",
+ "rustls-platform-verifier",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite 0.30.0",
+ "url",
 ]
 
 [[package]]
@@ -2954,7 +2990,10 @@ checksum = "17a073bfed563fa236697a068031408a93cd9522e08abf9933ead3e73411bd71"
 dependencies = [
  "futures-util",
  "log",
+ "rustls",
+ "rustls-pki-types",
  "tokio",
+ "tokio-rustls",
  "tungstenite 0.30.0",
 ]
 
@@ -3058,6 +3097,8 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.10.3",
+ "rustls",
+ "rustls-pki-types",
  "sha1 0.11.0",
  "thiserror",
 ]

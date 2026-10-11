@@ -1,6 +1,7 @@
 //! Environment configuration, ported from `apps/gateway/src/config.ts` (and
-//! the path helpers of `models.ts`). Only the gateway's half exists so far;
-//! the node's arrives with M6 (plans/rust-rewrite.md).
+//! the path helpers of `models.ts`): the gateway's here, the node's in
+//! [`node`], and the environment allowlist of the processes a node starts in
+//! [`env_allowlist`].
 //!
 //! Parsing follows the TypeScript rules exactly, including their leniency:
 //! a numeric variable that is not a positive integer silently takes its
@@ -12,6 +13,13 @@ use std::path::{Component, Path, PathBuf};
 
 use indexmap::{IndexMap, IndexSet};
 use serde_json::Value;
+
+pub mod env_allowlist;
+pub mod node;
+
+pub use node::{
+    BrowserSettings, CHAT_WORKSPACE_ID, ConfigWorkspace, NodeConfig, SandboxSettings, Viewport,
+};
 
 const DAY_MS: u64 = 24 * 60 * 60 * 1000;
 /// Node transport frames are capped at 16 MiB; a base64 upload (4/3 larger) must fit in one.
@@ -68,6 +76,13 @@ impl Env {
 
     pub fn get(&self, name: &str) -> Option<&str> {
         self.vars.get(name).map(String::as_str)
+    }
+
+    /// Every variable, by name.
+    pub fn vars(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.vars
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()))
     }
 
     /// `path.resolve`: absolute and lexically normalized.

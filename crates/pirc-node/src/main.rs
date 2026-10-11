@@ -1,25 +1,28 @@
-//! `pirc-node`, being rewritten in Rust (plans/rust-rewrite.md). The
-//! session agent (`pirc-node agent`) is being ported (M4); the node and
-//! chat roles are M6, so the TypeScript build remains the one to run.
+//! `pirc-node`: the coding node (no subcommand), the chat node (`chat`),
+//! and the internal subcommands its agents and sandbox run (`agent`,
+//! `ptc-guest`, `sandbox-bridge`). See `pirc_node` for the modules.
 
 use std::process::ExitCode;
 
+use pirc_node::cli::{self, Command};
+
 fn main() -> ExitCode {
-    let mut args = std::env::args().skip(1);
-    match args.next().as_deref() {
-        Some("version" | "--version") => {
+    match cli::parse(std::env::args().skip(1).collect()) {
+        Command::Run(role) => pirc_node::run_role(role),
+        Command::Version => {
             println!("{}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
-        Some("agent") => pirc_agent::run_agent(args.collect()),
-        // Internal: one `ptc` script, started by an agent (empty environment,
-        // its stdin and stdout as the channel).
-        Some("ptc-guest") => pirc_ptc::guest::run(),
-        _ => {
-            eprintln!(
-                "pirc-node (Rust) only runs `pirc-node agent` so far; run the TypeScript build. See plans/rust-rewrite.md."
-            );
-            ExitCode::FAILURE
+        Command::Help => {
+            print!("{}", cli::USAGE);
+            ExitCode::SUCCESS
+        }
+        Command::Agent(args) => pirc_agent::run_agent(args),
+        Command::PtcGuest => pirc_ptc::guest::run(),
+        Command::SandboxBridge(args) => pirc_node::sandbox::bridge::run(args),
+        Command::Unknown(command) => {
+            eprint!("Unknown command: {command}\n\n{}", cli::USAGE);
+            ExitCode::from(2)
         }
     }
 }
