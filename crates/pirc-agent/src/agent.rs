@@ -2523,6 +2523,8 @@ impl Agent {
                 );
                 break;
             }
+            // Set only by a wait in this iteration.
+            self.completion_waited.set(false);
             if self.pending_count() == 0 && !completion_timed_out {
                 completion_timed_out = self.wait_for_completion(&signal).await;
             }

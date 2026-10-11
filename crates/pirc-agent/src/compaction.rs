@@ -316,8 +316,9 @@ pub async fn run_compaction(
             .await;
         // `await feature.beforeCompact?.(…)` takes a microtask even when the
         // feature has no such hook: whatever was queued meanwhile (the
-        // response to the command that started a `/compact`) goes first.
-        tokio::task::yield_now().await;
+        // response to the command that started a `/compact`) goes first,
+        // but no I/O.
+        crate::tick().await;
         match decision {
             Ok(None) => continue,
             Ok(Some(CompactDecision::Cancel)) => {

@@ -1239,8 +1239,11 @@ pub async fn execute(options: ExecutionOptions) -> ExecutionReport {
                             () = wake.notified() => {}
                             line = lines.next_line() => {
                                 let Ok(Some(line)) = line else {
-                                    // The process is gone.
+                                    // The process is gone, or broke its
+                                    // stdout: it is killed either way, so
+                                    // waiting for it cannot hang the call.
                                     if let Some(child) = child.as_mut() {
+                                        let _ = child.start_kill();
                                         let _ = child.wait().await;
                                     }
                                     let stderr = match stderr_task.take() {
