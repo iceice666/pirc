@@ -215,10 +215,15 @@ impl Relay {
             socket_path: directory.join("socket").to_string_lossy().into_owned(),
             token: hex(&random_bytes::<32>()),
         };
-        let listener = match UnixListener::bind(&config.socket_path).and_then(|listener| {
-            std::fs::set_permissions(&config.socket_path, std::fs::Permissions::from_mode(0o600))
+        let listener = match pirc_protocol::SocketPath::new(Path::new(&config.socket_path))
+            .and_then(|bind| UnixListener::bind(&bind.path))
+            .and_then(|listener| {
+                std::fs::set_permissions(
+                    &config.socket_path,
+                    std::fs::Permissions::from_mode(0o600),
+                )
                 .map(|()| listener)
-        }) {
+            }) {
             Ok(listener) => listener,
             Err(error) => {
                 let _ = std::fs::remove_dir_all(&directory);

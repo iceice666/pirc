@@ -13,6 +13,7 @@
 mod inference;
 mod link;
 mod models;
+mod socket_path;
 
 pub use inference::{
     AssistantContent, AssistantDelta, AssistantMessage, INFERENCE_BUFFER_MAX_BYTES,
@@ -26,6 +27,7 @@ pub use link::{
     WorkspaceRole,
 };
 pub use models::{InferenceConfig, Model, ModelApi, ModelRef, Models, Provider, ThinkingLevel};
+pub use socket_path::SocketPath;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;

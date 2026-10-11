@@ -55,7 +55,10 @@ pub async fn request(
         head.push_str(&format!("Content-Length: {}\r\n", body.len()));
     }
     head.push_str("Connection: close\r\n\r\n");
-    let mut stream = UnixStream::connect(socket_path).await?;
+    // Deep state directories give socket paths longer than `sockaddr_un`.
+    let address = pirc_protocol::SocketPath::new(std::path::Path::new(socket_path))?;
+    let mut stream = UnixStream::connect(&address.path).await?;
+    drop(address);
     let mut bytes = head.into_bytes();
     if let Some(body) = body {
         bytes.extend_from_slice(body);
