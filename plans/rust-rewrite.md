@@ -1,6 +1,6 @@
 # Rust rewrite of the server executables
 
-Status: M0, M1 and M2 done 2026-10-10; M3 done 2026-10-11 (its real-provider smoke test moved to M5's gate); M4 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
+Status: M0, M1 and M2 done 2026-10-10; M3 and M4 done 2026-10-11 (M3's real-provider smoke test moved to M5's gate); M5 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
 
 Paths are relative to `apps/gateway/src/` unless noted.
 
@@ -160,6 +160,13 @@ Progress notes:
 
 Runs as the session agent under a TS node (same `configure` + JSONL RPC).
 
+Done 2026-10-11. `pirc-node agent` runs the Rust agent (`crates/pirc-agent`, path rules shared through `crates/pirc-policy`); the TS node starts it through `PIRC_AGENT_COMMAND`. 21 agent transcripts recorded from the TS agent with features off (`crates/pirc-conformance/tests/agent_*.rs`: loop, queues, retries, tools, hooks, auto mode, `ptc_docs`, compaction, RPC lines and startup, session store, line order with responses, and the Rust agent under the real TS node) pass against the Rust agent, and `bun run check` runs them (`test:conformance:rust-agent`). Reviewed through loop, components, concurrency and security lenses in two rounds; the auto-mode rules were compared with `rules.ts` on about 243,000 generated commands and 96 deny patterns with identical verdicts. Release sizes: `pirc-gateway` 11.84 MiB, `pirc-node` 3.73 MiB (the TS node binary is 101 MB).
+
+- Rust-only safeguards: a shell's process group is killed when its run is dropped and before the agent exits on a crash or second signal; `find` stops on abort (TS's synchronous walk could not); the glob matcher runs without recursion and gives up on a path past 2^20 steps, past 4,096 brace alternatives or 4 M expanded characters (Bun would keep matching); a panic in the loop reaches the node as `Agent loop crashed: internal error`.
+- Until M5's classifier, `useModel: true` (the default) takes TS's classifier-failure path: one warning, unclear shell actions treated as writes.
+- Accepted gaps: `ls` order approximates `localeCompare` (exact for ASCII and Latin-1); deny-list and `grep` regexes use `regress`, which matches by code point and reads `\u{…}` as an escape without the `u` flag; JSON, YAML and session-write error texts are not Bun's; integer-like object keys keep insertion order; session lines with lone surrogate escapes or nesting past 128 are skipped; the interrupted note's JSON key order; a second identical signal exits with 128+n instead of dying by the signal, and signals after stdin ends are ignored (no `unsafe` to reset handlers); about 0.03% of odd `**` patterns already differed from `Bun.Glob`.
+- Holes the review found in both builds (fd/rg/bat running programs, "read-only" commands that write, `..` after a symlink, wget uploads) are recorded in `plans/security-audit.md` for after cutover.
+
 Decided with the user before starting (2026-10-11):
 
 - **Acceptance without features:** the M0 `session_agent_events` snapshot depends on M5 features (todo, background, goal, memory panel; their tools and prompt sections), so M4 is accepted on agent-level JSONL RPC transcripts recorded from the TS agent with its built-in features turned off by a development-only switch (`PIRC_AGENT_FEATURES=none`; a small change to `apps/` that production never sets). The harness plays the node: it starts the agent directly, sends `configure`, serves the inference socket with scripted replies and answers side-channel requests. Full M0 agent-event parity is M5's.
@@ -167,11 +174,11 @@ Decided with the user before starting (2026-10-11):
 - **PTC surface and auto-mode rules move into M4:** the model sees `ptc`, `ptc_docs` and the capability index in every request, and every `bash` call passes the auto-mode rules (deny-list and write-lease decision) even with auto mode off. M4 therefore ports the capability registry, signatures, index prompt, the `ptc`/`ptc_docs` tool definitions with `ptc_docs` lookups, and `auto-mode/rules.ts` (with `auto-mode-rules.test.ts` as golden cases). The PTC runtime (rquickjs, `ptc-guest`) and the model classifier stay in M5; transcripts run with `features.autoMode.useModel: false`.
 - **Cadence as in M3:** transcripts recorded from TS first, then a layout commit with the `pirc-agent` crate's interfaces, then parallel worktrees (store/messages/config; RPC, side channels and the remote provider; tools and hooks), with the loop and compaction done by the parent; reviews through several lenses; one commit per sub-item.
 
-- [ ] Message types, session store (fresh format allowed, but keep the tree with `id`/`parentId`), config, roles.
-- [ ] RPC server, `configure`, remote provider over the node's Unix socket, side channels (`gateway_*`, `extension_ui_*`, write lease, sandbox, browser).
-- [ ] Loop, queues (prompt/steer/follow-up), retry, cancellation, compaction with matching token estimation and thresholds.
-- [ ] Core tools: `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash`; user hooks (`hooks.ts`).
-- [ ] PTC surface (capability registry, signatures, index prompt, `ptc`/`ptc_docs` definitions and `ptc_docs` lookups) and the auto-mode rules (`auto-mode/rules.ts`, golden cases from `auto-mode-rules.test.ts`).
+- [x] Message types, session store (fresh format allowed, but keep the tree with `id`/`parentId`), config, roles.
+- [x] RPC server, `configure`, remote provider over the node's Unix socket, side channels (`gateway_*`, `extension_ui_*`, write lease, sandbox, browser).
+- [x] Loop, queues (prompt/steer/follow-up), retry, cancellation, compaction with matching token estimation and thresholds.
+- [x] Core tools: `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash`; user hooks (`hooks.ts`).
+- [x] PTC surface (capability registry, signatures, index prompt, `ptc`/`ptc_docs` definitions and `ptc_docs` lookups) and the auto-mode rules (`auto-mode/rules.ts`, golden cases from `auto-mode-rules.test.ts`).
 
 Acceptance: recorded RPC transcripts replay with equivalent events; fake-llm end-to-end scenarios pass.
 
