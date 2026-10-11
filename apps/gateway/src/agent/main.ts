@@ -4,7 +4,7 @@ import type { AgentRole } from './roles.js';
 import { capabilities, type Capabilities } from './capabilities.js';
 import { loadAgentConfig } from './config.js';
 import { modelsSchema, type ModelsConfig } from '../models.js';
-import { builtinFeatures } from './features/index.js';
+import { processFeatures } from './features/index.js';
 import { teamChildMode } from './features/team/channel.js';
 import { TEAM_TOOL_NAMES } from './features/team/index.js';
 import { RpcUi, serveRpc, stdinLines } from './rpc.js';
@@ -117,7 +117,7 @@ export async function runAgent(argv: string[]): Promise<void> {
     ui,
     hasUI: !values.headless,
     tools: builtinTools(),
-    features: builtinFeatures(),
+    features: processFeatures(),
     acquireWrite: processWriteLease(),
     ...(allowedTools ? { allowedTools } : {}),
   });

@@ -46,3 +46,12 @@ export function builtinFeatures(): Feature[] {
     goalFeature(),
   ];
 }
+
+/**
+ * The features an agent process runs. `PIRC_AGENT_FEATURES=none` (development
+ * only: the Rust port's agent-level conformance transcripts, plans/rust-rewrite.md
+ * M4) runs the core alone; production never sets it.
+ */
+export function processFeatures(env: NodeJS.ProcessEnv = process.env): Feature[] {
+  return env.PIRC_AGENT_FEATURES === 'none' ? [] : builtinFeatures();
+}
