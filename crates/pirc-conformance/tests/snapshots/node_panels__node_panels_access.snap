@@ -1,0 +1,717 @@
+---
+source: crates/pirc-conformance/tests/node_panels.rs
+expression: p.into_value()
+---
+[
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "New session",
+        "nameSource": "auto",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 201,
+    "step": "create a session"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "browser",
+        "expiresAt": "<epoch-ms>",
+        "generation": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/control/acquire",
+    "status": 200,
+    "step": "acquire control"
+  },
+  {
+    "body": {
+      "repo": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/status",
+    "status": 200,
+    "step": "GET /git/status: the owner"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/status (as other@example.com)",
+    "status": 403,
+    "step": "GET /git/status: another user"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/status (no identity)",
+    "status": 401,
+    "step": "GET /git/status: no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_unknown/git/status",
+    "status": 404,
+    "step": "GET /git/status: an unknown session"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "                          select files by diff type\n    --max-depth <depth>   maximum tree depth to recurse\n    --output <file>       output to a specific file"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=README.md",
+    "status": 400,
+    "step": "GET /git/diff?path=README.md: the owner"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=README.md (as other@example.com)",
+    "status": 403,
+    "step": "GET /git/diff?path=README.md: another user"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=README.md (no identity)",
+    "status": 401,
+    "step": "GET /git/diff?path=README.md: no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_unknown/git/diff?path=README.md",
+    "status": 404,
+    "step": "GET /git/diff?path=README.md: an unknown session"
+  },
+  {
+    "body": {
+      "commits": [],
+      "more": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log",
+    "status": 200,
+    "step": "GET /git/log: the owner"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log (as other@example.com)",
+    "status": 403,
+    "step": "GET /git/log: another user"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log (no identity)",
+    "status": 401,
+    "step": "GET /git/log: no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_unknown/git/log",
+    "status": 404,
+    "step": "GET /git/log: an unknown session"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "fatal: not a git repository (or any of the parent directories): .git"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/abcd1234",
+    "status": 400,
+    "step": "GET /git/commits/abcd1234: the owner"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/abcd1234 (as other@example.com)",
+    "status": 403,
+    "step": "GET /git/commits/abcd1234: another user"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/abcd1234 (no identity)",
+    "status": 401,
+    "step": "GET /git/commits/abcd1234: no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_unknown/git/commits/abcd1234",
+    "status": 404,
+    "step": "GET /git/commits/abcd1234: an unknown session"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "file",
+          "name": "README.md",
+          "size": 12
+        }
+      ],
+      "path": "",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files",
+    "status": 200,
+    "step": "GET /files: the owner"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files (as other@example.com)",
+    "status": 403,
+    "step": "GET /files: another user"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files (no identity)",
+    "status": 401,
+    "step": "GET /files: no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_unknown/files",
+    "status": 404,
+    "step": "GET /files: an unknown session"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "conformance\n",
+      "modifiedAt": "<mtime>",
+      "path": "README.md",
+      "size": 12,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=README.md",
+    "status": 200,
+    "step": "GET /files/content?path=README.md: the owner"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=README.md (as other@example.com)",
+    "status": 403,
+    "step": "GET /files/content?path=README.md: another user"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=README.md (no identity)",
+    "status": 401,
+    "step": "GET /files/content?path=README.md: no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_unknown/files/content?path=README.md",
+    "status": 404,
+    "step": "GET /files/content?path=README.md: an unknown session"
+  },
+  {
+    "body": {
+      "agentRunning": false,
+      "backgroundTasks": [],
+      "memory": {
+        "counts": {
+          "active": 0,
+          "compactions": 0,
+          "dropped": 0,
+          "observations": 0,
+          "reflections": 0,
+          "visibleObservations": 0,
+          "visibleReflections": 0
+        },
+        "enabled": true,
+        "observations": [],
+        "passive": false,
+        "reflections": [],
+        "thresholds": {
+          "activePool": {
+            "max": 10000,
+            "value": 0
+          },
+          "compaction": {
+            "max": 81000,
+            "value": 0
+          },
+          "observation": {
+            "max": 10000,
+            "value": 0
+          },
+          "reflection": {
+            "max": 20000,
+            "value": 0
+          },
+          "visiblePool": {
+            "max": 20000,
+            "value": 0
+          }
+        }
+      },
+      "memoryRuntime": null,
+      "team": {
+        "agents": []
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/state",
+    "status": 200,
+    "step": "GET /panel/state: the owner"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/state (as other@example.com)",
+    "status": 403,
+    "step": "GET /panel/state: another user"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/state (no identity)",
+    "status": 401,
+    "step": "GET /panel/state: no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_unknown/panel/state",
+    "status": 404,
+    "step": "GET /panel/state: an unknown session"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "no_context",
+        "message": "Send a message first to inspect its context"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/context",
+    "status": 404,
+    "step": "GET /panel/context: the owner"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/context (as other@example.com)",
+    "status": 403,
+    "step": "GET /panel/context: another user"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/context (no identity)",
+    "status": 401,
+    "step": "GET /panel/context: no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_unknown/panel/context",
+    "status": 404,
+    "step": "GET /panel/context: an unknown session"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "runner_unavailable",
+        "message": "The agent is not running"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/background/abc",
+    "status": 409,
+    "step": "GET /panel/background/abc: the owner"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/background/abc (as other@example.com)",
+    "status": 403,
+    "step": "GET /panel/background/abc: another user"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/background/abc (no identity)",
+    "status": 401,
+    "step": "GET /panel/background/abc: no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_unknown/panel/background/abc",
+    "status": 404,
+    "step": "GET /panel/background/abc: an unknown session"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "runner_unavailable",
+        "message": "The agent is not running"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/abc/stop",
+    "status": 409,
+    "step": "POST /panel/background/abc/stop: the owner"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/abc/stop (as other@example.com)",
+    "status": 403,
+    "step": "POST /panel/background/abc/stop: another user"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/abc/stop (no identity)",
+    "status": 401,
+    "step": "POST /panel/background/abc/stop: no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_unknown/panel/background/abc/stop",
+    "status": 404,
+    "step": "POST /panel/background/abc/stop: an unknown session"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Recording not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/a.webm",
+    "status": 404,
+    "step": "GET /browser/recording?path=.pirc/recordings/a.webm: the owner"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/a.webm (as other@example.com)",
+    "status": 403,
+    "step": "GET /browser/recording?path=.pirc/recordings/a.webm: another user"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "unauthenticated",
+        "message": "Trusted identity header is missing"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/a.webm (no identity)",
+    "status": 401,
+    "step": "GET /browser/recording?path=.pirc/recordings/a.webm: no identity"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_unknown/browser/recording?path=.pirc/recordings/a.webm",
+    "status": 404,
+    "step": "GET /browser/recording?path=.pirc/recordings/a.webm: an unknown session"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/control/acquire (as other@example.com)",
+    "status": 403,
+    "step": "another user cannot take control"
+  }
+]

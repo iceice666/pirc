@@ -1,0 +1,466 @@
+---
+source: crates/pirc-conformance/tests/node_panels.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": {
+      "body": {
+        "session": {
+          "createdAt": "<epoch-ms>",
+          "id": "session_<uuid:1>",
+          "name": "New session",
+          "nameSource": "auto",
+          "nodeId": null,
+          "pinnedAt": null,
+          "runStatus": null,
+          "runnerEpoch": 0,
+          "runnerState": "stopped",
+          "settledAt": null,
+          "unread": false,
+          "updatedAt": "<epoch-ms>",
+          "workspaceId": "test"
+        }
+      },
+      "status": 201
+    },
+    "step": "create a session"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/files",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "entries": [
+            {
+              "kind": "dir",
+              "name": ".pirc"
+            },
+            {
+              "kind": "file",
+              "name": "README.md",
+              "size": 12
+            }
+          ],
+          "path": "",
+          "truncated": false
+        },
+        "status": 200
+      }
+    },
+    "step": "files as the owner"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/files",
+        "user": "other@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "forbidden",
+            "message": "Session belongs to another user"
+          }
+        },
+        "status": 403
+      }
+    },
+    "step": "files as another allowed user"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/files",
+        "user": "stranger@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "forbidden",
+            "message": "User is not allowed on this node"
+          }
+        },
+        "status": 403
+      }
+    },
+    "step": "files as a user the node does not allow"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/git/commits/not-a-sha",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Invalid commit id"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "a commit id that is not hex"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/git/commits/zzzz",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Invalid commit id"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "a commit id of 4 non-hex characters"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/git/commits/abc",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Invalid request"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "a commit id under 4 characters"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/git/commits/HEAD~1",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Invalid commit id"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "a commit ref"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/panel/background/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "code": "FST_ERR_MAX_PARAM_LENGTH",
+          "error": "Bad Request",
+          "message": "'/api/sessions/session_<uuid:1>/panel/background/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is exceeding the max param length",
+          "statusCode": 414
+        },
+        "status": 414
+      }
+    },
+    "step": "a task id over 100 characters"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r.webm&offset=3&length=4",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "dataBase64": "MzQ1Ng==",
+          "mimeType": "video/webm",
+          "offset": 3,
+          "size": 10
+        },
+        "status": 200
+      }
+    },
+    "step": "recording: a chunk"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r.webm",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "dataBase64": "MDEyMzQ1Njc4OQ==",
+          "mimeType": "video/webm",
+          "offset": 0,
+          "size": 10
+        },
+        "status": 200
+      }
+    },
+    "step": "recording: the default length"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r.webm&offset=50",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "dataBase64": "",
+          "mimeType": "video/webm",
+          "offset": 10,
+          "size": 10
+        },
+        "status": 200
+      }
+    },
+    "step": "recording: an offset past the end"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r.webm&length=0",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Invalid request"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "recording: length 0"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r.webm&length=4194305",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Invalid request"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "recording: length over 4 MiB"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "GET",
+        "url": "/api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r.webm&offset=-1",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Invalid request"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "recording: a negative offset"
+  },
+  {
+    "observed": {
+      "request": {
+        "bodyBase64": "<0 bytes>",
+        "contentType": "text/plain",
+        "method": "POST",
+        "url": "/api/sessions/session_<uuid:1>/uploads?filename=a.txt",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "payload_too_large",
+            "message": "Upload exceeds configured limit"
+          }
+        },
+        "status": 413
+      }
+    },
+    "step": "upload: an empty body"
+  },
+  {
+    "observed": {
+      "request": {
+        "method": "POST",
+        "payload": {
+          "data": "x"
+        },
+        "url": "/api/sessions/session_<uuid:1>/uploads?filename=a.txt",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Upload body must be raw bytes"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "upload: a JSON payload"
+  },
+  {
+    "observed": {
+      "request": {
+        "bodyBase64": "<70 bytes>",
+        "method": "POST",
+        "url": "/api/sessions/session_<uuid:1>/uploads",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "upload": {
+            "byteSize": 70,
+            "filename": null,
+            "id": "upload_<uuid:2>",
+            "kind": "image",
+            "mimeType": "image/png"
+          }
+        },
+        "status": 201
+      }
+    },
+    "step": "upload: a PNG without a content type (octet-stream)"
+  },
+  {
+    "observed": {
+      "request": {
+        "bodyBase64": "<70 bytes>",
+        "contentType": "image/jpeg",
+        "method": "POST",
+        "url": "/api/sessions/session_<uuid:1>/uploads",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Declared Content-Type does not match image content"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "upload: a PNG declared as a JPEG"
+  },
+  {
+    "observed": {
+      "request": {
+        "bodyBase64": "<1025 bytes>",
+        "contentType": "text/plain",
+        "method": "POST",
+        "url": "/api/sessions/session_<uuid:1>/uploads?filename=a.txt",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "payload_too_large",
+            "message": "Request body exceeds configured limit"
+          }
+        },
+        "status": 413
+      }
+    },
+    "step": "upload: over the limit"
+  },
+  {
+    "observed": {
+      "request": {
+        "bodyBase64": "<1 bytes>",
+        "contentType": "text/plain",
+        "method": "POST",
+        "url": "/api/sessions/session_<uuid:1>/uploads?filename=",
+        "user": "test@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Invalid request"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "upload: an empty filename"
+  },
+  {
+    "observed": {
+      "request": {
+        "bodyBase64": "<70 bytes>",
+        "contentType": "image/png",
+        "method": "POST",
+        "url": "/api/sessions/session_<uuid:1>/uploads",
+        "user": "other@example.com"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "forbidden",
+            "message": "Session belongs to another user"
+          }
+        },
+        "status": 403
+      }
+    },
+    "step": "upload: another allowed user"
+  },
+  {
+    "observed": {
+      "body": {
+        "error": {
+          "code": "not_found",
+          "message": "Session not found"
+        }
+      },
+      "status": 404
+    },
+    "step": "files of an unknown session"
+  }
+]

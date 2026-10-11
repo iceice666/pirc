@@ -1,0 +1,1309 @@
+---
+source: crates/pirc-conformance/tests/node_panels.rs
+expression: p.into_value()
+---
+[
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "New session",
+        "nameSource": "auto",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 201,
+    "step": "create a session"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "dir",
+          "name": ".config"
+        },
+        {
+          "kind": "dir",
+          "name": "alpha"
+        },
+        {
+          "kind": "dir",
+          "name": "dir-link"
+        },
+        {
+          "kind": "dir",
+          "name": "outside-dir"
+        },
+        {
+          "kind": "dir",
+          "name": "src"
+        },
+        {
+          "kind": "dir",
+          "name": "Zeta"
+        },
+        {
+          "kind": "file",
+          "name": "_under.txt",
+          "size": 10
+        },
+        {
+          "kind": "file",
+          "name": ".hidden",
+          "size": 8
+        },
+        {
+          "kind": "file",
+          "name": "B1.txt",
+          "size": 6
+        },
+        {
+          "kind": "file",
+          "name": "b10.txt",
+          "size": 7
+        },
+        {
+          "kind": "file",
+          "name": "b2.txt",
+          "size": 6
+        },
+        {
+          "kind": "file",
+          "name": "big-utf8.txt",
+          "size": 1048582
+        },
+        {
+          "kind": "file",
+          "name": "big.txt",
+          "size": 1048586
+        },
+        {
+          "kind": "file",
+          "name": "bin.dat",
+          "size": 3
+        },
+        {
+          "kind": "symlink",
+          "name": "dangling"
+        },
+        {
+          "kind": "file",
+          "name": "émile.txt",
+          "size": 10
+        },
+        {
+          "kind": "file",
+          "name": "Émile2.txt",
+          "size": 11
+        },
+        {
+          "kind": "file",
+          "name": "empty.txt",
+          "size": 0
+        },
+        {
+          "kind": "file",
+          "name": "fake.gif",
+          "size": 17
+        },
+        {
+          "kind": "file",
+          "name": "huge.jpg",
+          "size": 9437184
+        },
+        {
+          "kind": "file",
+          "name": "icon.svg",
+          "size": 41
+        },
+        {
+          "kind": "symlink",
+          "name": "inner-link"
+        },
+        {
+          "kind": "symlink",
+          "name": "leak"
+        },
+        {
+          "kind": "file",
+          "name": "photo.jpeg",
+          "size": 20
+        },
+        {
+          "kind": "other",
+          "name": "pipe"
+        },
+        {
+          "kind": "file",
+          "name": "README.md",
+          "size": 12
+        },
+        {
+          "kind": "file",
+          "name": "shot.png",
+          "size": 29
+        },
+        {
+          "kind": "file",
+          "name": "unreadable.txt",
+          "size": 6
+        },
+        {
+          "kind": "file",
+          "name": "upper.PNG",
+          "size": 29
+        },
+        {
+          "kind": "file",
+          "name": "utf8.txt",
+          "size": 11
+        }
+      ],
+      "path": "",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files",
+    "status": 200,
+    "step": "list: the root: dirs first, locale order, no .git, kinds of links"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "dir",
+          "name": ".config"
+        },
+        {
+          "kind": "dir",
+          "name": "alpha"
+        },
+        {
+          "kind": "dir",
+          "name": "dir-link"
+        },
+        {
+          "kind": "dir",
+          "name": "outside-dir"
+        },
+        {
+          "kind": "dir",
+          "name": "src"
+        },
+        {
+          "kind": "dir",
+          "name": "Zeta"
+        },
+        {
+          "kind": "file",
+          "name": "_under.txt",
+          "size": 10
+        },
+        {
+          "kind": "file",
+          "name": ".hidden",
+          "size": 8
+        },
+        {
+          "kind": "file",
+          "name": "B1.txt",
+          "size": 6
+        },
+        {
+          "kind": "file",
+          "name": "b10.txt",
+          "size": 7
+        },
+        {
+          "kind": "file",
+          "name": "b2.txt",
+          "size": 6
+        },
+        {
+          "kind": "file",
+          "name": "big-utf8.txt",
+          "size": 1048582
+        },
+        {
+          "kind": "file",
+          "name": "big.txt",
+          "size": 1048586
+        },
+        {
+          "kind": "file",
+          "name": "bin.dat",
+          "size": 3
+        },
+        {
+          "kind": "symlink",
+          "name": "dangling"
+        },
+        {
+          "kind": "file",
+          "name": "émile.txt",
+          "size": 10
+        },
+        {
+          "kind": "file",
+          "name": "Émile2.txt",
+          "size": 11
+        },
+        {
+          "kind": "file",
+          "name": "empty.txt",
+          "size": 0
+        },
+        {
+          "kind": "file",
+          "name": "fake.gif",
+          "size": 17
+        },
+        {
+          "kind": "file",
+          "name": "huge.jpg",
+          "size": 9437184
+        },
+        {
+          "kind": "file",
+          "name": "icon.svg",
+          "size": 41
+        },
+        {
+          "kind": "symlink",
+          "name": "inner-link"
+        },
+        {
+          "kind": "symlink",
+          "name": "leak"
+        },
+        {
+          "kind": "file",
+          "name": "photo.jpeg",
+          "size": 20
+        },
+        {
+          "kind": "other",
+          "name": "pipe"
+        },
+        {
+          "kind": "file",
+          "name": "README.md",
+          "size": 12
+        },
+        {
+          "kind": "file",
+          "name": "shot.png",
+          "size": 29
+        },
+        {
+          "kind": "file",
+          "name": "unreadable.txt",
+          "size": 6
+        },
+        {
+          "kind": "file",
+          "name": "upper.PNG",
+          "size": 29
+        },
+        {
+          "kind": "file",
+          "name": "utf8.txt",
+          "size": 11
+        }
+      ],
+      "path": "",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=",
+    "status": 200,
+    "step": "list: an empty path is the root"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "dir",
+          "name": "nested"
+        },
+        {
+          "kind": "file",
+          "name": "main.ts",
+          "size": 11
+        }
+      ],
+      "path": "src",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=src",
+    "status": 200,
+    "step": "list: a subdirectory"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "dir",
+          "name": "nested"
+        },
+        {
+          "kind": "file",
+          "name": "main.ts",
+          "size": 11
+        }
+      ],
+      "path": "src",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=src/",
+    "status": 200,
+    "step": "list: a trailing slash"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "dir",
+          "name": "nested"
+        },
+        {
+          "kind": "file",
+          "name": "main.ts",
+          "size": 11
+        }
+      ],
+      "path": "src",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=./src",
+    "status": 200,
+    "step": "list: a ./ prefix"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "dir",
+          "name": "nested"
+        },
+        {
+          "kind": "file",
+          "name": "main.ts",
+          "size": 11
+        }
+      ],
+      "path": "src",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=/src",
+    "status": 200,
+    "step": "list: a leading slash"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "file",
+          "name": "deep.txt",
+          "size": 5
+        }
+      ],
+      "path": "src/nested",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=src/nested",
+    "status": 200,
+    "step": "list: a nested directory"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "dir",
+          "name": "nested"
+        },
+        {
+          "kind": "file",
+          "name": "main.ts",
+          "size": 11
+        }
+      ],
+      "path": "src",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=dir-link",
+    "status": 200,
+    "step": "list: through a link to a directory"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "file",
+          "name": "HEAD",
+          "size": 21
+        }
+      ],
+      "path": ".git",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=.git",
+    "status": 200,
+    "step": "list: the .git directory itself"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "dir",
+          "name": ".config"
+        },
+        {
+          "kind": "dir",
+          "name": "alpha"
+        },
+        {
+          "kind": "dir",
+          "name": "dir-link"
+        },
+        {
+          "kind": "dir",
+          "name": "outside-dir"
+        },
+        {
+          "kind": "dir",
+          "name": "src"
+        },
+        {
+          "kind": "dir",
+          "name": "Zeta"
+        },
+        {
+          "kind": "file",
+          "name": "_under.txt",
+          "size": 10
+        },
+        {
+          "kind": "file",
+          "name": ".hidden",
+          "size": 8
+        },
+        {
+          "kind": "file",
+          "name": "B1.txt",
+          "size": 6
+        },
+        {
+          "kind": "file",
+          "name": "b10.txt",
+          "size": 7
+        },
+        {
+          "kind": "file",
+          "name": "b2.txt",
+          "size": 6
+        },
+        {
+          "kind": "file",
+          "name": "big-utf8.txt",
+          "size": 1048582
+        },
+        {
+          "kind": "file",
+          "name": "big.txt",
+          "size": 1048586
+        },
+        {
+          "kind": "file",
+          "name": "bin.dat",
+          "size": 3
+        },
+        {
+          "kind": "symlink",
+          "name": "dangling"
+        },
+        {
+          "kind": "file",
+          "name": "émile.txt",
+          "size": 10
+        },
+        {
+          "kind": "file",
+          "name": "Émile2.txt",
+          "size": 11
+        },
+        {
+          "kind": "file",
+          "name": "empty.txt",
+          "size": 0
+        },
+        {
+          "kind": "file",
+          "name": "fake.gif",
+          "size": 17
+        },
+        {
+          "kind": "file",
+          "name": "huge.jpg",
+          "size": 9437184
+        },
+        {
+          "kind": "file",
+          "name": "icon.svg",
+          "size": 41
+        },
+        {
+          "kind": "symlink",
+          "name": "inner-link"
+        },
+        {
+          "kind": "symlink",
+          "name": "leak"
+        },
+        {
+          "kind": "file",
+          "name": "photo.jpeg",
+          "size": 20
+        },
+        {
+          "kind": "other",
+          "name": "pipe"
+        },
+        {
+          "kind": "file",
+          "name": "README.md",
+          "size": 12
+        },
+        {
+          "kind": "file",
+          "name": "shot.png",
+          "size": 29
+        },
+        {
+          "kind": "file",
+          "name": "unreadable.txt",
+          "size": 6
+        },
+        {
+          "kind": "file",
+          "name": "upper.PNG",
+          "size": 29
+        },
+        {
+          "kind": "file",
+          "name": "utf8.txt",
+          "size": 11
+        }
+      ],
+      "path": "",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=<tmp>%2Fworkspace",
+    "status": 200,
+    "step": "list: an absolute path of the root"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "dir",
+          "name": "nested"
+        },
+        {
+          "kind": "file",
+          "name": "main.ts",
+          "size": 11
+        }
+      ],
+      "path": "src",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=<tmp>%2Fworkspace%2Fsrc",
+    "status": 200,
+    "step": "list: an absolute path inside"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Path not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=<tmp>",
+    "status": 404,
+    "step": "list: an absolute path outside"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Path not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=/etc",
+    "status": 404,
+    "step": "list: an absolute path that exists nowhere inside"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Not a directory"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=README.md",
+    "status": 400,
+    "step": "list: a file is not a directory"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Path not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=missing",
+    "status": 404,
+    "step": "list: a missing directory"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Path is outside the workspace"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=..",
+    "status": 403,
+    "step": "list: .."
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Path is outside the workspace"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=../",
+    "status": 403,
+    "step": "list: ../"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Path is outside the workspace"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=src/../../outside",
+    "status": 403,
+    "step": "list: a ../ escape"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Path is outside the workspace"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=outside-dir",
+    "status": 403,
+    "step": "list: a link to a directory outside"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid path"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=src%00",
+    "status": 400,
+    "step": "list: a NUL byte"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": 400,
+    "step": "list: a path that is too long"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "conformance\n",
+      "modifiedAt": "<mtime>",
+      "path": "README.md",
+      "size": 12,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=README.md",
+    "status": 200,
+    "step": "content: text"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "deep\n",
+      "modifiedAt": "<mtime>",
+      "path": "src/nested/deep.txt",
+      "size": 5,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=src/nested/deep.txt",
+    "status": 200,
+    "step": "content: in a subdirectory"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "conformance\n",
+      "modifiedAt": "<mtime>",
+      "path": "README.md",
+      "size": 12,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=src/../README.md",
+    "status": 200,
+    "step": "content: a normalized path"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "export {};\n",
+      "modifiedAt": "<mtime>",
+      "path": "src/main.ts",
+      "size": 11,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=<tmp>%2Fworkspace%2Fsrc%2Fmain.ts",
+    "status": 200,
+    "step": "content: absolute inside"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Path not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=<tmp>%2Fsecret.txt",
+    "status": 404,
+    "step": "content: absolute outside"
+  },
+  {
+    "body": {
+      "binary": true,
+      "modifiedAt": "<mtime>",
+      "path": "bin.dat",
+      "size": 3,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=bin.dat",
+    "status": 200,
+    "step": "content: binary"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "",
+      "modifiedAt": "<mtime>",
+      "path": "empty.txt",
+      "size": 0,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=empty.txt",
+    "status": 200,
+    "step": "content: empty"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "héllo ✓\n",
+      "modifiedAt": "<mtime>",
+      "path": "utf8.txt",
+      "size": 11,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=utf8.txt",
+    "status": 200,
+    "step": "content: UTF-8"
+  },
+  {
+    "body": {
+      "binary": true,
+      "image": {
+        "dataBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAA=",
+        "mimeType": "image/png"
+      },
+      "modifiedAt": "<mtime>",
+      "path": "shot.png",
+      "size": 29,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=shot.png",
+    "status": 200,
+    "step": "content: a PNG image"
+  },
+  {
+    "body": {
+      "binary": true,
+      "image": {
+        "dataBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAA=",
+        "mimeType": "image/png"
+      },
+      "modifiedAt": "<mtime>",
+      "path": "upper.PNG",
+      "size": 29,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=upper.PNG",
+    "status": 200,
+    "step": "content: an upper-case extension"
+  },
+  {
+    "body": {
+      "binary": true,
+      "image": {
+        "dataBase64": "/9j/4AAQSkZJRgABAQAAAQABAAA=",
+        "mimeType": "image/jpeg"
+      },
+      "modifiedAt": "<mtime>",
+      "path": "photo.jpeg",
+      "size": 20,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=photo.jpeg",
+    "status": 200,
+    "step": "content: a JPEG image"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "not really a gif\n",
+      "image": {
+        "dataBase64": "bm90IHJlYWxseSBhIGdpZgo=",
+        "mimeType": "image/gif"
+      },
+      "modifiedAt": "<mtime>",
+      "path": "fake.gif",
+      "size": 17,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=fake.gif",
+    "status": 200,
+    "step": "content: an image by extension only"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "<svg xmlns=\"http://www.w3.org/2000/svg\"/>",
+      "image": {
+        "dataBase64": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=",
+        "mimeType": "image/svg+xml"
+      },
+      "modifiedAt": "<mtime>",
+      "path": "icon.svg",
+      "size": 41,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=icon.svg",
+    "status": 200,
+    "step": "content: SVG is text and an image"
+  },
+  {
+    "body": {
+      "binary": true,
+      "imageTooLarge": true,
+      "modifiedAt": "<mtime>",
+      "path": "huge.jpg",
+      "size": 9437184,
+      "truncated": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=huge.jpg",
+    "status": 200,
+    "step": "content: an image over 8 MiB"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": {
+        "<long string>": {
+          "bytes": 1048576,
+          "chars": 1048576,
+          "head": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "tail": "xxxxxxxxxxxxxxxx"
+        }
+      },
+      "modifiedAt": "<mtime>",
+      "path": "big.txt",
+      "size": 1048586,
+      "truncated": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=big.txt",
+    "status": 200,
+    "step": "content: text over 1 MiB"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": {
+        "<long string>": {
+          "bytes": 1048578,
+          "chars": 1048576,
+          "head": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "tail": "xxxxxxxxxxxxxxx�"
+        }
+      },
+      "modifiedAt": "<mtime>",
+      "path": "big-utf8.txt",
+      "size": 1048582,
+      "truncated": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=big-utf8.txt",
+    "status": 200,
+    "step": "content: a character split by the cut"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "ref: refs/heads/main\n",
+      "modifiedAt": "<mtime>",
+      "path": ".git/HEAD",
+      "size": 21,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=.git/HEAD",
+    "status": 200,
+    "step": "content: the .git directory's files"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "dotfile\n",
+      "modifiedAt": "<mtime>",
+      "path": ".hidden",
+      "size": 8,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=.hidden",
+    "status": 200,
+    "step": "content: a dotfile"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "export {};\n",
+      "modifiedAt": "<mtime>",
+      "path": "src/main.ts",
+      "size": 11,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=inner-link",
+    "status": 200,
+    "step": "content: a link inside"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Path is outside the workspace"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=leak",
+    "status": 403,
+    "step": "content: a link to a file outside"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Not a file"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=dir-link",
+    "status": 400,
+    "step": "content: a link to a directory"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Path not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=dangling",
+    "status": 404,
+    "step": "content: a dangling link"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Not a file"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=src",
+    "status": 400,
+    "step": "content: a directory"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Not a file"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=pipe",
+    "status": 400,
+    "step": "content: a FIFO"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "internal_error",
+        "message": "Internal server error"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=unreadable.txt",
+    "status": 500,
+    "step": "content: an unreadable file"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Path not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=missing.txt",
+    "status": 404,
+    "step": "content: a missing file"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Path is outside the workspace"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=../secret.txt",
+    "status": 403,
+    "step": "content: a ../ escape"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid path"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=README.md%00",
+    "status": 400,
+    "step": "content: a NUL byte"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=",
+    "status": 400,
+    "step": "content: an empty path"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": 400,
+    "step": "content: a path that is too long"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content",
+    "status": 400,
+    "step": "content: without a path"
+  }
+]

@@ -1,0 +1,986 @@
+---
+source: crates/pirc-conformance/tests/node_panels.rs
+expression: p.into_value()
+---
+[
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "New session",
+        "nameSource": "auto",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 201,
+    "step": "create a session"
+  },
+  {
+    "body": {
+      "agentRunning": false,
+      "backgroundTasks": [],
+      "memory": {
+        "counts": {
+          "active": 0,
+          "compactions": 0,
+          "dropped": 0,
+          "observations": 0,
+          "reflections": 0,
+          "visibleObservations": 0,
+          "visibleReflections": 0
+        },
+        "enabled": true,
+        "observations": [],
+        "passive": false,
+        "reflections": [],
+        "thresholds": {
+          "activePool": {
+            "max": 10000,
+            "value": 0
+          },
+          "compaction": {
+            "max": 81000,
+            "value": 0
+          },
+          "observation": {
+            "max": 10000,
+            "value": 0
+          },
+          "reflection": {
+            "max": 20000,
+            "value": 0
+          },
+          "visiblePool": {
+            "max": 20000,
+            "value": 0
+          }
+        }
+      },
+      "memoryRuntime": null,
+      "team": {
+        "agents": []
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/state",
+    "status": 200,
+    "step": "state without an agent"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "no_context",
+        "message": "Send a message first to inspect its context"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/context",
+    "status": 404,
+    "step": "context before any message"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "runner_unavailable",
+        "message": "The agent is not running"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/background/abc",
+    "status": 409,
+    "step": "background output without an agent"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/background/abc?lines=0",
+    "status": 400,
+    "step": "background output: lines out of range is checked first"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/abc/stop",
+    "status": 400,
+    "step": "stop without a body"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/abc/stop",
+    "status": 400,
+    "step": "stop with an empty body"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/abc/stop",
+    "status": 400,
+    "step": "stop with generation 0"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/abc/stop",
+    "status": 409,
+    "step": "stop without holding the lease"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "browser",
+        "expiresAt": "<epoch-ms>",
+        "generation": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/control/acquire",
+    "status": 200,
+    "step": "acquire control"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/abc/stop",
+    "status": 409,
+    "step": "stop with a stale generation"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/abc/stop",
+    "status": 409,
+    "step": "stop as another client"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "runner_unavailable",
+        "message": "The agent is not running"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/abc/stop",
+    "status": 409,
+    "step": "stop with the lease, no agent"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Recording not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/missing.webm",
+    "status": 404,
+    "step": "recording: missing"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Recording not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/dir.webm",
+    "status": 404,
+    "step": "recording: a directory"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r-1.mp4",
+    "status": 400,
+    "step": "recording: not .webm"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/sub/r-1.webm",
+    "status": 400,
+    "step": "recording: a subdirectory"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/../../README.md",
+    "status": 400,
+    "step": "recording: an escape"
+  },
+  {
+    "body": "0123456789",
+    "headers": {
+      "cache-control": "private, max-age=3600",
+      "content-type": "video/webm"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r-1.webm",
+    "status": 200,
+    "step": "recording: whole"
+  },
+  {
+    "body": 456789,
+    "headers": {
+      "cache-control": "private, max-age=3600",
+      "content-type": "video/webm"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r-1.webm (range: bytes=4-)",
+    "status": 206,
+    "step": "recording: range bytes=4-"
+  },
+  {
+    "body": 234,
+    "headers": {
+      "cache-control": "private, max-age=3600",
+      "content-type": "video/webm"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r-1.webm (range: bytes=2-4)",
+    "status": 206,
+    "step": "recording: range bytes=2-4"
+  },
+  {
+    "body": 789,
+    "headers": {
+      "cache-control": "private, max-age=3600",
+      "content-type": "video/webm"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r-1.webm (range: bytes=-3)",
+    "status": 206,
+    "step": "recording: range bytes=-3"
+  },
+  {
+    "body": 23456789,
+    "headers": {
+      "cache-control": "private, max-age=3600",
+      "content-type": "video/webm"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r-1.webm (range: bytes=2-100)",
+    "status": 206,
+    "step": "recording: range bytes=2-100"
+  },
+  {
+    "body": null,
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r-1.webm (range: bytes=50-)",
+    "status": 416,
+    "step": "recording: range bytes=50-"
+  },
+  {
+    "body": "0123456789",
+    "headers": {
+      "cache-control": "private, max-age=3600",
+      "content-type": "video/webm"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=.pirc/recordings/r-1.webm (range: bytes=x)",
+    "status": 200,
+    "step": "recording: range bytes=x"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording?path=r-1.webm",
+    "status": 400,
+    "step": "recording: another directory"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/browser/recording",
+    "status": 400,
+    "step": "recording: without a path"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "prompt-1",
+        "payload": {
+          "message": "Say hello",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:1>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:2>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:1>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 202,
+    "step": "prompt"
+  },
+  {
+    "body": {
+      "agentRunning": true,
+      "backgroundTasks": [],
+      "memory": {
+        "counts": {
+          "active": 0,
+          "compactions": 0,
+          "dropped": 0,
+          "observations": 0,
+          "reflections": 0,
+          "visibleObservations": 0,
+          "visibleReflections": 0
+        },
+        "enabled": true,
+        "observations": [],
+        "passive": false,
+        "reflections": [],
+        "thresholds": {
+          "activePool": {
+            "max": 10000,
+            "value": 0
+          },
+          "compaction": {
+            "max": 81000,
+            "value": 10
+          },
+          "observation": {
+            "max": 10000,
+            "value": 110
+          },
+          "reflection": {
+            "max": 20000,
+            "value": 110
+          },
+          "visiblePool": {
+            "max": 20000,
+            "value": 0
+          }
+        }
+      },
+      "memoryRuntime": {
+        "autoCompacting": false,
+        "lastErrors": {},
+        "phase": null,
+        "rateLimited": []
+      },
+      "team": {
+        "agents": [],
+        "tasks": []
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/state",
+    "status": 200,
+    "step": "state with a live agent"
+  },
+  {
+    "observed": {
+      "agentRunning": true,
+      "capabilities": "<33 items>",
+      "keys": [
+        "agentRunning",
+        "snapshot",
+        "source"
+      ],
+      "messages": null,
+      "model": {
+        "contextWindow": 100000,
+        "id": "fake-model",
+        "provider": "fake"
+      },
+      "sections": [
+        {
+          "estimatedTokens": 81,
+          "id": "base",
+          "source": "built-in",
+          "text": "<323 chars>",
+          "title": "Coding instructions"
+        },
+        {
+          "estimatedTokens": 3,
+          "filePath": "AGENTS.md",
+          "id": "agents:workspace",
+          "source": "<tmp>/workspace/AGENTS.md",
+          "text": "<9 chars>",
+          "title": "AGENTS.md (workspace)"
+        },
+        {
+          "estimatedTokens": 225,
+          "id": "sandbox",
+          "source": "feature:sandbox",
+          "text": "<895 chars>",
+          "title": "sandbox"
+        },
+        {
+          "estimatedTokens": 2382,
+          "id": "capabilities",
+          "source": "built-in",
+          "text": "<9523 chars>",
+          "title": "Capabilities"
+        },
+        {
+          "estimatedTokens": 28,
+          "id": "cwd",
+          "source": "built-in",
+          "text": "<110 chars>",
+          "title": "Working directory"
+        }
+      ],
+      "snapshot keys": [
+        "capabilities",
+        "id",
+        "model",
+        "sections",
+        "takenAt",
+        "tools",
+        "usage",
+        "version"
+      ],
+      "source": "live",
+      "tools": [
+        {
+          "keys": [
+            "name",
+            "description",
+            "parameters",
+            "estimatedTokens"
+          ],
+          "name": "ptc"
+        },
+        {
+          "keys": [
+            "name",
+            "description",
+            "parameters",
+            "estimatedTokens"
+          ],
+          "name": "ptc_docs"
+        },
+        {
+          "keys": [
+            "name",
+            "description",
+            "parameters",
+            "estimatedTokens"
+          ],
+          "name": "read"
+        },
+        {
+          "keys": [
+            "name",
+            "description",
+            "parameters",
+            "estimatedTokens"
+          ],
+          "name": "write"
+        },
+        {
+          "keys": [
+            "name",
+            "description",
+            "parameters",
+            "estimatedTokens"
+          ],
+          "name": "edit"
+        },
+        {
+          "keys": [
+            "name",
+            "description",
+            "parameters",
+            "estimatedTokens"
+          ],
+          "name": "ls"
+        },
+        {
+          "keys": [
+            "name",
+            "description",
+            "parameters",
+            "estimatedTokens"
+          ],
+          "name": "grep"
+        },
+        {
+          "keys": [
+            "name",
+            "description",
+            "parameters",
+            "estimatedTokens"
+          ],
+          "name": "find"
+        },
+        {
+          "keys": [
+            "name",
+            "description",
+            "parameters",
+            "estimatedTokens"
+          ],
+          "name": "bash"
+        },
+        {
+          "keys": [
+            "name",
+            "description",
+            "parameters",
+            "estimatedTokens"
+          ],
+          "name": "web_search"
+        }
+      ],
+      "usage": {
+        "buckets": {
+          "memory": 0,
+          "messages": 3,
+          "system": 2719,
+          "tools": 1907
+        },
+        "estimatedInput": 4629,
+        "remaining": 99900,
+        "reportedInput": 100,
+        "scale": 0.02160293799956794
+      }
+    },
+    "step": "context with a live agent"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Unknown background task: abc"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/background/abc",
+    "status": 404,
+    "step": "background output: an unknown task"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Unknown background task: abc"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/abc/stop",
+    "status": 404,
+    "step": "stop an unknown task with the lease"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "bg-1",
+        "payload": {
+          "message": "/bg start echo started; until [ -e go ]; do sleep 0.02; done; echo done",
+          "type": "prompt"
+        },
+        "payloadHash": "<sha256:2>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:3>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:1>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 202,
+    "step": "start a background task"
+  },
+  {
+    "body": {
+      "agentRunning": true,
+      "backgroundTasks": [
+        {
+          "command": "echo started; until [ -e go ]; do sleep 0.02; done; echo done",
+          "cwd": "<tmp>/workspace",
+          "id": "<task>",
+          "pid": "<pid>",
+          "startedAt": "<time>",
+          "status": "running"
+        }
+      ],
+      "memory": {
+        "counts": {
+          "active": 0,
+          "compactions": 0,
+          "dropped": 0,
+          "observations": 0,
+          "reflections": 0,
+          "visibleObservations": 0,
+          "visibleReflections": 0
+        },
+        "enabled": true,
+        "observations": [],
+        "passive": false,
+        "reflections": [],
+        "thresholds": {
+          "activePool": {
+            "max": 10000,
+            "value": 0
+          },
+          "compaction": {
+            "max": 81000,
+            "value": 42
+          },
+          "observation": {
+            "max": 10000,
+            "value": 142
+          },
+          "reflection": {
+            "max": 20000,
+            "value": 142
+          },
+          "visiblePool": {
+            "max": 20000,
+            "value": 0
+          }
+        }
+      },
+      "memoryRuntime": {
+        "autoCompacting": false,
+        "lastErrors": {},
+        "phase": null,
+        "rateLimited": []
+      },
+      "team": {
+        "agents": [],
+        "tasks": []
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/state",
+    "status": 200,
+    "step": "state with a running task"
+  },
+  {
+    "body": {
+      "output": "started",
+      "task": {
+        "command": "echo started; until [ -e go ]; do sleep 0.02; done; echo done",
+        "cwd": "<tmp>/workspace",
+        "id": "<task>",
+        "pid": "<pid>",
+        "startedAt": "<time>",
+        "status": "running"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/background/<task>",
+    "status": 200,
+    "step": "its output"
+  },
+  {
+    "body": {
+      "output": "started",
+      "task": {
+        "command": "echo started; until [ -e go ]; do sleep 0.02; done; echo done",
+        "cwd": "<tmp>/workspace",
+        "id": "<task>",
+        "pid": "<pid>",
+        "startedAt": "<time>",
+        "status": "running"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/background/<task>?lines=1",
+    "status": 200,
+    "step": "its last line"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "lost_control",
+        "message": "Control lease is missing, expired, or superseded"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/<task>/stop",
+    "status": 409,
+    "step": "stop it without the lease"
+  },
+  {
+    "body": {
+      "task": {
+        "command": "echo started; until [ -e go ]; do sleep 0.02; done; echo done",
+        "cwd": "<tmp>/workspace",
+        "id": "<task>",
+        "pid": "<pid>",
+        "startedAt": "<time>",
+        "status": "stopping"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/<task>/stop",
+    "status": 200,
+    "step": "stop it"
+  },
+  {
+    "observed": 2,
+    "step": "model requests"
+  },
+  {
+    "observed": [
+      {
+        "content": "<task> · running · echo started; until [ -e go ]; do sleep 0.02; done; echo done\nLog: /tmp/pirc-background-<dir>/<task>.log",
+        "role": "user"
+      },
+      {
+        "content": "1 background task finished:\n<task> · stopped\nUse background_task list/output to inspect results.",
+        "role": "user"
+      }
+    ],
+    "step": "what the wake-up gives the model"
+  },
+  {
+    "body": {
+      "output": "started",
+      "task": {
+        "command": "echo started; until [ -e go ]; do sleep 0.02; done; echo done",
+        "cwd": "<tmp>/workspace",
+        "endedAt": "<time>",
+        "exitCode": null,
+        "id": "<task>",
+        "pid": "<pid>",
+        "signal": "SIGTERM",
+        "startedAt": "<time>",
+        "status": "stopped"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/background/<task>",
+    "status": 200,
+    "step": "its output once stopped"
+  },
+  {
+    "body": {
+      "agentRunning": true,
+      "backgroundTasks": [
+        {
+          "command": "echo started; until [ -e go ]; do sleep 0.02; done; echo done",
+          "cwd": "<tmp>/workspace",
+          "endedAt": "<time>",
+          "exitCode": null,
+          "id": "<task>",
+          "pid": "<pid>",
+          "signal": "SIGTERM",
+          "startedAt": "<time>",
+          "status": "stopped"
+        }
+      ],
+      "memory": {
+        "counts": {
+          "active": 0,
+          "compactions": 0,
+          "dropped": 0,
+          "observations": 0,
+          "reflections": 0,
+          "visibleObservations": 0,
+          "visibleReflections": 0
+        },
+        "enabled": true,
+        "observations": [],
+        "passive": false,
+        "reflections": [],
+        "thresholds": {
+          "activePool": {
+            "max": 10000,
+            "value": 0
+          },
+          "compaction": {
+            "max": 81000,
+            "value": "<depends on the pid's digits>"
+          },
+          "observation": {
+            "max": 10000,
+            "value": 110
+          },
+          "reflection": {
+            "max": 20000,
+            "value": 110
+          },
+          "visiblePool": {
+            "max": 20000,
+            "value": 0
+          }
+        }
+      },
+      "memoryRuntime": {
+        "autoCompacting": false,
+        "lastErrors": {},
+        "phase": null,
+        "rateLimited": []
+      },
+      "team": {
+        "agents": [],
+        "tasks": []
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/panel/state",
+    "status": 200,
+    "step": "state once it stopped"
+  },
+  {
+    "body": {
+      "task": {
+        "command": "echo started; until [ -e go ]; do sleep 0.02; done; echo done",
+        "cwd": "<tmp>/workspace",
+        "endedAt": "<time>",
+        "exitCode": null,
+        "id": "<task>",
+        "pid": "<pid>",
+        "signal": "SIGTERM",
+        "startedAt": "<time>",
+        "status": "stopped"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/panel/background/<task>/stop",
+    "status": 200,
+    "step": "stop it again"
+  }
+]

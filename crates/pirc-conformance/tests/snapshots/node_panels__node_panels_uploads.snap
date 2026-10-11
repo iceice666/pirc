@@ -1,0 +1,704 @@
+---
+source: crates/pirc-conformance/tests/node_panels.rs
+expression: p.into_value()
+---
+[
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "New session",
+        "nameSource": "auto",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 201,
+    "step": "create a session"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 70,
+        "filename": null,
+        "id": "upload_<uuid:2>",
+        "kind": "image",
+        "mimeType": "image/png"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads (image/png)",
+    "status": 201,
+    "step": "upload: a PNG"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 20,
+        "filename": null,
+        "id": "upload_<uuid:3>",
+        "kind": "image",
+        "mimeType": "image/jpeg"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads (image/jpeg)",
+    "status": 201,
+    "step": "upload: a JPEG by its magic bytes"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 14,
+        "filename": null,
+        "id": "upload_<uuid:4>",
+        "kind": "image",
+        "mimeType": "image/gif"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads (image/gif)",
+    "status": 201,
+    "step": "upload: a GIF"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 16,
+        "filename": null,
+        "id": "upload_<uuid:5>",
+        "kind": "image",
+        "mimeType": "image/webp"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads (image/webp)",
+    "status": 201,
+    "step": "upload: a WebP"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Declared Content-Type does not match image content"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads (image/jpeg)",
+    "status": 400,
+    "step": "upload: a PNG declared as a JPEG"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Declared Content-Type does not match image content"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads (text/plain)",
+    "status": 400,
+    "step": "upload: a PNG declared as text"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 70,
+        "filename": null,
+        "id": "upload_<uuid:6>",
+        "kind": "image",
+        "mimeType": "image/png"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads (application/octet-stream)",
+    "status": 201,
+    "step": "upload: a PNG as octet-stream"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 70,
+        "filename": null,
+        "id": "upload_<uuid:7>",
+        "kind": "image",
+        "mimeType": "image/png"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads (image/png; charset=binary)",
+    "status": 201,
+    "step": "upload: a PNG with a charset parameter"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 70,
+        "filename": null,
+        "id": "upload_<uuid:8>",
+        "kind": "image",
+        "mimeType": "image/png"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=shot.png (image/png)",
+    "status": 201,
+    "step": "upload: a PNG with a filename (an image all the same)"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 70,
+        "filename": null,
+        "id": "upload_<uuid:9>",
+        "kind": "image",
+        "mimeType": "image/png"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads (no content type)",
+    "status": 201,
+    "step": "upload: a PNG without a content type"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 11,
+        "filename": "notes.txt",
+        "id": "upload_<uuid:10>",
+        "kind": "file",
+        "mimeType": "text/plain"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=notes.txt (text/plain)",
+    "status": 201,
+    "step": "upload: a text file with a filename"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 4,
+        "filename": "data.bin",
+        "id": "upload_<uuid:11>",
+        "kind": "file",
+        "mimeType": "application/octet-stream"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=data.bin (no content type)",
+    "status": 201,
+    "step": "upload: a file without a content type"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 6,
+        "filename": "a.xyz",
+        "id": "upload_<uuid:12>",
+        "kind": "file",
+        "mimeType": "application/x-custom"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=a.xyz (application/x-custom)",
+    "status": 201,
+    "step": "upload: a file with an unknown type"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 5,
+        "filename": "evil.txt",
+        "id": "upload_<uuid:13>",
+        "kind": "file",
+        "mimeType": "text/plain"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=..%2F..%2Fdir%2Fevil.txt (text/plain)",
+    "status": 201,
+    "step": "upload: a filename with directories"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 7,
+        "filename": "padded.txt",
+        "id": "upload_<uuid:14>",
+        "kind": "file",
+        "mimeType": "text/plain"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=%20padded.txt%20 (text/plain)",
+    "status": 201,
+    "step": "upload: a filename with spaces around"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=%20%20 (text/plain)",
+    "status": 400,
+    "step": "upload: a filename of spaces"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 1,
+        "filename": "..",
+        "id": "upload_<uuid:15>",
+        "kind": "file",
+        "mimeType": "text/plain"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=.. (text/plain)",
+    "status": 201,
+    "step": "upload: a filename of .."
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn (text/plain)",
+    "status": 400,
+    "step": "upload: a filename over 255 characters"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "filename is required for non-image uploads"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads (text/plain)",
+    "status": 400,
+    "step": "upload: a non-image without a filename"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Upload body must be raw bytes"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=a.json (application/json)",
+    "status": 400,
+    "step": "upload: a JSON body"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "payload_too_large",
+        "message": "Upload exceeds configured limit"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=empty.txt (text/plain)",
+    "status": 413,
+    "step": "upload: an empty body"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 1024,
+        "filename": "limit.txt",
+        "id": "upload_<uuid:16>",
+        "kind": "file",
+        "mimeType": "text/plain"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=limit.txt (text/plain)",
+    "status": 201,
+    "step": "upload: exactly the node's limit"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "payload_too_large",
+        "message": "Request body exceeds configured limit"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads?filename=over.txt (text/plain)",
+    "status": 413,
+    "step": "upload: over the node's limit"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "payload_too_large",
+        "message": "Request body exceeds configured limit"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads (image/png)",
+    "status": 413,
+    "step": "upload: an image over the node's limit"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Session belongs to another user"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/uploads (image/png, as other@example.com)",
+    "status": 403,
+    "step": "upload: another user"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Session not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_unknown/uploads",
+    "status": 404,
+    "step": "upload: an unknown session"
+  },
+  {
+    "body": {
+      "lease": {
+        "clientId": "browser",
+        "expiresAt": "<epoch-ms>",
+        "generation": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/control/acquire",
+    "status": 200,
+    "step": "acquire control"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Upload not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 404,
+    "step": "a prompt with an unknown upload"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 400,
+    "step": "a prompt with 17 uploads"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "with-uploads",
+        "payload": {
+          "message": "Look at these",
+          "type": "prompt",
+          "uploadIds": [
+            "upload_<uuid:2>",
+            "upload_<uuid:10>",
+            "upload_<uuid:3>",
+            "upload_<uuid:13>",
+            "upload_<uuid:11>"
+          ]
+        },
+        "payloadHash": "<sha256:1>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:17>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:1>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 202,
+    "step": "a prompt with images and files"
+  },
+  {
+    "observed": {
+      "content": [
+        {
+          "text": "Look at these\n\nAttached file(s) available to read from the workspace:\n- .pirc/uploads/upload_<uuid:10>-notes.txt\n- .pirc/uploads/upload_<uuid:13>-evil.txt\n- .pirc/uploads/upload_<uuid:11>-data.bin",
+          "type": "text"
+        },
+        {
+          "image_url": {
+            "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+          },
+          "type": "image_url"
+        },
+        {
+          "image_url": {
+            "url": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAA="
+          },
+          "type": "image_url"
+        }
+      ],
+      "role": "user"
+    },
+    "step": "what the model receives"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "file",
+          "name": "upload_<uuid:11>-data.bin",
+          "size": 4
+        },
+        {
+          "kind": "file",
+          "name": "upload_<uuid:13>-evil.txt",
+          "size": 5
+        },
+        {
+          "kind": "file",
+          "name": "upload_<uuid:10>-notes.txt",
+          "size": 11
+        }
+      ],
+      "path": ".pirc/uploads",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=.pirc/uploads",
+    "status": 200,
+    "step": "the copies in the workspace (sorted by file name here)"
+  },
+  {
+    "body": {
+      "binary": true,
+      "modifiedAt": "<mtime>",
+      "path": ".pirc/uploads/upload_<uuid:11>-data.bin",
+      "size": 4,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=.pirc/uploads/upload_<uuid:11>-data.bin",
+    "status": 200,
+    "step": "content of the copy of data.bin"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "evil\n",
+      "modifiedAt": "<mtime>",
+      "path": ".pirc/uploads/upload_<uuid:13>-evil.txt",
+      "size": 5,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=.pirc/uploads/upload_<uuid:13>-evil.txt",
+    "status": 200,
+    "step": "content of the copy of evil.txt"
+  },
+  {
+    "body": {
+      "binary": false,
+      "content": "hello file\n",
+      "modifiedAt": "<mtime>",
+      "path": ".pirc/uploads/upload_<uuid:10>-notes.txt",
+      "size": 11,
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files/content?path=.pirc/uploads/upload_<uuid:10>-notes.txt",
+    "status": 200,
+    "step": "content of the copy of notes.txt"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "dir",
+          "name": "uploads"
+        }
+      ],
+      "path": ".pirc",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files?path=.pirc",
+    "status": 200,
+    "step": ".pirc itself"
+  },
+  {
+    "body": {
+      "command": {
+        "error": null,
+        "id": "again",
+        "payload": {
+          "message": "Again",
+          "type": "prompt",
+          "uploadIds": [
+            "upload_<uuid:10>"
+          ]
+        },
+        "payloadHash": "<sha256:2>",
+        "result": {
+          "command": "prompt",
+          "id": "rpc_<uuid:18>",
+          "success": true,
+          "type": "response"
+        },
+        "sessionId": "session_<uuid:1>",
+        "status": "accepted"
+      },
+      "duplicate": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/commands",
+    "status": 202,
+    "step": "the same files again, as a follow-up"
+  },
+  {
+    "observed": {
+      "content": "Again\n\nAttached file(s) available to read from the workspace:\n- .pirc/uploads/upload_<uuid:10>-notes.txt",
+      "role": "user"
+    },
+    "step": "what the model receives the second time"
+  },
+  {
+    "observed": [
+      {
+        "content": [
+          {
+            "text": "Look at these\n\nAttached file(s) available to read from the workspace:\n- .pirc/uploads/upload_<uuid:10>-notes.txt\n- .pirc/uploads/upload_<uuid:13>-evil.txt\n- .pirc/uploads/upload_<uuid:11>-data.bin",
+            "type": "text"
+          },
+          {
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            "mimeType": "image/png",
+            "type": "image"
+          },
+          {
+            "data": "/9j/4AAQSkZJRgABAQAAAQABAAA=",
+            "mimeType": "image/jpeg",
+            "type": "image"
+          }
+        ],
+        "role": "user",
+        "timestamp": "<epoch-ms>"
+      },
+      {
+        "content": "Again\n\nAttached file(s) available to read from the workspace:\n- .pirc/uploads/upload_<uuid:10>-notes.txt",
+        "role": "user",
+        "timestamp": "<epoch-ms>"
+      }
+    ],
+    "step": "the user messages in the session's history"
+  }
+]

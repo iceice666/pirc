@@ -1,0 +1,1062 @@
+---
+source: crates/pirc-conformance/tests/node_panels.rs
+expression: p.into_value()
+---
+[
+  {
+    "body": {
+      "session": {
+        "createdAt": "<epoch-ms>",
+        "id": "session_<uuid:1>",
+        "name": "New session",
+        "nameSource": "auto",
+        "nodeId": "test",
+        "pinnedAt": null,
+        "runStatus": null,
+        "runnerEpoch": 0,
+        "runnerState": "stopped",
+        "settledAt": null,
+        "unread": false,
+        "updatedAt": "<epoch-ms>",
+        "workspaceId": "test:test"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions",
+    "status": 201,
+    "step": "create a session"
+  },
+  {
+    "body": {
+      "repo": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/status",
+    "status": 200,
+    "step": "status outside a repository"
+  },
+  {
+    "body": {
+      "commits": [],
+      "more": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log",
+    "status": 200,
+    "step": "log outside a repository"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "                          select files by diff type\n    --max-depth <depth>   maximum tree depth to recurse\n    --output <file>       output to a specific file"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff",
+    "status": 400,
+    "step": "diff outside a repository"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "fatal: not a git repository (or any of the parent directories): .git"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/abcd1234",
+    "status": 400,
+    "step": "a commit outside a repository"
+  },
+  {
+    "body": {
+      "ahead": 0,
+      "behind": 0,
+      "branch": "outer",
+      "files": [
+        {
+          "index": "?",
+          "path": "workspace/README.md",
+          "worktree": "?"
+        },
+        {
+          "index": "?",
+          "path": "workspace/inside.txt",
+          "worktree": "?"
+        }
+      ],
+      "repo": true,
+      "root": "workspace",
+      "truncated": false,
+      "upstream": null
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/status",
+    "status": 200,
+    "step": "status in a subdirectory of a repository"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/inside.txt b/inside.txt\nnew file mode 100644\nindex 0000000..5be24b7\n--- /dev/null\n+++ b/inside.txt\n@@ -0,0 +1 @@\n+inside\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=inside.txt&untracked=1",
+    "status": 200,
+    "step": "untracked diff in a subdirectory"
+  },
+  {
+    "body": {
+      "ahead": 0,
+      "behind": 0,
+      "branch": "main",
+      "files": [
+        {
+          "index": "?",
+          "path": "README.md",
+          "worktree": "?"
+        }
+      ],
+      "repo": true,
+      "root": "",
+      "truncated": false,
+      "upstream": null
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/status",
+    "status": 200,
+    "step": "status before the first commit"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "fatal: your current branch 'main' does not have any commits yet"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log",
+    "status": 400,
+    "step": "log before the first commit"
+  },
+  {
+    "observed": {
+      "HEAD": "a50cfabe856922ddb9e556edeabe63149a661922",
+      "HEAD~1": "4d5e9bf82ba3bda168e0467585d6034c4f340a05"
+    },
+    "step": "the commits (fixed author and clock)"
+  },
+  {
+    "body": {
+      "ahead": 1,
+      "behind": 0,
+      "branch": "main",
+      "files": [
+        {
+          "index": "M",
+          "path": "a.txt",
+          "worktree": "M"
+        },
+        {
+          "index": "D",
+          "path": "gone.txt",
+          "worktree": " "
+        },
+        {
+          "index": "R",
+          "origPath": "old name.txt",
+          "path": "new name.txt",
+          "worktree": " "
+        },
+        {
+          "index": " ",
+          "path": "src/lib.rs",
+          "worktree": "M"
+        },
+        {
+          "index": "?",
+          "path": "-dash.txt",
+          "worktree": "?"
+        },
+        {
+          "index": "?",
+          "path": "new file.txt",
+          "worktree": "?"
+        },
+        {
+          "index": "?",
+          "path": "untracked dir/inner.txt",
+          "worktree": "?"
+        },
+        {
+          "index": "?",
+          "path": "ünïcode.txt",
+          "worktree": "?"
+        }
+      ],
+      "repo": true,
+      "root": "",
+      "truncated": false,
+      "upstream": "base"
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/status",
+    "status": 200,
+    "step": "status: branch, upstream, ahead, every kind of change"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/a.txt b/a.txt\nindex 7c1c303..cd57310 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,4 @@\n one\n two\n three staged\n+four unstaged\ndiff --git a/src/lib.rs b/src/lib.rs\nindex f328e4d..217e7c1 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-fn main() {}\n+fn main() { changed(); }\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff",
+    "status": 200,
+    "step": "diff: worktree diff of everything"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/a.txt b/a.txt\nindex 814f4a4..7c1c303 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,2 +1,3 @@\n one\n two\n+three staged\ndiff --git a/gone.txt b/gone.txt\ndeleted file mode 100644\nindex 4202011..0000000\n--- a/gone.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-to be deleted\ndiff --git a/old name.txt b/new name.txt\nsimilarity index 100%\nrename from old name.txt\nrename to new name.txt\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?staged=1",
+    "status": 200,
+    "step": "diff: staged diff of everything"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/a.txt b/a.txt\nindex 814f4a4..7c1c303 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,2 +1,3 @@\n one\n two\n+three staged\ndiff --git a/gone.txt b/gone.txt\ndeleted file mode 100644\nindex 4202011..0000000\n--- a/gone.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-to be deleted\ndiff --git a/old name.txt b/new name.txt\nsimilarity index 100%\nrename from old name.txt\nrename to new name.txt\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?staged=true",
+    "status": 200,
+    "step": "diff: staged=true"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/a.txt b/a.txt\nindex 7c1c303..cd57310 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,4 @@\n one\n two\n three staged\n+four unstaged\ndiff --git a/src/lib.rs b/src/lib.rs\nindex f328e4d..217e7c1 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-fn main() {}\n+fn main() { changed(); }\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?staged=0",
+    "status": 200,
+    "step": "diff: staged=0 is the worktree"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/a.txt b/a.txt\nindex 7c1c303..cd57310 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,4 @@\n one\n two\n three staged\n+four unstaged\ndiff --git a/src/lib.rs b/src/lib.rs\nindex f328e4d..217e7c1 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-fn main() {}\n+fn main() { changed(); }\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?staged=false",
+    "status": 200,
+    "step": "diff: staged=false"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?staged=yes",
+    "status": 400,
+    "step": "diff: a bad flag value"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/a.txt b/a.txt\nindex 7c1c303..cd57310 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,4 @@\n one\n two\n three staged\n+four unstaged\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=a.txt",
+    "status": 200,
+    "step": "diff: worktree diff of one file"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/a.txt b/a.txt\nindex 814f4a4..7c1c303 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,2 +1,3 @@\n one\n two\n+three staged\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=a.txt&staged=1",
+    "status": 200,
+    "step": "diff: staged diff of one file"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/src/lib.rs b/src/lib.rs\nindex f328e4d..217e7c1 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-fn main() {}\n+fn main() { changed(); }\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=src/lib.rs",
+    "status": 200,
+    "step": "diff: a file in a subdirectory"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/a.txt b/a.txt\nindex 7c1c303..cd57310 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,4 @@\n one\n two\n three staged\n+four unstaged\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=/a.txt",
+    "status": 200,
+    "step": "diff: a leading slash is dropped"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/src/lib.rs b/src/lib.rs\nindex f328e4d..217e7c1 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-fn main() {}\n+fn main() { changed(); }\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=src%5Clib.rs",
+    "status": 200,
+    "step": "diff: a backslash is a separator"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/a.txt b/a.txt\nindex 7c1c303..cd57310 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,4 @@\n one\n two\n three staged\n+four unstaged\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=src/../a.txt",
+    "status": 200,
+    "step": "diff: a path that is normalized"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/gone.txt b/gone.txt\ndeleted file mode 100644\nindex 4202011..0000000\n--- a/gone.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-to be deleted\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=gone.txt&staged=1",
+    "status": 200,
+    "step": "diff: a staged deletion"
+  },
+  {
+    "body": {
+      "diff": "",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=README.md",
+    "status": 200,
+    "step": "diff: an unchanged file"
+  },
+  {
+    "body": {
+      "diff": "",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=nothing.txt",
+    "status": 200,
+    "step": "diff: a missing file in the workspace"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Path not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=nowhere/x.txt",
+    "status": 404,
+    "step": "diff: a missing directory"
+  },
+  {
+    "body": {
+      "diff": "",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=*.txt",
+    "status": 200,
+    "step": "diff: a glob is literal"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/new file.txt b/new file.txt\nnew file mode 100644\nindex 0000000..92d5444\n--- /dev/null\n+++ b/new file.txt\t\n@@ -0,0 +1 @@\n+fresh\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=new%20file.txt&untracked=1",
+    "status": 200,
+    "step": "diff: an untracked file"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/untracked dir/inner.txt b/untracked dir/inner.txt\nnew file mode 100644\nindex 0000000..f05648e\n--- /dev/null\n+++ b/untracked dir/inner.txt\t\n@@ -0,0 +1 @@\n+inner\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=untracked%20dir/inner.txt&untracked=1",
+    "status": 200,
+    "step": "diff: an untracked file in an untracked directory"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/-dash.txt b/-dash.txt\nnew file mode 100644\nindex 0000000..a2544f7\n--- /dev/null\n+++ b/-dash.txt\n@@ -0,0 +1 @@\n+dash\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=-dash.txt&untracked=1",
+    "status": 200,
+    "step": "diff: an untracked file named with a dash"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/ünïcode.txt b/ünïcode.txt\nnew file mode 100644\nindex 0000000..be761e0\n--- /dev/null\n+++ b/ünïcode.txt\n@@ -0,0 +1 @@\n+ü\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=%C3%BCn%C3%AFcode.txt&untracked=1",
+    "status": 200,
+    "step": "diff: an untracked non-ASCII name"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/new file.txt b/new file.txt\nnew file mode 100644\nindex 0000000..92d5444\n--- /dev/null\n+++ b/new file.txt\t\n@@ -0,0 +1 @@\n+fresh\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=new%20file.txt&untracked=1&staged=1",
+    "status": 200,
+    "step": "diff: untracked ignores staged"
+  },
+  {
+    "body": {
+      "diff": "diff --git a/a.txt b/a.txt\nindex 7c1c303..cd57310 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,4 @@\n one\n two\n three staged\n+four unstaged\ndiff --git a/src/lib.rs b/src/lib.rs\nindex f328e4d..217e7c1 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-fn main() {}\n+fn main() { changed(); }\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?untracked=1",
+    "status": 200,
+    "step": "diff: untracked without a path"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Not a file"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=src&untracked=1",
+    "status": 400,
+    "step": "diff: untracked on a directory"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Path not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=missing.txt&untracked=1",
+    "status": 404,
+    "step": "diff: untracked on a missing file"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid path"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=../secret.txt",
+    "status": 400,
+    "step": "diff: a path outside the workspace"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid path"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=..",
+    "status": 400,
+    "step": "diff: a path of .."
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid path"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=.",
+    "status": 400,
+    "step": "diff: a path of ."
+  },
+  {
+    "body": {
+      "diff": "diff --git a/a.txt b/a.txt\nindex 7c1c303..cd57310 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,4 @@\n one\n two\n three staged\n+four unstaged\ndiff --git a/src/lib.rs b/src/lib.rs\nindex f328e4d..217e7c1 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-fn main() {}\n+fn main() { changed(); }\n",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=",
+    "status": 200,
+    "step": "diff: an empty path"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/diff?path=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": 400,
+    "step": "diff: a path that is too long"
+  },
+  {
+    "body": {
+      "commits": [
+        {
+          "author": "Test Author",
+          "email": "author@example.com",
+          "refs": [
+            "HEAD -> main",
+            "tag: v1"
+          ],
+          "sha": "a50cfabe856922ddb9e556edeabe63149a661922",
+          "short": "a50cfab",
+          "subject": "second commit",
+          "time": "<epoch-ms>"
+        },
+        {
+          "author": "Test Author",
+          "email": "author@example.com",
+          "refs": [
+            "base"
+          ],
+          "sha": "4d5e9bf82ba3bda168e0467585d6034c4f340a05",
+          "short": "4d5e9bf",
+          "subject": "first commit",
+          "time": "<epoch-ms>"
+        }
+      ],
+      "more": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log",
+    "status": 200,
+    "step": "log: defaults"
+  },
+  {
+    "body": {
+      "commits": [
+        {
+          "author": "Test Author",
+          "email": "author@example.com",
+          "refs": [
+            "HEAD -> main",
+            "tag: v1"
+          ],
+          "sha": "a50cfabe856922ddb9e556edeabe63149a661922",
+          "short": "a50cfab",
+          "subject": "second commit",
+          "time": "<epoch-ms>"
+        }
+      ],
+      "more": true
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log?limit=1",
+    "status": 200,
+    "step": "log: limit 1 has more"
+  },
+  {
+    "body": {
+      "commits": [
+        {
+          "author": "Test Author",
+          "email": "author@example.com",
+          "refs": [
+            "base"
+          ],
+          "sha": "4d5e9bf82ba3bda168e0467585d6034c4f340a05",
+          "short": "4d5e9bf",
+          "subject": "first commit",
+          "time": "<epoch-ms>"
+        }
+      ],
+      "more": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log?skip=1",
+    "status": 200,
+    "step": "log: skip 1"
+  },
+  {
+    "body": {
+      "commits": [],
+      "more": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log?skip=5",
+    "status": 200,
+    "step": "log: skip past the end"
+  },
+  {
+    "body": {
+      "commits": [
+        {
+          "author": "Test Author",
+          "email": "author@example.com",
+          "refs": [
+            "HEAD -> main",
+            "tag: v1"
+          ],
+          "sha": "a50cfabe856922ddb9e556edeabe63149a661922",
+          "short": "a50cfab",
+          "subject": "second commit",
+          "time": "<epoch-ms>"
+        },
+        {
+          "author": "Test Author",
+          "email": "author@example.com",
+          "refs": [
+            "base"
+          ],
+          "sha": "4d5e9bf82ba3bda168e0467585d6034c4f340a05",
+          "short": "4d5e9bf",
+          "subject": "first commit",
+          "time": "<epoch-ms>"
+        }
+      ],
+      "more": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log?limit=2",
+    "status": 200,
+    "step": "log: limit 2 has no more"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log?limit=0",
+    "status": 400,
+    "step": "log: limit 0"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log?limit=201",
+    "status": 400,
+    "step": "log: limit 201"
+  },
+  {
+    "body": {
+      "commits": [
+        {
+          "author": "Test Author",
+          "email": "author@example.com",
+          "refs": [
+            "HEAD -> main",
+            "tag: v1"
+          ],
+          "sha": "a50cfabe856922ddb9e556edeabe63149a661922",
+          "short": "a50cfab",
+          "subject": "second commit",
+          "time": "<epoch-ms>"
+        },
+        {
+          "author": "Test Author",
+          "email": "author@example.com",
+          "refs": [
+            "base"
+          ],
+          "sha": "4d5e9bf82ba3bda168e0467585d6034c4f340a05",
+          "short": "4d5e9bf",
+          "subject": "first commit",
+          "time": "<epoch-ms>"
+        }
+      ],
+      "more": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log?limit=200",
+    "status": 200,
+    "step": "log: limit 200"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log?skip=-1",
+    "status": 400,
+    "step": "log: a negative skip"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log?limit=1.5",
+    "status": 400,
+    "step": "log: a fractional limit"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log?skip=x",
+    "status": 400,
+    "step": "log: a non-numeric skip"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/log?limit=",
+    "status": 400,
+    "step": "log: an empty limit"
+  },
+  {
+    "body": {
+      "author": "Test Author",
+      "diff": " a.txt      | 1 +\n src/lib.rs | 1 +\n 2 files changed, 2 insertions(+)\n\ndiff --git a/a.txt b/a.txt\nindex 5626abf..814f4a4 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1,2 @@\n one\n+two\ndiff --git a/src/lib.rs b/src/lib.rs\nnew file mode 100644\nindex 0000000..f328e4d\n--- /dev/null\n+++ b/src/lib.rs\n@@ -0,0 +1 @@\n+fn main() {}\n",
+      "email": "author@example.com",
+      "message": "second commit\n\nWith a body\nover two lines.",
+      "refs": [
+        "HEAD -> main",
+        "tag: v1"
+      ],
+      "sha": "a50cfabe856922ddb9e556edeabe63149a661922",
+      "time": "<epoch-ms>",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/a50cfabe856922ddb9e556edeabe63149a661922",
+    "status": 200,
+    "step": "commit: the head commit"
+  },
+  {
+    "body": {
+      "author": "Test Author",
+      "diff": " README.md    | 1 +\n a.txt        | 1 +\n gone.txt     | 1 +\n old name.txt | 1 +\n 4 files changed, 4 insertions(+)\n\ndiff --git a/README.md b/README.md\nnew file mode 100644\nindex 0000000..fa78e60\n--- /dev/null\n+++ b/README.md\n@@ -0,0 +1 @@\n+conformance\ndiff --git a/a.txt b/a.txt\nnew file mode 100644\nindex 0000000..5626abf\n--- /dev/null\n+++ b/a.txt\n@@ -0,0 +1 @@\n+one\ndiff --git a/gone.txt b/gone.txt\nnew file mode 100644\nindex 0000000..4202011\n--- /dev/null\n+++ b/gone.txt\n@@ -0,0 +1 @@\n+to be deleted\ndiff --git a/old name.txt b/old name.txt\nnew file mode 100644\nindex 0000000..447368b\n--- /dev/null\n+++ b/old name.txt\t\n@@ -0,0 +1 @@\n+renamed content\n",
+      "email": "author@example.com",
+      "message": "first commit",
+      "refs": [
+        "base"
+      ],
+      "sha": "4d5e9bf82ba3bda168e0467585d6034c4f340a05",
+      "time": "<epoch-ms>",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/4d5e9bf82ba3bda168e0467585d6034c4f340a05",
+    "status": 200,
+    "step": "commit: the first commit (a root commit)"
+  },
+  {
+    "body": {
+      "author": "Test Author",
+      "diff": " a.txt      | 1 +\n src/lib.rs | 1 +\n 2 files changed, 2 insertions(+)\n\ndiff --git a/a.txt b/a.txt\nindex 5626abf..814f4a4 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1,2 @@\n one\n+two\ndiff --git a/src/lib.rs b/src/lib.rs\nnew file mode 100644\nindex 0000000..f328e4d\n--- /dev/null\n+++ b/src/lib.rs\n@@ -0,0 +1 @@\n+fn main() {}\n",
+      "email": "author@example.com",
+      "message": "second commit\n\nWith a body\nover two lines.",
+      "refs": [
+        "HEAD -> main",
+        "tag: v1"
+      ],
+      "sha": "a50cfabe856922ddb9e556edeabe63149a661922",
+      "time": "<epoch-ms>",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/a50cfab",
+    "status": 200,
+    "step": "commit: by its short id"
+  },
+  {
+    "body": {
+      "author": "Test Author",
+      "diff": " a.txt      | 1 +\n src/lib.rs | 1 +\n 2 files changed, 2 insertions(+)\n\ndiff --git a/a.txt b/a.txt\nindex 5626abf..814f4a4 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1,2 @@\n one\n+two\ndiff --git a/src/lib.rs b/src/lib.rs\nnew file mode 100644\nindex 0000000..f328e4d\n--- /dev/null\n+++ b/src/lib.rs\n@@ -0,0 +1 @@\n+fn main() {}\n",
+      "email": "author@example.com",
+      "message": "second commit\n\nWith a body\nover two lines.",
+      "refs": [
+        "HEAD -> main",
+        "tag: v1"
+      ],
+      "sha": "a50cfabe856922ddb9e556edeabe63149a661922",
+      "time": "<epoch-ms>",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/A50CFABE856922DDB9E556EDEABE63149A661922",
+    "status": 200,
+    "step": "commit: upper case"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "fatal: bad revision 'deadbeef0'"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/deadbeef0",
+    "status": 400,
+    "step": "commit: an unknown id"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Route not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/not-a-sha",
+    "status": 404,
+    "step": "commit: a non-hex id"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Route not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/abc",
+    "status": 404,
+    "step": "commit: too short"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Route not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/main",
+    "status": 404,
+    "step": "commit: a ref name is not an id"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Route not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/git/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": 404,
+    "step": "commit: too long"
+  },
+  {
+    "body": {
+      "entries": [
+        {
+          "kind": "dir",
+          "name": "src"
+        },
+        {
+          "kind": "dir",
+          "name": "untracked dir"
+        },
+        {
+          "kind": "file",
+          "name": "-dash.txt",
+          "size": 5
+        },
+        {
+          "kind": "file",
+          "name": "a.txt",
+          "size": 35
+        },
+        {
+          "kind": "file",
+          "name": "new file.txt",
+          "size": 6
+        },
+        {
+          "kind": "file",
+          "name": "new name.txt",
+          "size": 16
+        },
+        {
+          "kind": "file",
+          "name": "README.md",
+          "size": 12
+        },
+        {
+          "kind": "file",
+          "name": "ünïcode.txt",
+          "size": 3
+        }
+      ],
+      "path": "",
+      "truncated": false
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/sessions/session_<uuid:1>/files",
+    "status": 200,
+    "step": "files: .git is not listed"
+  }
+]
