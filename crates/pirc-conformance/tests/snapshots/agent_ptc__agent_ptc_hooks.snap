@@ -1,0 +1,4608 @@
+---
+source: crates/pirc-conformance/tests/agent_ptc.rs
+expression: json!(all)
+---
+[
+  [
+    {
+      "observed": {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
+      },
+      "step": "a code matcher: response"
+    },
+    {
+      "observed": [
+        {
+          "type": "agent_start"
+        },
+        {
+          "message": {
+            "content": "run a code matcher",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          "type": "message_start"
+        },
+        {
+          "message": {
+            "content": "run a code matcher",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          "type": "message_end"
+        },
+        {
+          "type": "turn_start"
+        },
+        {
+          "message": {
+            "content": [],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "timestamp": "<epoch-ms>"
+          },
+          "type": "message_start"
+        },
+        {
+          "sections": [
+            "context"
+          ],
+          "type": "panel_changed"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "id": "c1",
+            "toolName": "ptc",
+            "type": "toolcall_start"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "delta": "{\"code\":\"return 1;\"}",
+            "type": "toolcall_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "toolCall": {
+              "arguments": {
+                "code": "return 1;"
+              },
+              "id": "c1",
+              "name": "ptc",
+              "type": "toolCall"
+            },
+            "type": "toolcall_end"
+          },
+          "type": "message_update"
+        },
+        {
+          "message": {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "return 1;"
+                },
+                "id": "c1",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          "type": "message_end"
+        },
+        {
+          "sections": [
+            "context"
+          ],
+          "type": "panel_changed"
+        },
+        {
+          "args": {
+            "code": "return 1;"
+          },
+          "toolCallId": "c1",
+          "toolName": "ptc",
+          "type": "tool_execution_start"
+        },
+        {
+          "id": "<uuid:1>",
+          "message": "Hook matcher \"code\" names the retired code tool; it now applies to ptc. Match \"ptc\" instead.",
+          "method": "notify",
+          "notifyType": "warning",
+          "type": "extension_ui_request"
+        },
+        {
+          "isError": true,
+          "result": {
+            "content": [
+              {
+                "text": "Blocked by hook: scripts off",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          },
+          "toolCallId": "c1",
+          "toolName": "ptc",
+          "type": "tool_execution_end"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "Blocked by hook: scripts off",
+                "type": "text"
+              }
+            ],
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c1",
+            "toolName": "ptc"
+          },
+          "type": "message_start"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "Blocked by hook: scripts off",
+                "type": "text"
+              }
+            ],
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c1",
+            "toolName": "ptc"
+          },
+          "type": "message_end"
+        },
+        {
+          "type": "turn_end"
+        },
+        {
+          "type": "turn_start"
+        },
+        {
+          "message": {
+            "content": [],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "timestamp": "<epoch-ms>"
+          },
+          "type": "message_start"
+        },
+        {
+          "sections": [
+            "context"
+          ],
+          "type": "panel_changed"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "type": "text_start"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "delta": "o",
+            "type": "text_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "delta": "k",
+            "type": "text_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "content": "ok",
+            "contentIndex": 0,
+            "type": "text_end"
+          },
+          "type": "message_update"
+        },
+        {
+          "message": {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          "type": "message_end"
+        },
+        {
+          "sections": [
+            "context"
+          ],
+          "type": "panel_changed"
+        },
+        {
+          "type": "turn_end"
+        },
+        {
+          "type": "agent_end",
+          "willRetry": false
+        },
+        {
+          "type": "agent_settled"
+        }
+      ],
+      "step": "a code matcher: events"
+    },
+    {
+      "observed": [
+        {
+          "messages": [
+            {
+              "content": "run a code matcher",
+              "role": "user",
+              "timestamp": "<epoch-ms>"
+            }
+          ],
+          "modelId": "fake-model",
+          "providerName": "fake",
+          "sessionId": "<hex16:1>",
+          "systemPrompt": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\nCurrent working directory: <tmp>/workspace",
+          "thinking": "low",
+          "tools": [
+            {
+              "description": "Run a TypeScript async function body that calls capabilities. Every operation (files, shell commands, web, questions to the user, …) is a capability callable from here; the core ones may also be direct tools. Use a script to combine several operations, loop, or filter results before they reach you.\n\n- `await tools.<name>(args)` returns the result data and throws a `PtcError` on failure: `code` is ApprovalDenied, CapabilityUnavailable, InvalidArguments, QuotaExceeded, Cancelled, Timeout or OperationFailed; `outcome` says whether it ran (`not_started`, `failed`, `cancelled`, `unknown`); `data` holds the typed fields of a failed result when there are any. A `bash` command that exits non-zero is not a failure here: check its `exitCode`.\n- Result data is `text` (the formatted output) plus typed fields, e.g. `read` → `content`, `nextOffset`; `bash` → `output`, `exitCode`; `grep` → `matches`. Use the fields instead of parsing `text`.\n- `await tools.call(\"<name>\", args)` returns `{ ok: true, data }` or `{ ok: false, error: { code, message, outcome } }` instead of throwing.\n- Capability names must be literals (`tools.read(…)`, `tools.call(\"read\", …)`); never `tools[name]`. A script using an unavailable capability is rejected before anything runs.\n- `await tools.par(items, async (item, index) => …, { concurrency })` maps with up to 8 at a time and keeps order. At the first failure it starts no more items, cancels the operations its items still have running and throws that failure. Writes and commands still run one at a time. At most 8 operations run at once (more wait their turn), 200 operations and 200 `tools.par` calls per `ptc` call.\n- `return` what you need: strings are shown as is, other values as JSON. `console.log` output is shown too. Both are bounded, so filter large results in the script.\n- Images (e.g. `browser_screenshot`, `read` of a picture) come back as `images: [{ handle, mimeType, bytes }]`. To see one, `await attachments.add(result.images[0])`: it is attached to this `ptc` result (at most 4, together 512 KiB).\n- `store(key, value)` / `load(key)` keep small JSON values across `ptc` calls in this session (kept only when the script completes; `undefined` deletes).\n- The script runs in an isolated interpreter with no filesystem, network, processes, imports or timers: only `tools`, `attachments`, `store` and `load`.\n\nThe core signatures in the system prompt are complete; other listed capabilities show their arguments only: use `ptc_docs` for their result fields, or for a capability named without a signature. Default timeout 120 s (`timeout` in seconds, max 3600), not counting time spent waiting for the user. Nothing is retried automatically, and operations that already ran are not undone when a later one fails.",
+              "name": "ptc",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "description": "Body of an async TypeScript function, e.g. `const { text } = await tools.read({ path: \"README.md\" }); return text.split(\"\\n\").length;`",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "timeout": {
+                    "description": "Active-time budget in seconds (default 120)",
+                    "exclusiveMinimum": 0,
+                    "maximum": 3600,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Look up the capabilities `ptc` scripts can call. `{}` lists categories and names; `{ category }` gives one-line summaries (continue with the returned `cursor`); `{ names: [...] }` (1–8) gives argument schemas, results, errors, effects and approval behavior. Read-only. Docs already in the conversation stay valid until a call fails with StaleContract.",
+              "name": "ptc_docs",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "category": {
+                    "description": "A category from the index",
+                    "type": "string"
+                  },
+                  "cursor": {
+                    "description": "nextCursor of the previous page (with category)",
+                    "type": "string"
+                  },
+                  "names": {
+                    "description": "Capabilities to document in full",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 8,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "registryVersion": {
+                    "description": "registryVersion you already have; a mismatch fails with StaleContract",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            {
+              "description": "Read a file. Text is returned with line numbers (`offset` is 1-based, default limit 2000 lines). Images (png/jpg/gif/webp) are returned as images.",
+              "name": "read",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "limit": {
+                    "description": "Maximum lines to return",
+                    "type": "number"
+                  },
+                  "offset": {
+                    "description": "1-based first line",
+                    "type": "number"
+                  },
+                  "path": {
+                    "description": "File path, relative to the workspace or absolute",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Create or overwrite a file with the given content. Parent directories are created.",
+              "name": "write",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "content": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "content"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true. Read the file first.",
+              "name": "edit",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "newText": {
+                    "type": "string"
+                  },
+                  "oldText": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "replaceAll": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "path",
+                  "oldText",
+                  "newText"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "List a directory (directories end with /).",
+              "name": "ls",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "description": "Default: workspace root",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            {
+              "description": "Search file contents with a JavaScript regular expression. Returns `path:line: text`. Optional `glob` filters files.",
+              "name": "grep",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "glob": {
+                    "type": "string"
+                  },
+                  "ignoreCase": {
+                    "type": "boolean"
+                  },
+                  "limit": {
+                    "description": "Maximum matches (default 200)",
+                    "type": "number"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "pattern": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "pattern"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Find files by glob pattern (e.g. `**/*.ts`). Skips .git, node_modules, dist, target, result.",
+              "name": "find",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "description": "Directory to search (default workspace)",
+                    "type": "string"
+                  },
+                  "pattern": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "pattern"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Run a bash command in the workspace. stdout and stderr are combined. Default timeout 120s (`timeout` in seconds).",
+              "name": "bash",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "command": {
+                    "type": "string"
+                  },
+                  "timeout": {
+                    "description": "Timeout in seconds",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "command"
+                ],
+                "type": "object"
+              }
+            }
+          ]
+        },
+        {
+          "messages": [
+            {
+              "content": "run a code matcher",
+              "role": "user",
+              "timestamp": "<epoch-ms>"
+            },
+            {
+              "api": "openai-completions",
+              "completedAt": "<epoch-ms>",
+              "content": [
+                {
+                  "arguments": {
+                    "code": "return 1;"
+                  },
+                  "id": "c1",
+                  "name": "ptc",
+                  "type": "toolCall"
+                }
+              ],
+              "model": "fake-model",
+              "provider": "fake",
+              "role": "assistant",
+              "stopReason": "toolUse",
+              "timestamp": "<epoch-ms>",
+              "usage": {
+                "cacheRead": 40,
+                "cacheWrite": 0,
+                "input": 100,
+                "output": 10,
+                "totalTokens": 150
+              }
+            },
+            {
+              "content": [
+                {
+                  "text": "Blocked by hook: scripts off",
+                  "type": "text"
+                }
+              ],
+              "isError": true,
+              "role": "toolResult",
+              "timestamp": "<epoch-ms>",
+              "toolCallId": "c1",
+              "toolName": "ptc"
+            }
+          ],
+          "modelId": "fake-model",
+          "providerName": "fake",
+          "sessionId": "<hex16:1>",
+          "systemPrompt": "<unchanged>",
+          "thinking": "low",
+          "tools": "<unchanged>"
+        }
+      ],
+      "step": "a code matcher: model requests"
+    },
+    {
+      "observed": 0,
+      "step": "exit code"
+    }
+  ],
+  [
+    {
+      "observed": {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
+      },
+      "step": "refusals in scripts: response"
+    },
+    {
+      "observed": [
+        {
+          "type": "agent_start"
+        },
+        {
+          "message": {
+            "content": "run refusals in scripts",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          "type": "message_start"
+        },
+        {
+          "message": {
+            "content": "run refusals in scripts",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          "type": "message_end"
+        },
+        {
+          "type": "turn_start"
+        },
+        {
+          "message": {
+            "content": [],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "timestamp": "<epoch-ms>"
+          },
+          "type": "message_start"
+        },
+        {
+          "sections": [
+            "context"
+          ],
+          "type": "panel_changed"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "id": "c2",
+            "toolName": "ptc",
+            "type": "toolcall_start"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "delta": "{\"code\":\"try { await tools.bash({ command: 'echo hi' }); } catch (e) { return [e.code, e.outcome, e.message]; }\"}",
+            "type": "toolcall_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "toolCall": {
+              "arguments": {
+                "code": "try { await tools.bash({ command: 'echo hi' }); } catch (e) { return [e.code, e.outcome, e.message]; }"
+              },
+              "id": "c2",
+              "name": "ptc",
+              "type": "toolCall"
+            },
+            "type": "toolcall_end"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 1,
+            "id": "c3",
+            "toolName": "ptc",
+            "type": "toolcall_start"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 1,
+            "delta": "{\"code\":\"const out = [];\\n       try { await tools.bash({ command: 'echo hi' }); } catch (e) { out.push(e.code); }\\n       try { await tools.write({ path: 'b.txt', content: 'y' }); } catch (e) { out.push(e.code, e.message); }\\n       out.push((await tools.read({ path: 'a.txt' })).text);\\n       return out;\"}",
+            "type": "toolcall_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 1,
+            "toolCall": {
+              "arguments": {
+                "code": "const out = [];\n       try { await tools.bash({ command: 'echo hi' }); } catch (e) { out.push(e.code); }\n       try { await tools.write({ path: 'b.txt', content: 'y' }); } catch (e) { out.push(e.code, e.message); }\n       out.push((await tools.read({ path: 'a.txt' })).text);\n       return out;"
+              },
+              "id": "c3",
+              "name": "ptc",
+              "type": "toolCall"
+            },
+            "type": "toolcall_end"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 2,
+            "id": "c4",
+            "toolName": "ptc",
+            "type": "toolcall_start"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 2,
+            "delta": "{\"code\":\"await tools.read({ path: 'a.txt' }); return 'done';\"}",
+            "type": "toolcall_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 2,
+            "toolCall": {
+              "arguments": {
+                "code": "await tools.read({ path: 'a.txt' }); return 'done';"
+              },
+              "id": "c4",
+              "name": "ptc",
+              "type": "toolCall"
+            },
+            "type": "toolcall_end"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 3,
+            "id": "c5",
+            "toolName": "ptc",
+            "type": "toolcall_start"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 3,
+            "delta": "{\"code\":\"try { await tools.edit({ path: 'a.txt', oldText: 'x', newText: 'y' }); } catch (e) { return e.code + ': ' + e.message; }\"}",
+            "type": "toolcall_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 3,
+            "toolCall": {
+              "arguments": {
+                "code": "try { await tools.edit({ path: 'a.txt', oldText: 'x', newText: 'y' }); } catch (e) { return e.code + ': ' + e.message; }"
+              },
+              "id": "c5",
+              "name": "ptc",
+              "type": "toolCall"
+            },
+            "type": "toolcall_end"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 4,
+            "id": "c6",
+            "toolName": "ptc",
+            "type": "toolcall_start"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 4,
+            "delta": "{\"code\":\"await tools.bash({ command: 'echo hi' });\"}",
+            "type": "toolcall_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 4,
+            "toolCall": {
+              "arguments": {
+                "code": "await tools.bash({ command: 'echo hi' });"
+              },
+              "id": "c6",
+              "name": "ptc",
+              "type": "toolCall"
+            },
+            "type": "toolcall_end"
+          },
+          "type": "message_update"
+        },
+        {
+          "message": {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "try { await tools.bash({ command: 'echo hi' }); } catch (e) { return [e.code, e.outcome, e.message]; }"
+                },
+                "id": "c2",
+                "name": "ptc",
+                "type": "toolCall"
+              },
+              {
+                "arguments": {
+                  "code": "const out = [];\n       try { await tools.bash({ command: 'echo hi' }); } catch (e) { out.push(e.code); }\n       try { await tools.write({ path: 'b.txt', content: 'y' }); } catch (e) { out.push(e.code, e.message); }\n       out.push((await tools.read({ path: 'a.txt' })).text);\n       return out;"
+                },
+                "id": "c3",
+                "name": "ptc",
+                "type": "toolCall"
+              },
+              {
+                "arguments": {
+                  "code": "await tools.read({ path: 'a.txt' }); return 'done';"
+                },
+                "id": "c4",
+                "name": "ptc",
+                "type": "toolCall"
+              },
+              {
+                "arguments": {
+                  "code": "try { await tools.edit({ path: 'a.txt', oldText: 'x', newText: 'y' }); } catch (e) { return e.code + ': ' + e.message; }"
+                },
+                "id": "c5",
+                "name": "ptc",
+                "type": "toolCall"
+              },
+              {
+                "arguments": {
+                  "code": "await tools.bash({ command: 'echo hi' });"
+                },
+                "id": "c6",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          "type": "message_end"
+        },
+        {
+          "sections": [
+            "context"
+          ],
+          "type": "panel_changed"
+        },
+        {
+          "args": {
+            "code": "try { await tools.bash({ command: 'echo hi' }); } catch (e) { return [e.code, e.outcome, e.message]; }"
+          },
+          "toolCallId": "c2",
+          "toolName": "ptc",
+          "type": "tool_execution_start"
+        },
+        {
+          "args": {
+            "command": "echo hi"
+          },
+          "parentToolCallId": "c2",
+          "toolCallId": "<uuid:1>:op1",
+          "toolName": "bash",
+          "type": "tool_execution_start"
+        },
+        {
+          "isError": true,
+          "parentToolCallId": "c2",
+          "result": {
+            "content": [
+              {
+                "text": "Blocked by hook: bash denied",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          },
+          "toolCallId": "<uuid:1>:op1",
+          "toolName": "bash",
+          "type": "tool_execution_end"
+        },
+        {
+          "isError": false,
+          "result": {
+            "content": [
+              {
+                "text": "[\"ApprovalDenied\",\"not_started\",\"Blocked by hook: bash denied\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:1>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op1",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 1,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c2",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c2",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "c2",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "c2",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            }
+          },
+          "toolCallId": "c2",
+          "toolName": "ptc",
+          "type": "tool_execution_end"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "[\"ApprovalDenied\",\"not_started\",\"Blocked by hook: bash denied\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:1>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op1",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 1,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c2",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c2",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "c2",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "c2",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c2",
+            "toolName": "ptc"
+          },
+          "type": "message_start"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "[\"ApprovalDenied\",\"not_started\",\"Blocked by hook: bash denied\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:1>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op1",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 1,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c2",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c2",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "c2",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "c2",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c2",
+            "toolName": "ptc"
+          },
+          "type": "message_end"
+        },
+        {
+          "args": {
+            "code": "const out = [];\n       try { await tools.bash({ command: 'echo hi' }); } catch (e) { out.push(e.code); }\n       try { await tools.write({ path: 'b.txt', content: 'y' }); } catch (e) { out.push(e.code, e.message); }\n       out.push((await tools.read({ path: 'a.txt' })).text);\n       return out;"
+          },
+          "toolCallId": "c3",
+          "toolName": "ptc",
+          "type": "tool_execution_start"
+        },
+        {
+          "args": {
+            "command": "echo hi"
+          },
+          "parentToolCallId": "c3",
+          "toolCallId": "<uuid:2>:op1",
+          "toolName": "bash",
+          "type": "tool_execution_start"
+        },
+        {
+          "isError": true,
+          "parentToolCallId": "c3",
+          "result": {
+            "content": [
+              {
+                "text": "Blocked by hook: bash denied",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          },
+          "toolCallId": "<uuid:2>:op1",
+          "toolName": "bash",
+          "type": "tool_execution_end"
+        },
+        {
+          "args": {
+            "content": "y",
+            "path": "b.txt"
+          },
+          "parentToolCallId": "c3",
+          "toolCallId": "<uuid:2>:op2",
+          "toolName": "write",
+          "type": "tool_execution_start"
+        },
+        {
+          "isError": true,
+          "parentToolCallId": "c3",
+          "result": {
+            "content": [
+              {
+                "text": "Not started: an operation was declined earlier in this script, so write does not run in it. Report the refusal instead of working around it.",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          },
+          "toolCallId": "<uuid:2>:op2",
+          "toolName": "write",
+          "type": "tool_execution_end"
+        },
+        {
+          "args": {
+            "path": "a.txt"
+          },
+          "parentToolCallId": "c3",
+          "toolCallId": "<uuid:2>:op3",
+          "toolName": "read",
+          "type": "tool_execution_start"
+        },
+        {
+          "isError": false,
+          "parentToolCallId": "c3",
+          "result": {
+            "content": [
+              {
+                "text": "1\tx",
+                "type": "text"
+              },
+              {
+                "text": "\n[hook]\nlint: careful",
+                "type": "text"
+              }
+            ]
+          },
+          "toolCallId": "<uuid:2>:op3",
+          "toolName": "read",
+          "type": "tool_execution_end"
+        },
+        {
+          "isError": false,
+          "result": {
+            "content": [
+              {
+                "text": "[\"ApprovalDenied\",\"ApprovalDenied\",\"Not started: an operation was declined earlier in this script, so write does not run in it. Report the refusal instead of working around it.\",\"1\\tx\\n[hook]\\nlint: careful\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook\n\n[hooks]\nread: lint: careful",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:2>",
+              "manifest": [
+                "bash",
+                "write",
+                "read"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:2>:op1",
+                  "outcome": "not_started"
+                },
+                {
+                  "capability": "write",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:2>:op2",
+                  "outcome": "not_started"
+                },
+                {
+                  "capability": "read",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "operationId": "<uuid:2>:op3",
+                  "outcome": "completed"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 1,
+                "failed": 0,
+                "notStarted": 2,
+                "running": 0,
+                "total": 3,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c3",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op1",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "write",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op2",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 3,
+                  "status": "running",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "write",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op2",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 4,
+                  "status": "failed",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "read",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op3",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 5,
+                  "status": "running",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "read",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op3",
+                  "outcome": "completed",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 6,
+                  "status": "completed",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:root",
+                  "sequence": 7,
+                  "status": "completed",
+                  "turnId": "c3",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            }
+          },
+          "toolCallId": "c3",
+          "toolName": "ptc",
+          "type": "tool_execution_end"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "[\"ApprovalDenied\",\"ApprovalDenied\",\"Not started: an operation was declined earlier in this script, so write does not run in it. Report the refusal instead of working around it.\",\"1\\tx\\n[hook]\\nlint: careful\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook\n\n[hooks]\nread: lint: careful",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:2>",
+              "manifest": [
+                "bash",
+                "write",
+                "read"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:2>:op1",
+                  "outcome": "not_started"
+                },
+                {
+                  "capability": "write",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:2>:op2",
+                  "outcome": "not_started"
+                },
+                {
+                  "capability": "read",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "operationId": "<uuid:2>:op3",
+                  "outcome": "completed"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 1,
+                "failed": 0,
+                "notStarted": 2,
+                "running": 0,
+                "total": 3,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c3",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op1",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "write",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op2",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 3,
+                  "status": "running",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "write",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op2",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 4,
+                  "status": "failed",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "read",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op3",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 5,
+                  "status": "running",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "read",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op3",
+                  "outcome": "completed",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 6,
+                  "status": "completed",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:root",
+                  "sequence": 7,
+                  "status": "completed",
+                  "turnId": "c3",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c3",
+            "toolName": "ptc"
+          },
+          "type": "message_start"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "[\"ApprovalDenied\",\"ApprovalDenied\",\"Not started: an operation was declined earlier in this script, so write does not run in it. Report the refusal instead of working around it.\",\"1\\tx\\n[hook]\\nlint: careful\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook\n\n[hooks]\nread: lint: careful",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:2>",
+              "manifest": [
+                "bash",
+                "write",
+                "read"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:2>:op1",
+                  "outcome": "not_started"
+                },
+                {
+                  "capability": "write",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:2>:op2",
+                  "outcome": "not_started"
+                },
+                {
+                  "capability": "read",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "operationId": "<uuid:2>:op3",
+                  "outcome": "completed"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 1,
+                "failed": 0,
+                "notStarted": 2,
+                "running": 0,
+                "total": 3,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c3",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op1",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "write",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op2",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 3,
+                  "status": "running",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "write",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op2",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 4,
+                  "status": "failed",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "read",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op3",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 5,
+                  "status": "running",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "read",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:op3",
+                  "outcome": "completed",
+                  "parentNodeId": "<uuid:2>:root",
+                  "sequence": 6,
+                  "status": "completed",
+                  "turnId": "c3",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:2>",
+                  "nodeId": "<uuid:2>:root",
+                  "sequence": 7,
+                  "status": "completed",
+                  "turnId": "c3",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c3",
+            "toolName": "ptc"
+          },
+          "type": "message_end"
+        },
+        {
+          "args": {
+            "code": "await tools.read({ path: 'a.txt' }); return 'done';"
+          },
+          "toolCallId": "c4",
+          "toolName": "ptc",
+          "type": "tool_execution_start"
+        },
+        {
+          "args": {
+            "path": "a.txt"
+          },
+          "parentToolCallId": "c4",
+          "toolCallId": "<uuid:3>:op1",
+          "toolName": "read",
+          "type": "tool_execution_start"
+        },
+        {
+          "isError": false,
+          "parentToolCallId": "c4",
+          "result": {
+            "content": [
+              {
+                "text": "1\tx",
+                "type": "text"
+              },
+              {
+                "text": "\n[hook]\nlint: careful",
+                "type": "text"
+              }
+            ]
+          },
+          "toolCallId": "<uuid:3>:op1",
+          "toolName": "read",
+          "type": "tool_execution_end"
+        },
+        {
+          "isError": false,
+          "result": {
+            "content": [
+              {
+                "text": "done\n\n[hooks]\nread: lint: careful",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:3>",
+              "manifest": [
+                "read"
+              ],
+              "operations": [
+                {
+                  "capability": "read",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "operationId": "<uuid:3>:op1",
+                  "outcome": "completed"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 1,
+                "failed": 0,
+                "notStarted": 0,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c4",
+                  "type": "execution"
+                },
+                {
+                  "capability": "read",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:op1",
+                  "parentNodeId": "<uuid:3>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c4",
+                  "type": "operation"
+                },
+                {
+                  "capability": "read",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:op1",
+                  "outcome": "completed",
+                  "parentNodeId": "<uuid:3>:root",
+                  "sequence": 2,
+                  "status": "completed",
+                  "turnId": "c4",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "c4",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            }
+          },
+          "toolCallId": "c4",
+          "toolName": "ptc",
+          "type": "tool_execution_end"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "done\n\n[hooks]\nread: lint: careful",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:3>",
+              "manifest": [
+                "read"
+              ],
+              "operations": [
+                {
+                  "capability": "read",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "operationId": "<uuid:3>:op1",
+                  "outcome": "completed"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 1,
+                "failed": 0,
+                "notStarted": 0,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c4",
+                  "type": "execution"
+                },
+                {
+                  "capability": "read",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:op1",
+                  "parentNodeId": "<uuid:3>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c4",
+                  "type": "operation"
+                },
+                {
+                  "capability": "read",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:op1",
+                  "outcome": "completed",
+                  "parentNodeId": "<uuid:3>:root",
+                  "sequence": 2,
+                  "status": "completed",
+                  "turnId": "c4",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "c4",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c4",
+            "toolName": "ptc"
+          },
+          "type": "message_start"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "done\n\n[hooks]\nread: lint: careful",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:3>",
+              "manifest": [
+                "read"
+              ],
+              "operations": [
+                {
+                  "capability": "read",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "operationId": "<uuid:3>:op1",
+                  "outcome": "completed"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 1,
+                "failed": 0,
+                "notStarted": 0,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c4",
+                  "type": "execution"
+                },
+                {
+                  "capability": "read",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:op1",
+                  "parentNodeId": "<uuid:3>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c4",
+                  "type": "operation"
+                },
+                {
+                  "capability": "read",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:op1",
+                  "outcome": "completed",
+                  "parentNodeId": "<uuid:3>:root",
+                  "sequence": 2,
+                  "status": "completed",
+                  "turnId": "c4",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "c4",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c4",
+            "toolName": "ptc"
+          },
+          "type": "message_end"
+        },
+        {
+          "args": {
+            "code": "try { await tools.edit({ path: 'a.txt', oldText: 'x', newText: 'y' }); } catch (e) { return e.code + ': ' + e.message; }"
+          },
+          "toolCallId": "c5",
+          "toolName": "ptc",
+          "type": "tool_execution_start"
+        },
+        {
+          "args": {
+            "newText": "y",
+            "oldText": "x",
+            "path": "a.txt"
+          },
+          "parentToolCallId": "c5",
+          "toolCallId": "<uuid:4>:op1",
+          "toolName": "edit",
+          "type": "tool_execution_start"
+        },
+        {
+          "isError": true,
+          "parentToolCallId": "c5",
+          "result": {
+            "content": [
+              {
+                "text": "Invalid hook-rewritten arguments for edit: oldText is required; newText is required; path must be string, got integer",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          },
+          "toolCallId": "<uuid:4>:op1",
+          "toolName": "edit",
+          "type": "tool_execution_end"
+        },
+        {
+          "isError": false,
+          "result": {
+            "content": [
+              {
+                "text": "InvalidArguments: Invalid hook-rewritten arguments for edit: oldText is required; newText is required; path must be string, got integer",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:4>",
+              "manifest": [
+                "edit"
+              ],
+              "operations": [
+                {
+                  "capability": "edit",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "InvalidArguments",
+                  "operationId": "<uuid:4>:op1",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 1,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c5",
+                  "type": "execution"
+                },
+                {
+                  "capability": "edit",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:op1",
+                  "parentNodeId": "<uuid:4>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c5",
+                  "type": "operation"
+                },
+                {
+                  "capability": "edit",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "InvalidArguments",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:4>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "c5",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "c5",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            }
+          },
+          "toolCallId": "c5",
+          "toolName": "ptc",
+          "type": "tool_execution_end"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "InvalidArguments: Invalid hook-rewritten arguments for edit: oldText is required; newText is required; path must be string, got integer",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:4>",
+              "manifest": [
+                "edit"
+              ],
+              "operations": [
+                {
+                  "capability": "edit",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "InvalidArguments",
+                  "operationId": "<uuid:4>:op1",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 1,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c5",
+                  "type": "execution"
+                },
+                {
+                  "capability": "edit",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:op1",
+                  "parentNodeId": "<uuid:4>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c5",
+                  "type": "operation"
+                },
+                {
+                  "capability": "edit",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "InvalidArguments",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:4>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "c5",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "c5",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c5",
+            "toolName": "ptc"
+          },
+          "type": "message_start"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "InvalidArguments: Invalid hook-rewritten arguments for edit: oldText is required; newText is required; path must be string, got integer",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:4>",
+              "manifest": [
+                "edit"
+              ],
+              "operations": [
+                {
+                  "capability": "edit",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "InvalidArguments",
+                  "operationId": "<uuid:4>:op1",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 1,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c5",
+                  "type": "execution"
+                },
+                {
+                  "capability": "edit",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:op1",
+                  "parentNodeId": "<uuid:4>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c5",
+                  "type": "operation"
+                },
+                {
+                  "capability": "edit",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "InvalidArguments",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:4>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "c5",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "c5",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c5",
+            "toolName": "ptc"
+          },
+          "type": "message_end"
+        },
+        {
+          "args": {
+            "code": "await tools.bash({ command: 'echo hi' });"
+          },
+          "toolCallId": "c6",
+          "toolName": "ptc",
+          "type": "tool_execution_start"
+        },
+        {
+          "args": {
+            "command": "echo hi"
+          },
+          "parentToolCallId": "c6",
+          "toolCallId": "<uuid:5>:op1",
+          "toolName": "bash",
+          "type": "tool_execution_start"
+        },
+        {
+          "isError": true,
+          "parentToolCallId": "c6",
+          "result": {
+            "content": [
+              {
+                "text": "Blocked by hook: bash denied",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          },
+          "toolCallId": "<uuid:5>:op1",
+          "toolName": "bash",
+          "type": "tool_execution_end"
+        },
+        {
+          "isError": true,
+          "result": {
+            "content": [
+              {
+                "text": "[error] ApprovalDenied: Blocked by hook: bash denied\n\n[operations] 0 completed, 1 not started\n\n- bash: not_started (ApprovalDenied)\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:5>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:5>:op1",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "failed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 1,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:5>",
+                  "nodeId": "<uuid:5>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c6",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:5>",
+                  "nodeId": "<uuid:5>:op1",
+                  "parentNodeId": "<uuid:5>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c6",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:5>",
+                  "nodeId": "<uuid:5>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:5>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "c6",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:5>",
+                  "nodeId": "<uuid:5>:root",
+                  "sequence": 3,
+                  "status": "failed",
+                  "turnId": "c6",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": true
+          },
+          "toolCallId": "c6",
+          "toolName": "ptc",
+          "type": "tool_execution_end"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "[error] ApprovalDenied: Blocked by hook: bash denied\n\n[operations] 0 completed, 1 not started\n\n- bash: not_started (ApprovalDenied)\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:5>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:5>:op1",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "failed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 1,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:5>",
+                  "nodeId": "<uuid:5>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c6",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:5>",
+                  "nodeId": "<uuid:5>:op1",
+                  "parentNodeId": "<uuid:5>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c6",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:5>",
+                  "nodeId": "<uuid:5>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:5>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "c6",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:5>",
+                  "nodeId": "<uuid:5>:root",
+                  "sequence": 3,
+                  "status": "failed",
+                  "turnId": "c6",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c6",
+            "toolName": "ptc"
+          },
+          "type": "message_start"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "[error] ApprovalDenied: Blocked by hook: bash denied\n\n[operations] 0 completed, 1 not started\n\n- bash: not_started (ApprovalDenied)\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:5>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:5>:op1",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "failed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 1,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:5>",
+                  "nodeId": "<uuid:5>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c6",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:5>",
+                  "nodeId": "<uuid:5>:op1",
+                  "parentNodeId": "<uuid:5>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c6",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:5>",
+                  "nodeId": "<uuid:5>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:5>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "c6",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:5>",
+                  "nodeId": "<uuid:5>:root",
+                  "sequence": 3,
+                  "status": "failed",
+                  "turnId": "c6",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c6",
+            "toolName": "ptc"
+          },
+          "type": "message_end"
+        },
+        {
+          "type": "turn_end"
+        },
+        {
+          "type": "turn_start"
+        },
+        {
+          "message": {
+            "content": [],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "timestamp": "<epoch-ms>"
+          },
+          "type": "message_start"
+        },
+        {
+          "sections": [
+            "context"
+          ],
+          "type": "panel_changed"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "type": "text_start"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "delta": "o",
+            "type": "text_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "delta": "k",
+            "type": "text_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "content": "ok",
+            "contentIndex": 0,
+            "type": "text_end"
+          },
+          "type": "message_update"
+        },
+        {
+          "message": {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          "type": "message_end"
+        },
+        {
+          "sections": [
+            "context"
+          ],
+          "type": "panel_changed"
+        },
+        {
+          "type": "turn_end"
+        },
+        {
+          "type": "agent_end",
+          "willRetry": false
+        },
+        {
+          "type": "agent_settled"
+        }
+      ],
+      "step": "refusals in scripts: events"
+    },
+    {
+      "observed": [
+        {
+          "messages": [
+            {
+              "content": "run refusals in scripts",
+              "role": "user",
+              "timestamp": "<epoch-ms>"
+            }
+          ],
+          "modelId": "fake-model",
+          "providerName": "fake",
+          "sessionId": "<hex16:1>",
+          "systemPrompt": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\nCurrent working directory: <tmp>/workspace",
+          "thinking": "low",
+          "tools": [
+            {
+              "description": "Run a TypeScript async function body that calls capabilities. Every operation (files, shell commands, web, questions to the user, …) is a capability callable from here; the core ones may also be direct tools. Use a script to combine several operations, loop, or filter results before they reach you.\n\n- `await tools.<name>(args)` returns the result data and throws a `PtcError` on failure: `code` is ApprovalDenied, CapabilityUnavailable, InvalidArguments, QuotaExceeded, Cancelled, Timeout or OperationFailed; `outcome` says whether it ran (`not_started`, `failed`, `cancelled`, `unknown`); `data` holds the typed fields of a failed result when there are any. A `bash` command that exits non-zero is not a failure here: check its `exitCode`.\n- Result data is `text` (the formatted output) plus typed fields, e.g. `read` → `content`, `nextOffset`; `bash` → `output`, `exitCode`; `grep` → `matches`. Use the fields instead of parsing `text`.\n- `await tools.call(\"<name>\", args)` returns `{ ok: true, data }` or `{ ok: false, error: { code, message, outcome } }` instead of throwing.\n- Capability names must be literals (`tools.read(…)`, `tools.call(\"read\", …)`); never `tools[name]`. A script using an unavailable capability is rejected before anything runs.\n- `await tools.par(items, async (item, index) => …, { concurrency })` maps with up to 8 at a time and keeps order. At the first failure it starts no more items, cancels the operations its items still have running and throws that failure. Writes and commands still run one at a time. At most 8 operations run at once (more wait their turn), 200 operations and 200 `tools.par` calls per `ptc` call.\n- `return` what you need: strings are shown as is, other values as JSON. `console.log` output is shown too. Both are bounded, so filter large results in the script.\n- Images (e.g. `browser_screenshot`, `read` of a picture) come back as `images: [{ handle, mimeType, bytes }]`. To see one, `await attachments.add(result.images[0])`: it is attached to this `ptc` result (at most 4, together 512 KiB).\n- `store(key, value)` / `load(key)` keep small JSON values across `ptc` calls in this session (kept only when the script completes; `undefined` deletes).\n- The script runs in an isolated interpreter with no filesystem, network, processes, imports or timers: only `tools`, `attachments`, `store` and `load`.\n\nThe core signatures in the system prompt are complete; other listed capabilities show their arguments only: use `ptc_docs` for their result fields, or for a capability named without a signature. Default timeout 120 s (`timeout` in seconds, max 3600), not counting time spent waiting for the user. Nothing is retried automatically, and operations that already ran are not undone when a later one fails.",
+              "name": "ptc",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "description": "Body of an async TypeScript function, e.g. `const { text } = await tools.read({ path: \"README.md\" }); return text.split(\"\\n\").length;`",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "timeout": {
+                    "description": "Active-time budget in seconds (default 120)",
+                    "exclusiveMinimum": 0,
+                    "maximum": 3600,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Look up the capabilities `ptc` scripts can call. `{}` lists categories and names; `{ category }` gives one-line summaries (continue with the returned `cursor`); `{ names: [...] }` (1–8) gives argument schemas, results, errors, effects and approval behavior. Read-only. Docs already in the conversation stay valid until a call fails with StaleContract.",
+              "name": "ptc_docs",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "category": {
+                    "description": "A category from the index",
+                    "type": "string"
+                  },
+                  "cursor": {
+                    "description": "nextCursor of the previous page (with category)",
+                    "type": "string"
+                  },
+                  "names": {
+                    "description": "Capabilities to document in full",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 8,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "registryVersion": {
+                    "description": "registryVersion you already have; a mismatch fails with StaleContract",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            {
+              "description": "Read a file. Text is returned with line numbers (`offset` is 1-based, default limit 2000 lines). Images (png/jpg/gif/webp) are returned as images.",
+              "name": "read",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "limit": {
+                    "description": "Maximum lines to return",
+                    "type": "number"
+                  },
+                  "offset": {
+                    "description": "1-based first line",
+                    "type": "number"
+                  },
+                  "path": {
+                    "description": "File path, relative to the workspace or absolute",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Create or overwrite a file with the given content. Parent directories are created.",
+              "name": "write",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "content": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "content"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true. Read the file first.",
+              "name": "edit",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "newText": {
+                    "type": "string"
+                  },
+                  "oldText": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "replaceAll": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "path",
+                  "oldText",
+                  "newText"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "List a directory (directories end with /).",
+              "name": "ls",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "description": "Default: workspace root",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            {
+              "description": "Search file contents with a JavaScript regular expression. Returns `path:line: text`. Optional `glob` filters files.",
+              "name": "grep",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "glob": {
+                    "type": "string"
+                  },
+                  "ignoreCase": {
+                    "type": "boolean"
+                  },
+                  "limit": {
+                    "description": "Maximum matches (default 200)",
+                    "type": "number"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "pattern": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "pattern"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Find files by glob pattern (e.g. `**/*.ts`). Skips .git, node_modules, dist, target, result.",
+              "name": "find",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "description": "Directory to search (default workspace)",
+                    "type": "string"
+                  },
+                  "pattern": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "pattern"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Run a bash command in the workspace. stdout and stderr are combined. Default timeout 120s (`timeout` in seconds).",
+              "name": "bash",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "command": {
+                    "type": "string"
+                  },
+                  "timeout": {
+                    "description": "Timeout in seconds",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "command"
+                ],
+                "type": "object"
+              }
+            }
+          ]
+        },
+        {
+          "messages": [
+            {
+              "content": "run refusals in scripts",
+              "role": "user",
+              "timestamp": "<epoch-ms>"
+            },
+            {
+              "api": "openai-completions",
+              "completedAt": "<epoch-ms>",
+              "content": [
+                {
+                  "arguments": {
+                    "code": "try { await tools.bash({ command: 'echo hi' }); } catch (e) { return [e.code, e.outcome, e.message]; }"
+                  },
+                  "id": "c2",
+                  "name": "ptc",
+                  "type": "toolCall"
+                },
+                {
+                  "arguments": {
+                    "code": "const out = [];\n       try { await tools.bash({ command: 'echo hi' }); } catch (e) { out.push(e.code); }\n       try { await tools.write({ path: 'b.txt', content: 'y' }); } catch (e) { out.push(e.code, e.message); }\n       out.push((await tools.read({ path: 'a.txt' })).text);\n       return out;"
+                  },
+                  "id": "c3",
+                  "name": "ptc",
+                  "type": "toolCall"
+                },
+                {
+                  "arguments": {
+                    "code": "await tools.read({ path: 'a.txt' }); return 'done';"
+                  },
+                  "id": "c4",
+                  "name": "ptc",
+                  "type": "toolCall"
+                },
+                {
+                  "arguments": {
+                    "code": "try { await tools.edit({ path: 'a.txt', oldText: 'x', newText: 'y' }); } catch (e) { return e.code + ': ' + e.message; }"
+                  },
+                  "id": "c5",
+                  "name": "ptc",
+                  "type": "toolCall"
+                },
+                {
+                  "arguments": {
+                    "code": "await tools.bash({ command: 'echo hi' });"
+                  },
+                  "id": "c6",
+                  "name": "ptc",
+                  "type": "toolCall"
+                }
+              ],
+              "model": "fake-model",
+              "provider": "fake",
+              "role": "assistant",
+              "stopReason": "toolUse",
+              "timestamp": "<epoch-ms>",
+              "usage": {
+                "cacheRead": 40,
+                "cacheWrite": 0,
+                "input": 100,
+                "output": 10,
+                "totalTokens": 150
+              }
+            },
+            {
+              "content": [
+                {
+                  "text": "[\"ApprovalDenied\",\"not_started\",\"Blocked by hook: bash denied\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook",
+                  "type": "text"
+                }
+              ],
+              "details": {
+                "activeMs": "<ms>",
+                "consoleTruncated": false,
+                "executionId": "<uuid:1>",
+                "manifest": [
+                  "bash"
+                ],
+                "operations": [
+                  {
+                    "capability": "bash",
+                    "delivered": true,
+                    "durationMs": "<ms>",
+                    "errorCode": "ApprovalDenied",
+                    "operationId": "<uuid:1>:op1",
+                    "outcome": "not_started"
+                  }
+                ],
+                "status": "completed",
+                "summary": {
+                  "cancelled": 0,
+                  "completed": 0,
+                  "failed": 0,
+                  "notStarted": 1,
+                  "running": 0,
+                  "total": 1,
+                  "unknown": 0
+                },
+                "trace": [
+                  {
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:1>",
+                    "nodeId": "<uuid:1>:root",
+                    "sequence": 0,
+                    "status": "running",
+                    "turnId": "c2",
+                    "type": "execution"
+                  },
+                  {
+                    "capability": "bash",
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:1>",
+                    "nodeId": "<uuid:1>:op1",
+                    "parentNodeId": "<uuid:1>:root",
+                    "sequence": 1,
+                    "status": "running",
+                    "turnId": "c2",
+                    "type": "operation"
+                  },
+                  {
+                    "capability": "bash",
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "errorCode": "ApprovalDenied",
+                    "executionId": "<uuid:1>",
+                    "nodeId": "<uuid:1>:op1",
+                    "outcome": "not_started",
+                    "parentNodeId": "<uuid:1>:root",
+                    "sequence": 2,
+                    "status": "failed",
+                    "turnId": "c2",
+                    "type": "operation"
+                  },
+                  {
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "executionId": "<uuid:1>",
+                    "nodeId": "<uuid:1>:root",
+                    "sequence": 3,
+                    "status": "completed",
+                    "turnId": "c2",
+                    "type": "execution"
+                  }
+                ],
+                "truncated": false,
+                "waitedMs": "<ms>"
+              },
+              "isError": false,
+              "role": "toolResult",
+              "timestamp": "<epoch-ms>",
+              "toolCallId": "c2",
+              "toolName": "ptc"
+            },
+            {
+              "content": [
+                {
+                  "text": "[\"ApprovalDenied\",\"ApprovalDenied\",\"Not started: an operation was declined earlier in this script, so write does not run in it. Report the refusal instead of working around it.\",\"1\\tx\\n[hook]\\nlint: careful\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook\n\n[hooks]\nread: lint: careful",
+                  "type": "text"
+                }
+              ],
+              "details": {
+                "activeMs": "<ms>",
+                "consoleTruncated": false,
+                "executionId": "<uuid:2>",
+                "manifest": [
+                  "bash",
+                  "write",
+                  "read"
+                ],
+                "operations": [
+                  {
+                    "capability": "bash",
+                    "delivered": true,
+                    "durationMs": "<ms>",
+                    "errorCode": "ApprovalDenied",
+                    "operationId": "<uuid:2>:op1",
+                    "outcome": "not_started"
+                  },
+                  {
+                    "capability": "write",
+                    "delivered": true,
+                    "durationMs": "<ms>",
+                    "errorCode": "ApprovalDenied",
+                    "operationId": "<uuid:2>:op2",
+                    "outcome": "not_started"
+                  },
+                  {
+                    "capability": "read",
+                    "delivered": true,
+                    "durationMs": "<ms>",
+                    "operationId": "<uuid:2>:op3",
+                    "outcome": "completed"
+                  }
+                ],
+                "status": "completed",
+                "summary": {
+                  "cancelled": 0,
+                  "completed": 1,
+                  "failed": 0,
+                  "notStarted": 2,
+                  "running": 0,
+                  "total": 3,
+                  "unknown": 0
+                },
+                "trace": [
+                  {
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:2>",
+                    "nodeId": "<uuid:2>:root",
+                    "sequence": 0,
+                    "status": "running",
+                    "turnId": "c3",
+                    "type": "execution"
+                  },
+                  {
+                    "capability": "bash",
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:2>",
+                    "nodeId": "<uuid:2>:op1",
+                    "parentNodeId": "<uuid:2>:root",
+                    "sequence": 1,
+                    "status": "running",
+                    "turnId": "c3",
+                    "type": "operation"
+                  },
+                  {
+                    "capability": "bash",
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "errorCode": "ApprovalDenied",
+                    "executionId": "<uuid:2>",
+                    "nodeId": "<uuid:2>:op1",
+                    "outcome": "not_started",
+                    "parentNodeId": "<uuid:2>:root",
+                    "sequence": 2,
+                    "status": "failed",
+                    "turnId": "c3",
+                    "type": "operation"
+                  },
+                  {
+                    "capability": "write",
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:2>",
+                    "nodeId": "<uuid:2>:op2",
+                    "parentNodeId": "<uuid:2>:root",
+                    "sequence": 3,
+                    "status": "running",
+                    "turnId": "c3",
+                    "type": "operation"
+                  },
+                  {
+                    "capability": "write",
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "errorCode": "ApprovalDenied",
+                    "executionId": "<uuid:2>",
+                    "nodeId": "<uuid:2>:op2",
+                    "outcome": "not_started",
+                    "parentNodeId": "<uuid:2>:root",
+                    "sequence": 4,
+                    "status": "failed",
+                    "turnId": "c3",
+                    "type": "operation"
+                  },
+                  {
+                    "capability": "read",
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:2>",
+                    "nodeId": "<uuid:2>:op3",
+                    "parentNodeId": "<uuid:2>:root",
+                    "sequence": 5,
+                    "status": "running",
+                    "turnId": "c3",
+                    "type": "operation"
+                  },
+                  {
+                    "capability": "read",
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "executionId": "<uuid:2>",
+                    "nodeId": "<uuid:2>:op3",
+                    "outcome": "completed",
+                    "parentNodeId": "<uuid:2>:root",
+                    "sequence": 6,
+                    "status": "completed",
+                    "turnId": "c3",
+                    "type": "operation"
+                  },
+                  {
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "executionId": "<uuid:2>",
+                    "nodeId": "<uuid:2>:root",
+                    "sequence": 7,
+                    "status": "completed",
+                    "turnId": "c3",
+                    "type": "execution"
+                  }
+                ],
+                "truncated": false,
+                "waitedMs": "<ms>"
+              },
+              "isError": false,
+              "role": "toolResult",
+              "timestamp": "<epoch-ms>",
+              "toolCallId": "c3",
+              "toolName": "ptc"
+            },
+            {
+              "content": [
+                {
+                  "text": "done\n\n[hooks]\nread: lint: careful",
+                  "type": "text"
+                }
+              ],
+              "details": {
+                "activeMs": "<ms>",
+                "consoleTruncated": false,
+                "executionId": "<uuid:3>",
+                "manifest": [
+                  "read"
+                ],
+                "operations": [
+                  {
+                    "capability": "read",
+                    "delivered": true,
+                    "durationMs": "<ms>",
+                    "operationId": "<uuid:3>:op1",
+                    "outcome": "completed"
+                  }
+                ],
+                "status": "completed",
+                "summary": {
+                  "cancelled": 0,
+                  "completed": 1,
+                  "failed": 0,
+                  "notStarted": 0,
+                  "running": 0,
+                  "total": 1,
+                  "unknown": 0
+                },
+                "trace": [
+                  {
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:3>",
+                    "nodeId": "<uuid:3>:root",
+                    "sequence": 0,
+                    "status": "running",
+                    "turnId": "c4",
+                    "type": "execution"
+                  },
+                  {
+                    "capability": "read",
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:3>",
+                    "nodeId": "<uuid:3>:op1",
+                    "parentNodeId": "<uuid:3>:root",
+                    "sequence": 1,
+                    "status": "running",
+                    "turnId": "c4",
+                    "type": "operation"
+                  },
+                  {
+                    "capability": "read",
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "executionId": "<uuid:3>",
+                    "nodeId": "<uuid:3>:op1",
+                    "outcome": "completed",
+                    "parentNodeId": "<uuid:3>:root",
+                    "sequence": 2,
+                    "status": "completed",
+                    "turnId": "c4",
+                    "type": "operation"
+                  },
+                  {
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "executionId": "<uuid:3>",
+                    "nodeId": "<uuid:3>:root",
+                    "sequence": 3,
+                    "status": "completed",
+                    "turnId": "c4",
+                    "type": "execution"
+                  }
+                ],
+                "truncated": false,
+                "waitedMs": "<ms>"
+              },
+              "isError": false,
+              "role": "toolResult",
+              "timestamp": "<epoch-ms>",
+              "toolCallId": "c4",
+              "toolName": "ptc"
+            },
+            {
+              "content": [
+                {
+                  "text": "InvalidArguments: Invalid hook-rewritten arguments for edit: oldText is required; newText is required; path must be string, got integer",
+                  "type": "text"
+                }
+              ],
+              "details": {
+                "activeMs": "<ms>",
+                "consoleTruncated": false,
+                "executionId": "<uuid:4>",
+                "manifest": [
+                  "edit"
+                ],
+                "operations": [
+                  {
+                    "capability": "edit",
+                    "delivered": true,
+                    "durationMs": "<ms>",
+                    "errorCode": "InvalidArguments",
+                    "operationId": "<uuid:4>:op1",
+                    "outcome": "not_started"
+                  }
+                ],
+                "status": "completed",
+                "summary": {
+                  "cancelled": 0,
+                  "completed": 0,
+                  "failed": 0,
+                  "notStarted": 1,
+                  "running": 0,
+                  "total": 1,
+                  "unknown": 0
+                },
+                "trace": [
+                  {
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:4>",
+                    "nodeId": "<uuid:4>:root",
+                    "sequence": 0,
+                    "status": "running",
+                    "turnId": "c5",
+                    "type": "execution"
+                  },
+                  {
+                    "capability": "edit",
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:4>",
+                    "nodeId": "<uuid:4>:op1",
+                    "parentNodeId": "<uuid:4>:root",
+                    "sequence": 1,
+                    "status": "running",
+                    "turnId": "c5",
+                    "type": "operation"
+                  },
+                  {
+                    "capability": "edit",
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "errorCode": "InvalidArguments",
+                    "executionId": "<uuid:4>",
+                    "nodeId": "<uuid:4>:op1",
+                    "outcome": "not_started",
+                    "parentNodeId": "<uuid:4>:root",
+                    "sequence": 2,
+                    "status": "failed",
+                    "turnId": "c5",
+                    "type": "operation"
+                  },
+                  {
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "executionId": "<uuid:4>",
+                    "nodeId": "<uuid:4>:root",
+                    "sequence": 3,
+                    "status": "completed",
+                    "turnId": "c5",
+                    "type": "execution"
+                  }
+                ],
+                "truncated": false,
+                "waitedMs": "<ms>"
+              },
+              "isError": false,
+              "role": "toolResult",
+              "timestamp": "<epoch-ms>",
+              "toolCallId": "c5",
+              "toolName": "ptc"
+            },
+            {
+              "content": [
+                {
+                  "text": "[error] ApprovalDenied: Blocked by hook: bash denied\n\n[operations] 0 completed, 1 not started\n\n- bash: not_started (ApprovalDenied)\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook",
+                  "type": "text"
+                }
+              ],
+              "details": {
+                "activeMs": "<ms>",
+                "consoleTruncated": false,
+                "executionId": "<uuid:5>",
+                "manifest": [
+                  "bash"
+                ],
+                "operations": [
+                  {
+                    "capability": "bash",
+                    "delivered": true,
+                    "durationMs": "<ms>",
+                    "errorCode": "ApprovalDenied",
+                    "operationId": "<uuid:5>:op1",
+                    "outcome": "not_started"
+                  }
+                ],
+                "status": "failed",
+                "summary": {
+                  "cancelled": 0,
+                  "completed": 0,
+                  "failed": 0,
+                  "notStarted": 1,
+                  "running": 0,
+                  "total": 1,
+                  "unknown": 0
+                },
+                "trace": [
+                  {
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:5>",
+                    "nodeId": "<uuid:5>:root",
+                    "sequence": 0,
+                    "status": "running",
+                    "turnId": "c6",
+                    "type": "execution"
+                  },
+                  {
+                    "capability": "bash",
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:5>",
+                    "nodeId": "<uuid:5>:op1",
+                    "parentNodeId": "<uuid:5>:root",
+                    "sequence": 1,
+                    "status": "running",
+                    "turnId": "c6",
+                    "type": "operation"
+                  },
+                  {
+                    "capability": "bash",
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "errorCode": "ApprovalDenied",
+                    "executionId": "<uuid:5>",
+                    "nodeId": "<uuid:5>:op1",
+                    "outcome": "not_started",
+                    "parentNodeId": "<uuid:5>:root",
+                    "sequence": 2,
+                    "status": "failed",
+                    "turnId": "c6",
+                    "type": "operation"
+                  },
+                  {
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "executionId": "<uuid:5>",
+                    "nodeId": "<uuid:5>:root",
+                    "sequence": 3,
+                    "status": "failed",
+                    "turnId": "c6",
+                    "type": "execution"
+                  }
+                ],
+                "truncated": false,
+                "waitedMs": "<ms>"
+              },
+              "isError": true,
+              "role": "toolResult",
+              "timestamp": "<epoch-ms>",
+              "toolCallId": "c6",
+              "toolName": "ptc"
+            }
+          ],
+          "modelId": "fake-model",
+          "providerName": "fake",
+          "sessionId": "<hex16:1>",
+          "systemPrompt": "<unchanged>",
+          "thinking": "low",
+          "tools": "<unchanged>"
+        }
+      ],
+      "step": "refusals in scripts: model requests"
+    },
+    {
+      "observed": false,
+      "step": "b.txt exists"
+    },
+    {
+      "observed": 0,
+      "step": "exit code"
+    }
+  ],
+  [
+    {
+      "observed": {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
+      },
+      "step": "held back while waiting: response"
+    },
+    {
+      "observed": [
+        {
+          "type": "agent_start"
+        },
+        {
+          "message": {
+            "content": "run held back while waiting",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          "type": "message_start"
+        },
+        {
+          "message": {
+            "content": "run held back while waiting",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          "type": "message_end"
+        },
+        {
+          "type": "turn_start"
+        },
+        {
+          "message": {
+            "content": [],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "timestamp": "<epoch-ms>"
+          },
+          "type": "message_start"
+        },
+        {
+          "sections": [
+            "context"
+          ],
+          "type": "panel_changed"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "id": "c7",
+            "toolName": "ptc",
+            "type": "toolcall_start"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "delta": "{\"code\":\"const results = await Promise.allSettled([\\n         tools.bash({ command: 'echo hi' }),\\n         tools.write({ path: 'late.txt', content: 'y' }),\\n       ]);\\n       return results.map((r) => r.status === 'rejected' ? r.reason.code + ': ' + r.reason.message : 'ok');\"}",
+            "type": "toolcall_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "toolCall": {
+              "arguments": {
+                "code": "const results = await Promise.allSettled([\n         tools.bash({ command: 'echo hi' }),\n         tools.write({ path: 'late.txt', content: 'y' }),\n       ]);\n       return results.map((r) => r.status === 'rejected' ? r.reason.code + ': ' + r.reason.message : 'ok');"
+              },
+              "id": "c7",
+              "name": "ptc",
+              "type": "toolCall"
+            },
+            "type": "toolcall_end"
+          },
+          "type": "message_update"
+        },
+        {
+          "message": {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "const results = await Promise.allSettled([\n         tools.bash({ command: 'echo hi' }),\n         tools.write({ path: 'late.txt', content: 'y' }),\n       ]);\n       return results.map((r) => r.status === 'rejected' ? r.reason.code + ': ' + r.reason.message : 'ok');"
+                },
+                "id": "c7",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          "type": "message_end"
+        },
+        {
+          "sections": [
+            "context"
+          ],
+          "type": "panel_changed"
+        },
+        {
+          "args": {
+            "code": "const results = await Promise.allSettled([\n         tools.bash({ command: 'echo hi' }),\n         tools.write({ path: 'late.txt', content: 'y' }),\n       ]);\n       return results.map((r) => r.status === 'rejected' ? r.reason.code + ': ' + r.reason.message : 'ok');"
+          },
+          "toolCallId": "c7",
+          "toolName": "ptc",
+          "type": "tool_execution_start"
+        },
+        {
+          "args": {
+            "command": "echo hi"
+          },
+          "parentToolCallId": "c7",
+          "toolCallId": "<uuid:1>:op1",
+          "toolName": "bash",
+          "type": "tool_execution_start"
+        },
+        {
+          "args": {
+            "content": "y",
+            "path": "late.txt"
+          },
+          "parentToolCallId": "c7",
+          "toolCallId": "<uuid:1>:op2",
+          "toolName": "write",
+          "type": "tool_execution_start"
+        },
+        {
+          "isError": true,
+          "parentToolCallId": "c7",
+          "result": {
+            "content": [
+              {
+                "text": "Blocked by hook: bash denied",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          },
+          "toolCallId": "<uuid:1>:op1",
+          "toolName": "bash",
+          "type": "tool_execution_end"
+        },
+        {
+          "isError": true,
+          "parentToolCallId": "c7",
+          "result": {
+            "content": [
+              {
+                "text": "Not started: an operation was declined earlier in this script, so write does not run in it. Report the refusal instead of working around it.",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          },
+          "toolCallId": "<uuid:1>:op2",
+          "toolName": "write",
+          "type": "tool_execution_end"
+        },
+        {
+          "isError": false,
+          "result": {
+            "content": [
+              {
+                "text": "[\"ApprovalDenied: Blocked by hook: bash denied\",\"ApprovalDenied: Not started: an operation was declined earlier in this script, so write does not run in it. Report the refusal instead of working around it.\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:1>",
+              "manifest": [
+                "bash",
+                "write"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op1",
+                  "outcome": "not_started"
+                },
+                {
+                  "capability": "write",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op2",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 2,
+                "running": 0,
+                "total": 2,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c7",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c7",
+                  "type": "operation"
+                },
+                {
+                  "capability": "write",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op2",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 2,
+                  "status": "running",
+                  "turnId": "c7",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 3,
+                  "status": "failed",
+                  "turnId": "c7",
+                  "type": "operation"
+                },
+                {
+                  "capability": "write",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op2",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 4,
+                  "status": "failed",
+                  "turnId": "c7",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 5,
+                  "status": "completed",
+                  "turnId": "c7",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            }
+          },
+          "toolCallId": "c7",
+          "toolName": "ptc",
+          "type": "tool_execution_end"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "[\"ApprovalDenied: Blocked by hook: bash denied\",\"ApprovalDenied: Not started: an operation was declined earlier in this script, so write does not run in it. Report the refusal instead of working around it.\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:1>",
+              "manifest": [
+                "bash",
+                "write"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op1",
+                  "outcome": "not_started"
+                },
+                {
+                  "capability": "write",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op2",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 2,
+                "running": 0,
+                "total": 2,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c7",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c7",
+                  "type": "operation"
+                },
+                {
+                  "capability": "write",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op2",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 2,
+                  "status": "running",
+                  "turnId": "c7",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 3,
+                  "status": "failed",
+                  "turnId": "c7",
+                  "type": "operation"
+                },
+                {
+                  "capability": "write",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op2",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 4,
+                  "status": "failed",
+                  "turnId": "c7",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 5,
+                  "status": "completed",
+                  "turnId": "c7",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c7",
+            "toolName": "ptc"
+          },
+          "type": "message_start"
+        },
+        {
+          "message": {
+            "content": [
+              {
+                "text": "[\"ApprovalDenied: Blocked by hook: bash denied\",\"ApprovalDenied: Not started: an operation was declined earlier in this script, so write does not run in it. Report the refusal instead of working around it.\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:1>",
+              "manifest": [
+                "bash",
+                "write"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op1",
+                  "outcome": "not_started"
+                },
+                {
+                  "capability": "write",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op2",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 2,
+                "running": 0,
+                "total": 2,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "c7",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "c7",
+                  "type": "operation"
+                },
+                {
+                  "capability": "write",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op2",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 2,
+                  "status": "running",
+                  "turnId": "c7",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 3,
+                  "status": "failed",
+                  "turnId": "c7",
+                  "type": "operation"
+                },
+                {
+                  "capability": "write",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op2",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 4,
+                  "status": "failed",
+                  "turnId": "c7",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 5,
+                  "status": "completed",
+                  "turnId": "c7",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "c7",
+            "toolName": "ptc"
+          },
+          "type": "message_end"
+        },
+        {
+          "type": "turn_end"
+        },
+        {
+          "type": "turn_start"
+        },
+        {
+          "message": {
+            "content": [],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "timestamp": "<epoch-ms>"
+          },
+          "type": "message_start"
+        },
+        {
+          "sections": [
+            "context"
+          ],
+          "type": "panel_changed"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "type": "text_start"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "delta": "o",
+            "type": "text_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "contentIndex": 0,
+            "delta": "k",
+            "type": "text_delta"
+          },
+          "type": "message_update"
+        },
+        {
+          "assistantMessageEvent": {
+            "content": "ok",
+            "contentIndex": 0,
+            "type": "text_end"
+          },
+          "type": "message_update"
+        },
+        {
+          "message": {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          "type": "message_end"
+        },
+        {
+          "sections": [
+            "context"
+          ],
+          "type": "panel_changed"
+        },
+        {
+          "type": "turn_end"
+        },
+        {
+          "type": "agent_end",
+          "willRetry": false
+        },
+        {
+          "type": "agent_settled"
+        }
+      ],
+      "step": "held back while waiting: events"
+    },
+    {
+      "observed": [
+        {
+          "messages": [
+            {
+              "content": "run held back while waiting",
+              "role": "user",
+              "timestamp": "<epoch-ms>"
+            }
+          ],
+          "modelId": "fake-model",
+          "providerName": "fake",
+          "sessionId": "<hex16:1>",
+          "systemPrompt": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\nCurrent working directory: <tmp>/workspace",
+          "thinking": "low",
+          "tools": [
+            {
+              "description": "Run a TypeScript async function body that calls capabilities. Every operation (files, shell commands, web, questions to the user, …) is a capability callable from here; the core ones may also be direct tools. Use a script to combine several operations, loop, or filter results before they reach you.\n\n- `await tools.<name>(args)` returns the result data and throws a `PtcError` on failure: `code` is ApprovalDenied, CapabilityUnavailable, InvalidArguments, QuotaExceeded, Cancelled, Timeout or OperationFailed; `outcome` says whether it ran (`not_started`, `failed`, `cancelled`, `unknown`); `data` holds the typed fields of a failed result when there are any. A `bash` command that exits non-zero is not a failure here: check its `exitCode`.\n- Result data is `text` (the formatted output) plus typed fields, e.g. `read` → `content`, `nextOffset`; `bash` → `output`, `exitCode`; `grep` → `matches`. Use the fields instead of parsing `text`.\n- `await tools.call(\"<name>\", args)` returns `{ ok: true, data }` or `{ ok: false, error: { code, message, outcome } }` instead of throwing.\n- Capability names must be literals (`tools.read(…)`, `tools.call(\"read\", …)`); never `tools[name]`. A script using an unavailable capability is rejected before anything runs.\n- `await tools.par(items, async (item, index) => …, { concurrency })` maps with up to 8 at a time and keeps order. At the first failure it starts no more items, cancels the operations its items still have running and throws that failure. Writes and commands still run one at a time. At most 8 operations run at once (more wait their turn), 200 operations and 200 `tools.par` calls per `ptc` call.\n- `return` what you need: strings are shown as is, other values as JSON. `console.log` output is shown too. Both are bounded, so filter large results in the script.\n- Images (e.g. `browser_screenshot`, `read` of a picture) come back as `images: [{ handle, mimeType, bytes }]`. To see one, `await attachments.add(result.images[0])`: it is attached to this `ptc` result (at most 4, together 512 KiB).\n- `store(key, value)` / `load(key)` keep small JSON values across `ptc` calls in this session (kept only when the script completes; `undefined` deletes).\n- The script runs in an isolated interpreter with no filesystem, network, processes, imports or timers: only `tools`, `attachments`, `store` and `load`.\n\nThe core signatures in the system prompt are complete; other listed capabilities show their arguments only: use `ptc_docs` for their result fields, or for a capability named without a signature. Default timeout 120 s (`timeout` in seconds, max 3600), not counting time spent waiting for the user. Nothing is retried automatically, and operations that already ran are not undone when a later one fails.",
+              "name": "ptc",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "description": "Body of an async TypeScript function, e.g. `const { text } = await tools.read({ path: \"README.md\" }); return text.split(\"\\n\").length;`",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "timeout": {
+                    "description": "Active-time budget in seconds (default 120)",
+                    "exclusiveMinimum": 0,
+                    "maximum": 3600,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Look up the capabilities `ptc` scripts can call. `{}` lists categories and names; `{ category }` gives one-line summaries (continue with the returned `cursor`); `{ names: [...] }` (1–8) gives argument schemas, results, errors, effects and approval behavior. Read-only. Docs already in the conversation stay valid until a call fails with StaleContract.",
+              "name": "ptc_docs",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "category": {
+                    "description": "A category from the index",
+                    "type": "string"
+                  },
+                  "cursor": {
+                    "description": "nextCursor of the previous page (with category)",
+                    "type": "string"
+                  },
+                  "names": {
+                    "description": "Capabilities to document in full",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 8,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "registryVersion": {
+                    "description": "registryVersion you already have; a mismatch fails with StaleContract",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            {
+              "description": "Read a file. Text is returned with line numbers (`offset` is 1-based, default limit 2000 lines). Images (png/jpg/gif/webp) are returned as images.",
+              "name": "read",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "limit": {
+                    "description": "Maximum lines to return",
+                    "type": "number"
+                  },
+                  "offset": {
+                    "description": "1-based first line",
+                    "type": "number"
+                  },
+                  "path": {
+                    "description": "File path, relative to the workspace or absolute",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Create or overwrite a file with the given content. Parent directories are created.",
+              "name": "write",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "content": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "content"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true. Read the file first.",
+              "name": "edit",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "newText": {
+                    "type": "string"
+                  },
+                  "oldText": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "replaceAll": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "path",
+                  "oldText",
+                  "newText"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "List a directory (directories end with /).",
+              "name": "ls",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "description": "Default: workspace root",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            {
+              "description": "Search file contents with a JavaScript regular expression. Returns `path:line: text`. Optional `glob` filters files.",
+              "name": "grep",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "glob": {
+                    "type": "string"
+                  },
+                  "ignoreCase": {
+                    "type": "boolean"
+                  },
+                  "limit": {
+                    "description": "Maximum matches (default 200)",
+                    "type": "number"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "pattern": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "pattern"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Find files by glob pattern (e.g. `**/*.ts`). Skips .git, node_modules, dist, target, result.",
+              "name": "find",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "description": "Directory to search (default workspace)",
+                    "type": "string"
+                  },
+                  "pattern": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "pattern"
+                ],
+                "type": "object"
+              }
+            },
+            {
+              "description": "Run a bash command in the workspace. stdout and stderr are combined. Default timeout 120s (`timeout` in seconds).",
+              "name": "bash",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "command": {
+                    "type": "string"
+                  },
+                  "timeout": {
+                    "description": "Timeout in seconds",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "command"
+                ],
+                "type": "object"
+              }
+            }
+          ]
+        },
+        {
+          "messages": [
+            {
+              "content": "run held back while waiting",
+              "role": "user",
+              "timestamp": "<epoch-ms>"
+            },
+            {
+              "api": "openai-completions",
+              "completedAt": "<epoch-ms>",
+              "content": [
+                {
+                  "arguments": {
+                    "code": "const results = await Promise.allSettled([\n         tools.bash({ command: 'echo hi' }),\n         tools.write({ path: 'late.txt', content: 'y' }),\n       ]);\n       return results.map((r) => r.status === 'rejected' ? r.reason.code + ': ' + r.reason.message : 'ok');"
+                  },
+                  "id": "c7",
+                  "name": "ptc",
+                  "type": "toolCall"
+                }
+              ],
+              "model": "fake-model",
+              "provider": "fake",
+              "role": "assistant",
+              "stopReason": "toolUse",
+              "timestamp": "<epoch-ms>",
+              "usage": {
+                "cacheRead": 40,
+                "cacheWrite": 0,
+                "input": 100,
+                "output": 10,
+                "totalTokens": 150
+              }
+            },
+            {
+              "content": [
+                {
+                  "text": "[\"ApprovalDenied: Blocked by hook: bash denied\",\"ApprovalDenied: Not started: an operation was declined earlier in this script, so write does not run in it. Report the refusal instead of working around it.\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: blocked by a hook",
+                  "type": "text"
+                }
+              ],
+              "details": {
+                "activeMs": "<ms>",
+                "consoleTruncated": false,
+                "executionId": "<uuid:1>",
+                "manifest": [
+                  "bash",
+                  "write"
+                ],
+                "operations": [
+                  {
+                    "capability": "bash",
+                    "delivered": true,
+                    "durationMs": "<ms>",
+                    "errorCode": "ApprovalDenied",
+                    "operationId": "<uuid:1>:op1",
+                    "outcome": "not_started"
+                  },
+                  {
+                    "capability": "write",
+                    "delivered": true,
+                    "durationMs": "<ms>",
+                    "errorCode": "ApprovalDenied",
+                    "operationId": "<uuid:1>:op2",
+                    "outcome": "not_started"
+                  }
+                ],
+                "status": "completed",
+                "summary": {
+                  "cancelled": 0,
+                  "completed": 0,
+                  "failed": 0,
+                  "notStarted": 2,
+                  "running": 0,
+                  "total": 2,
+                  "unknown": 0
+                },
+                "trace": [
+                  {
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:1>",
+                    "nodeId": "<uuid:1>:root",
+                    "sequence": 0,
+                    "status": "running",
+                    "turnId": "c7",
+                    "type": "execution"
+                  },
+                  {
+                    "capability": "bash",
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:1>",
+                    "nodeId": "<uuid:1>:op1",
+                    "parentNodeId": "<uuid:1>:root",
+                    "sequence": 1,
+                    "status": "running",
+                    "turnId": "c7",
+                    "type": "operation"
+                  },
+                  {
+                    "capability": "write",
+                    "createdAt": "<time>",
+                    "executionId": "<uuid:1>",
+                    "nodeId": "<uuid:1>:op2",
+                    "parentNodeId": "<uuid:1>:root",
+                    "sequence": 2,
+                    "status": "running",
+                    "turnId": "c7",
+                    "type": "operation"
+                  },
+                  {
+                    "capability": "bash",
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "errorCode": "ApprovalDenied",
+                    "executionId": "<uuid:1>",
+                    "nodeId": "<uuid:1>:op1",
+                    "outcome": "not_started",
+                    "parentNodeId": "<uuid:1>:root",
+                    "sequence": 3,
+                    "status": "failed",
+                    "turnId": "c7",
+                    "type": "operation"
+                  },
+                  {
+                    "capability": "write",
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "errorCode": "ApprovalDenied",
+                    "executionId": "<uuid:1>",
+                    "nodeId": "<uuid:1>:op2",
+                    "outcome": "not_started",
+                    "parentNodeId": "<uuid:1>:root",
+                    "sequence": 4,
+                    "status": "failed",
+                    "turnId": "c7",
+                    "type": "operation"
+                  },
+                  {
+                    "createdAt": "<time>",
+                    "durationMs": "<ms>",
+                    "executionId": "<uuid:1>",
+                    "nodeId": "<uuid:1>:root",
+                    "sequence": 5,
+                    "status": "completed",
+                    "turnId": "c7",
+                    "type": "execution"
+                  }
+                ],
+                "truncated": false,
+                "waitedMs": "<ms>"
+              },
+              "isError": false,
+              "role": "toolResult",
+              "timestamp": "<epoch-ms>",
+              "toolCallId": "c7",
+              "toolName": "ptc"
+            }
+          ],
+          "modelId": "fake-model",
+          "providerName": "fake",
+          "sessionId": "<hex16:1>",
+          "systemPrompt": "<unchanged>",
+          "thinking": "low",
+          "tools": "<unchanged>"
+        }
+      ],
+      "step": "held back while waiting: model requests"
+    },
+    {
+      "observed": false,
+      "step": "late.txt exists"
+    },
+    {
+      "observed": 0,
+      "step": "exit code"
+    }
+  ]
+]

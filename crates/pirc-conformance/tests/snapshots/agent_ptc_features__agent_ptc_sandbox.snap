@@ -1,0 +1,2581 @@
+---
+source: crates/pirc-conformance/tests/agent_ptc_features.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": {
+      "command": "prompt",
+      "id": "c1",
+      "success": true,
+      "type": "response"
+    },
+    "step": "a declined approval: response"
+  },
+  {
+    "observed": [
+      {
+        "type": "agent_start"
+      },
+      {
+        "message": {
+          "content": "run a declined approval",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "run a declined approval",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "id": "n1",
+          "toolName": "ptc",
+          "type": "toolcall_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"code\":\"const out = [];\\n                   try { await tools.unsandboxed_bash({ command: 'nix build', reason: 'daemon' }); }\\n                   catch (e) { out.push(e.code); }\\n                   try { await tools.sandbox_allow_domains({ domains: ['a.example'], reason: 'r' }); }\\n                   catch (e) { out.push(e.code, e.message); }\\n                   return out;\"}",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "arguments": {
+              "code": "const out = [];\n                   try { await tools.unsandboxed_bash({ command: 'nix build', reason: 'daemon' }); }\n                   catch (e) { out.push(e.code); }\n                   try { await tools.sandbox_allow_domains({ domains: ['a.example'], reason: 'r' }); }\n                   catch (e) { out.push(e.code, e.message); }\n                   return out;"
+            },
+            "id": "n1",
+            "name": "ptc",
+            "type": "toolCall"
+          },
+          "type": "toolcall_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "code": "const out = [];\n                   try { await tools.unsandboxed_bash({ command: 'nix build', reason: 'daemon' }); }\n                   catch (e) { out.push(e.code); }\n                   try { await tools.sandbox_allow_domains({ domains: ['a.example'], reason: 'r' }); }\n                   catch (e) { out.push(e.code, e.message); }\n                   return out;"
+              },
+              "id": "n1",
+              "name": "ptc",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "args": {
+          "code": "const out = [];\n                   try { await tools.unsandboxed_bash({ command: 'nix build', reason: 'daemon' }); }\n                   catch (e) { out.push(e.code); }\n                   try { await tools.sandbox_allow_domains({ domains: ['a.example'], reason: 'r' }); }\n                   catch (e) { out.push(e.code, e.message); }\n                   return out;"
+        },
+        "toolCallId": "n1",
+        "toolName": "ptc",
+        "type": "tool_execution_start"
+      },
+      {
+        "args": {
+          "command": "nix build",
+          "reason": "daemon"
+        },
+        "parentToolCallId": "n1",
+        "toolCallId": "<uuid:1>:op1",
+        "toolName": "unsandboxed_bash",
+        "type": "tool_execution_start"
+      },
+      {
+        "id": "<uuid:2>",
+        "path": "<tmp>/workspace",
+        "type": "write_lease_request"
+      },
+      {
+        "args": {
+          "command": "nix build",
+          "reason": "daemon"
+        },
+        "id": "<uuid:3>",
+        "op": "exec",
+        "toolCallId": "<uuid:1>:op1",
+        "type": "sandbox_request"
+      },
+      {
+        "isError": true,
+        "parentToolCallId": "n1",
+        "result": {
+          "content": [
+            {
+              "text": "The user did not approve running this outside the sandbox. Do not try to get around it; ask them how to proceed.",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "denied": true
+          },
+          "isError": true
+        },
+        "toolCallId": "<uuid:1>:op1",
+        "toolName": "unsandboxed_bash",
+        "type": "tool_execution_end"
+      },
+      {
+        "args": {
+          "domains": [
+            "a.example"
+          ],
+          "reason": "r"
+        },
+        "parentToolCallId": "n1",
+        "toolCallId": "<uuid:1>:op2",
+        "toolName": "sandbox_allow_domains",
+        "type": "tool_execution_start"
+      },
+      {
+        "isError": true,
+        "parentToolCallId": "n1",
+        "result": {
+          "content": [
+            {
+              "text": "Not started: an operation was declined earlier in this script, so sandbox_allow_domains does not run in it. Report the refusal instead of working around it.",
+              "type": "text"
+            }
+          ],
+          "isError": true
+        },
+        "toolCallId": "<uuid:1>:op2",
+        "toolName": "sandbox_allow_domains",
+        "type": "tool_execution_end"
+      },
+      {
+        "isError": false,
+        "result": {
+          "content": [
+            {
+              "text": "[\"ApprovalDenied\",\"ApprovalDenied\",\"Not started: an operation was declined earlier in this script, so sandbox_allow_domains does not run in it. Report the refusal instead of working around it.\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- unsandboxed_bash: declined by the user",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:1>",
+            "manifest": [
+              "unsandboxed_bash",
+              "sandbox_allow_domains"
+            ],
+            "operations": [
+              {
+                "capability": "unsandboxed_bash",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "operationId": "<uuid:1>:op1",
+                "outcome": "not_started"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "operationId": "<uuid:1>:op2",
+                "outcome": "not_started"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 0,
+              "failed": 0,
+              "notStarted": 2,
+              "running": 0,
+              "total": 2,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "n1",
+                "type": "execution"
+              },
+              {
+                "capability": "unsandboxed_bash",
+                "createdAt": "<time>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op1",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "capability": "unsandboxed_bash",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op1",
+                "outcome": "not_started",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 2,
+                "status": "failed",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op2",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 3,
+                "status": "running",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op2",
+                "outcome": "not_started",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 4,
+                "status": "failed",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:root",
+                "sequence": 5,
+                "status": "completed",
+                "turnId": "n1",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          }
+        },
+        "toolCallId": "n1",
+        "toolName": "ptc",
+        "type": "tool_execution_end"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "[\"ApprovalDenied\",\"ApprovalDenied\",\"Not started: an operation was declined earlier in this script, so sandbox_allow_domains does not run in it. Report the refusal instead of working around it.\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- unsandboxed_bash: declined by the user",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:1>",
+            "manifest": [
+              "unsandboxed_bash",
+              "sandbox_allow_domains"
+            ],
+            "operations": [
+              {
+                "capability": "unsandboxed_bash",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "operationId": "<uuid:1>:op1",
+                "outcome": "not_started"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "operationId": "<uuid:1>:op2",
+                "outcome": "not_started"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 0,
+              "failed": 0,
+              "notStarted": 2,
+              "running": 0,
+              "total": 2,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "n1",
+                "type": "execution"
+              },
+              {
+                "capability": "unsandboxed_bash",
+                "createdAt": "<time>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op1",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "capability": "unsandboxed_bash",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op1",
+                "outcome": "not_started",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 2,
+                "status": "failed",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op2",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 3,
+                "status": "running",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op2",
+                "outcome": "not_started",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 4,
+                "status": "failed",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:root",
+                "sequence": 5,
+                "status": "completed",
+                "turnId": "n1",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "n1",
+          "toolName": "ptc"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "[\"ApprovalDenied\",\"ApprovalDenied\",\"Not started: an operation was declined earlier in this script, so sandbox_allow_domains does not run in it. Report the refusal instead of working around it.\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- unsandboxed_bash: declined by the user",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:1>",
+            "manifest": [
+              "unsandboxed_bash",
+              "sandbox_allow_domains"
+            ],
+            "operations": [
+              {
+                "capability": "unsandboxed_bash",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "operationId": "<uuid:1>:op1",
+                "outcome": "not_started"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "operationId": "<uuid:1>:op2",
+                "outcome": "not_started"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 0,
+              "failed": 0,
+              "notStarted": 2,
+              "running": 0,
+              "total": 2,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "n1",
+                "type": "execution"
+              },
+              {
+                "capability": "unsandboxed_bash",
+                "createdAt": "<time>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op1",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "capability": "unsandboxed_bash",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op1",
+                "outcome": "not_started",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 2,
+                "status": "failed",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op2",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 3,
+                "status": "running",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op2",
+                "outcome": "not_started",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 4,
+                "status": "failed",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:root",
+                "sequence": 5,
+                "status": "completed",
+                "turnId": "n1",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "n1",
+          "toolName": "ptc"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "type": "text_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "o",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "k",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "content": "ok",
+          "contentIndex": 0,
+          "type": "text_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "agent_end",
+        "willRetry": false
+      },
+      {
+        "type": "agent_settled"
+      }
+    ],
+    "step": "a declined approval: events"
+  },
+  {
+    "observed": [
+      {
+        "messages": [
+          {
+            "content": "run a declined approval",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\n## Sandbox\n\nYour shell commands (bash) run in an OS sandbox on this node:\n- Reads work anywhere except credential stores (~/.ssh, cloud and git credentials, keychains, browser profiles) and pirc's own state.\n- Writes work only in the workspace, temporary directories and build caches. Git hooks and .git/config are read-only.\n- Network reaches only allowlisted hosts (common code hosts and package registries). A blocked host fails with \"CONNECT tunnel failed, response 403\" or a proxy error.\n\nWhen the sandbox blocks something the task needs:\n- A host: call `sandbox_allow_domains` with the host and why. The user approves it for this session.\n- Anything else (a nix build, git over SSH, changing the system): call `unsandboxed_bash`, which runs one command outside the sandbox after the user approves it. Use it only for what the sandbox blocks, never to get around a refusal.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- sandbox: sandbox_allow_domains, unsandboxed_bash\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\n### Other capabilities\n\nCall these with the arguments shown. Each result has `text`; `ptc_docs({ names: [...] })` documents its typed fields if a script needs more.\n\n`tools.sandbox_allow_domains(args: { domains: string[]; reason: string })` — Ask the user to let this session's sandbox reach more hosts (e.g. a registry or API a build needs).\n`tools.unsandboxed_bash(args: { command: string; reason: string; cwd?: string; timeout?: number })` — Run one bash command outside the OS sandbox, with the node account's full access, after the user approves it.\n\nCurrent working directory: <tmp>/workspace",
+        "thinking": "low",
+        "tools": [
+          {
+            "description": "Run a TypeScript async function body that calls capabilities. Every operation (files, shell commands, web, questions to the user, …) is a capability callable from here; the core ones may also be direct tools. Use a script to combine several operations, loop, or filter results before they reach you.\n\n- `await tools.<name>(args)` returns the result data and throws a `PtcError` on failure: `code` is ApprovalDenied, CapabilityUnavailable, InvalidArguments, QuotaExceeded, Cancelled, Timeout or OperationFailed; `outcome` says whether it ran (`not_started`, `failed`, `cancelled`, `unknown`); `data` holds the typed fields of a failed result when there are any. A `bash` command that exits non-zero is not a failure here: check its `exitCode`.\n- Result data is `text` (the formatted output) plus typed fields, e.g. `read` → `content`, `nextOffset`; `bash` → `output`, `exitCode`; `grep` → `matches`. Use the fields instead of parsing `text`.\n- `await tools.call(\"<name>\", args)` returns `{ ok: true, data }` or `{ ok: false, error: { code, message, outcome } }` instead of throwing.\n- Capability names must be literals (`tools.read(…)`, `tools.call(\"read\", …)`); never `tools[name]`. A script using an unavailable capability is rejected before anything runs.\n- `await tools.par(items, async (item, index) => …, { concurrency })` maps with up to 8 at a time and keeps order. At the first failure it starts no more items, cancels the operations its items still have running and throws that failure. Writes and commands still run one at a time. At most 8 operations run at once (more wait their turn), 200 operations and 200 `tools.par` calls per `ptc` call.\n- `return` what you need: strings are shown as is, other values as JSON. `console.log` output is shown too. Both are bounded, so filter large results in the script.\n- Images (e.g. `browser_screenshot`, `read` of a picture) come back as `images: [{ handle, mimeType, bytes }]`. To see one, `await attachments.add(result.images[0])`: it is attached to this `ptc` result (at most 4, together 512 KiB).\n- `store(key, value)` / `load(key)` keep small JSON values across `ptc` calls in this session (kept only when the script completes; `undefined` deletes).\n- The script runs in an isolated interpreter with no filesystem, network, processes, imports or timers: only `tools`, `attachments`, `store` and `load`.\n\nThe core signatures in the system prompt are complete; other listed capabilities show their arguments only: use `ptc_docs` for their result fields, or for a capability named without a signature. Default timeout 120 s (`timeout` in seconds, max 3600), not counting time spent waiting for the user. Nothing is retried automatically, and operations that already ran are not undone when a later one fails.",
+            "name": "ptc",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "description": "Body of an async TypeScript function, e.g. `const { text } = await tools.read({ path: \"README.md\" }); return text.split(\"\\n\").length;`",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "timeout": {
+                  "description": "Active-time budget in seconds (default 120)",
+                  "exclusiveMinimum": 0,
+                  "maximum": 3600,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Look up the capabilities `ptc` scripts can call. `{}` lists categories and names; `{ category }` gives one-line summaries (continue with the returned `cursor`); `{ names: [...] }` (1–8) gives argument schemas, results, errors, effects and approval behavior. Read-only. Docs already in the conversation stay valid until a call fails with StaleContract.",
+            "name": "ptc_docs",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "category": {
+                  "description": "A category from the index",
+                  "type": "string"
+                },
+                "cursor": {
+                  "description": "nextCursor of the previous page (with category)",
+                  "type": "string"
+                },
+                "names": {
+                  "description": "Capabilities to document in full",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "registryVersion": {
+                  "description": "registryVersion you already have; a mismatch fails with StaleContract",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "description": "Read a file. Text is returned with line numbers (`offset` is 1-based, default limit 2000 lines). Images (png/jpg/gif/webp) are returned as images.",
+            "name": "read",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "limit": {
+                  "description": "Maximum lines to return",
+                  "type": "number"
+                },
+                "offset": {
+                  "description": "1-based first line",
+                  "type": "number"
+                },
+                "path": {
+                  "description": "File path, relative to the workspace or absolute",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Create or overwrite a file with the given content. Parent directories are created.",
+            "name": "write",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "content": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "content"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true. Read the file first.",
+            "name": "edit",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "newText": {
+                  "type": "string"
+                },
+                "oldText": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "replaceAll": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "path",
+                "oldText",
+                "newText"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "List a directory (directories end with /).",
+            "name": "ls",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "description": "Default: workspace root",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "description": "Search file contents with a JavaScript regular expression. Returns `path:line: text`. Optional `glob` filters files.",
+            "name": "grep",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "glob": {
+                  "type": "string"
+                },
+                "ignoreCase": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "description": "Maximum matches (default 200)",
+                  "type": "number"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "pattern": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Find files by glob pattern (e.g. `**/*.ts`). Skips .git, node_modules, dist, target, result.",
+            "name": "find",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "description": "Directory to search (default workspace)",
+                  "type": "string"
+                },
+                "pattern": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "description": "Run a bash command in the workspace. stdout and stderr are combined. Default timeout 120s (`timeout` in seconds).",
+            "name": "bash",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "timeout": {
+                  "description": "Timeout in seconds",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "command"
+              ],
+              "type": "object"
+            }
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "content": "run a declined approval",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "const out = [];\n                   try { await tools.unsandboxed_bash({ command: 'nix build', reason: 'daemon' }); }\n                   catch (e) { out.push(e.code); }\n                   try { await tools.sandbox_allow_domains({ domains: ['a.example'], reason: 'r' }); }\n                   catch (e) { out.push(e.code, e.message); }\n                   return out;"
+                },
+                "id": "n1",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "[\"ApprovalDenied\",\"ApprovalDenied\",\"Not started: an operation was declined earlier in this script, so sandbox_allow_domains does not run in it. Report the refusal instead of working around it.\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- unsandboxed_bash: declined by the user",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:1>",
+              "manifest": [
+                "unsandboxed_bash",
+                "sandbox_allow_domains"
+              ],
+              "operations": [
+                {
+                  "capability": "unsandboxed_bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op1",
+                  "outcome": "not_started"
+                },
+                {
+                  "capability": "sandbox_allow_domains",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op2",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 2,
+                "running": 0,
+                "total": 2,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "n1",
+                  "type": "execution"
+                },
+                {
+                  "capability": "unsandboxed_bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "n1",
+                  "type": "operation"
+                },
+                {
+                  "capability": "unsandboxed_bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "n1",
+                  "type": "operation"
+                },
+                {
+                  "capability": "sandbox_allow_domains",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op2",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 3,
+                  "status": "running",
+                  "turnId": "n1",
+                  "type": "operation"
+                },
+                {
+                  "capability": "sandbox_allow_domains",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op2",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 4,
+                  "status": "failed",
+                  "turnId": "n1",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 5,
+                  "status": "completed",
+                  "turnId": "n1",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "n1",
+            "toolName": "ptc"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "<unchanged>",
+        "thinking": "low",
+        "tools": "<unchanged>"
+      }
+    ],
+    "step": "a declined approval: model requests"
+  },
+  {
+    "observed": {
+      "command": "prompt",
+      "id": "c2",
+      "success": true,
+      "type": "response"
+    },
+    "step": "a slow approval: response"
+  },
+  {
+    "observed": {
+      "active under 1000 ms": true,
+      "waited at least 1000 ms": true
+    },
+    "step": "a slow approval: budget"
+  },
+  {
+    "observed": [
+      {
+        "type": "agent_start"
+      },
+      {
+        "message": {
+          "content": "run a slow approval",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "run a slow approval",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "id": "n2",
+          "toolName": "ptc",
+          "type": "toolcall_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"code\":\"const r = await tools.sandbox_allow_domains({ domains: ['example.org'], reason: 'docs' });\\n                   return r.granted;\",\"timeout\":1}",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "arguments": {
+              "code": "const r = await tools.sandbox_allow_domains({ domains: ['example.org'], reason: 'docs' });\n                   return r.granted;",
+              "timeout": 1
+            },
+            "id": "n2",
+            "name": "ptc",
+            "type": "toolCall"
+          },
+          "type": "toolcall_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "code": "const r = await tools.sandbox_allow_domains({ domains: ['example.org'], reason: 'docs' });\n                   return r.granted;",
+                "timeout": 1
+              },
+              "id": "n2",
+              "name": "ptc",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "args": {
+          "code": "const r = await tools.sandbox_allow_domains({ domains: ['example.org'], reason: 'docs' });\n                   return r.granted;",
+          "timeout": 1
+        },
+        "toolCallId": "n2",
+        "toolName": "ptc",
+        "type": "tool_execution_start"
+      },
+      {
+        "args": {
+          "domains": [
+            "example.org"
+          ],
+          "reason": "docs"
+        },
+        "parentToolCallId": "n2",
+        "toolCallId": "<uuid:4>:op1",
+        "toolName": "sandbox_allow_domains",
+        "type": "tool_execution_start"
+      },
+      {
+        "args": {
+          "domains": [
+            "example.org"
+          ],
+          "reason": "docs"
+        },
+        "id": "<uuid:5>",
+        "op": "network",
+        "toolCallId": "<uuid:4>:op1",
+        "type": "sandbox_request"
+      },
+      {
+        "isError": false,
+        "parentToolCallId": "n2",
+        "result": {
+          "content": [
+            {
+              "text": "Allowed for this session: example.org.",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "granted": [
+              "example.org"
+            ]
+          }
+        },
+        "toolCallId": "<uuid:4>:op1",
+        "toolName": "sandbox_allow_domains",
+        "type": "tool_execution_end"
+      },
+      {
+        "isError": false,
+        "result": {
+          "content": [
+            {
+              "text": "[\"example.org\"]",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:4>",
+            "manifest": [
+              "sandbox_allow_domains"
+            ],
+            "operations": [
+              {
+                "capability": "sandbox_allow_domains",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "operationId": "<uuid:4>:op1",
+                "outcome": "completed"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 1,
+              "failed": 0,
+              "notStarted": 0,
+              "running": 0,
+              "total": 1,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "n2",
+                "type": "execution"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:op1",
+                "parentNodeId": "<uuid:4>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "n2",
+                "type": "operation"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:op1",
+                "outcome": "completed",
+                "parentNodeId": "<uuid:4>:root",
+                "sequence": 2,
+                "status": "completed",
+                "turnId": "n2",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:root",
+                "sequence": 3,
+                "status": "completed",
+                "turnId": "n2",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          }
+        },
+        "toolCallId": "n2",
+        "toolName": "ptc",
+        "type": "tool_execution_end"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "[\"example.org\"]",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:4>",
+            "manifest": [
+              "sandbox_allow_domains"
+            ],
+            "operations": [
+              {
+                "capability": "sandbox_allow_domains",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "operationId": "<uuid:4>:op1",
+                "outcome": "completed"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 1,
+              "failed": 0,
+              "notStarted": 0,
+              "running": 0,
+              "total": 1,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "n2",
+                "type": "execution"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:op1",
+                "parentNodeId": "<uuid:4>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "n2",
+                "type": "operation"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:op1",
+                "outcome": "completed",
+                "parentNodeId": "<uuid:4>:root",
+                "sequence": 2,
+                "status": "completed",
+                "turnId": "n2",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:root",
+                "sequence": 3,
+                "status": "completed",
+                "turnId": "n2",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "n2",
+          "toolName": "ptc"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "[\"example.org\"]",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:4>",
+            "manifest": [
+              "sandbox_allow_domains"
+            ],
+            "operations": [
+              {
+                "capability": "sandbox_allow_domains",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "operationId": "<uuid:4>:op1",
+                "outcome": "completed"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 1,
+              "failed": 0,
+              "notStarted": 0,
+              "running": 0,
+              "total": 1,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "n2",
+                "type": "execution"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:op1",
+                "parentNodeId": "<uuid:4>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "n2",
+                "type": "operation"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:op1",
+                "outcome": "completed",
+                "parentNodeId": "<uuid:4>:root",
+                "sequence": 2,
+                "status": "completed",
+                "turnId": "n2",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:root",
+                "sequence": 3,
+                "status": "completed",
+                "turnId": "n2",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "n2",
+          "toolName": "ptc"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "type": "text_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "o",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "k",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "content": "ok",
+          "contentIndex": 0,
+          "type": "text_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "agent_end",
+        "willRetry": false
+      },
+      {
+        "type": "agent_settled"
+      }
+    ],
+    "step": "a slow approval: events"
+  },
+  {
+    "observed": [
+      {
+        "messages": [
+          {
+            "content": "run a declined approval",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "const out = [];\n                   try { await tools.unsandboxed_bash({ command: 'nix build', reason: 'daemon' }); }\n                   catch (e) { out.push(e.code); }\n                   try { await tools.sandbox_allow_domains({ domains: ['a.example'], reason: 'r' }); }\n                   catch (e) { out.push(e.code, e.message); }\n                   return out;"
+                },
+                "id": "n1",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "[\"ApprovalDenied\",\"ApprovalDenied\",\"Not started: an operation was declined earlier in this script, so sandbox_allow_domains does not run in it. Report the refusal instead of working around it.\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- unsandboxed_bash: declined by the user",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:1>",
+              "manifest": [
+                "unsandboxed_bash",
+                "sandbox_allow_domains"
+              ],
+              "operations": [
+                {
+                  "capability": "unsandboxed_bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op1",
+                  "outcome": "not_started"
+                },
+                {
+                  "capability": "sandbox_allow_domains",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op2",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 2,
+                "running": 0,
+                "total": 2,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "n1",
+                  "type": "execution"
+                },
+                {
+                  "capability": "unsandboxed_bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "n1",
+                  "type": "operation"
+                },
+                {
+                  "capability": "unsandboxed_bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "n1",
+                  "type": "operation"
+                },
+                {
+                  "capability": "sandbox_allow_domains",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op2",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 3,
+                  "status": "running",
+                  "turnId": "n1",
+                  "type": "operation"
+                },
+                {
+                  "capability": "sandbox_allow_domains",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op2",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 4,
+                  "status": "failed",
+                  "turnId": "n1",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 5,
+                  "status": "completed",
+                  "turnId": "n1",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "n1",
+            "toolName": "ptc"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": "run a slow approval",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "<unchanged>",
+        "thinking": "low",
+        "tools": "<unchanged>"
+      },
+      {
+        "messages": [
+          {
+            "content": "run a declined approval",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "const out = [];\n                   try { await tools.unsandboxed_bash({ command: 'nix build', reason: 'daemon' }); }\n                   catch (e) { out.push(e.code); }\n                   try { await tools.sandbox_allow_domains({ domains: ['a.example'], reason: 'r' }); }\n                   catch (e) { out.push(e.code, e.message); }\n                   return out;"
+                },
+                "id": "n1",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "[\"ApprovalDenied\",\"ApprovalDenied\",\"Not started: an operation was declined earlier in this script, so sandbox_allow_domains does not run in it. Report the refusal instead of working around it.\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- unsandboxed_bash: declined by the user",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:1>",
+              "manifest": [
+                "unsandboxed_bash",
+                "sandbox_allow_domains"
+              ],
+              "operations": [
+                {
+                  "capability": "unsandboxed_bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op1",
+                  "outcome": "not_started"
+                },
+                {
+                  "capability": "sandbox_allow_domains",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op2",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 2,
+                "running": 0,
+                "total": 2,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "n1",
+                  "type": "execution"
+                },
+                {
+                  "capability": "unsandboxed_bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "n1",
+                  "type": "operation"
+                },
+                {
+                  "capability": "unsandboxed_bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "n1",
+                  "type": "operation"
+                },
+                {
+                  "capability": "sandbox_allow_domains",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op2",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 3,
+                  "status": "running",
+                  "turnId": "n1",
+                  "type": "operation"
+                },
+                {
+                  "capability": "sandbox_allow_domains",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op2",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 4,
+                  "status": "failed",
+                  "turnId": "n1",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 5,
+                  "status": "completed",
+                  "turnId": "n1",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "n1",
+            "toolName": "ptc"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": "run a slow approval",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "const r = await tools.sandbox_allow_domains({ domains: ['example.org'], reason: 'docs' });\n                   return r.granted;",
+                  "timeout": 1
+                },
+                "id": "n2",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "[\"example.org\"]",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:4>",
+              "manifest": [
+                "sandbox_allow_domains"
+              ],
+              "operations": [
+                {
+                  "capability": "sandbox_allow_domains",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "operationId": "<uuid:4>:op1",
+                  "outcome": "completed"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 1,
+                "failed": 0,
+                "notStarted": 0,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "n2",
+                  "type": "execution"
+                },
+                {
+                  "capability": "sandbox_allow_domains",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:op1",
+                  "parentNodeId": "<uuid:4>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "n2",
+                  "type": "operation"
+                },
+                {
+                  "capability": "sandbox_allow_domains",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:op1",
+                  "outcome": "completed",
+                  "parentNodeId": "<uuid:4>:root",
+                  "sequence": 2,
+                  "status": "completed",
+                  "turnId": "n2",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:4>",
+                  "nodeId": "<uuid:4>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "n2",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "n2",
+            "toolName": "ptc"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "<unchanged>",
+        "thinking": "low",
+        "tools": "<unchanged>"
+      }
+    ],
+    "step": "a slow approval: model requests"
+  },
+  {
+    "observed": [
+      {
+        "cwd": "<tmp>/workspace",
+        "id": "<entry:1>",
+        "parentId": null,
+        "sessionId": "<hex16:1>",
+        "timestamp": "<epoch-ms>",
+        "type": "session",
+        "version": 1
+      },
+      {
+        "id": "<entry:2>",
+        "message": {
+          "content": "run a declined approval",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:1>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:3>",
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "code": "const out = [];\n                   try { await tools.unsandboxed_bash({ command: 'nix build', reason: 'daemon' }); }\n                   catch (e) { out.push(e.code); }\n                   try { await tools.sandbox_allow_domains({ domains: ['a.example'], reason: 'r' }); }\n                   catch (e) { out.push(e.code, e.message); }\n                   return out;"
+              },
+              "id": "n1",
+              "name": "ptc",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "parentId": "<entry:2>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "customType": "ptc.operation",
+        "data": {
+          "args": {
+            "command": "nix build",
+            "reason": "daemon"
+          },
+          "content": [
+            {
+              "text": "The user did not approve running this outside the sandbox. Do not try to get around it; ask them how to proceed.",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "denied": true
+          },
+          "isError": true,
+          "parentToolCallId": "n1",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "<uuid:1>:op1",
+          "toolName": "unsandboxed_bash"
+        },
+        "id": "<entry:4>",
+        "parentId": "<entry:3>",
+        "timestamp": "<epoch-ms>",
+        "type": "custom"
+      },
+      {
+        "customType": "ptc.operation",
+        "data": {
+          "args": {
+            "domains": [
+              "a.example"
+            ],
+            "reason": "r"
+          },
+          "content": [
+            {
+              "text": "Not started: an operation was declined earlier in this script, so sandbox_allow_domains does not run in it. Report the refusal instead of working around it.",
+              "type": "text"
+            }
+          ],
+          "isError": true,
+          "parentToolCallId": "n1",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "<uuid:1>:op2",
+          "toolName": "sandbox_allow_domains"
+        },
+        "id": "<entry:5>",
+        "parentId": "<entry:4>",
+        "timestamp": "<epoch-ms>",
+        "type": "custom"
+      },
+      {
+        "id": "<entry:6>",
+        "message": {
+          "content": [
+            {
+              "text": "[\"ApprovalDenied\",\"ApprovalDenied\",\"Not started: an operation was declined earlier in this script, so sandbox_allow_domains does not run in it. Report the refusal instead of working around it.\"]\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- unsandboxed_bash: declined by the user",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:1>",
+            "manifest": [
+              "unsandboxed_bash",
+              "sandbox_allow_domains"
+            ],
+            "operations": [
+              {
+                "capability": "unsandboxed_bash",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "operationId": "<uuid:1>:op1",
+                "outcome": "not_started"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "operationId": "<uuid:1>:op2",
+                "outcome": "not_started"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 0,
+              "failed": 0,
+              "notStarted": 2,
+              "running": 0,
+              "total": 2,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "n1",
+                "type": "execution"
+              },
+              {
+                "capability": "unsandboxed_bash",
+                "createdAt": "<time>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op1",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "capability": "unsandboxed_bash",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op1",
+                "outcome": "not_started",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 2,
+                "status": "failed",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op2",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 3,
+                "status": "running",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "errorCode": "ApprovalDenied",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:op2",
+                "outcome": "not_started",
+                "parentNodeId": "<uuid:1>:root",
+                "sequence": 4,
+                "status": "failed",
+                "turnId": "n1",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:1>",
+                "nodeId": "<uuid:1>:root",
+                "sequence": 5,
+                "status": "completed",
+                "turnId": "n1",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "n1",
+          "toolName": "ptc"
+        },
+        "parentId": "<entry:5>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:7>",
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "parentId": "<entry:6>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:8>",
+        "message": {
+          "content": "run a slow approval",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:7>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:9>",
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "code": "const r = await tools.sandbox_allow_domains({ domains: ['example.org'], reason: 'docs' });\n                   return r.granted;",
+                "timeout": 1
+              },
+              "id": "n2",
+              "name": "ptc",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "parentId": "<entry:8>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "customType": "ptc.operation",
+        "data": {
+          "args": {
+            "domains": [
+              "example.org"
+            ],
+            "reason": "docs"
+          },
+          "content": [
+            {
+              "text": "Allowed for this session: example.org.",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "granted": [
+              "example.org"
+            ]
+          },
+          "isError": false,
+          "parentToolCallId": "n2",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "<uuid:4>:op1",
+          "toolName": "sandbox_allow_domains"
+        },
+        "id": "<entry:10>",
+        "parentId": "<entry:9>",
+        "timestamp": "<epoch-ms>",
+        "type": "custom"
+      },
+      {
+        "id": "<entry:11>",
+        "message": {
+          "content": [
+            {
+              "text": "[\"example.org\"]",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:4>",
+            "manifest": [
+              "sandbox_allow_domains"
+            ],
+            "operations": [
+              {
+                "capability": "sandbox_allow_domains",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "operationId": "<uuid:4>:op1",
+                "outcome": "completed"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 1,
+              "failed": 0,
+              "notStarted": 0,
+              "running": 0,
+              "total": 1,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "n2",
+                "type": "execution"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:op1",
+                "parentNodeId": "<uuid:4>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "n2",
+                "type": "operation"
+              },
+              {
+                "capability": "sandbox_allow_domains",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:op1",
+                "outcome": "completed",
+                "parentNodeId": "<uuid:4>:root",
+                "sequence": 2,
+                "status": "completed",
+                "turnId": "n2",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:4>",
+                "nodeId": "<uuid:4>:root",
+                "sequence": 3,
+                "status": "completed",
+                "turnId": "n2",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "n2",
+          "toolName": "ptc"
+        },
+        "parentId": "<entry:10>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:12>",
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "parentId": "<entry:11>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      }
+    ],
+    "step": "session file"
+  },
+  {
+    "observed": 0,
+    "step": "exit code"
+  }
+]

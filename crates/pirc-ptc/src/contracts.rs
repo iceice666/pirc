@@ -1,6 +1,6 @@
 //! PTC v1 contracts (`agent/ptc/contracts.ts`): budgets, typed error codes
-//! and the error envelope. Metadata here describes capabilities; it never
-//! grants anything.
+//! and the error envelope, shared by the agent (the host) and the guest.
+//! Metadata here describes capabilities; it never grants anything.
 
 use serde_json::{Map, Value, json};
 
@@ -71,6 +71,24 @@ impl PtcError {
         }
     }
 
+    /// `new PtcError(code, message, outcome)`.
+    pub fn with_outcome(
+        code: &'static str,
+        message: impl Into<String>,
+        outcome: &'static str,
+    ) -> Self {
+        Self {
+            outcome,
+            ..Self::new(code, message)
+        }
+    }
+
+    /// The typed fields of a failed operation's result (`data`).
+    pub fn with_data(mut self, data: Option<Value>) -> Self {
+        self.data = data.map(Box::new);
+        self
+    }
+
     pub fn stale(message: impl Into<String>, names: Vec<String>, version: &str) -> Self {
         Self {
             docs: Some(Box::new((names, version.to_owned()))),
@@ -99,4 +117,17 @@ impl PtcError {
         }
         Value::Object(out)
     }
+}
+
+/// The code as one of [`ERROR_CODES`], or `None` for any other text.
+pub fn error_code(code: &str) -> Option<&'static str> {
+    ERROR_CODES.iter().copied().find(|known| *known == code)
+}
+
+/// `Outcome`: how far an operation got.
+pub const OUTCOMES: [&str; 5] = ["not_started", "completed", "failed", "cancelled", "unknown"];
+
+/// The outcome as one of [`OUTCOMES`], or `None` for any other text.
+pub fn outcome(value: &str) -> Option<&'static str> {
+    OUTCOMES.iter().copied().find(|known| *known == value)
 }
