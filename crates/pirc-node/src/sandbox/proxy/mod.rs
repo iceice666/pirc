@@ -46,7 +46,9 @@
 //! session's cap; until a client authenticates it holds one of a small
 //! separate set ([`MAX_UNAUTHENTICATED`]) for at most [`AUTH_TIMEOUT`], so
 //! a client without the token cannot use up the session's own
-//! connections.
+//! connections. Host-name lookups run on tokio's blocking pool, at most
+//! [`MAX_LOOKUPS`] per session (a lookup's thread outlives a dial that
+//! gave up on it).
 
 mod address;
 mod env;
@@ -91,6 +93,10 @@ const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
 /// How long an authenticated SOCKS client may take to send its request,
 /// and the proxy to reach the destination (srt's `CONNECT_TIMEOUT_MS`).
 const TIMEOUT: Duration = Duration::from_secs(30);
+/// Host-name lookups one session's proxy runs at once. Each holds a thread
+/// of tokio's blocking pool (shared with `tokio::fs`) until `getaddrinfo`
+/// returns, which can outlast the dial's deadline.
+const MAX_LOOKUPS: usize = 8;
 /// srt's mux: how long a client may wait before its first byte.
 const FIRST_BYTE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -293,6 +299,8 @@ struct Session {
     auth: Arc<ProxyAuth>,
     /// [`MAX_CONNECTIONS`]: the authenticated connections.
     connections: Arc<Semaphore>,
+    /// [`MAX_LOOKUPS`].
+    lookups: Arc<Semaphore>,
 }
 
 /// A connection's place under its session's caps: one of the
@@ -333,6 +341,7 @@ pub async fn serve(
         allowlist,
         auth,
         connections: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
+        lookups: Arc::new(Semaphore::new(MAX_LOOKUPS)),
     });
     let unauthenticated = Arc::new(Semaphore::new(MAX_UNAUTHENTICATED));
     let mut connections = JoinSet::new();
@@ -398,16 +407,14 @@ enum DialError {
 /// `dialDirect` with the guard's lookup: an IP literal is connected to as
 /// it is; a name is resolved once, its addresses vetted, and the survivors
 /// tried in the resolver's order (Node's family fallback).
-async fn dial(host: &str, port: u16, allowlist: &Allowlist) -> Result<TcpStream, DialError> {
+async fn dial(host: &str, port: u16, session: &Session) -> Result<TcpStream, DialError> {
     let attempt = async {
         let addresses: Vec<IpAddr> = match pattern::parse_ip(host) {
             Some(address) => vec![address],
             None => {
-                let resolved = tokio::net::lookup_host((host, port))
-                    .await
-                    .map_err(|_| DialError::Failed)?;
-                let resolved: Vec<IpAddr> = resolved.map(|address| address.ip()).collect();
-                allowlist
+                let resolved = lookup(host, port, &session.lookups).await?;
+                session
+                    .allowlist
                     .guard()
                     .vet(host, port, &resolved)
                     .map_err(|denied| DialError::Denied(denied.message))?
@@ -424,6 +431,28 @@ async fn dial(host: &str, port: u16, allowlist: &Allowlist) -> Result<TcpStream,
     tokio::time::timeout(TIMEOUT, attempt)
         .await
         .unwrap_or(Err(DialError::Failed))
+}
+
+/// `tokio::net::lookup_host`, holding one of the session's
+/// [`MAX_LOOKUPS`] until the blocking lookup itself returns (not only
+/// until the dial gives up on it).
+async fn lookup(host: &str, port: u16, lookups: &Arc<Semaphore>) -> Result<Vec<IpAddr>, DialError> {
+    use std::net::ToSocketAddrs;
+    let permit = lookups
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|_| DialError::Failed)?;
+    let host = host.to_owned();
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        (host.as_str(), port)
+            .to_socket_addrs()
+            .map(|addresses| addresses.map(|address| address.ip()).collect())
+    })
+    .await
+    .map_err(|_| DialError::Failed)?
+    .map_err(|_| DialError::Failed)
 }
 
 /// An established tunnel: each direction relayed on its own, so a client

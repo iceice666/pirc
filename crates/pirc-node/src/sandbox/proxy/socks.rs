@@ -95,7 +95,7 @@ pub(super) async fn handle(
     let Some(host) = session.allowlist.check(&host, port) else {
         return writer.write_all(&reply(NOT_ALLOWED)).await;
     };
-    match dial(&host, port, &session.allowlist).await {
+    match dial(&host, port, session).await {
         Ok(upstream) => {
             writer.write_all(&reply(GRANTED)).await?;
             relay(reader, writer, upstream).await;

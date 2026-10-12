@@ -669,3 +669,23 @@ async fn only_authenticated_connections_count_against_the_sessions_cap() {
     tunnel.read_exact(&mut echoed).await.unwrap();
     assert_eq!(&echoed, b"ping");
 }
+
+#[tokio::test]
+async fn lookups_hold_a_session_permit_until_they_return() {
+    let lookups = Arc::new(Semaphore::new(1));
+    let held = lookups.clone().acquire_owned().await.unwrap();
+    // No permit: the lookup waits (and the dial's deadline would end it).
+    let waiting = tokio::time::timeout(
+        Duration::from_millis(100),
+        lookup("localhost", 80, &lookups),
+    )
+    .await;
+    assert!(waiting.is_err());
+    drop(held);
+    let (a, b) = tokio::join!(
+        lookup("localhost", 80, &lookups),
+        lookup("localhost", 80, &lookups)
+    );
+    assert!(a.is_ok() && b.is_ok());
+    assert_eq!(lookups.available_permits(), 1);
+}

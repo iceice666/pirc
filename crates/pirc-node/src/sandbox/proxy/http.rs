@@ -323,7 +323,7 @@ pub(super) async fn handle(
                 .write_all(raw_denied(ALLOWLIST_REASON, ALLOWLIST_TAG).as_bytes())
                 .await;
         };
-        let upstream = match dial(&host, port, &session.allowlist).await {
+        let upstream = match dial(&host, port, session).await {
             Ok(upstream) => upstream,
             Err(DialError::Denied(reason)) => {
                 return writer
@@ -375,7 +375,7 @@ async fn forward(
     let Some(body) = body(request) else {
         return writer.write_all(BAD_REQUEST.as_bytes()).await;
     };
-    let upstream = match dial(&host, port, &session.allowlist).await {
+    let upstream = match dial(&host, port, session).await {
         Ok(upstream) => upstream,
         Err(DialError::Denied(reason)) => {
             return writer
