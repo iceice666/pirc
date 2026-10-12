@@ -63,6 +63,23 @@ fn matches_as_srt_does() {
     assert!(!list.allows("evil.com", 443));
 }
 
+#[test]
+fn entries_srts_schema_refuses_are_ignored() {
+    let list = Allowlist::new(
+        vec!["*.localhost".into(), "intranet".into(), "::1".into()],
+        Vec::new(),
+    );
+    assert!(!list.allows("app.localhost", 80));
+    assert!(!list.allows("intranet", 80));
+    assert!(!list.allows("::1", 80));
+    list.set_approved(&["*.localhost".into(), "localhost:3000".into()]);
+    assert!(!list.allows("app.localhost", 3000));
+    assert!(list.allows("localhost", 3000));
+    // Denied entries stay as written.
+    let list = Allowlist::new(vec!["localhost".into()], vec!["*.localhost".into()]);
+    assert!(list.allows("localhost", 80));
+}
+
 /// A host server: answers each request with its head (`|` for CRLF) and
 /// body; `/echo` echoes raw bytes instead.
 async fn upstream() -> u16 {

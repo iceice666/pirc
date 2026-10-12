@@ -96,6 +96,15 @@ const FIRST_BYTE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The domains a session may reach: its policy's, and the ones approved
 /// since, which replace each other as srt's settings lines did.
+///
+/// Allowed and approved entries srt's schema refuses
+/// ([`pattern::is_valid_allowed_entry`]: `*.localhost`, single-label
+/// names but `localhost`, unbracketed IPv6) are ignored. pirc's
+/// `valid_domain` (TS's `DOMAIN_PATTERN`) admits `*.localhost`, but srt
+/// refused a settings line holding it, so such an entry or approval never
+/// took effect; here it would open every loopback service of the host.
+/// (srt refused the whole line; ignoring only the entry keeps the rest.)
+/// Denied entries are kept as they are: a broader deny only refuses more.
 pub struct Allowlist {
     allowed: Vec<String>,
     denied: Vec<String>,
@@ -105,7 +114,7 @@ pub struct Allowlist {
 impl Allowlist {
     pub fn new(allowed: Vec<String>, denied: Vec<String>) -> Self {
         Self {
-            allowed,
+            allowed: valid_entries(&allowed),
             denied,
             approved: RwLock::new(Vec::new()),
         }
@@ -113,7 +122,7 @@ impl Allowlist {
 
     /// Every domain approved so far.
     pub fn set_approved(&self, approved: &[String]) {
-        *self.approved.write().unwrap_or_else(|p| p.into_inner()) = approved.to_vec();
+        *self.approved.write().unwrap_or_else(|p| p.into_inner()) = valid_entries(approved);
     }
 
     fn approved(&self) -> Vec<String> {
@@ -160,6 +169,15 @@ impl Allowlist {
         allowed.extend(self.approved());
         address::Guard::new(&allowed, &self.denied, address::local_addresses())
     }
+}
+
+/// The entries srt's schema would take.
+fn valid_entries(entries: &[String]) -> Vec<String> {
+    entries
+        .iter()
+        .filter(|entry| pattern::is_valid_allowed_entry(entry))
+        .cloned()
+        .collect()
 }
 
 /// The credential a session's clients present (srt's `proxyAuthToken`:

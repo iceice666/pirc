@@ -119,6 +119,40 @@ pub fn split_port(entry: &str) -> (String, Option<u16>) {
     }
 }
 
+/// srt's `domainPortPatternSchema` (`sandbox-config.js`), which srt's
+/// settings put every `allowedDomains` entry through: an IPv6 literal is
+/// bracketed (`hasValidIpv6Bracketing`), and the host pattern passes
+/// `isValidDomainPattern` (a bracketed IPv6 address, `localhost`, a name
+/// with a dot, or `*.` and a base with a dot; no scheme, path or other
+/// wildcard).
+pub fn is_valid_allowed_entry(entry: &str) -> bool {
+    let bracketed = entry.matches(':').count() < 2 || entry.starts_with('[');
+    bracketed && is_valid_domain_pattern(&split_port(entry).0)
+}
+
+/// `isValidDomainPattern`.
+fn is_valid_domain_pattern(pattern: &str) -> bool {
+    if pattern.parse::<Ipv6Addr>().is_ok() {
+        return true;
+    }
+    if pattern.contains("://") || pattern.contains('/') || pattern.contains(':') {
+        return false;
+    }
+    if pattern == "localhost" {
+        return true;
+    }
+    if let Some(base) = pattern.strip_prefix("*.") {
+        return base.contains('.')
+            && !base.starts_with('.')
+            && !base.ends_with('.')
+            && base.split('.').all(|part| !part.is_empty());
+    }
+    !pattern.contains('*')
+        && pattern.contains('.')
+        && !pattern.starts_with('.')
+        && !pattern.ends_with('.')
+}
+
 fn drop_zone(host: &str) -> &str {
     host.split_once('%').map_or(host, |(address, _)| address)
 }
@@ -290,6 +324,43 @@ mod tests {
         assert!(!matches("::1", 80, "[::1]:443"));
         assert!(matches("2001:db8::1", 80, "2001:DB8::0:1"));
         assert!(matches("127.0.0.1", 80, "[::ffff:127.0.0.1]"));
+    }
+
+    #[test]
+    fn allowed_entries_as_srts_schema_takes_them() {
+        for good in [
+            "github.com",
+            "*.github.com",
+            "api.github.com:443",
+            "*.crates.io:8443",
+            "localhost",
+            "localhost:3000",
+            "127.0.0.1",
+            "127.0.0.1:8080",
+            "[::1]",
+            "[2001:db8::1]:443",
+        ] {
+            assert!(is_valid_allowed_entry(good), "{good}");
+        }
+        for bad in [
+            "*.localhost",
+            "*.com",
+            "*",
+            "*:22",
+            "myhost",
+            "LOCALHOST",
+            "::1",
+            "2001:db8::1",
+            "::1:443",
+            "https://github.com",
+            "github.com/x",
+            "a.*.com",
+            ".github.com",
+            "github.com.",
+            "*..com",
+        ] {
+            assert!(!is_valid_allowed_entry(bad), "{bad}");
+        }
     }
 
     #[test]

@@ -404,8 +404,9 @@ async fn ssh_style_tunnels_go_through_the_helper_and_approvals_widen_them() {
 #[tokio::test]
 async fn names_resolving_to_this_host_are_refused() {
     // The host's own name resolves to one of its addresses (or loopback):
-    // allowing the name grants neither. (Approved: `DOMAIN_PATTERN` admits
-    // no single-label names in the config.)
+    // allowing the name grants neither. srt's schema refuses a
+    // single-label name, so as an approval it has no effect at all; a
+    // dotted host name reaches the resolved-address guard.
     let Ok(hostname) = fs::read_to_string("/proc/sys/kernel/hostname") else {
         return;
     };
@@ -429,21 +430,22 @@ async fn names_resolving_to_this_host_are_refused() {
         .run(&prepared, &proxy_command(&hostname, port, "x\\n"))
         .await;
     assert_eq!(run.code, 1, "{}", run.stdout);
-    assert!(
-        run.stderr
-            .contains(&format!("Connection to {hostname} blocked: resolved to ")),
-        "{}",
-        run.stderr
-    );
-    // `*.localhost` names may be loopback (RFC 6761), but not when denied.
-    let run = f
-        .run(&prepared, &proxy_command("bad.localhost", port, "x\\n"))
-        .await;
-    assert!(
-        run.stderr.contains("blocked by network allowlist"),
-        "{}",
-        run.stderr
-    );
+    let expected = if hostname.contains('.') {
+        format!("Connection to {hostname} blocked: resolved to ")
+    } else {
+        "blocked by network allowlist".to_owned()
+    };
+    assert!(run.stderr.contains(&expected), "{}", run.stderr);
+    // `*.localhost` (which `DOMAIN_PATTERN` admits) is not an entry srt
+    // takes: no `*.localhost` name is allowed.
+    for name in ["app.localhost", "bad.localhost"] {
+        let run = f.run(&prepared, &proxy_command(name, port, "x\\n")).await;
+        assert!(
+            run.stderr.contains("blocked by network allowlist"),
+            "{}",
+            run.stderr
+        );
+    }
     prepared.cleanup();
 }
 
