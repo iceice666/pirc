@@ -1396,13 +1396,17 @@ async fn stops_a_recording_after_thirty_minutes() {
     manager.shutdown().await;
 }
 
+/// ffmpeg failing at once fails the start with its stderr when it fails
+/// within the start's 150 ms (as in TS). On a loaded machine it may fail
+/// later: then the start succeeds and the stop reports the failure, the
+/// other outcome TS gives for a slow ffmpeg; both are accepted.
 #[tokio::test]
 async fn fails_a_start_whose_ffmpeg_reports_an_error() {
     let root = tempfile::tempdir().unwrap();
     let ffmpeg = fake_ffmpeg(root.path(), "echo 'Unknown encoder' >&2; exit 1");
-    // The start gives ffmpeg 150 ms to fail: run the script once first, as
-    // the first exec of a new file can take longer than that (macOS checks
-    // it).
+    // Run the script once first, as the first exec of a new file can take
+    // longer than 150 ms (macOS checks it): the start's own outcome is the
+    // likely one.
     let warm = std::process::Command::new(&ffmpeg).output().unwrap();
     assert_eq!(warm.stderr, b"Unknown encoder\n");
     let context = FakeContext::new();
@@ -1412,18 +1416,43 @@ async fn fails_a_start_whose_ffmpeg_reports_an_error() {
         root: root.path().join("session"),
         ..target("s", "w")
     };
-    let error = manager
+    let started = manager
         .handle(
             target.clone(),
             "record".into(),
             json!({ "action": "start" }),
         )
-        .await
-        .unwrap_err();
-    assert_eq!(
-        (error.status, &*error.code, &*error.message),
-        (503, "runner_unavailable", "Unknown encoder\n")
-    );
+        .await;
+    match started {
+        Err(error) => assert_eq!(
+            (error.status, &*error.code, &*error.message),
+            (503, "runner_unavailable", "Unknown encoder\n")
+        ),
+        Ok(started) => {
+            assert_eq!(started["recording"], true);
+            // Stopped once ffmpeg's failure is the recording's (a stop
+            // before it exits reports its exit code instead).
+            let tab = manager.inner.lock().tabs["s"].clone();
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            while tab
+                .lock()
+                .recording
+                .as_ref()
+                .is_some_and(|active| active.recording.failed().is_none())
+            {
+                assert!(std::time::Instant::now() < deadline, "ffmpeg never failed");
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            let error = manager
+                .handle(target.clone(), "record".into(), json!({ "action": "stop" }))
+                .await
+                .unwrap_err();
+            assert_eq!(
+                (error.status, &*error.code, &*error.message),
+                (500, "browser_error", "Recording failed: Unknown encoder\n")
+            );
+        }
+    }
     let status = manager
         .handle(target, "status".into(), json!({}))
         .await

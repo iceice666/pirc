@@ -447,7 +447,10 @@ mod tests {
         assert!(has_page_shape(&frame(jpeg(1280, 713), 0, 0), max));
     }
 
-    #[tokio::test]
+    /// On paused time: the fake browser's pipes are in-process, so its
+    /// messages are always ready before the clock auto-advances, and the
+    /// holds are measured on the test's own clock, not the machine's load.
+    #[tokio::test(start_paused = true)]
     async fn holds_back_a_stale_frame_for_the_next_one() {
         use super::super::cdp::Fake;
         let mut fake = Fake::new();
