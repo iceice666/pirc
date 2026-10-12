@@ -1,54 +1,61 @@
 //! The native Linux backend (`spikes/linux-sandbox`). Owner: **linux-fs** (M7).
 //!
 //! bubblewrap with srt's argument order and the session policy's paths, a
-//! network namespace whose only way out is a filtering HTTP/CONNECT proxy
-//! on a Unix socket served by the node itself, and the in-sandbox bridge
-//! (`pirc-node sandbox-bridge`, [`super::bridge`]) that exposes the proxy
-//! as `127.0.0.1:3128` and then runs the agent. The proxy's allowlist is
+//! network namespace whose only way out is the filtering HTTP and SOCKS5
+//! proxy ([`super::proxy`]) on a Unix socket served by the node itself,
+//! and the in-sandbox bridge (`pirc-node sandbox-bridge`, [`super::bridge`])
+//! that exposes it as `127.0.0.1:3128` and `:1080` and then runs the agent. The proxy's allowlist is
 //! shared with the session's [`super::NetworkControl`], so an approval
 //! widens it in place (no control fd). The agent's stdio passes through
 //! unchanged; `--die-with-parent`, and the agent runs in its own PID
 //! namespace, so killing bubblewrap (the runner's process group) ends
 //! everything inside.
 //!
-//! # What the native backend does not enforce yet (M7)
+//! Parts, each ported from sandbox-runtime 0.0.78 (Apache-2.0, see
+//! `crates/pirc-node/NOTICE`):
 //!
-//! It applies the policy's paths with a simpler mount plan than srt's
-//! `generateFilesystemArgs` (see [`filesystem_args`]), and its proxy is
-//! HTTP/CONNECT only. M7 ports srt's algorithm and proxy; until then:
+//! - [`plan`]: the filesystem arguments, M6's verdict planner with srt's
+//!   `generateFilesystemArgs` cases (symlinks, missing deny paths and their
+//!   placeholders, `/` expansion, `/proc` and `/dev`), the S7 pinning, and
+//!   the placeholders' cleanup. A protected path reached through a symlink
+//!   the agent could replace refuses the start (503): bubblewrap cannot pin
+//!   a link (decided with the user, M7).
+//! - [`scan`]: the mandatory deny paths of the working directory
+//!   (dangerous files, `.git/hooks`, `.git/config` unless `allowGitConfig`).
+//! - [`caps`]: uid 0 without `CAP_SETFCAP`, reported by the probe instead
+//!   of a bubblewrap failure on every start.
+//! - `args`: profiles past bubblewrap's or the kernel's argument limits.
 //!
-//! - `paths.denyWrite`/`denyRead` entries that do not exist when the agent
-//!   starts are not mounted over (srt puts `/dev/null` stubs there), so a
-//!   missing `<workspace>/.pirc`, `.git/hooks` or `.git/config` can be
-//!   created by the agent; symlinked spellings of denied paths are not
-//!   covered either. (Existing ones cannot be renamed away: their writable
-//!   ancestors are mount points, see [`filesystem_args`].)
-//! - No mandatory deny scan: dangerous files (`.bashrc`, nested
-//!   `.git/hooks`, ...) anywhere below a write root other than the listed
-//!   paths stay writable.
-//! - Rules under `/proc` and `/dev` are dropped (both are mounted afresh),
-//!   and a denied `/` is expanded into its children without srt's special
-//!   cases.
-//! - `--cap-drop ALL` is passed, but the uid-0 and missing-`CAP_SETFCAP`
-//!   cases are neither detected nor tested.
-//! - `network`: no SOCKS5 (so no `ssh`, `GIT_SSH_COMMAND`, `FTP_PROXY`,
-//!   `RSYNC_PROXY`), no TLS termination or resolved-address checks, plain
-//!   HTTP only through absolute-form `http://` requests (one request per
-//!   connection). `deniedDomains` are checked before the allowlist.
+//! [`Sandbox::prepare_readonly`] runs one host command (panel git) under
+//! bubblewrap with the read-only policy, `--unshare-net` and no proxy.
+//!
+//! # What the native backend does not enforce
+//!
+//! - `network`: see [`super::proxy`].
 //!   `allowLocalBinding` and `allowUnixSockets` have no effect: the agent
 //!   has its own network namespace (its localhost is its own) and Unix
-//!   sockets are filtered only by the read rules, as with srt on Linux.
-//! - `allowGitConfig` acts only through the policy's `denyWrite` (srt also
-//!   used it for its mandatory deny list).
+//!   sockets are filtered only by the read rules, as with srt on Linux
+//!   (`allowAllUnixSockets`, no seccomp).
+//! - Glob patterns in the policy's paths are taken literally (srt expanded
+//!   `denyRead` globs on Linux and dropped write globs); pirc's policies
+//!   hold resolved paths.
+
+mod args;
+pub mod caps;
+pub mod plan;
+pub mod scan;
 
 use std::ffi::OsString;
+use std::ops::Range;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use pirc_config::{Env, NodeConfig};
-use pirc_policy::{PathPolicy, is_inside, read_allowed, write_allowed};
+use pirc_policy::PathPolicy;
+use pirc_policy::session::SessionPolicy;
 
+use self::plan::{MountPoints, Options, Plan};
 use super::common::{self, ProbeCache, Session};
 use super::proxy::{self, Allowlist, ProxyListener};
 use super::{
@@ -79,177 +86,36 @@ pub fn find_bwrap(env: &Env) -> Option<PathBuf> {
         })
 }
 
-/// What a path's mount gives the agent.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Access {
-    Hidden,
-    ReadOnly,
-    Writable,
+/// bubblewrap's options, and where the filesystem plan sits in them (what
+/// goes to an `--args` file for a long profile).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BwrapArgs {
+    pub options: Vec<String>,
+    pub mounts: Range<usize>,
 }
 
-fn access(paths: &PathPolicy, path: &str) -> Access {
-    if !read_allowed(paths, path) {
-        Access::Hidden
-    } else if write_allowed(paths, path) {
-        Access::Writable
-    } else {
-        Access::ReadOnly
-    }
+/// The namespaces, `/dev`, capabilities and `/proc` after the filesystem,
+/// in srt's order.
+fn finish(options: &mut Vec<String>) {
+    options.extend(["--dev", "/dev", "--unshare-pid", "--unshare-user"].map(String::from));
+    // What keeps a command running as uid 0 from unmounting a denial,
+    // without srt's seccomp helper (pirc's case).
+    options.extend(caps::capability_args().map(String::from));
+    options.extend(["--proc", "/proc"].map(String::from));
 }
 
-/// Mounts outside bubblewrap's reach here: `--dev /dev` and `--proc /proc`
-/// come after the filesystem and replace them.
-fn kernel_path(path: &str) -> bool {
-    ["/proc", "/dev"].iter().any(|root| is_inside(path, root))
-}
-
-/// bubblewrap's filesystem arguments for `paths`.
-///
-/// Every existing rule path is a mount point, shallowest first, and gets
-/// what [`read_allowed`] and [`write_allowed`] say about it: hidden (a
-/// read-only `--tmpfs`, or `/dev/null` over a file), read-only (`--ro-bind`) or
-/// writable (`--bind`); a point that would give what its closest mounted
-/// ancestor already gives is skipped. Since the rules containing an
-/// existing path are exactly those containing its deepest mount point,
-/// every path inside the sandbox gets the verdict the file tools compute
-/// (a deny-write inside a denied region cannot re-expose it, as the spike's
-/// fixed order could). srt's own algorithm (symlinks, missing paths,
-/// mandatory deny scan) is M7's; see the module documentation.
-///
-/// A mount only covers the dentry it sits on, and renaming a directory
-/// that merely *contains* mount points is allowed (the mounts move with
-/// it; only a mount point itself is `EBUSY`). So a read-only
-/// `<ws>/.git/config` would be bypassed by `mv .git .git.bak; mkdir .git`
-/// (the host then sees a `.git/config` the agent wrote, and the Git panel
-/// runs its filters). Every path the agent may not write whose parent is
-/// writable is therefore a mount point, and so is each of its ancestors
-/// whose own parent is writable ([`pinned`]): none of them can be renamed,
-/// removed or replaced. srt binds the protected files only, so the srt
-/// backend (and the TS build) keep this hole (security audit S7).
-pub fn filesystem_args(paths: &PathPolicy) -> Vec<String> {
-    let mut points: Vec<String> = paths
-        .allow_write
-        .iter()
-        .chain(&paths.deny_read)
-        .chain(&paths.allow_read)
-        .chain(&paths.deny_write)
-        .filter(|path| path.starts_with('/') && *path != "/" && !kernel_path(path))
-        .filter(|path| Path::new(path).exists())
-        .cloned()
-        .collect();
-    let root = access(paths, "/");
-    if root == Access::Hidden
-        && let Ok(entries) = std::fs::read_dir("/")
-    {
-        // srt expands a denied `/` into its children.
-        for entry in entries.flatten() {
-            let path = format!("/{}", entry.file_name().to_string_lossy());
-            if !kernel_path(&path) {
-                points.push(path);
-            }
-        }
-    }
-    let pinned = pinned(paths, &points);
-    points.extend(pinned.iter().cloned());
-    let depth = |path: &str| path.matches('/').count();
-    points.sort_by(|a, b| depth(a).cmp(&depth(b)).then_with(|| a.cmp(b)));
-    points.dedup();
-    let mut args: Vec<String> = Vec::new();
-    let mut push = |items: &[&str]| args.extend(items.iter().map(|item| (*item).to_owned()));
-    let root_mount = if root == Access::Writable {
-        Access::Writable
-    } else {
-        Access::ReadOnly
-    };
-    push(&[
-        if root_mount == Access::Writable {
-            "--bind"
-        } else {
-            "--ro-bind"
-        },
-        "/",
-        "/",
-    ]);
-    let mut placed: Vec<(String, Access)> = vec![("/".to_owned(), root_mount)];
-    // Hidden directories become read-only once everything inside them is
-    // mounted (bubblewrap creates the mount points of nested binds there).
-    let mut read_only = Vec::new();
-    for point in points {
-        let want = access(paths, &point);
-        let around = placed
-            .iter()
-            .filter(|(mounted, _)| is_inside(&point, mounted))
-            .max_by_key(|(mounted, _)| mounted.len())
-            .map_or(root_mount, |(_, access)| *access);
-        // A pinned point inside a region of its own verdict (a directory on
-        // the way to a protected path) is bound onto itself.
-        if want != around || pinned.contains(&point) {
-            match want {
-                Access::Hidden if Path::new(&point).is_dir() => {
-                    push(&["--tmpfs", &point]);
-                    read_only.push(point.clone());
-                }
-                Access::Hidden => push(&["--ro-bind", "/dev/null", &point]),
-                Access::ReadOnly => push(&["--ro-bind", &point, &point]),
-                Access::Writable => push(&["--bind", &point, &point]),
-            }
-        }
-        placed.push((point, want));
-    }
-    for point in read_only {
-        args.extend(["--remount-ro".to_owned(), point]);
-    }
-    args
-}
-
-/// The paths that must be mount points so nothing the agent may not write
-/// can be renamed away (see [`filesystem_args`]): each existing point the
-/// agent may not write, and every ancestor of it, whose parent directory is
-/// writable. Ancestors exist since the point does. Symlinks are left out:
-/// bubblewrap refuses to mount onto one (`<ws>/.git` may be a link to the
-/// real repository), and a symlinked ancestor stays renamable, as with the
-/// other symlink cases left to M7.
-fn pinned(paths: &PathPolicy, points: &[String]) -> Vec<String> {
-    let writable_parent = |path: &Path| {
-        path.parent()
-            .and_then(Path::to_str)
-            .is_some_and(|parent| access(paths, parent) == Access::Writable)
-    };
-    let mut pinned: Vec<String> = Vec::new();
-    for point in points {
-        if access(paths, point) == Access::Writable {
-            continue;
-        }
-        for path in Path::new(point).ancestors() {
-            if path == Path::new("/") {
-                break;
-            }
-            let Some(text) = path.to_str() else {
-                continue;
-            };
-            let symlink = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
-            if !symlink
-                && writable_parent(path)
-                && !kernel_path(text)
-                && !pinned.iter().any(|p| p == text)
-            {
-                pinned.push(text.to_owned());
-            }
-        }
-    }
-    pinned
-}
-
-/// bubblewrap's arguments up to the command, in srt's order (namespaces,
+/// bubblewrap's options up to the command, in srt's order (namespaces,
 /// environment, filesystem, `/dev`, PID and user namespaces, capabilities,
-/// `/proc`). The proxy socket is bound after the filesystem rather than
-/// before it, so no mount of the plan can cover it.
+/// `/proc`), with `filesystem` from [`plan::plan`] and the proxy
+/// environment from [`proxy::env_vars`]. The proxy socket is bound after
+/// the filesystem rather than before it, so no mount of the plan can cover
+/// it.
 pub fn bwrap_args(
-    paths: &PathPolicy,
+    filesystem: Vec<String>,
     tmp: &str,
     socket: &str,
     proxy_env: &[(String, String)],
-) -> Vec<OsString> {
+) -> BwrapArgs {
     let mut args: Vec<String> = ["--new-session", "--die-with-parent", "--unshare-net"]
         .map(String::from)
         .to_vec();
@@ -263,24 +129,73 @@ pub fn bwrap_args(
     for (name, value) in setenv {
         args.extend(["--setenv".to_owned(), name, value]);
     }
-    args.extend(filesystem_args(paths));
+    let start = args.len();
+    args.extend(filesystem);
+    let mounts = start..args.len();
     args.extend(["--bind".to_owned(), socket.to_owned(), socket.to_owned()]);
-    args.extend(
-        [
-            "--dev",
-            "/dev",
-            "--unshare-pid",
-            "--unshare-user",
-            // What keeps a command running as uid 0 from unmounting a
-            // denial, without srt's seccomp helper (pirc's case).
-            "--cap-drop",
-            "ALL",
-            "--proc",
-            "/proc",
+    finish(&mut args);
+    BwrapArgs {
+        options: args,
+        mounts,
+    }
+}
+
+/// bubblewrap's options for [`Sandbox::prepare_readonly`]: no network at
+/// all (no proxy socket, no proxy variables), the read-only filesystem.
+pub fn readonly_bwrap_args(filesystem: Vec<String>, tmp: &str) -> BwrapArgs {
+    let mut args: Vec<String> = ["--new-session", "--die-with-parent", "--unshare-net"]
+        .map(String::from)
+        .to_vec();
+    for (name, value) in [
+        ("SANDBOX_RUNTIME", "1"),
+        ("TMPDIR", tmp),
+        ("PIRC_SANDBOX_BACKEND", "native"),
+    ] {
+        args.extend(["--setenv".to_owned(), name.to_owned(), value.to_owned()]);
+    }
+    let start = args.len();
+    args.extend(filesystem);
+    let mounts = start..args.len();
+    finish(&mut args);
+    BwrapArgs {
+        options: args,
+        mounts,
+    }
+}
+
+/// The filesystem plan for a policy whose agent works in `cwd`, off the
+/// async runtime (the mandatory scan walks the workspace).
+async fn plan_for(
+    config: &NodeConfig,
+    paths: &PathPolicy,
+    cwd: &Path,
+    allow_git_config: bool,
+) -> Result<Plan, String> {
+    let paths = paths.clone();
+    let database_dir = config.database_path.parent().map(Path::to_path_buf);
+    let options = Options {
+        cwd: Some(pirc_policy::real_resolve(&cwd.display().to_string())),
+        allow_git_config,
+        host_rules: true,
+        // What the node itself reads and writes by these names: an agent
+        // replacing a link on the way would hand the node its own config
+        // (`allowedPaths`) or state.
+        spellings: [
+            Some(config.config_dir.clone()),
+            Some(config.state_dir.clone()),
+            Some(config.sessions_dir.clone()),
+            Some(config.uploads_dir.clone()),
+            database_dir,
         ]
-        .map(String::from),
-    );
-    args.into_iter().map(OsString::from).collect()
+        .into_iter()
+        .flatten()
+        .map(|dir| dir.display().to_string())
+        .collect(),
+    };
+    tokio::task::spawn_blocking(move || plan::plan(&paths, &options))
+        .await
+        .map_err(|error| format!("the filesystem plan failed: {error}"))?
+        .map_err(|refusal| refusal.to_string())
 }
 
 /// The native backend.
@@ -334,13 +249,23 @@ impl NativeSandbox {
     }
 
     /// `/bin/sh -c 'exit 0'` through the whole stack (namespaces, the
-    /// bridge's listener), with nothing allowed.
+    /// bridge's listener), with nothing allowed. A uid-0 node without
+    /// `CAP_SETFCAP` is told why first ([`caps::uid0_sandbox_error`]).
     async fn probe(&self) -> SandboxStatus {
         let Some(bwrap) = find_bwrap(&self.env) else {
             return SandboxStatus::Unavailable {
                 reason: "bubblewrap (bwrap) was not found on PATH".to_owned(),
             };
         };
+        if let Some(reason) = caps::uid0_sandbox_error(
+            caps::euid(),
+            caps::process_has_bounding_capability(caps::CAP_SETFCAP),
+            Some(&bwrap),
+        )
+        .await
+        {
+            return SandboxStatus::Unavailable { reason };
+        }
         let tmp = match common::make_temp_dir(&common::tmpdir(&self.env), "pirc-") {
             Ok(tmp) => tmp,
             Err(error) => {
@@ -358,13 +283,23 @@ impl NativeSandbox {
             Ok(_listener) => {
                 let tmp_text = tmp.display().to_string();
                 let proxy_env = self.proxy_env(&proxy::ProxyAuth::generate());
+                let filesystem = plan::plan(
+                    &PathPolicy::default(),
+                    &Options {
+                        host_rules: true,
+                        ..Options::default()
+                    },
+                )
+                .map(|plan| plan.args)
+                .unwrap_or_default();
+                let options = bwrap_args(
+                    filesystem,
+                    &tmp_text,
+                    &socket.display().to_string(),
+                    &proxy_env,
+                );
                 let args = self.command_args(
-                    bwrap_args(
-                        &PathPolicy::default(),
-                        &tmp_text,
-                        &socket.display().to_string(),
-                        &proxy_env,
-                    ),
+                    options.options.into_iter().map(OsString::from).collect(),
                     &socket,
                     &["/bin/sh".into(), "-c".into(), "exit 0".into()],
                 );
@@ -381,6 +316,102 @@ impl NativeSandbox {
         Session::remove_tmp(&tmp);
         status
     }
+
+    /// bubblewrap, or 503 when the sandbox is unavailable.
+    async fn bwrap(&self) -> ApiResult<PathBuf> {
+        if let SandboxStatus::Unavailable { reason } = self.check().await {
+            return Err(super::unavailable_error(&reason));
+        }
+        find_bwrap(&self.env)
+            .ok_or_else(|| super::unavailable_error("bubblewrap (bwrap) was not found on PATH"))
+    }
+
+    /// [`Sandbox::prepare_readonly`] with a policy at hand (`tmp` is its
+    /// temporary directory, removed by the cleanup).
+    async fn readonly(
+        &self,
+        Session {
+            tmp,
+            policy,
+            warnings,
+        }: Session,
+        workspace_root: &Path,
+        command: Vec<OsString>,
+    ) -> ApiResult<Prepared> {
+        let fail = |tmp: &Path, error: ApiError| {
+            Session::remove_tmp(tmp);
+            Err(error)
+        };
+        let bwrap = match self.bwrap().await {
+            Ok(bwrap) => bwrap,
+            Err(error) => return fail(&tmp, error),
+        };
+        let plan = match plan_for(
+            &self.config,
+            &policy.paths,
+            workspace_root,
+            policy.allow_git_config,
+        )
+        .await
+        {
+            Ok(plan) => plan,
+            Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
+        };
+        let mounts = MountPoints::claim(plan.mount_points);
+        let tmp_text = tmp.display().to_string();
+        let options = readonly_bwrap_args(plan.args, &tmp_text);
+        let mut tail: Vec<OsString> = vec!["--".into()];
+        tail.extend(command);
+        let invocation = match args::render(
+            &bwrap,
+            options.options,
+            options.mounts,
+            tail,
+            args::byte_budget(),
+            &common::tmpdir(&self.env),
+        ) {
+            Ok(invocation) => invocation,
+            Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
+        };
+        caps::warn_if_setfcap_missing();
+        let profile = invocation.profile;
+        Ok(Prepared::new(
+            invocation.program,
+            invocation.args,
+            Vec::new(),
+            policy,
+            warnings,
+            None,
+            move || {
+                drop(profile);
+                drop(mounts);
+                Session::remove_tmp(&tmp);
+            },
+        ))
+    }
+
+    /// [`Sandbox::prepare_readonly`] for `policy` built by the caller
+    /// instead of `common::readonly_session` (tests, and callers that
+    /// already hold the policy).
+    pub async fn prepare_readonly_with(
+        &self,
+        policy: SessionPolicy,
+        workspace_root: &Path,
+        command: Vec<OsString>,
+    ) -> ApiResult<Prepared> {
+        let tmp = common::make_temp_dir(&common::tmpdir(&self.env), "pirc-").map_err(|error| {
+            crate::log::error(&format!(
+                "cannot make the command's temp directory: {error}"
+            ));
+            ApiError::internal()
+        })?;
+        let session = Session {
+            tmp,
+            policy,
+            warnings: Vec::new(),
+        };
+        self.readonly(session, workspace_root, command).await
+    }
 }
 
 impl Sandbox for NativeSandbox {
@@ -395,62 +426,80 @@ impl Sandbox for NativeSandbox {
                 policy,
                 warnings,
             } = common::session(&self.config, &self.env, &input)?;
-            let bwrap = match self.check().await {
-                SandboxStatus::Unavailable { reason } => {
-                    Session::remove_tmp(&tmp);
-                    return Err(super::unavailable_error(&reason));
-                }
-                SandboxStatus::Active { .. } => find_bwrap(&self.env),
+            let fail = |tmp: &Path, error: ApiError| {
+                Session::remove_tmp(tmp);
+                Err(error)
             };
-            let Some(bwrap) = bwrap else {
-                Session::remove_tmp(&tmp);
-                return Err(super::unavailable_error(
-                    "bubblewrap (bwrap) was not found on PATH",
-                ));
+            let bwrap = match self.bwrap().await {
+                Ok(bwrap) => bwrap,
+                Err(error) => return fail(&tmp, error),
+            };
+            let plan = match plan_for(
+                &self.config,
+                &policy.paths,
+                &input.workspace_root,
+                policy.allow_git_config,
+            )
+            .await
+            {
+                Ok(plan) => plan,
+                Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
             };
             let socket = tmp.join(PROXY_SOCKET);
             let listener = match tokio::net::UnixListener::bind(&socket) {
                 Ok(listener) => listener,
                 Err(error) => {
-                    Session::remove_tmp(&tmp);
                     crate::log::error(&format!("cannot start the sandbox proxy: {error}"));
-                    return Err(ApiError::internal());
+                    return fail(&tmp, ApiError::internal());
                 }
             };
+            let tmp_text = tmp.display().to_string();
+            let mut agent: Vec<OsString> = vec![self.config.agent_command.clone().into()];
+            agent.extend(self.config.agent_args.iter().map(OsString::from));
+            let auth = Arc::new(proxy::ProxyAuth::generate());
+            let proxy_env = self.proxy_env(&auth);
+            let options = bwrap_args(
+                plan.args,
+                &tmp_text,
+                &socket.display().to_string(),
+                &proxy_env,
+            );
+            let tail = self.command_args(Vec::new(), &socket, &agent);
+            let invocation = match args::render(
+                &bwrap,
+                options.options,
+                options.mounts,
+                tail,
+                args::byte_budget(),
+                &common::tmpdir(&self.env),
+            ) {
+                Ok(invocation) => invocation,
+                Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
+            };
+            let mounts = MountPoints::claim(plan.mount_points);
             let allowlist = Arc::new(Allowlist::new(
                 policy.network.allowed_domains.clone(),
                 policy.network.denied_domains.clone(),
             ));
-            let auth = Arc::new(proxy::ProxyAuth::generate());
-            let proxy_env = self.proxy_env(&auth);
             let proxy = tokio::spawn(proxy::serve(
                 ProxyListener::Unix(listener),
                 allowlist.clone(),
                 auth,
                 self.connections.clone(),
             ));
-            let tmp_text = tmp.display().to_string();
-            let mut agent: Vec<OsString> = vec![self.config.agent_command.clone().into()];
-            agent.extend(self.config.agent_args.iter().map(OsString::from));
-            let args = self.command_args(
-                bwrap_args(
-                    &policy.paths,
-                    &tmp_text,
-                    &socket.display().to_string(),
-                    &proxy_env,
-                ),
-                &socket,
-                &agent,
-            );
+            caps::warn_if_setfcap_missing();
+            let profile = invocation.profile;
             Ok(Prepared::new(
-                bwrap,
-                args,
+                invocation.program,
+                invocation.args,
                 vec![("CLAUDE_CODE_TMPDIR".to_owned(), tmp_text)],
                 policy,
                 warnings,
                 Some(Box::new(NativeControl { allowlist })),
                 move || {
                     proxy.abort();
+                    drop(profile);
+                    drop(mounts);
                     Session::remove_tmp(&tmp);
                 },
             ))
@@ -458,11 +507,11 @@ impl Sandbox for NativeSandbox {
     }
 
     fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>> {
-        // M7 (linux-fs): bubblewrap with `common::readonly_session`'s
-        // policy (`filesystem_args`), `--unshare-net` and no proxy or
-        // bridge, running `input.command` in `input.cwd`.
-        let _ = input;
-        todo!("M7 linux-fs: the read-only sandbox for panel git")
+        Box::pin(async move {
+            let session = common::readonly_session(&self.config, &self.env, &input)?;
+            self.readonly(session, &input.workspace_root, input.command)
+                .await
+        })
     }
 }
 
@@ -493,180 +542,6 @@ mod tests {
 
     use super::*;
 
-    fn rules(root: &str) -> PathPolicy {
-        let p = |rest: &str| format!("{root}/{rest}");
-        PathPolicy {
-            deny_read: vec![
-                p("home/.ssh"),
-                p("state"),
-                p("state/sessions"),
-                p("secret.txt"),
-            ],
-            allow_read: vec![p("ws"), p("state/sessions/s1"), p("state/i-1")],
-            allow_write: vec![p("ws"), p("state/sessions/s1"), p("missing")],
-            deny_write: vec![
-                p("ws/.pirc"),
-                p("ws/.git/config"),
-                p("home/.ssh"),
-                p("home/.bashrc"),
-            ],
-            shared_write: None,
-        }
-    }
-
-    #[test]
-    fn mounts_follow_the_policy_verdicts() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = fs::canonicalize(dir.path()).unwrap().display().to_string();
-        let p = |rest: &str| format!("{root}/{rest}");
-        for dir in ["home/.ssh", "state/sessions/s1", "state/i-1", "ws/.git"] {
-            fs::create_dir_all(p(dir)).unwrap();
-        }
-        for file in ["home/.bashrc", "secret.txt", "ws/.git/config"] {
-            fs::write(p(file), "").unwrap();
-        }
-        let args = filesystem_args(&rules(&root));
-        let expected: Vec<String> = [
-            "--ro-bind",
-            "/",
-            "/",
-            "--ro-bind",
-            "/dev/null",
-            &p("secret.txt"),
-            "--tmpfs",
-            &p("state"),
-            "--bind",
-            &p("ws"),
-            &p("ws"),
-            // Denied for writing and reading: hidden stays hidden (the
-            // spike's order re-exposed it read-only).
-            "--tmpfs",
-            &p("home/.ssh"),
-            "--ro-bind",
-            &p("state/i-1"),
-            &p("state/i-1"),
-            // Pinned, so `.git` cannot be renamed away from `config`.
-            "--bind",
-            &p("ws/.git"),
-            &p("ws/.git"),
-            // Hidden inside hidden: nothing to do. The session dir comes back.
-            "--bind",
-            &p("state/sessions/s1"),
-            &p("state/sessions/s1"),
-            "--ro-bind",
-            &p("ws/.git/config"),
-            &p("ws/.git/config"),
-            "--remount-ro",
-            &p("state"),
-            "--remount-ro",
-            &p("home/.ssh"),
-        ]
-        .map(String::from)
-        .to_vec();
-        // `home/.bashrc` is read-only, as `/` already is; `ws/.pirc` and
-        // `missing` do not exist (M7).
-        assert_eq!(args, expected);
-    }
-
-    #[test]
-    fn every_writable_directory_above_a_protected_path_is_a_mount_point() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = fs::canonicalize(dir.path()).unwrap().display().to_string();
-        let p = |rest: &str| format!("{root}/{rest}");
-        for dir in ["home/.config/.pirc", "home/a/b", "home/.ssh/keys", "ro/x"] {
-            fs::create_dir_all(p(dir)).unwrap();
-        }
-        fs::write(p("home/a/b/c"), "").unwrap();
-        fs::write(p("ro/x/y"), "").unwrap();
-        let paths = PathPolicy {
-            deny_read: vec![p("home/.ssh")],
-            allow_write: vec![p("home")],
-            deny_write: vec![
-                p("home/.config/.pirc"),
-                p("home/a/b/c"),
-                p("home/.ssh"),
-                // Inside a hidden directory, or with a read-only parent:
-                // nothing to rename.
-                p("home/.ssh/keys"),
-                p("ro/x/y"),
-            ],
-            ..PathPolicy::default()
-        };
-        let args = filesystem_args(&paths);
-        let expected: Vec<String> = [
-            "--ro-bind",
-            "/",
-            "/",
-            "--bind",
-            &p("home"),
-            &p("home"),
-            "--bind",
-            &p("home/.config"),
-            &p("home/.config"),
-            "--tmpfs",
-            &p("home/.ssh"),
-            "--bind",
-            &p("home/a"),
-            &p("home/a"),
-            "--ro-bind",
-            &p("home/.config/.pirc"),
-            &p("home/.config/.pirc"),
-            "--bind",
-            &p("home/a/b"),
-            &p("home/a/b"),
-            "--ro-bind",
-            &p("home/a/b/c"),
-            &p("home/a/b/c"),
-            "--remount-ro",
-            &p("home/.ssh"),
-        ]
-        .map(String::from)
-        .to_vec();
-        assert_eq!(args, expected);
-    }
-
-    #[test]
-    fn symlinked_ancestors_are_not_pinned() {
-        // `<ws>/.git` linking to the real repository (worktrees, dotfile
-        // managers): bubblewrap cannot mount onto the link.
-        let dir = tempfile::tempdir().unwrap();
-        let root = fs::canonicalize(dir.path()).unwrap().display().to_string();
-        let p = |rest: &str| format!("{root}/{rest}");
-        fs::create_dir_all(p("repo")).unwrap();
-        fs::create_dir_all(p("ws")).unwrap();
-        fs::write(p("repo/config"), "").unwrap();
-        std::os::unix::fs::symlink(p("repo"), p("ws/.git")).unwrap();
-        let paths = PathPolicy {
-            allow_write: vec![p("ws")],
-            deny_write: vec![p("ws/.git/config")],
-            ..PathPolicy::default()
-        };
-        let args = filesystem_args(&paths);
-        assert!(!args.contains(&p("ws/.git")), "{args:?}");
-        assert!(
-            args.windows(3)
-                .any(|w| w == ["--ro-bind", &p("ws/.git/config"), &p("ws/.git/config")]),
-            "{args:?}"
-        );
-    }
-
-    #[test]
-    fn a_denied_root_is_expanded_and_kernel_paths_are_left_alone() {
-        let paths = PathPolicy {
-            deny_read: vec!["/".into(), "/proc/1".into()],
-            allow_read: vec!["/usr".into()],
-            ..PathPolicy::default()
-        };
-        let args = filesystem_args(&paths);
-        assert_eq!(args[..3], ["--ro-bind", "/", "/"]);
-        assert!(args.windows(2).any(|w| w == ["--tmpfs", "/etc"]));
-        assert!(
-            !args
-                .iter()
-                .any(|arg| arg == "/usr" || arg.starts_with("/proc"))
-        );
-    }
-
     #[test]
     fn bwrap_arguments_keep_srts_order() {
         let proxy_env = proxy::env_vars(
@@ -677,19 +552,20 @@ mod tests {
             BRIDGE_SOCKS_PORT,
             &proxy::ProxyAuth::generate(),
         );
-        let args: Vec<String> = bwrap_args(
-            &PathPolicy::default(),
+        let BwrapArgs {
+            options: args,
+            mounts,
+        } = bwrap_args(
+            vec!["--ro-bind".into(), "/".into(), "/".into()],
             "/tmp/pirc-x",
             "/tmp/pirc-x/proxy.sock",
             &proxy_env,
-        )
-        .into_iter()
-        .map(|arg| arg.into_string().unwrap())
-        .collect();
+        );
         assert_eq!(
             args[..3],
             ["--new-session", "--die-with-parent", "--unshare-net"]
         );
+        assert_eq!(args[mounts], ["--ro-bind", "/", "/"]);
         let position = |item: &str| args.iter().position(|arg| arg == item).unwrap();
         assert!(position("--setenv") < position("--ro-bind"));
         assert!(position("--ro-bind") < position("--bind"));
@@ -715,6 +591,40 @@ mod tests {
             args[at + 1].ends_with("@localhost:3128"),
             "{}",
             args[at + 1]
+        );
+    }
+
+    #[test]
+    fn the_readonly_sandbox_has_no_network_way_out() {
+        let BwrapArgs {
+            options: args,
+            mounts,
+        } = readonly_bwrap_args(
+            vec!["--ro-bind".into(), "/".into(), "/".into()],
+            "/tmp/pirc-y",
+        );
+        assert_eq!(
+            args[..3],
+            ["--new-session", "--die-with-parent", "--unshare-net"]
+        );
+        assert_eq!(args[mounts.clone()], ["--ro-bind", "/", "/"]);
+        assert!(
+            !args
+                .iter()
+                .any(|arg| arg.contains("PROXY") || arg.ends_with(".sock"))
+        );
+        assert_eq!(
+            args[mounts.end..],
+            [
+                "--dev",
+                "/dev",
+                "--unshare-pid",
+                "--unshare-user",
+                "--cap-drop",
+                "ALL",
+                "--proc",
+                "/proc"
+            ]
         );
     }
 

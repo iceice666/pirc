@@ -206,6 +206,21 @@ impl Fixture {
         inference_socket: Option<PathBuf>,
         protected_paths: Vec<PathBuf>,
     ) -> Prepared {
+        self.try_prepare_with(session, inference_socket, protected_paths)
+            .await
+            .unwrap()
+    }
+
+    async fn try_prepare(&self, session: &str) -> Result<Prepared, pirc_node::error::ApiError> {
+        self.try_prepare_with(session, None, Vec::new()).await
+    }
+
+    async fn try_prepare_with(
+        &self,
+        session: &str,
+        inference_socket: Option<PathBuf>,
+        protected_paths: Vec<PathBuf>,
+    ) -> Result<Prepared, pirc_node::error::ApiError> {
         let session_dir = self.config.sessions_dir.join(session);
         fs::create_dir_all(&session_dir).unwrap();
         self.sandbox
@@ -217,7 +232,6 @@ impl Fixture {
                 protected_paths,
             })
             .await
-            .unwrap()
     }
 
     /// `script` as the agent (`/bin/sh -c <script>`): its exit code.
@@ -522,6 +536,10 @@ async fn protected_paths_cannot_be_renamed_away() {
         ),
         ("remove .git/config", format!("rm -f {w}/.git/config")),
         (
+            "hard-link .git/config to write it elsewhere",
+            format!("ln {w}/.git/config {w}/c && echo x >> {w}/c"),
+        ),
+        (
             "replace .git with a directory",
             format!("mkdir {w}/g && mv -T {w}/g {w}/.git"),
         ),
@@ -595,11 +613,13 @@ async fn protected_paths_cannot_be_renamed_away() {
     assert!(root.join("home/new").exists());
 }
 
-/// A workspace whose `.git` links to the repository elsewhere (worktrees,
-/// dotfile managers) still starts: bubblewrap cannot mount onto the link,
-/// so it is not pinned, and the config behind it stays read-only.
+/// A workspace whose `.git` links to the repository elsewhere: bubblewrap
+/// cannot pin the link, and the agent could replace it with a directory of
+/// its own (`.git/config` with a filter the host's git runs), so the
+/// session refuses to start; the same for `.pirc`. A link the agent cannot
+/// replace is fine, and its target is protected.
 #[tokio::test]
-async fn starts_with_a_symlinked_git_directory() {
+async fn refuses_protected_paths_behind_replaceable_symlinks() {
     let Some(f) = fixture("git-link") else {
         return;
     };
@@ -614,12 +634,248 @@ async fn starts_with_a_symlinked_git_directory() {
         f.root.join("workspace/.git"),
     )
     .unwrap();
-    assert_eq!(f.sh("exit 0").await, 0, "the agent starts");
-    assert_ne!(f.sh(&format!("echo x >> {w}/.git/config")).await, 0);
+    let Err(error) = f.try_prepare("pi_link").await else {
+        panic!("started");
+    };
+    assert_eq!(error.status, 503);
     assert_eq!(
-        fs::read_to_string(f.root.join("workspace/.git-real/config")).unwrap(),
+        error.message,
+        format!(
+            "Agents on this node must run in the sandbox, and it is unavailable: the protected path {w}/.git/hooks goes through the symbolic link {w}/.git, which the agent could replace (bubblewrap cannot pin a link); replace the link with the file or directory it points to"
+        )
+    );
+    fs::remove_file(f.root.join("workspace/.git")).unwrap();
+    fs::rename(
+        f.root.join("workspace/.git-real"),
+        f.root.join("workspace/.git"),
+    )
+    .unwrap();
+    fs::create_dir_all(f.root.join("outside/pirc")).unwrap();
+    std::os::unix::fs::symlink(f.root.join("outside/pirc"), f.root.join("workspace/.pirc"))
+        .unwrap();
+    let Err(error) = f.try_prepare("pi_link").await else {
+        panic!("started");
+    };
+    assert!(
+        error.message.contains(&format!("symbolic link {w}/.pirc,")),
+        "{}",
+        error.message
+    );
+    // Nothing left behind by the refused starts.
+    assert!(!f.root.join("workspace/.bashrc").exists());
+}
+
+/// Protected paths that do not exist yet get placeholders, so the agent
+/// cannot create them, and the placeholders' parents are pinned so they
+/// cannot be renamed away either. Everything bubblewrap made on the host
+/// is gone after the session.
+#[tokio::test]
+async fn missing_protected_paths_cannot_be_created() {
+    let Some(f) = fixture("missing") else {
+        return;
+    };
+    let (root, w) = (&f.root, path(&f.root, "workspace"));
+    fs::remove_dir_all(root.join("workspace/.git/hooks")).unwrap();
+    fs::remove_file(root.join("workspace/.git/config")).unwrap();
+    fs::create_dir_all(root.join("workspace/project")).unwrap();
+    // Missing below an existing directory, and behind a dangling link in a
+    // directory the agent cannot write (resolved where writes would land).
+    let instructions = root.join("workspace/project/docs/AGENTS.md");
+    std::os::unix::fs::symlink(root.join("workspace/later"), root.join("outside/link")).unwrap();
+    let protected = vec![instructions.clone(), root.join("outside/link/CHAT.md")];
+    let refused = [
+        ("create .pirc", format!("mkdir {w}/.pirc")),
+        (
+            "create .pirc/config.json",
+            format!("mkdir -p {w}/.pirc && echo '{{}}' > {w}/.pirc/config.json"),
+        ),
+        (
+            "create .git/hooks",
+            format!("mkdir -p {w}/.git/hooks && echo x > {w}/.git/hooks/pre-commit"),
+        ),
+        (
+            "create .git/config",
+            format!("printf '[core]\\n' > {w}/.git/config"),
+        ),
+        (
+            "swap .git to create its config",
+            format!("mv {w}/.git {w}/g && mkdir -p {w}/.git/hooks && echo x > {w}/.git/config"),
+        ),
+        ("create .bashrc", format!("echo x > {w}/.bashrc")),
+        ("create .mcp.json", format!("echo '{{}}' > {w}/.mcp.json")),
+        (
+            "create .vscode",
+            format!("mkdir -p {w}/.vscode && echo x > {w}/.vscode/tasks.json"),
+        ),
+        (
+            "create .claude/commands",
+            format!("mkdir -p {w}/.claude/commands && echo x > {w}/.claude/commands/x.md"),
+        ),
+        (
+            "create the instructions",
+            format!("mkdir -p {w}/project/docs && echo x > {w}/project/docs/AGENTS.md"),
+        ),
+        (
+            "rename the instructions' parent to create them",
+            format!(
+                "mv {w}/project {w}/p && mkdir -p {w}/project/docs && echo x > {w}/project/docs/AGENTS.md"
+            ),
+        ),
+        (
+            "create through the dangling link's target",
+            format!("mkdir -p {w}/later && echo x > {w}/later/CHAT.md"),
+        ),
+        ("remove a placeholder", format!("rm -f {w}/.bashrc")),
+    ];
+    let mut failures = Vec::new();
+    for (name, script) in &refused {
+        if f.sh_protecting(script, protected.clone()).await == 0 {
+            failures.push(format!("{name}: allowed"));
+        }
+    }
+    let allowed = [
+        (
+            "write the workspace",
+            format!("mkdir -p {w}/src && echo x > {w}/src/main.rs"),
+        ),
+        ("write in .git", format!("echo x > {w}/.git/description")),
+        (
+            "write next to the instructions",
+            format!("echo x > {w}/project/notes.md"),
+        ),
+    ];
+    for (name, script) in &allowed {
+        let code = f.sh_protecting(script, protected.clone()).await;
+        if code != 0 {
+            failures.push(format!("{name}: exit {code}"));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+    for gone in [
+        ".pirc",
+        ".git/hooks",
+        ".git/config",
+        ".bashrc",
+        ".mcp.json",
+        ".vscode",
+        ".claude",
+        "project/docs",
+        "later",
+        "g",
+        "p",
+    ] {
+        assert!(
+            !root.join("workspace").join(gone).exists(),
+            "{gone} left on the host"
+        );
+    }
+    assert!(root.join("workspace/src/main.rs").exists());
+}
+
+/// What the mandatory scan finds below the workspace stays read-only even
+/// though the policy does not list it: nested repositories' config, editor
+/// settings, shell rc files and `.mcp.json`.
+#[tokio::test]
+async fn mandatory_deny_paths_hold() {
+    let Some(f) = fixture("mandatory") else {
+        return;
+    };
+    let (root, w) = (&f.root, path(&f.root, "workspace"));
+    for (file, content) in [
+        ("sub/.git/config", "[core]"),
+        ("sub/.vscode/tasks.json", "{}"),
+        ("sub/deeper/.bashrc", "# rc"),
+        (".mcp.json", "{}"),
+        (".claude/commands/deploy.md", "deploy"),
+        ("node_modules/pkg/.bashrc", "# a package's"),
+    ] {
+        let file = root.join("workspace").join(file);
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(file, content).unwrap();
+    }
+    let refused = [
+        (
+            "nested .git/config",
+            format!("echo x >> {w}/sub/.git/config"),
+        ),
+        ("rename a nested .git", format!("mv {w}/sub/.git {w}/sub/g")),
+        (
+            "nested .vscode",
+            format!("echo x > {w}/sub/.vscode/launch.json"),
+        ),
+        (
+            "nested .bashrc",
+            format!("echo x >> {w}/sub/deeper/.bashrc"),
+        ),
+        (
+            "rename the directory of a nested .bashrc",
+            format!("mv {w}/sub/deeper {w}/sub/d"),
+        ),
+        (".mcp.json", format!("echo x >> {w}/.mcp.json")),
+        (
+            "a file in .claude/commands",
+            format!("echo x >> {w}/.claude/commands/deploy.md"),
+        ),
+    ];
+    let mut failures = Vec::new();
+    for (name, script) in &refused {
+        if f.sh(script).await == 0 {
+            failures.push(format!("{name}: allowed"));
+        }
+    }
+    // Inside node_modules: not scanned, as with srt.
+    let code = f
+        .sh(&format!("echo x >> {w}/node_modules/pkg/.bashrc"))
+        .await;
+    if code != 0 {
+        failures.push(format!("node_modules: exit {code}"));
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+    assert_eq!(
+        fs::read_to_string(root.join("workspace/sub/.git/config")).unwrap(),
         "[core]"
     );
+}
+
+/// A placeholder left by a node that died (an empty read-only file) is
+/// covered again and removed after the next session; two sessions of one
+/// workspace share placeholders, which stay until the last one ends.
+#[tokio::test]
+async fn placeholders_outlive_no_session_and_are_shared() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let Some(f) = fixture("placeholders") else {
+        return;
+    };
+    let stale = f.root.join("workspace/.zshrc");
+    fs::write(&stale, "").unwrap();
+    fs::set_permissions(&stale, fs::Permissions::from_mode(0o444)).unwrap();
+    let first = f.prepare("pi_one").await;
+    let second = f.prepare("pi_two").await;
+    let mut child = first.command().unwrap();
+    let mut first_child = child
+        .args(["-c", "read line"])
+        .stdin(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    // bubblewrap makes the placeholders as it starts.
+    let bashrc = f.root.join("workspace/.bashrc");
+    for _ in 0..200 {
+        if bashrc.exists() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(bashrc.exists());
+    assert_eq!(f.sh("exit 0").await, 0);
+    drop(second);
+    assert!(bashrc.exists(), "the first session still uses it");
+    drop(first_child.stdin.take());
+    first_child.wait().await.unwrap();
+    first.cleanup();
+    assert!(!bashrc.exists());
+    assert!(!stale.exists());
 }
 
 /// The node's inference socket lives in a private directory of its state,
