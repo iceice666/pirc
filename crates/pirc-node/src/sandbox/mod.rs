@@ -251,6 +251,9 @@ pub fn create(config: &NodeConfig, env: &Env) -> Arc<dyn Sandbox> {
             ))),
         };
     }
+    if cfg!(target_os = "macos") {
+        return Arc::new(macos::MacSandbox::new(config.clone(), env.clone()));
+    }
     Arc::new(unavailable::UnavailableSandbox::new(
         unavailable::PLATFORM_REASON,
     ))

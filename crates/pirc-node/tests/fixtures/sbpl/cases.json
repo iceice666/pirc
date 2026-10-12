@@ -1,0 +1,385 @@
+[
+  {
+    "name": "session",
+    "about": "A coding session as pirc's sessionPolicy builds it: private state denied with the session's own dirs back, the inference socket, .git present, .pirc missing.",
+    "tree": {
+      "dirs": [
+        "home/.ssh",
+        "home/.cache",
+        "home/.config/pirc",
+        "state/sandbox/bin",
+        "state/sessions/s1",
+        "state/uploads",
+        "state/memory/w1",
+        "state/i-abc123",
+        "ws/.git/hooks",
+        "ws/src",
+        "tmp/pirc-Ab12Cd"
+      ],
+      "files": ["ws/.git/config", "state/i-abc123/socket", "home/.bashrc"],
+      "symlinks": {}
+    },
+    "home": "home",
+    "cwd": "ws",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "settings": {
+      "network": {
+        "allowedDomains": ["github.com", "*.npmjs.org", "127.0.0.1:8080"],
+        "deniedDomains": ["evil.example"],
+        "allowLocalBinding": false,
+        "allowUnixSockets": ["{ROOT}/state/i-abc123/socket"]
+      },
+      "filesystem": {
+        "denyRead": ["{ROOT}/state", "{ROOT}/home/.ssh"],
+        "allowRead": [
+          "{ROOT}/ws",
+          "{ROOT}/state/sessions/s1",
+          "{ROOT}/state/memory/w1",
+          "{ROOT}/state/i-abc123",
+          "{ROOT}/state/sandbox/bin"
+        ],
+        "allowWrite": [
+          "{ROOT}/ws",
+          "{ROOT}/state/sessions/s1",
+          "{ROOT}/state/memory/w1",
+          "{ROOT}/tmp/pirc-Ab12Cd",
+          "{ROOT}/home/.cache"
+        ],
+        "denyWrite": [
+          "{ROOT}/ws/.pirc",
+          "{ROOT}/ws/.git/hooks",
+          "{ROOT}/ws/.git/config",
+          "{ROOT}/home/.config/pirc",
+          "{ROOT}/home/.config/pirc/SOUL.md",
+          "{ROOT}/home/.config/pirc/CHAT.md",
+          "{ROOT}/home/.ssh",
+          "{ROOT}/state/sandbox/bin"
+        ],
+        "allowGitConfig": false
+      },
+      "allowPty": true
+    }
+  },
+  {
+    "name": "git-config-allowed",
+    "about": "allowGitConfig: the policy leaves .git/config out of denyWrite and srt drops its mandatory .git/config denies.",
+    "tree": {
+      "dirs": ["home", "state", "ws/.git/hooks", "tmp/pirc-Ab12Cd"],
+      "files": ["ws/.git/config"],
+      "symlinks": {}
+    },
+    "home": "home",
+    "cwd": "ws",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "settings": {
+      "network": {
+        "allowedDomains": [],
+        "deniedDomains": [],
+        "allowLocalBinding": false,
+        "allowUnixSockets": []
+      },
+      "filesystem": {
+        "denyRead": ["{ROOT}/state"],
+        "allowRead": ["{ROOT}/ws"],
+        "allowWrite": ["{ROOT}/ws", "{ROOT}/tmp/pirc-Ab12Cd"],
+        "denyWrite": ["{ROOT}/ws/.pirc", "{ROOT}/ws/.git/hooks"],
+        "allowGitConfig": true
+      },
+      "allowPty": true
+    }
+  },
+  {
+    "name": "symlinks",
+    "about": "Symlinked spellings: .git linking to the real repository, a denied link, a writable link, a link to an ancestor (kept as spelled), a dangling link.",
+    "tree": {
+      "dirs": ["home/.ssh", "repo/hooks", "data", "state", "ws", "tmp/pirc-Ab12Cd"],
+      "files": ["repo/config"],
+      "symlinks": {
+        "ws/.git": "../repo",
+        "ws/data": "../data",
+        "secret-link": "home/.ssh",
+        "ws/up": "..",
+        "ws/dangling": "../nowhere",
+        "tmp-link": "tmp"
+      }
+    },
+    "home": "home",
+    "cwd": "ws",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "settings": {
+      "network": {
+        "allowedDomains": ["example.com"],
+        "deniedDomains": [],
+        "allowLocalBinding": false,
+        "allowUnixSockets": []
+      },
+      "filesystem": {
+        "denyRead": ["{ROOT}/secret-link", "{ROOT}/state"],
+        "allowRead": ["{ROOT}/ws"],
+        "allowWrite": [
+          "{ROOT}/ws",
+          "{ROOT}/ws/data",
+          "{ROOT}/ws/up",
+          "{ROOT}/tmp-link/pirc-Ab12Cd"
+        ],
+        "denyWrite": [
+          "{ROOT}/ws/.git/config",
+          "{ROOT}/ws/.git/hooks",
+          "{ROOT}/ws/dangling",
+          "{ROOT}/ws/.pirc"
+        ],
+        "allowGitConfig": false
+      },
+      "allowPty": true
+    }
+  },
+  {
+    "name": "missing",
+    "about": "Rules naming paths that do not exist: no .git at all, a missing denied directory, a missing write root, no Unix sockets.",
+    "tree": {
+      "dirs": ["home", "state", "ws", "tmp/pirc-Ab12Cd"],
+      "files": [],
+      "symlinks": {}
+    },
+    "home": "home",
+    "cwd": "ws",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "settings": {
+      "network": {
+        "allowedDomains": ["github.com"],
+        "deniedDomains": [],
+        "allowLocalBinding": false,
+        "allowUnixSockets": []
+      },
+      "filesystem": {
+        "denyRead": ["{ROOT}/state", "{ROOT}/nope/secret", "{ROOT}/home/.aws"],
+        "allowRead": ["{ROOT}/ws", "{ROOT}/state/sessions/missing"],
+        "allowWrite": ["{ROOT}/ws", "{ROOT}/missing-root", "{ROOT}/tmp/pirc-Ab12Cd"],
+        "denyWrite": [
+          "{ROOT}/ws/.pirc",
+          "{ROOT}/ws/.git/hooks",
+          "{ROOT}/ws/.git/config",
+          "{ROOT}/home/.aws"
+        ],
+        "allowGitConfig": false
+      },
+      "allowPty": true
+    }
+  },
+  {
+    "name": "local-binding",
+    "about": "allowLocalBinding with two Unix sockets and denied domains.",
+    "tree": {
+      "dirs": ["home", "state/i-abc123", "run", "ws", "tmp/pirc-Ab12Cd"],
+      "files": ["state/i-abc123/socket", "run/agent.sock"],
+      "symlinks": {}
+    },
+    "home": "home",
+    "cwd": "ws",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "settings": {
+      "network": {
+        "allowedDomains": ["*.example.com"],
+        "deniedDomains": ["metadata.google.internal"],
+        "allowLocalBinding": true,
+        "allowUnixSockets": ["{ROOT}/state/i-abc123/socket", "{ROOT}/run/agent.sock"]
+      },
+      "filesystem": {
+        "denyRead": ["{ROOT}/state"],
+        "allowRead": ["{ROOT}/ws", "{ROOT}/state/i-abc123"],
+        "allowWrite": ["{ROOT}/ws", "{ROOT}/tmp/pirc-Ab12Cd"],
+        "denyWrite": ["{ROOT}/ws/.pirc"],
+        "allowGitConfig": false
+      },
+      "allowPty": true
+    }
+  },
+  {
+    "name": "globs",
+    "about": "Glob rules from the user's sandbox settings: leaf and region globs, trailing /** stripped, a glob write root, glob write denies.",
+    "tree": {
+      "dirs": ["home/proj/sub", "home/secrets", "home/.ssh", "ws/pkg", "tmp/pirc-Ab12Cd"],
+      "files": ["home/id.pub", "home/proj/a.key", "ws/.env"],
+      "symlinks": {}
+    },
+    "home": "home",
+    "cwd": "ws",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "settings": {
+      "network": {
+        "allowedDomains": [],
+        "deniedDomains": [],
+        "allowLocalBinding": false,
+        "allowUnixSockets": []
+      },
+      "filesystem": {
+        "denyRead": [
+          "{ROOT}/home/**/*.key",
+          "{ROOT}/ws/**/.env",
+          "{ROOT}/home/secrets/**",
+          "{ROOT}/home/*"
+        ],
+        "allowRead": ["{ROOT}/home/proj", "{ROOT}/home/*.pub", "{ROOT}/ws"],
+        "allowWrite": ["{ROOT}/ws", "{ROOT}/home/proj/**", "{ROOT}/home/proj/*/out"],
+        "denyWrite": ["{ROOT}/ws/*.lock", "{ROOT}/ws/[ab]c", "{ROOT}/home/proj/sub/**"],
+        "allowGitConfig": false
+      },
+      "allowPty": true
+    }
+  },
+  {
+    "name": "special-chars",
+    "about": "A workspace whose name holds glob and quoting characters: the mandatory denies stay anchored at it, literally.",
+    "tree": {
+      "dirs": ["home", "state", "w[s] \"q\" ü*?/.git", "tmp/pirc-Ab12Cd"],
+      "files": ["w[s] \"q\" ü*?/.git/config"],
+      "symlinks": {}
+    },
+    "home": "home",
+    "cwd": "w[s] \"q\" ü*?",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "settings": {
+      "network": {
+        "allowedDomains": [],
+        "deniedDomains": [],
+        "allowLocalBinding": false,
+        "allowUnixSockets": []
+      },
+      "filesystem": {
+        "denyRead": ["{ROOT}/state"],
+        "allowRead": ["{ROOT}/w[s] \"q\" ü*?"],
+        "allowWrite": ["{ROOT}/w[s] \"q\" ü*?", "{ROOT}/tmp/pirc-Ab12Cd"],
+        "denyWrite": ["{ROOT}/w[s] \"q\" ü*?/.pirc"],
+        "allowGitConfig": false
+      },
+      "allowPty": true
+    }
+  },
+  {
+    "name": "grouped",
+    "about": "Many same-shaped literal write denies (pirc's denyWriteAround output): folded into chunked regexes (outside {ROOT}, so the chunks do not depend on its length).",
+    "tree": {
+      "dirs": ["home", "state", "ws/pkgs", "tmp/pirc-Ab12Cd"],
+      "files": [],
+      "symlinks": {}
+    },
+    "home": "home",
+    "cwd": "ws",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "generate": {
+      "denyWrite": {
+        "prefix": "/nonexistent-pirc-sbpl/pkgs/package-with-a-long-name-",
+        "count": 40,
+        "leaves": [".env", "secrets"]
+      }
+    },
+    "settings": {
+      "network": {
+        "allowedDomains": [],
+        "deniedDomains": [],
+        "allowLocalBinding": false,
+        "allowUnixSockets": []
+      },
+      "filesystem": {
+        "denyRead": ["{ROOT}/state"],
+        "allowRead": ["{ROOT}/ws"],
+        "allowWrite": ["{ROOT}/ws", "{ROOT}/tmp/pirc-Ab12Cd"],
+        "denyWrite": [
+          "{ROOT}/ws/pkgs/a/.npmrc",
+          "{ROOT}/ws/pkgs/b/.npmrc",
+          "{ROOT}/ws/pkgs/c/.npmrc",
+          "{ROOT}/ws/pkgs/d/.npmrc",
+          "{ROOT}/ws/pkgs/e/.npmrc",
+          "{ROOT}/ws/pkgs/f/other",
+          "{ROOT}/ws/pkgs/g/.npmrc",
+          "{ROOT}/ws/pkgs/h/.npmrc"
+        ],
+        "allowGitConfig": false
+      },
+      "allowPty": true
+    }
+  },
+  {
+    "name": "root-denied",
+    "about": "A denied / with paths allowed back: the root vnode itself is re-allowed.",
+    "tree": {
+      "dirs": ["home", "ws/secret", "tmp/pirc-Ab12Cd"],
+      "files": [],
+      "symlinks": {}
+    },
+    "home": "home",
+    "cwd": "ws",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "settings": {
+      "network": {
+        "allowedDomains": [],
+        "deniedDomains": [],
+        "allowLocalBinding": false,
+        "allowUnixSockets": []
+      },
+      "filesystem": {
+        "denyRead": ["/", "{ROOT}/ws/secret"],
+        "allowRead": ["{ROOT}/ws", "{ROOT}/home"],
+        "allowWrite": ["{ROOT}/ws", "{ROOT}/tmp/pirc-Ab12Cd"],
+        "denyWrite": [],
+        "allowGitConfig": false
+      },
+      "allowPty": true
+    }
+  },
+  {
+    "name": "readonly",
+    "about": "The Git panel's read-only sandbox: no proxy, no network, nothing writable but its temp directory, no pseudo-terminals.",
+    "tree": {
+      "dirs": ["home/.ssh", "state", "ws/.git/hooks", "tmp/pirc-Ab12Cd"],
+      "files": ["ws/.git/config"],
+      "symlinks": {}
+    },
+    "home": "home",
+    "cwd": "ws",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": false,
+    "settings": {
+      "network": {
+        "allowedDomains": [],
+        "deniedDomains": [],
+        "allowLocalBinding": false,
+        "allowUnixSockets": []
+      },
+      "filesystem": {
+        "denyRead": ["{ROOT}/state", "{ROOT}/home/.ssh"],
+        "allowRead": ["{ROOT}/ws"],
+        "allowWrite": ["{ROOT}/tmp/pirc-Ab12Cd"],
+        "denyWrite": [],
+        "allowGitConfig": false
+      },
+      "allowPty": false
+    }
+  },
+  {
+    "name": "probe",
+    "about": "The availability probe: nothing allowed (srt's probe settings).",
+    "tree": {
+      "dirs": ["home", "ws", "tmp/pirc-Ab12Cd"],
+      "files": [],
+      "symlinks": {}
+    },
+    "home": "home",
+    "cwd": "ws",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "settings": {
+      "network": { "allowedDomains": [], "deniedDomains": [] },
+      "filesystem": { "denyRead": [], "allowWrite": [], "denyWrite": [] }
+    }
+  }
+]
