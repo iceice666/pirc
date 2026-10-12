@@ -1,6 +1,6 @@
 //! What the srt and native backends share (`node/sandbox.ts`): the cached
 //! probe, a session's policy with its warnings, and its temporary
-//! directory. Owner: **sandbox**.
+//! directory. Owner: **sandbox** (M6); M7: `readonly_session` is **hardening**'s.
 
 use std::future::Future;
 use std::os::unix::fs::DirBuilderExt;
@@ -302,6 +302,20 @@ pub fn session(config: &NodeConfig, env: &Env, input: &PrepareInput) -> ApiResul
         policy,
         warnings,
     })
+}
+
+/// The policy and temporary directory of a read-only command for
+/// `input.workspace_root` ([`super::Sandbox::prepare_readonly`]): what a
+/// session of the workspace may read, no write path but `tmp`, no
+/// domains. Owner: **hardening** (M7).
+#[allow(dead_code)] // M7 layout: the backends' `prepare_readonly` call it.
+pub fn readonly_session(
+    config: &NodeConfig,
+    env: &Env,
+    input: &super::ReadonlyInput,
+) -> ApiResult<Session> {
+    let _ = (config, env, input);
+    todo!("M7 hardening: the read-only policy for panel git")
 }
 
 #[cfg(test)]

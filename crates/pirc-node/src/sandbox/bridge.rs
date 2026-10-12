@@ -1,7 +1,7 @@
 //! `pirc-node sandbox-bridge`: runs inside the native sandbox, bridges
 //! `127.0.0.1:3128` to the node's proxy socket, then runs the agent with
 //! the remaining arguments (spike C's `inner`, replacing srt's socat
-//! relays). Owner: **sandbox**. Internal: not in the help text.
+//! relays). Owner: **network** (M7). Internal: not in the help text.
 //!
 //! `sandbox-bridge <proxy socket> -- <command> [args...]`. The command
 //! inherits stdin, stdout and stderr untouched (the agent's JSONL RPC); the

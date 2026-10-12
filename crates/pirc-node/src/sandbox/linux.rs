@@ -1,4 +1,4 @@
-//! The native Linux backend (`spikes/linux-sandbox`). Owner: **sandbox**.
+//! The native Linux backend (`spikes/linux-sandbox`). Owner: **linux-fs** (M7).
 //!
 //! bubblewrap with srt's argument order and the session policy's paths, a
 //! network namespace whose only way out is a filtering HTTP/CONNECT proxy
@@ -41,8 +41,6 @@
 //! - `allowGitConfig` acts only through the policy's `denyWrite` (srt also
 //!   used it for its mandatory deny list).
 
-mod proxy;
-
 use std::ffi::OsString;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -51,20 +49,19 @@ use std::sync::Arc;
 use pirc_config::{Env, NodeConfig};
 use pirc_policy::{PathPolicy, is_inside, read_allowed, write_allowed};
 
-pub use proxy::Allowlist;
-
 use super::common::{self, ProbeCache, Session};
+use super::proxy::{self, Allowlist, ProxyListener};
 use super::{
-    BRIDGE_SUBCOMMAND, BoxFuture, NetworkControl, PrepareInput, Prepared, Sandbox, SandboxStatus,
+    BRIDGE_SUBCOMMAND, BoxFuture, NetworkControl, PrepareInput, Prepared, ReadonlyInput, Sandbox,
+    SandboxStatus,
 };
 use crate::error::{ApiError, ApiResult};
 
-/// Where the in-sandbox bridge listens, as srt's socat did.
+/// Where the in-sandbox bridge listens for HTTP, as srt's socat did.
 pub const BRIDGE_PORT: u16 = 3128;
-
-/// srt's `NO_PROXY`: localhost and private networks.
-const NO_PROXY: &str =
-    "localhost,127.0.0.1,::1,169.254.0.0/16,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16";
+/// Where the in-sandbox bridge listens for SOCKS5, as srt's socat did
+/// (the same proxy socket: the proxy tells the protocols apart).
+pub const BRIDGE_SOCKS_PORT: u16 = 1080;
 
 /// The proxy socket's name in the session's temporary directory (srt kept
 /// its sockets in the temp directory too).
@@ -251,25 +248,15 @@ pub fn bwrap_args(paths: &PathPolicy, tmp: &str, socket: &str) -> Vec<OsString> 
     let mut args: Vec<String> = ["--new-session", "--die-with-parent", "--unshare-net"]
         .map(String::from)
         .to_vec();
-    let proxy = format!("http://localhost:{BRIDGE_PORT}");
-    let setenv: [(&str, &str); 13] = [
-        ("SANDBOX_RUNTIME", "1"),
-        ("TMPDIR", tmp),
-        ("NO_PROXY", NO_PROXY),
-        ("no_proxy", NO_PROXY),
-        ("HTTP_PROXY", &proxy),
-        ("HTTPS_PROXY", &proxy),
-        ("http_proxy", &proxy),
-        ("https_proxy", &proxy),
-        ("ALL_PROXY", &proxy),
-        ("all_proxy", &proxy),
-        ("GRPC_PROXY", &proxy),
-        ("grpc_proxy", &proxy),
-        // Not srt's: says which kind of sandbox this is.
-        ("PIRC_SANDBOX_BACKEND", "native"),
+    let mut setenv: Vec<(String, String)> = vec![
+        ("SANDBOX_RUNTIME".to_owned(), "1".to_owned()),
+        ("TMPDIR".to_owned(), tmp.to_owned()),
     ];
+    setenv.extend(proxy::env_vars(BRIDGE_PORT, BRIDGE_SOCKS_PORT));
+    // Not srt's: says which kind of sandbox this is.
+    setenv.push(("PIRC_SANDBOX_BACKEND".to_owned(), "native".to_owned()));
     for (name, value) in setenv {
-        args.extend(["--setenv".to_owned(), name.to_owned(), value.to_owned()]);
+        args.extend(["--setenv".to_owned(), name, value]);
     }
     args.extend(filesystem_args(paths));
     args.extend(["--bind".to_owned(), socket.to_owned(), socket.to_owned()]);
@@ -419,7 +406,7 @@ impl Sandbox for NativeSandbox {
                 policy.network.denied_domains.clone(),
             ));
             let proxy = tokio::spawn(proxy::serve(
-                listener,
+                ProxyListener::Unix(listener),
                 allowlist.clone(),
                 self.connections.clone(),
             ));
@@ -444,6 +431,14 @@ impl Sandbox for NativeSandbox {
                 },
             ))
         })
+    }
+
+    fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>> {
+        // M7 (linux-fs): bubblewrap with `common::readonly_session`'s
+        // policy (`filesystem_args`), `--unshare-net` and no proxy or
+        // bridge, running `input.command` in `input.cwd`.
+        let _ = input;
+        todo!("M7 linux-fs: the read-only sandbox for panel git")
     }
 }
 

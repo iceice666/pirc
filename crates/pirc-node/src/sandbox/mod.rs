@@ -3,8 +3,17 @@
 //! agent starts (503 `runner_unavailable`).
 //!
 //! Layout: the [`Sandbox`] trait, its input and output types and
-//! [`Prepared`]'s plumbing are implemented here. The backends and
-//! [`create`] are owned by **sandbox**:
+//! [`Prepared`]'s plumbing are implemented here. M7 owners (one worker
+//! each; anything else in the crate is the parent's):
+//!
+//! | Module | Owner |
+//! | --- | --- |
+//! | [`linux`] (filesystem plan, uid 0, read-only sandbox), `tests/sandbox_native.rs`, CI | **linux-fs** |
+//! | [`proxy`], [`bridge`] | **network** |
+//! | [`macos`], [`create`] | **macos** |
+//! | [`srt`], [`unavailable`], [`common`]`::readonly_session`, `panels/inspect.rs` and its callers, `terminals.rs`, `pirc-ptc`'s guest | **hardening** |
+//!
+//! Backends:
 //!
 //! - [`srt`]: `PIRC_SANDBOX_SRT`, an external srt-compatible wrapper
 //!   (`<srt> --settings <file> --control-fd 3 -- <agent...>`, settings 0600
@@ -15,7 +24,14 @@
 //!   with srt's argument order, a filtering proxy in the node process whose
 //!   allowlist grows in place on approval, and the in-sandbox bridge
 //!   ([`bridge`], the `pirc-node sandbox-bridge` helper).
-//! - [`unavailable`]: other platforms (until M7's macOS backend).
+//! - [`macos`]: Seatbelt (`sandbox-exec` with srt's SBPL profile) and the
+//!   same filtering proxy on a loopback TCP port.
+//! - [`unavailable`]: other platforms.
+//!
+//! [`Sandbox::prepare_readonly`] wraps one host command (the Git panel's
+//! `git`, security audit S8) in a sandbox that may read what a session of
+//! the workspace may read, write nothing (but its temp directory) and reach
+//! no network.
 //!
 //! `check` probes once (`/bin/sh -c 'exit 0'` in the sandbox, 30 s
 //! deadline); success holds for the node's life, a failure is probed again
@@ -28,6 +44,8 @@
 pub mod bridge;
 mod common;
 pub mod linux;
+pub mod macos;
+pub mod proxy;
 pub mod srt;
 pub mod unavailable;
 
@@ -73,6 +91,17 @@ pub struct PrepareInput {
     pub protected_paths: Vec<PathBuf>,
 }
 
+/// A host command to run read-only ([`Sandbox::prepare_readonly`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReadonlyInput {
+    /// The workspace whose read policy applies (the session policy a
+    /// session of it would get, every write removed).
+    pub workspace_root: PathBuf,
+    /// The program and its arguments. The caller sets `cwd`, environment
+    /// and stdio on [`Prepared::command`].
+    pub command: Vec<OsString>,
+}
+
 /// The sandbox backend.
 pub trait Sandbox: Send + Sync {
     /// Whether this host can sandbox (cached as described above).
@@ -82,6 +111,11 @@ pub trait Sandbox: Send + Sync {
     /// [`Prepared::cleanup`] when the agent exits or fails to start
     /// (dropping it does too).
     fn prepare(&self, input: PrepareInput) -> BoxFuture<'_, ApiResult<Prepared>>;
+
+    /// `input.command` read-only and without network, or 503
+    /// [`unavailable_error`]. The [`Prepared`] has no network control and
+    /// its args end with the command; cleanup as for [`Sandbox::prepare`].
+    fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>>;
 }
 
 /// How a running session's network allowlist grows: srt's fd 3, or the
@@ -193,9 +227,9 @@ pub fn unavailable_error(reason: &str) -> ApiError {
     ))
 }
 
-/// The node's backend (owner: **sandbox**): [`srt`] when
-/// `config.sandbox.srt` is set, else [`linux`] on Linux, else
-/// [`unavailable`].
+/// The node's backend (owner: **macos**): [`srt`] when
+/// `config.sandbox.srt` is set, else [`linux`] on Linux, [`macos`] on
+/// macOS, else [`unavailable`].
 pub fn create(config: &NodeConfig, env: &Env) -> Arc<dyn Sandbox> {
     if let Some(srt) = &config.sandbox.srt {
         return Arc::new(srt::SrtSandbox::new(

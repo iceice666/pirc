@@ -1,10 +1,12 @@
-//! The backend of platforms without a sandbox yet (macOS until M7): every
-//! check is unavailable, so no agent starts. Owner: **sandbox**.
+//! The backend of platforms without a sandbox: every check is unavailable,
+//! so no agent starts and the Git panel cannot run. Owner: **hardening**.
 //!
 //! `PIRC_SANDBOX_SRT` still works there ([`super::srt`]), as TS's external
 //! srt did.
 
-use super::{BoxFuture, PrepareInput, Prepared, Sandbox, SandboxStatus, unavailable_error};
+use super::{
+    BoxFuture, PrepareInput, Prepared, ReadonlyInput, Sandbox, SandboxStatus, unavailable_error,
+};
 use crate::error::ApiResult;
 
 /// Why, on a platform without a native sandbox: shown in the node's log
@@ -34,6 +36,11 @@ impl Sandbox for UnavailableSandbox {
     }
 
     fn prepare(&self, input: PrepareInput) -> BoxFuture<'_, ApiResult<Prepared>> {
+        let _ = input;
+        Box::pin(async { Err(unavailable_error(&self.reason)) })
+    }
+
+    fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>> {
         let _ = input;
         Box::pin(async { Err(unavailable_error(&self.reason)) })
     }

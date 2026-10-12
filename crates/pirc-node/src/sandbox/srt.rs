@@ -1,6 +1,6 @@
 //! The external srt-compatible wrapper (`PIRC_SANDBOX_SRT`), the
 //! development stand-in: `node/sandbox.ts` with an external srt, and
-//! `srtSettings`. Owner: **sandbox**.
+//! `srtSettings`. Owner: **hardening** (M7).
 //!
 //! Probe: `<srt> --settings <state>/sandbox/probe.json -- /bin/sh -c 'exit
 //! 0'`. Prepare: `<srt> --settings <state>/sandbox/<basename(session)>.json
@@ -27,7 +27,9 @@ use pirc_policy::session::{Platform, SessionPolicy};
 use serde_json::{Value, json};
 
 use super::common::{self, ProbeCache, Session};
-use super::{BoxFuture, NetworkControl, PrepareInput, Prepared, Sandbox, SandboxStatus};
+use super::{
+    BoxFuture, NetworkControl, PrepareInput, Prepared, ReadonlyInput, Sandbox, SandboxStatus,
+};
 use crate::error::{ApiError, ApiResult};
 
 /// srt's settings (`--settings` and each control-fd line) for a session
@@ -186,6 +188,14 @@ impl Sandbox for SrtSandbox {
                 },
             ))
         })
+    }
+
+    fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>> {
+        // M7 (hardening): srt with `common::readonly_session`'s policy (no
+        // write paths, no domains) and no control fd, running
+        // `input.command`.
+        let _ = input;
+        todo!("M7 hardening: the read-only srt sandbox for panel git")
     }
 }
 

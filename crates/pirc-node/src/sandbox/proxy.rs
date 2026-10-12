@@ -1,7 +1,9 @@
-//! The native sandbox's filtering proxy (spike C's, on tokio): HTTP
-//! `CONNECT` tunnels and absolute-form `http://` requests from the
-//! in-sandbox bridge, on a Unix socket, to the domains the session may
-//! reach. Owner: **sandbox**.
+//! The native sandboxes' filtering proxy (spike C's, on tokio), shared by
+//! the Linux backend (a Unix socket the in-sandbox bridge reaches) and the
+//! macOS backend (a loopback TCP port the Seatbelt profile allows): HTTP
+//! `CONNECT` tunnels and absolute-form `http://` requests to the domains
+//! the session may reach. Owner: **network** (M7: SOCKS5 on the same
+//! listener as srt's mux, resolved-address checks, [`env_vars`]).
 //!
 //! Matching follows srt's `matchesDomainPatternWithPort`: `*.example.com`
 //! matches strict subdomains only (never an IP literal), other entries
@@ -13,8 +15,8 @@ use std::net::IpAddr;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpStream, UnixListener, UnixStream};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream, UnixListener};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
@@ -154,15 +156,69 @@ fn request_destination(connect: bool, target: &str) -> Option<(String, u16)> {
     destination(&format!("http://{target}/")).filter(|(_, parsed)| *parsed == port)
 }
 
+/// Where a session's proxy listens.
+pub enum ProxyListener {
+    /// Linux: a Unix socket in the session's temp directory, bound into
+    /// the sandbox and bridged to `127.0.0.1:{HTTP_PORT,SOCKS_PORT}`.
+    Unix(UnixListener),
+    /// macOS: a loopback TCP port, the only outbound address the Seatbelt
+    /// profile allows.
+    Tcp(TcpListener),
+}
+
+/// A client connection, whichever listener it came from.
+trait Client: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> Client for T {}
+
+impl ProxyListener {
+    async fn accept(&self) -> std::io::Result<Box<dyn Client>> {
+        match self {
+            Self::Unix(listener) => Ok(Box::new(listener.accept().await?.0)),
+            Self::Tcp(listener) => Ok(Box::new(listener.accept().await?.0)),
+        }
+    }
+}
+
+/// The proxy environment a sandboxed command gets, for the ports it
+/// reaches the proxy on (srt's `generateProxyEnvVars`, without the TLS and
+/// credential parts pirc never configures). Backend-specific variables
+/// (`SANDBOX_RUNTIME`, `TMPDIR`, `PIRC_SANDBOX_BACKEND`) are not here.
+pub fn env_vars(http_port: u16, socks_port: u16) -> Vec<(String, String)> {
+    // M7 (network): SOCKS5 variables (`GIT_SSH_COMMAND`, `FTP_PROXY`,
+    // `RSYNC_PROXY`, ...) on `socks_port`, in srt's order.
+    let _ = socks_port;
+    let proxy = format!("http://localhost:{http_port}");
+    let pairs: [(&str, &str); 10] = [
+        ("NO_PROXY", NO_PROXY),
+        ("no_proxy", NO_PROXY),
+        ("HTTP_PROXY", &proxy),
+        ("HTTPS_PROXY", &proxy),
+        ("http_proxy", &proxy),
+        ("https_proxy", &proxy),
+        ("ALL_PROXY", &proxy),
+        ("all_proxy", &proxy),
+        ("GRPC_PROXY", &proxy),
+        ("grpc_proxy", &proxy),
+    ];
+    pairs
+        .iter()
+        .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+        .collect()
+}
+
+/// srt's `NO_PROXY`: localhost and private networks.
+pub const NO_PROXY: &str =
+    "localhost,127.0.0.1,::1,169.254.0.0/16,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16";
+
 /// Serve the session's proxy until the task is aborted (the session's
 /// cleanup), which also ends every connection. `node` bounds the
 /// connections of every session's proxy together.
-pub async fn serve(listener: UnixListener, allowlist: Arc<Allowlist>, node: Arc<Semaphore>) {
+pub async fn serve(listener: ProxyListener, allowlist: Arc<Allowlist>, node: Arc<Semaphore>) {
     let mut connections = JoinSet::new();
     loop {
         tokio::select! {
             accepted = listener.accept() => {
-                let Ok((client, _)) = accepted else {
+                let Ok(client) = accepted else {
                     tokio::time::sleep(ACCEPT_BACKOFF).await;
                     continue;
                 };
@@ -186,7 +242,9 @@ pub async fn serve(listener: UnixListener, allowlist: Arc<Allowlist>, node: Arc<
 }
 
 /// The request head (through its blank line) and what followed it.
-async fn read_head(client: &mut UnixStream) -> std::io::Result<Option<(Vec<u8>, Vec<u8>)>> {
+async fn read_head(
+    client: &mut (impl AsyncRead + AsyncWrite + Unpin),
+) -> std::io::Result<Option<(Vec<u8>, Vec<u8>)>> {
     let mut buffer = Vec::new();
     let mut chunk = [0u8; 4096];
     loop {
@@ -208,7 +266,7 @@ async fn read_head(client: &mut UnixStream) -> std::io::Result<Option<(Vec<u8>, 
     }
 }
 
-async fn handle(mut client: UnixStream, allowlist: &Allowlist) -> std::io::Result<()> {
+async fn handle(mut client: Box<dyn Client>, allowlist: &Allowlist) -> std::io::Result<()> {
     let Ok(head) = tokio::time::timeout(TIMEOUT, read_head(&mut client)).await else {
         return Ok(());
     };
@@ -276,7 +334,7 @@ async fn handle(mut client: UnixStream, allowlist: &Allowlist) -> std::io::Resul
 #[cfg(test)]
 mod tests {
     use tokio::io::{AsyncBufReadExt, BufReader};
-    use tokio::net::TcpListener;
+    use tokio::net::UnixStream;
 
     use super::*;
 
@@ -402,7 +460,7 @@ mod tests {
         let socket = dir.path().join("proxy.sock");
         let list = Arc::new(Allowlist::new(vec!["localhost".into()], Vec::new()));
         let task = tokio::spawn(serve(
-            UnixListener::bind(&socket).unwrap(),
+            ProxyListener::Unix(UnixListener::bind(&socket).unwrap()),
             list.clone(),
             Arc::new(Semaphore::new(MAX_NODE_CONNECTIONS)),
         ));
@@ -472,7 +530,7 @@ mod tests {
         let (a, b) = (dir.path().join("a.sock"), dir.path().join("b.sock"));
         let tasks = [&a, &b].map(|socket| {
             tokio::spawn(serve(
-                UnixListener::bind(socket).unwrap(),
+                ProxyListener::Unix(UnixListener::bind(socket).unwrap()),
                 list.clone(),
                 node.clone(),
             ))
