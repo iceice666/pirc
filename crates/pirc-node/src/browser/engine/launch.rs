@@ -6,6 +6,7 @@
 
 use std::collections::BTreeMap;
 use std::os::fd::OwnedFd;
+use std::os::unix::process::CommandExt as _;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -91,7 +92,10 @@ pub fn launch(
         .envs(env)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(Stdio::null())
+        // Its own process group, killed as a whole (Playwright spawns it
+        // `detached` and kills `-pid`).
+        .process_group(0);
     command
         .fd_mappings(vec![
             FdMapping {
