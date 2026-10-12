@@ -31,7 +31,9 @@
 //! [`Sandbox::prepare_readonly`] wraps one host command (the Git panel's
 //! `git`, security audit S8) in a sandbox that may read what a session of
 //! the workspace may read, write nothing (but its temp directory) and reach
-//! no network.
+//! no network: no route out, and on Linux the host's name-service sockets
+//! hidden too (another host daemon's visible socket is the residual risk,
+//! see [`linux`]).
 //!
 //! `check` probes once (`/bin/sh -c 'exit 0'` in the sandbox, 30 s
 //! deadline); success holds for the node's life, a failure is probed again

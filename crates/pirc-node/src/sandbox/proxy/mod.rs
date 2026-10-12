@@ -28,7 +28,10 @@
 //! connect to its own loopback freely (no host service is reachable there)
 //! and `allowLocalBinding` changes nothing; Unix sockets are not filtered
 //! (pirc runs srt with `allowAllUnixSockets` on Linux, so no seccomp), only
-//! hidden by the read rules. On macOS both are Seatbelt rules in the
+//! hidden by the read rules. So the proxy is the only *network* way out on
+//! Linux, not the only way out: a visible host daemon socket that resolves
+//! or connects for its clients bypasses it (the name-service sockets are
+//! hidden for that reason; see the Linux backend). On macOS both are Seatbelt rules in the
 //! profile (`allowLocalBinding` also opens `localhost:*` outbound, which is
 //! why the token matters there); the proxy only needs its port
 //! ([`ProxyListener::loopback`]).

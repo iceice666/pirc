@@ -1,8 +1,10 @@
 //! The native Linux backend (`spikes/linux-sandbox`). Owner: **linux-fs** (M7).
 //!
 //! bubblewrap with srt's argument order and the session policy's paths, a
-//! network namespace whose only way out is the filtering HTTP and SOCKS5
-//! proxy ([`super::proxy`]) on a Unix socket served by the node itself,
+//! network namespace whose only network route out is the filtering HTTP
+//! and SOCKS5 proxy ([`super::proxy`]) on a Unix socket served by the node
+//! itself (host daemons behind visible Unix sockets are another way out:
+//! see below),
 //! and the in-sandbox bridge (`pirc-node sandbox-bridge`, [`super::bridge`])
 //! that exposes it as `127.0.0.1:3128` and `:1080` and then runs the agent. The proxy's allowlist is
 //! shared with the session's [`super::NetworkControl`], so an approval
@@ -27,7 +29,8 @@
 //! - `args`: profiles past bubblewrap's or the kernel's argument limits.
 //!
 //! [`Sandbox::prepare_readonly`] runs one host command (panel git) under
-//! bubblewrap with the read-only policy, `--unshare-net` and no proxy.
+//! bubblewrap with the read-only policy, `--unshare-net` and no proxy (the
+//! name-service sockets hidden as for a session).
 //!
 //! # What the native backend does not enforce
 //!
@@ -36,6 +39,16 @@
 //!   has its own network namespace (its localhost is its own) and Unix
 //!   sockets are filtered only by the read rules, as with srt on Linux
 //!   (`allowAllUnixSockets`, no seccomp).
+//! - Unix sockets of host daemons. The read rules hide the policy's
+//!   `LINUX_HOST_SOCKETS` and, beyond srt, the host's name-service sockets
+//!   (`plan::RESOLVER_SOCKETS`: nscd, systemd-resolved, sssd, avahi), which
+//!   would resolve any name for the agent and so leak data over DNS past
+//!   the allowlist; this holds for [`Sandbox::prepare_readonly`] too.
+//!   Residual risk: any other host daemon whose socket stays visible (and
+//!   connectable: `connect` works on a read-only bind) and that resolves
+//!   names or connects on a client's behalf is a way out past the proxy.
+//!   An allowlist of Unix sockets (the inference socket and the configured
+//!   ones) would close it; not done (srt has none on Linux either).
 //! - Glob patterns in the policy's paths are taken literally (srt expanded
 //!   `denyRead` globs on Linux and dropped write globs); pirc's policies
 //!   hold resolved paths.

@@ -16,8 +16,9 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use pirc_config::{Env, NodeConfig};
+use pirc_node::sandbox::linux::plan::RESOLVER_SOCKETS;
 use pirc_node::sandbox::linux::{NativeSandbox, find_bwrap};
-use pirc_node::sandbox::{PrepareInput, Prepared, Sandbox};
+use pirc_node::sandbox::{PrepareInput, Prepared, ReadonlyInput, Sandbox};
 use pirc_protocol::NodeRole;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
@@ -195,6 +196,99 @@ fn has(tool: &str, path: &str) -> bool {
         eprintln!("skipped: {tool} is not on PATH");
     }
     found
+}
+
+/// The host's name-service sockets ([`RESOLVER_SOCKETS`]: the socket
+/// itself, or the sockets in the directory).
+fn resolver_sockets() -> Vec<PathBuf> {
+    use std::os::unix::fs::FileTypeExt;
+    let is_socket = |path: &Path| fs::metadata(path).is_ok_and(|meta| meta.file_type().is_socket());
+    let mut found = Vec::new();
+    for entry in RESOLVER_SOCKETS {
+        let entry = Path::new(entry);
+        if is_socket(entry) {
+            found.push(entry.to_path_buf());
+        } else if let Ok(dir) = fs::read_dir(entry) {
+            found.extend(
+                dir.flatten()
+                    .map(|item| item.path())
+                    .filter(|path| is_socket(path)),
+            );
+        }
+    }
+    found
+}
+
+/// The host's resolver daemons (nscd, systemd-resolved, ...) would resolve
+/// any name for the sandbox, and their queries reach the name's
+/// authoritative server whatever the allowlist says: their sockets are
+/// hidden from sessions and from the read-only sandbox alike.
+#[tokio::test]
+async fn the_hosts_resolver_sockets_are_hidden() {
+    let sockets = resolver_sockets();
+    if sockets.is_empty() {
+        eprintln!("skipped: this host has no name-service socket");
+        return;
+    }
+    let Some(f) = fixture("resolver", &["localhost"], &[]) else {
+        return;
+    };
+    // Through the host resolver when the host itself resolves the name
+    // (it may be offline); the sockets' visibility either way.
+    let name = "example.com";
+    let resolves = has("getent", &f.path)
+        && std::process::Command::new("getent")
+            .args(["hosts", name])
+            .stdout(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success());
+    if !resolves {
+        eprintln!("the host cannot resolve {name}: only the sockets' visibility is checked");
+    }
+    let mut script = String::new();
+    for socket in &sockets {
+        script.push_str(&format!(
+            "[ -S '{0}' ] && echo 'visible {0}'\n",
+            socket.display()
+        ));
+    }
+    if resolves {
+        script.push_str(&format!("getent hosts {name} && echo 'resolved {name}'\n"));
+    }
+    script.push_str("exit 0\n");
+
+    let prepared = f.prepare("pi_resolver").await;
+    let run = f.run(&prepared, &script).await;
+    assert_eq!((run.code, run.stdout.as_str()), (0, ""), "{}", run.stderr);
+    prepared.cleanup();
+
+    let readonly = f
+        .sandbox
+        .prepare_readonly(ReadonlyInput {
+            workspace_root: f.root.join("workspace"),
+            command: vec!["/bin/sh".into(), "-c".into(), script.into()],
+        })
+        .await
+        .unwrap();
+    let output = readonly
+        .command()
+        .unwrap()
+        .env("PATH", &f.path)
+        .current_dir(f.root.join("workspace"))
+        .stdin(Stdio::null())
+        .output()
+        .await
+        .unwrap();
+    assert_eq!(
+        (
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout)
+        ),
+        (Some(0), "".into()),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    readonly.cleanup();
 }
 
 #[tokio::test]
