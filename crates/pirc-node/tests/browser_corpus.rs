@@ -5,6 +5,9 @@
 //! host guard with loopback allowed, the action overlay with 600 ms), the
 //! pages served as the fixtures' README says, and what each step returns
 //! must equal `expected/` (only `{{HOST_A}}`/`{{HOST_B}}` are normalized).
+//! The goldens are Linux recordings; on macOS, the steps that Playwright
+//! itself does differently there (the mac editing commands of `Control+a`)
+//! are taken from `expected/<case>.macos.json` (see the fixtures' README).
 //!
 //! Skipped, with a message, when no Chromium is found (`chromium`,
 //! `chromium-browser`, `google-chrome-stable`, `google-chrome`,
@@ -537,6 +540,29 @@ fn strings(value: Value) -> Vec<String> {
 }
 
 /// Run one case in a new page; its recorded steps.
+/// `expected/<case>.json`, with the steps of `expected/<case>.macos.json`
+/// (`{"steps": {"<index>": step}}`) in their place on macOS.
+fn expected(name: &str) -> Value {
+    let read = |file: String| {
+        let path = fixtures().join("expected").join(file);
+        std::fs::read_to_string(&path)
+            .ok()
+            .map(|text| serde_json::from_str::<Value>(&text).unwrap())
+    };
+    let mut expected = read(format!("{name}.json")).expect("the case's expected steps");
+    if cfg!(target_os = "macos")
+        && let Some(overrides) = read(format!("{name}.macos.json"))
+    {
+        let steps = expected["steps"].as_array_mut().unwrap();
+        for (index, step) in overrides["steps"].as_object().unwrap() {
+            let index: usize = index.parse().unwrap();
+            assert!(index < steps.len(), "{name}.macos.json: no step {index}");
+            steps[index] = step.clone();
+        }
+    }
+    expected
+}
+
 async fn run_case(context: &Context, name: &str, port: u16) -> Result<Vec<Value>, String> {
     let spec: Value = serde_json::from_str(
         &std::fs::read_to_string(fixtures().join("cases").join(format!("{name}.json"))).unwrap(),
@@ -637,11 +663,7 @@ async fn the_engine_does_what_playwright_recorded() {
     let mut failures = Vec::new();
     for name in &names {
         let started = std::time::Instant::now();
-        let expected: Value = serde_json::from_str(
-            &std::fs::read_to_string(fixtures().join("expected").join(format!("{name}.json")))
-                .unwrap(),
-        )
-        .unwrap();
+        let expected = expected(name);
         match run_case(&context, name, port).await {
             Err(failure) => failures.push(format!("{name}: {failure}")),
             Ok(steps) => {
@@ -666,4 +688,32 @@ async fn the_engine_does_what_playwright_recorded() {
     }
     context.close().await;
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+}
+
+/// Every platform checks the macOS overrides (only a Mac replays them):
+/// they name a case and existing steps, and differ from the Linux steps.
+#[test]
+fn the_macos_overrides_replace_existing_steps() {
+    for entry in std::fs::read_dir(fixtures().join("expected")).unwrap() {
+        let file = entry.unwrap().file_name().into_string().unwrap();
+        let Some(name) = file.strip_suffix(".macos.json") else {
+            continue;
+        };
+        let read = |file: String| -> Value {
+            serde_json::from_str(
+                &std::fs::read_to_string(fixtures().join("expected").join(file)).unwrap(),
+            )
+            .unwrap()
+        };
+        let linux = read(format!("{name}.json"));
+        let overrides = read(file.clone());
+        assert_eq!(overrides["case"], name, "{file}");
+        let steps = overrides["steps"].as_object().unwrap();
+        assert!(!steps.is_empty(), "{file}");
+        for (index, step) in steps {
+            let linux = &linux["steps"][index.parse::<usize>().unwrap()];
+            assert_eq!(linux["op"], step["op"], "{file}: step {index}");
+            assert_ne!(linux, step, "{file}: step {index} is the same on Linux");
+        }
+    }
 }

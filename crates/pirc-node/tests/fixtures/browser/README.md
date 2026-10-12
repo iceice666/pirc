@@ -8,6 +8,11 @@ replay the same cases against their CDP driver and compare with `expected/`.
 - `cases/<case>.json`: what to do with them, in the small step language below.
 - `expected/<case>.json`: what Playwright 1.63.0 returned, written by
   [`scripts/browser-reference.ts`](../../../../../scripts/browser-reference.ts).
+  These goldens are **Linux** recordings.
+- `expected/<case>.macos.json`: the steps that Playwright itself returns
+  differently on macOS, keyed by step index (`"steps": { "<index>": step }`).
+  On macOS the corpus replay uses them in place of the Linux steps (see
+  [macOS](#macos)).
 
 ## Recording
 
@@ -34,6 +39,23 @@ that one context, which is closed afterwards.
 Three consecutive recordings were byte-identical. Another Chromium version may
 change snapshots (Chromium's accessibility names, key codes); re-record and
 review the diff when the dev shell's Chromium moves.
+
+### macOS
+
+On macOS Playwright sends keys with the platform's editing commands
+(`macEditingCommands`): `Control+a` in a text field is
+`moveToBeginningOfParagraph`, not select-all, so `keyboard.json`'s steps 14
+and 19 read `aaB1 é!` where Linux reads `a`. `expected/keyboard.macos.json`
+holds those two steps as Playwright 1.63.0 returned them on macOS 26.5 (arm64,
+Chromium 154.0.8037.57, three identical runs). There, the rest of the corpus
+replays against the Linux goldens.
+
+To re-record them on a Mac: run
+`PIRC_BROWSER_EXECUTABLE=/Applications/Chromium.app/Contents/MacOS/Chromium bun run browser:reference keyboard`,
+copy the steps that differ from the Linux golden into `keyboard.macos.json`,
+then restore `keyboard.json` (`git checkout`). (They were recorded with a node
+port of this runner, where Playwright's error prefix is V8's
+`keyboard.press: …`; only the steps that differ beyond that prefix are kept.)
 
 ## Fixture server
 
