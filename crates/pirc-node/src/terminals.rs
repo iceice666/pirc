@@ -1,10 +1,12 @@
 //! Interactive shells for the side panel (`node/terminals.ts`). Owner:
-//! **panels**. Not a sandbox: a terminal has the node account's rights, and
-//! agents cannot reach it.
+//! **panels** (M6); M7: **hardening** (the PTY, `terminals/pty.rs`). Not a
+//! sandbox: a terminal has the node account's rights, and agents cannot
+//! reach it.
 //!
-//! A PTY ([`pty`]: its master close-on-exec from the start, security audit
-//! S9) running `/bin/sh -c 'exec "$0" -l' <shell>` as a session leader with
-//! the terminal as its controlling tty; the environment `without_secrets` plus
+//! A PTY (`terminals/pty.rs`: its master close-on-exec from the start,
+//! security audit S9) running `/bin/sh -c 'exec "$0" -l' <shell>` as a
+//! session leader with the terminal as its controlling tty; the
+//! environment `without_secrets` plus
 //! `SSH_AUTH_SOCK`, `TERM=xterm-256color`, `COLORTERM=truecolor`,
 //! `PIRC_TERMINAL=1`, `HOME`. Limits: 4 live terminals per session, 24 in
 //! all; 20..500 columns, 5..200 rows; 256 KiB of scrollback in whole

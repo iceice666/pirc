@@ -10,7 +10,10 @@
 //! `allowPty`; no seccomp entry) written 0600; a [`super::NetworkControl`]
 //! that maps a pipe to the agent's fd 3 (the `command-fds` crate) and
 //! writes `JSON(settings(approved)) + "\n"` on approval; `CLAUDE_CODE_TMPDIR`
-//! a fresh `pirc-XXXX` under the system temp directory.
+//! a fresh `pirc-XXXX` under the system temp directory. Read-only (M7,
+//! the Git panel): `<srt> --settings <state>/sandbox/readonly-pirc-XXXXXX.json
+//! -- <command...>` with `common::readonly_session`'s policy and no
+//! control fd.
 //!
 //! TS also ran a built-in srt (`pirc-node srt`, with its seccomp helper);
 //! the Rust node has none, so the settings never carry `seccomp`.
