@@ -464,6 +464,21 @@ impl Inner {
                             self.sync_screencast(tab);
                         } else {
                             chosen.close().await?;
+                            // Playwright's `page.close()` resolves after the
+                            // page's `close` listeners ran: the tab's listener
+                            // (which has the event by now) drops the page
+                            // before the list below is taken.
+                            let dropped = async {
+                                while tab
+                                    .lock()
+                                    .pages
+                                    .iter()
+                                    .any(|page| super::same(page, &chosen))
+                                {
+                                    tokio::time::sleep(Duration::from_millis(1)).await;
+                                }
+                            };
+                            let _ = tokio::time::timeout(Duration::from_secs(1), dropped).await;
                         }
                     }
                     Some("list") => {}
