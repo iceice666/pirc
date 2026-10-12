@@ -649,11 +649,13 @@ mod tests {
     #[test]
     fn session_temp_dirs_share_the_nodes_private_parent() {
         use std::os::unix::fs::PermissionsExt;
-        // The node's state outside `/tmp`, whose temp parent is in it.
+        // The node's temp parent in `/tmp`, a write root of every session;
+        // its state preferably outside it (the target directory).
         let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
         std::fs::create_dir_all(&base).unwrap();
         let dir = tempfile::tempdir_in(&base).unwrap();
         let root = dir.path().canonicalize().unwrap();
+        let state_in_tmp = is_inside(&text(&root), &real_resolve("/tmp"));
         let (config, env) = test_support::node(&root, &[("TMPDIR", "/tmp")]);
         let node_tmp = NodeTmp::new(&env);
         let input = |name: &str| PrepareInput {
@@ -672,8 +674,17 @@ mod tests {
         let mode = std::fs::metadata(&parent).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o700);
         // Inside `/tmp`, a write root of every session, by design: no
-        // warning about exposed state.
-        assert!(a.warnings.is_empty(), "{:?}", a.warnings);
+        // warning about it. A checkout under `/tmp` puts the node's state
+        // there too, which warns as it should.
+        let expected: &[&str] = if state_in_tmp {
+            &["pirc's state lies inside a writable path of this session"]
+        } else {
+            &[]
+        };
+        assert_eq!(a.warnings.len(), expected.len(), "{:?}", a.warnings);
+        for (warning, start) in a.warnings.iter().zip(expected) {
+            assert!(warning.starts_with(start), "{warning}");
+        }
         // The policy holds resolved paths (`/tmp` is `/private/tmp` on
         // macOS).
         let resolved = |tmp: &Path| real_resolve(&text(&tmp.join("x")));
