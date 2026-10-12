@@ -1,6 +1,6 @@
 # Rust rewrite of the server executables
 
-Status: M0, M1 and M2 done 2026-10-10; M3, M4, M5 and M6 done 2026-10-11 (M3's real-provider smoke test moved to M5's gate, which stays open until cutover); M7 done 2026-10-12 (its gate's security review is recorded; its one open finding, S10, was accepted by the user); M8 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
+Status: M0, M1 and M2 done 2026-10-10; M3, M4, M5 and M6 done 2026-10-11 (M3's real-provider smoke test moved to M5's gate, which stays open until cutover); M7 done 2026-10-12 (its gate's security review is recorded; its one open finding, S10, was accepted by the user); M8 done 2026-10-12 (the user accepted the browser's WebSocket and non-HTTP egress gaps, S18); M9 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
 
 Paths are relative to `apps/gateway/src/` unless noted.
 
@@ -271,11 +271,18 @@ Decided with the user before starting (2026-10-12):
 - **The injected script is committed:** Playwright's injected script (playwright-core 1.63.0, Apache-2.0) and the in-page helpers of `browser-extract.ts` are extracted into the repository and embedded at build time, with a `bun run` check that fails when they are stale (as the model catalog in M3). Building the Rust node needs no `node_modules`.
 - **Frames as Playwright does, including out-of-process iframes** (`Target.setAutoAttach`), with per-frame refs (`f<n>e<n>`).
 - **Recording keeps the external ffmpeg** (`PIRC_FFMPEG`).
-- **macOS is tested on m3air** with Chromium from Homebrew (`brew install --cask chromium`).
+- **macOS is tested on m3air** with Chromium (Homebrew's `chromium` cask turned out to be disabled; the Chromium 154.0.8037.57 already in `/Applications` was used).
 - **Cadence as in M4–M7:** a layout commit, parallel worktrees, reviews through several lenses, one commit per sub-item.
 
-- [ ] CDP client: persistent per-workspace profile, tabs per session, snapshot/ref interaction model from spike A (pinned, embedded injected script in an isolated world; child frames merged with per-frame refs as Playwright does), host guard (`browser-hosts.ts`) via the `Fetch` domain, screencast live view with backpressure, input forwarding, handoff lease, extraction, ffmpeg recording and chunked upload.
-- [ ] Port `browser.test.ts`, `browser-hosts.test.ts`, `browser.integration.test.ts`.
+- [x] CDP client: persistent per-workspace profile, tabs per session, snapshot/ref interaction model from spike A (pinned, embedded injected script in an isolated world; child frames merged with per-frame refs as Playwright does), host guard (`browser-hosts.ts`) via the `Fetch` domain, screencast live view with backpressure, input forwarding, handoff lease, extraction, ffmpeg recording and chunked upload.
+- [x] Port `browser.test.ts`, `browser-hosts.test.ts`, `browser.integration.test.ts`.
+
+Done 2026-10-12. `pirc-node` drives an external Chromium over the CDP pipe (`--remote-debugging-pipe`, no port), `crates/pirc-node/src/browser/`: `engine/` ports the parts of Playwright 1.63.0 `node/browser.ts` used (persistent context with Playwright's switches, targets and out-of-process iframes, frames with Playwright's sequence numbers, the injected script in a utility world, the AI snapshot merged across frames, `aria-ref`/text locators with actionability and retries, keyboard and mouse with the US layout and macOS editing commands, screenshots, the screencast with `showActions`); `hosts.rs` ports `browser-hosts.ts`; `manager/` and `recording.rs` port `BrowserManager`. Errors carry Bun's bare method prefix (`click: Timeout 10000ms exceeded.`), as the production TS node (compiled, with `PIRC_PLAYWRIGHT_CORE`) shows. The in-page scripts come from `scripts/browser-assets.ts` (`bun run browser-assets:check`); Playwright's notice is in `crates/pirc-node/NOTICE`. Release `pirc-node` is 19.08 MiB (+2.2 MiB).
+
+- Recorded before the port: a golden corpus from Playwright itself (`crates/pirc-node/tests/fixtures/browser/`, 15 cases on Chromium 153, `bun run browser:reference`; macOS overrides for the two `Control+a` steps) replayed by `tests/browser_corpus.rs`, and six node-level scenarios (`crates/pirc-conformance/tests/node_browser.rs`) recorded against the TS node and passing unchanged against the Rust node. CI installs Chrome for Testing 153.0.8010.47 and ffmpeg; `PIRC_BROWSER_REQUIRED=1` turns every "no Chromium/ffmpeg" skip into a failure there.
+- Stricter than TS (deliberate): the host guard checks subresource and document redirect hops (TS let the request reach a blocked host and only checked the final frame URL; the agent sees the same error text for the cases TS covered), requests without a `networkId`, service and shared workers (a browser-session `Fetch` backstop); the first screencast frame waits for the viewport size (Chromium sends a stale one, in TS too); keys held by a cancelled action are released; an out-of-process iframe's renderer crash fails only that iframe.
+- Accepted gaps (also TS's, S18 in `plans/security-audit.md`): WebSockets are guarded only by Playwright's main-world mock, which a page can bypass, and not at all in workers; preconnect, WebRTC and WebTransport are outside the `Fetch` domain; DNS is resolved again by Chromium (rebinding).
+- Found along the way: the "Text file busy" race in tests that write and run a script (fixed with a child-written helper, `test_support::executable`); M7's real-root test runs leave root-owned directories in `target/tmp` (moved out of the tree, `sudo rm -rf ../pirc-root-leftover-target-tmp`). Not verified: the CI workflow on GitHub; a real OOPIF renderer crash and service-worker restart (covered with a fake CDP browser).
 
 ### M9 Cutover
 
