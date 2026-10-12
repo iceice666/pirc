@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 use pirc_node::browser::engine::context::{Context, LaunchOptions};
 use pirc_node::browser::engine::frame::Arg;
 use pirc_node::browser::engine::page::{Page, PageEvent};
+use pirc_node::browser::engine::screencast::{ScreencastFrame, ScreencastOptions};
 use pirc_node::browser::engine::screenshot::ScreenshotOptions;
 use pirc_node::browser::engine::snapshot::aria_snapshot;
 use pirc_node::browser::engine::{LoadState, MouseButton};
@@ -1156,5 +1157,64 @@ async fn a_key_press_cut_short_leaves_no_modifier_held() {
             "x"
         );
         browser.context.close().await;
+    });
+}
+
+/// A JPEG's size from its first SOF marker.
+fn jpeg_size(jpeg: &[u8]) -> (u32, u32) {
+    let mut at = 2;
+    while at + 9 < jpeg.len() {
+        let marker = jpeg[at + 1];
+        let length = usize::from(u16::from_be_bytes([jpeg[at + 2], jpeg[at + 3]]));
+        if matches!(marker, 0xc0..=0xc3) {
+            let height = u16::from_be_bytes([jpeg[at + 5], jpeg[at + 6]]);
+            let width = u16::from_be_bytes([jpeg[at + 7], jpeg[at + 8]]);
+            return (u32::from(width), u32::from(height));
+        }
+        at += 2 + length;
+    }
+    panic!("no SOF marker");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_first_screencast_frame_shows_the_viewport() {
+    guard!(async {
+        let port = serve().await;
+        // Chromium's first frame is often of the un-emulated window
+        // (1280x713) when the screencast starts with the first navigation,
+        // as the manager's does (Playwright 1.63.0: 10 of 15 launches).
+        for _ in 0..6 {
+            let Some(browser) = launch().await else {
+                return;
+            };
+            let page = browser.context.pages()[0].clone();
+            let frames: Arc<std::sync::Mutex<Vec<(u32, u32)>>> = Arc::default();
+            let sink = {
+                let frames = frames.clone();
+                Arc::new(move |frame: ScreencastFrame| {
+                    assert_eq!((frame.width, frame.height), (1280, 800));
+                    frames.lock().unwrap().push(jpeg_size(&frame.jpeg));
+                })
+            };
+            let options = ScreencastOptions {
+                width: 1280,
+                height: 800,
+                quality: 60,
+            };
+            let url = format!("http://127.0.0.1:{port}/form");
+            let (started, navigated) = tokio::join!(
+                page.start_screencast(options, sink),
+                page.goto(&url, LoadState::Load, T)
+            );
+            started.unwrap();
+            navigated.unwrap();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while frames.lock().unwrap().is_empty() {
+                assert!(Instant::now() < deadline, "no frame");
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+            assert_eq!(frames.lock().unwrap()[0], (1280, 800));
+            browser.context.close().await;
+        }
     });
 }
