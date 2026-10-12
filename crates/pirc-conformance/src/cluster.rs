@@ -82,7 +82,8 @@ pub struct GatewayOptions {
     /// configured workspaces, the top-level chats workspace
     /// [`CHATS_WORKSPACE_ID`] instead of [`WORKSPACE_ID`].
     pub chat_node: bool,
-    /// Extra or overriding node environment variables.
+    /// Extra or overriding node environment variables. `{run_dir}` in a
+    /// value stands for the run directory ([`Cluster::dir`], [`LoneNode::dir`]).
     pub node_env: Vec<(&'static str, String)>,
 }
 
@@ -259,6 +260,14 @@ impl Cluster {
             env.push(("PIRC_AGENT_ARGS", r#"["agent"]"#.to_owned()));
         }
         override_env(&mut env, options.env.clone());
+        // `{run_dir}` in a value is the node's run directory, which only
+        // exists now (the browser's profiles, `node_browser.rs`).
+        let run_dir = root.display().to_string();
+        for (_, value) in &mut env {
+            if value.contains("{run_dir}") {
+                *value = value.replace("{run_dir}", &run_dir);
+            }
+        }
         let (program, args) = node_command(bin_dir, options.chat_node);
         Process::spawn(
             "node",
