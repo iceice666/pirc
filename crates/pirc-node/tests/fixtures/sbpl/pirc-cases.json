@@ -1,0 +1,114 @@
+[
+  {
+    "name": "chain",
+    "about": "Links the policy and extra_denies resolve: .git through a hop in a writable home, a linked ~/.ssh and a ~/.aws chain (linkedDenies, as the policy records them). Each link stays in place.",
+    "tree": {
+      "dirs": [
+        "home",
+        "repo/hooks",
+        "outside/ssh",
+        "outside/aws",
+        "state",
+        "ws",
+        "tmp/pirc-Ab12Cd"
+      ],
+      "files": ["repo/config"],
+      "symlinks": {
+        "ws/.git": "../home/hop",
+        "home/hop": "../repo",
+        "home/.ssh": "../outside/ssh",
+        "home/aws-hop": "../outside/aws",
+        "home/.aws": "aws-hop"
+      }
+    },
+    "home": "home",
+    "cwd": "ws",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "linkedDenies": ["{ROOT}/home/.ssh", "{ROOT}/home/.aws"],
+    "settings": {
+      "network": {
+        "allowedDomains": [],
+        "deniedDomains": [],
+        "allowLocalBinding": false,
+        "allowUnixSockets": []
+      },
+      "filesystem": {
+        "denyRead": ["{ROOT}/state", "{ROOT}/outside/ssh", "{ROOT}/outside/aws"],
+        "allowRead": ["{ROOT}/ws"],
+        "allowWrite": ["{ROOT}/ws", "{ROOT}/home", "{ROOT}/tmp/pirc-Ab12Cd"],
+        "denyWrite": [
+          "{ROOT}/ws/.pirc",
+          "{ROOT}/ws/.git/hooks",
+          "{ROOT}/ws/.git/config",
+          "{ROOT}/outside/ssh",
+          "{ROOT}/outside/aws"
+        ],
+        "allowGitConfig": false
+      },
+      "allowPty": true
+    }
+  },
+  {
+    "name": "control-chars",
+    "about": "A workspace whose name holds control characters, DEL and a backslash: SBPL escapes (\\xHH), which Seatbelt reads.",
+    "tree": {
+      "dirs": ["home", "state", "w\u0001\u001b\t\u007f\\x/.git", "tmp/pirc-Ab12Cd"],
+      "files": ["w\u0001\u001b\t\u007f\\x/.git/config"],
+      "symlinks": {}
+    },
+    "home": "home",
+    "cwd": "w\u0001\u001b\t\u007f\\x",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "settings": {
+      "network": {
+        "allowedDomains": [],
+        "deniedDomains": [],
+        "allowLocalBinding": false,
+        "allowUnixSockets": []
+      },
+      "filesystem": {
+        "denyRead": ["{ROOT}/state"],
+        "allowRead": ["{ROOT}/w\u0001\u001b\t\u007f\\x"],
+        "allowWrite": ["{ROOT}/w\u0001\u001b\t\u007f\\x", "{ROOT}/tmp/pirc-Ab12Cd"],
+        "denyWrite": [
+          "{ROOT}/w\u0001\u001b\t\u007f\\x/.pirc",
+          "{ROOT}/w\u0001\u001b\t\u007f\\x/.git/hooks",
+          "{ROOT}/w\u0001\u001b\t\u007f\\x/.git/config"
+        ],
+        "allowGitConfig": false
+      },
+      "allowPty": true
+    }
+  },
+  {
+    "name": "user-globs",
+    "about": "A workspace with glob characters (read literally) holding paths spelled like the user's globs: those stay patterns.",
+    "tree": {
+      "dirs": ["home", "state", "w[1]/gen/*", "tmp/pirc-Ab12Cd"],
+      "files": ["w[1]/*.lock"],
+      "symlinks": {}
+    },
+    "home": "home",
+    "cwd": "w[1]",
+    "tmpdir": "tmp/pirc-Ab12Cd",
+    "proxy": true,
+    "settings": {
+      "network": {
+        "allowedDomains": [],
+        "deniedDomains": [],
+        "allowLocalBinding": false,
+        "allowUnixSockets": []
+      },
+      "filesystem": {
+        "denyRead": ["{ROOT}/state", "{ROOT}/w[1]/**/*.key"],
+        "allowRead": ["{ROOT}/w[1]"],
+        "allowWrite": ["{ROOT}/w[1]", "{ROOT}/w[1]/gen/*", "{ROOT}/tmp/pirc-Ab12Cd"],
+        "denyWrite": ["{ROOT}/w[1]/.pirc", "{ROOT}/w[1]/*.lock"],
+        "allowGitConfig": false
+      },
+      "allowPty": true
+    }
+  }
+]

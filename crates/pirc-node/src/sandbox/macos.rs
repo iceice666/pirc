@@ -84,16 +84,18 @@ use proxy::{Allowlist, EnvPlatform, ProxyAuth, ProxyListener};
 pub const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
 
 /// What a profile is built from besides the policy.
-struct Settings<'a> {
-    cwd: &'a str,
-    home: &'a str,
-    proxy_port: Option<u16>,
-    allow_pty: bool,
-    log_tag: &'a str,
+pub struct Settings<'a> {
+    /// The workspace (resolved by [`policy_profile`]).
+    pub cwd: &'a str,
+    pub home: &'a str,
+    /// [`ProfileInput::proxy_port`].
+    pub proxy_port: Option<u16>,
+    pub allow_pty: bool,
+    pub log_tag: &'a str,
     /// [`ProfileInput::readonly`].
-    readonly: bool,
+    pub readonly: bool,
     /// pirc's own paths besides `cwd` ([`ProfileInput::literal_roots`]).
-    literal_roots: &'a [String],
+    pub literal_roots: &'a [String],
 }
 
 /// Not srt's (see the module documentation): what [`profile::generate`]
@@ -203,8 +205,9 @@ fn refuse_non_utf8<'a>(
 /// The profile for `policy` (as `srtSettings` passes it on macOS), with
 /// `settings.cwd` resolved as srt's `process.cwd()` (`getcwd`) is: the
 /// mandatory `**/` denies are anchored there, and Seatbelt matches
-/// resolved paths. `Err` when it cannot be resolved.
-fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<String, String> {
+/// resolved paths. `Err` when it cannot be resolved. Public for the
+/// golden tests of production profiles (`tests/sandbox_macos_profiles.rs`).
+pub fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<String, String> {
     let paths = &policy.paths;
     let cwd = std::fs::canonicalize(settings.cwd)
         .map_err(|error| format!("cannot resolve {}: {error}", settings.cwd))
