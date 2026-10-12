@@ -148,15 +148,33 @@ impl Inner {
     }
 
     /// `emitState(tab)` with the tab already locked: the state now, its
-    /// titles filled in without blocking (so a state may arrive after a
-    /// later one, as in TS).
+    /// titles filled in without blocking. The tab's states go out in the
+    /// order they were taken, as TS's do (their titles come back in the
+    /// order they were asked for on its one event loop; the spawned tasks
+    /// here may finish in any order): a state waits for the earlier ones,
+    /// at most a second (a title that takes longer lets later states pass,
+    /// as a slow title could in TS).
     pub(super) fn emit_state_with(self: &Arc<Self>, tab: &Tab, st: &TabState) {
         let mut state = self.view_of(Some(st));
         let pages = st.pages.clone();
         let session = tab.session().to_owned();
         let inner = self.clone();
+        let seq = tab
+            .states_emitted
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let sent = tab.states_sent.clone();
         spawn(async move {
+            let in_order = async {
+                let mut earlier = sent.subscribe();
+                let _ = tokio::time::timeout(
+                    Duration::from_secs(1),
+                    earlier.wait_for(|done| *done >= seq),
+                )
+                .await;
+            };
             if !inner.has_viewers(&session) {
+                in_order.await;
+                sent.send_modify(|done| *done = (*done).max(seq + 1));
                 return;
             }
             let titles = futures_util::future::join_all(
@@ -175,7 +193,9 @@ impl Inner {
                 }
             }
             state["title"] = Value::String(active_title);
+            in_order.await;
             inner.broadcast(&session, &json!({ "type": "state", "state": state }));
+            sent.send_modify(|done| *done = (*done).max(seq + 1));
         });
     }
 

@@ -321,6 +321,11 @@ pub(crate) struct Tab {
     busy: tokio::sync::Mutex<()>,
     /// Serializes screencast start/stop.
     cast: tokio::sync::Mutex<()>,
+    /// The states emitted so far (numbered under the tab's lock) and how
+    /// many of them went out: they go out in order (see
+    /// `Inner::emit_state_with`).
+    states_emitted: AtomicU64,
+    states_sent: Arc<watch::Sender<u64>>,
 }
 
 pub(crate) struct TabState {
@@ -366,6 +371,8 @@ impl Tab {
             }),
             busy: tokio::sync::Mutex::new(()),
             cast: tokio::sync::Mutex::new(()),
+            states_emitted: AtomicU64::new(0),
+            states_sent: Arc::new(watch::channel(0).0),
         }
     }
 
