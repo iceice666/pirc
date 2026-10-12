@@ -348,9 +348,12 @@ impl PageApi for Page {
     }
 
     fn show_actions(&self) -> BoxFuture<'_, Result<()>> {
-        // MERGE(netio): `engine::screencast::show_actions(self,
-        // Some(ShowActions { duration: Duration::from_millis(600) }))`, which
-        // is on m8-netio and not in this branch's layout.
+        crate::browser::engine::screencast::show_actions(
+            self,
+            Some(crate::browser::engine::screencast::ShowActions {
+                duration: std::time::Duration::from_millis(600),
+            }),
+        );
         Box::pin(async { Ok(()) })
     }
 

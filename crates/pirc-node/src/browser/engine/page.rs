@@ -730,12 +730,16 @@ impl Page {
                 shared.bump();
             });
         }
-        Arc::new(Self {
+        let page = Arc::new(Self {
             shared,
             keyboard: OnceLock::new(),
             mouse: OnceLock::new(),
             screencast: ScreencastState::default(),
-        })
+        });
+        // Announcements (`showActions`) and drag handling for the page's
+        // input devices.
+        super::input::attach(&page);
+        page
     }
 
     /// The page target is gone (`didClose`): every session's guard is
