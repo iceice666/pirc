@@ -10,6 +10,14 @@
 //! listener, in order, on unbounded channels (as Playwright's event
 //! emitters do).
 //!
+//! A crashed renderer (`Inspector.targetCrashed`) fails its session's
+//! commands, pending and new, only for frame sessions (a page's own and its
+//! out-of-process iframes', see [`Session::fail_on_crash`]), as Playwright's
+//! `FrameSession._onTargetCrashed` marks them. A worker's session is not
+//! marked: Playwright's `CRServiceWorker` takes the event as a restart, and
+//! Chromium keeps the session for the restarted worker, whose requests the
+//! guard must still be able to continue.
+//!
 //! Ported from playwright-core 1.63.0 `src/server/chromium/crConnection.ts`,
 //! `src/server/pipeTransport.ts` (Apache-2.0, see
 //! `crates/pirc-node/NOTICE`).
@@ -119,6 +127,9 @@ struct State {
     /// Sessions whose renderer crashed, until they detach: their commands
     /// fail at once (`CRSession._crashed`).
     crashed: HashSet<Arc<str>>,
+    /// Frame sessions, which a renderer crash marks crashed (see
+    /// [`Session::fail_on_crash`]), until they detach.
+    frames: HashSet<Arc<str>>,
     closed: bool,
 }
 
@@ -266,6 +277,13 @@ impl Connection {
         let _ = self.outgoing.send(message.to_string().into_bytes());
     }
 
+    fn fail_on_crash(&self, session: &Arc<str>) {
+        let mut state = self.state.lock().unwrap();
+        if !state.closed {
+            state.frames.insert(session.clone());
+        }
+    }
+
     fn listen(&self, session: Option<Arc<str>>) -> mpsc::UnboundedReceiver<Event> {
         let (tx, rx) = mpsc::unbounded_channel();
         self.listen_into(session, tx);
@@ -319,10 +337,12 @@ fn dispatch(state: &Mutex<State>, message: Value) {
     if let Some(listeners) = state.listeners.get_mut(&session) {
         listeners.retain(|listener| listener.send(event.clone()).is_ok());
     }
-    // A crashed renderer answers nothing more: its commands fail
-    // (`_markAsCrashed`), now and from now on.
+    // A crashed renderer answers nothing more: a frame session's commands
+    // fail (`_markAsCrashed`), now and from now on. A worker's session lives
+    // on for the restarted worker (`CRServiceWorker`).
     if method == "Inspector.targetCrashed"
         && let Some(session) = &session
+        && state.frames.contains(session)
     {
         state.crashed.insert(session.clone());
         fail_pending(&mut state, session, &CdpError::crashed());
@@ -339,6 +359,7 @@ fn dispatch(state: &Mutex<State>, message: Value) {
     if let Some(detached) = detached {
         fail_pending(&mut state, &detached, &CdpError::closed());
         state.crashed.remove(&detached);
+        state.frames.remove(&detached);
         state.listeners.remove(&Some(detached));
     }
 }
@@ -420,6 +441,18 @@ impl Session {
         self.connection
             .call(self.id.as_ref(), method, params, Some(echo))
             .await
+    }
+
+    /// Mark this session as a frame session (a page's or an out-of-process
+    /// iframe's): once its renderer crashes, its commands in flight and
+    /// every later one fail with [`CdpError::crashed`] until it detaches
+    /// (Playwright's `FrameSession._onTargetCrashed`). Call it before the
+    /// target runs. Other sessions (workers) ignore `Inspector.targetCrashed`
+    /// here.
+    pub fn fail_on_crash(&self) {
+        if let Some(id) = &self.id {
+            self.connection.fail_on_crash(id);
+        }
     }
 
     /// This session's events from now on, until it detaches or the
@@ -532,6 +565,7 @@ mod tests {
     async fn a_crashed_session_fails_its_commands() {
         let mut fake = Fake::new();
         let page = fake.connection.session("S");
+        page.fail_on_crash();
         let mut pending = {
             let page = page.clone();
             tokio::spawn(async move { page.call("Runtime.evaluate", json!({})).await })
@@ -553,5 +587,41 @@ mod tests {
         assert_eq!(fake.command().await["method"], "Runtime.enable");
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(!later.is_finished());
+    }
+
+    /// A worker's renderer crash is a restart (`CRServiceWorker`): its
+    /// session keeps sending, so the restarted worker's paused requests can
+    /// still be continued.
+    #[tokio::test]
+    async fn a_worker_session_survives_its_renderer_crash() {
+        let mut fake = Fake::new();
+        let worker = fake.connection.session("W");
+        let pending = {
+            let worker = worker.clone();
+            tokio::spawn(async move { worker.call("Runtime.evaluate", json!({})).await })
+        };
+        let id = fake.command().await["id"].clone();
+        fake.send(json!({ "method": "Inspector.targetCrashed", "params": {}, "sessionId": "W" }))
+            .await;
+        let later = {
+            let worker = worker.clone();
+            tokio::spawn(async move {
+                worker
+                    .call("Fetch.continueRequest", json!({ "requestId": "R" }))
+                    .await
+            })
+        };
+        let command = fake.command().await;
+        assert_eq!(command["method"], "Fetch.continueRequest");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(!pending.is_finished());
+        fake.send(json!({ "id": id, "result": { "ok": true }, "sessionId": "W" }))
+            .await;
+        fake.send(json!({ "id": command["id"], "result": {}, "sessionId": "W" }))
+            .await;
+        let mut pending = pending;
+        let mut later = later;
+        assert_eq!(settled(&mut pending).await, Some(Ok(json!({ "ok": true }))));
+        assert_eq!(settled(&mut later).await, Some(Ok(json!({}))));
     }
 }

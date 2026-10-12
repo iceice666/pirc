@@ -14,6 +14,15 @@
 //! ([`Session::call_echo`]). The state lives under one lock that is never
 //! held across an `await`; waiters watch a change counter.
 //!
+//! A renderer crash marks the crashed frame session's commands failed
+//! ([`Session::fail_on_crash`]), the page's own and an out-of-process
+//! iframe's alike, as Playwright does. Deviation: only the page's own crash
+//! makes the page crashed (`Page crashed`). Playwright's
+//! `FrameSession._onTargetCrashed` also calls `page._didCrash()` for an
+//! out-of-process iframe's renderer, failing the whole page; here only that
+//! iframe's commands fail (its frame stays in the tree until Chromium
+//! detaches it), and the page and its other frames stay usable.
+//!
 //! Ported from playwright-core 1.63.0 `src/server/page.ts`,
 //! `src/server/frames.ts`, `src/server/chromium/crPage.ts` (Apache-2.0, see
 //! `crates/pirc-node/NOTICE`).
@@ -696,6 +705,7 @@ impl Page {
             setup.target_id.clone(),
             FrameSession::new(setup.session.clone(), None, true),
         );
+        setup.session.fail_on_crash();
         let mut routes = HashMap::new();
         if let Some(id) = setup.session.id() {
             routes.insert(id.to_owned(), Route::Frame(setup.target_id.clone()));
@@ -1153,7 +1163,8 @@ fn frame_event(shared: &Arc<Shared>, state: &mut State, target: &str, event: &Ev
         "Target.attachedToTarget" => attached(shared, state, target, params),
         "Target.detachedFromTarget" => detached(shared, state, target, params),
         // `_onTargetCrashed` (the session's commands fail in the
-        // connection).
+        // connection). An out-of-process iframe's crash leaves the page
+        // usable: a deviation, see the module docs.
         "Inspector.targetCrashed" if target == shared.target_id => state.crashed = true,
         "Page.windowOpen" => {
             let features = params["windowFeatures"]
@@ -1766,6 +1777,7 @@ fn attached(shared: &Arc<Shared>, state: &mut State, target: &str, params: &Valu
             for id in stale {
                 context_destroyed(state, target, id);
             }
+            session.fail_on_crash();
             state.sessions.insert(
                 child.clone(),
                 FrameSession::new(session.clone(), Some(target.to_owned()), false),
