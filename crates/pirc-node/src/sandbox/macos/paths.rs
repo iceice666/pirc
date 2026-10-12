@@ -418,50 +418,6 @@ fn home_dirs_not_read_denied(
         .collect()
 }
 
-/// Every symlink in absolute `path` resolved, a dangling one included,
-/// as far as the path exists; the rest appended. What the kernel (and so
-/// Seatbelt) sees when the path is opened or created. `None` past 40
-/// links or when a component cannot be examined. Not srt's.
-pub fn resolve_existing(path: &str) -> Option<String> {
-    let mut path = normalize(path);
-    let mut links = 0;
-    'restart: loop {
-        let parts: Vec<String> = path
-            .split('/')
-            .filter(|part| !part.is_empty())
-            .map(str::to_owned)
-            .collect();
-        let mut cursor = String::from("/");
-        for (index, part) in parts.iter().enumerate() {
-            let next = join(&[&cursor, part]);
-            match std::fs::symlink_metadata(&next) {
-                Ok(meta) if meta.file_type().is_symlink() => {
-                    links += 1;
-                    if links > 40 {
-                        return None;
-                    }
-                    let target = std::fs::read_link(&next).ok()?;
-                    let target = resolve(&cursor, target.to_str()?);
-                    let rest = parts[index + 1..].join("/");
-                    path = if rest.is_empty() {
-                        target
-                    } else {
-                        join(&[&target, &rest])
-                    };
-                    continue 'restart;
-                }
-                Ok(_) => cursor = next,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    let rest = parts[index..].join("/");
-                    return Some(join(&[&cursor, &rest]));
-                }
-                Err(_) => return None,
-            }
-        }
-        return Some(cursor);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -516,24 +472,5 @@ mod tests {
             "/nonexistent-cwd/rel/p"
         );
         assert_eq!(normalize_path_for_sandbox("/", true, ctx), "/");
-    }
-
-    #[test]
-    fn existing_prefixes_resolve() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = std::fs::canonicalize(dir.path()).unwrap();
-        std::fs::create_dir(root.join("real")).unwrap();
-        std::os::unix::fs::symlink(root.join("real"), root.join("link")).unwrap();
-        let root = root.display().to_string();
-        assert_eq!(
-            resolve_existing(&format!("{root}/link/missing/x")),
-            Some(format!("{root}/real/missing/x"))
-        );
-        assert_eq!(resolve_existing(&root), Some(root.clone()));
-        std::os::unix::fs::symlink("real/target", format!("{root}/dangling")).unwrap();
-        assert_eq!(
-            resolve_existing(&format!("{root}/dangling")),
-            Some(format!("{root}/real/target"))
-        );
     }
 }

@@ -47,9 +47,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use pirc_config::{Env, NodeConfig};
-use pirc_policy::session::SessionPolicy;
+use pirc_policy::session::{SessionPolicy, walk_links};
 
-use self::paths::{Context, contains_glob_chars, normalize_path_for_sandbox, resolve_existing};
+use self::paths::{Context, contains_glob_chars, normalize_path_for_sandbox};
 use self::profile::ProfileInput;
 use super::common::{self, ProbeCache, Session};
 use super::proxy;
@@ -71,37 +71,54 @@ struct Settings<'a> {
     log_tag: &'a str,
 }
 
-/// Not srt's (see the module documentation): the literal read and write
-/// denies [`profile::generate`] adds, so that a deny holds whatever
-/// spelling reaches the kernel. For each entry of `deny_read` and
-/// `deny_write`, and for srt's protected names in `cwd`: its spelling with
-/// every symlink resolved (as far as it exists) when that differs from
-/// the one srt uses, and an entry with glob characters as the literal path.
+/// Not srt's (see the module documentation): what [`profile::generate`]
+/// adds so that a deny holds whatever spelling reaches the kernel.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct ExtraDenies {
+    /// Literal read denies.
+    pub read: Vec<String>,
+    /// Literal write denies.
+    pub write: Vec<String>,
+    /// Paths kept in place ([`ProfileInput::extra_move_blocks`]).
+    pub move_blocks: Vec<String>,
+}
+
+/// [`ExtraDenies`] for `deny_read`, `deny_write` and srt's protected names
+/// in `cwd`: each entry's spelling with every symlink resolved (as far as
+/// it exists) when that differs from the one srt uses, an entry with glob
+/// characters also as the literal path, and every link resolving it
+/// crosses kept in place (a link in the middle of a chain, in a writable
+/// directory, would otherwise redirect the resolved deny).
 pub fn extra_denies(
     deny_read: &[String],
     deny_write: &[String],
     allow_git_config: bool,
     cwd: &str,
     home: &str,
-) -> (Vec<String>, Vec<String>) {
+) -> ExtraDenies {
     let ctx = Context { cwd, home };
-    let extras = |entries: &mut dyn Iterator<Item = String>| {
+    let push = |out: &mut Vec<String>, path: String| {
+        if !out.contains(&path) {
+            out.push(path);
+        }
+    };
+    let mut move_blocks: Vec<String> = Vec::new();
+    let mut extras = |entries: &mut dyn Iterator<Item = String>| {
         let mut out: Vec<String> = Vec::new();
-        let mut push = |path: String| {
-            if !out.contains(&path) {
-                out.push(path);
-            }
-        };
         for entry in entries {
             let entry = paths::remove_trailing_glob_suffix(&entry);
             let literal = normalize_path_for_sandbox(&entry, true, ctx);
             if contains_glob_chars(&entry) {
-                push(literal.clone());
+                push(&mut out, literal.clone());
             }
-            if let Some(resolved) = resolve_existing(&literal)
+            let walk = walk_links(&literal);
+            for link in walk.links {
+                push(&mut move_blocks, link);
+            }
+            if let Ok(resolved) = walk.target
                 && resolved != literal
             {
-                push(resolved);
+                push(&mut out, resolved);
             }
         }
         out
@@ -115,25 +132,30 @@ pub fn extra_denies(
                 .map(|name| paths::resolve(&cwd_real, name)),
         ),
     );
-    (read, write)
+    ExtraDenies {
+        read,
+        write,
+        move_blocks,
+    }
 }
 
 /// The profile for `policy` (as `srtSettings` passes it on macOS).
 fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<String, String> {
     let paths = &policy.paths;
-    let (extra_read, extra_write) = extra_denies(
+    let extra = extra_denies(
         &paths.deny_read,
         &paths.deny_write,
         policy.allow_git_config,
         settings.cwd,
         settings.home,
     );
-    // The links the policy resolved its denies through stay in place.
-    let move_blocks: Vec<String> = policy
-        .linked_denies
-        .iter()
-        .flat_map(|entry| entry.links.iter().cloned())
-        .collect();
+    // The links the policy resolved its denies through stay in place too.
+    let mut move_blocks = extra.move_blocks;
+    for link in policy.linked_denies.iter().flat_map(|entry| &entry.links) {
+        if !move_blocks.contains(link) {
+            move_blocks.push(link.clone());
+        }
+    }
     profile::generate(&ProfileInput {
         deny_read: &paths.deny_read,
         allow_read: &paths.allow_read,
@@ -147,8 +169,8 @@ fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<Str
         cwd: settings.cwd,
         home: settings.home,
         log_tag: settings.log_tag,
-        extra_read_denies: &extra_read,
-        extra_write_denies: &extra_write,
+        extra_read_denies: &extra.read,
+        extra_write_denies: &extra.write,
         extra_move_blocks: &move_blocks,
         literal_existing_allows: true,
     })
@@ -455,7 +477,11 @@ mod tests {
         std::os::unix::fs::symlink(p("repo"), p("ws/.git")).unwrap();
         std::os::unix::fs::symlink(p("dot/bashrc"), p("ws/.bashrc")).unwrap();
         fs::create_dir_all(p("w[1]")).unwrap();
-        let (read, write) = extra_denies(
+        let ExtraDenies {
+            read,
+            write,
+            move_blocks,
+        } = extra_denies(
             &[p("ws/.git/config")],
             &[
                 p("ws/.git/config"),
@@ -478,8 +504,17 @@ mod tests {
                 p("dot/bashrc"),
             ]
         );
-        let (read, write) = extra_denies(&[], &[], true, &p("dot"), &p("home"));
-        assert!(read.is_empty() && write.is_empty(), "{write:?}");
+        assert_eq!(move_blocks, [p("ws/.git"), p("ws/.bashrc")]);
+        let extra = extra_denies(&[], &[], true, &p("dot"), &p("home"));
+        assert_eq!(extra, ExtraDenies::default());
+        // A chain: ws2/.git -> hop -> repo. Repointing `hop` would
+        // redirect the resolved deny: every link crossed stays in place.
+        fs::create_dir_all(p("ws2")).unwrap();
+        std::os::unix::fs::symlink("repo", p("hop")).unwrap();
+        std::os::unix::fs::symlink(p("hop"), p("ws2/.git")).unwrap();
+        let extra = extra_denies(&[], &[p("ws2/.git/config")], true, &p("dot"), &p("home"));
+        assert_eq!(extra.write, [p("repo/config")]);
+        assert_eq!(extra.move_blocks, [p("ws2/.git"), p("hop")]);
     }
 
     /// What the backend sets, against the environment srt set in the

@@ -933,6 +933,61 @@ async fn a_linked_credential_store_cannot_be_replaced() {
     );
 }
 
+/// pirc's resolved denies name where a chain of links leads now: every
+/// link in the chain stays in place, or repointing one in a writable
+/// directory redirects the protected path (review finding 2).
+#[tokio::test]
+async fn links_in_the_middle_of_a_chain_cannot_be_repointed() {
+    let f = fixture_with(
+        "chain",
+        Options {
+            home_writable: true,
+            ..Options::default()
+        },
+    );
+    let (root, w) = (&f.root, f.w());
+    let home = path(root, "home");
+    // ws/.git -> ~/hop -> ~/repo (a relative hop, as a dotfile manager makes).
+    fs::rename(f.workspace.join(".git"), root.join("home/repo")).unwrap();
+    std::os::unix::fs::symlink("repo", root.join("home/hop")).unwrap();
+    std::os::unix::fs::symlink(root.join("home/hop"), f.workspace.join(".git")).unwrap();
+    // ~/.zshrc-style: ws/.bashrc -> ~/code/bashrc, ~/code -> outside/code.
+    fs::create_dir_all(root.join("outside/code")).unwrap();
+    fs::write(root.join("outside/code/bashrc"), "rc").unwrap();
+    std::os::unix::fs::symlink(root.join("outside/code"), root.join("home/code")).unwrap();
+    std::os::unix::fs::symlink(root.join("home/code/bashrc"), f.workspace.join(".bashrc")).unwrap();
+    let failures = f
+        .expect(
+            &[
+                (
+                    "repoint the hop",
+                    format!(
+                        "mkdir -p {home}/evil && printf '[core]\\n\\thooksPath=/x\\n' > {home}/evil/config && ln -sfn evil {home}/hop"
+                    ),
+                ),
+                ("remove the hop", format!("rm {home}/hop")),
+                ("rename the hop", format!("mv {home}/hop {home}/hop2")),
+                (
+                    "replace the linked directory",
+                    format!("rm {home}/code && mkdir -p {home}/code"),
+                ),
+                ("write the rc file", format!("echo x >> {w}/.bashrc")),
+                ("write .git/config", format!("echo x >> {w}/.git/config")),
+            ],
+            &[("write home", format!("echo x > {home}/notes"))],
+        )
+        .await;
+    assert!(failures.is_empty(), "{failures:#?}");
+    assert_eq!(
+        fs::read_to_string(f.workspace.join(".git/config")).unwrap(),
+        "[core]"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("outside/code/bashrc")).unwrap(),
+        "rc"
+    );
+}
+
 /// srt reads `[`, `*` and `?` in a rule as glob syntax, so a workspace named
 /// like `notes [draft]` lost its `.pirc` deny; pirc adds the literal path.
 #[tokio::test]
