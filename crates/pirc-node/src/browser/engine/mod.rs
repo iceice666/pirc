@@ -9,10 +9,8 @@
 //! WebSocket.
 //!
 //! Errors carry Playwright's message text ([`Error`]), because the agent
-//! reads it (`cleanError` in the manager keeps its first lines). That is
-//! the text the production TS node shows: compiled by `bun build --compile
-//! --minify`, Playwright's client finds no API name in its stack, so its
-//! messages have no `page.goto: `-style prefix (see [`Error::api`]).
+//! reads it (`cleanError` in the manager keeps its first lines), prefixed
+//! as the production TS node shows it (see [`Error::api`]).
 //!
 //! | Module | Port of | Owner |
 //! |---|---|---|
@@ -40,7 +38,7 @@ use std::time::Duration;
 pub use cdp::CdpError;
 
 /// A failed engine operation, with the message Playwright would have
-/// thrown for it (e.g. `Timeout 10000ms exceeded.`).
+/// thrown for it (e.g. `click: Timeout 10000ms exceeded.`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Error {
     pub message: String,
@@ -53,19 +51,25 @@ impl Error {
         }
     }
 
-    /// The error of Playwright API call `api` (e.g. `page.goto`) failing
-    /// with `message`. Playwright's client prefixes the API name it finds
-    /// in the JS stack (`page.goto: ` under V8, `goto: ` under Bun from
-    /// source); the compiled TS node finds none, so the message is
-    /// unprefixed. Every engine error goes through here, so the choice
-    /// lives in one place.
+    /// The error of Playwright API call `api` failing with `message`:
+    /// `<api>: <message>`. Playwright's client prefixes the API name it
+    /// finds in the JS stack; the production TS node (Bun, with
+    /// playwright-core on disk) finds the bare client method name, so `api`
+    /// is that name (`goto`, `goBack`, `evaluate`, `waitForLoadState`,
+    /// `click`, `fill`, `waitFor`…). A `page.`/`locator.`-style qualifier
+    /// is dropped; an empty `api` (an internal step, prefixed by the API
+    /// call it is part of) leaves `message` as it is. Every engine error
+    /// goes through here.
     pub fn api(api: &str, message: impl Into<String>) -> Self {
-        let _ = api;
-        Self::new(message)
+        let message = message.into();
+        match api.rsplit('.').next().unwrap_or_default() {
+            "" => Self::new(message),
+            name => Self::new(format!("{name}: {message}")),
+        }
     }
 
-    /// Playwright's timeout text for `api` (e.g. `locator.click`):
-    /// `Timeout 10000ms exceeded.` (see [`Error::api`]).
+    /// Playwright's timeout text for `api` (e.g. `click`):
+    /// `click: Timeout 10000ms exceeded.` (see [`Error::api`]).
     pub fn timeout(api: &str, timeout: Duration) -> Self {
         Self::api(api, format!("Timeout {}ms exceeded.", timeout.as_millis()))
     }

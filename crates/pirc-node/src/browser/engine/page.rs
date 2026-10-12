@@ -98,12 +98,7 @@ impl Page {
     pub async fn title(&self) -> Result<String> {
         let main = self.main_frame();
         match main
-            .evaluate_in(
-                World::Utility,
-                "page.title",
-                "() => document.title",
-                Value::Null,
-            )
+            .evaluate_in(World::Utility, "title", "() => document.title", Value::Null)
             .await
         {
             Ok(Value::String(title)) => Ok(title),
@@ -133,13 +128,13 @@ impl Page {
           }";
         let main = self.main_frame();
         match main
-            .evaluate_in(World::Utility, "page.content", CONTENT, Value::Null)
+            .evaluate_in(World::Utility, "content", CONTENT, Value::Null)
             .await
         {
             Ok(value) => Ok(value.as_str().unwrap_or_default().to_owned()),
             Err(error) if error.non_retriable || main.is_detached() => Err(error.error),
             Err(_) => Err(Error::api(
-                "page.content",
+                "content",
                 "Unable to retrieve content because the page is navigating and changing the content.",
             )),
         }
@@ -179,7 +174,8 @@ impl Page {
 
     /// `page.goto(url, {waitUntil, timeout})`: the main frame's response,
     /// `None` for same-document or `about:` navigations. Errors as
-    /// Playwright's (`net::ERR_… at <url>`, timeouts; see [`Error::api`]).
+    /// Playwright's (`goto: net::ERR_… at <url>`, `goto: Timeout 30000ms
+    /// exceeded.`; see [`Error::api`]).
     pub async fn goto(
         &self,
         url: &str,
@@ -187,19 +183,19 @@ impl Page {
         timeout: Duration,
     ) -> Result<Option<Response>> {
         let main = self.main_frame();
-        let api = "page.goto";
+        let api = "goto";
         main.race_navigation(api, timeout, main.goto_impl(api, url, wait_until))
             .await
     }
 
     /// `page.goBack({waitUntil, timeout})`; no history entry is not an error.
     pub async fn go_back(&self, wait_until: LoadState, timeout: Duration) -> Result<()> {
-        self.go(-1, "page.goBack", wait_until, timeout).await
+        self.go(-1, "goBack", wait_until, timeout).await
     }
 
     /// `page.goForward({timeout})` (waits for `load`).
     pub async fn go_forward(&self, timeout: Duration) -> Result<()> {
-        self.go(1, "page.goForward", LoadState::Load, timeout).await
+        self.go(1, "goForward", LoadState::Load, timeout).await
     }
 
     async fn go(
@@ -242,7 +238,7 @@ impl Page {
     pub async fn reload(&self, timeout: Duration) -> Result<()> {
         let main = self.main_frame();
         let session = self.shared.session.clone();
-        let api = "page.reload";
+        let api = "reload";
         let work = async {
             let navigations = main.subscribe_navigations();
             let wait = main.wait_for_navigation(api, navigations, true, LoadState::Load);
@@ -262,7 +258,7 @@ impl Page {
     /// `page.waitForLoadState(state, {timeout})` for the main frame.
     pub async fn wait_for_load_state(&self, state: LoadState, timeout: Duration) -> Result<()> {
         self.main_frame()
-            .wait_for_load_state_api("page.waitForLoadState", state, timeout)
+            .wait_for_load_state_api("waitForLoadState", state, timeout)
             .await
     }
 
@@ -270,7 +266,7 @@ impl Page {
     /// [`Frame::evaluate`]).
     pub async fn evaluate(&self, function: &str, arg: Value) -> Result<Value> {
         self.main_frame()
-            .evaluate_api("page.evaluate", function, arg)
+            .evaluate_api("evaluate", function, arg)
             .await
     }
 
@@ -321,7 +317,7 @@ impl Page {
             .call("Page.bringToFront", json!({}))
             .await
             .map(|_| ())
-            .map_err(|e| protocol_error("page.bringToFront", "Page.bringToFront", e))
+            .map_err(|e| protocol_error("bringToFront", "Page.bringToFront", e))
     }
 
     /// `page.close()`: `Target.closeTarget` (no `beforeunload`), then the

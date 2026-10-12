@@ -286,7 +286,7 @@ async fn a_killed_browser_closes_the_context() {
         let error = page.evaluate("() => 1", Value::Null).await.unwrap_err();
         assert_eq!(
             error.message,
-            "Target page, context or browser has been closed"
+            "evaluate: Target page, context or browser has been closed"
         );
         browser.context.close().await;
     });
@@ -463,7 +463,7 @@ async fn evaluates_and_runs_the_injected_script() {
             .await
             .unwrap_err();
         assert!(
-            error.message.starts_with("Error: boom\n    at "),
+            error.message.starts_with("evaluate: Error: boom\n    at "),
             "{}",
             error.message
         );
@@ -472,7 +472,7 @@ async fn evaluates_and_runs_the_injected_script() {
             .await
             .unwrap_err();
         assert!(
-            error.message.starts_with("TypeError: bad\n"),
+            error.message.starts_with("evaluate: TypeError: bad\n"),
             "{}",
             error.message
         );
@@ -480,7 +480,7 @@ async fn evaluates_and_runs_the_injected_script() {
             .evaluate("() => { throw 'str'; }", Value::Null)
             .await
             .unwrap_err();
-        assert_eq!(error.message, "str");
+        assert_eq!(error.message, "evaluate: str");
         // The utility world is not the page's.
         page.evaluate("() => { window.marker = 1; }", Value::Null)
             .await
@@ -612,7 +612,7 @@ async fn navigates_with_playwright_statuses_and_errors() {
         let error = page.goto(&url, LoadState::Load, T).await.unwrap_err();
         assert_eq!(
             error.message,
-            format!("net::ERR_CONNECTION_REFUSED at {url}")
+            format!("goto: net::ERR_CONNECTION_REFUSED at {url}")
         );
         let error = page
             .goto("http://127.0.0.1:1/x", LoadState::Load, T)
@@ -620,7 +620,7 @@ async fn navigates_with_playwright_statuses_and_errors() {
             .unwrap_err();
         assert_eq!(
             error.message,
-            "net::ERR_UNSAFE_PORT at http://127.0.0.1:1/x"
+            "goto: net::ERR_UNSAFE_PORT at http://127.0.0.1:1/x"
         );
         let started = Instant::now();
         let error = page
@@ -631,7 +631,7 @@ async fn navigates_with_playwright_statuses_and_errors() {
             )
             .await
             .unwrap_err();
-        assert_eq!(error.message, "Timeout 1000ms exceeded.");
+        assert_eq!(error.message, "goto: Timeout 1000ms exceeded.");
         assert!(started.elapsed() < Duration::from_secs(3));
         browser.context.close().await;
     });
@@ -704,7 +704,7 @@ async fn waits_for_load_states_and_networkidle() {
             .wait_for_load_state(LoadState::NetworkIdle, Duration::from_millis(300))
             .await
             .unwrap_err();
-        assert_eq!(error.message, "Timeout 300ms exceeded.");
+        assert_eq!(error.message, "waitForLoadState: Timeout 300ms exceeded.");
         page.wait_for_load_state(LoadState::NetworkIdle, T)
             .await
             .unwrap();

@@ -35,6 +35,9 @@ use crate::browser::hosts::HostGuard;
 /// How long [`Context::close`] lets Chromium exit before killing it.
 pub const CLOSE_GRACE: Duration = Duration::from_secs(10);
 
+/// The API name of launch errors.
+const LAUNCH: &str = "launchPersistentContext";
+
 /// Playwright's default launch timeout.
 const LAUNCH_TIMEOUT: Duration = Duration::from_secs(180);
 
@@ -143,7 +146,8 @@ impl Context {
         installer: Installer,
     ) -> std::result::Result<Arc<Self>, String> {
         let launch::Launched { child, connection } =
-            launch::launch(executable, profile_dir, &options.env)?;
+            launch::launch(executable, profile_dir, &options.env)
+                .map_err(|reason| Error::api(LAUNCH, reason).message)?;
         let pid = child.id();
         let (kill, exited) = watch_process(child);
         let browser = connection.browser();
@@ -171,14 +175,11 @@ impl Context {
             Ok(Ok(())) => Ok(context),
             Ok(Err(reason)) => {
                 context.close().await;
-                Err(reason)
+                Err(Error::api(LAUNCH, reason).message)
             }
             Err(_) => {
                 context.close().await;
-                Err(format!(
-                    "Timeout {}ms exceeded.",
-                    LAUNCH_TIMEOUT.as_millis()
-                ))
+                Err(Error::timeout(LAUNCH, LAUNCH_TIMEOUT).message)
             }
         }
     }
@@ -264,7 +265,7 @@ impl Context {
     /// A new page (`context.newPage()`), initialized:
     /// `Target.createTarget {url: 'about:blank'}` in the default context.
     pub async fn new_page(&self) -> Result<Arc<Page>> {
-        let api = "browserContext.newPage";
+        let api = "newPage";
         let shared = &self.shared;
         let reply = shared
             .browser

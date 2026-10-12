@@ -231,6 +231,11 @@ impl ExecContext {
 }
 
 /// A handle to a frame (cheap to clone); stale once the frame detaches.
+///
+/// [`Frame::evaluate`] and [`Frame::wait_for_load_state`] are Playwright
+/// API calls (their errors are prefixed, see [`Error::api`]); the rest
+/// ([`Frame::injected`], [`Frame::adopt`], [`Frame::owner`],
+/// [`JsHandle`]) are steps of other calls, whose errors are not.
 #[derive(Clone)]
 pub struct Frame {
     pub(super) shared: Arc<Shared>,
@@ -318,7 +323,7 @@ impl Frame {
     /// JSON cannot carry). Waits for the frame's document to have a main
     /// world.
     pub async fn evaluate(&self, function: &str, arg: Value) -> Result<Value> {
-        self.evaluate_api("frame.evaluate", function, arg).await
+        self.evaluate_api("evaluate", function, arg).await
     }
 
     pub(super) async fn evaluate_api(
@@ -388,7 +393,7 @@ impl Frame {
     /// The injected script of the frame's current document, in its utility
     /// world (created on first use per document).
     pub async fn injected(&self) -> Result<JsHandle> {
-        let context = self.context(World::Utility, "injectedScript").await?;
+        let context = self.context(World::Utility, "").await?;
         let seq = self.seq();
         let handle = context
             .injected
@@ -470,7 +475,7 @@ impl Frame {
 
     /// Resolve once `state` has fired for the current document.
     pub async fn wait_for_load_state(&self, state: LoadState, timeout: Duration) -> Result<()> {
-        self.wait_for_load_state_api("frame.waitForLoadState", state, timeout)
+        self.wait_for_load_state_api("waitForLoadState", state, timeout)
             .await
     }
 
