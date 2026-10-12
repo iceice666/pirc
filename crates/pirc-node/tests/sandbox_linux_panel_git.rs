@@ -204,3 +204,35 @@ async fn panel_git_handles_git_lfs_files() {
     // The objects went to the temp directory, not the repository.
     assert_eq!(objects(&ws.join(".git/lfs")), before);
 }
+
+/// bubblewrap's own failure (review F2; here `execvp git` with git off the
+/// command's `PATH`) exits 1 as git's "no" does: the panel answers 503,
+/// not a clean repository or an empty history.
+#[tokio::test]
+async fn a_failing_sandbox_is_not_a_clean_repository() {
+    let Some(f) = fixture("git-broken") else {
+        return;
+    };
+    let ws = f.root.join("workspace");
+    let env: ChildEnv = [
+        ("PATH", path(&f.root, "no-such-bin")),
+        ("HOME", path(&f.root, "home")),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_owned(), v))
+    .collect();
+    let error = git_status(&f.sandbox, &ws, &env).await.unwrap_err();
+    assert_eq!(
+        (error.status, error.code.as_ref()),
+        (503, "runner_unavailable")
+    );
+    assert!(
+        error.message.starts_with(
+            "The Git panel runs git in the sandbox, and it is unavailable on this node: bwrap: execvp git"
+        ),
+        "{}",
+        error.message
+    );
+    let error = git_log(&f.sandbox, &ws, &env, 0, 10).await.unwrap_err();
+    assert_eq!(error.status, 503, "{}", error.message);
+}

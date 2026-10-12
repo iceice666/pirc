@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use pirc_policy::session::SessionPolicy;
 
 use super::*;
-use crate::sandbox::{BoxFuture, PrepareInput};
+use crate::sandbox::{BoxFuture, PrepareInput, StderrPrefixes};
 
 /// A stand-in for the node's sandbox: runs the command under `/bin/sh`
 /// with `PIRC_TEST_SANDBOXED=1` (so what git starts shows it ran beneath
@@ -19,6 +19,8 @@ use crate::sandbox::{BoxFuture, PrepareInput};
 /// reason: available.
 struct FakeSandbox {
     unavailable: Option<&'static str>,
+    /// The wrapper fails with this on stderr (after the probe passed).
+    broken: Option<&'static str>,
     calls: Mutex<Vec<ReadonlyInput>>,
     cleaned: Arc<AtomicUsize>,
 }
@@ -27,6 +29,7 @@ impl FakeSandbox {
     fn new(unavailable: Option<&'static str>) -> Self {
         Self {
             unavailable,
+            broken: None,
             calls: Mutex::new(Vec::new()),
             cleaned: Arc::new(AtomicUsize::new(0)),
         }
@@ -54,11 +57,11 @@ impl Sandbox for FakeSandbox {
     fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>> {
         Box::pin(async move {
             self.calls.lock().unwrap().push(input.clone());
-            let mut args: Vec<OsString> = vec![
-                "-c".into(),
-                "PIRC_TEST_SANDBOXED=1 exec \"$@\"".into(),
-                "sandbox".into(),
-            ];
+            let script = match self.broken {
+                None => "PIRC_TEST_SANDBOXED=1 exec \"$@\"".to_owned(),
+                Some(error) => format!("echo '{error}' >&2; exit 1"),
+            };
+            let mut args: Vec<OsString> = vec!["-c".into(), script.into(), "sandbox".into()];
             args.extend(input.command);
             let cleaned = self.cleaned.clone();
             Ok(Prepared::new(
@@ -71,7 +74,8 @@ impl Sandbox for FakeSandbox {
                 move || {
                     cleaned.fetch_add(1, Ordering::SeqCst);
                 },
-            ))
+            )
+            .with_wrapper_status(Box::new(StderrPrefixes(&["fakewrap: "]))))
         })
     }
 }
@@ -642,6 +646,46 @@ async fn git_is_unavailable_without_a_sandbox() {
         expected
     );
     assert!(sandbox.calls.lock().unwrap().is_empty());
+}
+
+/// A sandbox that fails once git is prepared (bubblewrap's own exit 1: a
+/// mount gone since the plan, git missing) is 503 too, never git's "no":
+/// not a clean repository, an empty history or an empty diff.
+#[tokio::test]
+async fn a_failing_sandbox_is_not_a_clean_repository() {
+    let f = fixture();
+    let env = env(&f.run);
+    run_git(&f.ws, &["init", "-q", "-b", "main"]);
+    let mut sandbox = FakeSandbox::new(None);
+    sandbox.broken = Some("fakewrap: execvp git: No such file or directory");
+    let expected = (
+        503,
+        "runner_unavailable".to_owned(),
+        "The Git panel runs git in the sandbox, and it is unavailable on this node: fakewrap: execvp git: No such file or directory"
+            .to_owned(),
+    );
+    assert_eq!(
+        status(git_status(&sandbox, &f.ws, &env).await.unwrap_err()),
+        expected
+    );
+    assert_eq!(
+        status(git_log(&sandbox, &f.ws, &env, 0, 50).await.unwrap_err()),
+        expected
+    );
+    assert_eq!(
+        status(
+            git_diff(&sandbox, &f.ws, &env, None, false, false)
+                .await
+                .unwrap_err()
+        ),
+        expected
+    );
+    // git's own exit 1 is still an answer (`diff --no-index` of a new file).
+    std::fs::write(f.ws.join("new.txt"), "x\n").unwrap();
+    let diff = git_diff(&*HOST, &f.ws, &env, Some("new.txt"), false, true)
+        .await
+        .unwrap();
+    assert!(diff["diff"].as_str().unwrap().contains("+x"), "{diff}");
 }
 
 /// A git that outlives its deadline is killed with its whole process

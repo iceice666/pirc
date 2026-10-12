@@ -32,6 +32,7 @@ use serde_json::{Value, json};
 use super::common::{self, ProbeCache, Session};
 use super::{
     BoxFuture, NetworkControl, PrepareInput, Prepared, ReadonlyInput, Sandbox, SandboxStatus,
+    StderrPrefixes,
 };
 use crate::error::{ApiError, ApiResult};
 
@@ -70,6 +71,18 @@ pub fn srt_settings(policy: &SessionPolicy, extra_domains: &[String], platform: 
         "allowPty": true,
     })
 }
+
+/// How srt 0.0.78's `cli.js` and the sandbox it runs (bubblewrap on Linux,
+/// `sandbox-exec` on macOS) start their own errors on stderr: what tells a
+/// failed sandbox from the command's exit status ([`StderrPrefixes`]).
+/// Not srt's "Process killed by signal": the command ran.
+const SRT_FAILURES: &[&str] = &[
+    "bwrap: ",
+    "sandbox-exec: ",
+    "Error: ",
+    "Failed to execute command: ",
+    "Fatal error: ",
+];
 
 /// The probe's settings: nothing allowed, nothing denied.
 const PROBE_SETTINGS: &str = r#"{"network":{"allowedDomains":[],"deniedDomains":[]},"filesystem":{"denyRead":[],"allowWrite":[],"denyWrite":[]}}"#;
@@ -245,7 +258,8 @@ impl Sandbox for SrtSandbox {
                     Session::remove_tmp(&tmp);
                 },
             )
-            .with_temp_dir(temp_dir))
+            .with_temp_dir(temp_dir)
+            .with_wrapper_status(Box::new(StderrPrefixes(SRT_FAILURES))))
         })
     }
 }

@@ -7,7 +7,8 @@
 //! `without_secrets` plus `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`,
 //! `GIT_PAGER=cat`, `LC_ALL=C`; 15 s then SIGKILL; stdout capped at 1 MiB
 //! (`truncated`); exit codes other than 0 and 1 are 400 with the last three
-//! stderr lines. Rust-only (security audit S8): git runs in the node's
+//! stderr lines, but a sandbox that failed before git ran is 503
+//! [`git_unavailable`] ([`Prepared::wrapper_failure`]). Rust-only (security audit S8): git runs in the node's
 //! sandbox, read-only and without network ([`Sandbox::prepare_readonly`]),
 //! with Git LFS's storage in the sandbox's temp directory (`lfs_storage`);
 //! without a working sandbox every git route is 503 [`git_unavailable`],
@@ -304,6 +305,15 @@ async fn run_prepared(
         }
         Err(error) => return Err(GitError::Spawn(error)),
     };
+    // The sandbox's own failure (it exits 1, as git's "no" does): 503,
+    // never a clean repository, an empty history or an empty diff.
+    if code != 0
+        && !truncated
+        && !timed_out
+        && let Some(reason) = prepared.wrapper_failure(code, &String::from_utf8_lossy(&stderr))
+    {
+        return Err(GitError::Sandbox(git_unavailable(&reason)));
+    }
     if code != 0 && !truncated && code != 1 {
         let stderr = String::from_utf8_lossy(&stderr);
         let lines: Vec<&str> = trim(&stderr).split('\n').collect();

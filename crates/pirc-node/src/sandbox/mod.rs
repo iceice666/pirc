@@ -115,7 +115,9 @@ pub trait Sandbox: Send + Sync {
     /// `input.command` read-only and without network, or 503
     /// [`unavailable_error`]. The [`Prepared`] has no network control, its
     /// args end with the command, and it says where the command may write
-    /// ([`Prepared::temp_dir`]); cleanup as for [`Sandbox::prepare`].
+    /// ([`Prepared::temp_dir`]) and how to tell the sandbox's own failure
+    /// from the command's exit status ([`Prepared::wrapper_failure`]);
+    /// cleanup as for [`Sandbox::prepare`].
     fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>>;
 }
 
@@ -134,6 +136,48 @@ pub trait NetworkControl: Send + Sync {
     fn approve(&self, approved: &[String]) -> Result<(), String>;
 }
 
+/// How the caller of a read-only command tells the sandbox wrapper's own
+/// failure (it never ran the command: a set-up error, `execvp` failing, a
+/// path gone before it was mounted) from the command's exit status.
+/// bubblewrap, `sandbox-exec` and srt exit 1 for most of their own
+/// failures, which is also git's "no": read as git's, a broken sandbox
+/// looked like a clean repository in the Git panel.
+pub trait WrapperStatus: Send + Sync {
+    /// Called on the command before it is spawned.
+    fn prepare_command(&self, command: &mut tokio::process::Command) -> std::io::Result<()>;
+
+    /// After the command exited with `code` (not 0, and not killed by the
+    /// caller) and wrote `stderr`: why the sandbox failed, or `None` when
+    /// the command ran.
+    fn failure(&self, code: i32, stderr: &str) -> Option<String>;
+}
+
+/// [`WrapperStatus`] for wrappers that report only on stderr: a failure is
+/// a non-zero exit whose stderr starts with one of the prefixes (the
+/// wrapper speaks before the command can). Its first line is the reason.
+/// A command that prints such a prefix itself is taken for a failed
+/// sandbox, which costs it nothing but the status code.
+pub struct StderrPrefixes(pub &'static [&'static str]);
+
+impl WrapperStatus for StderrPrefixes {
+    fn prepare_command(&self, command: &mut tokio::process::Command) -> std::io::Result<()> {
+        let _ = command;
+        Ok(())
+    }
+
+    fn failure(&self, code: i32, stderr: &str) -> Option<String> {
+        let stderr = stderr.trim_start();
+        (code != 0 && self.0.iter().any(|prefix| stderr.starts_with(prefix))).then(|| {
+            stderr
+                .lines()
+                .next()
+                .unwrap_or_default()
+                .trim_end()
+                .to_owned()
+        })
+    }
+}
+
 /// One session's sandbox: the command that runs the agent inside it.
 pub struct Prepared {
     /// The program to spawn (srt, bubblewrap).
@@ -149,6 +193,8 @@ pub struct Prepared {
     control: Option<Box<dyn NetworkControl>>,
     /// A read-only command's writable directory ([`Prepared::with_temp_dir`]).
     temp_dir: Option<PathBuf>,
+    /// A read-only command's ([`Prepared::with_wrapper_status`]).
+    status: Option<Box<dyn WrapperStatus>>,
     cleanup: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
@@ -170,6 +216,7 @@ impl Prepared {
             warnings,
             control,
             temp_dir: None,
+            status: None,
             cleanup: Mutex::new(Some(Box::new(cleanup))),
         }
     }
@@ -188,14 +235,32 @@ impl Prepared {
         self.temp_dir.as_deref()
     }
 
-    /// `program` with `args`, prepared by the network control. The runner
-    /// sets the rest: the agent's flags, environment, `cwd`, piped stdio
-    /// and its own process group.
+    /// How a read-only command's wrapper reports its own failure.
+    #[must_use]
+    pub fn with_wrapper_status(mut self, status: Box<dyn WrapperStatus>) -> Self {
+        self.status = Some(status);
+        self
+    }
+
+    /// Why the sandbox itself failed, when the command exited with `code`
+    /// (not 0, and not killed by the caller) and wrote `stderr`; `None`
+    /// when the command ran, or nothing tells.
+    pub fn wrapper_failure(&self, code: i32, stderr: &str) -> Option<String> {
+        self.status.as_ref()?.failure(code, stderr)
+    }
+
+    /// `program` with `args`, prepared by the network control (or a
+    /// read-only command's wrapper status). The runner sets the rest: the
+    /// agent's flags, environment, `cwd`, piped stdio and its own process
+    /// group.
     pub fn command(&self) -> std::io::Result<tokio::process::Command> {
         let mut command = tokio::process::Command::new(&self.program);
         command.args(&self.args);
         if let Some(control) = &self.control {
             control.prepare_command(&mut command)?;
+        }
+        if let Some(status) = &self.status {
+            status.prepare_command(&mut command)?;
         }
         Ok(command)
     }
@@ -348,6 +413,18 @@ mod tests {
             unavailable_error("no bwrap").message,
             "Agents on this node must run in the sandbox, and it is unavailable: no bwrap"
         );
+    }
+
+    #[test]
+    fn stderr_prefixes_tell_the_wrappers_failures() {
+        let status = StderrPrefixes(&["sandbox-exec: "]);
+        assert_eq!(
+            status.failure(71, "sandbox-exec: execvp() of 'git' failed\nmore\n"),
+            Some("sandbox-exec: execvp() of 'git' failed".to_owned())
+        );
+        assert_eq!(status.failure(1, ""), None, "git's no");
+        assert_eq!(status.failure(128, "fatal: not a git repository"), None);
+        assert_eq!(status.failure(0, "sandbox-exec: noise"), None);
     }
 
     #[test]

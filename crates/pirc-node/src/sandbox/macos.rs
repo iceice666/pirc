@@ -399,7 +399,9 @@ impl Sandbox for MacSandbox {
                 None,
                 move || Session::remove_tmp(&tmp),
             )
-            .with_temp_dir(temp_dir))
+            .with_temp_dir(temp_dir)
+            // `sandbox-exec: <what failed>` (a profile it refused, `execvp`).
+            .with_wrapper_status(Box::new(super::StderrPrefixes(&["sandbox-exec: "]))))
         })
     }
 }

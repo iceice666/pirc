@@ -44,6 +44,7 @@ mod args;
 pub mod caps;
 pub mod plan;
 pub mod scan;
+mod status;
 
 use std::ffi::OsString;
 use std::ops::Range;
@@ -141,11 +142,14 @@ pub fn bwrap_args(
 }
 
 /// bubblewrap's options for [`Sandbox::prepare_readonly`]: no network at
-/// all (no proxy socket, no proxy variables), the read-only filesystem.
+/// all (no proxy socket, no proxy variables), the read-only filesystem,
+/// and a status descriptor that tells bubblewrap's failures from the
+/// command's (`status`).
 pub fn readonly_bwrap_args(filesystem: Vec<String>, tmp: &str) -> BwrapArgs {
     let mut args: Vec<String> = ["--new-session", "--die-with-parent", "--unshare-net"]
         .map(String::from)
         .to_vec();
+    args.extend(["--json-status-fd".to_owned(), status::STATUS_FD.to_string()]);
     for (name, value) in [
         ("SANDBOX_RUNTIME", "1"),
         ("TMPDIR", tmp),
@@ -389,7 +393,8 @@ impl NativeSandbox {
                 Session::remove_tmp(&tmp);
             },
         )
-        .with_temp_dir(temp_dir))
+        .with_temp_dir(temp_dir)
+        .with_wrapper_status(Box::new(status::JsonStatus::default())))
     }
 
     /// [`Sandbox::prepare_readonly`] for `policy` built by the caller
@@ -610,6 +615,7 @@ mod tests {
             ["--new-session", "--die-with-parent", "--unshare-net"]
         );
         assert_eq!(args[mounts.clone()], ["--ro-bind", "/", "/"]);
+        assert_eq!(args[3..5], ["--json-status-fd", "3"]);
         assert!(
             !args
                 .iter()
