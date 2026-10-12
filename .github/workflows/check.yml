@@ -55,10 +55,11 @@ jobs:
       - run: bun run size:check
 
   sandbox-podman:
-    # The native Linux sandbox for real (crates/pirc-node/tests/sandbox_native.rs
-    # and sandbox_linux_*.rs): bubblewrap, uid 0 in user namespaces, and
-    # container root in rootless podman with bubblewrap nested. The check job
-    # has no bubblewrap, so these tests skip there.
+    # The native Linux sandbox for real (crates/pirc-node/tests/sandbox_native.rs,
+    # sandbox_linux_*.rs and sandbox_network.rs): bubblewrap, uid 0 in user
+    # namespaces, container root in rootless podman with bubblewrap nested,
+    # and the proxy end to end through curl, ssh and nc. The check job has no
+    # bubblewrap, so these tests skip there.
     name: Native sandbox (bubblewrap, uid 0, podman)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -68,10 +69,10 @@ jobs:
         with:
           toolchain: 1.98.1
       - uses: Swatinem/rust-cache@v2
-      - name: Install bubblewrap, podman and capability tools
+      - name: Install bubblewrap, podman, capability and network tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends bubblewrap podman uidmap libcap2-bin util-linux git
+          sudo apt-get install -y --no-install-recommends bubblewrap podman uidmap libcap2-bin util-linux git git-lfs curl openssh-client netcat-openbsd
       # Ubuntu 24.04 confines unprivileged user namespaces with AppArmor,
       # which stops bubblewrap and `unshare -r` for the runner's user.
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -85,5 +86,5 @@ jobs:
           cargo test -p pirc-node
           --test sandbox_native --test sandbox_linux_uid0
           --test sandbox_linux_readonly --test sandbox_linux_agent
-          --test sandbox_linux_panel_git
+          --test sandbox_linux_panel_git --test sandbox_network
           -- --nocapture
