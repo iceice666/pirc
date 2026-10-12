@@ -947,15 +947,26 @@ async fn a_dropped_start_leaves_no_temp_dir() {
     let started = tokio::time::timeout(Duration::from_millis(1), f.try_prepare("pi_dropped")).await;
     assert!(started.is_err(), "the start finished within 1 ms");
     let tmp = f.tmp.path();
-    let mut left = Vec::new();
-    for entry in fs::read_dir(tmp).unwrap().flatten() {
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with("pirc-n-") {
-            left.extend(fs::read_dir(&path).unwrap().flatten().map(|e| e.path()));
-        } else {
-            left.push(path);
+    let left = || {
+        let mut left = Vec::new();
+        for entry in fs::read_dir(tmp).unwrap().flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with("pirc-n-") {
+                left.extend(fs::read_dir(&path).unwrap().flatten().map(|e| e.path()));
+            } else {
+                left.push(path);
+            }
         }
+        left
+    };
+    // The policy is built on the blocking pool, which finishes (and drops
+    // its result, the directory with it) after the start was dropped.
+    for _ in 0..100 {
+        if left().is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    assert!(left.is_empty(), "{left:?}");
+    assert!(left().is_empty(), "{:?}", left());
 }
