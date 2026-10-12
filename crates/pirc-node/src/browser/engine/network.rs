@@ -1,5 +1,6 @@
-//! The host guard on every request and WebSocket of the context, as
-//! `node/browser.ts` set it up with Playwright: `context.route('**/*')`
+//! The host guard on every request and WebSocket of the context (but for
+//! the accepted gaps listed at the end), as `node/browser.ts` set it up
+//! with Playwright: `context.route('**/*')`
 //! (the `Fetch` domain: a blocked request fails with `BlockedByClient`, the
 //! rest continue; `Network.setCacheDisabled` as Playwright does while
 //! routing), `context.routeWebSocket` (Playwright's main-world WebSocket
@@ -114,18 +115,46 @@
 //!   the same socket. A page `close()` before the verdict is relayed as
 //!   Playwright's client does (`closeServer`, then `closePage`).
 //!
-//! Known gaps kept from Playwright's WebSocket mock (an untrusted page can
-//! open a socket to a blocked host; verified with Chromium 153):
+//! Accepted gaps (decided with the user on 2026-10-12): each is equal to
+//! TS, whose Playwright guard has the same holes, and through each an
+//! untrusted page reaches a blocked host (verified with Chromium 153
+//! unless noted):
 //!
-//! - `ws.url` is a writable property, and the mock connects to it after the
-//!   verdict on the URL it reported at construction: set right after `new
-//!   WebSocket(<allowed URL>)`, the socket connects to the new URL.
-//! - `__pwWebSocketDispatch` is a page-visible global: called with a
-//!   pending socket's `_id` (also page-visible) and `type: 'passthrough'`,
-//!   it connects that socket whatever the verdict.
-//! - WebSockets of dedicated and shared workers are not guarded at all (the
-//!   mock is a main-world init script; `Fetch` does not see WebSocket
-//!   handshakes).
+//! - WebSockets. `Fetch` never sees a handshake, and no CDP command blocks
+//!   one (`Network.setBlockedURLs` on page and worker sessions let the
+//!   sockets connect); `Network.webSocketCreated` only reports one after
+//!   the fact. The only guard is Playwright's main-world mock, in the realm
+//!   the page's own scripts share:
+//!   - `ws.url` is a writable property, and the mock connects to it after
+//!     the verdict on the URL it reported at construction: set right after
+//!     `new WebSocket(<allowed URL>)`, the socket connects to the new URL.
+//!   - `__pwWebSocketDispatch` is a page-visible global: called with a
+//!     pending socket's `_id` (also page-visible) and `type:
+//!     'passthrough'`, it connects that socket whatever the verdict.
+//!   - An allowed socket in passthrough keeps the native socket in its
+//!     page-visible `_ws`: `new (ws._ws.constructor)(<blocked URL>)`
+//!     connects with the native `WebSocket`, unchecked.
+//!   - Workers have no mock: dedicated workers (nested ones too), shared
+//!     workers and service workers (registered through
+//!     `ServiceWorkerContainer.prototype.register`) open sockets to any
+//!     host and port.
+//!
+//!   A handshake is an HTTP GET with a path and `Origin` the page chooses,
+//!   and WebSockets have no CORS: a local WebSocket server that does not
+//!   check `Origin` (dev servers' hot reload, local agents, debuggers)
+//!   gives the page full read and write.
+//! - Connections that are no request `Fetch` pauses:
+//!   - `<link rel=preconnect>` and Chromium's own preconnect for a
+//!     navigation open TCP connections to a blocked host (no bytes are
+//!     sent; the request that would follow is refused);
+//!   - WebRTC: STUN and TURN (UDP, and TURN/TCP allocations) reach blocked
+//!     hosts, which is how browser LAN scans work (`icecandidateerror`);
+//!   - WebTransport (HTTP/3 over QUIC) is not intercepted either (not
+//!     tested).
+//!
+//! Closing them takes egress enforced outside the page (for example a
+//! node-local proxy that applies [`HostGuard`] to every connection
+//! Chromium makes), which is not done.
 //!
 //! Owner: netio.
 

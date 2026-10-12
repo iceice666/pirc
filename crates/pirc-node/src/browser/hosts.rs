@@ -13,6 +13,17 @@
 //! DNS-rebinding host could still answer a private address after passing
 //! this check. The short cache narrows, but does not close, that window.
 //!
+//! Also kept from TS as they are (parity):
+//!
+//! - IPv6 ranges that reach other addresses are not classified:
+//!   `64:ff9b:1::/48` (local-use NAT64, RFC 8215: on such a network
+//!   `http://[64:ff9b:1::a00:1]/` reaches 10.0.0.1), `2001::/32` (Teredo),
+//!   `::ffff:0:0:0/96` (SIIT) and `100::/64` (discard-only).
+//! - The gateway is refused by name only: its IP literal, or another DNS
+//!   name for it, passes the gateway rule (operators can list those in
+//!   `PIRC_BROWSER_BLOCK_HOSTS`); and any allow rule matching its name, a
+//!   `*.suffix` rule included, exempts it, not only an exact host rule.
+//!
 //! URLs are parsed with the `url` crate (WHATWG, as `new URL` is: e.g.
 //! `http://2130706433/` is `127.0.0.1`).
 //!
