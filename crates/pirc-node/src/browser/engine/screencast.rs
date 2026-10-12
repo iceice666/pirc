@@ -4,11 +4,40 @@
 //! acknowledged once the sink returned. Playwright's action overlay
 //! (`screencast.showActions({duration: 600})`) is part of it.
 //!
+//! Playwright 1.63.0 (`server/screencast.ts`, `CRPage.startScreencast`,
+//! `FrameSession._onScreencastFrame`): `Page.startScreencast {format:
+//! 'jpeg', quality, maxWidth, maxHeight}` on the page's main session, each
+//! `Page.screencastFrame` (`data` base64, `metadata.deviceWidth` /
+//! `deviceHeight`) handed to the client, then `Page.screencastFrameAck
+//! {sessionId}` (the frame's number, not a CDP session); stopping sends
+//! `Page.stopScreencast`. Errors of start and stop are ignored, as there.
+//! pirc has one client per page (the manager fans frames out), so the
+//! cached-frame replay for later clients is the manager's.
+//!
+//! `showActions`: before every input action (`onBeforeInputAction`, see
+//! [`announce`]) Playwright shows the action on the page (the injected
+//! script's `setScreencastAnnotation`: the point, the element's box, the
+//! action's title) for `duration` ms, *waiting that long before the action
+//! runs*, then removes it. It does so whether or not a screencast runs:
+//! with `node/browser.ts`'s 600 ms, every agent and viewer input waits
+//! 600 ms (measured with Playwright 1.63.0: `keyboard.press` 633 ms,
+//! `mouse.move` 623 ms, `locator.click` 653 ms). Ported as is. Deviation:
+//! the announcement is bounded (`duration` + 2 s) and its failures are
+//! ignored, where Playwright waits for the main frame's utility world
+//! within the action's timeout and fails the action if it cannot get it.
+//!
 //! Owner: netio.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use base64::Engine as _;
+use serde_json::{Value, json};
+use tokio::task::JoinHandle;
 
 use super::Result;
+use super::cdp::Session;
+use super::frame::Arg;
 use super::page::Page;
 
 #[derive(Clone, Copy, Debug)]
@@ -27,20 +56,221 @@ pub struct ScreencastFrame {
     pub height: u32,
 }
 
+/// `screencast.showActions(options)`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ShowActions {
+    /// How long each action is shown (and delayed), Playwright's default
+    /// 500 ms.
+    pub duration: Duration,
+}
+
 /// Per-page screencast state, kept by the page.
 #[derive(Default)]
 pub struct ScreencastState {
-    _todo: (),
+    /// The task handing frames to the sink while a screencast runs.
+    running: Mutex<Option<JoinHandle<()>>>,
+    actions: Mutex<Option<ShowActions>>,
+    /// Screenshots of the page run one at a time (`Screenshotter`'s
+    /// queue).
+    pub(super) screenshots: tokio::sync::Mutex<()>,
+}
+
+impl ScreencastState {
+    pub fn show_actions(&self, actions: Option<ShowActions>) {
+        *self.actions.lock().unwrap() = actions;
+    }
+
+    pub fn actions(&self) -> Option<ShowActions> {
+        *self.actions.lock().unwrap()
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running.lock().unwrap().is_some()
+    }
+}
+
+impl Drop for ScreencastState {
+    fn drop(&mut self) {
+        if let Some(task) = self.running.get_mut().unwrap().take() {
+            task.abort();
+        }
+    }
 }
 
 pub async fn start(
-    _page: &Page,
-    _options: ScreencastOptions,
-    _sink: Arc<dyn Fn(ScreencastFrame) + Send + Sync>,
+    page: &Page,
+    options: ScreencastOptions,
+    sink: Arc<dyn Fn(ScreencastFrame) + Send + Sync>,
 ) -> Result<()> {
-    todo!("netio")
+    start_on(page.session(), page.screencast_state(), options, sink).await
 }
 
-pub async fn stop(_page: &Page) -> Result<()> {
-    todo!("netio")
+pub async fn stop(page: &Page) -> Result<()> {
+    stop_on(page.session(), page.screencast_state()).await
+}
+
+/// [`start`] on a page's main session and state: a running screencast is
+/// stopped first (a restart with the new options).
+pub async fn start_on(
+    session: &Session,
+    state: &ScreencastState,
+    options: ScreencastOptions,
+    sink: Arc<dyn Fn(ScreencastFrame) + Send + Sync>,
+) -> Result<()> {
+    stop_on(session, state).await?;
+    let mut events = session.listen();
+    let acks = session.clone();
+    let task = tokio::spawn(async move {
+        while let Some(event) = events.recv().await {
+            if event.method != "Page.screencastFrame" {
+                continue;
+            }
+            if let Some(frame) = decode_frame(&event.params) {
+                sink(frame);
+            }
+            let _ = acks
+                .call(
+                    "Page.screencastFrameAck",
+                    json!({ "sessionId": event.params["sessionId"] }),
+                )
+                .await;
+        }
+    });
+    *state.running.lock().unwrap() = Some(task);
+    let _ = session
+        .call(
+            "Page.startScreencast",
+            json!({
+                "format": "jpeg",
+                "quality": options.quality,
+                "maxWidth": options.width & !1,
+                "maxHeight": options.height & !1,
+            }),
+        )
+        .await;
+    Ok(())
+}
+
+/// [`stop`] on a page's main session and state; nothing when none runs.
+pub async fn stop_on(session: &Session, state: &ScreencastState) -> Result<()> {
+    let running = state.running.lock().unwrap().take();
+    if let Some(task) = running {
+        task.abort();
+        let _ = session.call("Page.stopScreencast", json!({})).await;
+    }
+    Ok(())
+}
+
+fn decode_frame(params: &Value) -> Option<ScreencastFrame> {
+    let jpeg = base64::engine::general_purpose::STANDARD
+        .decode(params["data"].as_str()?)
+        .ok()?;
+    let size = |name: &str| params["metadata"][name].as_f64().unwrap_or(0.0).round() as u32;
+    Some(ScreencastFrame {
+        jpeg: Arc::new(jpeg),
+        width: size("deviceWidth"),
+        height: size("deviceHeight"),
+    })
+}
+
+/// `page.screencast.showActions({duration})` (`None`: `hideActions`).
+pub fn show_actions(page: &Page, actions: Option<ShowActions>) {
+    page.screencast_state().show_actions(actions);
+}
+
+/// An element's box in the main frame's viewport (`box` of
+/// `onBeforeInputAction`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Rect {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// What `Screencast.onBeforeInputAction` evaluates in the main frame's
+/// utility world (`this` is the injected script).
+const ANNOTATE: &str = "async function(options) {
+  const injected = this;
+  injected.setScreencastAnnotation(options);
+  await new Promise((f) => injected.utils.builtins.setTimeout(f, options.duration));
+  injected.setScreencastAnnotation(null);
+}";
+
+/// The annotation's options (`setScreencastAnnotation`'s argument).
+pub fn annotation(
+    actions: ShowActions,
+    title: &str,
+    point: Option<(f64, f64)>,
+    rect: Option<Rect>,
+) -> Value {
+    let mut options = json!({
+        "duration": actions.duration.as_millis() as u64,
+        "actionTitle": title,
+        "cursor": "pointer",
+    });
+    if let Some((x, y)) = point {
+        options["point"] = json!({ "x": x, "y": y });
+    }
+    if let Some(rect) = rect {
+        options["box"] =
+            json!({ "x": rect.x, "y": rect.y, "width": rect.width, "height": rect.height });
+    }
+    options
+}
+
+/// `onBeforeInputAction`: with `showActions` on, show the action `title`
+/// (Playwright's rendered call title, e.g. `Press "Enter"`, `Mouse move`,
+/// `Click`) at `point` / around `rect` and wait out the duration. Element
+/// actions pass their element's box.
+pub async fn announce(page: &Page, title: &str, point: Option<(f64, f64)>, rect: Option<Rect>) {
+    let Some(actions) = page.screencast_state().actions() else {
+        return;
+    };
+    let options = annotation(actions, title, point, rect);
+    let shown = async {
+        let injected = page.main_frame().injected().await?;
+        injected.call(ANNOTATE, vec![Arg::Value(options)]).await
+    };
+    let _ = tokio::time::timeout(actions.duration + Duration::from_secs(2), shown).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shapes_the_annotation_as_playwright() {
+        let actions = ShowActions {
+            duration: Duration::from_millis(600),
+        };
+        assert_eq!(
+            annotation(actions, "Mouse move", Some((10.0, 20.5)), None),
+            json!({ "duration": 600, "actionTitle": "Mouse move", "cursor": "pointer",
+                "point": { "x": 10.0, "y": 20.5 } })
+        );
+        assert_eq!(
+            annotation(
+                actions,
+                "Click",
+                Some((1.0, 2.0)),
+                Some(Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 4.0,
+                    height: 3.0
+                })
+            )["box"],
+            json!({ "x": 0.0, "y": 0.0, "width": 4.0, "height": 3.0 })
+        );
+    }
+
+    #[test]
+    fn decodes_frames() {
+        let frame = decode_frame(&json!({ "data": "/9j/", "sessionId": 3,
+            "metadata": { "deviceWidth": 1280.0, "deviceHeight": 799.6 } }))
+        .unwrap();
+        assert_eq!(*frame.jpeg, vec![0xff, 0xd8, 0xff]);
+        assert_eq!((frame.width, frame.height), (1280, 800));
+    }
 }

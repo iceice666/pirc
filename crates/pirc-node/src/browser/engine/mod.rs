@@ -17,7 +17,7 @@
 //! | [`cdp`], [`launch`] | Playwright's pipe transport, `launchPersistentContext` | layout |
 //! | [`context`], [`page`], [`frame`] | `crBrowser`, `crPage`, `frames`, `page`, lifecycle and `networkidle` | core |
 //! | [`network`] | `crNetworkManager` routing, `routeWebSocket`, `serviceWorkers: 'block'` | netio |
-//! | [`input`] | `input.ts`, `usKeyboardLayout.ts`, `crInput` | netio |
+//! | [`input`], [`keyboard_layout`] | `input.ts`, `usKeyboardLayout.ts`, `crInput`, `crDragDrop` | netio |
 //! | [`screenshot`], [`screencast`] | `screenshotter`, `crPage` screencast | netio |
 //! | [`snapshot`], [`locator`] | `ariaSnapshotJSONForFrame`, `aria-ref` routing, `dom.ts` actions | locator |
 
@@ -25,6 +25,7 @@ pub mod cdp;
 pub mod context;
 pub mod frame;
 pub mod input;
+pub mod keyboard_layout;
 pub mod launch;
 pub mod locator;
 pub mod network;
