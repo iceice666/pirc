@@ -5,7 +5,7 @@ Copyright 2025 Anthropic PBC
 Licensed under the Apache License, Version 2.0 (below).
 
 The native sandbox (src/sandbox/linux.rs, src/sandbox/macos.rs,
-src/sandbox/proxy.rs, src/sandbox/bridge.rs and the modules below them)
+src/sandbox/proxy/, src/sandbox/bridge.rs and the modules below them)
 ports srt's filesystem argument generation, Seatbelt profile generation,
 filtering proxies and proxy environment to Rust. Files ported from it say
 so in their headers. Changes: rewritten in Rust; only the behaviour pirc
