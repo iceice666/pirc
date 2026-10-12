@@ -80,9 +80,25 @@ fn entries_srts_schema_refuses_are_ignored() {
     assert!(list.allows("localhost", 80));
 }
 
+/// The soft `RLIMIT_NOFILE` raised as the node raises it at start-up
+/// (`node::raise_fd_limit`): the cap tests hold hundreds of sockets in
+/// this one process, past macOS's default soft limit of 256.
+fn raise_fd_limit() {
+    static RAISED: std::sync::Once = std::sync::Once::new();
+    RAISED.call_once(|| {
+        use nix::sys::resource::{Resource, getrlimit, setrlimit};
+        let (soft, hard) = getrlimit(Resource::RLIMIT_NOFILE).unwrap();
+        let target = hard.min(10240);
+        if soft < target {
+            setrlimit(Resource::RLIMIT_NOFILE, target, hard).unwrap();
+        }
+    });
+}
+
 /// A host server: answers each request with its head (`|` for CRLF) and
 /// body; `/echo` echoes raw bytes instead.
 async fn upstream() -> u16 {
+    raise_fd_limit();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(async move {
@@ -624,50 +640,94 @@ async fn every_sessions_proxy_shares_the_nodes_connection_cap() {
     }
 }
 
-#[tokio::test]
-async fn only_authenticated_connections_count_against_the_sessions_cap() {
+/// One authenticated `CONNECT` tunnel to the upstream on `port`.
+async fn tunnel(socket: &Path, port: u16) -> UnixStream {
+    let mut tunnel = UnixStream::connect(socket).await.unwrap();
+    tunnel
+        .write_all(
+            format!(
+                "CONNECT 127.0.0.1:{port} HTTP/1.1\r\n{}\r\n",
+                authorization()
+            )
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    let mut established = [0u8; 39];
+    tunnel.read_exact(&mut established).await.unwrap();
+    assert_eq!(&established, b"HTTP/1.1 200 Connection Established\r\n\r\n");
+    tunnel
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_burst_of_the_sessions_own_clients_gets_in() {
     let port = upstream().await;
     let p = proxy(&["127.0.0.1"], &[]);
-    let auth = authorization();
-    // More tunnels than the unauthenticated cap: each left it once it
-    // presented the token.
+    // As a parallel download does: every client connects at once and
+    // sends its head right away; the accept loop outruns the heads.
+    let burst: Vec<_> = (0..MAX_CONNECTIONS)
+        .map(|_| {
+            let socket = p.socket.clone();
+            tokio::spawn(async move { tunnel(&socket, port).await })
+        })
+        .collect();
     let mut tunnels = Vec::new();
-    for _ in 0..MAX_UNAUTHENTICATED + 4 {
-        let mut tunnel = UnixStream::connect(&p.socket).await.unwrap();
-        tunnel
-            .write_all(format!("CONNECT 127.0.0.1:{port} HTTP/1.1\r\n{auth}\r\n").as_bytes())
-            .await
-            .unwrap();
-        let mut established = [0u8; 39];
-        tunnel.read_exact(&mut established).await.unwrap();
-        assert_eq!(&established, b"HTTP/1.1 200 Connection Established\r\n\r\n");
-        tunnels.push(tunnel);
+    for client in burst {
+        tunnels.push(client.await.unwrap());
     }
-    // Clients without the token get a small cap of their own...
+    // Each tunnel works, and the session's cap holds: one more is closed.
+    for tunnel in &mut tunnels {
+        tunnel.write_all(b"ECHO\r\nping").await.unwrap();
+        let mut echoed = [0u8; 4];
+        tunnel.read_exact(&mut echoed).await.unwrap();
+        assert_eq!(&echoed, b"ping");
+    }
+    let get = format!(
+        "GET http://127.0.0.1:{port}/ HTTP/1.1\r\n{}\r\n",
+        authorization()
+    );
+    assert_eq!(ask(&p.socket, get.as_bytes()).await, "");
+}
+
+#[tokio::test]
+async fn clients_without_the_token_cannot_shut_the_session_out() {
+    let port = upstream().await;
+    let p = proxy(&["127.0.0.1"], &[]);
+    // Tunnels left the waiting set once they presented the token.
+    let mut tunnels = Vec::new();
+    for _ in 0..4 {
+        tunnels.push(tunnel(&p.socket, port).await);
+    }
+    // A client without the token fills the waiting set, and more...
     let mut idle = Vec::new();
-    for _ in 0..MAX_UNAUTHENTICATED {
+    for _ in 0..MAX_UNAUTHENTICATED + 4 {
         idle.push(UnixStream::connect(&p.socket).await.unwrap());
     }
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    let get = format!("GET http://127.0.0.1:{port}/ HTTP/1.1\r\n{auth}\r\n");
-    assert_eq!(ask(&p.socket, get.as_bytes()).await, "");
-    // ...and once they are gone the session's clients get in again, its
-    // tunnels untouched.
-    drop(idle);
-    let mut reply = String::new();
-    for _ in 0..50 {
-        reply = ask(&p.socket, get.as_bytes()).await;
-        if !reply.is_empty() {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    // ...yet the session's clients still get in at once: each new
+    // connection evicts the oldest one still waiting.
+    let get = format!(
+        "GET http://127.0.0.1:{port}/ HTTP/1.1\r\n{}\r\n",
+        authorization()
+    );
+    let reply = ask(&p.socket, get.as_bytes()).await;
     assert!(reply.starts_with("HTTP/1.1 200 OK"), "{reply}");
-    let tunnel = &mut tunnels[0];
-    tunnel.write_all(b"ECHO\r\nping").await.unwrap();
-    let mut echoed = [0u8; 4];
-    tunnel.read_exact(&mut echoed).await.unwrap();
-    assert_eq!(&echoed, b"ping");
+    // The oldest idle connections were closed, the newest are still open.
+    let mut closed = [0u8; 1];
+    for stream in &mut idle[..5] {
+        let read = tokio::time::timeout(Duration::from_secs(5), stream.read(&mut closed)).await;
+        assert!(matches!(read, Ok(Ok(0) | Err(_))), "{read:?}");
+    }
+    let newest = idle.last_mut().unwrap();
+    let still_open =
+        tokio::time::timeout(Duration::from_millis(100), newest.read(&mut closed)).await;
+    assert!(still_open.is_err(), "{still_open:?}");
+    // The session's tunnels are untouched.
+    for tunnel in &mut tunnels {
+        tunnel.write_all(b"ECHO\r\nping").await.unwrap();
+        let mut echoed = [0u8; 4];
+        tunnel.read_exact(&mut echoed).await.unwrap();
+        assert_eq!(&echoed, b"ping");
+    }
 }
 
 #[tokio::test]

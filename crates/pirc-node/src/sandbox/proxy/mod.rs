@@ -43,12 +43,20 @@
 //! proxy shares the node's fd table; deadlines for request heads and SOCKS
 //! handshakes (Node's server had its own header timeouts, the SOCKS
 //! library none). Only authenticated connections count against a
-//! session's cap; until a client authenticates it holds one of a small
-//! separate set ([`MAX_UNAUTHENTICATED`]) for at most [`AUTH_TIMEOUT`], so
-//! a client without the token cannot use up the session's own
-//! connections. Host-name lookups run on tokio's blocking pool, at most
-//! [`MAX_LOOKUPS`] per session (a lookup's thread outlives a dial that
-//! gave up on it).
+//! session's cap ([`MAX_CONNECTIONS`]). Until a client authenticates it
+//! is one of a separate waiting set ([`MAX_UNAUTHENTICATED`], as large as
+//! the cap, so a burst of the session's own clients fits) for at most
+//! [`AUTH_TIMEOUT`]. A new connection is never refused because that set
+//! is full: the oldest connection still waiting is closed instead. So a
+//! client without the token cannot use up the session's own connections,
+//! and holding idle connections no longer shuts new ones out. The
+//! residual risk: a client that opens connections faster than the
+//! session's clients send their request heads (the whole set within that
+//! time) can still evict them before they authenticate. On Linux only
+//! the session itself and host processes reach the socket; on macOS any
+//! local process can. Host-name lookups run on tokio's blocking pool, at
+//! most [`MAX_LOOKUPS`] per session (a lookup's thread outlives a dial
+//! that gave up on it).
 
 mod address;
 mod env;
@@ -56,7 +64,9 @@ mod http;
 mod pattern;
 mod socks;
 
+use std::collections::VecDeque;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -66,7 +76,7 @@ use tokio::io::{
 };
 use tokio::net::{TcpListener, TcpStream, UnixListener};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-use tokio::task::JoinSet;
+use tokio::task::{AbortHandle, JoinSet};
 
 pub use env::{EnvPlatform, NO_PROXY, PROXY_USER, basic_authorization, env_vars};
 
@@ -75,8 +85,11 @@ pub use env::{EnvPlatform, NO_PROXY, PROXY_USER, basic_authorization, env_vars};
 /// the session's own process, this one shares the node's fd table.
 const MAX_CONNECTIONS: usize = 64;
 /// Connections one session's proxy holds before they authenticate (one
-/// fd each), apart from [`MAX_CONNECTIONS`].
-const MAX_UNAUTHENTICATED: usize = 16;
+/// fd each), apart from [`MAX_CONNECTIONS`]. When a new one arrives with
+/// the set full, the oldest is closed. As large as [`MAX_CONNECTIONS`]:
+/// a parallel burst (one connection per request) is accepted faster than
+/// its heads arrive, and a smaller set would evict its own first clients.
+const MAX_UNAUTHENTICATED: usize = MAX_CONNECTIONS;
 /// How long a client has, from its connection, to present the token: its
 /// first byte, then its HTTP request head or its SOCKS5 greeting and
 /// credentials (clients send them at once).
@@ -303,28 +316,75 @@ struct Session {
     lookups: Arc<Semaphore>,
 }
 
+/// [`Gate::state`]: still waiting for the token (evictable).
+const WAITING: u8 = 0;
+/// [`Gate::state`]: authenticated, under the session's cap.
+const ADMITTED: u8 = 1;
+/// [`Gate::state`]: evicted, or ended before it authenticated.
+const GONE: u8 = 2;
+
 /// A connection's place under its session's caps: one of the
-/// [`MAX_UNAUTHENTICATED`] until it presents the token by `deadline`, then
-/// one of the session's [`MAX_CONNECTIONS`] ([`Gate::admit`]).
+/// [`MAX_UNAUTHENTICATED`] waiting ones until it presents the token by
+/// `deadline`, then one of the session's [`MAX_CONNECTIONS`]
+/// ([`Gate::admit`]).
 struct Gate {
-    waiting: Option<OwnedSemaphorePermit>,
+    /// [`WAITING`], [`ADMITTED`] or [`GONE`], shared with the accept loop's
+    /// [`Waiting`] entry; whichever side moves it off [`WAITING`] first
+    /// wins, so an admitted connection is never evicted.
+    state: Arc<AtomicU8>,
     admitted: Option<OwnedSemaphorePermit>,
     connections: Arc<Semaphore>,
     deadline: tokio::time::Instant,
 }
 
 impl Gate {
-    /// The client authenticated: it leaves the unauthenticated cap for the
-    /// session's. `false` when the session's cap is full (close it).
+    /// The client authenticated: it leaves the waiting set for the
+    /// session's cap. `false` when that cap is full or the connection was
+    /// evicted meanwhile (close it).
     fn admit(&mut self) -> bool {
         if self.admitted.is_none() {
             let Ok(permit) = self.connections.clone().try_acquire_owned() else {
                 return false;
             };
+            if !moved_from_waiting(&self.state, ADMITTED) {
+                return false;
+            }
             self.admitted = Some(permit);
-            self.waiting = None;
         }
         true
+    }
+}
+
+impl Drop for Gate {
+    fn drop(&mut self) {
+        moved_from_waiting(&self.state, GONE);
+    }
+}
+
+/// Move `state` from [`WAITING`] to `to`; `false` when it had left already.
+fn moved_from_waiting(state: &AtomicU8, to: u8) -> bool {
+    state
+        .compare_exchange(WAITING, to, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// The accept loop's view of a connection that has not authenticated.
+struct Waiting {
+    state: Arc<AtomicU8>,
+    task: AbortHandle,
+}
+
+/// Make room for one more waiting connection: forget the ones that left
+/// the set, and when it is still full close the oldest one still waiting.
+fn evict_if_full(waiting: &mut VecDeque<Waiting>) {
+    waiting.retain(|entry| entry.state.load(Ordering::Acquire) == WAITING);
+    while waiting.len() >= MAX_UNAUTHENTICATED {
+        let Some(oldest) = waiting.pop_front() else {
+            break;
+        };
+        if moved_from_waiting(&oldest.state, GONE) {
+            oldest.task.abort();
+        }
     }
 }
 
@@ -343,7 +403,7 @@ pub async fn serve(
         connections: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
         lookups: Arc::new(Semaphore::new(MAX_LOOKUPS)),
     });
-    let unauthenticated = Arc::new(Semaphore::new(MAX_UNAUTHENTICATED));
+    let mut waiting = VecDeque::with_capacity(MAX_UNAUTHENTICATED);
     let mut connections = JoinSet::new();
     loop {
         tokio::select! {
@@ -352,25 +412,24 @@ pub async fn serve(
                     tokio::time::sleep(ACCEPT_BACKOFF).await;
                     continue;
                 };
-                let Ok(waiting) = unauthenticated.clone().try_acquire_owned() else {
-                    drop(client);
-                    continue;
-                };
                 let Ok(permit) = node.clone().try_acquire_owned() else {
                     drop(client);
                     continue;
                 };
+                evict_if_full(&mut waiting);
+                let state = Arc::new(AtomicU8::new(WAITING));
                 let gate = Gate {
-                    waiting: Some(waiting),
+                    state: state.clone(),
                     admitted: None,
                     connections: session.connections.clone(),
                     deadline: tokio::time::Instant::now() + AUTH_TIMEOUT,
                 };
                 let session = session.clone();
-                connections.spawn(async move {
+                let task = connections.spawn(async move {
                     let _ = handle(client, &session, gate).await;
                     drop(permit);
                 });
+                waiting.push_back(Waiting { state, task });
             }
             Some(_) = connections.join_next(), if !connections.is_empty() => {}
         }
