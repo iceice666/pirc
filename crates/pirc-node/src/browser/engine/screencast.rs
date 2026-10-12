@@ -136,7 +136,11 @@ pub async fn start_on(
                 .await;
         }
     });
-    *state.running.lock().unwrap() = Some(task);
+    // A start that raced this one (both past their stop) is replaced, not
+    // left feeding its sink.
+    if let Some(previous) = state.running.lock().unwrap().replace(task) {
+        previous.abort();
+    }
     let _ = session
         .call(
             "Page.startScreencast",
