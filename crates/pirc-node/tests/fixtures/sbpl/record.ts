@@ -18,6 +18,10 @@
  * `{ROOT_ANCESTORS}`, the proxy port as `{PORT}`, the proxy token as `{TOKEN}` and the
  * log tag as `{TAG}`.
  *
+ * `pirc-cases.json` and `pirc/*.sb` are pirc's production profiles, which
+ * srt cannot produce: `tests/sandbox_macos_profiles.rs` records them
+ * (`PIRC_BLESS_SBPL=1`).
+ *
  * Runs on any platform (srt is told it is on macOS). From the repository
  * root, with the main checkout's dependencies installed:
  *
@@ -65,6 +69,8 @@ interface Case {
   proxy: boolean;
   generate?: { denyWrite: { prefix: string; count: number; leaves: string[] } };
   settings: any;
+  /** pirc's read-only profile, which srt does not have: ignored here. */
+  readonly?: boolean;
 }
 
 /** The words of a command line `quote()` (utils/shell-quote.js) produced. */

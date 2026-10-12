@@ -656,18 +656,22 @@ async fn reaches_the_inference_socket_and_no_other() {
         assert!(path.as_os_str().len() < 104, "{}", path.display());
         unix_server(path);
     }
+    // Another socket through a link in the workspace.
+    let linked = f.workspace.join("l.sock");
+    std::os::unix::fs::symlink(&other, &linked).unwrap();
     let prepared = f
         .prepare_with("pi_inference", Some(socket.clone()), Vec::new())
         .await;
     let results = run_client(
         &prepared,
         &format!(
-            "unix:{} unix:{} unix:{} read:{} read:{}",
+            "unix:{} unix:{} unix:{} read:{} read:{} unix:{}",
             socket.display(),
             other.display(),
             in_workspace.display(),
             f.root.join("state/secret").display(),
             f.workspace.join("README").display(),
+            linked.display(),
         ),
     )
     .await;
@@ -685,6 +689,10 @@ async fn reaches_the_inference_socket_and_no_other() {
         "the rest of the state stays denied"
     );
     assert_eq!(results[4], "read");
+    assert_eq!(
+        results[5], "unreachable: PermissionDenied",
+        "another socket through a link"
+    );
     prepared.cleanup();
 }
 
@@ -933,6 +941,61 @@ async fn a_linked_credential_store_cannot_be_replaced() {
     );
 }
 
+/// pirc's resolved denies name where a chain of links leads now: every
+/// link in the chain stays in place, or repointing one in a writable
+/// directory redirects the protected path (review finding 2).
+#[tokio::test]
+async fn links_in_the_middle_of_a_chain_cannot_be_repointed() {
+    let f = fixture_with(
+        "chain",
+        Options {
+            home_writable: true,
+            ..Options::default()
+        },
+    );
+    let (root, w) = (&f.root, f.w());
+    let home = path(root, "home");
+    // ws/.git -> ~/hop -> ~/repo (a relative hop, as a dotfile manager makes).
+    fs::rename(f.workspace.join(".git"), root.join("home/repo")).unwrap();
+    std::os::unix::fs::symlink("repo", root.join("home/hop")).unwrap();
+    std::os::unix::fs::symlink(root.join("home/hop"), f.workspace.join(".git")).unwrap();
+    // ~/.zshrc-style: ws/.bashrc -> ~/code/bashrc, ~/code -> outside/code.
+    fs::create_dir_all(root.join("outside/code")).unwrap();
+    fs::write(root.join("outside/code/bashrc"), "rc").unwrap();
+    std::os::unix::fs::symlink(root.join("outside/code"), root.join("home/code")).unwrap();
+    std::os::unix::fs::symlink(root.join("home/code/bashrc"), f.workspace.join(".bashrc")).unwrap();
+    let failures = f
+        .expect(
+            &[
+                (
+                    "repoint the hop",
+                    format!(
+                        "mkdir -p {home}/evil && printf '[core]\\n\\thooksPath=/x\\n' > {home}/evil/config && ln -sfn evil {home}/hop"
+                    ),
+                ),
+                ("remove the hop", format!("rm {home}/hop")),
+                ("rename the hop", format!("mv {home}/hop {home}/hop2")),
+                (
+                    "replace the linked directory",
+                    format!("rm {home}/code && mkdir -p {home}/code"),
+                ),
+                ("write the rc file", format!("echo x >> {w}/.bashrc")),
+                ("write .git/config", format!("echo x >> {w}/.git/config")),
+            ],
+            &[("write home", format!("echo x > {home}/notes"))],
+        )
+        .await;
+    assert!(failures.is_empty(), "{failures:#?}");
+    assert_eq!(
+        fs::read_to_string(f.workspace.join(".git/config")).unwrap(),
+        "[core]"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("outside/code/bashrc")).unwrap(),
+        "rc"
+    );
+}
+
 /// srt reads `[`, `*` and `?` in a rule as glob syntax, so a workspace named
 /// like `notes [draft]` lost its `.pirc` deny; pirc adds the literal path.
 #[tokio::test]
@@ -961,11 +1024,69 @@ async fn a_workspace_with_glob_characters_keeps_its_denies() {
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
+/// srt wrote rule strings as JSON, whose `\u0001`-style escapes Seatbelt
+/// does not read: every deny naming a path with a control character named
+/// another path (review finding 3). Also regex metacharacters, quotes, a
+/// backslash and non-ASCII: srt's anchored `**/` denies still match.
+#[tokio::test]
+async fn a_workspace_with_control_characters_keeps_its_denies() {
+    for (name, workspace) in [
+        ("ctl", "home/ws\u{1}\u{1b}\t\u{7f}x"),
+        ("meta", "w[s] \"q\" \\ ü*?(x)|{1}+$^."),
+    ] {
+        let f = fixture_with(
+            name,
+            Options {
+                home_writable: true,
+                workspace: Some(workspace),
+                ..Options::default()
+            },
+        );
+        let w = f.w();
+        // The workspace as the script's `$1`: no quoting of its name.
+        let sh = |script: &str| format!("set -- \"$PWD\"; {script}");
+        let failures = f
+            .expect(
+                &[
+                    ("write .git/hooks", sh("echo x > \"$1/.git/hooks/pre-commit\"")),
+                    ("append .git/config", sh("echo x >> \"$1/.git/config\"")),
+                    ("create .pirc", sh("mkdir \"$1/.pirc\"")),
+                    ("rename .git", sh("mv \"$1/.git\" \"$1/.git2\"")),
+                    ("nested .zshrc", sh("mkdir -p \"$1/sub\" && echo x > \"$1/sub/.zshrc\"")),
+                    (
+                        "nested hooks",
+                        sh("mkdir -p \"$1/s/.git/hooks\" && echo x > \"$1/s/.git/hooks/pre-commit\""),
+                    ),
+                    (
+                        "write .vscode",
+                        sh("mkdir -p \"$1/.vscode\" && echo x > \"$1/.vscode/settings.json\""),
+                    ),
+                ],
+                &[
+                    ("write the workspace", sh("echo x > \"$1/x\"")),
+                    ("read the workspace", sh("cat \"$1/README\"")),
+                ],
+            )
+            .await;
+        assert!(failures.is_empty(), "{w:?}: {failures:#?}");
+        assert_eq!(
+            fs::read_to_string(f.workspace.join(".git/config")).unwrap(),
+            "[core]"
+        );
+    }
+}
+
 /// The Git panel's sandbox (security audit S8): the workspace readable,
-/// nothing writable but its temp directory, no network.
+/// nothing writable but its temp directory, no network. Not even srt's
+/// default write paths (review finding 4): its home convenience
+/// directories, `/tmp/claude` (shared with every session) or `/dev/tty`.
 #[tokio::test]
 async fn the_readonly_sandbox_reads_but_never_writes() {
     let f = fixture("readonly");
+    let home = path(&f.root, "home");
+    fs::create_dir_all(f.root.join("home/.claude/debug")).unwrap();
+    fs::create_dir_all(f.root.join("home/.npm/_logs")).unwrap();
+    let _ = fs::create_dir_all("/tmp/claude");
     // A real repository for `git status` (the fixture's `.git` is a stub).
     let init = std::process::Command::new("git")
         .args(["init", "-q"])
@@ -1002,10 +1123,46 @@ async fn the_readonly_sandbox_reads_but_never_writes() {
     };
     let w = f.w();
     assert_eq!(run(format!("cat {w}/README && git -C {w} status")).await, 0);
+    // The narrower base (no shared memory, notifications or security
+    // daemons) still runs git's reading commands.
+    let commit = std::process::Command::new("git")
+        .args(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q"])
+        .args(["--allow-empty", "-m", "first"])
+        .current_dir(&f.workspace)
+        .status()
+        .unwrap();
+    assert!(commit.success());
+    assert_eq!(
+        run(format!(
+            "git -C {w} log --oneline -1 && git -C {w} diff HEAD && git -C {w} show --stat HEAD"
+        ))
+        .await,
+        0
+    );
     assert_ne!(run(format!("echo x > {w}/x")).await, 0);
     assert_ne!(run(format!("echo x >> {w}/.git/config")).await, 0);
     assert_ne!(run("echo x > /tmp/pirc-ro-$$".to_owned()).await, 0);
     assert_eq!(run("echo x > \"$TMPDIR/x\"".to_owned()).await, 0);
+    assert_eq!(run("echo x > /dev/null".to_owned()).await, 0);
+    for script in [
+        format!("echo x > {home}/.claude/debug/planted"),
+        format!("mkdir {home}/.claude/debug/d"),
+        format!("echo x > {home}/.npm/_logs/planted"),
+        "echo x > /tmp/claude/pirc-ro-$$".to_owned(),
+        "echo x > /private/tmp/claude/pirc-ro-$$".to_owned(),
+        "echo x > /dev/tty".to_owned(),
+    ] {
+        assert_ne!(run(script.clone()).await, 0, "{script}");
+    }
+    assert!(!f.root.join("home/.claude/debug/planted").exists());
+    // No Unix socket at all.
+    let socket = f.root.join("outside/ro.sock");
+    unix_server(&socket);
+    assert_ne!(
+        run(format!("/usr/bin/nc -U {} </dev/null", socket.display())).await,
+        0,
+        "no Unix socket"
+    );
     assert_ne!(
         run(format!("curl -s -m 5 http://127.0.0.1:{port}/")).await,
         0,
@@ -1015,6 +1172,146 @@ async fn the_readonly_sandbox_reads_but_never_writes() {
         run(format!("cat {}", path(&f.root, "state/secret"))).await,
         0
     );
+}
+
+/// A user's glob deny whose static directory is a link out of its tree:
+/// the policy resolves the glob's directory (`real_resolve`), so both
+/// spellings stay denied.
+#[tokio::test]
+async fn a_glob_deny_through_a_link_holds() {
+    let f = fixture("globlink");
+    let root = &f.root;
+    fs::create_dir_all(root.join("outside/keys")).unwrap();
+    fs::write(root.join("outside/keys/a.key"), "k").unwrap();
+    std::os::unix::fs::symlink(root.join("outside"), root.join("link")).unwrap();
+    fs::write(
+        root.join("config/config.json"),
+        format!(
+            r#"{{"sandbox":{{"network":{{"defaultDomains":false,"allowedDomains":["localhost"]}},"filesystem":{{"denyRead":["{}/link/**/*.key"]}}}}}}"#,
+            root.display()
+        ),
+    )
+    .unwrap();
+    let failures = f
+        .expect(
+            &[
+                (
+                    "through the link",
+                    format!("cat {}", path(root, "link/keys/a.key")),
+                ),
+                (
+                    "resolved",
+                    format!("cat {}", path(root, "outside/keys/a.key")),
+                ),
+            ],
+            &[],
+        )
+        .await;
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// `/dev/tty` stays ioctl-able in srt's base profile: pushing input into
+/// the node's terminal (TIOCSTI) must still be refused, from a session and
+/// from the read-only sandbox. Needs a controlling terminal (skipped
+/// otherwise, as under CI).
+#[tokio::test]
+async fn tiocsti_into_the_nodes_terminal_is_refused() {
+    if std::fs::File::open("/dev/tty").is_err() {
+        eprintln!("no controlling terminal: skipped");
+        return;
+    }
+    let f = fixture("tty");
+    // TIOCSTI through perl (shipped with macOS): 3 no tty, 4 refused.
+    let inject = r##"/usr/bin/perl -e 'open(my $t, "+<", "/dev/tty") or exit 3; my $c = "#"; ioctl($t, 0x80017472, $c) or exit 4; exit 0'"##;
+    assert_ne!(f.sh(inject).await, 0, "from a session");
+    let prepared = f
+        .sandbox
+        .prepare_readonly(ReadonlyInput {
+            workspace_root: f.workspace.clone(),
+            command: vec!["/bin/sh".into(), "-c".into(), inject.into()],
+        })
+        .await
+        .unwrap();
+    let status = prepared
+        .command()
+        .unwrap()
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .envs(prepared.env.iter().map(|(k, v)| (k, v)))
+        .current_dir(&f.workspace)
+        .status()
+        .await
+        .unwrap();
+    prepared.cleanup();
+    assert!(!status.success(), "from the read-only sandbox");
+}
+
+/// Panel git through the read-only sandbox: git's reading commands work,
+/// and the sandbox's own failure is 503, never git's "no". `sandbox-exec`
+/// reports its failures (a profile it refuses, `execvp` failing) on
+/// stderr as `sandbox-exec: …`, which `StderrPrefixes` relies on.
+#[tokio::test]
+async fn panel_git_answers_503_when_the_sandbox_fails() {
+    use pirc_node::panels::inspect::{ChildEnv, git_log, git_status};
+
+    let f = fixture("panelgit");
+    let w = &f.workspace;
+    fs::remove_dir_all(w.join(".git")).unwrap();
+    // A commit that touches a file: the panel's log is `-- .`.
+    for args in [
+        &["init", "-q"][..],
+        &["add", "README"],
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-qm",
+            "first",
+        ],
+    ] {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(w)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?}");
+    }
+    let env = |path: &str| -> ChildEnv {
+        [("PATH", path.to_owned()), ("HOME", path_of(&f, "home"))]
+            .into_iter()
+            .map(|(k, v)| (k.to_owned(), v))
+            .collect()
+    };
+    let status = git_status(&f.sandbox, w, &env("/usr/bin:/bin"))
+        .await
+        .unwrap();
+    assert_eq!(status["repo"], true, "{status}");
+    let log = git_log(&f.sandbox, w, &env("/usr/bin:/bin"), 0, 10)
+        .await
+        .unwrap();
+    assert_eq!(log["commits"][0]["subject"], "first", "{log}");
+
+    // git off PATH: `execvp` fails inside sandbox-exec.
+    let error = git_status(&f.sandbox, w, &env("/nonexistent-pirc"))
+        .await
+        .unwrap_err();
+    assert_eq!(error.status, 503, "{error:?}");
+    assert!(error.message.contains("sandbox-exec: "), "{error:?}");
+
+    // A profile sandbox-exec refuses says so on stderr, the same way.
+    let refused = std::process::Command::new(pirc_node::sandbox::macos::SANDBOX_EXEC)
+        .args(["-p", "(version 1)(not-a-rule", "/usr/bin/true"])
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(stderr.starts_with("sandbox-exec: "), "{stderr}");
+}
+
+fn path_of(f: &Fixture, rest: &str) -> String {
+    path(&f.root, rest)
 }
 
 /// srt's hole that remains (as on Linux under srt): its mandatory denies

@@ -16,17 +16,22 @@
 //! - The agent is spawned as `sandbox-exec -p <profile> <program> <args>`
 //!   with the environment set on the process; srt ran
 //!   `env <vars> /usr/bin/sandbox-exec -p <profile> bash -c <quoted command>`.
-//! - [`extra_denies`]: every deny (and srt's protected names in the
-//!   workspace) also under its symlink-resolved spelling, and a deny
-//!   spelled with glob characters also as the literal path. srt keeps a
-//!   symlinked spelling when it leaves the path's tree, but Seatbelt
-//!   matches the path the kernel resolved, so `<ws>/.git/config` with `.git`
-//!   linking to the repository elsewhere stayed writable; and it reads
-//!   `[`, `*`, `?` in a pirc path (a workspace named `notes [draft]`) as a
-//!   pattern that no longer matches the path. Both only add denies. For
-//!   the same reason an allow spelled with glob characters that names an
-//!   existing path is that path (`literal_existing_allows`), so such a
-//!   workspace stays readable and writable.
+//! - [`extra_denies`]: every literal deny (and srt's protected names in
+//!   the workspace) also under its spelling with every symlink resolved,
+//!   with each link in the chain kept in place (move-blocked with its
+//!   ancestors). srt keeps a symlinked spelling when it leaves the path's
+//!   tree, but Seatbelt matches the path the kernel resolved, so
+//!   `<ws>/.git/config` with `.git` linking to the repository elsewhere
+//!   stayed writable. A glob deny is left to srt's pattern (whose static
+//!   directory srt resolves itself, as the policy already did).
+//! - srt reads `[`, `]`, `*`, `?` in a path as glob syntax, so a pirc path
+//!   holding them (a workspace named `notes [draft]`) became a pattern
+//!   that no longer matched it. A deny spelled with them only inside
+//!   pirc's own paths ([`paths::is_literal_spelling`]: the workspace, the
+//!   node's state, home, ...) is also denied as the literal path, and such
+//!   an allow is that path ([`ProfileInput::literal_roots`]), so the
+//!   workspace stays readable and writable. A glob the user configured
+//!   keeps srt's reading.
 //! - The policy lists its denies by their symlink-resolved targets (the
 //!   sensitive home paths, private, read-only and protected paths, the
 //!   agent config dir, configured denies). The links their spellings cross
@@ -34,6 +39,21 @@
 //!   ancestors, so a link a writable root holds (`~/.ssh` linking
 //!   elsewhere, `~` in `allowedPaths`) cannot be replaced by a directory
 //!   of the agent's.
+//! - Rule strings are SBPL string literals, control characters written
+//!   `\xHH` (`profile::escape`): srt wrote them as JSON, whose `\u0001`
+//!   Seatbelt reads as `u0001`, so a deny naming a path with a control
+//!   character named another path. A path that is not UTF-8 (the
+//!   workspace, the node's paths, or a link's target on the way to a rule)
+//!   refuses the start: srt converted it lossily, naming another path.
+//! - The Git panel's read-only profile ([`ProfileInput::readonly`]) keeps
+//!   only `/dev/null`, `/dev/stdout` and `/dev/stderr` of srt's default
+//!   write paths: srt also opened `/tmp/claude` (shared with every
+//!   session), `~/.npm/_logs`, `~/.claude/debug` and `/dev/tty` (and two
+//!   more devices) to every command it wrapped. It also leaves out the
+//!   base rules with host side effects that are not file writes (POSIX
+//!   shared memory, a sysctl write, distributed notifications, the
+//!   security and LaunchServices daemons: [`profile::READONLY_BASE_DROPS`]).
+//!   Agent sessions keep srt's base as it is.
 //! - No log monitor (srt's `log stream` of violations) and no JVM proxy
 //!   agent jar (`-Djava.net.preferIPv4Stack=true` is still set).
 //! - The log tag's command is the agent's arguments joined by spaces
@@ -47,9 +67,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use pirc_config::{Env, NodeConfig};
-use pirc_policy::session::SessionPolicy;
+use pirc_policy::real_resolve;
+use pirc_policy::session::{SessionPolicy, WalkError, walk_links};
 
-use self::paths::{Context, contains_glob_chars, normalize_path_for_sandbox, resolve_existing};
+use self::paths::{Context, contains_glob_chars, is_literal_spelling, normalize_path_for_sandbox};
 use self::profile::ProfileInput;
 use super::common::{self, ProbeCache, Session};
 use super::proxy;
@@ -63,50 +84,86 @@ use proxy::{Allowlist, EnvPlatform, ProxyAuth, ProxyListener};
 pub const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
 
 /// What a profile is built from besides the policy.
-struct Settings<'a> {
-    cwd: &'a str,
-    home: &'a str,
-    proxy_port: Option<u16>,
-    allow_pty: bool,
-    log_tag: &'a str,
+pub struct Settings<'a> {
+    /// The workspace (resolved by [`policy_profile`]).
+    pub cwd: &'a str,
+    pub home: &'a str,
+    /// [`ProfileInput::proxy_port`].
+    pub proxy_port: Option<u16>,
+    pub allow_pty: bool,
+    pub log_tag: &'a str,
+    /// [`ProfileInput::readonly`].
+    pub readonly: bool,
+    /// pirc's own paths besides `cwd` ([`ProfileInput::literal_roots`]).
+    pub literal_roots: &'a [String],
 }
 
-/// Not srt's (see the module documentation): the literal read and write
-/// denies [`profile::generate`] adds, so that a deny holds whatever
-/// spelling reaches the kernel. For each entry of `deny_read` and
-/// `deny_write`, and for srt's protected names in `cwd`: its spelling with
-/// every symlink resolved (as far as it exists) when that differs from
-/// the one srt uses, and an entry with glob characters as the literal path.
+/// Not srt's (see the module documentation): what [`profile::generate`]
+/// adds so that a literal deny holds whatever spelling reaches the kernel
+/// (a glob deny is srt's pattern alone).
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct ExtraDenies {
+    /// Literal read denies.
+    pub read: Vec<String>,
+    /// Literal write denies.
+    pub write: Vec<String>,
+    /// Paths kept in place ([`ProfileInput::extra_move_blocks`]).
+    pub move_blocks: Vec<String>,
+}
+
+/// [`ExtraDenies`] for `deny_read`, `deny_write` and srt's protected names
+/// in `cwd`: each entry's spelling with every symlink resolved (as far as
+/// it exists) when that differs from the one srt uses, every link
+/// resolving it crosses kept in place (a link in the middle of a chain,
+/// in a writable directory, would otherwise redirect the resolved deny),
+/// and an entry with glob characters only inside `cwd` or `literal_roots`
+/// ([`paths::is_literal_spelling`]) also as the literal path. A glob of
+/// the user's gets no extra deny (but the links in its static directory
+/// stay in place).
 pub fn extra_denies(
     deny_read: &[String],
     deny_write: &[String],
     allow_git_config: bool,
     cwd: &str,
     home: &str,
-) -> (Vec<String>, Vec<String>) {
+    literal_roots: &[String],
+) -> ExtraDenies {
     let ctx = Context { cwd, home };
-    let extras = |entries: &mut dyn Iterator<Item = String>| {
+    let cwd_real = normalize_path_for_sandbox(cwd, true, ctx);
+    let roots: Vec<String> = literal_roots
+        .iter()
+        .cloned()
+        .chain([cwd_real.clone()])
+        .collect();
+    let push = |out: &mut Vec<String>, path: String| {
+        if !out.contains(&path) {
+            out.push(path);
+        }
+    };
+    let mut move_blocks: Vec<String> = Vec::new();
+    let mut extras = |entries: &mut dyn Iterator<Item = String>| {
         let mut out: Vec<String> = Vec::new();
-        let mut push = |path: String| {
-            if !out.contains(&path) {
-                out.push(path);
-            }
-        };
         for entry in entries {
             let entry = paths::remove_trailing_glob_suffix(&entry);
             let literal = normalize_path_for_sandbox(&entry, true, ctx);
-            if contains_glob_chars(&entry) {
-                push(literal.clone());
+            let walk = walk_links(&literal);
+            for link in walk.links {
+                push(&mut move_blocks, link);
             }
-            if let Some(resolved) = resolve_existing(&literal)
+            if contains_glob_chars(&entry) {
+                if !is_literal_spelling(&entry, &roots) {
+                    continue;
+                }
+                push(&mut out, literal.clone());
+            }
+            if let Ok(resolved) = walk.target
                 && resolved != literal
             {
-                push(resolved);
+                push(&mut out, resolved);
             }
         }
         out
     };
-    let cwd_real = normalize_path_for_sandbox(cwd, true, ctx);
     let read = extras(&mut deny_read.iter().cloned());
     let write = extras(
         &mut deny_write.iter().cloned().chain(
@@ -115,25 +172,78 @@ pub fn extra_denies(
                 .map(|name| paths::resolve(&cwd_real, name)),
         ),
     );
-    (read, write)
+    ExtraDenies {
+        read,
+        write,
+        move_blocks,
+    }
 }
 
-/// The profile for `policy` (as `srtSettings` passes it on macOS).
-fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<String, String> {
+/// `Err` when resolving one of `entries` (or srt's protected names in
+/// `cwd`) reaches a symlink whose target is not UTF-8: a rule cannot name
+/// that path (srt converted it lossily, so its rule named another path).
+fn refuse_non_utf8<'a>(
+    entries: impl IntoIterator<Item = &'a String>,
+    cwd: &str,
+) -> Result<(), String> {
+    let names = profile::mandatory_names(false)
+        .into_iter()
+        .map(|name| paths::resolve(cwd, name));
+    for entry in entries
+        .into_iter()
+        .cloned()
+        .chain([cwd.to_owned()])
+        .chain(names)
+    {
+        if let Err(WalkError::NotUtf8(link)) = walk_links(&entry).target {
+            return Err(format!("{link} links to a path that is not UTF-8"));
+        }
+    }
+    Ok(())
+}
+
+/// The profile for `policy` (as `srtSettings` passes it on macOS), with
+/// `settings.cwd` resolved as srt's `process.cwd()` (`getcwd`) is: the
+/// mandatory `**/` denies are anchored there, and Seatbelt matches
+/// resolved paths. `Err` when it cannot be resolved. Public for the
+/// golden tests of production profiles (`tests/sandbox_macos_profiles.rs`).
+pub fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<String, String> {
     let paths = &policy.paths;
-    let (extra_read, extra_write) = extra_denies(
+    let cwd = std::fs::canonicalize(settings.cwd)
+        .map_err(|error| format!("cannot resolve {}: {error}", settings.cwd))
+        .and_then(|cwd| text(&cwd))?;
+    let cwd = cwd.as_str();
+    refuse_non_utf8(
+        paths
+            .deny_read
+            .iter()
+            .chain(&paths.allow_read)
+            .chain(&paths.allow_write)
+            .chain(&paths.deny_write)
+            .chain(&policy.network.allow_unix_sockets),
+        cwd,
+    )?;
+    let extra = extra_denies(
         &paths.deny_read,
         &paths.deny_write,
         policy.allow_git_config,
-        settings.cwd,
+        cwd,
         settings.home,
+        settings.literal_roots,
     );
-    // The links the policy resolved its denies through stay in place.
-    let move_blocks: Vec<String> = policy
-        .linked_denies
+    let literal_roots: Vec<String> = settings
+        .literal_roots
         .iter()
-        .flat_map(|entry| entry.links.iter().cloned())
+        .cloned()
+        .chain([cwd.to_owned()])
         .collect();
+    // The links the policy resolved its denies through stay in place too.
+    let mut move_blocks = extra.move_blocks;
+    for link in policy.linked_denies.iter().flat_map(|entry| &entry.links) {
+        if !move_blocks.contains(link) {
+            move_blocks.push(link.clone());
+        }
+    }
     profile::generate(&ProfileInput {
         deny_read: &paths.deny_read,
         allow_read: &paths.allow_read,
@@ -144,13 +254,14 @@ fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<Str
         allow_local_binding: policy.network.allow_local_binding,
         proxy_port: settings.proxy_port,
         allow_pty: settings.allow_pty,
-        cwd: settings.cwd,
+        cwd,
         home: settings.home,
         log_tag: settings.log_tag,
-        extra_read_denies: &extra_read,
-        extra_write_denies: &extra_write,
+        extra_read_denies: &extra.read,
+        extra_write_denies: &extra.write,
         extra_move_blocks: &move_blocks,
-        literal_existing_allows: true,
+        readonly: settings.readonly,
+        literal_roots: &literal_roots,
     })
 }
 
@@ -181,8 +292,13 @@ fn sandbox_env(
     env
 }
 
-fn text(path: &Path) -> String {
-    path.display().to_string()
+/// `path` as text, or `Err` when it is not UTF-8: the agent does not
+/// start, since no rule can name such a path (srt converted it lossily,
+/// so its rule named another path). Not srt's.
+fn text(path: &Path) -> Result<String, String> {
+    path.to_str()
+        .map(str::to_owned)
+        .ok_or_else(|| format!("{} is not UTF-8", path.display()))
 }
 
 /// `-p <profile>` and the command.
@@ -218,8 +334,42 @@ impl MacSandbox {
         }
     }
 
-    fn home(&self) -> String {
+    fn home(&self) -> Result<String, String> {
         text(&self.env.home())
+    }
+
+    /// pirc's own paths ([`ProfileInput::literal_roots`]): the node's,
+    /// `home` and `extra`, each as given and resolved as the policy
+    /// resolves it. `Err` when one is not UTF-8 ([`text`]): the policy is
+    /// built from them.
+    fn own_paths(&self, home: &str, extra: &[&Path]) -> Result<Vec<String>, String> {
+        let config = &self.config;
+        let database_dir = config.database_path.parent().unwrap_or(Path::new("/"));
+        let node: [&Path; 8] = [
+            &config.config_dir,
+            &config.state_dir,
+            &config.sessions_dir,
+            &config.uploads_dir,
+            &config.database_path,
+            database_dir,
+            &config.browser.profiles_dir,
+            &config.workspace_memory_dir,
+        ];
+        let mut out: Vec<String> = Vec::new();
+        for path in node.into_iter().chain(extra.iter().copied()) {
+            let path = text(path)?;
+            for spelling in [real_resolve(&path), path] {
+                if !out.contains(&spelling) {
+                    out.push(spelling);
+                }
+            }
+        }
+        for spelling in [home.to_owned(), real_resolve(home)] {
+            if !out.contains(&spelling) {
+                out.push(spelling);
+            }
+        }
+        Ok(out)
     }
 
     fn log_tag(&self, command: &[OsString]) -> String {
@@ -238,8 +388,9 @@ impl MacSandbox {
                 reason: format!("sandbox-exec ({SANDBOX_EXEC}) was not found"),
             };
         }
+        // Removed however the probe ends (a dropped `check` too).
         let tmp = match common::make_temp_dir(&common::tmpdir(&self.env), "pirc-") {
-            Ok(tmp) => tmp,
+            Ok(tmp) => common::SessionTmp::new(tmp),
             Err(error) => {
                 return SandboxStatus::Unavailable {
                     reason: format!("sandbox-exec: {error}"),
@@ -247,31 +398,35 @@ impl MacSandbox {
             }
         };
         let command: Vec<OsString> = vec!["/bin/sh".into(), "-c".into(), "exit 0".into()];
-        let tmp_text = text(&tmp);
-        let home = self.home();
         let tag = self.log_tag(&command);
-        // A port nothing listens on: the probe makes no connection.
-        let profile = policy_profile(
-            &SessionPolicy::default(),
-            &Settings {
-                cwd: &tmp_text,
-                home: &home,
-                proxy_port: Some(9),
-                allow_pty: false,
-                log_tag: &tag,
-            },
-        );
+        let profile = text(&tmp).and_then(|tmp_text| {
+            let home = self.home()?;
+            // A port nothing listens on: the probe makes no connection.
+            let profile = policy_profile(
+                &SessionPolicy::default(),
+                &Settings {
+                    cwd: &tmp_text,
+                    home: &home,
+                    proxy_port: Some(9),
+                    allow_pty: false,
+                    log_tag: &tag,
+                    readonly: false,
+                    literal_roots: &[],
+                },
+            )?;
+            Ok((profile, tmp_text))
+        });
         let status = match profile {
             Err(error) => SandboxStatus::Unavailable {
                 reason: format!("sandbox-exec: {error}"),
             },
-            Ok(profile) => {
+            Ok((profile, tmp_text)) => {
                 let mut probe = tokio::process::Command::new(SANDBOX_EXEC);
                 probe
                     .args(exec_args(profile, command))
                     .env_clear()
                     .envs(sandbox_env(&tmp_text, None, false))
-                    .current_dir(&tmp);
+                    .current_dir(&*tmp);
                 common::run_probe(
                     "sandbox-exec",
                     probe,
@@ -280,7 +435,7 @@ impl MacSandbox {
                 .await
             }
         };
-        Session::remove_tmp(&tmp);
+        drop(tmp);
         status
     }
 
@@ -324,19 +479,33 @@ impl Sandbox for MacSandbox {
             };
             let mut agent: Vec<OsString> = vec![self.config.agent_command.clone().into()];
             agent.extend(self.config.agent_args.iter().map(OsString::from));
-            let (tmp_text, home) = (text(&tmp), self.home());
             let tag = self.log_tag(&agent);
-            let profile = match policy_profile(
-                &policy,
-                &Settings {
-                    cwd: &text(&input.workspace_root),
-                    home: &home,
-                    proxy_port: Some(port),
-                    allow_pty: true,
-                    log_tag: &tag,
-                },
-            ) {
-                Ok(profile) => profile,
+            let built = (|| {
+                let (tmp_text, home) = (text(&tmp)?, self.home()?);
+                let socket_dir = input.inference_socket.as_deref().and_then(Path::parent);
+                let extra: Vec<&Path> = [&*input.workspace_root, &input.session_dir, &tmp]
+                    .into_iter()
+                    .chain(input.inference_socket.as_deref())
+                    .chain(socket_dir)
+                    .chain(input.protected_paths.iter().map(PathBuf::as_path))
+                    .collect();
+                let literal_roots = self.own_paths(&home, &extra)?;
+                let profile = policy_profile(
+                    &policy,
+                    &Settings {
+                        cwd: &text(&input.workspace_root)?,
+                        home: &home,
+                        proxy_port: Some(port),
+                        allow_pty: true,
+                        log_tag: &tag,
+                        readonly: false,
+                        literal_roots: &literal_roots,
+                    },
+                )?;
+                Ok::<_, String>((profile, tmp_text))
+            })();
+            let (profile, tmp_text) = match built {
+                Ok(built) => built,
                 Err(error) => {
                     Session::remove_tmp(&tmp);
                     return Err(internal(
@@ -385,20 +554,27 @@ impl Sandbox for MacSandbox {
             } = common::spawn_readonly_session(&self.config, &self.env, &self.node_tmp, &input)
                 .await?;
             self.require(&tmp).await?;
-            let (tmp_text, home) = (text(&tmp), self.home());
             let tag = self.log_tag(&input.command);
-            // No proxy port: the profile allows no network at all.
-            let profile = match policy_profile(
-                &policy,
-                &Settings {
-                    cwd: &text(&input.workspace_root),
-                    home: &home,
-                    proxy_port: None,
-                    allow_pty: false,
-                    log_tag: &tag,
-                },
-            ) {
-                Ok(profile) => profile,
+            let built = (|| {
+                let (tmp_text, home) = (text(&tmp)?, self.home()?);
+                let literal_roots = self.own_paths(&home, &[&input.workspace_root, &tmp])?;
+                // No proxy port: the profile allows no network at all.
+                let profile = policy_profile(
+                    &policy,
+                    &Settings {
+                        cwd: &text(&input.workspace_root)?,
+                        home: &home,
+                        proxy_port: None,
+                        allow_pty: false,
+                        log_tag: &tag,
+                        readonly: true,
+                        literal_roots: &literal_roots,
+                    },
+                )?;
+                Ok::<_, String>((profile, tmp_text))
+            })();
+            let (profile, tmp_text) = match built {
+                Ok(built) => built,
                 Err(error) => {
                     Session::remove_tmp(&tmp);
                     return Err(internal(
@@ -464,17 +640,25 @@ mod tests {
         std::os::unix::fs::symlink(p("repo"), p("ws/.git")).unwrap();
         std::os::unix::fs::symlink(p("dot/bashrc"), p("ws/.bashrc")).unwrap();
         fs::create_dir_all(p("w[1]")).unwrap();
-        let (read, write) = extra_denies(
+        let ExtraDenies {
+            read,
+            write,
+            move_blocks,
+        } = extra_denies(
             &[p("ws/.git/config")],
             &[
                 p("ws/.git/config"),
                 p("ws/.git/hooks"),
                 p("w[1]/.pirc"),
                 p("ws/x"),
+                // The user's globs: srt's pattern alone.
+                p("w[1]/*.key"),
+                p("ws/*.lock"),
             ],
             false,
             &p("ws"),
             &p("home"),
+            &[p("w[1]")],
         );
         assert_eq!(read, [p("repo/config")]);
         assert_eq!(
@@ -487,8 +671,97 @@ mod tests {
                 p("dot/bashrc"),
             ]
         );
-        let (read, write) = extra_denies(&[], &[], true, &p("dot"), &p("home"));
-        assert!(read.is_empty() && write.is_empty(), "{write:?}");
+        assert_eq!(move_blocks, [p("ws/.git"), p("ws/.bashrc")]);
+        let extra = extra_denies(&[], &[], true, &p("dot"), &p("home"), &[]);
+        assert_eq!(extra, ExtraDenies::default());
+        // A chain: ws2/.git -> hop -> repo. Repointing `hop` would
+        // redirect the resolved deny: every link crossed stays in place.
+        fs::create_dir_all(p("ws2")).unwrap();
+        std::os::unix::fs::symlink("repo", p("hop")).unwrap();
+        std::os::unix::fs::symlink(p("hop"), p("ws2/.git")).unwrap();
+        let extra = extra_denies(
+            &[],
+            &[p("ws2/.git/config")],
+            true,
+            &p("dot"),
+            &p("home"),
+            &[],
+        );
+        assert_eq!(extra.write, [p("repo/config")]);
+        assert_eq!(extra.move_blocks, [p("ws2/.git"), p("hop")]);
+    }
+
+    /// A rule cannot name a path that is not UTF-8: the profile is refused
+    /// (the agent does not start) rather than naming another path.
+    #[test]
+    fn paths_that_are_not_utf8_refuse_the_profile() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        assert!(text(Path::new(OsStr::from_bytes(b"/a\xff"))).is_err());
+        assert_eq!(text(Path::new("/a\u{1}b")), Ok("/a\u{1}b".to_owned()));
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap().display().to_string();
+        let ws = format!("{root}/ws");
+        fs::create_dir_all(&ws).unwrap();
+        let settings = Settings {
+            cwd: &ws,
+            home: &root,
+            proxy_port: None,
+            allow_pty: false,
+            log_tag: "t",
+            readonly: false,
+            literal_roots: &[],
+        };
+        assert!(policy_profile(&SessionPolicy::default(), &settings).is_ok());
+        let target = OsStr::from_bytes(b"repo\xff");
+        if std::os::unix::fs::symlink(target, format!("{ws}/.git")).is_err() {
+            // The file system refuses such names: nothing to name.
+            return;
+        }
+        let error = policy_profile(&SessionPolicy::default(), &settings).unwrap_err();
+        assert!(error.contains("not UTF-8"), "{error}");
+        fs::remove_file(format!("{ws}/.git")).unwrap();
+        std::os::unix::fs::symlink(target, format!("{root}/link")).unwrap();
+        let policy = SessionPolicy {
+            paths: pirc_policy::PathPolicy {
+                deny_read: vec![format!("{root}/link/secret")],
+                ..pirc_policy::PathPolicy::default()
+            },
+            ..SessionPolicy::default()
+        };
+        let error = policy_profile(&policy, &settings).unwrap_err();
+        assert!(error.contains("not UTF-8"), "{error}");
+    }
+
+    /// srt anchored its mandatory denies at `process.cwd()`, the physical
+    /// path: a workspace spelled through a link that leaves its tree
+    /// (which `normalizePathForSandbox` keeps as spelled) is anchored at
+    /// where it is (review finding 6).
+    #[test]
+    fn the_cwd_is_resolved() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap().display().to_string();
+        fs::create_dir_all(format!("{root}/b/ws")).unwrap();
+        std::os::unix::fs::symlink(format!("{root}/b"), format!("{root}/a")).unwrap();
+        let profile = |cwd: &str| {
+            policy_profile(
+                &SessionPolicy::default(),
+                &Settings {
+                    cwd,
+                    home: &root,
+                    proxy_port: None,
+                    allow_pty: false,
+                    log_tag: "t",
+                    readonly: false,
+                    literal_roots: &[],
+                },
+            )
+        };
+        let linked = profile(&format!("{root}/a/ws")).unwrap();
+        assert_eq!(linked, profile(&format!("{root}/b/ws")).unwrap());
+        assert!(linked.contains("/b/ws/(.*/)?"), "{linked}");
+        assert!(!linked.contains("/a/ws/"), "{linked}");
+        assert!(profile(&format!("{root}/missing")).is_err());
     }
 
     /// What the backend sets, against the environment srt set in the

@@ -28,7 +28,35 @@ use super::paths::{
 /// The profile's fixed part after the log tag: process, Mach, IPC, IOKit,
 /// sysctl and device rules (srt's `generateSandboxProfile` prelude, with
 /// none of the opt-in Mach services), after its `;;` header.
+///
+/// It also allows a few host side effects that are not file writes or
+/// network access: POSIX shared memory of any name, writing the
+/// `kern.tcsm_enable` sysctl, posting distributed notifications, and
+/// lookups of the LaunchServices and security daemons. Sessions keep them
+/// (srt's agent profile); the read-only profile drops them
+/// ([`READONLY_BASE_DROPS`]).
 const BASE: &str = include_str!("base.sb");
+
+/// Not srt's: what the read-only profile ([`ProfileInput::readonly`])
+/// leaves out of [`BASE`], so the Git panel's command has no host side
+/// effects beyond its temp directory either. Semaphores, user preferences,
+/// the other Mach services and IOKit stay.
+pub const READONLY_BASE_DROPS: [&str; 7] = [
+    "  (global-name \"com.apple.distributed_notifications@Uv3\")\n",
+    "  (global-name \"com.apple.securityd.xpc\")\n",
+    "  (global-name \"com.apple.coreservices.launchservicesd\")\n",
+    "; POSIX IPC - shared memory\n(allow ipc-posix-shm)\n\n",
+    "; V8 thread calculations\n(allow sysctl-write\n  (sysctl-name \"kern.tcsm_enable\")\n)\n\n",
+    "; Distributed notifications\n(allow distributed-notification-post)\n\n",
+    "; Specific mach-lookup permissions for security operations\n(allow mach-lookup (global-name \"com.apple.SecurityServer\"))\n\n",
+];
+
+/// [`BASE`] for [`ProfileInput::readonly`].
+fn readonly_base() -> String {
+    READONLY_BASE_DROPS
+        .iter()
+        .fold(BASE.to_owned(), |base, drop| base.replacen(drop, "", 1))
+}
 
 /// `DANGEROUS_FILES`.
 const DANGEROUS_FILES: [&str; 9] = [
@@ -45,6 +73,10 @@ const DANGEROUS_FILES: [&str; 9] = [
 
 /// `getDangerousDirectories()`.
 const DANGEROUS_DIRECTORIES: [&str; 4] = [".vscode", ".idea", ".claude/commands", ".claude/agents"];
+
+/// What a read-only profile ([`ProfileInput::readonly`]) keeps of srt's
+/// default write paths.
+pub const READONLY_WRITE_PATHS: [&str; 3] = ["/dev/stdout", "/dev/stderr", "/dev/null"];
 
 /// `SBPL_STRING_MAX_BYTES`: sandbox-exec refuses longer string literals.
 const SBPL_STRING_MAX_BYTES: usize = 900;
@@ -90,9 +122,16 @@ pub struct ProfileInput<'a> {
     /// [`super::extra_denies`]): a deny names where the link leads, so the
     /// link itself must not be replaced.
     pub extra_move_blocks: &'a [String],
-    /// Not srt's: an allow (read or write) spelled with glob characters
-    /// that names an existing path is that path ([`allow_entry`]).
-    pub literal_existing_allows: bool,
+    /// Not srt's: the Git panel's read-only sandbox. Of srt's default
+    /// write paths ([`paths::default_write_paths`]) only
+    /// [`READONLY_WRITE_PATHS`] stay: not `/tmp/claude` (shared with every
+    /// session), the home convenience directories or `/dev/tty`, so it
+    /// writes nothing but its temp directory (security audit S8).
+    pub readonly: bool,
+    /// Not srt's: pirc's own paths ([`paths::is_literal_spelling`]). An
+    /// allow (read or write) spelled with glob characters inside one of
+    /// them is that one path (`allow_entry`).
+    pub literal_roots: &'a [String],
 }
 
 /// `generateLogTag`: `CMD64_<base64 of the command's first 100
@@ -127,9 +166,32 @@ struct Entry {
     anchor: Option<String>,
 }
 
-/// `escapePath`: `JSON.stringify`.
+/// `escapePath`, as an SBPL string literal. Not srt's spelling: srt used
+/// `JSON.stringify`, whose `\u00XX`, `\b` and `\f` escapes Seatbelt's
+/// reader does not know (it reads `\u0001` as `u0001`), so a rule naming
+/// a path with a control character named another path and a deny did not
+/// hold. Here `"` and `\` get a backslash, `\t` and `\n` keep JSON's
+/// escapes (Seatbelt reads them alike), and every other control character
+/// and DEL is written `\xHH` (Seatbelt reads exactly two hex digits). A
+/// string without such characters is spelled as srt spelled it.
 fn escape(text: &str) -> String {
-    serde_json::to_string(text).unwrap_or_default()
+    use std::fmt::Write as _;
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\t' => out.push_str("\\t"),
+            '\n' => out.push_str("\\n"),
+            c if c < ' ' || c == '\u{7f}' => {
+                let _ = write!(out, "\\x{:02x}", u32::from(c));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// `toPathEntry`: a caller's spelling, a glob when it reads as one.
@@ -142,20 +204,14 @@ fn to_path_entry(pattern: &str, ctx: Context<'_>) -> Entry {
     }
 }
 
-/// [`to_path_entry`] for an allow; with `literal_existing`, a spelling
-/// with glob characters that names an existing path is a literal (srt
+/// [`to_path_entry`] for an allow; a spelling whose glob characters lie in
+/// pirc's own paths ([`paths::is_literal_spelling`]) is a literal (srt
 /// reads it as a pattern, which no longer matches that path: a workspace
-/// named `notes [draft]` would not be writable). Not srt's.
-fn allow_entry(pattern: &str, literal_existing: bool, ctx: Context<'_>) -> Entry {
-    if literal_existing && contains_glob_chars(pattern) {
-        let literal = normalize_path_for_sandbox(pattern, true, ctx);
-        if std::fs::symlink_metadata(&literal).is_ok() {
-            return Entry {
-                glob: false,
-                path: literal,
-                anchor: None,
-            };
-        }
+/// named `notes [draft]` would not be writable). A user's glob keeps srt's
+/// reading, even once a path spelled like it exists. Not srt's.
+fn allow_entry(pattern: &str, literal_roots: &[String], ctx: Context<'_>) -> Entry {
+    if paths::is_literal_spelling(pattern, literal_roots) {
+        return to_literal_path_entry(pattern, ctx);
     }
     to_path_entry(pattern, ctx)
 }
@@ -513,7 +569,7 @@ fn mandatory_deny_entries(allow_git_config: bool, ctx: Context<'_>) -> Vec<Entry
     entries
 }
 
-/// The names srt protects in the cwd ([`mandatory_deny_entries`]'s
+/// The names srt protects in the cwd (`mandatory_deny_entries`'s
 /// literals), relative to it.
 pub fn mandatory_names(allow_git_config: bool) -> Vec<&'static str> {
     let mut names: Vec<&str> = DANGEROUS_FILES.to_vec();
@@ -660,7 +716,7 @@ fn write_rules(
     let mut rules = Vec::new();
     let allow_filters: IndexSet<String> = allow_only
         .iter()
-        .map(|pattern| path_filter(&allow_entry(pattern, input.literal_existing_allows, ctx)))
+        .map(|pattern| path_filter(&allow_entry(pattern, input.literal_roots, ctx)))
         .collect();
     rules.extend(render_rule("allow", &["file-write*"], &allow_filters, tag));
     let deny_entries: Vec<Entry> = deny_within_allow
@@ -718,16 +774,20 @@ pub fn generate(input: &ProfileInput<'_>) -> Result<String, String> {
     let tag = input.log_tag;
     // `wrapWithSandbox`: the default write paths, `/**` stripped (macOS
     // keeps globs).
-    let allow_only: Vec<String> =
+    let default_writes = if input.readonly {
+        READONLY_WRITE_PATHS.map(str::to_owned).to_vec()
+    } else {
         paths::default_write_paths(input.deny_read, input.allow_read, ctx)
-            .into_iter()
-            .chain(
-                input
-                    .allow_write
-                    .iter()
-                    .map(|p| remove_trailing_glob_suffix(p)),
-            )
-            .collect();
+    };
+    let allow_only: Vec<String> = default_writes
+        .into_iter()
+        .chain(
+            input
+                .allow_write
+                .iter()
+                .map(|p| remove_trailing_glob_suffix(p)),
+        )
+        .collect();
     let deny_within_allow: Vec<String> = input
         .deny_write
         .iter()
@@ -752,8 +812,13 @@ pub fn generate(input: &ProfileInput<'_>) -> Result<String, String> {
         String::new(),
     ];
     // BASE ends with the blank line before the network section.
+    let base = if input.readonly {
+        readonly_base()
+    } else {
+        BASE.to_owned()
+    };
     profile.extend(
-        BASE.trim_end_matches('\n')
+        base.trim_end_matches('\n')
             .split('\n')
             .skip_while(|line| line.starts_with(";;"))
             .map(str::to_owned),
@@ -804,11 +869,11 @@ pub fn generate(input: &ProfileInput<'_>) -> Result<String, String> {
             .collect(),
         allows: allow_within_deny
             .iter()
-            .map(|p| allow_entry(p, input.literal_existing_allows, ctx))
+            .map(|p| allow_entry(p, input.literal_roots, ctx))
             .collect(),
         write_roots: allow_only
             .iter()
-            .map(|p| allow_entry(p, input.literal_existing_allows, ctx))
+            .map(|p| allow_entry(p, input.literal_roots, ctx))
             .collect(),
     };
     profile.push("; File read".to_owned());
@@ -863,6 +928,109 @@ mod tests {
         let long = "é".repeat(150);
         let tag = log_tag(&long, "_x_SBX");
         assert!(tag.len() < 300, "{tag}");
+    }
+
+    #[test]
+    fn strings_are_sbpl_literals() {
+        assert_eq!(escape("/a b/ü"), "\"/a b/ü\"");
+        assert_eq!(escape("q\"\\"), "\"q\\\"\\\\\"");
+        assert_eq!(escape("\t\n"), "\"\\t\\n\"");
+        assert_eq!(
+            escape("\u{1}\u{8}\u{c}\r\u{1b}\u{1f}\u{7f}"),
+            "\"\\x01\\x08\\x0c\\x0d\\x1b\\x1f\\x7f\""
+        );
+        // srt's spelling for everything else.
+        let plain = "/w[s] \"q\" \\ ü*?(x)|{1}+$^.\t";
+        assert_eq!(escape(plain), serde_json::to_string(plain).unwrap());
+    }
+
+    #[test]
+    fn readonly_profiles_drop_srts_default_write_paths() {
+        let allow_write = ["/nonexistent-pirc/tmp".to_owned()];
+        let input = |readonly| ProfileInput {
+            deny_read: &[],
+            allow_read: &[],
+            allow_write: &allow_write,
+            deny_write: &[],
+            allow_git_config: false,
+            allow_unix_sockets: &[],
+            allow_local_binding: false,
+            proxy_port: None,
+            allow_pty: false,
+            cwd: "/nonexistent-pirc/ws",
+            home: "/nonexistent-pirc/home",
+            log_tag: "t",
+            extra_read_denies: &[],
+            extra_write_denies: &[],
+            extra_move_blocks: &[],
+            literal_roots: &[],
+            readonly,
+        };
+        let dropped = [
+            // `/tmp/claude` and `/private/tmp/claude` are one filter on a
+            // Mac where it exists (both resolve).
+            "tmp/claude",
+            "(subpath \"/dev/tty\")",
+            "(subpath \"/dev/dtracehelper\")",
+            "(subpath \"/dev/autofs_nowait\")",
+            "(subpath \"/nonexistent-pirc/home/.npm/_logs\")",
+            "(subpath \"/nonexistent-pirc/home/.claude/debug\")",
+        ];
+        let srt = generate(&input(false)).unwrap();
+        let readonly = generate(&input(true)).unwrap();
+        for filter in dropped {
+            assert!(srt.contains(filter), "{filter}");
+            assert!(!readonly.contains(filter), "{filter}");
+        }
+        for drop in READONLY_BASE_DROPS {
+            assert!(BASE.contains(drop), "{drop}");
+            assert!(srt.contains(drop.trim_end()), "{drop}");
+            assert!(!readonly.contains(drop.trim_end()), "{drop}");
+        }
+        assert!(readonly.contains("(allow ipc-posix-sem)"));
+        for path in READONLY_WRITE_PATHS
+            .iter()
+            .chain([&"/nonexistent-pirc/tmp"])
+        {
+            assert!(
+                readonly.contains(&format!("(subpath \"{path}\")")),
+                "{path}"
+            );
+        }
+    }
+
+    /// Glob characters are read literally only inside pirc's own paths: a
+    /// user's glob stays a pattern even once a path spelled like it exists
+    /// (review finding 7).
+    #[test]
+    fn only_pircs_own_paths_are_read_literally() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(dir.path())
+            .unwrap()
+            .display()
+            .to_string();
+        let ws = format!("{root}/w[s]");
+        std::fs::create_dir_all(format!("{ws}/gen/*")).unwrap();
+        let ctx = Context {
+            cwd: &ws,
+            home: &root,
+        };
+        let roots = [ws.clone()];
+        assert_eq!(
+            allow_entry(&ws, &roots, ctx),
+            Entry {
+                glob: false,
+                path: ws.clone(),
+                anchor: None
+            }
+        );
+        assert!(!allow_entry(&format!("{ws}/sub"), &roots, ctx).glob);
+        assert!(allow_entry(&format!("{ws}/gen/*"), &roots, ctx).glob);
+        assert!(allow_entry(&ws, &[], ctx).glob);
+        let home_glob = format!("{root}/*.pub");
+        std::fs::write(format!("{root}/id.pub"), "").unwrap();
+        std::fs::write(&home_glob, "").unwrap();
+        assert!(allow_entry(&home_glob, std::slice::from_ref(&root), ctx).glob);
     }
 
     #[test]

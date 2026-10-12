@@ -338,7 +338,8 @@
   },
   {
     "name": "readonly",
-    "about": "The Git panel's read-only sandbox: no proxy, no network, nothing writable but its temp directory, no pseudo-terminals.",
+    "readonly": true,
+    "about": "The Git panel's read-only sandbox: no proxy, no network, nothing writable but its temp directory (and srt's default write paths, which pirc's read-only profile drops), no pseudo-terminals.",
     "tree": {
       "dirs": ["home/.ssh", "state", "ws/.git/hooks", "tmp/pirc-Ab12Cd"],
       "files": ["ws/.git/config"],
