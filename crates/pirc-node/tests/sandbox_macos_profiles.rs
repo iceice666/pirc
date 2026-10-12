@@ -111,6 +111,7 @@ fn profiles_match_srts() {
             log_tag: TAG,
             extra_read_denies: &[],
             extra_write_denies: &[],
+            extra_move_blocks: &[],
             literal_existing_allows: false,
         };
         let actual = profile::generate(&input).unwrap();

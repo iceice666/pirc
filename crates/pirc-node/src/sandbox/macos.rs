@@ -27,6 +27,13 @@
 //!   the same reason an allow spelled with glob characters that names an
 //!   existing path is that path (`literal_existing_allows`), so such a
 //!   workspace stays readable and writable.
+//! - The policy lists its denies by their symlink-resolved targets (the
+//!   sensitive home paths, private, read-only and protected paths, the
+//!   agent config dir, configured denies). The links their spellings cross
+//!   (`SessionPolicy::linked_denies`) are move-blocked with their
+//!   ancestors, so a link a writable root holds (`~/.ssh` linking
+//!   elsewhere, `~` in `allowedPaths`) cannot be replaced by a directory
+//!   of the agent's.
 //! - No log monitor (srt's `log stream` of violations) and no JVM proxy
 //!   agent jar (`-Djava.net.preferIPv4Stack=true` is still set).
 //! - The log tag's command is the agent's arguments joined by spaces
@@ -121,6 +128,12 @@ fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<Str
         settings.cwd,
         settings.home,
     );
+    // The links the policy resolved its denies through stay in place.
+    let move_blocks: Vec<String> = policy
+        .linked_denies
+        .iter()
+        .flat_map(|entry| entry.links.iter().cloned())
+        .collect();
     profile::generate(&ProfileInput {
         deny_read: &paths.deny_read,
         allow_read: &paths.allow_read,
@@ -136,6 +149,7 @@ fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<Str
         log_tag: settings.log_tag,
         extra_read_denies: &extra_read,
         extra_write_denies: &extra_write,
+        extra_move_blocks: &move_blocks,
         literal_existing_allows: true,
     })
 }

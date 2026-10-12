@@ -879,6 +879,60 @@ async fn symlinked_spellings_stay_protected() {
     assert!(!root.join("home/dotfiles/zshrc").exists());
 }
 
+/// The policy denies a sensitive home path by its target: with `~/.ssh`
+/// linking elsewhere and `~` writable, the link itself must stay in place
+/// (`SessionPolicy::linked_denies`), or the agent replaces it with a
+/// directory of its own (review finding 1).
+#[tokio::test]
+async fn a_linked_credential_store_cannot_be_replaced() {
+    let f = fixture_with(
+        "sshlink",
+        Options {
+            home_writable: true,
+            ..Options::default()
+        },
+    );
+    let root = &f.root;
+    let home = path(root, "home");
+    fs::rename(root.join("home/.ssh"), root.join("outside/ssh")).unwrap();
+    std::os::unix::fs::symlink(root.join("outside/ssh"), root.join("home/.ssh")).unwrap();
+    // A chain: ~/.aws -> ~/hop -> outside/aws.
+    fs::create_dir_all(root.join("outside/aws")).unwrap();
+    std::os::unix::fs::symlink(root.join("outside/aws"), root.join("home/hop")).unwrap();
+    std::os::unix::fs::symlink("hop", root.join("home/.aws")).unwrap();
+    let failures = f
+        .expect(
+            &[
+                ("read through the link", format!("cat {home}/.ssh/id_ed25519")),
+                (
+                    "write through the link",
+                    format!("echo k > {home}/.ssh/authorized_keys"),
+                ),
+                (
+                    "replace the link",
+                    format!("rm {home}/.ssh && mkdir {home}/.ssh && echo k > {home}/.ssh/authorized_keys"),
+                ),
+                ("rename the link", format!("mv {home}/.ssh {home}/ssh2")),
+                ("repoint the link", format!("ln -sfn {home}/x {home}/.ssh")),
+                ("replace the chain's hop", format!("rm {home}/hop && mkdir {home}/hop")),
+                ("rename home", format!("mv {home} {home}2")),
+            ],
+            &[("write home", format!("echo x > {home}/notes"))],
+        )
+        .await;
+    assert!(failures.is_empty(), "{failures:#?}");
+    assert!(
+        fs::symlink_metadata(root.join("home/.ssh"))
+            .unwrap()
+            .is_symlink()
+    );
+    assert!(
+        fs::symlink_metadata(root.join("home/hop"))
+            .unwrap()
+            .is_symlink()
+    );
+}
+
 /// srt reads `[`, `*` and `?` in a rule as glob syntax, so a workspace named
 /// like `notes [draft]` lost its `.pirc` deny; pirc adds the literal path.
 #[tokio::test]

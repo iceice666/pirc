@@ -139,6 +139,31 @@ pub struct SessionPolicy {
     pub paths: PathPolicy,
     pub network: NetworkPolicy,
     pub allow_git_config: bool,
+    /// Not TS's, and never serialized (not in srt's settings, not in
+    /// `PIRC_SANDBOX_POLICY`): the deny entries `paths` lists by their
+    /// symlink-resolved target, with the symlinks crossed on the way.
+    ///
+    /// `paths` names a protected path by where it leads (`~/.ssh` linking
+    /// to `/elsewhere/ssh` is denied as `/elsewhere/ssh`), so a sandbox
+    /// enforcing only `paths` leaves the link itself replaceable when a
+    /// writable root holds it (`~` in `allowedPaths`): the agent removes the
+    /// link and puts a directory of its own in its place. Each backend keeps
+    /// these links in place (macOS: move-blocking denies on each link and
+    /// its ancestors) or refuses to start. Only entries that cross at least
+    /// one link are listed; see [`session_policy`] for which entries.
+    #[serde(skip)]
+    pub linked_denies: Vec<LinkedPath>,
+}
+
+/// A deny entry spelled through symlinks ([`SessionPolicy::linked_denies`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LinkedPath {
+    /// The entry as given: absolute, `~` expanded, symlinks unresolved.
+    pub spelled: String,
+    /// What the policy lists for it (`real_resolve`).
+    pub target: String,
+    /// [`LinkWalk::links`] of `spelled`: every symlink crossed, in order.
+    pub links: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -699,6 +724,139 @@ fn prompt_write_paths(file: &str, seen: &mut Vec<String>) -> Result<Vec<String>,
     Ok(vec![absolute])
 }
 
+/// What resolving a path crosses ([`walk_links`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LinkWalk {
+    /// Every symlink the kernel crosses resolving the path, in order and
+    /// without repeats, each named with its parent directory resolved (the
+    /// path that removing or renaming the link names), a dangling one
+    /// included; and every directory a link's target leaves through `..`
+    /// (replacing it moves where the target leads too).
+    pub links: Vec<String>,
+    /// The path with every symlink resolved as far as it exists, the rest
+    /// appended (what the kernel resolves the path to now).
+    pub target: Result<String, WalkError>,
+}
+
+/// Why [`walk_links`] stopped before the end of the path.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WalkError {
+    /// More than 40 links (a loop).
+    TooManyLinks,
+    /// This link's target is not UTF-8.
+    NotUtf8(String),
+    /// This component cannot be examined (or its link not read).
+    Unreadable(String),
+}
+
+/// Resolve absolute `path` one component at a time, as the kernel does:
+/// a symlink's target is walked in its place (relative to the link's
+/// directory), `..` leaves the directory reached so far. Stops at the
+/// first component that does not exist (or is not a directory). Not TS's.
+pub fn walk_links(path: &str) -> LinkWalk {
+    let mut links: Vec<String> = Vec::new();
+    let note = |links: &mut Vec<String>, path: &str| {
+        if !links.iter().any(|link| link == path) {
+            links.push(path.to_owned());
+        }
+    };
+    let child = |dir: &str, name: &str| {
+        if dir == "/" {
+            format!("/{name}")
+        } else {
+            format!("{dir}/{name}")
+        }
+    };
+    let parent = |dir: &str| match dir.rfind('/') {
+        Some(0) | None => "/".to_owned(),
+        Some(at) => dir[..at].to_owned(),
+    };
+    // The components still to walk, the next one last.
+    let mut pending: Vec<String> = absolute(path).split('/').rev().map(str::to_owned).collect();
+    let mut cursor = String::from("/");
+    let mut count = 0;
+    while let Some(part) = pending.pop() {
+        match part.as_str() {
+            "" | "." => continue,
+            ".." => {
+                if cursor != "/" {
+                    note(&mut links, &cursor);
+                }
+                cursor = parent(&cursor);
+                continue;
+            }
+            _ => {}
+        }
+        let next = child(&cursor, &part);
+        match std::fs::symlink_metadata(&next) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                note(&mut links, &next);
+                count += 1;
+                if count > 40 {
+                    return LinkWalk {
+                        links,
+                        target: Err(WalkError::TooManyLinks),
+                    };
+                }
+                let target = match std::fs::read_link(&next) {
+                    Ok(target) => target,
+                    Err(_) => {
+                        return LinkWalk {
+                            links,
+                            target: Err(WalkError::Unreadable(next)),
+                        };
+                    }
+                };
+                let Some(target) = target.to_str() else {
+                    return LinkWalk {
+                        links,
+                        target: Err(WalkError::NotUtf8(next)),
+                    };
+                };
+                if target.starts_with('/') {
+                    cursor = "/".to_owned();
+                }
+                pending.extend(target.split('/').rev().map(str::to_owned));
+            }
+            Ok(_) => cursor = next,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+                ) =>
+            {
+                let rest: Vec<String> = std::iter::once(part)
+                    .chain(pending.into_iter().rev())
+                    .collect();
+                return LinkWalk {
+                    links,
+                    target: Ok(resolve_path(&cursor, &rest.join("/"))),
+                };
+            }
+            Err(_) => {
+                return LinkWalk {
+                    links,
+                    target: Err(WalkError::Unreadable(next)),
+                };
+            }
+        }
+    }
+    LinkWalk {
+        links,
+        target: Ok(cursor),
+    }
+}
+
+/// [`LinkedPath`] for `spelled` when resolving it crosses a link.
+pub fn linked_path(spelled: &str) -> Option<LinkedPath> {
+    let walk = walk_links(spelled);
+    (!walk.links.is_empty()).then(|| LinkedPath {
+        spelled: absolute(spelled),
+        target: real_resolve(spelled),
+        links: walk.links,
+    })
+}
+
 /// Items in first-seen order without repeats (`[...new Set(items)]`).
 fn unique(items: impl IntoIterator<Item = String>) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
@@ -719,6 +877,11 @@ fn exists(path: &str) -> bool {
 ///
 /// `Err` where TS threw: a prompt configuration file behind too many (or
 /// looping) symlinks, or a component of its path that cannot be examined.
+///
+/// [`SessionPolicy::linked_denies`] (not TS's) covers every deny entry the
+/// policy resolves: the sensitive home paths, the private dirs, the
+/// read-only dirs, the protected paths, the agent config dir and the
+/// configured `denyRead` / `denyWrite` entries.
 pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, String> {
     let home = input.home.as_str();
     let config_dir = absolute(&input.config_dir);
@@ -746,10 +909,14 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
     let tmp_dirs = resolve_all(&input.tmp_dirs);
     let read_only_dirs = resolve_all(&input.read_only_dirs);
     let private_dirs = resolve_all(&input.private_dirs);
-    let sensitive: Vec<String> = SENSITIVE_HOME_PATHS
+    let sensitive_spelled: Vec<String> = SENSITIVE_HOME_PATHS
         .iter()
-        .map(|item| real_resolve(&resolve_path(home, item)))
+        .map(|item| resolve_path(home, item))
         .filter(|item| exists(item))
+        .collect();
+    let sensitive: Vec<String> = sensitive_spelled
+        .iter()
+        .map(|item| real_resolve(item))
         .collect();
     let host_sockets: Vec<String> = if input.platform == Platform::Linux {
         let uid = input.uid.to_string();
@@ -847,8 +1014,28 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
         ),
         shared_write: Some(shared_write),
     };
+    let configured_spelled = |items: &[String]| -> Vec<String> {
+        items
+            .iter()
+            .map(|item| resolve_path(&config_dir, &expand_home_path(item, home)))
+            .collect()
+    };
+    let linked_denies: Vec<LinkedPath> = unique(
+        sensitive_spelled
+            .into_iter()
+            .chain(input.private_dirs.iter().map(|dir| absolute(dir)))
+            .chain(input.read_only_dirs.iter().map(|dir| absolute(dir)))
+            .chain(input.protected_paths.iter().map(|path| absolute(path)))
+            .chain([config_dir.clone()])
+            .chain(configured_spelled(&filesystem.deny_read))
+            .chain(configured_spelled(&filesystem.deny_write)),
+    )
+    .iter()
+    .filter_map(|spelled| linked_path(spelled))
+    .collect();
     Ok(SessionPolicy {
         paths,
+        linked_denies,
         network: NetworkPolicy {
             allowed_domains: unique(
                 DEFAULT_ALLOWED_DOMAINS
@@ -1112,6 +1299,116 @@ mod tests {
     }
 
     #[test]
+    fn walks_links_as_the_kernel_does() {
+        let d = layout();
+        let r = |rest: &str| p(&d.root, rest);
+        fs::create_dir_all(r("real/sub")).unwrap();
+        fs::create_dir_all(r("other")).unwrap();
+        symlink(r("real"), r("abs")).unwrap();
+        symlink("hop", r("rel")).unwrap();
+        symlink("real/sub", r("hop")).unwrap();
+        // `..` from the link's target, not from the link's spelling.
+        symlink("real/sub/../../other", r("up")).unwrap();
+        symlink("nowhere/x", r("dangling")).unwrap();
+        symlink("loop", r("loop")).unwrap();
+        let walk = walk_links(&r("abs/sub/missing/file"));
+        assert_eq!(walk.links, [r("abs")]);
+        assert_eq!(walk.target, Ok(r("real/sub/missing/file")));
+        let walk = walk_links(&r("rel/f"));
+        assert_eq!(walk.links, [r("rel"), r("hop")]);
+        assert_eq!(walk.target, Ok(r("real/sub/f")));
+        let walk = walk_links(&r("up"));
+        assert_eq!(walk.links, [r("up"), r("real/sub"), r("real")]);
+        assert_eq!(walk.target, Ok(r("other")));
+        let walk = walk_links(&r("dangling"));
+        assert_eq!(walk.links, [r("dangling")]);
+        assert_eq!(walk.target, Ok(r("nowhere/x")));
+        let walk = walk_links(&r("loop/x"));
+        assert_eq!(walk.links, [r("loop")]);
+        assert_eq!(walk.target, Err(WalkError::TooManyLinks));
+        let walk = walk_links(&r("real/sub"));
+        assert!(walk.links.is_empty());
+        assert_eq!(walk.target, Ok(r("real/sub")));
+        assert_eq!(linked_path(&r("real")), None);
+    }
+
+    /// `~/.ssh` linking out of the home directory is denied by its target,
+    /// which leaves the link replaceable under a writable `~`: the policy
+    /// lists it (and every other linked deny spelling) without changing
+    /// what it passes to srt or to the agent.
+    #[test]
+    fn lists_the_links_of_linked_deny_entries_without_serializing_them() {
+        let d = layout();
+        let r = |rest: &str| p(&d.root, rest);
+        fs::create_dir_all(r("outside/ssh")).unwrap();
+        fs::create_dir_all(r("outside/secrets")).unwrap();
+        fs::create_dir_all(r("outside/bin")).unwrap();
+        fs::remove_dir(p(&d.home, ".ssh")).unwrap();
+        symlink(r("outside/ssh"), p(&d.home, ".ssh")).unwrap();
+        // A chain: ~/.aws -> ~/hop -> outside/aws (relative hop).
+        fs::create_dir_all(r("outside/aws")).unwrap();
+        symlink(r("outside/aws"), p(&d.home, "hop")).unwrap();
+        symlink("hop", p(&d.home, ".aws")).unwrap();
+        symlink(r("state"), r("state-link")).unwrap();
+        symlink(r("outside/bin"), r("bin-link")).unwrap();
+        symlink(r("outside/secrets"), p(&d.home, "secrets")).unwrap();
+        let notes = p(&d.workspace, "AGENTS.md");
+        fs::write(r("outside/AGENTS.md"), "").unwrap();
+        symlink(r("outside/AGENTS.md"), &notes).unwrap();
+        let mut input = input(
+            &d,
+            &d.workspace,
+            json!({ "filesystem": { "denyRead": ["~/secrets"] } }),
+        );
+        input.allowed_paths = vec![d.home.clone()];
+        input.private_dirs = vec![r("state-link")];
+        input.read_only_dirs = vec![r("bin-link")];
+        input.protected_paths = vec![notes.clone()];
+        let policy = session_policy(&input).unwrap();
+        let linked = |spelled: &str| {
+            policy
+                .linked_denies
+                .iter()
+                .find(|entry| entry.spelled == spelled)
+                .unwrap_or_else(|| panic!("{spelled}: {:#?}", policy.linked_denies))
+                .clone()
+        };
+        let ssh = linked(&p(&d.home, ".ssh"));
+        assert_eq!(ssh.links, [p(&d.home, ".ssh")]);
+        assert_eq!(ssh.target, r("outside/ssh"));
+        let aws = linked(&p(&d.home, ".aws"));
+        assert_eq!(aws.links, [p(&d.home, ".aws"), p(&d.home, "hop")]);
+        assert_eq!(aws.target, r("outside/aws"));
+        assert_eq!(linked(&r("state-link")).links, [r("state-link")]);
+        assert_eq!(linked(&r("bin-link")).links, [r("bin-link")]);
+        assert_eq!(linked(&notes).links, std::slice::from_ref(&notes));
+        assert_eq!(linked(&p(&d.home, "secrets")).target, r("outside/secrets"));
+        assert!(
+            policy
+                .linked_denies
+                .iter()
+                .all(|entry| entry.spelled != d.workspace),
+            "allows are not listed"
+        );
+        // The lists srt and the agent get name targets only, as before.
+        assert!(policy.paths.deny_read.contains(&r("outside/ssh")));
+        assert!(!policy.paths.deny_read.contains(&p(&d.home, ".ssh")));
+        let json = serde_json::to_value(&policy).unwrap();
+        let mut keys: Vec<&String> = json.as_object().unwrap().keys().collect();
+        keys.sort();
+        assert_eq!(keys, ["allowGitConfig", "network", "paths"]);
+        assert!(!json.to_string().contains("hop"));
+        let back: SessionPolicy = serde_json::from_value(json).unwrap();
+        assert!(back.linked_denies.is_empty());
+        // Nothing linked, nothing listed.
+        let plain = layout();
+        assert_eq!(
+            policy_for(&plain, &plain.workspace, json!({})).linked_denies,
+            []
+        );
+    }
+
+    #[test]
     fn refuses_prompt_symlink_loops() {
         let d = layout();
         let config_dir = p(&d.tmp, "config");
@@ -1130,6 +1427,7 @@ mod tests {
             paths,
             network,
             allow_git_config,
+            ..
         } = policy_for(
             &d,
             &d.workspace,
