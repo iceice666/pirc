@@ -12,12 +12,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use pirc_node::browser::engine::LoadState;
 use pirc_node::browser::engine::context::{Context, LaunchOptions};
 use pirc_node::browser::engine::frame::Arg;
 use pirc_node::browser::engine::page::{Page, PageEvent};
 use pirc_node::browser::engine::screenshot::ScreenshotOptions;
 use pirc_node::browser::engine::snapshot::aria_snapshot;
+use pirc_node::browser::engine::{LoadState, MouseButton};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -134,6 +134,9 @@ fn route(path: &str, port: u16) -> Option<(u16, String)> {
         "/form" => html(FORM),
         "/idle" => html(r#"<title>idle</title><img src="/slow.png">"#),
         "/dialog" => html("<title>Dialog</title><p>dialogs</p>"),
+        "/dnd" => html(
+            r#"<div id=s draggable=true style="width:50px;height:50px;background:red">S</div><div id=t style="width:100px;height:100px;margin-top:50px;background:blue">T</div><script>window.log=[];t.ondragover=e=>e.preventDefault();t.ondrop=e=>{e.preventDefault();log.push('drop')};s.ondragstart=e=>{e.dataTransfer.setData('text/plain','x');log.push('start')};s.ondragend=()=>log.push('end')</script>"#,
+        ),
         // An iframe whose document never comes (an ad, a long poll).
         "/hanging" => html(
             r#"<title>Hanging</title><h1>Outer</h1><input id=i><iframe title="Late" src="/hang"></iframe>"#,
@@ -960,6 +963,62 @@ async fn snapshots_leave_out_a_frame_still_loading_at_the_timeout() {
         assert!(
             elapsed >= Duration::from_secs(2) && elapsed < Duration::from_secs(4),
             "{elapsed:?}"
+        );
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn drags_do_not_wait_for_a_frame_still_loading() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let page = hanging_page(&browser).await;
+        // Playwright 1.63.0: move, down, move, up in 28 ms.
+        let mouse = page.mouse();
+        let started = Instant::now();
+        tokio::time::timeout(Duration::from_secs(10), async {
+            mouse.move_to(10.0, 10.0, 0).await.unwrap();
+            mouse.down(MouseButton::Left, 1, 0).await.unwrap();
+            mouse.move_to(50.0, 50.0, 0).await.unwrap();
+            mouse.up(MouseButton::Left, 1, 0).await.unwrap();
+        })
+        .await
+        .expect("the drag ends");
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn drags_and_drops_as_playwright() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let page = browser.context.pages()[0].clone();
+        page.goto(&format!("http://127.0.0.1:{port}/dnd"), LoadState::Load, T)
+            .await
+            .unwrap();
+        let mouse = page.mouse();
+        mouse.move_to(25.0, 25.0, 0).await.unwrap();
+        mouse.down(MouseButton::Left, 1, 0).await.unwrap();
+        mouse.move_to(50.0, 150.0, 0).await.unwrap();
+        assert!(mouse.is_dragging());
+        mouse.move_to(50.0, 160.0, 0).await.unwrap();
+        mouse.up(MouseButton::Left, 1, 0).await.unwrap();
+        // Playwright 1.63.0 on the same page.
+        assert_eq!(
+            page.evaluate("() => window.log", Value::Null)
+                .await
+                .unwrap(),
+            json!(["start", "drop", "end"])
         );
         browser.context.close().await;
     });

@@ -33,6 +33,7 @@ use futures_util::future::join_all;
 use serde_json::{Value, json};
 
 use super::cdp::Session;
+use super::frame::World;
 use super::keyboard_layout::{KEYPAD_LOCATION, KeyDescription, mac_commands, us_keyboard_layout};
 use super::page::Page;
 use super::{Error, MouseButton, Result};
@@ -433,6 +434,9 @@ const SETUP_DRAG_LISTENERS: &str = r#"function setupDragListeners() {
           };
         }"#;
 
+/// `window.__cleanupDrag?.()`: whether a drag started.
+const CLEANUP_DRAG: &str = "function() { return window.__cleanupDrag?.(); }";
+
 impl Mouse {
     pub fn new(session: Session) -> Self {
         Self {
@@ -594,15 +598,13 @@ impl Mouse {
                 .await?;
             return Ok(());
         };
-        let frames = page.frames();
-        join_all(frames.iter().map(|frame| async move {
-            if let Ok(injected) = frame.injected().await {
-                let _ = injected
-                    .call(
-                        &format!("function() {{ ({SETUP_DRAG_LISTENERS})(); }}"),
-                        Vec::new(),
-                    )
-                    .await;
+        // Only in the frames' existing utility worlds, never waiting for a
+        // frame still loading (`safeNonStallingEvaluateInAllFrames`).
+        let setup = format!("function() {{ ({SETUP_DRAG_LISTENERS})(); }}");
+        join_all(page.frames().iter().map(|frame| {
+            let setup = &setup;
+            async move {
+                let _ = frame.evaluate_existing(World::Utility, setup).await;
             }
         }))
         .await;
@@ -613,14 +615,8 @@ impl Mouse {
         let moved = self.session.call("Input.dispatchMouseEvent", params).await;
         let expecting = match moved {
             Ok(_) => join_all(page.frames().iter().map(|frame| async move {
-                let Ok(injected) = frame.injected().await else {
-                    return false;
-                };
-                injected
-                    .call(
-                        "function() { return window.__cleanupDrag?.(); }",
-                        Vec::new(),
-                    )
+                frame
+                    .evaluate_existing(World::Utility, CLEANUP_DRAG)
                     .await
                     .is_ok_and(|value| value.as_bool() == Some(true))
             }))
