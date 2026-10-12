@@ -182,7 +182,12 @@ pub fn readonly_bwrap_args(filesystem: Vec<String>, tmp: &str) -> BwrapArgs {
 
 /// The filesystem plan for a policy whose agent works in `cwd`, off the
 /// async runtime (the mandatory scan walks the workspace).
-async fn plan_for(config: &NodeConfig, policy: &SessionPolicy, cwd: &Path) -> Result<Plan, String> {
+async fn plan_for(
+    config: &NodeConfig,
+    env: &Env,
+    policy: &SessionPolicy,
+    cwd: &Path,
+) -> Result<Plan, String> {
     let paths = policy.paths.clone();
     let database_dir = config.database_path.parent().map(Path::to_path_buf);
     let options = Options {
@@ -210,6 +215,10 @@ async fn plan_for(config: &NodeConfig, policy: &SessionPolicy, cwd: &Path) -> Re
                 .map(|entry| entry.spelled.clone()),
         )
         .collect(),
+        host_sockets: pirc_policy::session::linux_host_sockets(
+            nix::unistd::getuid().as_raw(),
+            env.get("SSH_AUTH_SOCK"),
+        ),
     };
     tokio::task::spawn_blocking(move || plan::plan(&paths, &options))
         .await
@@ -370,7 +379,7 @@ impl NativeSandbox {
             Ok(bwrap) => bwrap,
             Err(error) => return fail(&tmp, error),
         };
-        let plan = match plan_for(&self.config, &policy, workspace_root).await {
+        let plan = match plan_for(&self.config, &self.env, &policy, workspace_root).await {
             Ok(plan) => plan,
             Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
         };
@@ -454,7 +463,8 @@ impl Sandbox for NativeSandbox {
                 Ok(bwrap) => bwrap,
                 Err(error) => return fail(&tmp, error),
             };
-            let plan = match plan_for(&self.config, &policy, &input.workspace_root).await {
+            let plan = match plan_for(&self.config, &self.env, &policy, &input.workspace_root).await
+            {
                 Ok(plan) => plan,
                 Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
             };

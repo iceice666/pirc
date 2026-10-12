@@ -123,6 +123,16 @@ fn fixture(name: &str) -> Option<Fixture> {
 /// [`fixture`]; with `home_writable`, the agent config lives in
 /// `~/.config/.pirc` and puts `~` in `allowedPaths`.
 fn fixture_with(name: &str, home_writable: bool) -> Option<Fixture> {
+    fixture_env(name, home_writable, |_| Vec::new())
+}
+
+/// [`fixture_with`] with the node's environment extended by `extra`,
+/// called with the layout's root once it exists.
+fn fixture_env(
+    name: &str,
+    home_writable: bool,
+    extra: impl FnOnce(&Path) -> Vec<(String, String)>,
+) -> Option<Fixture> {
     let path_var = std::env::var("PATH").unwrap_or_default();
     let probe_env = Env::new([("PATH", path_var.as_str())], "/");
     if find_bwrap(&probe_env).is_none() {
@@ -189,6 +199,10 @@ fn fixture_with(name: &str, home_writable: bool) -> Option<Fixture> {
         ("TMPDIR", tmp.as_str()),
         ("PATH", path_var.as_str()),
     ];
+    let extra = extra(&root);
+    let vars = vars
+        .into_iter()
+        .chain(extra.iter().map(|(k, v)| (k.as_str(), v.as_str())));
     let env = Env::new(vars, &root);
     let mut config = NodeConfig::load(&env, NodeRole::Node).unwrap();
     config.agent_command = "/bin/sh".to_owned();
@@ -755,6 +769,42 @@ async fn refuses_links_in_the_middle_of_a_protected_chain() {
         fs::read_to_string(root.join("workspace/project/AGENTS.md")).unwrap(),
         "be nice"
     );
+}
+
+/// tmux's recipe, `SSH_AUTH_SOCK` a stable link in `/tmp` (a write root of
+/// every session) to the agent's socket, starts sessions: host sockets are
+/// hidden from reading, not protected for host tools. The socket stays
+/// out of reach, through the link or at its target.
+#[tokio::test]
+async fn a_linked_ssh_agent_socket_is_hidden_and_refuses_nothing() {
+    let link = Path::new("/tmp").join(format!("pirc-ssh-agent-{}", std::process::id()));
+    let _ = fs::remove_file(&link);
+    let link_var = link.display().to_string();
+    let Some(f) = fixture_env("ssh-agent", false, |_| {
+        vec![("SSH_AUTH_SOCK".to_owned(), link_var.clone())]
+    }) else {
+        return;
+    };
+    let socket_path = f.root.join("outside/agent.sock");
+    let listener = std::os::unix::net::UnixListener::bind(&socket_path).unwrap();
+    std::thread::spawn(move || {
+        for mut stream in listener.incoming().flatten() {
+            let _ = stream.write_all(b"agent");
+        }
+    });
+    std::os::unix::fs::symlink(&socket_path, &link).unwrap();
+    let started = f.try_prepare("pi_ssh").await;
+    let _ = fs::remove_file(&link);
+    let prepared = started.unwrap();
+    // The link is gone by now; the target's mount is what counts.
+    let mut command = client(&prepared, &format!("unix:{}", socket_path.display()));
+    command.stdin(Stdio::null());
+    let mut child = command.spawn().unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let result = next_result(&mut lines).await;
+    assert!(result.starts_with("unreachable"), "{result}");
+    assert!(child.wait().await.unwrap().success());
+    prepared.cleanup();
 }
 
 /// Protected paths that do not exist yet get placeholders, so the agent

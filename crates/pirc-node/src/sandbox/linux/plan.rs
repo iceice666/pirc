@@ -56,7 +56,12 @@
 //!   `SessionPolicy::linked_denies`, and the node's own spellings of its
 //!   config and state directories are checked too ([`Options::spellings`]):
 //!   a replaced link there would hand the node a config (`allowedPaths`)
-//!   the agent wrote.
+//!   the agent wrote. Host sockets ([`Options::host_sockets`]: the
+//!   policy's `LINUX_HOST_SOCKETS` and `SSH_AUTH_SOCK`, as spelled) are
+//!   exempt: they are hidden from reading, not protected for host tools, and
+//!   a stable link in `/tmp` to the ssh-agent's socket (tmux's recipe) would
+//!   otherwise refuse every session. Their targets are hidden as for any
+//!   deny.
 //! - **Missing deny paths** whose deepest existing ancestor the agent may
 //!   write get a read-only placeholder on their first missing component:
 //!   `/dev/null` when that is the path itself, an empty directory when it is
@@ -290,6 +295,10 @@ pub struct Options {
     /// `SessionPolicy::linked_denies`): checked for replaceable symlinks
     /// like the policy's own spellings.
     pub spellings: Vec<String>,
+    /// The policy's host sockets as spelled
+    /// (`pirc_policy::session::linux_host_sockets`): `deny_read` entries
+    /// whose links are not checked (their targets are still hidden).
+    pub host_sockets: Vec<String>,
 }
 
 /// A protected path the plan cannot protect: it is reached through a
@@ -436,7 +445,12 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
     for spelling in paths
         .deny_write
         .iter()
-        .chain(&paths.deny_read)
+        .chain(
+            paths
+                .deny_read
+                .iter()
+                .filter(|path| !options.host_sockets.contains(path)),
+        )
         .chain(&mandatory)
         .chain(&options.spellings)
         .filter(absolute)
@@ -1045,6 +1059,48 @@ mod tests {
             ..PathPolicy::default()
         };
         assert!(plan(&paths, &Options::default()).is_ok());
+    }
+
+    /// A host socket spelled through a link in a writable root (tmux's
+    /// `/tmp/ssh-agent-$USER` for `SSH_AUTH_SOCK`) is hidden at its target
+    /// and refuses nothing: it is not protected for host tools.
+    #[test]
+    fn host_sockets_behind_replaceable_links_are_hidden_at_their_targets() {
+        let (_dir, root) = temp();
+        let p = |rest: &str| format!("{root}/{rest}");
+        fs::create_dir_all(p("tmp")).unwrap();
+        fs::create_dir_all(p("agent")).unwrap();
+        let _listener = std::os::unix::net::UnixListener::bind(p("agent/socket")).unwrap();
+        symlink(p("agent/socket"), p("tmp/ssh-agent")).unwrap();
+        let paths = PathPolicy {
+            deny_read: vec![p("tmp/ssh-agent")],
+            allow_write: vec![p("tmp")],
+            ..PathPolicy::default()
+        };
+        assert_eq!(
+            plan(&paths, &Options::default()).unwrap_err().link,
+            p("tmp/ssh-agent"),
+            "any other deny is refused"
+        );
+        let options = Options {
+            host_sockets: vec![p("tmp/ssh-agent")],
+            ..Options::default()
+        };
+        let plan = plan(&paths, &options).unwrap();
+        assert_eq!(
+            plan.args,
+            strings(&[
+                "--ro-bind",
+                "/",
+                "/",
+                "--bind",
+                &p("tmp"),
+                &p("tmp"),
+                "--ro-bind",
+                "/dev/null",
+                &p("agent/socket"),
+            ])
+        );
     }
 
     /// A link the agent cannot replace that leads through one it can (or

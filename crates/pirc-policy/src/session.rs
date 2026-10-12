@@ -261,6 +261,22 @@ pub const LINUX_HOST_SOCKETS: [&str; 23] = [
     "/run/user/$UID/keyring",
 ];
 
+/// The Linux host sockets [`session_policy`] hides (those that exist, as
+/// spelled): [`LINUX_HOST_SOCKETS`] for `uid`, and the ssh-agent socket.
+/// Not TS's name (TS built the list inline).
+pub fn linux_host_sockets(uid: u32, ssh_auth_sock: Option<&str>) -> Vec<String> {
+    let uid = uid.to_string();
+    LINUX_HOST_SOCKETS
+        .iter()
+        .map(|item| item.replacen("$UID", &uid, 1))
+        .chain(
+            ssh_auth_sock
+                .filter(|socket| !socket.is_empty())
+                .map(str::to_owned),
+        )
+        .collect()
+}
+
 /// `DOMAIN_PATTERN` (case-insensitive): a host with an optional `*.` prefix,
 /// `localhost`, or an IPv4 address, then an optional `:port`.
 ///
@@ -921,17 +937,8 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
         .map(|item| real_resolve(item))
         .collect();
     let host_sockets: Vec<String> = if input.platform == Platform::Linux {
-        let uid = input.uid.to_string();
-        LINUX_HOST_SOCKETS
-            .iter()
-            .map(|item| item.replacen("$UID", &uid, 1))
-            .chain(
-                input
-                    .ssh_auth_sock
-                    .iter()
-                    .filter(|s| !s.is_empty())
-                    .cloned(),
-            )
+        linux_host_sockets(input.uid, input.ssh_auth_sock.as_deref())
+            .into_iter()
             .filter(|item| exists(item))
             .collect()
     } else {
