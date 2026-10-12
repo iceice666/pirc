@@ -39,6 +39,12 @@
 //!   ancestors, so a link a writable root holds (`~/.ssh` linking
 //!   elsewhere, `~` in `allowedPaths`) cannot be replaced by a directory
 //!   of the agent's.
+//! - Rule strings are SBPL string literals, control characters written
+//!   `\xHH` (`profile::escape`): srt wrote them as JSON, whose `\u0001`
+//!   Seatbelt reads as `u0001`, so a deny naming a path with a control
+//!   character named another path. A path that is not UTF-8 (the
+//!   workspace, the node's paths, or a link's target on the way to a rule)
+//!   refuses the start: srt converted it lossily, naming another path.
 //! - The Git panel's read-only profile ([`ProfileInput::readonly`]) keeps
 //!   only `/dev/null`, `/dev/stdout` and `/dev/stderr` of srt's default
 //!   write paths: srt also opened `/tmp/claude` (shared with every
@@ -87,7 +93,8 @@ struct Settings<'a> {
 }
 
 /// Not srt's (see the module documentation): what [`profile::generate`]
-/// adds so that a deny holds whatever spelling reaches the kernel.
+/// adds so that a literal deny holds whatever spelling reaches the kernel
+/// (a glob deny is srt's pattern alone).
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct ExtraDenies {
     /// Literal read denies.

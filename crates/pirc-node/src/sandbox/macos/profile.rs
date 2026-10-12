@@ -102,7 +102,7 @@ pub struct ProfileInput<'a> {
     pub readonly: bool,
     /// Not srt's: pirc's own paths ([`paths::is_literal_spelling`]). An
     /// allow (read or write) spelled with glob characters inside one of
-    /// them is that one path ([`allow_entry`]).
+    /// them is that one path (`allow_entry`).
     pub literal_roots: &'a [String],
 }
 
@@ -541,7 +541,7 @@ fn mandatory_deny_entries(allow_git_config: bool, ctx: Context<'_>) -> Vec<Entry
     entries
 }
 
-/// The names srt protects in the cwd ([`mandatory_deny_entries`]'s
+/// The names srt protects in the cwd (`mandatory_deny_entries`'s
 /// literals), relative to it.
 pub fn mandatory_names(allow_git_config: bool) -> Vec<&'static str> {
     let mut names: Vec<&str> = DANGEROUS_FILES.to_vec();
