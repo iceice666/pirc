@@ -438,7 +438,13 @@ pub struct HostGuard {
     gateway: HashSet<String>,
     resolver: Resolver,
     cache: Mutex<HashMap<String, (Instant, Option<String>)>>,
+    /// By frame id: the redirect hop the guard refused in the frame's
+    /// latest navigation, and why (see [`HostGuard::refused_hop`]).
+    refused_hops: Mutex<HashMap<String, (String, String)>>,
 }
+
+/// How many frames' refused hops are kept before they are all forgotten.
+const REFUSED_HOPS_MAX: usize = 1_000;
 
 impl HostGuard {
     pub fn new(settings: &BrowserSettings) -> Self {
@@ -475,7 +481,35 @@ impl HostGuard {
             gateway,
             resolver,
             cache: Mutex::default(),
+            refused_hops: Mutex::default(),
         }
+    }
+
+    /// The redirect hop (its URL with the fragment, the reason) the request
+    /// interception refused in frame `frame_id`'s latest navigation, if it
+    /// refused one. TS let Playwright follow such a hop and named the
+    /// frame's URL there in its error; the manager names this URL instead
+    /// (see [`super::engine::network`]).
+    pub fn refused_hop(&self, frame_id: &str) -> Option<(String, String)> {
+        self.refused_hops.lock().unwrap().get(frame_id).cloned()
+    }
+
+    /// Remember that a navigation of `frame_id` was refused at a redirect
+    /// hop to `url`.
+    pub fn note_refused_hop(&self, frame_id: &str, url: String, reason: String) {
+        if frame_id.is_empty() {
+            return;
+        }
+        let mut hops = self.refused_hops.lock().unwrap();
+        if hops.len() >= REFUSED_HOPS_MAX {
+            hops.clear();
+        }
+        hops.insert(frame_id.to_owned(), (url, reason));
+    }
+
+    /// `frame_id` starts another navigation: forget its refused hop.
+    pub fn forget_refused_hop(&self, frame_id: &str) {
+        self.refused_hops.lock().unwrap().remove(frame_id);
     }
 
     /// Why `url` may not be opened, or `None` when it may.
@@ -848,5 +882,24 @@ mod tests {
         assert_eq!(guard.blocked_reason("https://a.example/x").await, None);
         assert_eq!(guard.blocked_reason("wss://A.example./y").await, None);
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn remembers_a_frame_s_refused_hop_until_its_next_navigation() {
+        let guard = guard(&[], "pirc.example", &[]);
+        assert_eq!(guard.refused_hop("F1"), None);
+        guard.note_refused_hop("F1", "http://10.0.0.1/#a".into(), "why".into());
+        guard.note_refused_hop("", "http://10.0.0.2/".into(), "why".into());
+        assert_eq!(
+            guard.refused_hop("F1"),
+            Some(("http://10.0.0.1/#a".into(), "why".into()))
+        );
+        assert_eq!(guard.refused_hop(""), None);
+        guard.forget_refused_hop("F1");
+        assert_eq!(guard.refused_hop("F1"), None);
+        for index in 0..=REFUSED_HOPS_MAX {
+            guard.note_refused_hop(&format!("F{index}"), String::new(), String::new());
+        }
+        assert!(guard.refused_hops.lock().unwrap().len() <= REFUSED_HOPS_MAX);
     }
 }

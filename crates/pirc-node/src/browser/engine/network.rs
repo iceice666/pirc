@@ -32,9 +32,8 @@
 //!   `Target.setAutoAttach`.
 //!
 //! `Fetch.requestPaused`: an intercepted CORS preflight is fulfilled with
-//! Playwright's 204; a redirect hop of a document continues unchecked, as
-//! Playwright does not route redirects (the manager's `assertAllowed`
-//! covers the final URLs); every other request is checked:
+//! Playwright's 204; every other request, redirect hops included (see the
+//! deviations), is checked:
 //! `Fetch.failRequest {errorReason: 'BlockedByClient'}` or
 //! `Fetch.continueRequest {requestId}`. `Fetch.authRequired` answers
 //! `Default` (Playwright without credentials).
@@ -44,22 +43,36 @@
 //! stage). Playwright continues it unrouted, either because its
 //! `Network.requestWillBeSent` carries the `redirectResponse` or because
 //! the request was already continued (it replays that `continue`). Here a
-//! pause whose `networkId` this session already continued is a hop.
+//! pause whose `networkId` this session already continued is a hop; hops
+//! are told apart only to remember a document's refused hop (below).
 //!
 //! Deviations (each blocks more than Playwright, never less):
 //!
-//! - Redirect hops of everything but documents (subresources, `fetch`/XHR,
-//!   workers' requests: `resourceType` other than `Document`) are checked
-//!   like any request. With Playwright (and so TS) they are not, so a page
-//!   could reach a blocked host through a public redirect, unseen by
-//!   `assertAllowed`, which looks only at frame URLs. A document's hops
-//!   (main frame and iframes) stay unchecked, so a navigation redirected to
-//!   a blocked host fails as in TS: `assertAllowed` reports
-//!   `blockedError(<final frame URL>, reason)`.
+//! - Redirect hops are checked like any request. With Playwright (and so
+//!   TS) they are not: a subresource's hop reached a blocked host unseen
+//!   by `assertAllowed`, which looks only at frame URLs, and a document's
+//!   hop (main frame, iframe or popup; a 307/308 keeps a form POST's method
+//!   and body) was sent before `assertAllowed` refused the frame that
+//!   landed there. A document's refused hop fails its navigation with
+//!   `BlockedByClient` (the frame shows Chromium's error page); its URL
+//!   (with the fragment) and reason are remembered by frame id
+//!   ([`HostGuard::note_refused_hop`], forgotten at the frame's next
+//!   navigation), and the manager names them as TS's `assertAllowed` named
+//!   the URL the frame landed on (`goto`'s `ERR_BLOCKED_BY_CLIENT`, a frame
+//!   on the error page), then leaves the page for `about:blank` as TS did.
+//!   The text is TS's whenever the blocked host would have answered; it is
+//!   stricter where TS's depended on what the blocked host did with the
+//!   request: an unreachable blocked host (TS: Playwright's `net::ERR_…`
+//!   goto error), a chain that leaves the blocked host again (TS: no
+//!   error), several blocked hops (TS named the last, this the first), and
+//!   the history (the error page's entry where TS had the blocked page's).
+//!   As no frame can then commit a blocked host's document (DNS rebinding
+//!   aside, see [`crate::browser::hosts`]), the manager reads a page after
+//!   `assertAllowed` without a second check, as TS did.
 //! - Playwright continues a paused request without a `networkId`, and one
 //!   whose frame it does not know, without routing it: such a request's URL
 //!   would reach the network unchecked. Here every paused request that is
-//!   not a document's redirect hop or a preflight is checked. A dedicated
+//!   not a preflight is checked. A dedicated
 //!   worker's `fetch` pauses without a `networkId` (seen with Chromium 153
 //!   when the worker's session has not enabled `Network`).
 //! - With `serviceWorkers: 'block'` Playwright gives a service worker no
@@ -410,19 +423,17 @@ async fn handle_events(
 /// What to do with a paused request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Verdict {
-    /// `Fetch.continueRequest` unchecked (a document's redirect hop).
-    Continue,
     /// Playwright's answer to an intercepted CORS preflight.
     FulfillPreflight(Vec<Value>),
     /// Ask the guard about this URL.
     Check(String),
 }
 
-/// How `_onRequestPaused`/`_onRequest` treat a `Fetch.requestPaused`;
-/// `hop`: its `networkId` was already continued (see the module
-/// documentation): a document's hop continues unchecked, any other is
+/// How a `Fetch.requestPaused` is treated: a CORS preflight is answered as
+/// Playwright's `_onRequestPaused`/`_onRequest` answer it, every other
+/// request (redirect hops included, see the module documentation) is
 /// checked.
-pub fn classify(paused: &Value, hop: bool) -> Verdict {
+pub fn classify(paused: &Value) -> Verdict {
     let request = &paused["request"];
     let headers = &request["headers"];
     let preflight = request["method"] == "OPTIONS"
@@ -444,9 +455,6 @@ pub fn classify(paused: &Value, hop: bool) -> Verdict {
         }
         return Verdict::FulfillPreflight(response);
     }
-    if hop && paused["resourceType"] == "Document" {
-        return Verdict::Continue;
-    }
     Verdict::Check(request["url"].as_str().unwrap_or_default().to_owned())
 }
 
@@ -459,14 +467,24 @@ async fn on_request_paused(
     let request_id = paused["requestId"].clone();
     let network_id = paused["networkId"].as_str();
     let hop = network_id.is_some_and(|id| continued.contains(id));
+    // A frame's navigation (not one of its hops) forgets the hop refused in
+    // its previous one, before anything continues: its own hops pause
+    // only after that.
+    let frame = (paused["resourceType"] == "Document")
+        .then(|| paused["frameId"].as_str())
+        .flatten();
+    if let Some(frame) = frame
+        && !hop
+    {
+        guard.forget_refused_hop(frame);
+    }
     let proceed = || {
         if let Some(id) = network_id {
             continued.insert(id);
         }
         ("Fetch.continueRequest", json!({ "requestId": request_id }))
     };
-    let (method, params) = match classify(&paused, hop) {
-        Verdict::Continue => proceed(),
+    let (method, params) = match classify(&paused) {
         Verdict::FulfillPreflight(headers) => (
             "Fetch.fulfillRequest",
             json!({
@@ -478,10 +496,19 @@ async fn on_request_paused(
             }),
         ),
         Verdict::Check(url) => match guard.blocked_reason(&url).await {
-            Some(_) => (
-                "Fetch.failRequest",
-                json!({ "requestId": request_id, "errorReason": "BlockedByClient" }),
-            ),
+            Some(reason) => {
+                if let Some(frame) = frame
+                    && hop
+                {
+                    let fragment = paused["request"]["urlFragment"].as_str();
+                    let url = url + fragment.unwrap_or_default();
+                    guard.note_refused_hop(frame, url, reason);
+                }
+                (
+                    "Fetch.failRequest",
+                    json!({ "requestId": request_id, "errorReason": "BlockedByClient" }),
+                )
+            }
             None => proceed(),
         },
     };
@@ -576,26 +603,16 @@ mod tests {
     fn classifies_paused_requests() {
         assert_eq!(
             classify(
-                &json!({ "requestId": "1", "request": { "url": "http://a/", "method": "GET" } }),
-                false
+                &json!({ "requestId": "1", "request": { "url": "http://a/", "method": "GET" } })
             ),
             Verdict::Check("http://a/".into())
         );
-        assert_eq!(
-            classify(
-                &json!({ "requestId": "1", "networkId": "9", "resourceType": "Document",
-                "request": { "url": "http://10.0.0.1/", "method": "GET" } }),
-                true
-            ),
-            Verdict::Continue
-        );
-        // Other hops are checked (tighter than TS).
-        for kind in ["XHR", "Fetch", "Image", "Script", "Other"] {
+        // Redirect hops are checked, documents' too (tighter than TS).
+        for kind in ["Document", "XHR", "Fetch", "Image", "Script", "Other"] {
             assert_eq!(
                 classify(
                     &json!({ "requestId": "1", "networkId": "9", "resourceType": kind,
-                    "request": { "url": "http://10.0.0.1/", "method": "GET" } }),
-                    true
+                    "request": { "url": "http://10.0.0.1/", "method": "GET" } })
                 ),
                 Verdict::Check("http://10.0.0.1/".into())
             );
@@ -605,26 +622,21 @@ mod tests {
         assert_eq!(
             classify(
                 &json!({ "requestId": "1", "request": { "url": "http://c/", "method": "OPTIONS",
-                "headers": { "Origin": "http://a" } } }),
-                false
+                "headers": { "Origin": "http://a" } } })
             ),
             Verdict::Check("http://c/".into())
         );
         assert_eq!(
             classify(
-                &json!({ "requestId": "1", "request": { "url": "http://b/", "method": "POST" } }),
-                false
+                &json!({ "requestId": "1", "request": { "url": "http://b/", "method": "POST" } })
             ),
             Verdict::Check("http://b/".into())
         );
         assert_eq!(
-            classify(
-                &json!({ "requestId": "1", "resourceType": "XHR",
+            classify(&json!({ "requestId": "1", "resourceType": "XHR",
                 "request": { "url": "http://b/", "method": "OPTIONS", "headers": {
                     "Origin": "http://a", "Access-Control-Request-Method": "PUT",
-                    "Access-Control-Request-Headers": "x-a" } } }),
-                false
-            ),
+                    "Access-Control-Request-Headers": "x-a" } } })),
             Verdict::FulfillPreflight(vec![
                 json!({ "name": "Access-Control-Allow-Origin", "value": "http://a" }),
                 json!({ "name": "Access-Control-Allow-Methods", "value": "PUT" }),
@@ -633,12 +645,9 @@ mod tests {
             ])
         );
         assert_eq!(
-            classify(
-                &json!({ "requestId": "1", "resourceType": "XHR",
+            classify(&json!({ "requestId": "1", "resourceType": "XHR",
                 "request": { "url": "http://b/", "method": "OPTIONS", "headers": {
-                    "Origin": "", "Access-Control-Request-Method": "" } } }),
-                false
-            ),
+                    "Origin": "", "Access-Control-Request-Method": "" } } })),
             Verdict::FulfillPreflight(vec![
                 json!({ "name": "Access-Control-Allow-Origin", "value": "*" }),
                 json!({ "name": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS, DELETE" }),
