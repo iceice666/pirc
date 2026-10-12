@@ -16,6 +16,7 @@ use pirc_node::browser::engine::LoadState;
 use pirc_node::browser::engine::context::{Context, LaunchOptions};
 use pirc_node::browser::engine::frame::Arg;
 use pirc_node::browser::engine::page::{Page, PageEvent};
+use pirc_node::browser::engine::screenshot::ScreenshotOptions;
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -132,6 +133,10 @@ fn route(path: &str, port: u16) -> Option<(u16, String)> {
         "/form" => html(FORM),
         "/idle" => html(r#"<title>idle</title><img src="/slow.png">"#),
         "/dialog" => html("<title>Dialog</title><p>dialogs</p>"),
+        // An iframe whose document never comes (an ad, a long poll).
+        "/hanging" => html(
+            r#"<title>Hanging</title><h1>Outer</h1><input id=i><iframe title="Late" src="/hang"></iframe>"#,
+        ),
         "/missing" => Some((
             404,
             format!("<title>Missing</title>{}", "<p>not here</p>".repeat(60)),
@@ -847,6 +852,53 @@ async fn an_iframe_keeps_its_number_moving_in_and_out_of_process() {
                     .unwrap(),
                 "Inner"
             );
+        }
+        browser.context.close().await;
+    });
+}
+
+/// A page whose iframe never gets its document, loaded up to
+/// `DOMContentLoaded` (`load` waits for the iframe).
+async fn hanging_page(browser: &Browser) -> Arc<Page> {
+    let port = serve().await;
+    let page = browser.context.pages()[0].clone();
+    page.goto(
+        &format!("http://127.0.0.1:{port}/hanging"),
+        LoadState::DomContentLoaded,
+        T,
+    )
+    .await
+    .unwrap();
+    assert_eq!(page.frames().len(), 2);
+    page
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn screenshots_skip_a_frame_that_is_still_loading() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let page = hanging_page(&browser).await;
+        // Playwright 1.63.0 takes it at once (50 ms): the loading iframe has
+        // no utility world and is not waited for.
+        let options = ScreenshotOptions {
+            quality: 50,
+            full_page: false,
+            timeout: Duration::from_secs(3),
+        };
+        for _ in 0..2 {
+            let started = Instant::now();
+            let shot = tokio::time::timeout(Duration::from_secs(10), page.screenshot(options))
+                .await
+                .expect("the screenshot returns")
+                .unwrap();
+            assert!(
+                started.elapsed() < Duration::from_secs(2),
+                "{:?}",
+                started.elapsed()
+            );
+            assert_eq!(shot[..2], [0xff, 0xd8]);
         }
         browser.context.close().await;
     });

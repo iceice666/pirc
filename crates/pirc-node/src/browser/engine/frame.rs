@@ -403,6 +403,58 @@ impl Frame {
         Ok(reply["result"]["value"].clone())
     }
 
+    /// Playwright's `nonStallingEvaluateInExistingContext`: call `function`
+    /// (a JS function's source, no arguments; awaited, by value) in the
+    /// frame's current `world` context without waiting for one. Fails at
+    /// once when the frame has no such context or is navigating (has a
+    /// pending document), and as soon as a navigation starts, the context
+    /// goes away or the page closes while it runs (`EvaluationStalledError`).
+    pub(super) async fn evaluate_existing(&self, world: World, function: &str) -> Result<Value> {
+        let context = {
+            let state = self.shared.state.lock().unwrap();
+            if state.closed {
+                return Err(closed_error(""));
+            }
+            let Some(frame) = state.frames.get(&self.key) else {
+                return Err(Error::new("Frame was detached"));
+            };
+            if frame.pending.is_some() {
+                return Err(Error::new("Frame is currently attempting a navigation"));
+            }
+            frame
+                .context(world)
+                .cloned()
+                .ok_or_else(|| Error::new("Frame does not yet have the execution context"))?
+        };
+        let call = context.session.call(
+            "Runtime.callFunctionOn",
+            json!({
+                "functionDeclaration": function,
+                "executionContextId": context.id,
+                "returnByValue": true,
+                "awaitPromise": true,
+                "userGesture": true,
+            }),
+        );
+        let stalled = self.shared.wait(|state| {
+            let frame = state.frames.get(&self.key);
+            let current = frame
+                .and_then(|frame| frame.context(world))
+                .map(|context| context.uid);
+            (state.closed
+                || frame.is_none_or(|frame| frame.pending.is_some())
+                || current != Some(context.uid))
+            .then_some(())
+        });
+        tokio::select! {
+            biased;
+            reply = call => evaluation_reply("", reply)
+                .map(|reply| reply["result"]["value"].clone())
+                .map_err(|error| error.error),
+            () = stalled => Err(Error::new("Navigation interrupted the evaluation")),
+        }
+    }
+
     /// The frame's current execution context of `world`, once there is one.
     pub(super) async fn context(&self, world: World, api: &str) -> Result<ExecContext> {
         self.shared
