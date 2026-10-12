@@ -7,7 +7,9 @@
 //! always end a script: a busy script never stalls the agent, and SIGKILL
 //! stops even what QuickJS cannot interrupt (a backtracking regular
 //! expression). The agent starts it with an empty environment, inside the
-//! same OS sandbox. This side keeps no authority and no records: every
+//! same OS sandbox, and it hardens itself before reading the script
+//! (`crate::harden`: seccomp, rlimits, no inherited descriptors; Rust-only,
+//! security audit S6). This side keeps no authority and no records: every
 //! operation is a request to the host (crate::protocol), which validates,
 //! authorizes and accounts for it (the agent's `ptc::runtime`).
 //!
@@ -197,6 +199,10 @@ pub fn run() -> ExitCode {
     // An agent already gone is caught by the interrupt handler's check.
     #[cfg(target_os = "linux")]
     let _ = nix::sys::prctl::set_pdeathsig(nix::sys::signal::Signal::SIGKILL);
+    // Rust-only (security audit S6): no file, process, socket or inherited
+    // descriptor from here on, before any script is read. A guest that
+    // cannot harden runs nothing.
+    let hardened = crate::harden::harden();
     let mut input = std::io::stdin().lock();
     let start = loop {
         let Some(message) = read_message(&mut input) else {
@@ -206,6 +212,11 @@ pub fn run() -> ExitCode {
             break message;
         }
     };
+    if let Err(error) = hardened {
+        post(&json!({ "type": "done",
+            "outcome": failure(&format!("cannot harden the guest: {error}")) }));
+        return ExitCode::SUCCESS;
+    }
     if let Err(message) = execute(&start, &mut input) {
         post(&json!({ "type": "done", "outcome": failure(&message) }));
     }

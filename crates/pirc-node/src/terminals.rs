@@ -1,10 +1,12 @@
 //! Interactive shells for the side panel (`node/terminals.ts`). Owner:
-//! **panels**. Not a sandbox: a terminal has the node account's rights, and
-//! agents cannot reach it.
+//! **panels** (M6); M7: **hardening** (the PTY, `terminals/pty.rs`). Not a
+//! sandbox: a terminal has the node account's rights, and agents cannot
+//! reach it.
 //!
-//! A PTY (`pty-process`, as the agent's background tasks) running
-//! `/bin/sh -c 'exec "$0" -l' <shell>` as a session leader with the
-//! terminal as its controlling tty; the environment `without_secrets` plus
+//! A PTY (`terminals/pty.rs`: its master close-on-exec from the start,
+//! security audit S9) running `/bin/sh -c 'exec "$0" -l' <shell>` as a
+//! session leader with the terminal as its controlling tty; the
+//! environment `without_secrets` plus
 //! `SSH_AUTH_SOCK`, `TERM=xterm-256color`, `COLORTERM=truecolor`,
 //! `PIRC_TERMINAL=1`, `HOME`. Limits: 4 live terminals per session, 24 in
 //! all; 20..500 columns, 5..200 rows; 256 KiB of scrollback in whole
@@ -28,11 +30,12 @@ use indexmap::IndexMap;
 use nix::sys::signal::Signal;
 use pirc_agent::tools::bash::kill_group;
 use serde::Serialize;
-use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use tokio::sync::{mpsc, watch};
 
 use crate::error::{ApiError, ApiResult};
 use crate::services::WeakNode;
+
+mod pty;
 
 const SCROLLBACK_BYTES: usize = 256 * 1024;
 const PER_SESSION: usize = 4;
@@ -249,40 +252,24 @@ impl Terminals {
         env.insert("COLORTERM".into(), "truecolor".into());
         env.insert("PIRC_TERMINAL".into(), "1".into());
 
-        let io = |error: pty_process::Error| match error {
-            pty_process::Error::Io(error) => error,
-            other => std::io::Error::other(other.to_string()),
-        };
-        let (pty, pts) = pty_process::open().map_err(|error| {
+        let (pty, slave) = pty::open(rows, cols).map_err(|error| {
             crate::log::error(&format!("terminal: no PTY: {error}"));
             ApiError::internal()
         })?;
-        pty.resize(pty_process::Size::new(rows, cols))
-            .map_err(|error| {
-                crate::log::error(&format!("terminal: PTY size: {error}"));
-                ApiError::internal()
-            })?;
         // Through /bin/sh and exec: spawned directly, some shells (fish,
         // zsh) come up without the PTY as their controlling terminal and
-        // lose job control. pty-process makes it a session leader (Bun's
-        // `detached`), so a hangup to the group reaches its jobs too.
-        let child = pty_process::Command::new("/bin/sh")
-            .args(["-c", "exec \"$0\" -l", shell])
-            .current_dir(cwd)
-            .env_clear()
-            .envs(&env)
-            .spawn(pts)
-            .map_err(|error| {
-                let error = io(error);
-                ApiError::new(
-                    500,
-                    "runner_unavailable",
-                    format!(
-                        "Could not start shell: {}",
-                        pirc_agent::tools::js::fs_error(&error, "posix_spawn", Some("/bin/sh"))
-                    ),
-                )
-            })?;
+        // lose job control. It is a session leader (Bun's `detached`), so a
+        // hangup to the group reaches its jobs too.
+        let child = pty::spawn(slave, shell, cwd, &env).map_err(|error| {
+            ApiError::new(
+                500,
+                "runner_unavailable",
+                format!(
+                    "Could not start shell: {}",
+                    pirc_agent::tools::js::fs_error(&error, "posix_spawn", Some("/bin/sh"))
+                ),
+            )
+        })?;
         let (exited_tx, exited) = watch::channel(false);
         let (commands, receiver) = mpsc::unbounded_channel();
         let info = TerminalInfo {
@@ -500,12 +487,13 @@ fn output(entry: &Entry, chunk: &[u8]) {
 fn run(
     registry: Weak<Mutex<Registry>>,
     entry: Arc<Entry>,
-    mut child: tokio::process::Child,
-    pty: pty_process::Pty,
+    mut child: Box<dyn process_wrap::tokio::ChildWrapper>,
+    pty: pty::Master,
     mut commands: mpsc::UnboundedReceiver<PtyCommand>,
     exited: watch::Sender<bool>,
 ) {
-    let (mut reader, mut writer) = pty.into_split();
+    let reader = Arc::new(pty);
+    let writer = reader.clone();
     let reading = {
         let entry = entry.clone();
         tokio::spawn(async move {
@@ -523,7 +511,7 @@ fn run(
                     let _ = writer.write_all(&bytes).await;
                 }
                 PtyCommand::Resize { rows, cols } => {
-                    let _ = writer.resize(pty_process::Size::new(rows, cols));
+                    let _ = writer.resize(rows, cols);
                 }
             }
         }

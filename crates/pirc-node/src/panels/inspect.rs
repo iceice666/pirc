@@ -1,12 +1,16 @@
 //! Workspace inspection for the panels (`node/inspect.ts`): git through the
-//! `git` executable and files with realpath containment. Owner: **panels**.
+//! `git` executable and files with realpath containment. Owner: **panels**
+//! (M6); M7: **hardening** (git in the sandbox).
 //!
 //! git: `git --no-pager -c core.quotepath=false -c core.fsmonitor=false -c
 //! color.ui=false <args>`, no shell, `cwd` the real root, the environment
 //! `without_secrets` plus `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`,
 //! `GIT_PAGER=cat`, `LC_ALL=C`; 15 s then SIGKILL; stdout capped at 1 MiB
 //! (`truncated`); exit codes other than 0 and 1 are 400 with the last three
-//! stderr lines. Files: `resolve_inside` (404 for a missing path or an
+//! stderr lines. Rust-only (security audit S8): git runs in the node's
+//! sandbox, read-only and without network ([`Sandbox::prepare_readonly`]);
+//! without a working sandbox every git route is 503 [`git_unavailable`],
+//! where TS ran git on the host. Files: `resolve_inside` (404 for a missing path or an
 //! absolute one outside, 403 for a relative or symlink escape, 400 for NUL),
 //! directory listings without `.git`, dirs first in `localeCompare` order
 //! (the agent's `ls` ordering), 2000 entries; file reads with the 1 MiB
@@ -17,6 +21,7 @@
 //! `..` after following symlinks.
 
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::io::{Read as _, Seek as _, SeekFrom};
 use std::os::unix::fs::MetadataExt as _;
 use std::path::{Path, PathBuf};
@@ -32,6 +37,7 @@ use serde_json::{Map, Value, json};
 use tokio::io::AsyncReadExt as _;
 
 use crate::error::{ApiError, ApiResult};
+use crate::sandbox::{Prepared, ReadonlyInput, Sandbox, SandboxStatus};
 
 const GIT_TIMEOUT: Duration = Duration::from_secs(15);
 const DIFF_LIMIT: usize = 1_048_576;
@@ -72,55 +78,135 @@ enum GitError {
     Api(ApiError),
     /// It could not start (TS: `Bun.spawn` threw).
     Spawn(std::io::Error),
+    /// No sandbox to run it in (503), or the sandbox could not be prepared:
+    /// always the answer, never read as "not a repository".
+    Sandbox(ApiError),
 }
 
 impl From<GitError> for ApiError {
     fn from(error: GitError) -> Self {
         match error {
-            GitError::Api(error) => error,
+            GitError::Api(error) | GitError::Sandbox(error) => error,
             GitError::Spawn(error) => internal("git could not start", error),
         }
     }
 }
 
-async fn git(cwd: &Path, args: &[&str], env: &ChildEnv) -> Result<GitResult, GitError> {
+/// 503 `runner_unavailable` when git cannot run in the sandbox (S8): the
+/// Git panel is unavailable on this node, for the reason agents are.
+pub fn git_unavailable(reason: &str) -> ApiError {
+    ApiError::runner_unavailable(format!(
+        "The Git panel runs git in the sandbox, and it is unavailable on this node: {reason}"
+    ))
+}
+
+/// SIGKILL the process group `pid` leads until it has been reaped (the
+/// sandbox wrapper's own children included).
+struct Group(Option<i32>);
+
+impl Group {
+    fn kill(&self) {
+        if let Some(pid) = self.0 {
+            let _ = nix::sys::signal::killpg(
+                nix::unistd::Pid::from_raw(pid),
+                nix::sys::signal::Signal::SIGKILL,
+            );
+        }
+    }
+}
+
+impl Drop for Group {
+    fn drop(&mut self) {
+        self.kill();
+    }
+}
+
+/// How long output is still read after git was killed: a process that
+/// left the group may hold the pipes.
+const KILL_DRAIN: Duration = Duration::from_secs(1);
+
+/// `git <args>` in `root`, inside the sandbox
+/// ([`Sandbox::prepare_readonly`]: `root`'s read policy, nothing writable
+/// but a temp directory, no network). The repository is agent-writable:
+/// its config, attributes and hooks are the agent's, so whatever they make
+/// git run stays in the sandbox (security audit S8), and never sees the
+/// node token (the environment is the caller's `without_secrets`).
+///
+/// The sandbox wrapper runs in a process group of its own, killed as a
+/// whole on the timeout, the output cap or a dropped request; output still
+/// arriving from outside the group is read for at most [`KILL_DRAIN`].
+async fn git(
+    sandbox: &dyn Sandbox,
+    root: &Path,
+    args: &[&str],
+    env: &ChildEnv,
+) -> Result<GitResult, GitError> {
+    if let SandboxStatus::Unavailable { reason } = sandbox.check().await {
+        return Err(GitError::Sandbox(git_unavailable(&reason)));
+    }
+    let command: Vec<OsString> = [
+        "git",
+        "--no-pager",
+        "-c",
+        "core.quotepath=false",
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "color.ui=false",
+    ]
+    .iter()
+    .chain(args)
+    .map(OsString::from)
+    .collect();
+    let prepared = sandbox
+        .prepare_readonly(ReadonlyInput {
+            workspace_root: root.to_path_buf(),
+            command,
+        })
+        .await
+        .map_err(GitError::Sandbox)?;
+    let result = run_prepared(&prepared, root, env, GIT_TIMEOUT).await;
+    prepared.cleanup();
+    result
+}
+
+/// Run a prepared git with `timeout` (15 s; shorter in tests).
+async fn run_prepared(
+    prepared: &Prepared,
+    cwd: &Path,
+    env: &ChildEnv,
+    timeout: Duration,
+) -> Result<GitResult, GitError> {
     let limit = DIFF_LIMIT;
-    let mut child = tokio::process::Command::new("git")
-        .args([
-            "--no-pager",
-            "-c",
-            "core.quotepath=false",
-            "-c",
-            "core.fsmonitor=false",
-            "-c",
-            "color.ui=false",
-        ])
-        .args(args)
+    let mut child = prepared
+        .command()
+        .map_err(GitError::Spawn)?
         .current_dir(cwd)
-        // The repository is agent-writable: whatever its config makes git
-        // run must not see the node token.
         .env_clear()
         .envs(env)
         .env("GIT_OPTIONAL_LOCKS", "0")
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_PAGER", "cat")
         .env("LC_ALL", "C")
+        .envs(prepared.env.iter().cloned())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .process_group(0)
         .kill_on_drop(true)
         .spawn()
         .map_err(GitError::Spawn)?;
+    let mut group = Group(child.id().and_then(|pid| i32::try_from(pid).ok()));
     let mut stdout = child.stdout.take().expect("piped stdout");
     let mut stderr = child.stderr.take().expect("piped stderr");
     // Read concurrently, so a chatty stderr never blocks git (TS read it
     // after stdout, without a bound).
-    let stderr = tokio::spawn(async move {
+    let mut stderr = tokio::spawn(async move {
         let mut bytes = Vec::new();
         let _ = stderr.read_to_end(&mut bytes).await;
         bytes
     });
-    let timer = tokio::time::sleep(GIT_TIMEOUT);
+    let timer = tokio::time::sleep(timeout);
     tokio::pin!(timer);
     let mut timed_out = false;
     let mut out = Vec::new();
@@ -134,15 +220,19 @@ async fn git(cwd: &Path, args: &[&str], env: &ChildEnv) -> Result<GitResult, Git
                     if out.len() + n > limit {
                         out.extend_from_slice(&chunk[..limit - out.len()]);
                         truncated = true;
-                        let _ = child.start_kill();
+                        group.kill();
                         break;
                     }
                     out.extend_from_slice(&chunk[..n]);
                 }
             },
-            () = &mut timer, if !timed_out => {
+            () = &mut timer => {
+                if timed_out {
+                    break;
+                }
                 timed_out = true;
-                let _ = child.start_kill();
+                group.kill();
+                timer.as_mut().reset(tokio::time::Instant::now() + KILL_DRAIN);
             }
         }
     }
@@ -152,11 +242,19 @@ async fn git(cwd: &Path, args: &[&str], env: &ChildEnv) -> Result<GitResult, Git
             status = child.wait() => break status,
             () = &mut timer, if !timed_out => {
                 timed_out = true;
-                let _ = child.start_kill();
+                group.kill();
             }
         }
     };
-    let stderr = stderr.await.unwrap_or_default();
+    // Reaped: its pid (the group's id) may be reused from now on.
+    group.0 = None;
+    let stderr = match tokio::time::timeout(KILL_DRAIN, &mut stderr).await {
+        Ok(bytes) => bytes.unwrap_or_default(),
+        Err(_) => {
+            stderr.abort();
+            Vec::new()
+        }
+    };
     // Bun's `exited` is 128 + the signal for a killed process.
     let code = match status {
         Ok(status) => {
@@ -234,13 +332,16 @@ fn pathspec(root: &Path, relative: &str) -> ApiResult<String> {
 
 /// `git rev-parse` and `git status` of the workspace: `{repo:false}`, or
 /// the branch, its upstream and the changed files (at most 5000).
-pub async fn git_status(root: &Path, env: &ChildEnv) -> ApiResult<Value> {
+pub async fn git_status(sandbox: &dyn Sandbox, root: &Path, env: &ChildEnv) -> ApiResult<Value> {
     let root = real_root(root)?;
-    let Ok(top) = git(&root, &["rev-parse", "--show-toplevel"], env).await else {
-        return Ok(json!({ "repo": false }));
+    let top = match git(sandbox, &root, &["rev-parse", "--show-toplevel"], env).await {
+        Ok(top) => top,
+        Err(GitError::Sandbox(error)) => return Err(error),
+        Err(_) => return Ok(json!({ "repo": false })),
     };
     let top = trim(&top.stdout).to_owned();
     let status = git(
+        sandbox,
         &root,
         &[
             "status",
@@ -340,6 +441,7 @@ fn parse_status(stdout: &str) -> Status {
 /// index, or index against HEAD when `staged`; an untracked file against
 /// `/dev/null` (`staged` ignored).
 pub async fn git_diff(
+    sandbox: &dyn Sandbox,
     root: &Path,
     env: &ChildEnv,
     path: Option<&str>,
@@ -361,7 +463,7 @@ pub async fn git_diff(
         let relative = relative(&display(&root), &display(&file));
         let mut args = base.to_vec();
         args.extend(["--no-index", "--", "/dev/null", &relative]);
-        let result = git(&root, &args, env).await?;
+        let result = git(sandbox, &root, &args, env).await?;
         return Ok(json!({ "diff": result.stdout, "truncated": result.truncated }));
     }
     let spec = match path {
@@ -373,7 +475,7 @@ pub async fn git_diff(
         args.push("--cached");
     }
     args.extend(["--", &spec]);
-    let result = git(&root, &args, env).await?;
+    let result = git(sandbox, &root, &args, env).await?;
     Ok(json!({ "diff": result.stdout, "truncated": result.truncated }))
 }
 
@@ -394,18 +496,31 @@ fn refs(text: Option<&str>) -> Vec<String> {
 }
 
 /// One page of the workspace's history; none without a HEAD.
-pub async fn git_log(root: &Path, env: &ChildEnv, skip: u64, limit: u64) -> ApiResult<Value> {
+pub async fn git_log(
+    sandbox: &dyn Sandbox,
+    root: &Path,
+    env: &ChildEnv,
+    skip: u64,
+    limit: u64,
+) -> ApiResult<Value> {
     // Not `real_root` (TS): a missing workspace fails to spawn, which reads
     // as no history.
-    if git(root, &["rev-parse", "--verify", "--quiet", "HEAD"], env)
-        .await
-        .is_err()
+    match git(
+        sandbox,
+        root,
+        &["rev-parse", "--verify", "--quiet", "HEAD"],
+        env,
+    )
+    .await
     {
-        return Ok(json!({ "commits": [], "more": false }));
+        Ok(_) => {}
+        Err(GitError::Sandbox(error)) => return Err(error),
+        Err(_) => return Ok(json!({ "commits": [], "more": false })),
     }
     let max_count = format!("--max-count={}", limit + 1);
     let skip = format!("--skip={skip}");
     let result = git(
+        sandbox,
         root,
         &[
             "log",
@@ -450,11 +565,17 @@ pub async fn git_log(root: &Path, env: &ChildEnv, skip: u64, limit: u64) -> ApiR
 static SHA: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[0-9a-fA-F]{4,64}$").expect("regex"));
 
 /// A commit's header, message and patch (with its `--stat`).
-pub async fn git_show(root: &Path, env: &ChildEnv, sha: &str) -> ApiResult<Value> {
+pub async fn git_show(
+    sandbox: &dyn Sandbox,
+    root: &Path,
+    env: &ChildEnv,
+    sha: &str,
+) -> ApiResult<Value> {
     if !SHA.is_match(sha) {
         return Err(ApiError::bad_request("Invalid commit id"));
     }
     let header = git(
+        sandbox,
         root,
         &[
             "show",
@@ -469,6 +590,7 @@ pub async fn git_show(root: &Path, env: &ChildEnv, sha: &str) -> ApiResult<Value
     let fields: Vec<&str> = header.stdout.split('\x1f').collect();
     let field = |n: usize| fields.get(n).copied();
     let patch = git(
+        sandbox,
         root,
         &[
             "show",

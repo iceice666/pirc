@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use pirc_config::{Env, NodeConfig};
 use pirc_policy::session::{
-    Platform, SessionPolicy, SessionPolicyInput, read_agent_config, session_policy,
+    NetworkPolicy, Platform, SessionPolicy, SessionPolicyInput, read_agent_config, session_policy,
 };
 use pirc_policy::{is_inside, real_resolve};
 use tokio::io::AsyncReadExt;
@@ -304,23 +304,184 @@ pub fn session(config: &NodeConfig, env: &Env, input: &PrepareInput) -> ApiResul
     })
 }
 
+/// The node's private directories, as [`session`] lists them: closed to
+/// reads (`deny_read`) unless the policy reopens a part.
+fn private_dirs(config: &NodeConfig, env: &Env) -> Vec<String> {
+    let database_dir = config
+        .database_path
+        .parent()
+        .map_or_else(|| PathBuf::from("/"), Path::to_path_buf);
+    [
+        config.state_dir.clone(),
+        config.sessions_dir.clone(),
+        config.uploads_dir.clone(),
+        database_dir,
+        config.browser.profiles_dir.clone(),
+    ]
+    .into_iter()
+    .chain(
+        env.get("CREDENTIALS_DIRECTORY")
+            .filter(|dir| !dir.is_empty())
+            .map(PathBuf::from),
+    )
+    .map(|dir| real_resolve(&text(&dir)))
+    .collect()
+}
+
 /// The policy and temporary directory of a read-only command for
-/// `input.workspace_root` ([`super::Sandbox::prepare_readonly`]): what a
-/// session of the workspace may read, no write path but `tmp`, no
-/// domains. Owner: **hardening** (M7).
-#[allow(dead_code)] // M7 layout: the backends' `prepare_readonly` call it.
+/// `input.workspace_root` ([`super::Sandbox::prepare_readonly`], the Git
+/// panel's `git`, security audit S8). Owner: **hardening** (M7).
+///
+/// Reads are a session's: `session_policy` with [`session`]'s inputs, the
+/// workspace standing in for the session directory (there is no session
+/// of its own, so nothing is reopened beyond what the workspace's sessions
+/// share), no inference socket. Writes are removed but a fresh temporary
+/// directory (`allow_write` and `shared_write` are only `tmp`, not `/tmp`
+/// nor the cache directories, `deny_write` is empty as nothing else is
+/// writable); the network is closed (no domains, no local binding, no Unix
+/// sockets); `.git/config` is never writable. A problem in the agent
+/// config is a warning, as for a session.
 pub fn readonly_session(
     config: &NodeConfig,
     env: &Env,
     input: &super::ReadonlyInput,
 ) -> ApiResult<Session> {
-    let _ = (config, env, input);
-    todo!("M7 hardening: the read-only policy for panel git")
+    let home = text(&env.home());
+    let agent_config = read_agent_config(&text(&config.config_dir), &home);
+    let tmp = make_temp_dir(&tmpdir(env), "pirc-").map_err(|error| {
+        crate::log::error(&format!(
+            "cannot make a read-only sandbox's temp directory: {error}"
+        ));
+        ApiError::internal()
+    })?;
+    let mut warnings = Vec::new();
+    if let Some(problem) = &agent_config.problem {
+        warnings.push(format!("Sandbox settings ignored: {problem}"));
+    }
+    let workspace = text(&input.workspace_root);
+    let policy_input = SessionPolicyInput {
+        config: agent_config.sandbox,
+        config_dir: agent_config.config_dir,
+        home,
+        private_dirs: private_dirs(config, env),
+        workspace_root: workspace.clone(),
+        allowed_paths: agent_config.allowed_paths,
+        session_dir: workspace,
+        workspace_memory_dir: text(&config.workspace_memory_dir),
+        inference_socket: None,
+        tmp_dirs: vec![text(&tmp)],
+        protected_paths: Vec::new(),
+        read_only_dirs: vec![text(&sandbox_bin_dir(config))],
+        platform: Platform::current(),
+        uid: nix::unistd::getuid().as_raw(),
+        ssh_auth_sock: env.get("SSH_AUTH_SOCK").map(str::to_owned),
+    };
+    let mut policy = match session_policy(&policy_input) {
+        Ok(policy) => policy,
+        Err(error) => {
+            Session::remove_tmp(&tmp);
+            crate::log::error(&format!("cannot build a read-only sandbox policy: {error}"));
+            return Err(ApiError::internal());
+        }
+    };
+    let writable = real_resolve(&text(&tmp));
+    policy.paths.allow_write = vec![writable.clone()];
+    policy.paths.deny_write = Vec::new();
+    policy.paths.shared_write = Some(vec![writable]);
+    policy.network = NetworkPolicy::default();
+    policy.allow_git_config = false;
+    Ok(Session {
+        tmp,
+        policy,
+        warnings,
+    })
+}
+
+/// A node configuration in a temporary directory, for the backends' tests.
+#[cfg(test)]
+pub(super) mod test_support {
+    use std::path::Path;
+
+    use pirc_config::{Env, NodeConfig};
+    use pirc_protocol::NodeRole;
+
+    /// `<root>/workspace` (with a file), `<root>/home`, `<root>/state`,
+    /// `<root>/config` and `<root>/tmp` (`TMPDIR`); `extra` adds variables.
+    pub fn node(root: &Path, extra: &[(&str, &str)]) -> (NodeConfig, Env) {
+        for dir in ["workspace", "home", "state", "config", "tmp"] {
+            std::fs::create_dir_all(root.join(dir)).unwrap();
+        }
+        std::fs::write(root.join("workspace/README.md"), "hi\n").unwrap();
+        let path = |name: &str| root.join(name).display().to_string();
+        let (home, state, config, tmp) = (path("home"), path("state"), path("config"), path("tmp"));
+        let mut vars = vec![
+            ("PIRC_NODE_ID", "test-node"),
+            ("PIRC_NODE_TOKEN", "0123456789abcdef0123456789abcdef"),
+            ("PIRC_DAEMON_URL", "ws://127.0.0.1:8787"),
+            ("PIRC_ALLOWED_USERS", "test-user"),
+            ("PIRC_STATE_DIR", state.as_str()),
+            ("PIRC_CONFIG_DIR", config.as_str()),
+            ("PIRC_BROWSER", "false"),
+            ("HOME", home.as_str()),
+            ("TMPDIR", tmp.as_str()),
+        ];
+        vars.extend_from_slice(extra);
+        let env = Env::new(vars, root);
+        (NodeConfig::load(&env, NodeRole::Node).unwrap(), env)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn readonly_sessions_read_as_a_session_and_write_only_their_temp_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        std::fs::create_dir_all(root.join("config")).unwrap();
+        std::fs::write(
+            root.join("config/config.json"),
+            r#"{"allowedPaths":["~"],"sandbox":{"network":{"allowedDomains":["example.com"],"allowLocalBinding":true},"filesystem":{"denyRead":["~/secret"],"allowWrite":["/var/tmp"]}}}"#,
+        )
+        .unwrap();
+        let (config, env) = test_support::node(&root, &[]);
+        let workspace = root.join("workspace");
+        let input = super::super::ReadonlyInput {
+            workspace_root: workspace.clone(),
+            command: vec!["git".into()],
+        };
+        let Session {
+            tmp,
+            policy,
+            warnings,
+        } = readonly_session(&config, &env, &input).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(tmp.is_dir() && tmp.starts_with(root.join("tmp")), "{tmp:?}");
+        let text = |path: &Path| path.display().to_string();
+        // Writes: the temp directory only.
+        assert_eq!(policy.paths.allow_write, [text(&tmp)]);
+        assert_eq!(policy.paths.shared_write, Some(vec![text(&tmp)]));
+        assert!(policy.paths.deny_write.is_empty());
+        assert!(!policy.allow_git_config);
+        assert_eq!(policy.network, NetworkPolicy::default());
+        // Reads: a session's.
+        assert!(policy.paths.allow_read.contains(&text(&workspace)));
+        for denied in [root.join("state"), root.join("home/secret")] {
+            assert!(
+                policy.paths.deny_read.contains(&text(&denied)),
+                "{denied:?} in {:?}",
+                policy.paths.deny_read
+            );
+        }
+        Session::remove_tmp(&tmp);
+
+        // A broken agent config warns and keeps the defaults.
+        std::fs::write(root.join("config/config.json"), r#"{"sandbox":{"x":1}}"#).unwrap();
+        let session = readonly_session(&config, &env, &input).unwrap();
+        assert_eq!(session.warnings.len(), 1, "{:?}", session.warnings);
+        Session::remove_tmp(&session.tmp);
+    }
 
     #[test]
     fn tmpdir_follows_node() {

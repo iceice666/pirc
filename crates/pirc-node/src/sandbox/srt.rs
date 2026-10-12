@@ -10,7 +10,10 @@
 //! `allowPty`; no seccomp entry) written 0600; a [`super::NetworkControl`]
 //! that maps a pipe to the agent's fd 3 (the `command-fds` crate) and
 //! writes `JSON(settings(approved)) + "\n"` on approval; `CLAUDE_CODE_TMPDIR`
-//! a fresh `pirc-XXXX` under the system temp directory.
+//! a fresh `pirc-XXXX` under the system temp directory. Read-only (M7,
+//! the Git panel): `<srt> --settings <state>/sandbox/readonly-pirc-XXXXXX.json
+//! -- <command...>` with `common::readonly_session`'s policy and no
+//! control fd.
 //!
 //! TS also ran a built-in srt (`pirc-node srt`, with its seccomp helper);
 //! the Rust node has none, so the settings never carry `seccomp`.
@@ -190,12 +193,58 @@ impl Sandbox for SrtSandbox {
         })
     }
 
+    /// `<srt> --settings <state>/sandbox/readonly-<tmp name>.json --
+    /// <command...>` with [`common::readonly_session`]'s policy rendered by
+    /// [`srt_settings`] (so `allowAllUnixSockets` on Linux, as for agents:
+    /// the node ships no seccomp helper), no control fd, and
+    /// `CLAUDE_CODE_TMPDIR` the fresh temp directory (srt points `TMPDIR`
+    /// there). Rust-only: TS ran panel git on the host (S8).
     fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>> {
-        // M7 (hardening): srt with `common::readonly_session`'s policy (no
-        // write paths, no domains) and no control fd, running
-        // `input.command`.
-        let _ = input;
-        todo!("M7 hardening: the read-only srt sandbox for panel git")
+        Box::pin(async move {
+            if let SandboxStatus::Unavailable { reason } = self.check().await {
+                return Err(super::unavailable_error(&reason));
+            }
+            let Session {
+                tmp,
+                policy,
+                warnings,
+            } = common::readonly_session(&self.config, &self.env, &input)?;
+            let mut file_name = OsString::from("readonly-");
+            file_name.push(tmp.file_name().unwrap_or_default());
+            file_name.push(".json");
+            let settings_file = match common::sandbox_state_dir(&self.config).and_then(|dir| {
+                let file = dir.join(&file_name);
+                let settings = srt_settings(&policy, &[], Platform::current()).to_string();
+                write_private(&file, settings.as_bytes())?;
+                Ok(file)
+            }) {
+                Ok(file) => file,
+                Err(error) => {
+                    Session::remove_tmp(&tmp);
+                    crate::log::error(&format!("cannot write the srt settings: {error}"));
+                    return Err(ApiError::internal());
+                }
+            };
+            let mut args: Vec<OsString> = vec![
+                "--settings".into(),
+                settings_file.clone().into(),
+                "--".into(),
+            ];
+            args.extend(input.command);
+            let env = vec![("CLAUDE_CODE_TMPDIR".to_owned(), tmp.display().to_string())];
+            Ok(Prepared::new(
+                PathBuf::from(&self.srt),
+                args,
+                env,
+                policy,
+                warnings,
+                None,
+                move || {
+                    let _ = std::fs::remove_file(&settings_file);
+                    Session::remove_tmp(&tmp);
+                },
+            ))
+        })
     }
 }
 
@@ -290,6 +339,140 @@ mod tests {
         );
         assert!(mac["network"].get("allowAllUnixSockets").is_none());
         assert!(mac.get("seccomp").is_none());
+    }
+
+    /// The conformance harness's fake srt (`pirc-conformance`'s
+    /// `cluster.rs`), verbatim: it must accept what `prepare_readonly`
+    /// passes.
+    const FAKE_SRT: &str = r#"#!/bin/sh
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --) shift; break ;;
+    --settings|--control-fd) shift 2 ;;
+    *) shift ;;
+  esac
+done
+if [ -e /dev/fd/3 ]; then
+  cat <&3 >> "$(dirname "$0")/fake-srt-control.log" &
+fi
+exec "$@"
+"#;
+
+    fn script(path: &Path, text: &str) -> String {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(path, text).unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path.display().to_string()
+    }
+
+    #[tokio::test]
+    async fn readonly_commands_run_under_the_readonly_policy_without_a_control_fd() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let srt = script(&root.join("fake-srt.sh"), FAKE_SRT);
+        let (config, env) = common::test_support::node(&root, &[]);
+        let sandbox = SrtSandbox::new(srt.clone(), config, env);
+        let workspace = root.join("workspace");
+        let prepared = sandbox
+            .prepare_readonly(ReadonlyInput {
+                workspace_root: workspace.clone(),
+                command: vec![
+                    "/bin/sh".into(),
+                    "-c".into(),
+                    "read -r line < README.md; echo \"$line\"; echo \"$CLAUDE_CODE_TMPDIR\"".into(),
+                ],
+            })
+            .await
+            .unwrap();
+        assert_eq!(prepared.program, PathBuf::from(&srt));
+        assert!(!prepared.has_control());
+        let args: Vec<String> = prepared
+            .args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(args[0], "--settings");
+        assert_eq!(&args[2..4], ["--", "/bin/sh"]);
+        let settings_file = PathBuf::from(&args[1]);
+        assert!(settings_file.starts_with(root.join("state/sandbox")));
+        let name = settings_file
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        assert!(
+            name.starts_with("readonly-pirc-") && name.ends_with(".json"),
+            "{name}"
+        );
+        let tmp = PathBuf::from(&prepared.env[0].1);
+        assert_eq!(prepared.env[0].0, "CLAUDE_CODE_TMPDIR");
+        assert!(tmp.is_dir());
+        let settings: Value =
+            serde_json::from_str(&std::fs::read_to_string(&settings_file).unwrap()).unwrap();
+        assert_eq!(
+            settings["filesystem"]["allowWrite"],
+            json!([tmp.display().to_string()])
+        );
+        assert_eq!(settings["filesystem"]["denyWrite"], json!([]));
+        assert_eq!(settings["network"]["allowedDomains"], json!([]));
+        assert_eq!(settings["network"]["allowLocalBinding"], json!(false));
+        assert!(
+            settings["filesystem"]["allowRead"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(workspace.display().to_string()))
+        );
+
+        // The caller sets cwd and environment; the fake srt runs it.
+        let mut command = prepared.command().unwrap();
+        command
+            .current_dir(&workspace)
+            .env_clear()
+            .envs(prepared.env.iter().cloned())
+            .stdin(std::process::Stdio::null());
+        let output = command.output().await.unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            format!("hi\n{}\n", tmp.display())
+        );
+        assert!(!root.join(FAKE_SRT_LOG).exists(), "no control fd");
+
+        prepared.cleanup();
+        assert!(!tmp.exists() && !settings_file.exists());
+    }
+
+    const FAKE_SRT_LOG: &str = "fake-srt-control.log";
+
+    #[tokio::test]
+    async fn readonly_commands_need_a_working_sandbox() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let srt = script(
+            &root.join("broken-srt.sh"),
+            "#!/bin/sh\necho 'no namespaces' >&2\nexit 1\n",
+        );
+        let (config, env) = common::test_support::node(&root, &[]);
+        let sandbox = SrtSandbox::new(srt, config, env);
+        let error = sandbox
+            .prepare_readonly(ReadonlyInput {
+                workspace_root: root.join("workspace"),
+                command: vec!["git".into()],
+            })
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(
+            (error.status, error.code.as_ref()),
+            (503, "runner_unavailable")
+        );
+        assert!(
+            error.message.ends_with("(exit 1): no namespaces"),
+            "{}",
+            error.message
+        );
+        // Nothing was left behind.
+        assert_eq!(std::fs::read_dir(root.join("tmp")).unwrap().count(), 0);
     }
 
     #[tokio::test]

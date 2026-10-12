@@ -5,8 +5,79 @@
 
 use std::os::unix::fs::symlink;
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+
+use pirc_policy::session::SessionPolicy;
 
 use super::*;
+use crate::sandbox::{BoxFuture, PrepareInput};
+
+/// A stand-in for the node's sandbox: runs the command under `/bin/sh`
+/// with `PIRC_TEST_SANDBOXED=1` (so what git starts shows it ran beneath
+/// the wrapper), records each call and counts cleanups. `None` as the
+/// reason: available.
+struct FakeSandbox {
+    unavailable: Option<&'static str>,
+    calls: Mutex<Vec<ReadonlyInput>>,
+    cleaned: Arc<AtomicUsize>,
+}
+
+impl FakeSandbox {
+    fn new(unavailable: Option<&'static str>) -> Self {
+        Self {
+            unavailable,
+            calls: Mutex::new(Vec::new()),
+            cleaned: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+}
+
+impl Sandbox for FakeSandbox {
+    fn check(&self) -> BoxFuture<'_, SandboxStatus> {
+        Box::pin(async {
+            match self.unavailable {
+                None => SandboxStatus::Active {
+                    description: "fake".into(),
+                },
+                Some(reason) => SandboxStatus::Unavailable {
+                    reason: reason.into(),
+                },
+            }
+        })
+    }
+
+    fn prepare(&self, _: PrepareInput) -> BoxFuture<'_, ApiResult<Prepared>> {
+        unreachable!("panels never start agents")
+    }
+
+    fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>> {
+        Box::pin(async move {
+            self.calls.lock().unwrap().push(input.clone());
+            let mut args: Vec<OsString> = vec![
+                "-c".into(),
+                "PIRC_TEST_SANDBOXED=1 exec \"$@\"".into(),
+                "sandbox".into(),
+            ];
+            args.extend(input.command);
+            let cleaned = self.cleaned.clone();
+            Ok(Prepared::new(
+                PathBuf::from("/bin/sh"),
+                args,
+                vec![("PIRC_TEST_PREPARED".into(), "1".into())],
+                SessionPolicy::default(),
+                Vec::new(),
+                None,
+                move || {
+                    cleaned.fetch_add(1, Ordering::SeqCst);
+                },
+            ))
+        })
+    }
+}
+
+/// The sandbox of the golden cases.
+static HOST: LazyLock<FakeSandbox> = LazyLock::new(|| FakeSandbox::new(None));
 
 /// What git needs to run: the test's `PATH` and `HOME`, and no repository
 /// above the temporary directory.
@@ -331,17 +402,21 @@ async fn git_outside_a_repository() {
     let f = fixture();
     let env = env(&f.run);
     assert_eq!(
-        git_status(&f.ws, &env).await.unwrap(),
+        git_status(&*HOST, &f.ws, &env).await.unwrap(),
         json!({ "repo": false })
     );
     assert_eq!(
-        git_log(&f.ws, &env, 0, 50).await.unwrap(),
+        git_log(&*HOST, &f.ws, &env, 0, 50).await.unwrap(),
         json!({ "commits": [], "more": false })
     );
-    let error = git_show(&f.ws, &env, "abcd1234").await.unwrap_err();
+    let error = git_show(&*HOST, &f.ws, &env, "abcd1234").await.unwrap_err();
     assert_eq!((error.status, error.code.as_ref()), (400, "invalid_input"));
     assert_eq!(
-        status(git_show(&f.ws, &env, "not-a-sha").await.unwrap_err()),
+        status(
+            git_show(&*HOST, &f.ws, &env, "not-a-sha")
+                .await
+                .unwrap_err()
+        ),
         (
             400,
             "invalid_input".to_owned(),
@@ -356,13 +431,13 @@ async fn git_status_diff_log_and_show() {
     let ws = &f.ws;
     let env = env(&f.run);
     run_git(ws, &["init", "-q", "-b", "main"]);
-    let unborn = git_status(ws, &env).await.unwrap();
+    let unborn = git_status(&*HOST, ws, &env).await.unwrap();
     assert_eq!(unborn["branch"], "main");
     assert_eq!(unborn["root"], "");
     // `rev-parse --verify --quiet HEAD` exits 1, which passes (TS), so
     // `git log` itself fails.
     assert_eq!(
-        status(git_log(ws, &env, 0, 50).await.unwrap_err()),
+        status(git_log(&*HOST, ws, &env, 0, 50).await.unwrap_err()),
         (
             400,
             "invalid_input".to_owned(),
@@ -387,7 +462,7 @@ async fn git_status_diff_log_and_show() {
     std::fs::write(ws.join("-dash.txt"), "dash\n").unwrap();
     std::fs::write(ws.join("ünïcode.txt"), "ü\n").unwrap();
 
-    let changes = git_status(ws, &env).await.unwrap();
+    let changes = git_status(&*HOST, ws, &env).await.unwrap();
     assert_eq!(changes["branch"], "main");
     assert_eq!(changes["upstream"], "base");
     assert_eq!(changes["ahead"], 1);
@@ -401,35 +476,35 @@ async fn git_status_diff_log_and_show() {
     // core.quotepath=false: names as they are.
     assert!(files.contains(&json!({ "path": "ünïcode.txt", "index": "?", "worktree": "?" })));
 
-    let diff = git_diff(ws, &env, Some("a.txt"), false, false)
+    let diff = git_diff(&*HOST, ws, &env, Some("a.txt"), false, false)
         .await
         .unwrap();
     assert!(diff["diff"].as_str().unwrap().contains("+three"));
     assert_eq!(diff["truncated"], false);
-    let staged = git_diff(ws, &env, None, true, false).await.unwrap();
+    let staged = git_diff(&*HOST, ws, &env, None, true, false).await.unwrap();
     assert!(
         staged["diff"]
             .as_str()
             .unwrap()
             .contains("rename to new name.txt")
     );
-    let untracked = git_diff(ws, &env, Some("-dash.txt"), true, true)
+    let untracked = git_diff(&*HOST, ws, &env, Some("-dash.txt"), true, true)
         .await
         .unwrap();
     assert!(untracked["diff"].as_str().unwrap().contains("+dash"));
-    let glob = git_diff(ws, &env, Some("*.txt"), false, false)
+    let glob = git_diff(&*HOST, ws, &env, Some("*.txt"), false, false)
         .await
         .unwrap();
     assert_eq!(glob["diff"], "");
     assert_eq!(
-        git_diff(ws, &env, Some("../secret.txt"), false, false)
+        git_diff(&*HOST, ws, &env, Some("../secret.txt"), false, false)
             .await
             .unwrap_err()
             .status,
         400
     );
 
-    let log = git_log(ws, &env, 0, 1).await.unwrap();
+    let log = git_log(&*HOST, ws, &env, 0, 1).await.unwrap();
     assert_eq!(log["more"], true);
     let head = &log["commits"][0];
     assert_eq!(head["subject"], "second commit");
@@ -437,27 +512,185 @@ async fn git_status_diff_log_and_show() {
     assert_eq!(head["email"], "ada@example.com");
     assert_eq!(head["time"], json!(1_700_000_000_000_u64));
     assert_eq!(head["refs"], json!(["HEAD -> main", "tag: v1"]));
-    let rest = git_log(ws, &env, 1, 50).await.unwrap();
+    let rest = git_log(&*HOST, ws, &env, 1, 50).await.unwrap();
     assert_eq!(rest["more"], false);
     assert_eq!(rest["commits"][0]["refs"], json!(["base"]));
 
     let sha = head["sha"].as_str().unwrap().to_uppercase();
-    let show = git_show(ws, &env, &sha).await.unwrap();
+    let show = git_show(&*HOST, ws, &env, &sha).await.unwrap();
     assert_eq!(show["message"], "second commit\n\nWith a body.");
     assert_eq!(show["time"], json!(1_700_000_000_000_u64));
     let patch = show["diff"].as_str().unwrap();
     assert!(patch.starts_with(" a.txt | 1 +"), "{patch}");
     assert!(patch.contains("+two"));
-    let unknown = git_show(ws, &env, "deadbeef0").await.unwrap_err();
+    let unknown = git_show(&*HOST, ws, &env, "deadbeef0").await.unwrap_err();
     assert_eq!(unknown.status, 400);
 
     // A subdirectory of the repository: its path and only its files.
     std::fs::create_dir(ws.join("sub")).unwrap();
     std::fs::write(ws.join("sub/inner.txt"), "x").unwrap();
-    let sub = git_status(&ws.join("sub"), &env).await.unwrap();
+    let sub = git_status(&*HOST, &ws.join("sub"), &env).await.unwrap();
     assert_eq!(sub["root"], "sub");
     assert_eq!(
         sub["files"],
         json!([{ "path": "sub/inner.txt", "index": "?", "worktree": "?" }])
     );
+}
+
+/// Security audit S8: every git call goes through `prepare_readonly`
+/// (the workspace, git's flags) and is cleaned up; what the repository's
+/// config makes git run (a clean filter here) runs beneath the sandbox
+/// wrapper, with the caller's environment and the sandbox's.
+#[tokio::test]
+async fn git_runs_in_the_sandbox() {
+    let f = fixture();
+    let ws = &f.ws;
+    let env = env(&f.run);
+    let sandbox = FakeSandbox::new(None);
+    run_git(ws, &["init", "-q", "-b", "main"]);
+    std::fs::write(ws.join(".gitattributes"), "*.txt filter=x\n").unwrap();
+    std::fs::write(ws.join("a.txt"), "one\n").unwrap();
+    run_git(ws, &["add", "."]);
+    run_git(ws, &["commit", "-q", "-m", "first"]);
+    let marker = f.run.join("marker");
+    run_git(
+        ws,
+        &[
+            "config",
+            "filter.x.clean",
+            &format!(
+                "sh -c 'echo \"$PIRC_TEST_SANDBOXED $PIRC_TEST_PREPARED\" >> {}; cat'",
+                marker.display()
+            ),
+        ],
+    );
+    std::fs::write(ws.join("a.txt"), "one\ntwo\n").unwrap();
+
+    let status = git_status(&sandbox, ws, &env).await.unwrap();
+    assert_eq!(status["repo"], true);
+    let diff = git_diff(&sandbox, ws, &env, Some("a.txt"), false, false)
+        .await
+        .unwrap();
+    assert!(diff["diff"].as_str().unwrap().contains("+two"));
+    let log = git_log(&sandbox, ws, &env, 0, 50).await.unwrap();
+    let sha = log["commits"][0]["sha"].as_str().unwrap().to_owned();
+    git_show(&sandbox, ws, &env, &sha).await.unwrap();
+
+    let marks = std::fs::read_to_string(&marker).unwrap();
+    assert!(!marks.is_empty());
+    assert!(marks.lines().all(|line| line == "1 1"), "{marks}");
+    let calls = sandbox.calls.lock().unwrap().clone();
+    // status: rev-parse + status; diff; log: rev-parse + log; show: 2.
+    assert_eq!(calls.len(), 7);
+    for call in &calls {
+        assert_eq!(call.workspace_root, *ws);
+        assert_eq!(
+            call.command[..8],
+            [
+                "git",
+                "--no-pager",
+                "-c",
+                "core.quotepath=false",
+                "-c",
+                "core.fsmonitor=false",
+                "-c",
+                "color.ui=false"
+            ]
+            .map(OsString::from)
+        );
+    }
+    assert_eq!(calls[1].command[8], "status");
+    assert_eq!(sandbox.cleaned.load(Ordering::SeqCst), 7);
+}
+
+/// Without a sandbox the Git panel is unavailable: 503, never "not a
+/// repository" or an empty history, and git never runs.
+#[tokio::test]
+async fn git_is_unavailable_without_a_sandbox() {
+    let f = fixture();
+    let env = env(&f.run);
+    run_git(&f.ws, &["init", "-q", "-b", "main"]);
+    let sandbox = FakeSandbox::new(Some("bubblewrap is missing"));
+    let expected = (
+        503,
+        "runner_unavailable".to_owned(),
+        "The Git panel runs git in the sandbox, and it is unavailable on this node: bubblewrap is missing"
+            .to_owned(),
+    );
+    assert_eq!(
+        status(git_status(&sandbox, &f.ws, &env).await.unwrap_err()),
+        expected
+    );
+    assert_eq!(
+        status(git_log(&sandbox, &f.ws, &env, 0, 50).await.unwrap_err()),
+        expected
+    );
+    assert_eq!(
+        status(
+            git_diff(&sandbox, &f.ws, &env, None, false, false)
+                .await
+                .unwrap_err()
+        ),
+        expected
+    );
+    assert_eq!(
+        status(
+            git_show(&sandbox, &f.ws, &env, "abcd1234")
+                .await
+                .unwrap_err()
+        ),
+        expected
+    );
+    assert!(sandbox.calls.lock().unwrap().is_empty());
+}
+
+/// A git that outlives its deadline is killed with its whole process
+/// group (the sandbox wrapper's children too), and the answer does not wait
+/// past the drain for a process that left the group but holds the pipe.
+#[tokio::test]
+async fn a_stuck_git_is_killed_with_its_group() {
+    let f = fixture();
+    let pid_file = f.run.join("child.pid");
+    let script = format!(
+        "sleep 100 & echo $! > {}; (command -v setsid >/dev/null && setsid sleep 5) & echo started; wait",
+        pid_file.display()
+    );
+    let prepared = Prepared::new(
+        PathBuf::from("/bin/sh"),
+        vec!["-c".into(), script.into()],
+        Vec::new(),
+        SessionPolicy::default(),
+        Vec::new(),
+        None,
+        || {},
+    );
+    let started = std::time::Instant::now();
+    let timeout = Duration::from_millis(500);
+    let error = run_prepared(&prepared, &f.ws, &env(&f.run), timeout)
+        .await
+        .err()
+        .unwrap();
+    let elapsed = started.elapsed();
+    let GitError::Api(error) = error else {
+        panic!("not an exit code")
+    };
+    assert_eq!(error.message, "git exited with 137");
+    assert!(
+        elapsed >= timeout && elapsed < timeout + KILL_DRAIN + Duration::from_secs(2),
+        "{elapsed:?}"
+    );
+    let pid: i32 = std::fs::read_to_string(&pid_file)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    let pid = nix::unistd::Pid::from_raw(pid);
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while nix::sys::signal::kill(pid, None).is_ok() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the group's child lives on"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
 }

@@ -45,7 +45,7 @@ pub fn routes() -> Vec<Route> {
             let local = local(&node, &request)?;
             let env = child_env(&node);
             Ok(Response::json(
-                inspect::git_status(&local.root, &env).await?,
+                inspect::git_status(&*node.sandbox, &local.root, &env).await?,
             ))
         }),
         get("/api/sessions/:id/git/diff", |node, request| async move {
@@ -54,8 +54,15 @@ pub fn routes() -> Vec<Route> {
             let staged = flag(&request, "staged")?;
             let untracked = flag(&request, "untracked")?;
             let env = child_env(&node);
-            let diff =
-                inspect::git_diff(&local.root, &env, path.as_deref(), staged, untracked).await?;
+            let diff = inspect::git_diff(
+                &*node.sandbox,
+                &local.root,
+                &env,
+                path.as_deref(),
+                staged,
+                untracked,
+            )
+            .await?;
             Ok(Response::json(diff))
         }),
         get("/api/sessions/:id/git/log", |node, request| async move {
@@ -63,7 +70,9 @@ pub fn routes() -> Vec<Route> {
             let skip = coerce_int(&request, "skip", 0.0, 1_000_000.0, 0.0)?;
             let limit = coerce_int(&request, "limit", 1.0, 200.0, 50.0)?;
             let env = child_env(&node);
-            let log = inspect::git_log(&local.root, &env, skip as u64, limit as u64).await?;
+            let log =
+                inspect::git_log(&*node.sandbox, &local.root, &env, skip as u64, limit as u64)
+                    .await?;
             Ok(Response::json(log))
         }),
         get(
@@ -76,7 +85,7 @@ pub fn routes() -> Vec<Route> {
                 }
                 let env = child_env(&node);
                 Ok(Response::json(
-                    inspect::git_show(&local.root, &env, sha).await?,
+                    inspect::git_show(&*node.sandbox, &local.root, &env, sha).await?,
                 ))
             },
         ),
