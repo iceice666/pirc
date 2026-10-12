@@ -474,7 +474,10 @@ mod tests {
         // Killed, it would have no exit code and no "end".
         assert_eq!(code, Some(0));
         let written = std::fs::read_to_string(&file).unwrap();
-        assert!(written.starts_with("JPEG") && written.ends_with("end\n"), "{written}");
+        assert!(
+            written.starts_with("JPEG") && written.ends_with("end\n"),
+            "{written}"
+        );
     }
 
     #[tokio::test]

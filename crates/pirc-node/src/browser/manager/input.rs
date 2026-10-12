@@ -83,8 +83,7 @@ impl Inner {
                 // A tab that records (or starts to) ignores a start.
                 if action == Some("start") {
                     if let Some(reservation) = self.reserve_recording(&tab) {
-                        self.start_recording(&tab, reservation, "recording")
-                            .await?;
+                        self.start_recording(&tab, reservation, "recording").await?;
                         self.log(&tab, "user", "Started recording", None);
                     }
                 } else if action == Some("stop")

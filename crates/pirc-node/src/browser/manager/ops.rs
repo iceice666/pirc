@@ -684,7 +684,10 @@ impl Inner {
                 tab.upgrade().is_some_and(|tab| {
                     let st = tab.lock();
                     st.recording_starting == Some(seq)
-                        || st.recording.as_ref().is_some_and(|active| active.seq == seq)
+                        || st
+                            .recording
+                            .as_ref()
+                            .is_some_and(|active| active.seq == seq)
                 })
             })
         };
