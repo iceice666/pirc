@@ -607,19 +607,14 @@ impl Inner {
     async fn record(self: &Arc<Self>, tab: &Arc<Tab>, args: &Value) -> ApiResult<Value> {
         match arg(args, "action").and_then(Value::as_str) {
             Some("start") => {
-                if tab.lock().recording.is_some() {
+                let Some(reservation) = self.reserve_recording(tab) else {
                     return Err(ApiError::conflict("Already recording"));
-                }
+                };
                 let name = arg(args, "name")
                     .and_then(Value::as_str)
                     .unwrap_or_default();
-                self.start_recording(tab, name).await?;
+                let path = self.start_recording(tab, reservation, name).await?;
                 self.log(tab, "agent", "Started recording", None);
-                let path = tab
-                    .lock()
-                    .recording
-                    .as_ref()
-                    .map(|active| active.recording.relative.clone());
                 Ok(json!({ "recording": true, "path": path }))
             }
             Some("stop") => {
@@ -634,12 +629,33 @@ impl Inner {
         }
     }
 
-    /// `startRecording(tab, name)`.
+    /// The check of `if (tab.recording)` and the start that follows, made
+    /// atomic: TS set `tab.recording` with no await in between (a tab with
+    /// a page), but two starts on different threads could both pass the
+    /// check here. `None` when the tab records or a start is in progress.
+    /// Stricter than TS for a tab without a page: TS let two starts that
+    /// both awaited `newPage` both proceed (the second replaced the first).
+    pub(super) fn reserve_recording(&self, tab: &Arc<Tab>) -> Option<RecordingReservation> {
+        let mut st = tab.lock();
+        if st.recording.is_some() || st.recording_starting.is_some() {
+            return None;
+        }
+        let seq = self.next_seq();
+        st.recording_starting = Some(seq);
+        Some(RecordingReservation {
+            tab: tab.clone(),
+            seq,
+        })
+    }
+
+    /// `startRecording(tab, name)` with the slot reserved; the recording's
+    /// path.
     pub(super) async fn start_recording(
         self: &Arc<Self>,
         tab: &Arc<Tab>,
+        reservation: RecordingReservation,
         name: &str,
-    ) -> ApiResult<()> {
+    ) -> ApiResult<String> {
         if tab.active().is_none() {
             self.new_page(tab).await.map_err(OpError::into_api)?;
         }
@@ -651,7 +667,9 @@ impl Inner {
             file_stamp(crate::util::now_ms())
         );
         let relative = format!(".pirc/recordings/{file_name}");
-        let seq = self.next_seq();
+        // Current from now on, also before it is installed: a fast ffmpeg
+        // failure is the recording's (`tab.recording === recording`).
+        let seq = reservation.seq;
         let frames: FrameSource = {
             let tab = Arc::downgrade(tab);
             Arc::new(move || {
@@ -664,10 +682,9 @@ impl Inner {
             let tab = Arc::downgrade(tab);
             Arc::new(move || {
                 tab.upgrade().is_some_and(|tab| {
-                    tab.lock()
-                        .recording
-                        .as_ref()
-                        .is_some_and(|active| active.seq == seq)
+                    let st = tab.lock();
+                    st.recording_starting == Some(seq)
+                        || st.recording.as_ref().is_some_and(|active| active.seq == seq)
                 })
             })
         };
@@ -675,7 +692,7 @@ impl Inner {
             &self.settings.ffmpeg,
             &self.env,
             dir.join(&file_name),
-            relative,
+            relative.clone(),
             frames,
             still_current,
         );
@@ -703,6 +720,9 @@ impl Inner {
         };
         let (needs_seed, active) = {
             let mut st = tab.lock();
+            // The reservation kept the slot empty.
+            debug_assert!(st.recording.is_none());
+            st.recording_starting = None;
             st.recording = Some(ActiveRecording {
                 seq,
                 recording,
@@ -710,6 +730,7 @@ impl Inner {
             });
             (st.last_frame.is_none(), st.active.clone())
         };
+        drop(reservation);
         // Seed a frame so the video starts with the current page.
         if needs_seed && let Some(page) = active {
             let seed = page
@@ -753,7 +774,7 @@ impl Inner {
             return Err(ApiError::runner_unavailable(reason));
         }
         self.emit_state(tab);
-        Ok(())
+        Ok(relative)
     }
 
     /// `stopRecording(tab)` when the tab records: the tab lets go of the
@@ -782,6 +803,22 @@ impl Inner {
             inner.sync_screencast(&tab);
             inner.emit_state(&tab);
             stopped.result()
+        }
+    }
+}
+
+/// A tab's recording slot, held by a start until its recording is
+/// installed; released on drop (a start that failed or was dropped).
+pub(super) struct RecordingReservation {
+    tab: Arc<Tab>,
+    seq: u64,
+}
+
+impl Drop for RecordingReservation {
+    fn drop(&mut self) {
+        let mut st = self.tab.lock();
+        if st.recording_starting == Some(self.seq) {
+            st.recording_starting = None;
         }
     }
 }

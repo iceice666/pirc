@@ -342,6 +342,9 @@ pub(crate) struct TabState {
     frame_timer: Option<AbortHandle>,
     last_sent: Option<Instant>,
     recording: Option<ActiveRecording>,
+    /// A start in progress before its recording is installed (its seq):
+    /// another start sees the slot taken (see `Inner::reserve_recording`).
+    recording_starting: Option<u64>,
     log: VecDeque<LogEntry>,
     log_count: u64,
     last_activity: Instant,
@@ -365,6 +368,7 @@ impl Tab {
                 frame_timer: None,
                 last_sent: None,
                 recording: None,
+                recording_starting: None,
                 log: VecDeque::new(),
                 log_count: 0,
                 last_activity: Instant::now(),

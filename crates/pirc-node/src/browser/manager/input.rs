@@ -80,10 +80,13 @@ impl Inner {
             }
             Some("record") => {
                 let action = message.get("action").and_then(Value::as_str);
-                let recording = tab.lock().recording.is_some();
-                if action == Some("start") && !recording {
-                    self.start_recording(&tab, "recording").await?;
-                    self.log(&tab, "user", "Started recording", None);
+                // A tab that records (or starts to) ignores a start.
+                if action == Some("start") {
+                    if let Some(reservation) = self.reserve_recording(&tab) {
+                        self.start_recording(&tab, reservation, "recording")
+                            .await?;
+                        self.log(&tab, "user", "Started recording", None);
+                    }
                 } else if action == Some("stop")
                     && let Some(stopping) = self.stop_recording(&tab)
                 {
