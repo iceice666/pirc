@@ -3,9 +3,10 @@
 //! [`engine`], a port of the parts of Playwright the TS node used, speaking
 //! CDP to an external Chromium. [`UnavailableBrowser`] stays for tests.
 //!
-//! The runner calls [`BrowserService::handle`] for `browser_request`s
-//! (dropping the future is `browser_cancel`: as in TS, that only abandons
-//! waits; an operation already running finishes); streams call
+//! The runner calls [`BrowserService::handle_with_abort`] for
+//! `browser_request`s (`browser_cancel` aborts it: as in TS, that only
+//! abandons waits; an operation already running finishes, and the request
+//! keeps its in-flight slot until then); streams call
 //! [`BrowserService::attach`] and [`BrowserService::input`]; core calls
 //! `close_session` on chat deletion and `shutdown` on close.
 //!
@@ -61,6 +62,29 @@ pub trait BrowserService: Send + Sync {
         op: String,
         args: Value,
     ) -> BoxFuture<'_, ApiResult<Value>>;
+
+    /// [`BrowserService::handle`] with TS's `AbortSignal`: `abort` turning
+    /// true (or closing) is `controller.abort()` (`browser_cancel`), and
+    /// the future still resolves only once the operation has settled, as
+    /// TS's `handle` promise did, so the runner can hold the request's
+    /// in-flight slot until then. Dropping the future also aborts.
+    fn handle_with_abort(
+        &self,
+        target: BrowserTarget,
+        op: String,
+        args: Value,
+        mut abort: tokio::sync::watch::Receiver<bool>,
+    ) -> BoxFuture<'_, ApiResult<Value>> {
+        let handle = self.handle(target, op, args);
+        Box::pin(async move {
+            tokio::select! {
+                result = handle => result,
+                () = async { let _ = abort.wait_for(|aborted| *aborted).await; } => {
+                    Err(ApiError::new(499, "aborted", "Aborted"))
+                }
+            }
+        })
+    }
 
     /// A viewer of the session's browser: frames go to `send` until the
     /// returned function runs. Called only when [`BrowserService::enabled`].

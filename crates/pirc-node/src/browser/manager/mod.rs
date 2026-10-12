@@ -14,7 +14,10 @@
 //! returned future is TS's abort, which only ends waits for the user
 //! (`waitForAgentMode`) and the check before an operation starts; an
 //! operation already running (a launch, a navigation, a recording) finishes
-//! and its result is discarded.
+//! and its result is discarded. The runner aborts through
+//! [`BrowserService::handle_with_abort`] instead, which still waits for the
+//! operation to settle (TS's `browser_cancel` kept the request in flight
+//! until then).
 //!
 //! The engine is reached through [`seam`] (TS's `settings.launch` test
 //! hook), so the session lifecycle is unit-tested with a fake context.
@@ -113,6 +116,29 @@ impl BrowserService for BrowserManager {
         Box::pin(async move {
             let result = task.await;
             drop(abort);
+            result.unwrap_or_else(|error| Err(panicked(error)))
+        })
+    }
+
+    fn handle_with_abort(
+        &self,
+        target: BrowserTarget,
+        op: String,
+        args: Value,
+        mut abort: watch::Receiver<bool>,
+    ) -> BoxFuture<'_, ApiResult<Value>> {
+        let signal = Signal::new();
+        let mut task = tokio::spawn(self.inner.clone().handle(target, op, args, signal.clone()));
+        let abort_on_drop = AbortOnDrop(signal.clone());
+        Box::pin(async move {
+            let result = tokio::select! {
+                result = &mut task => result,
+                () = async { let _ = abort.wait_for(|aborted| *aborted).await; } => {
+                    signal.abort();
+                    task.await
+                }
+            };
+            drop(abort_on_drop);
             result.unwrap_or_else(|error| Err(panicked(error)))
         })
     }

@@ -406,6 +406,51 @@ async fn an_abandoned_request_still_drains_with_its_launch() {
     manager.shutdown().await;
 }
 
+/// `browser_cancel` through the runner: the abort ends a wait at once but
+/// the request settles (and keeps its slot) only when its launch does.
+#[tokio::test]
+async fn an_aborted_request_settles_with_its_operation() {
+    let (fixture, open, launch_started) = gated_manager();
+    let manager = &fixture.manager;
+    let target = target("s", "w");
+    let (abort, aborted) = watch::channel(false);
+    let request = {
+        let manager = manager.clone();
+        let target = target.clone();
+        tokio::spawn(async move {
+            manager
+                .handle_with_abort(target, "snapshot".into(), json!({}), aborted)
+                .await
+        })
+    };
+    launch_started.await.unwrap();
+    abort.send_replace(true);
+    settle().await;
+    assert!(!request.is_finished());
+    let _ = open.send(FakeContext::new() as ContextRef);
+    // The launch went on; the aborted operation never starts.
+    let error = request.await.unwrap().unwrap_err();
+    assert_eq!(
+        (error.status, &*error.message),
+        (500, "This operation was aborted")
+    );
+
+    // A wait for the user ends with the abort.
+    manager
+        .handle(target.clone(), "handoff".into(), json!({ "reason": "x" }))
+        .await
+        .unwrap();
+    let (abort, aborted) = watch::channel(false);
+    let waiting = manager.handle_with_abort(target, "wait_control".into(), json!({}), aborted);
+    let cancel = async {
+        settle().await;
+        abort.send_replace(true);
+    };
+    let (error, ()) = tokio::join!(waiting, cancel);
+    assert_eq!(error.unwrap_err().status, 499);
+    manager.shutdown().await;
+}
+
 #[tokio::test]
 async fn keeps_a_shared_workspace_context_alive_for_another_pending_session() {
     let (fixture, open, launch_started) = gated_manager();
