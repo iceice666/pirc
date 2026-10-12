@@ -222,6 +222,32 @@ impl Inner {
         });
     }
 
+    /// `dropTab`'s `view(undefined)`: the empty state as the tab's state
+    /// number `seq`, after the tab's earlier states (which may still be
+    /// reading titles), so none of them lands after it. Skipped when the
+    /// session has a new tab by then: that tab's states are current (TS
+    /// sent the empty state at once, before any new tab's).
+    pub(super) fn emit_dropped(self: &Arc<Self>, tab: &Arc<Tab>, seq: u64) {
+        let inner = self.clone();
+        let tab = tab.clone();
+        let send = async move {
+            let sent = tab.states_sent.clone();
+            let mut earlier = sent.subscribe();
+            let _ = tokio::time::timeout(
+                Duration::from_secs(1),
+                earlier.wait_for(|done| *done >= seq),
+            )
+            .await;
+            let replaced = inner.lock().tabs.contains_key(tab.session());
+            if !replaced {
+                let empty = json!({ "type": "state", "state": inner.view_of(None) });
+                inner.broadcast(tab.session(), &empty);
+            }
+            sent.send_modify(|done| *done = (*done).max(seq + 1));
+        };
+        spawn(send);
+    }
+
     /// `log(tab, actor, action, jpeg)`: an action log entry (at most 300
     /// UTF-16 code units of text; typed text is never logged).
     pub(super) fn log(&self, tab: &Tab, actor: &'static str, action: &str, jpeg: Option<Vec<u8>>) {

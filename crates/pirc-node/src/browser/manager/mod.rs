@@ -828,7 +828,7 @@ impl Inner {
     /// `dropTab(tab)`: forget the tab (its pages are closed by the caller,
     /// or already gone); viewers stay registered.
     fn drop_tab(self: &Arc<Self>, tab: &Arc<Tab>) {
-        let stop = {
+        let (stop, empty_seq) = {
             let mut st = tab.lock();
             if st.closed {
                 return;
@@ -841,7 +841,9 @@ impl Inner {
             }
             st.mode = Mode::Agent;
             self.wake_waiters(tab, &mut st, None);
-            st.recording.take()
+            // Numbered after the woken waiters' states: it goes out last.
+            let empty_seq = tab.states_emitted.fetch_add(1, Ordering::Relaxed);
+            (st.recording.take(), empty_seq)
         };
         if let Some(recording) = stop {
             let stopping = self.finish_recording(tab, recording);
@@ -862,8 +864,7 @@ impl Inner {
                 workspace.sessions.remove(tab.session());
             }
         }
-        let empty = json!({ "type": "state", "state": self.view_of(None) });
-        self.broadcast(tab.session(), &empty);
+        self.emit_dropped(tab, empty_seq);
     }
 
     /// `closeSession(sessionId)`: fence new requests, fail the waits for the
