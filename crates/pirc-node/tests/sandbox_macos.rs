@@ -912,13 +912,20 @@ async fn a_workspace_with_glob_characters_keeps_its_denies() {
 #[tokio::test]
 async fn the_readonly_sandbox_reads_but_never_writes() {
     let f = fixture("readonly");
+    // A real repository for `git status` (the fixture's `.git` is a stub).
+    let init = std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(&f.workspace)
+        .status()
+        .unwrap();
+    assert!(init.success());
     let port = upstream().await;
     let run = async |script: String| {
         let prepared = f
             .sandbox
             .prepare_readonly(ReadonlyInput {
                 workspace_root: f.workspace.clone(),
-                command: vec!["/bin/sh".into(), "-c".into(), script.into()],
+                command: vec!["/bin/sh".into(), "-c".into(), script.clone().into()],
             })
             .await
             .unwrap();
@@ -930,9 +937,13 @@ async fn the_readonly_sandbox_reads_but_never_writes() {
             .envs(prepared.env.iter().map(|(k, v)| (k, v)))
             .current_dir(&f.workspace)
             .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        let code = command.status().await.unwrap().code().unwrap_or(-1);
+            .stderr(Stdio::piped());
+        let output = command.output().await.unwrap();
         prepared.cleanup();
+        let code = output.status.code().unwrap_or(-1);
+        if code != 0 {
+            eprintln!("{script}: {}", String::from_utf8_lossy(&output.stderr));
+        }
         code
     };
     let w = f.w();
