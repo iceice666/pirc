@@ -18,7 +18,7 @@ use std::time::Duration;
 use pirc_config::{Env, NodeConfig};
 use pirc_node::sandbox::linux::plan::RESOLVER_SOCKETS;
 use pirc_node::sandbox::linux::{NativeSandbox, find_bwrap};
-use pirc_node::sandbox::{PrepareInput, Prepared, ReadonlyInput, Sandbox};
+use pirc_node::sandbox::{PrepareInput, Prepared, ReadonlyInput, Sandbox, SandboxStatus};
 use pirc_protocol::NodeRole;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
@@ -39,6 +39,16 @@ impl Drop for Fixture {
 /// A node whose sessions may reach `allowed` but not `denied`, or `None`
 /// without bubblewrap.
 fn fixture(name: &str, allowed: &[&str], denied: &[&str]) -> Option<Fixture> {
+    fixture_with(name, allowed, denied, None)
+}
+
+/// [`fixture`], its `TMPDIR` `tmp_len` bytes long when given.
+fn fixture_with(
+    name: &str,
+    allowed: &[&str],
+    denied: &[&str],
+    tmp_len: Option<usize>,
+) -> Option<Fixture> {
     let path_var = std::env::var("PATH").unwrap_or_default();
     if find_bwrap(&Env::new([("PATH", path_var.as_str())], "/")).is_none() {
         eprintln!("skipped: bwrap is not on PATH, so the native sandbox cannot be tested here");
@@ -68,10 +78,14 @@ fn fixture(name: &str, allowed: &[&str], denied: &[&str]) -> Option<Fixture> {
         .prefix("pirc-t")
         .tempdir_in("/tmp")
         .unwrap();
-    let tmp = fs::canonicalize(tmp_dir.path())
+    let mut tmp = fs::canonicalize(tmp_dir.path())
         .unwrap()
         .display()
         .to_string();
+    if let Some(len) = tmp_len {
+        tmp = format!("{tmp}/{}", "x".repeat(len - tmp.len() - 1));
+        fs::create_dir(&tmp).unwrap();
+    }
     let vars = [
         ("PIRC_NODE_ID", "test-node"),
         ("PIRC_NODE_TOKEN", "0123456789abcdef0123456789abcdef"),
@@ -359,6 +373,27 @@ exit 0
     }
     a.cleanup();
     b.cleanup();
+}
+
+/// The probe binds its socket where a session's goes
+/// (`<TMPDIR>/pirc-n-*/pirc-*/proxy.sock`): a `TMPDIR` too long for that
+/// path in `sun_path` (108 bytes) makes the backend unavailable, saying
+/// why, rather than available with every start failing (second review,
+/// issue 5). 80 bytes fit a socket directly in `<TMPDIR>/pirc-*`.
+#[tokio::test]
+async fn the_probe_checks_a_session_shaped_socket_path() {
+    let Some(f) = fixture_with("long-tmp", &[], &[], Some(80)) else {
+        return;
+    };
+    let status = f.sandbox.check().await;
+    let SandboxStatus::Unavailable { reason } = status else {
+        panic!("{status:?}");
+    };
+    assert!(
+        reason.starts_with("bubblewrap: cannot bind the proxy socket /tmp/"),
+        "{reason}"
+    );
+    assert!(reason.contains("/pirc-n-"), "{reason}");
 }
 
 #[tokio::test]

@@ -321,9 +321,10 @@ impl NativeSandbox {
         {
             return SandboxStatus::Unavailable { reason };
         }
-        // Removed however the probe ends (a dropped `check` too).
-        let tmp = match common::make_temp_dir(&common::tmpdir(&self.env), "pirc-") {
-            Ok(tmp) => common::SessionTmp::new(tmp),
+        // Removed however the probe ends (a dropped `check` too). Shaped
+        // as a session's, so its socket path is as long as theirs.
+        let tmp = match self.node_tmp.make_session_dir() {
+            Ok((tmp, _)) => common::SessionTmp::new(tmp),
             Err(error) => {
                 return SandboxStatus::Unavailable {
                     reason: format!("bubblewrap: {error}"),
@@ -334,7 +335,10 @@ impl NativeSandbox {
         // Bound but never served: the probe only needs the file to bind.
         let status = match std::os::unix::net::UnixListener::bind(&socket) {
             Err(error) => SandboxStatus::Unavailable {
-                reason: format!("bubblewrap: {error}"),
+                reason: format!(
+                    "bubblewrap: cannot bind the proxy socket {}: {error}",
+                    socket.display()
+                ),
             },
             Ok(_listener) => {
                 let tmp_text = tmp.display().to_string();
