@@ -97,6 +97,22 @@ pub fn contains_glob_chars(pattern: &str) -> bool {
     pattern.contains(['*', '?', '[', ']'])
 }
 
+/// Not srt's: whether `entry` is spelled with glob characters only inside
+/// one of `roots` (pirc's own paths: the workspace, the node's state, ...),
+/// so it names one path whatever characters it holds. srt reads `[`, `]`,
+/// `*`, `?` in such a path as a pattern, which no longer matches it (a
+/// workspace named `notes [draft]`). A glob a user configured keeps
+/// srt's reading.
+pub fn is_literal_spelling(entry: &str, roots: &[String]) -> bool {
+    contains_glob_chars(entry)
+        && roots.iter().any(|root| {
+            entry == root
+                || entry
+                    .strip_prefix(root.as_str())
+                    .is_some_and(|rest| rest.starts_with('/') && !contains_glob_chars(rest))
+        })
+}
+
 /// `isAtOrUnder`: `path` is `dir` or lies beneath it, by segment.
 pub fn is_at_or_under(path: &str, dir: &str) -> bool {
     path == dir

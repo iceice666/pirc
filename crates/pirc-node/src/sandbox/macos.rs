@@ -16,17 +16,22 @@
 //! - The agent is spawned as `sandbox-exec -p <profile> <program> <args>`
 //!   with the environment set on the process; srt ran
 //!   `env <vars> /usr/bin/sandbox-exec -p <profile> bash -c <quoted command>`.
-//! - [`extra_denies`]: every deny (and srt's protected names in the
-//!   workspace) also under its symlink-resolved spelling, and a deny
-//!   spelled with glob characters also as the literal path. srt keeps a
-//!   symlinked spelling when it leaves the path's tree, but Seatbelt
-//!   matches the path the kernel resolved, so `<ws>/.git/config` with `.git`
-//!   linking to the repository elsewhere stayed writable; and it reads
-//!   `[`, `*`, `?` in a pirc path (a workspace named `notes [draft]`) as a
-//!   pattern that no longer matches the path. Both only add denies. For
-//!   the same reason an allow spelled with glob characters that names an
-//!   existing path is that path (`literal_existing_allows`), so such a
-//!   workspace stays readable and writable.
+//! - [`extra_denies`]: every literal deny (and srt's protected names in
+//!   the workspace) also under its spelling with every symlink resolved,
+//!   with each link in the chain kept in place (move-blocked with its
+//!   ancestors). srt keeps a symlinked spelling when it leaves the path's
+//!   tree, but Seatbelt matches the path the kernel resolved, so
+//!   `<ws>/.git/config` with `.git` linking to the repository elsewhere
+//!   stayed writable. A glob deny is left to srt's pattern (whose static
+//!   directory srt resolves itself, as the policy already did).
+//! - srt reads `[`, `]`, `*`, `?` in a path as glob syntax, so a pirc path
+//!   holding them (a workspace named `notes [draft]`) became a pattern
+//!   that no longer matched it. A deny spelled with them only inside
+//!   pirc's own paths ([`paths::is_literal_spelling`]: the workspace, the
+//!   node's state, home, ...) is also denied as the literal path, and such
+//!   an allow is that path ([`ProfileInput::literal_roots`]), so the
+//!   workspace stays readable and writable. A glob the user configured
+//!   keeps srt's reading.
 //! - The policy lists its denies by their symlink-resolved targets (the
 //!   sensitive home paths, private, read-only and protected paths, the
 //!   agent config dir, configured denies). The links their spellings cross
@@ -52,9 +57,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use pirc_config::{Env, NodeConfig};
+use pirc_policy::real_resolve;
 use pirc_policy::session::{SessionPolicy, WalkError, walk_links};
 
-use self::paths::{Context, contains_glob_chars, normalize_path_for_sandbox};
+use self::paths::{Context, contains_glob_chars, is_literal_spelling, normalize_path_for_sandbox};
 use self::profile::ProfileInput;
 use super::common::{self, ProbeCache, Session};
 use super::proxy;
@@ -76,6 +82,8 @@ struct Settings<'a> {
     log_tag: &'a str,
     /// [`ProfileInput::readonly`].
     readonly: bool,
+    /// pirc's own paths besides `cwd` ([`ProfileInput::literal_roots`]).
+    literal_roots: &'a [String],
 }
 
 /// Not srt's (see the module documentation): what [`profile::generate`]
@@ -92,18 +100,28 @@ pub struct ExtraDenies {
 
 /// [`ExtraDenies`] for `deny_read`, `deny_write` and srt's protected names
 /// in `cwd`: each entry's spelling with every symlink resolved (as far as
-/// it exists) when that differs from the one srt uses, an entry with glob
-/// characters also as the literal path, and every link resolving it
-/// crosses kept in place (a link in the middle of a chain, in a writable
-/// directory, would otherwise redirect the resolved deny).
+/// it exists) when that differs from the one srt uses, every link
+/// resolving it crosses kept in place (a link in the middle of a chain,
+/// in a writable directory, would otherwise redirect the resolved deny),
+/// and an entry with glob characters only inside `cwd` or `literal_roots`
+/// ([`paths::is_literal_spelling`]) also as the literal path. A glob of
+/// the user's gets no extra deny (but the links in its static directory
+/// stay in place).
 pub fn extra_denies(
     deny_read: &[String],
     deny_write: &[String],
     allow_git_config: bool,
     cwd: &str,
     home: &str,
+    literal_roots: &[String],
 ) -> ExtraDenies {
     let ctx = Context { cwd, home };
+    let cwd_real = normalize_path_for_sandbox(cwd, true, ctx);
+    let roots: Vec<String> = literal_roots
+        .iter()
+        .cloned()
+        .chain([cwd_real.clone()])
+        .collect();
     let push = |out: &mut Vec<String>, path: String| {
         if !out.contains(&path) {
             out.push(path);
@@ -115,12 +133,15 @@ pub fn extra_denies(
         for entry in entries {
             let entry = paths::remove_trailing_glob_suffix(&entry);
             let literal = normalize_path_for_sandbox(&entry, true, ctx);
-            if contains_glob_chars(&entry) {
-                push(&mut out, literal.clone());
-            }
             let walk = walk_links(&literal);
             for link in walk.links {
                 push(&mut move_blocks, link);
+            }
+            if contains_glob_chars(&entry) {
+                if !is_literal_spelling(&entry, &roots) {
+                    continue;
+                }
+                push(&mut out, literal.clone());
             }
             if let Ok(resolved) = walk.target
                 && resolved != literal
@@ -130,7 +151,6 @@ pub fn extra_denies(
         }
         out
     };
-    let cwd_real = normalize_path_for_sandbox(cwd, true, ctx);
     let read = extras(&mut deny_read.iter().cloned());
     let write = extras(
         &mut deny_write.iter().cloned().chain(
@@ -195,7 +215,14 @@ fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<Str
         policy.allow_git_config,
         cwd,
         settings.home,
+        settings.literal_roots,
     );
+    let literal_roots: Vec<String> = settings
+        .literal_roots
+        .iter()
+        .cloned()
+        .chain([cwd.to_owned()])
+        .collect();
     // The links the policy resolved its denies through stay in place too.
     let mut move_blocks = extra.move_blocks;
     for link in policy.linked_denies.iter().flat_map(|entry| &entry.links) {
@@ -220,7 +247,7 @@ fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<Str
         extra_write_denies: &extra.write,
         extra_move_blocks: &move_blocks,
         readonly: settings.readonly,
-        literal_existing_allows: true,
+        literal_roots: &literal_roots,
     })
 }
 
@@ -293,22 +320,38 @@ impl MacSandbox {
         text(&self.env.home())
     }
 
-    /// The node's own paths, which the policy is built from: each must be
-    /// UTF-8 ([`text`]).
-    fn check_node_paths(&self) -> Result<(), String> {
+    /// pirc's own paths ([`ProfileInput::literal_roots`]): the node's,
+    /// `home` and `extra`, each as given and resolved as the policy
+    /// resolves it. `Err` when one is not UTF-8 ([`text`]): the policy is
+    /// built from them.
+    fn own_paths(&self, home: &str, extra: &[&Path]) -> Result<Vec<String>, String> {
         let config = &self.config;
-        for path in [
+        let database_dir = config.database_path.parent().unwrap_or(Path::new("/"));
+        let node: [&Path; 8] = [
             &config.config_dir,
             &config.state_dir,
             &config.sessions_dir,
             &config.uploads_dir,
             &config.database_path,
+            database_dir,
             &config.browser.profiles_dir,
             &config.workspace_memory_dir,
-        ] {
-            text(path)?;
+        ];
+        let mut out: Vec<String> = Vec::new();
+        for path in node.into_iter().chain(extra.iter().copied()) {
+            let path = text(path)?;
+            for spelling in [real_resolve(&path), path] {
+                if !out.contains(&spelling) {
+                    out.push(spelling);
+                }
+            }
         }
-        Ok(())
+        for spelling in [home.to_owned(), real_resolve(home)] {
+            if !out.contains(&spelling) {
+                out.push(spelling);
+            }
+        }
+        Ok(out)
     }
 
     fn log_tag(&self, command: &[OsString]) -> String {
@@ -349,6 +392,7 @@ impl MacSandbox {
                     allow_pty: false,
                     log_tag: &tag,
                     readonly: false,
+                    literal_roots: &[],
                 },
             )?;
             Ok((profile, tmp_text))
@@ -418,15 +462,15 @@ impl Sandbox for MacSandbox {
             agent.extend(self.config.agent_args.iter().map(OsString::from));
             let tag = self.log_tag(&agent);
             let built = (|| {
-                self.check_node_paths()?;
-                for path in [&input.session_dir]
-                    .into_iter()
-                    .chain(&input.inference_socket)
-                    .chain(&input.protected_paths)
-                {
-                    text(path)?;
-                }
                 let (tmp_text, home) = (text(&tmp)?, self.home()?);
+                let socket_dir = input.inference_socket.as_deref().and_then(Path::parent);
+                let extra: Vec<&Path> = [&*input.workspace_root, &input.session_dir, &tmp]
+                    .into_iter()
+                    .chain(input.inference_socket.as_deref())
+                    .chain(socket_dir)
+                    .chain(input.protected_paths.iter().map(PathBuf::as_path))
+                    .collect();
+                let literal_roots = self.own_paths(&home, &extra)?;
                 let profile = policy_profile(
                     &policy,
                     &Settings {
@@ -436,6 +480,7 @@ impl Sandbox for MacSandbox {
                         allow_pty: true,
                         log_tag: &tag,
                         readonly: false,
+                        literal_roots: &literal_roots,
                     },
                 )?;
                 Ok::<_, String>((profile, tmp_text))
@@ -491,8 +536,8 @@ impl Sandbox for MacSandbox {
             self.require(&tmp).await?;
             let tag = self.log_tag(&input.command);
             let built = (|| {
-                self.check_node_paths()?;
                 let (tmp_text, home) = (text(&tmp)?, self.home()?);
+                let literal_roots = self.own_paths(&home, &[&input.workspace_root, &tmp])?;
                 // No proxy port: the profile allows no network at all.
                 let profile = policy_profile(
                     &policy,
@@ -503,6 +548,7 @@ impl Sandbox for MacSandbox {
                         allow_pty: false,
                         log_tag: &tag,
                         readonly: true,
+                        literal_roots: &literal_roots,
                     },
                 )?;
                 Ok::<_, String>((profile, tmp_text))
@@ -581,10 +627,14 @@ mod tests {
                 p("ws/.git/hooks"),
                 p("w[1]/.pirc"),
                 p("ws/x"),
+                // The user's globs: srt's pattern alone.
+                p("w[1]/*.key"),
+                p("ws/*.lock"),
             ],
             false,
             &p("ws"),
             &p("home"),
+            &[p("w[1]")],
         );
         assert_eq!(read, [p("repo/config")]);
         assert_eq!(
@@ -598,14 +648,21 @@ mod tests {
             ]
         );
         assert_eq!(move_blocks, [p("ws/.git"), p("ws/.bashrc")]);
-        let extra = extra_denies(&[], &[], true, &p("dot"), &p("home"));
+        let extra = extra_denies(&[], &[], true, &p("dot"), &p("home"), &[]);
         assert_eq!(extra, ExtraDenies::default());
         // A chain: ws2/.git -> hop -> repo. Repointing `hop` would
         // redirect the resolved deny: every link crossed stays in place.
         fs::create_dir_all(p("ws2")).unwrap();
         std::os::unix::fs::symlink("repo", p("hop")).unwrap();
         std::os::unix::fs::symlink(p("hop"), p("ws2/.git")).unwrap();
-        let extra = extra_denies(&[], &[p("ws2/.git/config")], true, &p("dot"), &p("home"));
+        let extra = extra_denies(
+            &[],
+            &[p("ws2/.git/config")],
+            true,
+            &p("dot"),
+            &p("home"),
+            &[],
+        );
         assert_eq!(extra.write, [p("repo/config")]);
         assert_eq!(extra.move_blocks, [p("ws2/.git"), p("hop")]);
     }
@@ -629,6 +686,7 @@ mod tests {
             allow_pty: false,
             log_tag: "t",
             readonly: false,
+            literal_roots: &[],
         };
         assert!(policy_profile(&SessionPolicy::default(), &settings).is_ok());
         let target = OsStr::from_bytes(b"repo\xff");
@@ -671,6 +729,7 @@ mod tests {
                     allow_pty: false,
                     log_tag: "t",
                     readonly: false,
+                    literal_roots: &[],
                 },
             )
         };

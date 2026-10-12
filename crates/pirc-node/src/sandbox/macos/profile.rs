@@ -100,9 +100,10 @@ pub struct ProfileInput<'a> {
     /// session), the home convenience directories or `/dev/tty`, so it
     /// writes nothing but its temp directory (security audit S8).
     pub readonly: bool,
-    /// Not srt's: an allow (read or write) spelled with glob characters
-    /// that names an existing path is that path ([`allow_entry`]).
-    pub literal_existing_allows: bool,
+    /// Not srt's: pirc's own paths ([`paths::is_literal_spelling`]). An
+    /// allow (read or write) spelled with glob characters inside one of
+    /// them is that one path ([`allow_entry`]).
+    pub literal_roots: &'a [String],
 }
 
 /// `generateLogTag`: `CMD64_<base64 of the command's first 100
@@ -175,20 +176,14 @@ fn to_path_entry(pattern: &str, ctx: Context<'_>) -> Entry {
     }
 }
 
-/// [`to_path_entry`] for an allow; with `literal_existing`, a spelling
-/// with glob characters that names an existing path is a literal (srt
+/// [`to_path_entry`] for an allow; a spelling whose glob characters lie in
+/// pirc's own paths ([`paths::is_literal_spelling`]) is a literal (srt
 /// reads it as a pattern, which no longer matches that path: a workspace
-/// named `notes [draft]` would not be writable). Not srt's.
-fn allow_entry(pattern: &str, literal_existing: bool, ctx: Context<'_>) -> Entry {
-    if literal_existing && contains_glob_chars(pattern) {
-        let literal = normalize_path_for_sandbox(pattern, true, ctx);
-        if std::fs::symlink_metadata(&literal).is_ok() {
-            return Entry {
-                glob: false,
-                path: literal,
-                anchor: None,
-            };
-        }
+/// named `notes [draft]` would not be writable). A user's glob keeps srt's
+/// reading, even once a path spelled like it exists. Not srt's.
+fn allow_entry(pattern: &str, literal_roots: &[String], ctx: Context<'_>) -> Entry {
+    if paths::is_literal_spelling(pattern, literal_roots) {
+        return to_literal_path_entry(pattern, ctx);
     }
     to_path_entry(pattern, ctx)
 }
@@ -693,7 +688,7 @@ fn write_rules(
     let mut rules = Vec::new();
     let allow_filters: IndexSet<String> = allow_only
         .iter()
-        .map(|pattern| path_filter(&allow_entry(pattern, input.literal_existing_allows, ctx)))
+        .map(|pattern| path_filter(&allow_entry(pattern, input.literal_roots, ctx)))
         .collect();
     rules.extend(render_rule("allow", &["file-write*"], &allow_filters, tag));
     let deny_entries: Vec<Entry> = deny_within_allow
@@ -836,11 +831,11 @@ pub fn generate(input: &ProfileInput<'_>) -> Result<String, String> {
             .collect(),
         allows: allow_within_deny
             .iter()
-            .map(|p| allow_entry(p, input.literal_existing_allows, ctx))
+            .map(|p| allow_entry(p, input.literal_roots, ctx))
             .collect(),
         write_roots: allow_only
             .iter()
-            .map(|p| allow_entry(p, input.literal_existing_allows, ctx))
+            .map(|p| allow_entry(p, input.literal_roots, ctx))
             .collect(),
     };
     profile.push("; File read".to_owned());
@@ -930,7 +925,7 @@ mod tests {
             extra_read_denies: &[],
             extra_write_denies: &[],
             extra_move_blocks: &[],
-            literal_existing_allows: false,
+            literal_roots: &[],
             readonly,
         };
         let dropped = [
@@ -958,6 +953,40 @@ mod tests {
                 "{path}"
             );
         }
+    }
+
+    /// Glob characters are read literally only inside pirc's own paths: a
+    /// user's glob stays a pattern even once a path spelled like it exists
+    /// (review finding 7).
+    #[test]
+    fn only_pircs_own_paths_are_read_literally() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(dir.path())
+            .unwrap()
+            .display()
+            .to_string();
+        let ws = format!("{root}/w[s]");
+        std::fs::create_dir_all(format!("{ws}/gen/*")).unwrap();
+        let ctx = Context {
+            cwd: &ws,
+            home: &root,
+        };
+        let roots = [ws.clone()];
+        assert_eq!(
+            allow_entry(&ws, &roots, ctx),
+            Entry {
+                glob: false,
+                path: ws.clone(),
+                anchor: None
+            }
+        );
+        assert!(!allow_entry(&format!("{ws}/sub"), &roots, ctx).glob);
+        assert!(allow_entry(&format!("{ws}/gen/*"), &roots, ctx).glob);
+        assert!(allow_entry(&ws, &[], ctx).glob);
+        let home_glob = format!("{root}/*.pub");
+        std::fs::write(format!("{root}/id.pub"), "").unwrap();
+        std::fs::write(&home_glob, "").unwrap();
+        assert!(allow_entry(&home_glob, std::slice::from_ref(&root), ctx).glob);
     }
 
     #[test]

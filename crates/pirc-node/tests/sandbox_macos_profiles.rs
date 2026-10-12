@@ -113,7 +113,7 @@ fn profiles_match_srts() {
             extra_write_denies: &[],
             extra_move_blocks: &[],
             readonly: false,
-            literal_existing_allows: false,
+            literal_roots: &[],
         };
         let actual = profile::generate(&input).unwrap();
         let expected = fs::read_to_string(format!("{FIXTURES}/{name}.sb"))
