@@ -250,7 +250,7 @@ impl Sandbox for SrtSandbox {
             ];
             args.extend(input.command);
             let env = vec![("CLAUDE_CODE_TMPDIR".to_owned(), tmp.display().to_string())];
-            let temp_dir = tmp.clone();
+            let temp_dir = tmp.to_path_buf();
             Ok(Prepared::new(
                 PathBuf::from(&self.srt),
                 args,

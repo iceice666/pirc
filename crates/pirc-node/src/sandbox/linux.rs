@@ -397,7 +397,7 @@ impl NativeSandbox {
         };
         caps::warn_if_setfcap_missing();
         let profile = invocation.profile;
-        let temp_dir = tmp.clone();
+        let temp_dir = tmp.to_path_buf();
         Ok(Prepared::new(
             invocation.program,
             invocation.args,

@@ -394,7 +394,7 @@ impl Sandbox for MacSandbox {
                 }
             };
             let env = sandbox_env(&tmp_text, None, false);
-            let temp_dir = tmp.clone();
+            let temp_dir = tmp.to_path_buf();
             Ok(Prepared::new(
                 PathBuf::from(SANDBOX_EXEC),
                 exec_args(profile, input.command),
