@@ -176,7 +176,6 @@ impl Locator {
         let element = self
             .run(api, timeout, self.wait_for_attached(timeout))
             .await?;
-        let element = OwnedHandle::new(element);
         let declaration =
             format!("function(element) {{\n  return (\n{function}\n)(element, undefined);\n}}");
         let main = self.page.main_frame();
@@ -1344,8 +1343,9 @@ impl Locator {
     }
 
     /// `Frame.waitForSelector(selector, {strict: true, state: 'attached'})`:
-    /// the element, in its frame's main world.
-    async fn wait_for_attached(&self, timeout: Duration) -> Result<JsHandle> {
+    /// the element, in its frame's main world, released if this is dropped
+    /// at any point after it was adopted.
+    async fn wait_for_attached(&self, timeout: Duration) -> Result<OwnedHandle> {
         let main = self.page.main_frame();
         let waits = backoff(timeout);
         let mut attempt = 0;
@@ -1362,13 +1362,24 @@ impl Locator {
                 Err(failure) if failure.retriable => continue,
                 Err(failure) => return Err(failure.error),
             };
-            let adopted = element.frame.adopt(&element.handle, false).await;
-            element.release().await;
-            if let Ok(handle) = adopted {
+            let Element { frame, handle, .. } = element;
+            let adoption = async |found: &JsHandle| frame.adopt(found, false).await;
+            if let Ok(handle) = adopt_then_release(handle, adoption).await {
                 return Ok(handle);
             }
         }
     }
+}
+
+/// The handle `adopt` makes of `found`, owned before `found` is released,
+/// so that dropping this while the release is in flight releases both.
+async fn adopt_then_release<T>(
+    found: OwnedHandle,
+    adopt: impl AsyncFnOnce(&JsHandle) -> std::result::Result<JsHandle, T>,
+) -> std::result::Result<OwnedHandle, T> {
+    let adopted = adopt(&found).await.map(OwnedHandle::new);
+    found.release().await;
+    adopted
 }
 
 /// `computeQuadArea`.
@@ -1384,7 +1395,36 @@ fn quad_area(quad: &[(f64, f64); 4]) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use super::super::cdp::Fake;
     use super::*;
+
+    /// Cut short while the found element's release is in flight, the
+    /// adopted handle is released too.
+    #[tokio::test]
+    async fn an_adopted_handle_is_released_when_cut_short() {
+        let mut fake = Fake::new();
+        let session = fake.connection.session("S");
+        let handle = |id: &str| JsHandle {
+            session: session.clone(),
+            object_id: id.to_owned(),
+        };
+        let adopted = handle("adopted");
+        let adopt = async |_: &JsHandle| Ok::<_, ()>(adopted);
+        let swap = adopt_then_release(OwnedHandle::new(handle("found")), adopt);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), swap)
+                .await
+                .is_err()
+        );
+        let mut released = Vec::new();
+        for _ in 0..2 {
+            let command = fake.command().await;
+            assert_eq!(command["method"], "Runtime.releaseObject");
+            released.push(command["params"]["objectId"].as_str().unwrap().to_owned());
+        }
+        released.sort();
+        assert_eq!(released, ["adopted", "found"]);
+    }
 
     #[test]
     fn parses_frame_refs_as_playwright() {
