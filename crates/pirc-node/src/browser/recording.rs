@@ -441,7 +441,12 @@ mod tests {
             no_frames(),
             Arc::new(|| true),
         );
-        tokio::time::sleep(Duration::from_millis(300)).await;
+        for _ in 0..100 {
+            if recording.failed().is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
         assert_eq!(recording.failed().as_deref(), Some("bad input\n"));
         let error = recording.stop().await.result().unwrap_err();
         assert_eq!((error.status, &*error.code), (500, "browser_error"));
