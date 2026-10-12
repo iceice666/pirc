@@ -22,9 +22,9 @@
 //! with `node/browser.ts`'s 600 ms, every agent and viewer input waits
 //! 600 ms (measured with Playwright 1.63.0: `keyboard.press` 633 ms,
 //! `mouse.move` 623 ms, `locator.click` 653 ms). Ported as is. Deviation:
-//! the announcement is bounded (`duration` + 2 s) and its failures are
-//! ignored, where Playwright waits for the main frame's utility world
-//! within the action's timeout and fails the action if it cannot get it.
+//! the announcement is bounded (`duration` + 2 s; the action goes on after
+//! that), where Playwright waits for the main frame's utility world within
+//! the action's timeout.
 //!
 //! Owner: netio.
 
@@ -223,16 +223,31 @@ pub fn annotation(
 /// (Playwright's rendered call title, e.g. `Press "Enter"`, `Mouse move`,
 /// `Click`) at `point` / around `rect` and wait out the duration. Element
 /// actions pass their element's box.
-pub async fn announce(page: &Page, title: &str, point: Option<(f64, f64)>, rect: Option<Rect>) {
+///
+/// As Playwright's, the action fails when the main frame's injected script
+/// cannot be had (its context destroyed while it is created, the page
+/// closed), while a failure of the annotation itself is ignored (a
+/// navigation ends its wait at once).
+pub async fn announce(
+    page: &Page,
+    title: &str,
+    point: Option<(f64, f64)>,
+    rect: Option<Rect>,
+) -> Result<()> {
     let Some(actions) = page.screencast_state().actions() else {
-        return;
+        return Ok(());
     };
     let options = annotation(actions, title, point, rect);
-    let shown = async {
-        let injected = page.main_frame().injected().await?;
-        injected.call(ANNOTATE, vec![Arg::Value(options)]).await
+    let deadline = tokio::time::Instant::now() + actions.duration + Duration::from_secs(2);
+    let main = page.main_frame();
+    let (injected, uid) = match tokio::time::timeout_at(deadline, main.injected_in_context()).await
+    {
+        Ok(found) => found?,
+        Err(_) => return Ok(()),
     };
-    let _ = tokio::time::timeout(actions.duration + Duration::from_secs(2), shown).await;
+    let shown = main.call_in_context(uid, &injected, ANNOTATE, vec![Arg::Value(options)], true);
+    let _ = tokio::time::timeout_at(deadline, shown).await;
+    Ok(())
 }
 
 #[cfg(test)]

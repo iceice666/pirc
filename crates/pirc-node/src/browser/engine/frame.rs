@@ -421,9 +421,20 @@ impl Frame {
     /// The injected script of the frame's current document, in its utility
     /// world (created on first use per document).
     pub async fn injected(&self) -> Result<JsHandle> {
+        self.injected_in_context().await.map(|(handle, _)| handle)
+    }
+
+    /// [`Frame::injected`] with its context's uid (for
+    /// [`Frame::call_in_context`]).
+    ///
+    /// Fails as soon as the context goes away while the script is created
+    /// (Playwright's `injectedScript()` rejects every caller when the
+    /// context is destroyed; the callers here would otherwise retry the
+    /// creation on the dead context one after another).
+    pub(super) async fn injected_in_context(&self) -> Result<(JsHandle, u64)> {
         let context = self.context(World::Utility, "").await?;
         let seq = self.seq();
-        let handle = context
+        let created = context
             .injected
             .get_or_try_init(|| async {
                 let options = json!({
@@ -452,9 +463,57 @@ impl Frame {
                 handle_of(&context.session, &reply["result"]).ok_or_else(|| {
                     Error::new("Execution context was destroyed, most likely because of a navigation.")
                 })
+            });
+        let handle = tokio::select! {
+            biased;
+            handle = created => handle?,
+            () = self.context_gone(World::Utility, context.uid) => {
+                return Err(Error::new(
+                    "Execution context was destroyed, most likely because of a navigation.",
+                ));
+            }
+        };
+        Ok((handle.clone(), context.uid))
+    }
+
+    /// Resolves once the frame's `world` context `uid` is gone (destroyed or
+    /// replaced, the frame detached, the page closed).
+    pub(super) async fn context_gone(&self, world: World, uid: u64) {
+        self.shared
+            .wait(|state| {
+                let current = state
+                    .frames
+                    .get(&self.key)
+                    .and_then(|frame| frame.context(world))
+                    .map(|context| context.uid);
+                (state.closed || current != Some(uid)).then_some(())
             })
-            .await?;
-        Ok(handle.clone())
+            .await
+    }
+
+    /// [`JsHandle::call_raw`] on a handle of this frame's utility context
+    /// `uid`, failing (retriably) as soon as that context goes away:
+    /// Playwright rejects a context's pending evaluations when Chromium
+    /// reports it destroyed, where Chromium's own replies to them may come
+    /// one by one well after.
+    pub(super) async fn call_in_context(
+        &self,
+        uid: u64,
+        handle: &JsHandle,
+        function: &str,
+        args: Vec<Arg>,
+        by_value: bool,
+    ) -> std::result::Result<Value, EvalError> {
+        tokio::select! {
+            biased;
+            result = handle.call_raw(function, args, by_value) => result,
+            () = self.context_gone(World::Utility, uid) => Err(EvalError {
+                error: Error::new(
+                    "Execution context was destroyed, most likely because of a navigation.",
+                ),
+                non_retriable: false,
+            }),
+        }
     }
 
     /// Adopt `handle` (an element from another world or this frame's main

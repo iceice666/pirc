@@ -107,9 +107,10 @@ impl Keyboard {
         self.page.get().and_then(Weak::upgrade)
     }
 
-    async fn announce(&self, title: String) {
-        if let Some(page) = self.page() {
-            super::screencast::announce(&page, &title, None, None).await;
+    async fn announce(&self, title: String) -> Result<()> {
+        match self.page() {
+            Some(page) => super::screencast::announce(&page, &title, None, None).await,
+            None => Ok(()),
         }
     }
 
@@ -124,36 +125,66 @@ impl Keyboard {
     /// their name as Playwright's client words them, [`Keyboard::raw`]'s
     /// are bare: `Unknown key: "<key>"`).
     pub async fn press(&self, key: &str, delay: Duration) -> Result<()> {
-        self.announce(format!("Press \"{}\"", title_param(key)))
-            .await;
-        api("press", self.raw().press(key, delay).await)
+        api(
+            "press",
+            async {
+                self.announce(format!("Press \"{}\"", title_param(key)))
+                    .await?;
+                self.raw().press(key, delay).await
+            }
+            .await,
+        )
     }
 
     pub async fn down(&self, key: &str) -> Result<()> {
-        self.announce(format!("Key down \"{}\"", title_param(key)))
-            .await;
-        api("down", self.raw().down(key).await)
+        api(
+            "down",
+            async {
+                self.announce(format!("Key down \"{}\"", title_param(key)))
+                    .await?;
+                self.raw().down(key).await
+            }
+            .await,
+        )
     }
 
     pub async fn up(&self, key: &str) -> Result<()> {
-        self.announce(format!("Key up \"{}\"", title_param(key)))
-            .await;
-        api("up", self.raw().up(key).await)
+        api(
+            "up",
+            async {
+                self.announce(format!("Key up \"{}\"", title_param(key)))
+                    .await?;
+                self.raw().up(key).await
+            }
+            .await,
+        )
     }
 
     /// `keyboard.type(text, {delay})`: a key press per character the layout
     /// has, `insertText` for the others.
     pub async fn type_text(&self, text: &str, delay: Duration) -> Result<()> {
-        self.announce(format!("Type \"{}\"", title_param(text)))
-            .await;
-        api("type", self.raw().type_text(text, delay).await)
+        api(
+            "type",
+            async {
+                self.announce(format!("Type \"{}\"", title_param(text)))
+                    .await?;
+                self.raw().type_text(text, delay).await
+            }
+            .await,
+        )
     }
 
     /// `keyboard.insertText(text)`.
     pub async fn insert_text(&self, text: &str) -> Result<()> {
-        self.announce(format!("Insert \"{}\"", title_param(text)))
-            .await;
-        api("insertText", self.raw().insert_text(text).await)
+        api(
+            "insertText",
+            async {
+                self.announce(format!("Insert \"{}\"", title_param(text)))
+                    .await?;
+                self.raw().insert_text(text).await
+            }
+            .await,
+        )
     }
 
     /// The CDP modifiers bitmask of the keys held now (for mouse events).
@@ -421,9 +452,10 @@ impl Mouse {
         self.page.get().and_then(Weak::upgrade)
     }
 
-    async fn announce(&self, title: &str, point: Option<(f64, f64)>) {
-        if let Some(page) = self.page() {
-            super::screencast::announce(&page, title, point, None).await;
+    async fn announce(&self, title: &str, point: Option<(f64, f64)>) -> Result<()> {
+        match self.page() {
+            Some(page) => super::screencast::announce(&page, title, point, None).await,
+            None => Ok(()),
         }
     }
 
@@ -439,24 +471,40 @@ impl Mouse {
 
     /// `mouse.move(x, y)`; `modifiers` from the page's keyboard.
     pub async fn move_to(&self, x: f64, y: f64, modifiers: u32) -> Result<()> {
-        self.announce("Mouse move", Some((x, y))).await;
-        api("move", self.raw().move_to(x, y, 1, false, modifiers).await)
+        api(
+            "move",
+            async {
+                self.announce("Mouse move", Some((x, y))).await?;
+                self.raw().move_to(x, y, 1, false, modifiers).await
+            }
+            .await,
+        )
     }
 
     /// `mouse.down({button, clickCount})`.
     pub async fn down(&self, button: MouseButton, click_count: u32, modifiers: u32) -> Result<()> {
-        self.announce("Mouse down", Some(self.current_point()))
-            .await;
         api(
             "down",
-            self.raw().down(button, click_count, modifiers).await,
+            async {
+                self.announce("Mouse down", Some(self.current_point()))
+                    .await?;
+                self.raw().down(button, click_count, modifiers).await
+            }
+            .await,
         )
     }
 
     /// `mouse.up({button, clickCount})`.
     pub async fn up(&self, button: MouseButton, click_count: u32, modifiers: u32) -> Result<()> {
-        self.announce("Mouse up", Some(self.current_point())).await;
-        api("up", self.raw().up(button, click_count, modifiers).await)
+        api(
+            "up",
+            async {
+                self.announce("Mouse up", Some(self.current_point()))
+                    .await?;
+                self.raw().up(button, click_count, modifiers).await
+            }
+            .await,
+        )
     }
 
     /// `mouse.click(x, y, {button, clickCount})`: move, then a down/up per
@@ -469,17 +517,26 @@ impl Mouse {
         click_count: u32,
         modifiers: u32,
     ) -> Result<()> {
-        self.announce("Click", Some((x, y))).await;
         api(
             "click",
-            self.raw().click(x, y, button, click_count, modifiers).await,
+            async {
+                self.announce("Click", Some((x, y))).await?;
+                self.raw().click(x, y, button, click_count, modifiers).await
+            }
+            .await,
         )
     }
 
     /// `mouse.wheel(dx, dy)` at the current position.
     pub async fn wheel(&self, dx: f64, dy: f64, modifiers: u32) -> Result<()> {
-        self.announce("Mouse wheel", None).await;
-        api("wheel", self.raw().wheel(dx, dy, modifiers).await)
+        api(
+            "wheel",
+            async {
+                self.announce("Mouse wheel", None).await?;
+                self.raw().wheel(dx, dy, modifiers).await
+            }
+            .await,
+        )
     }
 
     /// Whether a drag is in progress (`DragManager.isDragging`).

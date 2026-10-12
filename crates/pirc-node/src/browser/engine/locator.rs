@@ -417,12 +417,18 @@ impl Element {
         by_value: bool,
     ) -> std::result::Result<Eval, Failure> {
         let call = async {
-            let injected = self.frame.injected().await.map_err(|error| EvalError {
-                error,
-                non_retriable: false,
-            })?;
-            injected
-                .call_raw(
+            let (injected, uid) =
+                self.frame
+                    .injected_in_context()
+                    .await
+                    .map_err(|error| EvalError {
+                        error,
+                        non_retriable: false,
+                    })?;
+            self.frame
+                .call_in_context(
+                    uid,
+                    &injected,
                     function,
                     vec![Arg::Handle(self.handle.clone()), Arg::Value(arg)],
                     by_value,
@@ -736,7 +742,7 @@ impl Locator {
                 self.retry_action(element, action, values).await
             }
             Action::Type { text, delay } => {
-                self.announce(element, action, None, element.rect).await;
+                self.announce(action, None, element.rect).await?;
                 match self.focus(element).await? {
                     Outcome::Done => {}
                     other => return Ok(other),
@@ -750,7 +756,7 @@ impl Locator {
                 Ok(Outcome::Done)
             }
             Action::Press(key) => {
-                self.announce(element, action, None, element.rect).await;
+                self.announce(action, None, element.rect).await?;
                 self.with_signal_barrier(true, async {
                     match self.focus(element).await? {
                         Outcome::Done => {}
@@ -784,19 +790,20 @@ impl Locator {
         Failure { error, retriable }
     }
 
-    /// `onBeforeInputAction` for an attempt.
+    /// `onBeforeInputAction` for an attempt (its failure is retriable).
     async fn announce(
         &self,
-        _element: &Element,
         action: &Action<'_>,
         point: Option<(f64, f64)>,
         rect: Option<Rect>,
-    ) {
+    ) -> std::result::Result<(), Failure> {
         if self.page.screencast_state().actions().is_none() {
-            return;
+            return Ok(());
         }
         let title = action.title(&self.description);
-        screencast::announce(&self.page, &title, point, rect).await;
+        screencast::announce(&self.page, &title, point, rect)
+            .await
+            .map_err(|error| Failure::of(&self.page.main_frame(), error))
     }
 
     /// `ElementHandle._retryAction`.
@@ -834,7 +841,7 @@ impl Locator {
     ) -> std::result::Result<Outcome, Failure> {
         match action {
             Action::Fill(value) => {
-                self.announce(element, action, None, element.rect).await;
+                self.announce(action, None, element.rect).await?;
                 let result = match element.eval(FILL, json!(value)).await? {
                     Eval::Value(result) => result,
                     Eval::NotConnected => return Ok(Outcome::NotConnected),
@@ -852,7 +859,7 @@ impl Locator {
                 Ok(Outcome::Done)
             }
             Action::Select(options) => {
-                self.announce(element, action, None, element.rect).await;
+                self.announce(action, None, element.rect).await?;
                 let options: Vec<Value> = options
                     .iter()
                     .map(|value| json!({ "valueOrLabel": value }))
@@ -906,8 +913,7 @@ impl Locator {
             Err(outcome) => return Ok(outcome),
         };
         let point = round_point(point);
-        self.announce(element, action, Some(point), Some(rect))
-            .await;
+        self.announce(action, Some(point), Some(rect)).await?;
         let hit_point = match self.check_frame_is_hit_target(element, point).await? {
             FrameCheck::Outcome(outcome) => return Ok(outcome),
             FrameCheck::Point(point) => point,
