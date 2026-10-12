@@ -1,0 +1,853 @@
+//! The engine's context, pages and frames against a real Chromium (found
+//! as `BrowserSettings` finds it; the tests are skipped without one), on
+//! pages served from loopback by a tiny HTTP server: `127.0.0.1` and
+//! `localhost` are two sites, so iframes from the other one are
+//! out-of-process. Expected values (frame sequence numbers, snapshots,
+//! messages) were taken from Playwright 1.63.0 on the same pages.
+//!
+//! These tests launch the context without the host guard
+//! (`Context::launch_unguarded`).
+
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use pirc_node::browser::engine::LoadState;
+use pirc_node::browser::engine::context::{Context, LaunchOptions};
+use pirc_node::browser::engine::frame::Arg;
+use pirc_node::browser::engine::page::{Page, PageEvent};
+use serde_json::{Value, json};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+
+const FORM: &str = include_str!("../../../spikes/browser-snapshot/pages/form.html");
+
+/// What Playwright's `page.ariaSnapshot({mode: 'ai'})` gives for the form
+/// (`spikes/browser-snapshot/reference.ts`).
+const FORM_SNAPSHOT: &str = r#"- generic [active] [ref=e1]:
+  - heading "Sign up" [level=1] [ref=e2]
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - text: Name
+      - textbox "Name" [ref=e5]
+    - generic [ref=e6]:
+      - text: Password
+      - textbox "Password" [ref=e7]
+    - generic [ref=e8]:
+      - checkbox "Remember me" [checked] [ref=e9]
+      - text: Remember me
+    - generic [ref=e10]:
+      - text: Plan
+      - combobox "Plan" [ref=e11]:
+        - option "Free"
+        - option "Pro" [selected]
+    - button "Submit" [ref=e12]
+    - button "Later" [disabled] [ref=e13]
+  - paragraph"#;
+
+fn chromium() -> Option<PathBuf> {
+    if let Ok(explicit) = std::env::var("PIRC_BROWSER_EXECUTABLE") {
+        return Some(PathBuf::from(explicit));
+    }
+    let path = std::env::var("PATH").unwrap_or_default();
+    for name in [
+        "chromium",
+        "chromium-browser",
+        "google-chrome-stable",
+        "google-chrome",
+        "microsoft-edge",
+    ] {
+        for dir in path.split(':').filter(|dir| !dir.is_empty()) {
+            let candidate = PathBuf::from(dir).join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    [
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    ]
+    .into_iter()
+    .map(PathBuf::from)
+    .find(|candidate| candidate.is_file())
+}
+
+struct Browser {
+    context: Arc<Context>,
+    _profile: tempfile::TempDir,
+}
+
+async fn launch() -> Option<Browser> {
+    let Some(executable) = chromium() else {
+        eprintln!("skipped: no Chromium found");
+        return None;
+    };
+    let profile = tempfile::tempdir().unwrap();
+    let env = std::env::vars()
+        .filter(|(name, _)| {
+            [
+                "PATH",
+                "HOME",
+                "TMPDIR",
+                "FONTCONFIG_FILE",
+                "XDG_RUNTIME_DIR",
+            ]
+            .contains(&name.as_str())
+        })
+        .collect();
+    let context = Context::launch_unguarded(
+        &executable,
+        profile.path(),
+        LaunchOptions {
+            viewport: (1280, 800),
+            env,
+        },
+    )
+    .await
+    .expect("launch");
+    Some(Browser {
+        context,
+        _profile: profile,
+    })
+}
+
+/// A page's HTML, by path.
+fn route(path: &str, port: u16) -> Option<(u16, String)> {
+    let html = |body: &str| Some((200, body.replace("PORT", &port.to_string())));
+    match path {
+        "/plain" | "/plain#x" => html("<title>Plain</title><h1>Plain</h1>"),
+        "/same" => {
+            html(r#"<title>Same</title><h1>Outer</h1><iframe title="Inner" src="/plain"></iframe>"#)
+        }
+        "/nested" => {
+            html(r#"<title>Nested</title><h1>N</h1><iframe title="L1" src="/same"></iframe>"#)
+        }
+        "/cross" => html(
+            r#"<title>Cross</title><h1>C</h1><iframe title="X" src="http://localhost:PORT/form"></iframe>"#,
+        ),
+        "/two" => html(
+            r#"<title>Two</title><iframe title="A" src="/plain"></iframe><iframe title="B" src="http://localhost:PORT/same"></iframe>"#,
+        ),
+        "/form" => html(FORM),
+        "/idle" => html(r#"<title>idle</title><img src="/slow.png">"#),
+        "/dialog" => html("<title>Dialog</title><p>dialogs</p>"),
+        "/missing" => Some((
+            404,
+            format!("<title>Missing</title>{}", "<p>not here</p>".repeat(60)),
+        )),
+        _ => None,
+    }
+}
+
+async fn respond(mut stream: TcpStream, port: u16) {
+    let mut head = Vec::new();
+    let mut buffer = [0u8; 1024];
+    while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+        match stream.read(&mut buffer).await {
+            Ok(0) | Err(_) => return,
+            Ok(n) => head.extend_from_slice(&buffer[..n]),
+        }
+    }
+    let head = String::from_utf8_lossy(&head);
+    let path = head.split(' ').nth(1).unwrap_or("/").to_owned();
+    let reply = match path.as_str() {
+        "/hang" => {
+            tokio::time::sleep(Duration::from_secs(3600)).await;
+            return;
+        }
+        "/redirect" => {
+            "HTTP/1.1 302 Found\r\nLocation: /plain\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                .to_owned()
+        }
+        "/slow.png" => {
+            tokio::time::sleep(Duration::from_millis(1500)).await;
+            "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_owned()
+        }
+        _ => {
+            let (status, body) =
+                route(&path, port).unwrap_or((404, "<title>nf</title>".repeat(100)));
+            format!(
+                "HTTP/1.1 {status} X\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+        }
+    };
+    let _ = stream.write_all(reply.as_bytes()).await;
+    let _ = stream.shutdown().await;
+}
+
+/// Serve the pages on loopback; the port.
+async fn serve() -> u16 {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            tokio::spawn(respond(stream, port));
+        }
+    });
+    port
+}
+
+const T: Duration = Duration::from_secs(30);
+
+fn seqs(page: &Page) -> Vec<u64> {
+    page.frames().iter().map(|frame| frame.seq()).collect()
+}
+
+async fn snapshot(frame: &pirc_node::browser::engine::frame::Frame) -> String {
+    let injected = frame.injected().await.unwrap();
+    injected
+        .call(
+            "function () { return this.ariaSnapshot(this.document.body, { mode: 'ai' }); }",
+            vec![],
+        )
+        .await
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+macro_rules! guard {
+    ($body:expr) => {
+        tokio::time::timeout(Duration::from_secs(120), $body)
+            .await
+            .expect("test timed out")
+    };
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn launches_opens_pages_and_closes_killing_the_browser() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let context = &browser.context;
+        let pages = context.pages();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].url(), "about:blank");
+        assert_eq!(pages[0].viewport(), (1280, 800));
+        assert_eq!(
+            pages[0]
+                .evaluate("() => [innerWidth, innerHeight]", Value::Null)
+                .await
+                .unwrap(),
+            json!([1280, 800])
+        );
+        let second = context.new_page().await.unwrap();
+        assert_eq!(second.url(), "about:blank");
+        let ids: Vec<String> = context
+            .pages()
+            .iter()
+            .map(|p| p.target_id().to_owned())
+            .collect();
+        assert_eq!(ids, [pages[0].target_id(), second.target_id()]);
+        let mut events = second.subscribe();
+        second.close().await.unwrap();
+        assert!(second.is_closed());
+        assert!(matches!(events.recv().await, Some(PageEvent::Closed)));
+        assert_eq!(context.pages().len(), 1);
+
+        let pid = context.pid().unwrap() as i32;
+        context.close().await;
+        assert!(context.is_closed());
+        context.closed().await;
+        assert!(pages[0].is_closed());
+        // Killed helpers may stay zombies until their new parent reaps them.
+        let gone = Instant::now();
+        while nix::sys::signal::killpg(nix::unistd::Pid::from_raw(pid), None).is_ok() {
+            assert!(
+                gone.elapsed() < Duration::from_secs(5),
+                "the process group is gone"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_killed_browser_closes_the_context() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let page = browser.context.pages()[0].clone();
+        let mut events = page.subscribe();
+        let pid = browser.context.pid().unwrap() as i32;
+        nix::sys::signal::kill(
+            nix::unistd::Pid::from_raw(pid),
+            nix::sys::signal::Signal::SIGKILL,
+        )
+        .unwrap();
+        browser.context.closed().await;
+        assert!(page.is_closed());
+        assert!(matches!(events.recv().await, Some(PageEvent::Closed)));
+        let error = page.evaluate("() => 1", Value::Null).await.unwrap_err();
+        assert_eq!(
+            error.message,
+            "Target page, context or browser has been closed"
+        );
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn numbers_frames_as_playwright_across_navigations_and_oopifs() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let base = format!("http://127.0.0.1:{port}");
+        let page = browser.context.pages()[0].clone();
+        assert_eq!(seqs(&page), [0]);
+        // Playwright 1.63.0's refs for the same steps: f0; f1; f2,f3;
+        // f4,f5,f6; f7,f8; f9..f12; reload f13..f16; back f17,f18;
+        // about:blank; f19,f20; f19,f20.
+        let steps: [(&str, &[u64]); 11] = [
+            ("/plain", &[0]),
+            ("/plain", &[1]),
+            ("/same", &[2, 3]),
+            ("/nested", &[4, 5, 6]),
+            ("/cross", &[7, 8]),
+            ("/two", &[9, 10, 11, 12]),
+            ("reload", &[13, 14, 15, 16]),
+            ("back", &[17, 18]),
+            ("about:blank", &[19]),
+            ("/same", &[19, 20]),
+            ("/same#x", &[19, 20]),
+        ];
+        for (step, expected) in steps {
+            match step {
+                "reload" => page.reload(T).await.unwrap(),
+                "back" => page.go_back(LoadState::Load, T).await.unwrap(),
+                "about:blank" => {
+                    assert_eq!(page.goto(step, LoadState::Load, T).await.unwrap(), None);
+                }
+                _ => {
+                    page.goto(&format!("{base}{step}"), LoadState::Load, T)
+                        .await
+                        .unwrap();
+                }
+            }
+            assert_eq!(seqs(&page), expected, "after {step}");
+        }
+
+        // The cross-site frame is out of process: its own session, its own
+        // injected script numbering its refs with its sequence number.
+        page.goto(&format!("{base}/cross"), LoadState::Load, T)
+            .await
+            .unwrap();
+        let frames = page.frames();
+        assert_eq!(frames.len(), 2);
+        let (main, child) = (&frames[0], &frames[1]);
+        assert!(main.is_main() && !child.is_main());
+        assert_eq!(child.url(), format!("http://localhost:{port}/form"));
+        assert_eq!(child.parent().unwrap().id(), main.id());
+        assert_ne!(child.session().id(), main.session().id());
+        assert_eq!(page.frame_by_seq(child.seq()).unwrap().id(), child.id());
+        let prefix = format!("f{}e", child.seq());
+        assert_eq!(
+            snapshot(child).await,
+            FORM_SNAPSHOT
+                .replace("[ref=e", &format!("[ref={prefix}"))
+                .replace("generic [active] [ref", "generic [ref")
+        );
+        let owner = child.owner().await.unwrap().unwrap();
+        assert_eq!(
+            owner
+                .call("function () { return this.title; }", vec![])
+                .await
+                .unwrap(),
+            "X"
+        );
+        assert!(main.owner().await.unwrap().is_none());
+
+        // Same-process frames share the page's session.
+        page.goto(&format!("{base}/nested"), LoadState::Load, T)
+            .await
+            .unwrap();
+        let frames = page.frames();
+        let urls: Vec<String> = frames.iter().map(|f| f.url()).collect();
+        assert_eq!(
+            urls,
+            [
+                format!("{base}/nested"),
+                format!("{base}/same"),
+                format!("{base}/plain")
+            ]
+        );
+        assert!(
+            frames
+                .iter()
+                .all(|f| f.session().id() == page.session().id())
+        );
+        assert_eq!(frames[2].parent().unwrap().id(), frames[1].id());
+        let owner = frames[2].owner().await.unwrap().unwrap();
+        assert_eq!(
+            owner
+                .call("function () { return this.title; }", vec![])
+                .await
+                .unwrap(),
+            "Inner"
+        );
+        assert_eq!(
+            frames[2]
+                .evaluate("() => document.title", Value::Null)
+                .await
+                .unwrap(),
+            "Plain"
+        );
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn evaluates_and_runs_the_injected_script() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let page = browser.context.pages()[0].clone();
+        page.goto(&format!("http://127.0.0.1:{port}/form"), LoadState::Load, T)
+            .await
+            .unwrap();
+        let main = page.main_frame();
+        assert_eq!(main.seq(), 0);
+        assert_eq!(snapshot(&main).await, FORM_SNAPSHOT);
+        // One injected script per document.
+        let first = main.injected().await.unwrap();
+        assert_eq!(main.injected().await.unwrap().object_id, first.object_id);
+
+        assert_eq!(
+            page.evaluate("() => 1 + 1", Value::Null).await.unwrap(),
+            json!(2)
+        );
+        assert_eq!(page.evaluate("1 + 2", Value::Null).await.unwrap(), json!(3));
+        assert_eq!(
+            page.evaluate("(a) => [a === undefined, typeof a]", Value::Null)
+                .await
+                .unwrap(),
+            json!([true, "undefined"])
+        );
+        assert_eq!(
+            page.evaluate("(a) => a.x * 2", json!({ "x": 21 }))
+                .await
+                .unwrap(),
+            json!(42)
+        );
+        assert_eq!(
+            page.evaluate("async () => 'later'", Value::Null)
+                .await
+                .unwrap(),
+            "later"
+        );
+        assert_eq!(
+            page.evaluate("() => undefined", Value::Null).await.unwrap(),
+            Value::Null
+        );
+        assert_eq!(
+            page.evaluate("() => NaN", Value::Null).await.unwrap(),
+            Value::Null
+        );
+        assert_eq!(
+            page.evaluate("() => document.title", Value::Null)
+                .await
+                .unwrap(),
+            "Form"
+        );
+        let error = page
+            .evaluate("() => { throw new Error('boom'); }", Value::Null)
+            .await
+            .unwrap_err();
+        assert!(
+            error.message.starts_with("Error: boom\n    at "),
+            "{}",
+            error.message
+        );
+        let error = page
+            .evaluate("async () => { throw new TypeError('bad'); }", Value::Null)
+            .await
+            .unwrap_err();
+        assert!(
+            error.message.starts_with("TypeError: bad\n"),
+            "{}",
+            error.message
+        );
+        let error = page
+            .evaluate("() => { throw 'str'; }", Value::Null)
+            .await
+            .unwrap_err();
+        assert_eq!(error.message, "str");
+        // The utility world is not the page's.
+        page.evaluate("() => { window.marker = 1; }", Value::Null)
+            .await
+            .unwrap();
+        let injected = main.injected().await.unwrap();
+        assert_eq!(
+            injected
+                .call("function () { return typeof window.marker; }", vec![])
+                .await
+                .unwrap(),
+            "undefined"
+        );
+        // Handles, arguments and adoption across worlds.
+        let button = injected
+            .call_handle(
+                "function (selector) { return document.querySelector(selector); }",
+                vec![Arg::Value(json!("button"))],
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            injected
+                .call(
+                    "function (node) { return node.textContent; }",
+                    vec![Arg::Handle(button.clone())]
+                )
+                .await
+                .unwrap(),
+            "Submit"
+        );
+        assert!(
+            injected
+                .call_handle("function () { return null; }", vec![])
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let in_main = main.adopt(&button, false).await.unwrap();
+        assert_ne!(in_main.object_id, button.object_id);
+        let back = main.adopt(&in_main, true).await.unwrap();
+        assert_eq!(
+            back.call("function () { return this.type; }", vec![])
+                .await
+                .unwrap(),
+            "submit"
+        );
+        button.release().await;
+        assert_eq!(page.title().await.unwrap(), "Form");
+        let content = page.content().await.unwrap();
+        assert!(
+            content.starts_with("<!DOCTYPE html><html lang=\"en\"><head>"),
+            "{content}"
+        );
+        // A new document has a new injected script.
+        page.reload(T).await.unwrap();
+        assert_ne!(main.injected().await.unwrap().object_id, first.object_id);
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn navigates_with_playwright_statuses_and_errors() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let base = format!("http://127.0.0.1:{port}");
+        let page = browser.context.pages()[0].clone();
+        let mut events = page.subscribe();
+        let status = |r: Option<pirc_node::browser::engine::page::Response>| r.map(|r| r.status);
+        assert_eq!(
+            status(
+                page.goto(&format!("{base}/plain"), LoadState::Load, T)
+                    .await
+                    .unwrap()
+            ),
+            Some(200)
+        );
+        let mut seen = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            seen.push(match event {
+                PageEvent::MainFrameNavigated => "navigated",
+                PageEvent::Load => "load",
+                _ => "other",
+            });
+        }
+        assert_eq!(seen, ["navigated", "load"]);
+        assert_eq!(
+            status(
+                page.goto(&format!("{base}/missing"), LoadState::Load, T)
+                    .await
+                    .unwrap()
+            ),
+            Some(404)
+        );
+        assert_eq!(
+            status(
+                page.goto(&format!("{base}/redirect"), LoadState::Load, T)
+                    .await
+                    .unwrap()
+            ),
+            Some(200)
+        );
+        assert_eq!(page.url(), format!("{base}/plain"));
+        // Same-document: no response.
+        assert_eq!(
+            page.goto(&format!("{base}/plain#x"), LoadState::Load, T)
+                .await
+                .unwrap(),
+            None
+        );
+        assert_eq!(page.url(), format!("{base}/plain#x"));
+        assert_eq!(
+            status(
+                page.goto(&format!("{base}/plain"), LoadState::Commit, T)
+                    .await
+                    .unwrap()
+            ),
+            Some(200)
+        );
+
+        let closed = {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.local_addr().unwrap().port()
+        };
+        let url = format!("http://127.0.0.1:{closed}/x");
+        let error = page.goto(&url, LoadState::Load, T).await.unwrap_err();
+        assert_eq!(
+            error.message,
+            format!("net::ERR_CONNECTION_REFUSED at {url}")
+        );
+        let error = page
+            .goto("http://127.0.0.1:1/x", LoadState::Load, T)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.message,
+            "net::ERR_UNSAFE_PORT at http://127.0.0.1:1/x"
+        );
+        let started = Instant::now();
+        let error = page
+            .goto(
+                &format!("{base}/hang"),
+                LoadState::Load,
+                Duration::from_millis(1000),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(error.message, "Timeout 1000ms exceeded.");
+        assert!(started.elapsed() < Duration::from_secs(3));
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn goes_back_forward_and_reloads() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let base = format!("http://127.0.0.1:{port}");
+        let page = browser.context.new_page().await.unwrap();
+        // No history: nothing happens, no error.
+        page.go_back(LoadState::DomContentLoaded, T).await.unwrap();
+        assert_eq!(page.url(), "about:blank");
+        page.goto(&format!("{base}/plain"), LoadState::Load, T)
+            .await
+            .unwrap();
+        page.goto(&format!("{base}/same"), LoadState::Load, T)
+            .await
+            .unwrap();
+        page.go_back(LoadState::DomContentLoaded, T).await.unwrap();
+        assert_eq!(page.url(), format!("{base}/plain"));
+        page.go_forward(T).await.unwrap();
+        assert_eq!(page.url(), format!("{base}/same"));
+        page.go_forward(T).await.unwrap();
+        assert_eq!(page.url(), format!("{base}/same"));
+        page.evaluate("() => { window.before = 1; }", Value::Null)
+            .await
+            .unwrap();
+        page.reload(T).await.unwrap();
+        assert_eq!(
+            page.evaluate("() => typeof window.before", Value::Null)
+                .await
+                .unwrap(),
+            "undefined"
+        );
+        assert_eq!(page.frames().len(), 2);
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn waits_for_load_states_and_networkidle() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let page = browser.context.pages()[0].clone();
+        let started = Instant::now();
+        page.goto(
+            &format!("http://127.0.0.1:{port}/idle"),
+            LoadState::DomContentLoaded,
+            T,
+        )
+        .await
+        .unwrap();
+        assert!(
+            started.elapsed() < Duration::from_millis(1400),
+            "{:?}",
+            started.elapsed()
+        );
+        let main = page.main_frame();
+        assert!(main.has_load_state(LoadState::DomContentLoaded));
+        assert!(!main.has_load_state(LoadState::NetworkIdle));
+        let error = page
+            .wait_for_load_state(LoadState::NetworkIdle, Duration::from_millis(300))
+            .await
+            .unwrap_err();
+        assert_eq!(error.message, "Timeout 300ms exceeded.");
+        page.wait_for_load_state(LoadState::NetworkIdle, T)
+            .await
+            .unwrap();
+        // The image takes 1.5 s, then 500 ms without requests.
+        let elapsed = started.elapsed();
+        assert!(elapsed >= Duration::from_millis(1950), "{elapsed:?}");
+        assert!(elapsed < Duration::from_millis(3500), "{elapsed:?}");
+        assert!(main.has_load_state(LoadState::Load));
+        // Already reached: immediate.
+        page.wait_for_load_state(LoadState::Load, Duration::from_millis(50))
+            .await
+            .unwrap();
+        // goto with networkidle.
+        let started = Instant::now();
+        page.goto(
+            &format!("http://127.0.0.1:{port}/plain"),
+            LoadState::NetworkIdle,
+            T,
+        )
+        .await
+        .unwrap();
+        assert!(started.elapsed() >= Duration::from_millis(500));
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn dismisses_dialogs_and_reports_popups() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let page = browser.context.pages()[0].clone();
+        page.goto(
+            &format!("http://127.0.0.1:{port}/dialog"),
+            LoadState::Load,
+            T,
+        )
+        .await
+        .unwrap();
+        let answers = page
+            .evaluate(
+                "() => { const r = [confirm('sure?'), prompt('name', 'x')]; alert('hi'); r.push('done'); return r; }",
+                Value::Null,
+            )
+            .await
+            .unwrap();
+        assert_eq!(answers, json!([false, null, "done"]));
+
+        let mut events = page.subscribe();
+        page.evaluate(
+            "() => { window.open('/plain', '_blank', 'width=500,height=400'); }",
+            Value::Null,
+        )
+        .await
+        .unwrap();
+        let popup = loop {
+            match events.recv().await.unwrap() {
+                PageEvent::Popup(popup) => break popup,
+                _ => continue,
+            }
+        };
+        popup.wait_for_load_state(LoadState::Load, T).await.unwrap();
+        assert_eq!(popup.url(), format!("http://127.0.0.1:{port}/plain"));
+        assert_eq!(popup.viewport(), (500, 400));
+        assert_eq!(
+            popup
+                .evaluate("() => [innerWidth, innerHeight]", Value::Null)
+                .await
+                .unwrap(),
+            json!([500, 400])
+        );
+        assert_eq!(popup.main_frame().seq(), 0);
+        assert_eq!(browser.context.pages().len(), 2);
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_iframe_keeps_its_number_moving_in_and_out_of_process() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let page = browser.context.pages()[0].clone();
+        page.goto(&format!("http://127.0.0.1:{port}/same"), LoadState::Load, T)
+            .await
+            .unwrap();
+        assert_eq!(seqs(&page), [0, 1]);
+        // Playwright 1.63.0: the child stays f1 through every swap.
+        let cross = format!("http://localhost:{port}/plain");
+        let same = format!("http://127.0.0.1:{port}/plain");
+        for (src, url, own_session) in [
+            (cross.as_str(), cross.as_str(), true),
+            ("/plain", same.as_str(), false),
+            (cross.as_str(), cross.as_str(), true),
+        ] {
+            page.evaluate(
+                "(src) => new Promise((resolve) => { const f = document.querySelector('iframe'); f.onload = resolve; f.src = src; })",
+                json!(src),
+            )
+            .await
+            .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                let frames = page.frames();
+                let settled = frames.len() == 2
+                    && frames[1].url() == url
+                    && (frames[1].session().id() != page.session().id()) == own_session
+                    && frames[1].has_load_state(LoadState::Load);
+                if settled {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "the iframe did not settle on {url}"
+                );
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            assert_eq!(seqs(&page), [0, 1], "after {src}");
+            let child = &page.frames()[1];
+            assert_eq!(
+                child
+                    .evaluate("() => document.title", Value::Null)
+                    .await
+                    .unwrap(),
+                "Plain"
+            );
+            assert_eq!(
+                snapshot(child).await,
+                "- heading \"Plain\" [level=1] [ref=f1e2]"
+            );
+            let owner = child.owner().await.unwrap().unwrap();
+            assert_eq!(
+                owner
+                    .call("function () { return this.title; }", vec![])
+                    .await
+                    .unwrap(),
+                "Inner"
+            );
+        }
+        browser.context.close().await;
+    });
+}
