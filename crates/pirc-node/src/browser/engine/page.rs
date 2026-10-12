@@ -373,6 +373,9 @@ pub(super) struct PageSetup {
     pub installer: Installer,
     pub viewport: (u32, u32),
     pub mac: bool,
+    /// The page that opened it: its `window.open` features may set the
+    /// viewport.
+    pub opener: Option<Arc<Page>>,
 }
 
 pub(super) struct Shared {
@@ -386,6 +389,7 @@ pub(super) struct Shared {
     pub(super) state: Mutex<State>,
     changed: watch::Sender<u64>,
     events: mpsc::UnboundedSender<Event>,
+    barriers: std::sync::atomic::AtomicU64,
 }
 
 /// A document of a frame (Playwright's `DocumentInfo`).
@@ -529,6 +533,8 @@ pub(super) struct State {
     subscribers: Vec<mpsc::UnboundedSender<PageEvent>>,
     window_features: VecDeque<Vec<String>>,
     viewport: (u32, u32),
+    /// The last [`Shared::barrier`] the event loop reached.
+    barrier: u64,
 }
 
 impl State {
@@ -607,8 +613,24 @@ impl Shared {
 
     /// The window features of the latest `window.open` (for a popup's
     /// viewport).
-    pub(super) fn take_window_features(&self) -> Option<Vec<String>> {
+    fn take_window_features(&self) -> Option<Vec<String>> {
         self.state.lock().unwrap().window_features.pop_front()
+    }
+
+    /// Resolves once the event loop applied every event received so far
+    /// (or the page closed).
+    async fn barrier(&self) {
+        let id = self
+            .barriers
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
+        let _ = self.events.send(Event {
+            session: None,
+            method: "pirc.barrier".to_owned(),
+            params: json!(id),
+        });
+        self.wait(|state| (state.barrier >= id || state.closed).then_some(()))
+            .await;
     }
 }
 
@@ -658,9 +680,11 @@ impl Page {
                 subscribers: Vec::new(),
                 window_features: VecDeque::new(),
                 viewport: setup.viewport,
+                barrier: 0,
             }),
             changed,
             events: events.clone(),
+            barriers: Default::default(),
         });
         setup.session.listen_into(events);
         {
@@ -686,7 +710,21 @@ impl Page {
             let shared = shared.clone();
             let session = setup.session.clone();
             let target = setup.target_id.clone();
+            let opener = setup.opener;
             tokio::spawn(async move {
+                // `new CRPage`: a popup takes the size its opener's latest
+                // `window.open` asked for; that event came before this
+                // target, possibly still queued in the opener's loop.
+                if let Some(opener) = opener {
+                    opener.shared.barrier().await;
+                    let size = opener
+                        .shared
+                        .take_window_features()
+                        .and_then(|features| Page::viewport_from_features(&features));
+                    if let Some(size) = size {
+                        shared.state.lock().unwrap().viewport = size;
+                    }
+                }
                 let result = init_session(&shared, target, session, true, Some(first_rx)).await;
                 let mut state = shared.state.lock().unwrap();
                 if state.initialized.is_none() {
@@ -733,9 +771,9 @@ impl Page {
         self.shared.bump();
     }
 
-    /// Set the popup's viewport from its opener's `window.open` features
-    /// (`getViewportSizeFromWindowFeatures`), before it initializes.
-    pub(super) fn viewport_from_features(features: &[String]) -> Option<(u32, u32)> {
+    /// A popup's viewport from its opener's `window.open` features
+    /// (`getViewportSizeFromWindowFeatures`).
+    fn viewport_from_features(features: &[String]) -> Option<(u32, u32)> {
         let value = |name: &str| {
             features
                 .iter()
@@ -1001,6 +1039,13 @@ async fn init_session(
 // Event handling.
 
 fn handle(shared: &Arc<Shared>, event: Event) {
+    if event.method == "pirc.barrier" {
+        let mut state = shared.state.lock().unwrap();
+        state.barrier = state.barrier.max(event.params.as_u64().unwrap_or(0));
+        drop(state);
+        shared.bump();
+        return;
+    }
     let Some(session_id) = event.session.as_deref() else {
         return;
     };

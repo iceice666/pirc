@@ -443,18 +443,14 @@ fn attached(shared: &Arc<Shared>, params: &Value) {
                     .find(|page| page.target_id() == opener)
                     .cloned()
             });
-            let viewport = opener
-                .as_ref()
-                .and_then(|opener| opener.shared.take_window_features())
-                .and_then(|features| Page::viewport_from_features(&features))
-                .unwrap_or(shared.viewport);
             let page = Page::attach(PageSetup {
                 target_id: target,
                 session,
                 browser: shared.browser.clone(),
                 installer: shared.installer.clone(),
-                viewport,
+                viewport: shared.viewport,
                 mac: shared.mac.get().copied().unwrap_or(false),
+                opener: opener.clone(),
             });
             shared.state.lock().unwrap().pages.push(page.clone());
             // `reportAsNew`: a popup is reported to its opener once both
