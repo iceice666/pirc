@@ -182,11 +182,17 @@ const SSH_CONFIG_D: &str = "/etc/ssh/ssh_config.d";
 /// allowlist says (a DNS exfiltration channel past the proxy). Nothing in
 /// the sandbox needs them: its network namespace has no route to a
 /// resolver, and clients reach names through the proxy (`CONNECT host`,
-/// `socks5h`).
-pub const RESOLVER_SOCKETS: [&str; 5] = [
+/// `socks5h`). systemd-resolved's are its two Varlink sockets, not
+/// `/run/systemd/resolve` whole: `/etc/resolv.conf` usually links to
+/// `stub-resolv.conf` there, and tools that read it at start-up (`dig`,
+/// `host`, some runtimes) would fail on a dangling link instead of timing
+/// out (no route). Its D-Bus name answers on the system bus, whose socket
+/// the policy already hides (`LINUX_HOST_SOCKETS`).
+pub const RESOLVER_SOCKETS: [&str; 6] = [
     "/run/nscd",
     "/var/run/nscd",
-    "/run/systemd/resolve",
+    "/run/systemd/resolve/io.systemd.Resolve",
+    "/run/systemd/resolve/io.systemd.Resolve.Monitor",
     "/var/lib/sss/pipes",
     "/run/avahi-daemon/socket",
 ];
