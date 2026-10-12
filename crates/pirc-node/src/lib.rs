@@ -66,6 +66,8 @@ pub mod services;
 pub mod store;
 pub mod streams;
 pub mod terminals;
+#[cfg(test)]
+mod test_support;
 pub mod util;
 pub mod write_broker;
 

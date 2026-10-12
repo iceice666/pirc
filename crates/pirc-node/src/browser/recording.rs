@@ -341,26 +341,13 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 #[cfg(test)]
 pub(crate) mod test_support {
     /// A stand-in ffmpeg: a shell script that copies stdin to the output
-    /// file (its last argument) or fails with a message.
-    ///
-    /// The executable is written by a short-lived `sh`, under a fresh name,
-    /// never by this process: a write fd open here would be inherited by a
-    /// child that another test thread forks meanwhile, and exec'ing the
-    /// script while that child still holds it fails with ETXTBSY
-    /// (rust-lang/rust#114554).
+    /// file (its last argument) or fails with a message. Each call gets a
+    /// fresh name (see [`crate::test_support::executable`]).
     pub(crate) fn fake_ffmpeg(dir: &std::path::Path, body: &str) -> String {
         static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let source = dir.join(format!("ffmpeg-{n}.sh"));
         let path = dir.join(format!("ffmpeg-{n}"));
-        std::fs::write(&source, format!("#!/bin/sh\n{body}\n")).unwrap();
-        let status = std::process::Command::new("/bin/sh")
-            .args(["-c", r#"cp "$1" "$2" && chmod 755 "$2""#, "sh"])
-            .arg(&source)
-            .arg(&path)
-            .status()
-            .unwrap();
-        assert!(status.success(), "{status}");
+        crate::test_support::executable(&path, &format!("#!/bin/sh\n{body}\n"));
         path.display().to_string()
     }
 }
