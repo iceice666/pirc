@@ -190,23 +190,9 @@ mod tests {
         assert_eq!(capability_args(), ["--cap-drop", "ALL"]);
     }
 
-    /// An executable shell script, run once until it is no longer "text
-    /// file busy" (another test thread's fork may hold it open for writing).
+    /// An executable shell script (see [`crate::test_support::executable`]).
     fn script(path: &Path, body: &str) -> PathBuf {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
-        for _ in 0..100 {
-            match std::process::Command::new(path)
-                .stderr(Stdio::null())
-                .status()
-            {
-                Err(error) if error.raw_os_error() == Some(nix::libc::ETXTBSY) => {
-                    std::thread::sleep(Duration::from_millis(10));
-                }
-                _ => break,
-            }
-        }
+        crate::test_support::executable(path, &format!("#!/bin/sh\n{body}\n"));
         path.to_path_buf()
     }
 

@@ -448,9 +448,7 @@ exec "$@"
 "#;
 
     fn script(path: &Path, text: &str) -> String {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::write(path, text).unwrap();
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_support::executable(path, text);
         path.display().to_string()
     }
 
