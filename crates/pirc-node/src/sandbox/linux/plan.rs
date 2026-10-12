@@ -77,7 +77,11 @@
 //!   user's own empty read-only file. Here the node records the placeholders
 //!   it makes ([`Options::record`], `<state>/sandbox/placeholders`), and only
 //!   a recorded one is tracked again and removed; an unrecorded match is
-//!   covered with `/dev/null` (as srt did) but left in place.
+//!   covered with `/dev/null` (as srt did) but left in place. An empty
+//!   directory where another sandbox's directory placeholder is (or a
+//!   recorded one) is that placeholder, claimed again with nothing planned
+//!   below it: planned as the user's, the later session's placeholders
+//!   inside would keep it from ever being removed.
 //! - **A denied `/`** is expanded into its children (srt: a tmpfs on `/`
 //!   would wipe every mount before it), without `/proc`, `/dev` and `/sys`,
 //!   each child at its canonical location (`/bin` may link to `/usr/bin`).
@@ -274,6 +278,12 @@ fn stale_mount_point(path: &str) -> bool {
     std::fs::symlink_metadata(path).is_ok_and(|meta| {
         meta.is_file() && meta.len() == 0 && meta.mode() & 0o222 == 0 && meta.nlink() == 1
     })
+}
+
+/// An empty directory (not a link to one).
+fn empty_directory(path: &str) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir())
+        && std::fs::read_dir(path).is_ok_and(|mut entries| entries.next().is_none())
 }
 
 /// srt's `isAbsenceErrno`.
@@ -481,16 +491,36 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
     let mut stale: Vec<String> = Vec::new();
     let mut covered: Vec<String> = Vec::new();
     let mut added: Vec<String> = Vec::new();
+    // Under the lock: a release removes placeholders under it too, so what
+    // is claimed and what exists are seen together (a placeholder seen
+    // existing but no longer claimed would be planned as the user's, and
+    // gone by the time bubblewrap binds it).
+    let claimed = CLAIMED.lock().unwrap_or_else(|p| p.into_inner());
     let recorded = options
         .record
         .as_deref()
         .map(read_record)
         .unwrap_or_default();
-    let known = |path: &str| recorded.contains(Path::new(path));
+    let known =
+        |path: &str| claimed.contains_key(Path::new(path)) || recorded.contains(Path::new(path));
     let denies = (effective.deny_write.iter().map(|denied| (denied, false)))
         .chain(effective.deny_read.iter().map(|denied| (denied, true)));
     for (denied, hide) in denies {
         if denied == "/" || kernel_path(denied) {
+            continue;
+        }
+        // Another sandbox's directory placeholder (or a recorded leftover)
+        // on the way is this one's too, with nothing planned below it.
+        let reused = prefixes(denied)
+            .take_while(|prefix| std::fs::symlink_metadata(prefix).is_ok_and(|m| m.is_dir()))
+            .find(|prefix| known(prefix) && empty_directory(prefix));
+        if let Some(first) = reused {
+            if access(&effective, &parent(&first)) == Access::Writable {
+                if hide && !hidden.contains(&first) {
+                    hidden.push(first.clone());
+                }
+                placeholders.insert(first, true);
+            }
             continue;
         }
         match std::fs::symlink_metadata(denied) {
@@ -532,6 +562,7 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
         }
         *placeholders.entry(first).or_insert(directory) |= directory;
     }
+    drop(claimed);
     effective.deny_write.extend(added);
     effective.deny_write.extend(placeholders.keys().cloned());
     effective.deny_read.extend(hidden);
@@ -1385,6 +1416,57 @@ mod tests {
                 "{arg}"
             );
         }
+    }
+
+    /// Another sandbox's directory placeholder is an empty directory on the
+    /// host: it is planned as this sandbox's placeholder too, not as the
+    /// user's directory with placeholders inside.
+    #[test]
+    fn another_sandboxs_directory_placeholder_is_claimed_again() {
+        let (_dir, root) = temp();
+        let p = |rest: &str| format!("{root}/{rest}");
+        fs::create_dir_all(p("ws")).unwrap();
+        let paths = PathPolicy {
+            allow_write: vec![p("ws")],
+            deny_write: vec![p("ws/.claude/commands"), p("ws/.claude/agents")],
+            ..PathPolicy::default()
+        };
+        let first = plan(&paths, &Options::default()).unwrap();
+        let expected = strings(&[
+            "--ro-bind",
+            "/",
+            "/",
+            "--bind",
+            &p("ws"),
+            &p("ws"),
+            "--tmpfs",
+            &p("ws/.claude"),
+            "--remount-ro",
+            &p("ws/.claude"),
+        ]);
+        assert_eq!(first.args, expected);
+        let mut claim = MountPoints::claim(first.mount_points, None);
+        // What bubblewrap makes for the first sandbox.
+        fs::create_dir(p("ws/.claude")).unwrap();
+        let second = plan(&paths, &Options::default()).unwrap();
+        assert_eq!(second.args, expected);
+        assert_eq!(second.mount_points, [PathBuf::from(p("ws/.claude"))]);
+        let mut again = MountPoints::claim(second.mount_points, None);
+        claim.release();
+        assert!(Path::new(&p("ws/.claude")).exists(), "still claimed");
+        again.release();
+        assert!(!Path::new(&p("ws/.claude")).exists());
+        // Unclaimed and unrecorded, an empty directory is the user's.
+        fs::create_dir(p("ws/.claude")).unwrap();
+        let users = plan(&paths, &Options::default()).unwrap();
+        assert!(
+            users
+                .args
+                .windows(3)
+                .any(|w| w == ["--ro-bind", "/dev/null", &p("ws/.claude/commands")]),
+            "{:?}",
+            users.args
+        );
     }
 
     #[test]

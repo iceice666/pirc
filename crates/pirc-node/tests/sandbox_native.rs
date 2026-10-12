@@ -1088,6 +1088,55 @@ async fn placeholders_outlive_no_session_and_are_shared() {
     );
 }
 
+/// A session starting while another runs sees the first one's directory
+/// placeholder (`.claude`, for `.claude/commands`) as an empty directory:
+/// it shares it rather than placing its own placeholders inside, so the
+/// directory goes when both have ended.
+#[tokio::test]
+async fn overlapping_sessions_share_directory_placeholders() {
+    let Some(f) = fixture("overlap") else {
+        return;
+    };
+    let claude = f.root.join("workspace/.claude");
+    let start = |prepared: &Prepared| {
+        let mut command = prepared.command().unwrap();
+        command
+            .args(["-c", "read line; exit 0"])
+            .current_dir(f.root.join("workspace"))
+            .stdin(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap()
+    };
+    let first = f.prepare("pi_a").await;
+    let mut a = start(&first);
+    for _ in 0..200 {
+        if claude.exists() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(claude.is_dir());
+    let second = f.prepare("pi_b").await;
+    let mut b = start(&second);
+    // Let the second bubblewrap set its mounts up.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let inside: Vec<_> = fs::read_dir(&claude)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name())
+        .collect();
+    assert!(inside.is_empty(), "placed inside: {inside:?}");
+    drop(a.stdin.take());
+    assert!(a.wait().await.unwrap().success());
+    first.cleanup();
+    assert!(claude.exists(), "the second session still uses it");
+    drop(b.stdin.take());
+    assert!(b.wait().await.unwrap().success());
+    second.cleanup();
+    assert!(!claude.exists(), ".claude left on the host");
+}
+
 /// The node's inference socket lives in a private directory of its state,
 /// which the sandbox hides: the policy gives that one directory back.
 #[tokio::test]
