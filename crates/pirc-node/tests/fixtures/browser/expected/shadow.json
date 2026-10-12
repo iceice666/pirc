@@ -1,0 +1,23 @@
+{
+  "case": "shadow",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Shadow", "url": "http://{{HOST_A}}/shadow.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - heading \"Shadow DOM\" [level=1] [ref=e2]\n  - generic [ref=e3]:\n    - heading \"Card title\" [level=2] [ref=e4]\n    - generic: Slotted text\n    - generic [ref=e5]:\n      - text: Shadow input\n      - textbox \"Shadow input\" [ref=e6]\n    - button \"Shadow button\" [ref=e7]\n    - paragraph",
+      "url": "http://{{HOST_A}}/shadow.html"
+    },
+    { "op": "click", "ref": "e7", "url": "http://{{HOST_A}}/shadow.html" },
+    { "op": "fill", "ref": "e6", "url": "http://{{HOST_A}}/shadow.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - heading \"Shadow DOM\" [level=1] [ref=e2]\n  - generic [active] [ref=e3]:\n    - heading \"Card title\" [level=2] [ref=e4]\n    - generic: Slotted text\n    - generic [ref=e5]:\n      - text: Shadow input\n      - textbox \"Shadow input\" [ref=e6]: inside\n    - button \"Shadow button\" [ref=e7]\n    - paragraph [ref=e9]: shadow clicked",
+      "url": "http://{{HOST_A}}/shadow.html"
+    },
+    {
+      "op": "evaluate",
+      "result": "# Shadow DOM\n\nSlotted text",
+      "url": "http://{{HOST_A}}/shadow.html"
+    }
+  ]
+}

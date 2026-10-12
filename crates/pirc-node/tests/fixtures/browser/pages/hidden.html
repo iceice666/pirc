@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Hidden</title>
+  </head>
+  <body>
+    <h1>Visibility</h1>
+    <button>Visible button</button>
+    <button style="display: none">Display none button</button>
+    <button style="visibility: hidden">Invisible button</button>
+    <button hidden>Hidden attribute button</button>
+    <div aria-hidden="true"><button>Aria hidden button</button></div>
+    <button style="opacity: 0">Transparent button</button>
+    <div style="width: 0; height: 0; overflow: hidden"><button>Zero size button</button></div>
+    <p aria-hidden="true">Aria hidden text</p>
+    <p style="display: none">Display none text</p>
+    <button id="target" onclick="document.getElementById('out').textContent = 'target clicked'">
+      Target
+    </button>
+    <button onclick="document.getElementById('target').style.visibility = 'hidden'">
+      Hide target
+    </button>
+    <div style="position: relative; width: 200px">
+      <button id="covered">Covered button</button>
+      <div id="cover" style="display: none; position: absolute; inset: 0; background: white">
+        Cover
+      </div>
+    </div>
+    <button onclick="document.getElementById('cover').style.display = 'block'">Show cover</button>
+    <button disabled>Disabled button</button>
+    <label>Disabled input <input disabled value="fixed" /></label>
+    <label>Read-only input <input readonly value="fixed" /></label>
+    <p id="out"></p>
+  </body>
+</html>

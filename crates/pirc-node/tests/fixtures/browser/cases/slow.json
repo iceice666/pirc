@@ -1,0 +1,16 @@
+{
+  "description": "A JS-rendered page whose fetch keeps the network busy: goto waits for networkidle (up to 3 s), so the rendered content is there; waiting for text to appear and to go, and a wait that times out.",
+  "steps": [
+    { "op": "goto", "url": "http://{{HOST_A}}/slow.html" },
+    { "op": "snapshot" },
+    { "op": "evaluate", "helper": "pageMarkdown" },
+    { "op": "click", "target": "button \"Load more\"" },
+    { "op": "waitFor", "text": "More content" },
+    { "op": "click", "target": "button \"Dismiss toast\"" },
+    { "op": "waitFor", "textGone": "Toast message" },
+    { "op": "snapshot" },
+    { "op": "waitFor", "text": "Never shows up", "timeout": 500, "error": true },
+    { "op": "waitFor", "textGone": "Slow page", "timeout": 500, "error": true },
+    { "op": "waitFor", "textGone": "Not on the page", "timeout": 500 }
+  ]
+}

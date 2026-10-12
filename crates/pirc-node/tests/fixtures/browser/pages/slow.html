@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Loading</title>
+  </head>
+  <body>
+    <h1>Slow page</h1>
+    <p id="state">Loading…</p>
+    <div id="spinner">Spinner</div>
+    <main id="main"></main>
+    <button id="more">Load more</button>
+    <button id="dismiss">Dismiss toast</button>
+    <div id="toast" role="status">Toast message</div>
+    <script>
+      // Rendered by script after the document loaded; finished before
+      // networkidle (the fetch below keeps the network busy for 400 ms).
+      setTimeout(() => {
+        document.getElementById('state').textContent = 'Loaded content';
+        document.title = 'Loaded';
+        document.getElementById('spinner').remove();
+        document.getElementById('main').innerHTML =
+          '<h2>Rendered by script</h2><p>This paragraph came from <code>setTimeout</code>.</p>';
+      }, 200);
+      fetch('/slow?ms=400&text=payload')
+        .then((r) => r.text())
+        .then((text) => {
+          const p = document.createElement('p');
+          p.textContent = 'Fetched: ' + text;
+          document.body.append(p);
+        });
+      document.getElementById('more').onclick = () =>
+        setTimeout(() => {
+          const p = document.createElement('p');
+          p.textContent = 'More content';
+          document.body.append(p);
+        }, 500);
+      document.getElementById('dismiss').onclick = () =>
+        setTimeout(() => document.getElementById('toast').remove(), 500);
+    </script>
+  </body>
+</html>

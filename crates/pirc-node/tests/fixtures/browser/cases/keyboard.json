@@ -1,0 +1,93 @@
+{
+  "description": "Key events: fill, type slowly (key by key), press on a ref, keyboard presses with modifiers, insertText, an unknown key.",
+  "steps": [
+    {
+      "op": "goto",
+      "url": "http://{{HOST_A}}/keyboard.html"
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "fill",
+      "target": "textbox \"Field\"",
+      "text": "héllo"
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "click",
+      "target": "button \"Clear log\""
+    },
+    {
+      "op": "type",
+      "target": "textbox \"Field\"",
+      "text": "aB1 é!"
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "click",
+      "target": "button \"Clear log\""
+    },
+    {
+      "op": "press",
+      "target": "textbox \"Field\"",
+      "key": "Enter"
+    },
+    {
+      "op": "keyboard",
+      "key": "Backspace"
+    },
+    {
+      "op": "keyboard",
+      "key": "Shift+ArrowLeft"
+    },
+    {
+      "op": "keyboard",
+      "key": "Control+a"
+    },
+    {
+      "op": "keyboard",
+      "key": "a"
+    },
+    {
+      "op": "keyboard",
+      "key": "Shift+Tab"
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "click",
+      "target": "button \"Clear log\""
+    },
+    {
+      "op": "click",
+      "target": "textbox \"Area\""
+    },
+    {
+      "op": "insertText",
+      "text": "inserted 文字"
+    },
+    {
+      "op": "keyboard",
+      "key": "Enter"
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "keyboard",
+      "key": "NotAKey",
+      "error": true
+    },
+    {
+      "op": "keyboard",
+      "key": "Control+NotAKey",
+      "error": true
+    }
+  ]
+}

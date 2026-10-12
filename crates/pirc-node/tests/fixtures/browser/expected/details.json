@@ -1,0 +1,22 @@
+{
+  "case": "details",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Details", "url": "http://{{HOST_A}}/details.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - group [ref=e2]:\n    - generic \"Closed section\" [ref=e3]\n  - group [ref=e4]:\n    - generic \"Open section\" [ref=e5]\n    - paragraph [ref=e6]: Open content",
+      "url": "http://{{HOST_A}}/details.html"
+    },
+    { "op": "click", "ref": "e3", "url": "http://{{HOST_A}}/details.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - group [ref=e2]:\n    - generic \"Closed section\" [active] [ref=e3]\n    - paragraph [ref=e7]: Closed content\n    - button \"Hidden in closed\" [ref=e8]\n  - group [ref=e4]:\n    - generic \"Open section\" [ref=e5]\n    - paragraph [ref=e6]: Open content",
+      "url": "http://{{HOST_A}}/details.html"
+    },
+    {
+      "op": "evaluate",
+      "result": "Closed section\n\nClosed content\n\nOpen section\n\nOpen content",
+      "url": "http://{{HOST_A}}/details.html"
+    }
+  ]
+}

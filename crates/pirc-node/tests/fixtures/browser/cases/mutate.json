@@ -1,0 +1,31 @@
+{
+  "description": "Ref stability across snapshots of a mutating page: kept refs for unchanged elements, new refs for new or renamed ones, and a stale ref.",
+  "steps": [
+    { "op": "goto", "url": "http://{{HOST_A}}/mutate.html" },
+    { "op": "snapshot", "name": "initial" },
+    { "op": "click", "target": "button \"Prepend item\"" },
+    { "op": "snapshot" },
+    { "op": "click", "target": "button \"Remove Beta\"" },
+    { "op": "snapshot" },
+    { "op": "click", "target": "button \"Beta\"", "in": "initial", "timeout": 1000, "error": true },
+    { "op": "click", "target": "button \"Rename Gamma\"" },
+    { "op": "snapshot" },
+    {
+      "op": "click",
+      "target": "button \"Gamma\"",
+      "in": "initial",
+      "timeout": 1000,
+      "error": true
+    },
+    { "op": "click", "target": "button \"Replace list\"" },
+    { "op": "snapshot" },
+    {
+      "op": "click",
+      "target": "button \"Alpha\"",
+      "in": "initial",
+      "timeout": 1000,
+      "error": true
+    },
+    { "op": "click", "ref": "e999", "timeout": 1000, "error": true }
+  ]
+}

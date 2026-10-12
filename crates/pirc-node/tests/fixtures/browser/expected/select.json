@@ -1,0 +1,60 @@
+{
+  "case": "select",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Select", "url": "http://{{HOST_A}}/select.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - generic [ref=e2]:\n    - text: Color\n    - combobox \"Color\" [ref=e3]:\n      - option \"Red\"\n      - option \"Green\" [selected]\n      - option \"Blue\"\n      - option \"Unavailable\" [disabled]\n  - generic [ref=e4]:\n    - text: Toppings\n    - listbox \"Toppings\" [ref=e5]:\n      - option \"Cheese\" [ref=e6]\n      - option \"Olives\" [ref=e7]\n      - option \"Basil\" [ref=e8]\n  - generic [ref=e9]:\n    - checkbox \"Agree\" [ref=e10]\n    - text: Agree\n  - generic [ref=e11]:\n    - text: Plain input\n    - textbox \"Plain input\" [ref=e12]\n  - status",
+      "url": "http://{{HOST_A}}/select.html"
+    },
+    { "op": "select", "ref": "e3", "url": "http://{{HOST_A}}/select.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - generic [ref=e2]:\n    - text: Color\n    - combobox \"Color\" [ref=e3]:\n      - option \"Red\"\n      - option \"Green\"\n      - option \"Blue\" [selected]\n      - option \"Unavailable\" [disabled]\n  - generic [ref=e4]:\n    - text: Toppings\n    - listbox \"Toppings\" [ref=e5]:\n      - option \"Cheese\" [ref=e6]\n      - option \"Olives\" [ref=e7]\n      - option \"Basil\" [ref=e8]\n  - generic [ref=e9]:\n    - checkbox \"Agree\" [ref=e10]\n    - text: Agree\n  - generic [ref=e11]:\n    - text: Plain input\n    - textbox \"Plain input\" [ref=e12]\n  - status [ref=e13]: \"color: b\"",
+      "url": "http://{{HOST_A}}/select.html"
+    },
+    { "op": "select", "ref": "e3", "url": "http://{{HOST_A}}/select.html" },
+    { "op": "select", "ref": "e5", "url": "http://{{HOST_A}}/select.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - generic [ref=e2]:\n    - text: Color\n    - combobox \"Color\" [ref=e3]:\n      - option \"Red\" [selected]\n      - option \"Green\"\n      - option \"Blue\"\n      - option \"Unavailable\" [disabled]\n  - generic [ref=e4]:\n    - text: Toppings\n    - listbox \"Toppings\" [ref=e5]:\n      - option \"Cheese\" [selected] [ref=e6]\n      - option \"Olives\" [ref=e7]\n      - option \"Basil\" [selected] [ref=e8]\n  - generic [ref=e9]:\n    - checkbox \"Agree\" [ref=e10]\n    - text: Agree\n  - generic [ref=e11]:\n    - text: Plain input\n    - textbox \"Plain input\" [ref=e12]\n  - status [ref=e13]: \"toppings: Cheese,Basil\"",
+      "url": "http://{{HOST_A}}/select.html"
+    },
+    { "op": "select", "ref": "e3", "url": "http://{{HOST_A}}/select.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - generic [ref=e2]:\n    - text: Color\n    - combobox \"Color\" [ref=e3]:\n      - option \"Red\"\n      - option \"Green\"\n      - option \"Blue\"\n      - option \"Unavailable\" [disabled] [selected]\n  - generic [ref=e4]:\n    - text: Toppings\n    - listbox \"Toppings\" [ref=e5]:\n      - option \"Cheese\" [selected] [ref=e6]\n      - option \"Olives\" [ref=e7]\n      - option \"Basil\" [selected] [ref=e8]\n  - generic [ref=e9]:\n    - checkbox \"Agree\" [ref=e10]\n    - text: Agree\n  - generic [ref=e11]:\n    - text: Plain input\n    - textbox \"Plain input\" [ref=e12]\n  - status [ref=e13]: \"color: x\"",
+      "url": "http://{{HOST_A}}/select.html"
+    },
+    {
+      "op": "select",
+      "error": "selectOption: Timeout 1000ms exceeded.",
+      "ref": "e3",
+      "url": "http://{{HOST_A}}/select.html"
+    },
+    {
+      "op": "select",
+      "error": "selectOption: Error: Element is not a <select> element",
+      "ref": "e12",
+      "url": "http://{{HOST_A}}/select.html"
+    },
+    {
+      "op": "select",
+      "error": "selectOption: Error: Element is not a <select> element",
+      "ref": "e10",
+      "url": "http://{{HOST_A}}/select.html"
+    },
+    {
+      "op": "fill",
+      "error": "fill: Error: Input of type \"checkbox\" cannot be filled",
+      "ref": "e10",
+      "url": "http://{{HOST_A}}/select.html"
+    },
+    {
+      "op": "fill",
+      "error": "fill: Error: Element is not an <input>, <textarea> or [contenteditable] element",
+      "ref": "e3",
+      "url": "http://{{HOST_A}}/select.html"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "description": "The spike's form: snapshot, fill and submit by ref, the new paragraph and [active].",
+  "steps": [
+    { "op": "goto", "url": "http://{{HOST_A}}/form.html" },
+    { "op": "snapshot" },
+    { "op": "fill", "target": "textbox \"Name\"", "text": "Ada" },
+    { "op": "click", "target": "button \"Submit\"" },
+    { "op": "snapshot" },
+    { "op": "fill", "target": "checkbox \"Remember me\"", "text": "x", "error": true },
+    { "op": "click", "target": "button \"Later\"", "timeout": 1000, "error": true }
+  ]
+}

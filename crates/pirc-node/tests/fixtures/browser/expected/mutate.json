@@ -1,0 +1,59 @@
+{
+  "case": "mutate",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Mutations", "url": "http://{{HOST_A}}/mutate.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - heading \"Items\" [level=1] [ref=e2]\n  - list [ref=e3]:\n    - listitem [ref=e4]:\n      - button \"Alpha\" [ref=e5]\n    - listitem [ref=e6]:\n      - button \"Beta\" [ref=e7]\n    - listitem [ref=e8]:\n      - button \"Gamma\" [ref=e9]\n  - button \"Prepend item\" [ref=e10]\n  - button \"Remove Beta\" [ref=e11]\n  - button \"Rename Gamma\" [ref=e12]\n  - button \"Replace list\" [ref=e13]\n  - status",
+      "url": "http://{{HOST_A}}/mutate.html"
+    },
+    { "op": "click", "ref": "e10", "url": "http://{{HOST_A}}/mutate.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - heading \"Items\" [level=1] [ref=e2]\n  - list [ref=e3]:\n    - listitem [ref=e14]:\n      - button \"Zero\" [ref=e15]\n    - listitem [ref=e4]:\n      - button \"Alpha\" [ref=e5]\n    - listitem [ref=e6]:\n      - button \"Beta\" [ref=e7]\n    - listitem [ref=e8]:\n      - button \"Gamma\" [ref=e9]\n  - button \"Prepend item\" [active] [ref=e10]\n  - button \"Remove Beta\" [ref=e11]\n  - button \"Rename Gamma\" [ref=e12]\n  - button \"Replace list\" [ref=e13]\n  - status [ref=e16]: prepended",
+      "url": "http://{{HOST_A}}/mutate.html"
+    },
+    { "op": "click", "ref": "e11", "url": "http://{{HOST_A}}/mutate.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - heading \"Items\" [level=1] [ref=e2]\n  - list [ref=e3]:\n    - listitem [ref=e14]:\n      - button \"Zero\" [ref=e15]\n    - listitem [ref=e4]:\n      - button \"Alpha\" [ref=e5]\n    - listitem [ref=e8]:\n      - button \"Gamma\" [ref=e9]\n  - button \"Prepend item\" [ref=e10]\n  - button \"Remove Beta\" [active] [ref=e11]\n  - button \"Rename Gamma\" [ref=e12]\n  - button \"Replace list\" [ref=e13]\n  - status [ref=e16]: removed",
+      "url": "http://{{HOST_A}}/mutate.html"
+    },
+    {
+      "op": "click",
+      "error": "click: Timeout 1000ms exceeded.",
+      "ref": "e7",
+      "url": "http://{{HOST_A}}/mutate.html"
+    },
+    { "op": "click", "ref": "e12", "url": "http://{{HOST_A}}/mutate.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - heading \"Items\" [level=1] [ref=e2]\n  - list [ref=e3]:\n    - listitem [ref=e14]:\n      - button \"Zero\" [ref=e15]\n    - listitem [ref=e4]:\n      - button \"Alpha\" [ref=e5]\n    - listitem [ref=e8]:\n      - button \"Gamma renamed\" [ref=e17]\n  - button \"Prepend item\" [ref=e10]\n  - button \"Remove Beta\" [ref=e11]\n  - button \"Rename Gamma\" [active] [ref=e12]\n  - button \"Replace list\" [ref=e13]\n  - status [ref=e16]: renamed",
+      "url": "http://{{HOST_A}}/mutate.html"
+    },
+    {
+      "op": "click",
+      "error": "click: Timeout 1000ms exceeded.",
+      "ref": "e9",
+      "url": "http://{{HOST_A}}/mutate.html"
+    },
+    { "op": "click", "ref": "e13", "url": "http://{{HOST_A}}/mutate.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - heading \"Items\" [level=1] [ref=e2]\n  - list [ref=e3]:\n    - listitem [ref=e18]:\n      - button \"Zero\" [ref=e19]\n    - listitem [ref=e20]:\n      - button \"Alpha\" [ref=e21]\n    - listitem [ref=e22]:\n      - button \"Gamma renamed\" [ref=e23]\n  - button \"Prepend item\" [ref=e10]\n  - button \"Remove Beta\" [ref=e11]\n  - button \"Rename Gamma\" [ref=e12]\n  - button \"Replace list\" [active] [ref=e13]\n  - status [ref=e16]: replaced",
+      "url": "http://{{HOST_A}}/mutate.html"
+    },
+    {
+      "op": "click",
+      "error": "click: Timeout 1000ms exceeded.",
+      "ref": "e5",
+      "url": "http://{{HOST_A}}/mutate.html"
+    },
+    {
+      "op": "click",
+      "error": "click: Timeout 1000ms exceeded.",
+      "ref": "e999",
+      "url": "http://{{HOST_A}}/mutate.html"
+    }
+  ]
+}

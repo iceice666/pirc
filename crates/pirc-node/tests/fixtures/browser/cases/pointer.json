@@ -1,0 +1,9 @@
+{
+  "description": "cursor=pointer annotations, nested pointers, role=button, labels.",
+  "steps": [
+    { "op": "goto", "url": "http://{{HOST_A}}/pointer.html" },
+    { "op": "snapshot" },
+    { "op": "click", "target": "Pointer label" },
+    { "op": "snapshot" }
+  ]
+}

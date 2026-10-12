@@ -1,0 +1,32 @@
+{
+  "case": "navigation",
+  "steps": [
+    { "op": "back", "response": null, "url": "about:blank" },
+    { "op": "goto", "status": 200, "title": "Links", "url": "http://{{HOST_A}}/links.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - heading \"Links\" [level=1] [ref=e2]\n  - list [ref=e3]:\n    - listitem [ref=e4]:\n      - link \"Details page\" [ref=e5] [cursor=pointer]:\n        - /url: /details.html\n    - listitem [ref=e6]:\n      - link \"Form page\" [ref=e7] [cursor=pointer]:\n        - /url: /form.html\n    - listitem [ref=e8]:\n      - link \"Form in a new tab\" [ref=e9] [cursor=pointer]:\n        - /url: /form.html\n    - listitem [ref=e10]:\n      - link \"Same-document link\" [ref=e11] [cursor=pointer]:\n        - /url: \"#section\"\n  - heading \"Section\" [level=2] [ref=e12]",
+      "url": "http://{{HOST_A}}/links.html"
+    },
+    { "op": "click", "ref": "e11", "url": "http://{{HOST_A}}/links.html#section" },
+    { "op": "click", "ref": "e5", "url": "http://{{HOST_A}}/details.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=f1e1]:\n  - group [ref=f1e2]:\n    - generic \"Closed section\" [ref=f1e3]\n  - group [ref=f1e4]:\n    - generic \"Open section\" [ref=f1e5]\n    - paragraph [ref=f1e6]: Open content",
+      "url": "http://{{HOST_A}}/details.html"
+    },
+    { "op": "back", "response": 200, "url": "http://{{HOST_A}}/links.html#section" },
+    { "op": "back", "response": null, "url": "http://{{HOST_A}}/links.html" },
+    { "op": "goto", "status": 404, "title": "Status 404", "url": "http://{{HOST_A}}/status/404" },
+    { "op": "goto", "status": 500, "title": "Status 500", "url": "http://{{HOST_A}}/status/500" },
+    { "op": "goto", "status": 404, "title": "", "url": "http://{{HOST_A}}/nothing-here" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=f5e1]: Not found",
+      "url": "http://{{HOST_A}}/nothing-here"
+    },
+    { "op": "goto", "status": 200, "title": "Details", "url": "http://{{HOST_A}}/details.html" },
+    { "op": "goto", "error": "goto: Timeout 500ms exceeded." },
+    { "op": "goto", "error": "goto: net::ERR_UNSAFE_PORT at http://127.0.0.1:1/" }
+  ]
+}

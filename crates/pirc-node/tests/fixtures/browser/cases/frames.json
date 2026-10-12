@@ -1,0 +1,16 @@
+{
+  "description": "Same-origin nested iframes: per-frame refs (f<seq>e<n>), clicks and fills inside frames, password values per frame.",
+  "steps": [
+    { "op": "goto", "url": "http://{{HOST_A}}/frames.html" },
+    { "op": "frames" },
+    { "op": "targets" },
+    { "op": "snapshot" },
+    { "op": "click", "target": "button \"Child button\"" },
+    { "op": "fill", "target": "textbox \"Child input\"", "text": "in the child" },
+    { "op": "click", "target": "button \"Grandchild button\"" },
+    { "op": "snapshot" },
+    { "op": "snapshot", "mask": true },
+    { "op": "evaluate", "helper": "passwordValues", "frames": "all" },
+    { "op": "click", "ref": "f99e1", "timeout": 1000, "error": true }
+  ]
+}

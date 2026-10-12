@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Markdown</title>
+    <style>
+      .gone {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <nav><a href="/">Home</a> | <a href="/docs">Docs</a></nav>
+    <main>
+      <article>
+        <!-- prettier-ignore -->
+        <h1>Install   guide</h1>
+        <p>
+          Run <code>pirc node</code>, then <strong>restart</strong> the <em>service</em>. See
+          <a href="/docs/setup?x=1#top">the setup page</a> or
+          <a href="https://example.com/external">an external page</a>.
+          <a href="javascript:void(0)">Script link</a> and <a href="/empty"></a>an empty link.
+        </p>
+        <p>Line one<br />Line two</p>
+        <hr />
+        <h2>Steps</h2>
+        <ol>
+          <li>Download</li>
+          <li>
+            Configure
+            <ul>
+              <li>Edit <code>config.json</code></li>
+              <li>
+                Set the token
+                <ol>
+                  <li>Copy it</li>
+                  <li>Paste it</li>
+                </ol>
+              </li>
+            </ul>
+          </li>
+          <li>Start</li>
+        </ol>
+        <h3>Options</h3>
+        <table>
+          <tr>
+            <th>Name</th>
+            <th>Default</th>
+          </tr>
+          <tr>
+            <td>PIRC_BROWSER</td>
+            <td>true</td>
+          </tr>
+          <tr>
+            <td>a | b</td>
+            <!-- prettier-ignore -->
+            <td>  spaced   out  </td>
+          </tr>
+        </table>
+        <pre><code>cargo build --release
+  ./target/release/pirc-node
+</code></pre>
+        <blockquote>
+          <p>Quoted first.</p>
+          <p>Quoted second.</p>
+        </blockquote>
+        <img src="/logo.png" alt="Logo" />
+        <img src="/spacer.png" alt="" />
+        <p class="gone">Hidden paragraph</p>
+        <p hidden>Hidden attribute paragraph</p>
+        <p style="visibility: hidden">Invisible paragraph</p>
+        <form>
+          <label>Search <input value="typed value" /></label>
+          <textarea>area text</textarea>
+          <select>
+            <option>Choice</option>
+          </select>
+          <button>Go</button>
+        </form>
+        <script>
+          document.write('');
+        </script>
+        <noscript>No script</noscript>
+        <details>
+          <summary>More</summary>
+          <p>Collapsed text</p>
+        </details>
+        <dl>
+          <dt>Term</dt>
+          <dd>Definition</dd>
+        </dl>
+        <li>Stray item</li>
+        <h4>Heading <b>bold</b> <i>italic</i></h4>
+        <h5>Five</h5>
+        <h6>Six</h6>
+      </article>
+    </main>
+    <footer>Footer text</footer>
+  </body>
+</html>

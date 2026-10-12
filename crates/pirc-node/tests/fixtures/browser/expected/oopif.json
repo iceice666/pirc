@@ -1,0 +1,49 @@
+{
+  "case": "oopif",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Cross-site", "url": "http://{{HOST_A}}/oopif.html" },
+    {
+      "op": "targets",
+      "iframeTargets": [
+        "http://{{HOST_A}}/frame-grandchild.html",
+        "http://{{HOST_B}}/oopif-child.html"
+      ],
+      "url": "http://{{HOST_A}}/oopif.html"
+    },
+    {
+      "op": "frames",
+      "frames": [
+        { "url": "http://{{HOST_A}}/oopif.html", "name": "", "parent": null },
+        { "url": "http://{{HOST_B}}/oopif-child.html", "name": "", "parent": 0 },
+        { "url": "http://{{HOST_A}}/frame-grandchild.html", "name": "", "parent": 1 }
+      ],
+      "url": "http://{{HOST_A}}/oopif.html"
+    },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - heading \"Host page\" [level=1] [ref=e2]\n  - iframe [ref=e3]:\n    - generic [ref=f1e1]:\n      - heading \"Remote frame\" [level=2] [ref=f1e2]\n      - generic [ref=f1e3]:\n        - text: Remote input\n        - textbox \"Remote input\" [ref=f1e4]\n      - button \"Remote button\" [ref=f1e5]\n      - paragraph\n      - iframe [ref=f1e6]:\n        - generic [ref=f2e1]:\n          - heading \"Grandchild frame\" [level=3] [ref=f2e2]\n          - generic [ref=f2e3]:\n            - text: Frame password\n            - textbox \"Frame password\" [ref=f2e4]: frame-hunter2\n          - button \"Grandchild button\" [ref=f2e5]\n          - paragraph\n  - paragraph [ref=e4]: After the frame",
+      "url": "http://{{HOST_A}}/oopif.html"
+    },
+    { "op": "click", "ref": "f1e5", "url": "http://{{HOST_A}}/oopif.html" },
+    { "op": "type", "ref": "f1e4", "url": "http://{{HOST_A}}/oopif.html" },
+    { "op": "hover", "ref": "f2e5", "url": "http://{{HOST_A}}/oopif.html" },
+    { "op": "click", "ref": "f2e5", "url": "http://{{HOST_A}}/oopif.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - heading \"Host page\" [level=1] [ref=e2]\n  - iframe [active] [ref=e3]:\n    - generic [ref=f1e1]:\n      - heading \"Remote frame\" [level=2] [ref=f1e2]\n      - generic [ref=f1e3]:\n        - text: Remote input\n        - textbox \"Remote input\" [ref=f1e4]: über 1\n      - button \"Remote button\" [ref=f1e5]\n      - paragraph [ref=f1e7]: remote clicked\n      - iframe [active] [ref=f1e6]:\n        - generic [ref=f2e1]:\n          - heading \"Grandchild frame\" [level=3] [ref=f2e2]\n          - generic [ref=f2e3]:\n            - text: Frame password\n            - textbox \"Frame password\" [ref=f2e4]: ••••••\n          - button \"Grandchild button\" [active] [ref=f2e5]\n          - paragraph [ref=f2e6]: grandchild clicked\n  - paragraph [ref=e4]: After the frame",
+      "url": "http://{{HOST_A}}/oopif.html"
+    },
+    {
+      "op": "evaluate",
+      "result": [[], [], ["frame-hunter2"]],
+      "url": "http://{{HOST_A}}/oopif.html"
+    },
+    { "op": "click", "ref": "f2e4", "url": "http://{{HOST_A}}/oopif.html" },
+    { "op": "evaluate", "result": [false, false, true], "url": "http://{{HOST_A}}/oopif.html" },
+    {
+      "op": "evaluate",
+      "result": "# Host page\n\nAfter the frame",
+      "url": "http://{{HOST_A}}/oopif.html"
+    }
+  ]
+}

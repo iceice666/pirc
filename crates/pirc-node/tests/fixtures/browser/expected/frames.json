@@ -1,0 +1,45 @@
+{
+  "case": "frames",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Frames", "url": "http://{{HOST_A}}/frames.html" },
+    {
+      "op": "frames",
+      "frames": [
+        { "url": "http://{{HOST_A}}/frames.html", "name": "", "parent": null },
+        { "url": "http://{{HOST_A}}/frame-child.html", "name": "", "parent": 0 },
+        { "url": "http://{{HOST_A}}/frame-grandchild.html", "name": "", "parent": 1 }
+      ],
+      "url": "http://{{HOST_A}}/frames.html"
+    },
+    { "op": "targets", "iframeTargets": [], "url": "http://{{HOST_A}}/frames.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - heading \"Outer page\" [level=1] [ref=e2]\n  - button \"Outer button\" [ref=e3]\n  - paragraph\n  - iframe [ref=e4]:\n    - generic [ref=f1e1]:\n      - heading \"Child frame\" [level=2] [ref=f1e2]\n      - generic [ref=f1e3]:\n        - text: Child input\n        - textbox \"Child input\" [ref=f1e4]\n      - button \"Child button\" [ref=f1e5]\n      - paragraph\n      - iframe [ref=f1e6]:\n        - generic [ref=f2e1]:\n          - heading \"Grandchild frame\" [level=3] [ref=f2e2]\n          - generic [ref=f2e3]:\n            - text: Frame password\n            - textbox \"Frame password\" [ref=f2e4]: frame-hunter2\n          - button \"Grandchild button\" [ref=f2e5]\n          - paragraph",
+      "url": "http://{{HOST_A}}/frames.html"
+    },
+    { "op": "click", "ref": "f1e5", "url": "http://{{HOST_A}}/frames.html" },
+    { "op": "fill", "ref": "f1e4", "url": "http://{{HOST_A}}/frames.html" },
+    { "op": "click", "ref": "f2e5", "url": "http://{{HOST_A}}/frames.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - heading \"Outer page\" [level=1] [ref=e2]\n  - button \"Outer button\" [ref=e3]\n  - paragraph\n  - iframe [active] [ref=e4]:\n    - generic [ref=f1e1]:\n      - heading \"Child frame\" [level=2] [ref=f1e2]\n      - generic [ref=f1e3]:\n        - text: Child input\n        - textbox \"Child input\" [ref=f1e4]: in the child\n      - button \"Child button\" [ref=f1e5]\n      - paragraph [ref=f1e7]: child clicked\n      - iframe [active] [ref=f1e6]:\n        - generic [ref=f2e1]:\n          - heading \"Grandchild frame\" [level=3] [ref=f2e2]\n          - generic [ref=f2e3]:\n            - text: Frame password\n            - textbox \"Frame password\" [ref=f2e4]: frame-hunter2\n          - button \"Grandchild button\" [active] [ref=f2e5]\n          - paragraph [ref=f2e6]: grandchild clicked",
+      "url": "http://{{HOST_A}}/frames.html"
+    },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - heading \"Outer page\" [level=1] [ref=e2]\n  - button \"Outer button\" [ref=e3]\n  - paragraph\n  - iframe [active] [ref=e4]:\n    - generic [ref=f1e1]:\n      - heading \"Child frame\" [level=2] [ref=f1e2]\n      - generic [ref=f1e3]:\n        - text: Child input\n        - textbox \"Child input\" [ref=f1e4]: in the child\n      - button \"Child button\" [ref=f1e5]\n      - paragraph [ref=f1e7]: child clicked\n      - iframe [active] [ref=f1e6]:\n        - generic [ref=f2e1]:\n          - heading \"Grandchild frame\" [level=3] [ref=f2e2]\n          - generic [ref=f2e3]:\n            - text: Frame password\n            - textbox \"Frame password\" [ref=f2e4]: ••••••\n          - button \"Grandchild button\" [active] [ref=f2e5]\n          - paragraph [ref=f2e6]: grandchild clicked",
+      "url": "http://{{HOST_A}}/frames.html"
+    },
+    {
+      "op": "evaluate",
+      "result": [[], [], ["frame-hunter2"]],
+      "url": "http://{{HOST_A}}/frames.html"
+    },
+    {
+      "op": "click",
+      "error": "click: Invalid frame in aria-ref selector \"aria-ref=f99e1\"",
+      "ref": "f99e1",
+      "url": "http://{{HOST_A}}/frames.html"
+    }
+  ]
+}

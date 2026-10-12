@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Remote child</title>
+  </head>
+  <body>
+    <h2>Remote frame</h2>
+    <label>Remote input <input name="remote" /></label>
+    <button onclick="document.getElementById('out').textContent = 'remote clicked'">
+      Remote button
+    </button>
+    <p id="out"></p>
+    <!-- Back to the first site: a frame in yet another renderer than its parent. -->
+    <iframe
+      title="Back home"
+      src="http://{{HOST_A}}/frame-grandchild.html"
+      width="500"
+      height="200"
+    ></iframe>
+  </body>
+</html>

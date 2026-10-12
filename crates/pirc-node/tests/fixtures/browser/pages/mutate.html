@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Mutations</title>
+  </head>
+  <body>
+    <h1>Items</h1>
+    <ul id="list">
+      <li><button>Alpha</button></li>
+      <li><button id="beta">Beta</button></li>
+      <li><button id="gamma">Gamma</button></li>
+    </ul>
+    <button id="prepend">Prepend item</button>
+    <button id="remove">Remove Beta</button>
+    <button id="rename">Rename Gamma</button>
+    <button id="replace">Replace list</button>
+    <p id="status" role="status"></p>
+    <script>
+      const list = document.getElementById('list');
+      const status = document.getElementById('status');
+      const item = (name) => {
+        const li = document.createElement('li');
+        const button = document.createElement('button');
+        button.textContent = name;
+        li.append(button);
+        return li;
+      };
+      document.getElementById('prepend').onclick = () => {
+        list.prepend(item('Zero'));
+        status.textContent = 'prepended';
+      };
+      document.getElementById('remove').onclick = () => {
+        document.getElementById('beta')?.parentElement.remove();
+        status.textContent = 'removed';
+      };
+      document.getElementById('rename').onclick = () => {
+        document.getElementById('gamma').textContent = 'Gamma renamed';
+        status.textContent = 'renamed';
+      };
+      document.getElementById('replace').onclick = () => {
+        list.replaceChildren(
+          ...[...list.querySelectorAll('button')].map((b) => item(b.textContent)),
+        );
+        status.textContent = 'replaced';
+      };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "case": "static-pages",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Docs", "url": "http://{{HOST_A}}/nav.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - navigation \"Main\" [ref=e2]:\n    - list [ref=e3]:\n      - listitem [ref=e4]:\n        - link \"Guide\" [ref=e5] [cursor=pointer]:\n          - /url: /guide\n      - listitem [ref=e6]:\n        - link \"API\" [ref=e7] [cursor=pointer]:\n          - /url: /api\n      - listitem [ref=e8]:\n        - link \"Blog\" [ref=e9] [cursor=pointer]:\n          - /url: https://example.com/blog\n  - main [ref=e10]:\n    - heading \"Install\" [level=2] [ref=e11]\n    - paragraph [ref=e12]:\n      - text: Run the\n      - code [ref=e13]: install\n      - text: command, then\n      - strong [ref=e14]: restart\n      - text: .\n    - group [ref=e15]:\n      - generic \"More\" [ref=e16]\n      - paragraph [ref=e17]: Hidden details\n    - generic [aria-hidden] [ref=e18]: Not for assistive technology\n    - alert [ref=e19]: Saved\n    - img \"Logo\" [ref=e20]\n    - generic [ref=e21] [cursor=pointer]: Clickable div",
+      "url": "http://{{HOST_A}}/nav.html"
+    },
+    { "op": "goto", "status": 200, "title": "Table", "url": "http://{{HOST_A}}/table.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=f1e1]:\n  - table [ref=f1e2]:\n    - caption [ref=f1e3]: Builds\n    - rowgroup [ref=f1e4]:\n      - row [ref=f1e5]:\n        - columnheader \"Job\" [ref=f1e6]\n        - columnheader \"Status\" [ref=f1e7]\n    - rowgroup [ref=f1e8]:\n      - row [ref=f1e9]:\n        - cell \"check\" [ref=f1e10]\n        - cell \"passed\" [ref=f1e11]\n      - row [ref=f1e12]:\n        - cell \"size\" [ref=f1e13]\n        - cell [ref=f1e14]:\n          - status [ref=f1e15]: running\n  - tablist [ref=f1e16]:\n    - tab \"One\" [selected] [ref=f1e17]\n    - tab \"Two\" [ref=f1e18]\n  - slider \"Volume\" [ref=f1e19]: \"30\"\n  - textbox \"Notes\" [ref=f1e20]: first line",
+      "url": "http://{{HOST_A}}/table.html"
+    },
+    { "op": "goto", "status": 200, "title": "Frames", "url": "http://{{HOST_A}}/iframe.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=f2e1]:\n  - heading \"Outer\" [level=1] [ref=f2e2]\n  - iframe [ref=f2e3]:\n    - button \"Inside the frame\" [ref=f3e2]",
+      "url": "http://{{HOST_A}}/iframe.html"
+    },
+    { "op": "click", "ref": "f3e2", "url": "http://{{HOST_A}}/iframe.html" },
+    {
+      "op": "frames",
+      "frames": [
+        { "url": "http://{{HOST_A}}/iframe.html", "name": "", "parent": null },
+        { "url": "about:srcdoc", "name": "", "parent": 0 }
+      ],
+      "url": "http://{{HOST_A}}/iframe.html"
+    }
+  ]
+}

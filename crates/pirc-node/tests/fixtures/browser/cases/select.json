@@ -1,0 +1,75 @@
+{
+  "description": "selectOption by value and by label, multiple values, a disabled option, a missing option, and on a non-select.",
+  "steps": [
+    {
+      "op": "goto",
+      "url": "http://{{HOST_A}}/select.html"
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "select",
+      "target": "combobox \"Color\"",
+      "values": ["b"]
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "select",
+      "target": "combobox \"Color\"",
+      "values": ["Red"]
+    },
+    {
+      "op": "select",
+      "target": "listbox \"Toppings\"",
+      "values": ["Cheese", "Basil"]
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "select",
+      "target": "combobox \"Color\"",
+      "values": ["Unavailable"],
+      "note": "a disabled option"
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "select",
+      "target": "combobox \"Color\"",
+      "values": ["Purple"],
+      "timeout": 1000,
+      "error": true
+    },
+    {
+      "op": "select",
+      "target": "textbox \"Plain input\"",
+      "values": ["x"],
+      "timeout": 1000,
+      "error": true
+    },
+    {
+      "op": "select",
+      "target": "checkbox \"Agree\"",
+      "values": ["x"],
+      "timeout": 1000,
+      "error": true
+    },
+    {
+      "op": "fill",
+      "target": "checkbox \"Agree\"",
+      "text": "x",
+      "error": true
+    },
+    {
+      "op": "fill",
+      "target": "combobox \"Color\"",
+      "text": "x",
+      "error": true
+    }
+  ]
+}

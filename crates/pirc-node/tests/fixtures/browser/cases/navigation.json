@@ -1,0 +1,62 @@
+{
+  "description": "Links, history and statuses: same-document navigation, back without a response, back with no history, HTTP error statuses, a redirect, a refused connection.",
+  "steps": [
+    {
+      "op": "back"
+    },
+    {
+      "op": "goto",
+      "url": "http://{{HOST_A}}/links.html"
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "click",
+      "target": "link \"Same-document link\""
+    },
+    {
+      "op": "click",
+      "target": "link \"Details page\""
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "back"
+    },
+    {
+      "op": "back"
+    },
+    {
+      "op": "goto",
+      "url": "http://{{HOST_A}}/status/404"
+    },
+    {
+      "op": "goto",
+      "url": "http://{{HOST_A}}/status/500"
+    },
+    {
+      "op": "goto",
+      "url": "http://{{HOST_A}}/nothing-here"
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "goto",
+      "url": "http://{{HOST_A}}/redirect?to=/details.html"
+    },
+    {
+      "op": "goto",
+      "url": "http://{{HOST_A}}/slow?ms=2000&text=late",
+      "timeout": 500,
+      "error": true
+    },
+    {
+      "op": "goto",
+      "url": "http://127.0.0.1:1/",
+      "error": true
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "case": "markdown",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Markdown", "url": "http://{{HOST_A}}/markdown.html" },
+    {
+      "op": "evaluate",
+      "result": "# Install guide\n\nRun `pirc node`, then **restart** the _service_. See [the setup page](http://{{HOST_A}}/docs/setup?x=1#top) or [an external page](https://example.com/external). Script link and an empty link.\n\nLine one\nLine two\n\n---\n\n## Steps\n\n1. Download\n2. Configure\n  - Edit `config.json`\n  - Set the token\n    1. Copy it\n    2. Paste it\n3. Start\n\n### Options\n\n| Name | Default |\n| --- | --- |\n| PIRC_BROWSER | true |\n| a \\| b | spaced out |\n\n```\ncargo build --release\n./target/release/pirc-node\n```\n\n> Quoted first.\n>\n>\n>\n> Quoted second.\n\n![Logo](http://{{HOST_A}}/logo.png)\n\nSearch\n\nMore\n\nTerm\n\nDefinition\n\n- Stray item\n\n#### Heading **bold** _italic_\n\n##### Five\n\n###### Six",
+      "url": "http://{{HOST_A}}/markdown.html"
+    },
+    {
+      "op": "evaluate",
+      "result": "Home | Docs\nInstall guide\n\nRun pirc node, then restart the service. See the setup page or an external page. Script link and an empty link.\n\nLine one\nLine two\n\nSteps\nDownload\nConfigure\nEdit config.json\nSet the token\nCopy it\nPaste it\nStart\nOptions\nName\tDefault\nPIRC_BROWSER\ttrue\na | b\tspaced out\ncargo build --release\n  ./target/release/pirc-node\n\n\nQuoted first.\n\nQuoted second.\n\n \nSearch   \nChoice\n Go\nMore\nTerm\nDefinition\nStray item\nHeading bold italic\nFive\nSix\nFooter text",
+      "url": "http://{{HOST_A}}/markdown.html"
+    },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - navigation [ref=e2]:\n    - link \"Home\" [ref=e3] [cursor=pointer]:\n      - /url: /\n    - text: \"|\"\n    - link \"Docs\" [ref=e4] [cursor=pointer]:\n      - /url: /docs\n  - main [ref=e5]:\n    - article [ref=e6]:\n      - heading \"Install guide\" [level=1] [ref=e7]\n      - paragraph [ref=e8]:\n        - text: Run\n        - code [ref=e9]: pirc node\n        - text: \", then\"\n        - strong [ref=e10]: restart\n        - text: the\n        - emphasis [ref=e11]: service\n        - text: . See\n        - link \"the setup page\" [ref=e12] [cursor=pointer]:\n          - /url: /docs/setup?x=1#top\n        - text: or\n        - link \"an external page\" [ref=e13] [cursor=pointer]:\n          - /url: https://example.com/external\n        - text: .\n        - link \"Script link\" [ref=e14] [cursor=pointer]:\n          - /url: javascript:void(0)\n        - text: and\n        - link:\n          - /url: /empty\n        - text: an empty link.\n      - paragraph [ref=e15]: Line oneLine two\n      - separator [ref=e16]\n      - heading \"Steps\" [level=2] [ref=e17]\n      - list [ref=e18]:\n        - listitem [ref=e19]: Download\n        - listitem [ref=e20]:\n          - text: Configure\n          - list [ref=e21]:\n            - listitem [ref=e22]:\n              - text: Edit\n              - code [ref=e23]: config.json\n            - listitem [ref=e24]:\n              - text: Set the token\n              - list [ref=e25]:\n                - listitem [ref=e26]: Copy it\n                - listitem [ref=e27]: Paste it\n        - listitem [ref=e28]: Start\n      - heading \"Options\" [level=3] [ref=e29]\n      - table [ref=e30]:\n        - rowgroup [ref=e31]:\n          - row [ref=e32]:\n            - columnheader \"Name\" [ref=e33]\n            - columnheader \"Default\" [ref=e34]\n          - row [ref=e35]:\n            - cell \"PIRC_BROWSER\" [ref=e36]\n            - cell \"true\" [ref=e37]\n          - row [ref=e38]:\n            - cell \"a | b\" [ref=e39]\n            - cell \"spaced out\" [ref=e40]\n      - code [ref=e42]: cargo build --release ./target/release/pirc-node\n      - blockquote [ref=e43]:\n        - paragraph [ref=e44]: Quoted first.\n        - paragraph [ref=e45]: Quoted second.\n      - img \"Logo\" [ref=e46]\n      - generic [ref=e47]:\n        - generic [ref=e48]:\n          - text: Search\n          - textbox \"Search\" [ref=e49]: typed value\n        - textbox [ref=e50]: area text\n        - combobox [ref=e51]:\n          - option \"Choice\" [selected]\n        - button \"Go\" [ref=e52]\n      - group [ref=e53]:\n        - generic \"More\" [ref=e54]\n      - generic [ref=e55]:\n        - term [ref=e56]: Term\n        - definition [ref=e57]: Definition\n      - listitem [ref=e58]: Stray item\n      - heading \"Heading bold italic\" [level=4] [ref=e59]\n      - heading \"Five\" [level=5] [ref=e60]\n      - heading \"Six\" [level=6] [ref=e61]\n  - contentinfo [ref=e62]: Footer text",
+      "url": "http://{{HOST_A}}/markdown.html"
+    },
+    {
+      "op": "goto",
+      "status": 200,
+      "title": "Body markdown",
+      "url": "http://{{HOST_A}}/markdown-body.html"
+    },
+    {
+      "op": "evaluate",
+      "result": "# Site header\n\nShort main.\n\n## Outside main\n\nMost of the text of this page lies outside its main element, so the extraction takes the whole body instead of main. This sentence makes that so.\n\n- First\n- Second",
+      "url": "http://{{HOST_A}}/markdown-body.html"
+    },
+    {
+      "op": "evaluate",
+      "result": "<!DOCTYPE html><html lang=\"en\"><head>\n    <title>Body markdown</title>\n  </head>\n  <body>\n    <header><h1>Site header</h1></header>\n    <main><p>Short main.</p></main>\n    <section>\n      <h2>Outside main</h2>\n      <p>\n        Most of the text of this page lies outside its main element, so the extraction takes the\n        whole body instead of main. This sentence makes that so.\n      </p>\n      <ul>\n        <li>First</li>\n        <li>Second</li>\n      </ul>\n    </section>\n  \n\n</body></html>",
+      "url": "http://{{HOST_A}}/markdown-body.html"
+    },
+    { "op": "goto", "status": 200, "title": "Docs", "url": "http://{{HOST_A}}/nav.html" },
+    {
+      "op": "evaluate",
+      "result": "## Install\n\nRun the `install` command, then **restart**.\n\nMore\n\nHidden details\n\nNot for assistive technology\n\nSaved\n\n![Logo](data:,)\n\nClickable div",
+      "url": "http://{{HOST_A}}/nav.html"
+    },
+    { "op": "goto", "status": 200, "title": "Table", "url": "http://{{HOST_A}}/table.html" },
+    {
+      "op": "evaluate",
+      "result": "| Job | Status |\n| --- | --- |\n| check | passed |\n| size | running |",
+      "url": "http://{{HOST_A}}/table.html"
+    }
+  ]
+}
