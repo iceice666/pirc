@@ -36,7 +36,7 @@ use futures_util::future::{BoxFuture, join_all};
 use serde_json::{Value, json};
 use tokio::time::Instant;
 
-use super::frame::{Arg, Frame, handle_of};
+use super::frame::{Arg, Frame, OwnedHandle, handle_of};
 use super::locator::{Failure, content_frame, jump_to_aria_ref_frame, retry_wait};
 use super::page::{Page, deadline, within};
 use super::{Error, Result};
@@ -210,6 +210,7 @@ async fn snapshot_once(
             let Some(element) = handle_of(&injected.session, &element) else {
                 return Ok(None);
             };
+            let element = OwnedHandle::new(element);
             let content = content_frame(page, frame, &element).await;
             element.release().await;
             match content? {

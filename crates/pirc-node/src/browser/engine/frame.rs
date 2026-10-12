@@ -101,6 +101,47 @@ impl JsHandle {
     }
 }
 
+/// A [`JsHandle`] an operation holds: released when dropped (in the
+/// background), so an operation cut short (its timeout, its page gone)
+/// does not leave the object pinned in its world, as Playwright disposes
+/// its handles in a `finally`.
+pub(super) struct OwnedHandle(Option<JsHandle>);
+
+impl OwnedHandle {
+    pub(super) fn new(handle: JsHandle) -> Self {
+        Self(Some(handle))
+    }
+
+    pub(super) fn handle(&self) -> &JsHandle {
+        self.0.as_ref().expect("held until released")
+    }
+
+    /// [`JsHandle::release`] now.
+    pub(super) async fn release(mut self) {
+        if let Some(handle) = self.0.take() {
+            handle.release().await;
+        }
+    }
+}
+
+impl std::ops::Deref for OwnedHandle {
+    type Target = JsHandle;
+
+    fn deref(&self) -> &JsHandle {
+        self.handle()
+    }
+}
+
+impl Drop for OwnedHandle {
+    fn drop(&mut self) {
+        if let Some(handle) = self.0.take()
+            && let Ok(runtime) = tokio::runtime::Handle::try_current()
+        {
+            runtime.spawn(handle.release());
+        }
+    }
+}
+
 /// An argument to [`JsHandle::call`].
 #[derive(Clone, Debug)]
 pub enum Arg {
@@ -652,5 +693,46 @@ impl std::fmt::Debug for Frame {
             .field("id", &self.id)
             .field("seq", &self.seq())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::cdp::Fake;
+    use super::*;
+
+    #[tokio::test]
+    async fn an_owned_handle_is_released_when_dropped() {
+        let mut fake = Fake::new();
+        let session = fake.connection.session("S");
+        let handle = |id: &str| JsHandle {
+            session: session.clone(),
+            object_id: id.to_owned(),
+        };
+        // Dropped mid-operation (an action's timeout).
+        let held = OwnedHandle::new(handle("1"));
+        let operation = async move {
+            let _element = held;
+            std::future::pending::<()>().await;
+        };
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), operation)
+                .await
+                .is_err()
+        );
+        let released = fake.command().await;
+        assert_eq!(released["method"], "Runtime.releaseObject");
+        assert_eq!(released["params"], json!({ "objectId": "1" }));
+        assert_eq!(released["sessionId"], "S");
+        // Released once when released explicitly.
+        let explicit = OwnedHandle::new(handle("2"));
+        let release = tokio::spawn(explicit.release());
+        let released = fake.command().await;
+        assert_eq!(released["params"], json!({ "objectId": "2" }));
+        fake.send(json!({ "id": released["id"], "sessionId": "S", "result": {} }))
+            .await;
+        release.await.unwrap();
+        let _ = OwnedHandle::new(handle("3"));
+        assert_eq!(fake.command().await["params"], json!({ "objectId": "3" }));
     }
 }

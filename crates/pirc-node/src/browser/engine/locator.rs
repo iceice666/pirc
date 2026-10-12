@@ -47,7 +47,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 use super::cdp::CdpError;
-use super::frame::{Arg, EvalError, Frame, JsHandle, World, handle_of};
+use super::frame::{Arg, EvalError, Frame, JsHandle, OwnedHandle, World, handle_of};
 use super::page::{Page, Shared, deadline, protocol_error, within};
 use super::screencast::{self, Rect};
 use super::{Error, MouseButton, Result};
@@ -174,10 +174,11 @@ impl Locator {
         let element = self
             .run(api, timeout, self.wait_for_attached(timeout))
             .await?;
+        let element = OwnedHandle::new(element);
         let declaration =
             format!("function(element) {{\n  return (\n{function}\n)(element, undefined);\n}}");
         let main = self.page.main_frame();
-        let evaluation = element.call(&declaration, vec![Arg::Handle(element.clone())]);
+        let evaluation = element.call(&declaration, vec![Arg::Handle(element.handle().clone())]);
         let result = tokio::select! {
             result = evaluation => result,
             error = main.gone("") => Err(error),
@@ -379,10 +380,11 @@ impl Outcome {
     }
 }
 
-/// An element found by a selector: a handle in its frame's utility world.
+/// An element found by a selector: a handle in its frame's utility world
+/// (released when dropped).
 struct Element {
     frame: Frame,
-    handle: JsHandle,
+    handle: OwnedHandle,
     /// Its `getBoundingClientRect()` when it was found (for the action
     /// overlay; only taken while the overlay is on).
     rect: Option<Rect>,
@@ -430,7 +432,7 @@ impl Element {
                     uid,
                     &injected,
                     function,
-                    vec![Arg::Handle(self.handle.clone()), Arg::Value(arg)],
+                    vec![Arg::Handle(self.handle.handle().clone()), Arg::Value(arg)],
                     by_value,
                 )
                 .await
@@ -690,7 +692,7 @@ impl Locator {
         };
         let mut element = Element {
             frame,
-            handle,
+            handle: OwnedHandle::new(handle),
             rect: None,
         };
         if self.page.screencast_state().actions().is_some()
@@ -1131,6 +1133,7 @@ impl Locator {
             else {
                 return Ok(None);
             };
+            let owner = OwnedHandle::new(owner);
             let rect = self.bounding_box(&owner, &parent).await;
             owner.release().await;
             Ok(rect?.map(|rect| (rect.x, rect.y)))
@@ -1188,8 +1191,8 @@ impl Locator {
         let main = self.page.main_frame();
         // (the frame, its <iframe> in the parent's utility world, the point
         // in the frame).
-        let mut data: Vec<(Frame, Option<JsHandle>, (f64, f64))> = Vec::new();
-        let release = |data: Vec<(Frame, Option<JsHandle>, (f64, f64))>| async move {
+        let mut data: Vec<(Frame, Option<OwnedHandle>, (f64, f64))> = Vec::new();
+        let release = |data: Vec<(Frame, Option<OwnedHandle>, (f64, f64))>| async move {
             for (_, owner, _) in data {
                 if let Some(owner) = owner {
                     owner.release().await;
@@ -1199,7 +1202,7 @@ impl Locator {
         let mut frame = element.frame.clone();
         while let Some(parent) = frame.parent() {
             let owner = match frame.owner().await {
-                Ok(Some(owner)) => owner,
+                Ok(Some(owner)) => OwnedHandle::new(owner),
                 Ok(None) => {
                     release(data).await;
                     return Ok(FrameCheck::Outcome(Outcome::NotConnected));
@@ -1220,7 +1223,10 @@ impl Locator {
             let style = async {
                 let injected = parent.injected().await.ok()?;
                 injected
-                    .call(DESCRIBE_IFRAME_STYLE, vec![Arg::Handle(owner.clone())])
+                    .call(
+                        DESCRIBE_IFRAME_STYLE,
+                        vec![Arg::Handle(owner.handle().clone())],
+                    )
                     .await
                     .ok()
             }
@@ -1249,7 +1255,12 @@ impl Locator {
         data.push((frame, None, point));
         for i in (1..data.len()).rev() {
             let (parent, _, parent_point) = &data[i];
-            let owner = data[i - 1].1.clone().expect("a child frame has an owner");
+            let owner = data[i - 1]
+                .1
+                .as_ref()
+                .expect("a child frame has an owner")
+                .handle()
+                .clone();
             let hit = async {
                 let injected = parent.injected().await.map_err(|error| EvalError {
                     error,
