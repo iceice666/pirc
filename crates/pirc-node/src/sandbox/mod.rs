@@ -113,8 +113,9 @@ pub trait Sandbox: Send + Sync {
     fn prepare(&self, input: PrepareInput) -> BoxFuture<'_, ApiResult<Prepared>>;
 
     /// `input.command` read-only and without network, or 503
-    /// [`unavailable_error`]. The [`Prepared`] has no network control and
-    /// its args end with the command; cleanup as for [`Sandbox::prepare`].
+    /// [`unavailable_error`]. The [`Prepared`] has no network control, its
+    /// args end with the command, and it says where the command may write
+    /// ([`Prepared::temp_dir`]); cleanup as for [`Sandbox::prepare`].
     fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>>;
 }
 
@@ -146,6 +147,8 @@ pub struct Prepared {
     /// For the session (config problems, exposed state).
     pub warnings: Vec<String>,
     control: Option<Box<dyn NetworkControl>>,
+    /// A read-only command's writable directory ([`Prepared::with_temp_dir`]).
+    temp_dir: Option<PathBuf>,
     cleanup: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
@@ -166,8 +169,23 @@ impl Prepared {
             policy,
             warnings,
             control,
+            temp_dir: None,
             cleanup: Mutex::new(Some(Box::new(cleanup))),
         }
+    }
+
+    /// A read-only command's ([`Sandbox::prepare_readonly`]) one writable
+    /// directory, its temp directory: the Git panel puts Git LFS's storage
+    /// there.
+    #[must_use]
+    pub fn with_temp_dir(mut self, temp_dir: PathBuf) -> Self {
+        self.temp_dir = Some(temp_dir);
+        self
+    }
+
+    /// See [`Prepared::with_temp_dir`].
+    pub fn temp_dir(&self) -> Option<&std::path::Path> {
+        self.temp_dir.as_deref()
     }
 
     /// `program` with `args`, prepared by the network control. The runner
@@ -317,6 +335,9 @@ mod tests {
             || {},
         );
         assert!(!closed.has_control());
+        assert_eq!(closed.temp_dir(), None);
+        let closed = closed.with_temp_dir(PathBuf::from("/tmp/pirc-x"));
+        assert_eq!(closed.temp_dir(), Some(std::path::Path::new("/tmp/pirc-x")));
         drop(prepared);
         assert_eq!(cleaned.load(Ordering::SeqCst), 1, "cleaned once");
         assert_eq!(

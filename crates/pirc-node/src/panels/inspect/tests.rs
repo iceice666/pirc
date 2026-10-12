@@ -694,3 +694,35 @@ async fn a_stuck_git_is_killed_with_its_group() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
+
+/// Git LFS's storage goes to the sandbox's temp directory, as `-c` would
+/// put it, after the pairs the node's environment already has.
+#[tokio::test]
+async fn lfs_storage_is_the_sandboxs_temp_directory() {
+    let f = fixture();
+    let mut env = env(&f.run);
+    env.insert("GIT_CONFIG_COUNT".to_owned(), "1".to_owned());
+    env.insert("GIT_CONFIG_KEY_0".to_owned(), "core.abbrev".to_owned());
+    env.insert("GIT_CONFIG_VALUE_0".to_owned(), "9".to_owned());
+    let prepared = Prepared::new(
+        PathBuf::from("/bin/sh"),
+        vec![
+            "-c".into(),
+            "git config --get lfs.storage && git config --get core.abbrev".into(),
+        ],
+        Vec::new(),
+        SessionPolicy::default(),
+        Vec::new(),
+        None,
+        || {},
+    )
+    .with_temp_dir(f.run.join("tmp"));
+    let result = run_prepared(&prepared, &f.ws, &env, GIT_TIMEOUT)
+        .await
+        .ok()
+        .unwrap();
+    assert_eq!(
+        result.stdout,
+        format!("{}\n9\n", f.run.join("tmp/lfs").display())
+    );
+}

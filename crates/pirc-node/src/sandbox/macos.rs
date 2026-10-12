@@ -389,6 +389,7 @@ impl Sandbox for MacSandbox {
                 }
             };
             let env = sandbox_env(&tmp_text, None, false);
+            let temp_dir = tmp.clone();
             Ok(Prepared::new(
                 PathBuf::from(SANDBOX_EXEC),
                 exec_args(profile, input.command),
@@ -397,7 +398,8 @@ impl Sandbox for MacSandbox {
                 warnings,
                 None,
                 move || Session::remove_tmp(&tmp),
-            ))
+            )
+            .with_temp_dir(temp_dir))
         })
     }
 }

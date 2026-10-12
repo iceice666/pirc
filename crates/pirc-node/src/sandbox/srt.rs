@@ -232,6 +232,7 @@ impl Sandbox for SrtSandbox {
             ];
             args.extend(input.command);
             let env = vec![("CLAUDE_CODE_TMPDIR".to_owned(), tmp.display().to_string())];
+            let temp_dir = tmp.clone();
             Ok(Prepared::new(
                 PathBuf::from(&self.srt),
                 args,
@@ -243,7 +244,8 @@ impl Sandbox for SrtSandbox {
                     let _ = std::fs::remove_file(&settings_file);
                     Session::remove_tmp(&tmp);
                 },
-            ))
+            )
+            .with_temp_dir(temp_dir))
         })
     }
 }
@@ -407,6 +409,7 @@ exec "$@"
         let tmp = PathBuf::from(&prepared.env[0].1);
         assert_eq!(prepared.env[0].0, "CLAUDE_CODE_TMPDIR");
         assert!(tmp.is_dir());
+        assert_eq!(prepared.temp_dir(), Some(tmp.as_path()));
         let settings: Value =
             serde_json::from_str(&std::fs::read_to_string(&settings_file).unwrap()).unwrap();
         assert_eq!(

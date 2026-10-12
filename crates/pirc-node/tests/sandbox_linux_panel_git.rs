@@ -139,3 +139,68 @@ cat
         config
     );
 }
+
+/// Git LFS (review F1): its clean filter, required and run on every changed
+/// LFS file, writes the object into `lfs.storage`, which the panel points at
+/// the sandbox's temp directory; under the default `.git/lfs` the
+/// read-only sandbox made status and diff fail. Skipped without `git-lfs`.
+#[tokio::test]
+async fn panel_git_handles_git_lfs_files() {
+    let Some(f) = fixture("panel-git-lfs") else {
+        return;
+    };
+    let lfs = Command::new("git").args(["lfs", "version"]).output();
+    if !lfs.is_ok_and(|output| output.status.success()) {
+        eprintln!("skipped: git or git-lfs is not on PATH");
+        return;
+    }
+    let ws = f.root.join("workspace");
+    std::fs::remove_dir_all(ws.join(".git")).unwrap();
+    host_git(&ws, &["init", "-q"]);
+    host_git(&ws, &["lfs", "install", "--local"]);
+    host_git(&ws, &["lfs", "track", "*.bin"]);
+    std::fs::write(ws.join("a.bin"), "one\n").unwrap();
+    host_git(&ws, &["add", "."]);
+    host_git(&ws, &["commit", "-qm", "first"]);
+    std::fs::write(ws.join("a.bin"), "two\n").unwrap();
+    fn objects(dir: &Path) -> usize {
+        std::fs::read_dir(dir).map_or(0, |entries| {
+            entries
+                .flatten()
+                .map(|entry| {
+                    if entry.file_type().unwrap().is_dir() {
+                        objects(&entry.path())
+                    } else {
+                        1
+                    }
+                })
+                .sum()
+        })
+    }
+    let before = objects(&ws.join(".git/lfs"));
+
+    let env: ChildEnv = [
+        ("PATH", std::env::var("PATH").unwrap_or_default()),
+        ("HOME", path(&f.root, "home")),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_owned(), v))
+    .collect();
+    let status = git_status(&f.sandbox, &ws, &env).await.unwrap();
+    let files = status["files"].as_array().unwrap();
+    let changed = files.iter().find(|file| file["path"] == "a.bin");
+    assert_eq!(changed.unwrap()["worktree"], "M", "{status}");
+
+    let diff = git_diff(&f.sandbox, &ws, &env, Some("a.bin"), false, false)
+        .await
+        .unwrap();
+    let text = diff["diff"].as_str().unwrap();
+    assert!(
+        text.contains(" version https://git-lfs.github.com/spec/v1")
+            && text.contains("-oid sha256:")
+            && text.contains("+oid sha256:"),
+        "{text}"
+    );
+    // The objects went to the temp directory, not the repository.
+    assert_eq!(objects(&ws.join(".git/lfs")), before);
+}

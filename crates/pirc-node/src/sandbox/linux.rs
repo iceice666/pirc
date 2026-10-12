@@ -375,6 +375,7 @@ impl NativeSandbox {
         };
         caps::warn_if_setfcap_missing();
         let profile = invocation.profile;
+        let temp_dir = tmp.clone();
         Ok(Prepared::new(
             invocation.program,
             invocation.args,
@@ -387,7 +388,8 @@ impl NativeSandbox {
                 drop(mounts);
                 Session::remove_tmp(&tmp);
             },
-        ))
+        )
+        .with_temp_dir(temp_dir))
     }
 
     /// [`Sandbox::prepare_readonly`] for `policy` built by the caller
