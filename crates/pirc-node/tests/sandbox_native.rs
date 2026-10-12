@@ -783,6 +783,31 @@ async fn refuses_links_in_the_middle_of_a_protected_chain() {
     );
 }
 
+/// The node's private directories keep their spelling into the policy:
+/// systemd's credentials directory reached through a link in a writable
+/// home could be replaced by a directory of the agent's (the node's token).
+#[tokio::test]
+async fn refuses_a_private_dir_behind_a_replaceable_link() {
+    let Some(f) = fixture_env("private-link", true, |root| {
+        fs::create_dir_all(root.join("outside/creds")).unwrap();
+        std::os::unix::fs::symlink(root.join("outside/creds"), root.join("home/creds")).unwrap();
+        vec![("CREDENTIALS_DIRECTORY".to_owned(), path(root, "home/creds"))]
+    }) else {
+        return;
+    };
+    let creds = path(&f.root, "home/creds");
+    let Err(error) = f.try_prepare("pi_private").await else {
+        panic!("started");
+    };
+    assert_eq!(error.status, 503);
+    assert_eq!(
+        error.message,
+        format!(
+            "Agents on this node must run in the sandbox, and it is unavailable: the protected path {creds} goes through the symbolic link {creds}, which the agent could replace (bubblewrap cannot pin a link); replace the link with the file or directory it points to"
+        )
+    );
+}
+
 /// tmux's recipe, `SSH_AUTH_SOCK` a stable link in `/tmp` (a write root of
 /// every session) to the agent's socket, starts sessions: host sockets are
 /// hidden from reading, not protected for host tools. The socket stays

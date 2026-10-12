@@ -390,6 +390,7 @@ pub fn session(
     // The temp parent may sit in a write root (`/tmp`) by design: the
     // sandboxes hide it whole (Linux mounts an empty directory there).
     let node_tmp = real_resolve(&text(&parent));
+    let private_dirs: Vec<String> = private_dirs.iter().map(|dir| real_resolve(dir)).collect();
     let exposed: Vec<&str> = policy
         .paths
         .allow_write
@@ -417,6 +418,10 @@ pub fn session(
 
 /// The node's private directories: closed to reads (`deny_read`) unless
 /// the policy reopens a part. `node_tmp` is [`NodeTmp`]'s parent.
+///
+/// As spelled: `session_policy` resolves them for its lists, and keeps a
+/// spelling through symlinks in `linked_denies`, which the native Linux
+/// backend checks for links the agent could replace.
 fn private_dirs(config: &NodeConfig, env: &Env, node_tmp: &Path) -> Vec<String> {
     let database_dir = config
         .database_path
@@ -437,7 +442,7 @@ fn private_dirs(config: &NodeConfig, env: &Env, node_tmp: &Path) -> Vec<String> 
             .map(PathBuf::from),
     )
     .chain([node_tmp.to_path_buf()])
-    .map(|dir| real_resolve(&text(&dir)))
+    .map(|dir| text(&dir))
     .collect()
 }
 
