@@ -1190,3 +1190,51 @@ async fn streams_the_screencast_and_stops() {
     assert_eq!(jpeg_size(&last.jpeg), (320, 200));
     screencast::stop_on(&page, &state).await.unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn concurrent_screencast_restarts_leave_one_running() {
+    let Some(browser) = Browser::start() else {
+        return;
+    };
+    let page = viewport_page(&browser, "<h1 id=h>0</h1>").await;
+    let state = ScreencastState::default();
+    let sink = |count: &Arc<Mutex<usize>>| {
+        let count = count.clone();
+        Arc::new(move |_: ScreencastFrame| *count.lock().unwrap() += 1)
+    };
+    let options = ScreencastOptions {
+        width: 640,
+        height: 400,
+        quality: 60,
+    };
+    let counts: Vec<Arc<Mutex<usize>>> = (0..4).map(|_| Arc::default()).collect();
+    screencast::start_on(&page, &state, options, sink(&counts[0]))
+        .await
+        .unwrap();
+    // Two restarts at once: the first stops the running one, the second
+    // finds none to stop; both start.
+    let (a, b) = tokio::join!(
+        screencast::start_on(&page, &state, options, sink(&counts[1])),
+        screencast::start_on(&page, &state, options, sink(&counts[2])),
+    );
+    a.unwrap();
+    b.unwrap();
+    screencast::stop_on(&page, &state).await.unwrap();
+    assert!(!state.is_running());
+    screencast::start_on(&page, &state, options, sink(&counts[3]))
+        .await
+        .unwrap();
+    let before: Vec<usize> = counts.iter().map(|count| *count.lock().unwrap()).collect();
+    for i in 1..=5 {
+        eval(
+            &page,
+            &format!("document.getElementById('h').textContent = '{i}'"),
+        )
+        .await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let after: Vec<usize> = counts.iter().map(|count| *count.lock().unwrap()).collect();
+    assert!(after[3] > before[3], "the running screencast gets frames");
+    assert_eq!(after[..3], before[..3], "no earlier sink gets frames");
+    screencast::stop_on(&page, &state).await.unwrap();
+}

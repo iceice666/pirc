@@ -104,6 +104,47 @@ impl JsHandle {
     }
 }
 
+/// A [`JsHandle`] an operation holds: released when dropped (in the
+/// background), so an operation cut short (its timeout, its page gone)
+/// does not leave the object pinned in its world, as Playwright disposes
+/// its handles in a `finally`.
+pub(super) struct OwnedHandle(Option<JsHandle>);
+
+impl OwnedHandle {
+    pub(super) fn new(handle: JsHandle) -> Self {
+        Self(Some(handle))
+    }
+
+    pub(super) fn handle(&self) -> &JsHandle {
+        self.0.as_ref().expect("held until released")
+    }
+
+    /// [`JsHandle::release`] now.
+    pub(super) async fn release(mut self) {
+        if let Some(handle) = self.0.take() {
+            handle.release().await;
+        }
+    }
+}
+
+impl std::ops::Deref for OwnedHandle {
+    type Target = JsHandle;
+
+    fn deref(&self) -> &JsHandle {
+        self.handle()
+    }
+}
+
+impl Drop for OwnedHandle {
+    fn drop(&mut self) {
+        if let Some(handle) = self.0.take()
+            && let Ok(runtime) = tokio::runtime::Handle::try_current()
+        {
+            runtime.spawn(handle.release());
+        }
+    }
+}
+
 /// An argument to [`JsHandle::call`].
 #[derive(Clone, Debug)]
 pub enum Arg {
@@ -205,6 +246,8 @@ fn evaluation_reply(
                     )
                 } else if error.message.contains("Promise was collected") {
                     ("Resulting promise was garbage collected.".to_owned(), false)
+                } else if error.is_crashed() {
+                    (error.message, true)
                 } else if error.is_closed() {
                     (CdpError::closed().message, true)
                 } else {
@@ -406,6 +449,58 @@ impl Frame {
         Ok(reply["result"]["value"].clone())
     }
 
+    /// Playwright's `nonStallingEvaluateInExistingContext`: call `function`
+    /// (a JS function's source, no arguments; awaited, by value) in the
+    /// frame's current `world` context without waiting for one. Fails at
+    /// once when the frame has no such context or is navigating (has a
+    /// pending document), and as soon as a navigation starts, the context
+    /// goes away or the page closes while it runs (`EvaluationStalledError`).
+    pub(super) async fn evaluate_existing(&self, world: World, function: &str) -> Result<Value> {
+        let context = {
+            let state = self.shared.state.lock().unwrap();
+            if state.closed {
+                return Err(closed_error(""));
+            }
+            let Some(frame) = state.frames.get(&self.key) else {
+                return Err(Error::new("Frame was detached"));
+            };
+            if frame.pending.is_some() {
+                return Err(Error::new("Frame is currently attempting a navigation"));
+            }
+            frame
+                .context(world)
+                .cloned()
+                .ok_or_else(|| Error::new("Frame does not yet have the execution context"))?
+        };
+        let call = context.session.call(
+            "Runtime.callFunctionOn",
+            json!({
+                "functionDeclaration": function,
+                "executionContextId": context.id,
+                "returnByValue": true,
+                "awaitPromise": true,
+                "userGesture": true,
+            }),
+        );
+        let stalled = self.shared.wait(|state| {
+            let frame = state.frames.get(&self.key);
+            let current = frame
+                .and_then(|frame| frame.context(world))
+                .map(|context| context.uid);
+            (state.closed
+                || frame.is_none_or(|frame| frame.pending.is_some())
+                || current != Some(context.uid))
+            .then_some(())
+        });
+        tokio::select! {
+            biased;
+            reply = call => evaluation_reply("", reply)
+                .map(|reply| reply["result"]["value"].clone())
+                .map_err(|error| error.error),
+            () = stalled => Err(Error::new("Navigation interrupted the evaluation")),
+        }
+    }
+
     /// The frame's current execution context of `world`, once there is one.
     pub(super) async fn context(&self, world: World, api: &str) -> Result<ExecContext> {
         self.shared
@@ -601,5 +696,46 @@ impl std::fmt::Debug for Frame {
             .field("id", &self.id)
             .field("seq", &self.seq())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::cdp::Fake;
+    use super::*;
+
+    #[tokio::test]
+    async fn an_owned_handle_is_released_when_dropped() {
+        let mut fake = Fake::new();
+        let session = fake.connection.session("S");
+        let handle = |id: &str| JsHandle {
+            session: session.clone(),
+            object_id: id.to_owned(),
+        };
+        // Dropped mid-operation (an action's timeout).
+        let held = OwnedHandle::new(handle("1"));
+        let operation = async move {
+            let _element = held;
+            std::future::pending::<()>().await;
+        };
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), operation)
+                .await
+                .is_err()
+        );
+        let released = fake.command().await;
+        assert_eq!(released["method"], "Runtime.releaseObject");
+        assert_eq!(released["params"], json!({ "objectId": "1" }));
+        assert_eq!(released["sessionId"], "S");
+        // Released once when released explicitly.
+        let explicit = OwnedHandle::new(handle("2"));
+        let release = tokio::spawn(explicit.release());
+        let released = fake.command().await;
+        assert_eq!(released["params"], json!({ "objectId": "2" }));
+        fake.send(json!({ "id": released["id"], "sessionId": "S", "result": {} }))
+            .await;
+        release.await.unwrap();
+        let _ = OwnedHandle::new(handle("3"));
+        assert_eq!(fake.command().await["params"], json!({ "objectId": "3" }));
     }
 }

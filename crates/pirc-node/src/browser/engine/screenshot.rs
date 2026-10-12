@@ -9,7 +9,9 @@
 //! 2. `inPagePrepareForScreenshots(undefined, true, false, false)` in every
 //!    frame's utility world (carets of inputs, textareas and
 //!    contenteditables made transparent), then `document.fonts.ready` in
-//!    the main frame's;
+//!    the main frame's, each only where that world exists and the frame is
+//!    not navigating (`nonStallingEvaluateInExistingContext`: nothing
+//!    waits for a frame still loading);
 //! 3. full page: the document's size from the main frame's utility world
 //!    (polled until it has a body), clip `{0, 0, w, h, scale: 1}`,
 //!    `captureBeyondViewport` unless it fits the viewport; viewport:
@@ -20,13 +22,11 @@
 //! 4. `Page.captureScreenshot {format: 'jpeg', quality, clip,
 //!    captureBeyondViewport}`;
 //! 5. `window.__pwCleanupScreenshot()` in every frame's utility world,
-//!    also after a failure or timeout.
+//!    also after a failure or timeout (then sent without waiting for the
+//!    replies, as Playwright's timed-out `progress.race` does).
 //!
 //! Errors start with `screenshot: `, as the TS node's (Bun's) Playwright
 //! client words them (a timeout is `screenshot: Timeout <n>ms exceeded.`).
-//! Deviation: the utility worlds are reached through the frames' injected
-//! scripts, so a frame without one gets it (Playwright evaluates only in
-//! existing contexts).
 //!
 //! Ported from playwright-core 1.63.0 `src/server/screenshotter.ts`
 //! (Apache-2.0, see `crates/pirc-node/NOTICE`).
@@ -34,9 +34,11 @@
 use std::time::Duration;
 
 use base64::Engine as _;
+use futures_util::FutureExt as _;
 use serde_json::{Value, json};
 
 use super::cdp::{CdpError, Session};
+use super::frame::World;
 use super::page::Page;
 use super::{Error, Result};
 use crate::browser::BoxFuture;
@@ -61,11 +63,19 @@ pub trait Surface: Send + Sync {
     /// (`_metricsOverride.deviceScaleFactor`).
     fn device_scale_factor(&self) -> Option<f64>;
     /// Call `function` (a JS function's source, no arguments) in every
-    /// frame's utility world, ignoring failures
-    /// (`safeNonStallingEvaluateInAllFrames`).
+    /// frame's existing utility world, ignoring failures and frames without
+    /// one (`safeNonStallingEvaluateInAllFrames`). Every call is sent on the
+    /// future's first poll.
     fn in_all_frames<'a>(&'a self, function: &'a str) -> BoxFuture<'a, ()>;
-    /// Call `function` in the main frame's utility world, by value.
+    /// Call `function` in the main frame's utility world, by value (waiting
+    /// for it).
     fn in_main_frame<'a>(&'a self, function: &'a str) -> BoxFuture<'a, Result<Value>>;
+    /// [`Surface::in_main_frame`] only if that world exists and the frame is
+    /// not navigating (`nonStallingEvaluateInExistingContext`); by default
+    /// the same as [`Surface::in_main_frame`].
+    fn in_main_frame_now<'a>(&'a self, function: &'a str) -> BoxFuture<'a, Result<Value>> {
+        self.in_main_frame(function)
+    }
 }
 
 impl Surface for Page {
@@ -85,11 +95,17 @@ impl Surface for Page {
     fn in_all_frames<'a>(&'a self, function: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             futures_util::future::join_all(self.frames().into_iter().map(|frame| async move {
-                if let Ok(injected) = frame.injected().await {
-                    let _ = injected.call(function, Vec::new()).await;
-                }
+                let _ = frame.evaluate_existing(World::Utility, function).await;
             }))
             .await;
+        })
+    }
+
+    fn in_main_frame_now<'a>(&'a self, function: &'a str) -> BoxFuture<'a, Result<Value>> {
+        Box::pin(async move {
+            self.main_frame()
+                .evaluate_existing(World::Utility, function)
+                .await
         })
     }
 
@@ -273,7 +289,7 @@ const INNER_SIZE: &str =
     "function() { return { width: window.innerWidth, height: window.innerHeight }; }";
 
 fn api_error(method: &str, error: CdpError) -> Error {
-    if error == CdpError::closed() {
+    if error == CdpError::closed() || error.is_crashed() {
         Error::new(format!("screenshot: {}", error.message))
     } else {
         Error::new(format!(
@@ -312,7 +328,7 @@ pub async fn capture_on(surface: &dyn Surface, options: ScreenshotOptions) -> Re
         };
         prepared.store(true, std::sync::atomic::Ordering::SeqCst);
         surface.in_all_frames(&prepare_function()).await;
-        let _ = surface.in_main_frame(FONTS_READY).await;
+        let _ = surface.in_main_frame_now(FONTS_READY).await;
         let shot = take(surface, options, viewport).await;
         surface.in_all_frames(RESTORE).await;
         shot
@@ -322,8 +338,11 @@ pub async fn capture_on(surface: &dyn Surface, options: ScreenshotOptions) -> Re
         Ok(shot) => shot,
         Err(_) => {
             if prepared.load(std::sync::atomic::Ordering::SeqCst) {
-                // Playwright's cleanup still runs after its timeout.
-                surface.in_all_frames(RESTORE).await;
+                // Playwright's cleanup still runs after its timeout, but
+                // its `progress.race` has already timed out: the calls are
+                // sent and nothing waits for them (a page whose main thread
+                // is stuck never answers).
+                let _ = surface.in_all_frames(RESTORE).now_or_never();
             }
             Err(Error::timeout("screenshot", options.timeout))
         }

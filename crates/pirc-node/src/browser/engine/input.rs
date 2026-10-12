@@ -35,6 +35,7 @@ use futures_util::future::join_all;
 use serde_json::{Value, json};
 
 use super::cdp::Session;
+use super::frame::World;
 use super::keyboard_layout::{KEYPAD_LOCATION, KeyDescription, mac_commands, us_keyboard_layout};
 use super::page::Page;
 use super::{Error, MouseButton, Result};
@@ -230,19 +231,27 @@ impl RawKeyboard<'_> {
     /// `Keyboard.press`: split on `+` (a `+` right after another or at the
     /// start is the key itself), modifiers down left to right, the key, the
     /// delay, then all up in reverse.
+    ///
+    /// Unlike Playwright's, a press cut short (its action's timeout) or
+    /// failing lets go of the keys it holds down: a `Control` left held
+    /// would empty the text of every later key.
     pub async fn press(&self, key: &str, delay: Duration) -> Result<()> {
         let tokens = split_combo(key);
         let (key, modifiers) = tokens.split_last().expect("at least one token");
-        for modifier in modifiers {
-            self.down(modifier).await?;
+        let mut held = HeldKeys {
+            keyboard: self.0,
+            keys: Vec::new(),
+        };
+        for key in modifiers.iter().chain([key]) {
+            held.keys.push(key.clone());
+            self.down(key).await?;
         }
-        self.down(key).await?;
         if !delay.is_zero() {
             tokio::time::sleep(delay).await;
         }
-        self.up(key).await?;
-        for modifier in modifiers.iter().rev() {
-            self.up(modifier).await?;
+        while let Some(key) = held.keys.pop() {
+            // Its state and its command are done on the first poll.
+            self.up(&key).await?;
         }
         Ok(())
     }
@@ -295,6 +304,16 @@ impl RawKeyboard<'_> {
 
     /// `Keyboard.up` and `RawKeyboardImpl.keyup`.
     pub async fn up(&self, key: &str) -> Result<()> {
+        let params = self.key_up(key)?;
+        self.0
+            .session
+            .call("Input.dispatchKeyEvent", params)
+            .await?;
+        Ok(())
+    }
+
+    /// `key` released in the state; the `keyUp` to send.
+    fn key_up(&self, key: &str) -> Result<Value> {
         let keyboard = self.0;
         let description = keyboard.describe(key)?;
         let modifiers = {
@@ -305,21 +324,14 @@ impl RawKeyboard<'_> {
             state.pressed.remove(description.code);
             state.modifiers
         };
-        keyboard
-            .session
-            .call(
-                "Input.dispatchKeyEvent",
-                json!({
-                    "type": "keyUp",
-                    "modifiers": modifiers,
-                    "key": description.key,
-                    "windowsVirtualKeyCode": description.key_code_without_location,
-                    "code": description.code,
-                    "location": description.location,
-                }),
-            )
-            .await?;
-        Ok(())
+        Ok(json!({
+            "type": "keyUp",
+            "modifiers": modifiers,
+            "key": description.key,
+            "windowsVirtualKeyCode": description.key_code_without_location,
+            "code": description.code,
+            "location": description.location,
+        }))
     }
 
     /// `Keyboard.type`: per code point, a press when the layout has it,
@@ -348,6 +360,24 @@ impl RawKeyboard<'_> {
             .call("Input.insertText", json!({ "text": text }))
             .await?;
         Ok(())
+    }
+}
+
+/// The keys a [`RawKeyboard::press`] holds down, let go of (last first)
+/// when it is dropped before it releases them.
+struct HeldKeys<'a> {
+    keyboard: &'a Keyboard,
+    keys: Vec<String>,
+}
+
+impl Drop for HeldKeys<'_> {
+    fn drop(&mut self) {
+        let raw = self.keyboard.raw();
+        while let Some(key) = self.keys.pop() {
+            if let Ok(params) = raw.key_up(&key) {
+                self.keyboard.session.send("Input.dispatchKeyEvent", params);
+            }
+        }
     }
 }
 
@@ -434,6 +464,9 @@ const SETUP_DRAG_LISTENERS: &str = r#"function setupDragListeners() {
             return val;
           };
         }"#;
+
+/// `window.__cleanupDrag?.()`: whether a drag started.
+const CLEANUP_DRAG: &str = "function() { return window.__cleanupDrag?.(); }";
 
 impl Mouse {
     pub fn new(session: Session) -> Self {
@@ -596,33 +629,34 @@ impl Mouse {
                 .await?;
             return Ok(());
         };
-        let frames = page.frames();
-        join_all(frames.iter().map(|frame| async move {
-            if let Ok(injected) = frame.injected().await {
-                let _ = injected
-                    .call(
-                        &format!("function() {{ ({SETUP_DRAG_LISTENERS})(); }}"),
-                        Vec::new(),
-                    )
-                    .await;
+        // Undone if the move fails or is cut short (Playwright's `catch`;
+        // its `finally` for the interception).
+        let mut undo = DragUndo {
+            session: self.session.clone(),
+            page: page.clone(),
+            listeners: true,
+            intercepting: false,
+        };
+        // Only in the frames' existing utility worlds, never waiting for a
+        // frame still loading (`safeNonStallingEvaluateInAllFrames`).
+        let setup = format!("function() {{ ({SETUP_DRAG_LISTENERS})(); }}");
+        join_all(page.frames().iter().map(|frame| {
+            let setup = &setup;
+            async move {
+                let _ = frame.evaluate_existing(World::Utility, setup).await;
             }
         }))
         .await;
         let mut events = self.session.listen();
+        undo.intercepting = true;
         self.session
             .call("Input.setInterceptDrags", json!({ "enabled": true }))
             .await?;
         let moved = self.session.call("Input.dispatchMouseEvent", params).await;
         let expecting = match moved {
             Ok(_) => join_all(page.frames().iter().map(|frame| async move {
-                let Ok(injected) = frame.injected().await else {
-                    return false;
-                };
-                injected
-                    .call(
-                        "function() { return window.__cleanupDrag?.(); }",
-                        Vec::new(),
-                    )
+                frame
+                    .evaluate_existing(World::Utility, CLEANUP_DRAG)
                     .await
                     .is_ok_and(|value| value.as_bool() == Some(true))
             }))
@@ -631,10 +665,14 @@ impl Mouse {
             .any(|started| started),
             Err(_) => false,
         };
+        // `__cleanupDrag` removed the listeners (unless the move failed).
+        undo.listeners = moved.is_err();
+        undo.intercepting = false;
         let _ = self
             .session
             .call("Input.setInterceptDrags", json!({ "enabled": false }))
             .await;
+        drop(undo);
         moved?;
         let data = if expecting {
             tokio::time::timeout(Duration::from_secs(1), async {
@@ -661,6 +699,35 @@ impl Mouse {
                 .await?;
         }
         Ok(())
+    }
+}
+
+/// What a drag interception undoes when it does not finish: the drag
+/// listeners in the frames, the interception.
+struct DragUndo {
+    session: Session,
+    page: Arc<Page>,
+    listeners: bool,
+    intercepting: bool,
+}
+
+impl Drop for DragUndo {
+    fn drop(&mut self) {
+        if self.intercepting {
+            self.session
+                .send("Input.setInterceptDrags", json!({ "enabled": false }));
+        }
+        if self.listeners
+            && let Ok(runtime) = tokio::runtime::Handle::try_current()
+        {
+            let page = self.page.clone();
+            runtime.spawn(async move {
+                join_all(page.frames().iter().map(|frame| async move {
+                    let _ = frame.evaluate_existing(World::Utility, CLEANUP_DRAG).await;
+                }))
+                .await;
+            });
+        }
     }
 }
 
@@ -871,5 +938,116 @@ mod tests {
             if MAC { "Meta" } else { "Control" }
         );
         assert_eq!(modifier_names(8 | 2), ["Control", "Shift"]);
+    }
+
+    use super::super::cdp::Fake;
+    use super::super::context::Installer;
+    use super::super::page::PageSetup;
+
+    /// The next command named `method` (the others skipped), answered
+    /// with `{}` when `reply`.
+    async fn next(fake: &mut Fake, method: &str, reply: bool) -> Value {
+        loop {
+            let command = fake.command().await;
+            if command["method"] == method {
+                if reply {
+                    fake.send(
+                        json!({ "id": command["id"], "sessionId": command["sessionId"],
+                        "result": {} }),
+                    )
+                    .await;
+                }
+                return command;
+            }
+        }
+    }
+
+    /// A page on a fake browser (its initialization never finishes).
+    fn fake_page(fake: &Fake) -> Arc<Page> {
+        let connection = fake.connection.clone();
+        let installer: Installer = Arc::new(|_, _| {
+            Box::pin(async {
+                Ok((
+                    None,
+                    Box::pin(async { Ok(()) }) as super::super::network::Replies,
+                ))
+            })
+        });
+        Page::attach(PageSetup {
+            target_id: "T".to_owned(),
+            session: connection.session("S"),
+            browser: connection.browser(),
+            installer,
+            viewport: (1280, 800),
+            mac: false,
+            opener: None,
+        })
+    }
+
+    #[tokio::test]
+    async fn a_press_cut_short_lets_go_of_its_keys() {
+        let mut fake = Fake::new();
+        let keyboard = Keyboard::new(fake.connection.session("S"));
+        let raw = keyboard.raw();
+        let mut press = Box::pin(raw.press("Shift+Control+a", Duration::from_secs(60)));
+        let typed = async {
+            for _ in 0..3 {
+                let down = next(&mut fake, "Input.dispatchKeyEvent", true).await;
+                assert_eq!(down["params"]["type"], "rawKeyDown");
+            }
+        };
+        tokio::select! {
+            _ = &mut press => panic!("the press ended"),
+            () = typed => {}
+        }
+        assert_eq!(keyboard.modifiers(), 8 | 2);
+        drop(press);
+        assert_eq!(keyboard.modifiers(), 0);
+        let mut ups = Vec::new();
+        for _ in 0..3 {
+            let up = next(&mut fake, "Input.dispatchKeyEvent", false).await;
+            assert_eq!(up["params"]["type"], "keyUp");
+            ups.push((
+                up["params"]["key"].clone(),
+                up["params"]["modifiers"].clone(),
+            ));
+        }
+        assert_eq!(
+            ups,
+            [
+                (json!("a"), json!(8 | 2)),
+                (json!("Control"), json!(8)),
+                (json!("Shift"), json!(0)),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_drag_move_cut_short_stops_intercepting_drags() {
+        let mut fake = Fake::new();
+        let page = fake_page(&fake);
+        let mouse = page.mouse();
+        let down = mouse.down(MouseButton::Left, 1, 0);
+        tokio::pin!(down);
+        tokio::select! {
+            _ = &mut down => panic!("no reply yet"),
+            command = next(&mut fake, "Input.dispatchMouseEvent", true) => {
+                assert_eq!(command["params"]["type"], "mousePressed");
+            }
+        }
+        down.await.unwrap();
+        let mut moved = Box::pin(mouse.move_to(5.0, 5.0, 0));
+        // The move itself is never answered (a page busy in a handler).
+        let intercepted = async {
+            next(&mut fake, "Input.setInterceptDrags", true).await;
+            next(&mut fake, "Input.dispatchMouseEvent", false).await
+        };
+        tokio::select! {
+            _ = &mut moved => panic!("the move ended"),
+            command = intercepted => assert_eq!(command["params"]["type"], "mouseMoved"),
+        }
+        drop(moved);
+        let command = next(&mut fake, "Input.setInterceptDrags", false).await;
+        assert_eq!(command["params"], json!({ "enabled": false }));
     }
 }

@@ -35,8 +35,9 @@ use std::time::Duration;
 
 use futures_util::future::{BoxFuture, join_all};
 use serde_json::{Value, json};
+use tokio::time::Instant;
 
-use super::frame::{Arg, Frame, handle_of};
+use super::frame::{Arg, Frame, OwnedHandle, handle_of};
 use super::locator::{Failure, content_frame, jump_to_aria_ref_frame, retry_wait};
 use super::page::{Page, deadline, within};
 use super::{Error, Result};
@@ -72,55 +73,80 @@ const RENDER: &str = "function(json) {
   return this.ariaSnapshot.call({ ariaSnapshotJSON: () => ({ json }) }, null, { mode: 'ai' });
 }";
 
+/// How long rendering the merged JSON may take once the frames are done
+/// (Playwright renders on its side, at once, even past the timeout).
+const RENDER_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// The page's AI-mode snapshot, refs `e<n>` in the main frame and
 /// `f<seq>e<n>` in child frames.
+///
+/// As Playwright's, the timeout fails the call only while the main frame
+/// is snapshotted: a child frame that is not done by then (an iframe still
+/// loading) is left out, and the rest is rendered.
 pub async fn aria_snapshot(page: &Page, timeout: Duration) -> Result<String> {
     let main = page.main_frame();
+    let deadline = deadline(timeout);
+    let timed_out = Error::timeout(API, timeout);
     let work = async {
-        let json = frame_json(page, main.clone(), None).await?;
-        render(&main, json).await
+        let json = frame_json(page, main.clone(), None, deadline)
+            .await?
+            .ok_or_else(|| timed_out.clone())?;
+        let render_deadline = deadline.map(|_| Instant::now() + RENDER_TIMEOUT);
+        within(render_deadline, render(&main, json))
+            .await
+            .unwrap_or_else(|| Err(timed_out.clone()))
     };
-    let raced = async {
-        tokio::select! {
-            result = work => result,
-            error = main.gone("") => Err(error),
+    let result = tokio::select! {
+        result = work => result,
+        error = main.gone("") => Err(error),
+    };
+    result.map_err(|error| {
+        if error == timed_out {
+            error
+        } else {
+            Error::api(API, error.message)
         }
-    };
-    match within(deadline(timeout), raced).await {
-        Some(result) => result.map_err(|error| Error::api(API, error.message)),
-        None => Err(Error::timeout(API, timeout)),
-    }
+    })
 }
 
 /// `ariaSnapshotJSONForFrame(frame, selector)`: `child` is the ref of the
 /// `<iframe>` (in `frame`) whose frame to snapshot, `None` for `frame`
-/// itself.
+/// itself. `Ok(None)` when `deadline` passed before `frame` itself was
+/// snapshotted; a child frame that fails or is not done by then is `[]`.
 fn frame_json<'a>(
     page: &'a Page,
     frame: Frame,
     child: Option<String>,
-) -> BoxFuture<'a, Result<Vec<Value>>> {
+    deadline: Option<Instant>,
+) -> BoxFuture<'a, Result<Option<Vec<Value>>>> {
     Box::pin(async move {
-        let mut attempt = 0;
-        let (snapshot, resolved) = loop {
-            let wait = RETRY[attempt.min(RETRY.len() - 1)];
-            attempt += 1;
-            if wait > 0 {
-                retry_wait(&frame, Duration::from_millis(wait)).await?;
-            }
-            match snapshot_once(page, &frame, child.as_deref()).await {
-                Ok(Some(found)) => break found,
-                Ok(None) => {
-                    if let Some(reference) = &child {
-                        return Err(Error::new(format!(
-                            "Selector \"{}\" does not match any element",
-                            child_selector(reference)
-                        )));
-                    }
+        let found = within(deadline, async {
+            let mut attempt = 0;
+            loop {
+                let wait = RETRY[attempt.min(RETRY.len() - 1)];
+                attempt += 1;
+                if wait > 0 {
+                    retry_wait(&frame, Duration::from_millis(wait)).await?;
                 }
-                Err(failure) if failure.retriable => {}
-                Err(failure) => return Err(failure.error),
+                match snapshot_once(page, &frame, child.as_deref()).await {
+                    Ok(Some(found)) => return Ok(found),
+                    Ok(None) => {
+                        if let Some(reference) = &child {
+                            return Err(Error::new(format!(
+                                "Selector \"{}\" does not match any element",
+                                child_selector(reference)
+                            )));
+                        }
+                    }
+                    Err(failure) if failure.retriable => {}
+                    Err(failure) => return Err(failure.error),
+                }
             }
+        })
+        .await;
+        let (snapshot, resolved) = match found {
+            Some(found) => found?,
+            None => return Ok(None),
         };
         let depths = snapshot["iframeDepths"].as_object();
         let refs: Vec<String> = snapshot["iframeRefs"]
@@ -135,8 +161,10 @@ fn frame_json<'a>(
         let children = join_all(refs.iter().map(|reference| {
             let resolved = resolved.clone();
             async move {
-                frame_json(page, resolved, Some(reference.clone()))
+                frame_json(page, resolved, Some(reference.clone()), deadline)
                     .await
+                    .ok()
+                    .flatten()
                     .unwrap_or_default()
             }
         }))
@@ -148,7 +176,7 @@ fn frame_json<'a>(
         for node in &mut json {
             merge_iframe_children(node, &refs, &children);
         }
-        Ok(json)
+        Ok(Some(json))
     })
 }
 
@@ -183,6 +211,7 @@ async fn snapshot_once(
             let Some(element) = handle_of(&injected.session, &element) else {
                 return Ok(None);
             };
+            let element = OwnedHandle::new(element);
             let content = content_frame(page, frame, &element).await;
             element.release().await;
             match content? {

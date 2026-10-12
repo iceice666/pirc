@@ -13,10 +13,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use pirc_node::browser::engine::LoadState;
 use pirc_node::browser::engine::context::{Context, LaunchOptions};
 use pirc_node::browser::engine::frame::Arg;
 use pirc_node::browser::engine::page::{Page, PageEvent};
+use pirc_node::browser::engine::screencast::{ScreencastFrame, ScreencastOptions};
+use pirc_node::browser::engine::screenshot::ScreenshotOptions;
+use pirc_node::browser::engine::snapshot::aria_snapshot;
+use pirc_node::browser::engine::{LoadState, MouseButton};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -158,6 +161,13 @@ fn route(path: &str, port: u16) -> Option<(u16, String)> {
         "/form" => html(FORM),
         "/idle" => html(r#"<title>idle</title><img src="/slow.png">"#),
         "/dialog" => html("<title>Dialog</title><p>dialogs</p>"),
+        "/dnd" => html(
+            r#"<div id=s draggable=true style="width:50px;height:50px;background:red">S</div><div id=t style="width:100px;height:100px;margin-top:50px;background:blue">T</div><script>window.log=[];t.ondragover=e=>e.preventDefault();t.ondrop=e=>{e.preventDefault();log.push('drop')};s.ondragstart=e=>{e.dataTransfer.setData('text/plain','x');log.push('start')};s.ondragend=()=>log.push('end')</script>"#,
+        ),
+        // An iframe whose document never comes (an ad, a long poll).
+        "/hanging" => html(
+            r#"<title>Hanging</title><h1>Outer</h1><input id=i><iframe title="Late" src="/hang"></iframe>"#,
+        ),
         "/missing" => Some((
             404,
             format!("<title>Missing</title>{}", "<p>not here</p>".repeat(60)),
@@ -272,7 +282,16 @@ async fn launches_opens_pages_and_closes_killing_the_browser() {
         let mut events = second.subscribe();
         second.close().await.unwrap();
         assert!(second.is_closed());
-        assert!(matches!(events.recv().await, Some(PageEvent::Closed)));
+        // Its `about:blank` may still report `load` first (Playwright's
+        // `newPage` does not wait for it either).
+        loop {
+            match events.recv().await {
+                Some(PageEvent::Closed) => break,
+                Some(PageEvent::Load | PageEvent::MainFrameNavigated) => {}
+                Some(PageEvent::Popup(_)) | None => panic!("closed last"),
+            }
+        }
+        assert!(events.recv().await.is_none());
         assert_eq!(context.pages().len(), 1);
 
         let pid = context.pid().unwrap() as i32;
@@ -875,5 +894,353 @@ async fn an_iframe_keeps_its_number_moving_in_and_out_of_process() {
             );
         }
         browser.context.close().await;
+    });
+}
+
+/// A page whose iframe never gets its document, loaded up to
+/// `DOMContentLoaded` (`load` waits for the iframe).
+async fn hanging_page(browser: &Browser) -> Arc<Page> {
+    let port = serve().await;
+    let page = browser.context.pages()[0].clone();
+    page.goto(
+        &format!("http://127.0.0.1:{port}/hanging"),
+        LoadState::DomContentLoaded,
+        T,
+    )
+    .await
+    .unwrap();
+    assert_eq!(page.frames().len(), 2);
+    page
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn screenshots_skip_a_frame_that_is_still_loading() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let page = hanging_page(&browser).await;
+        // Playwright 1.63.0 takes it at once (50 ms): the loading iframe has
+        // no utility world and is not waited for.
+        let options = ScreenshotOptions {
+            quality: 50,
+            full_page: false,
+            timeout: Duration::from_secs(3),
+        };
+        for _ in 0..2 {
+            let started = Instant::now();
+            let shot = tokio::time::timeout(Duration::from_secs(10), page.screenshot(options))
+                .await
+                .expect("the screenshot returns")
+                .unwrap();
+            assert!(
+                started.elapsed() < Duration::from_secs(2),
+                "{:?}",
+                started.elapsed()
+            );
+            assert_eq!(shot[..2], [0xff, 0xd8]);
+        }
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn calls_in_flight_fail_when_their_page_closes() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let page = browser.context.new_page().await.unwrap();
+        let pending = {
+            let page = page.clone();
+            tokio::spawn(async move {
+                page.evaluate("() => new Promise(() => {})", Value::Null)
+                    .await
+            })
+        };
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        page.close().await.unwrap();
+        // Playwright 1.63.0 rejects it at once.
+        let error = tokio::time::timeout(Duration::from_secs(5), pending)
+            .await
+            .expect("the evaluation ends")
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(
+            error.message,
+            "evaluate: Target page, context or browser has been closed"
+        );
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn snapshots_leave_out_a_frame_still_loading_at_the_timeout() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let page = hanging_page(&browser).await;
+        // Playwright 1.63.0 returns this after the timeout (2003 ms): the
+        // iframe's snapshot timed out and is left empty.
+        let started = Instant::now();
+        let snapshot = tokio::time::timeout(
+            Duration::from_secs(10),
+            aria_snapshot(&page, Duration::from_secs(2)),
+        )
+        .await
+        .expect("the snapshot returns")
+        .unwrap();
+        assert_eq!(
+            snapshot,
+            "- generic [active] [ref=e1]:\n  - heading \"Outer\" [level=1] [ref=e2]\n  - textbox [ref=e3]\n  - iframe [ref=e4]"
+        );
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= Duration::from_secs(2) && elapsed < Duration::from_secs(4),
+            "{elapsed:?}"
+        );
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn drags_do_not_wait_for_a_frame_still_loading() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let page = hanging_page(&browser).await;
+        // Playwright 1.63.0: move, down, move, up in 28 ms.
+        let mouse = page.mouse();
+        let started = Instant::now();
+        tokio::time::timeout(Duration::from_secs(10), async {
+            mouse.move_to(10.0, 10.0, 0).await.unwrap();
+            mouse.down(MouseButton::Left, 1, 0).await.unwrap();
+            mouse.move_to(50.0, 50.0, 0).await.unwrap();
+            mouse.up(MouseButton::Left, 1, 0).await.unwrap();
+        })
+        .await
+        .expect("the drag ends");
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn drags_and_drops_as_playwright() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let page = browser.context.pages()[0].clone();
+        page.goto(&format!("http://127.0.0.1:{port}/dnd"), LoadState::Load, T)
+            .await
+            .unwrap();
+        let mouse = page.mouse();
+        mouse.move_to(25.0, 25.0, 0).await.unwrap();
+        mouse.down(MouseButton::Left, 1, 0).await.unwrap();
+        mouse.move_to(50.0, 150.0, 0).await.unwrap();
+        assert!(mouse.is_dragging());
+        mouse.move_to(50.0, 160.0, 0).await.unwrap();
+        mouse.up(MouseButton::Left, 1, 0).await.unwrap();
+        // Playwright 1.63.0 on the same page.
+        assert_eq!(
+            page.evaluate("() => window.log", Value::Null)
+                .await
+                .unwrap(),
+            json!(["start", "drop", "end"])
+        );
+        browser.context.close().await;
+    });
+}
+
+/// Kill the renderers of the context's browser (`SIGKILL`, found by their
+/// process group): its pages crash.
+fn kill_renderers(context: &Context) {
+    let group = context.pid().unwrap().to_string();
+    let listing = std::process::Command::new("ps")
+        .args(["-A", "-o", "pid=,pgid=,command="])
+        .output()
+        .unwrap();
+    let mut killed = 0;
+    for line in String::from_utf8_lossy(&listing.stdout).lines() {
+        let mut fields = line.split_whitespace();
+        let (Some(pid), Some(pgid)) = (fields.next(), fields.next()) else {
+            continue;
+        };
+        if pgid == group && line.contains("--type=renderer") {
+            nix::sys::signal::kill(
+                nix::unistd::Pid::from_raw(pid.parse().unwrap()),
+                nix::sys::signal::Signal::SIGKILL,
+            )
+            .unwrap();
+            killed += 1;
+        }
+    }
+    assert!(killed > 0, "no renderer found");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_crashed_page_fails_its_calls_as_playwright() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let page = browser.context.pages()[0].clone();
+        page.goto(
+            &format!("http://127.0.0.1:{port}/plain"),
+            LoadState::Load,
+            T,
+        )
+        .await
+        .unwrap();
+        let pending = {
+            let page = page.clone();
+            tokio::spawn(async move {
+                page.evaluate("() => new Promise(() => {})", Value::Null)
+                    .await
+            })
+        };
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        kill_renderers(&browser.context);
+        // Playwright 1.63.0 after the same crash.
+        let error = tokio::time::timeout(Duration::from_secs(5), pending)
+            .await
+            .expect("the evaluation ends")
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.message, "evaluate: Target crashed ");
+        let short = Duration::from_secs(5);
+        let error = page.evaluate("() => 1", Value::Null).await.unwrap_err();
+        assert_eq!(error.message, "evaluate: Target crashed ");
+        assert_eq!(page.title().await.unwrap(), "");
+        assert_eq!(
+            page.content().await.unwrap_err().message,
+            "content: Target crashed "
+        );
+        let shot = page.screenshot(ScreenshotOptions {
+            quality: 50,
+            full_page: false,
+            timeout: short,
+        });
+        assert_eq!(
+            shot.await.unwrap_err().message,
+            "screenshot: Target crashed "
+        );
+        assert_eq!(
+            aria_snapshot(&page, short).await.unwrap_err().message,
+            "ariaSnapshot: Target crashed "
+        );
+        let error = page
+            .goto(
+                &format!("http://127.0.0.1:{port}/same"),
+                LoadState::Load,
+                short,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(error.message, "goto: Page crashed");
+        assert!(!page.is_closed());
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_key_press_cut_short_leaves_no_modifier_held() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let page = browser.context.pages()[0].clone();
+        page.goto(&format!("http://127.0.0.1:{port}/form"), LoadState::Load, T)
+            .await
+            .unwrap();
+        page.evaluate("() => document.querySelector('input').focus()", Value::Null)
+            .await
+            .unwrap();
+        let keyboard = page.keyboard();
+        // Its action's timeout drops it while Control is down.
+        let press = keyboard.press("Control+a", Duration::from_secs(60));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(300), press)
+                .await
+                .is_err()
+        );
+        assert_eq!(keyboard.modifiers(), 0);
+        keyboard.type_text("x", Duration::ZERO).await.unwrap();
+        assert_eq!(
+            page.evaluate("() => document.querySelector('input').value", Value::Null)
+                .await
+                .unwrap(),
+            "x"
+        );
+        browser.context.close().await;
+    });
+}
+
+/// A JPEG's size from its first SOF marker.
+fn jpeg_size(jpeg: &[u8]) -> (u32, u32) {
+    let mut at = 2;
+    while at + 9 < jpeg.len() {
+        let marker = jpeg[at + 1];
+        let length = usize::from(u16::from_be_bytes([jpeg[at + 2], jpeg[at + 3]]));
+        if matches!(marker, 0xc0..=0xc3) {
+            let height = u16::from_be_bytes([jpeg[at + 5], jpeg[at + 6]]);
+            let width = u16::from_be_bytes([jpeg[at + 7], jpeg[at + 8]]);
+            return (u32::from(width), u32::from(height));
+        }
+        at += 2 + length;
+    }
+    panic!("no SOF marker");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_first_screencast_frame_shows_the_viewport() {
+    guard!(async {
+        let port = serve().await;
+        // Chromium's first frame is often of the un-emulated window
+        // (1280x713) when the screencast starts with the first navigation,
+        // as the manager's does (Playwright 1.63.0: 10 of 15 launches).
+        for _ in 0..6 {
+            let Some(browser) = launch().await else {
+                return;
+            };
+            let page = browser.context.pages()[0].clone();
+            let frames: Arc<std::sync::Mutex<Vec<(u32, u32)>>> = Arc::default();
+            let sink = {
+                let frames = frames.clone();
+                Arc::new(move |frame: ScreencastFrame| {
+                    assert_eq!((frame.width, frame.height), (1280, 800));
+                    frames.lock().unwrap().push(jpeg_size(&frame.jpeg));
+                })
+            };
+            let options = ScreencastOptions {
+                width: 1280,
+                height: 800,
+                quality: 60,
+            };
+            let url = format!("http://127.0.0.1:{port}/form");
+            let (started, navigated) = tokio::join!(
+                page.start_screencast(options, sink),
+                page.goto(&url, LoadState::Load, T)
+            );
+            started.unwrap();
+            navigated.unwrap();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while frames.lock().unwrap().is_empty() {
+                assert!(Instant::now() < deadline, "no frame");
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+            assert_eq!(frames.lock().unwrap()[0], (1280, 800));
+            browser.context.close().await;
+        }
     });
 }
