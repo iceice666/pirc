@@ -70,9 +70,10 @@ fn main() -> ExitCode {
             failures.push(format!("{case}: {output:?}"));
         }
     }
-    let checks: [(&str, fn(&std::path::Path) -> Result<(), String>); 2] = [
+    let checks: [(&str, fn(&std::path::Path) -> Result<(), String>); 3] = [
         ("inherited descriptors", inherited_descriptors),
         ("a fault kills", a_fault_kills),
+        ("local time", local_time),
     ];
     for (name, check) in checks {
         match check(&exe) {
@@ -174,7 +175,46 @@ fn a_fault_kills(exe: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
+/// The hardened guest keeps local time: the time zone is loaded before
+/// the filter refuses its file (a zone without daylight saving time).
+fn local_time(exe: &std::path::Path) -> Result<(), String> {
+    let zone = std::env::var_os("TZDIR")
+        .map(std::path::PathBuf::from)
+        .into_iter()
+        .chain(["/usr/share/zoneinfo".into(), "/etc/zoneinfo".into()])
+        .map(|dir| dir.join("Asia/Taipei"))
+        .find(|file| file.is_file());
+    let Some(zone) = zone else {
+        println!("(local time skipped: no zoneinfo for Asia/Taipei)");
+        return Ok(());
+    };
+    let mut child = Command::new(exe)
+        .args(["child", "guest"])
+        .env("TZ", format!(":{}", zone.display()))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let start = r#"{"type":"start","code":"async function __ptc_main() { return String(new Date(0).getTimezoneOffset()) + ' ' + new Date(0).getHours(); }","manifest":[]}"#;
+    let mut stdin = child.stdin.take().unwrap();
+    writeln!(stdin, "{start}").unwrap();
+    let stdout = std::io::BufReader::new(child.stdout.take().unwrap());
+    let done = stdout
+        .lines()
+        .map_while(Result::ok)
+        .find(|line| line.contains(r#""type":"done""#));
+    drop(stdin);
+    let _ = child.wait();
+    match done {
+        Some(line) if line.contains(r#""-480 8""#) => Ok(()),
+        other => Err(format!("local time: {other:?}")),
+    }
+}
+
 fn child(case: &str) -> ExitCode {
+    if case == "guest" {
+        return pirc_ptc::guest::run();
+    }
     // Opened before hardening, without close-on-exec mattering: the
     // descriptor case checks it is closed.
     let file = std::fs::File::open(std::env::current_exe().unwrap()).unwrap();

@@ -187,6 +187,23 @@ fn read_message(input: &mut impl BufRead) -> Option<Json> {
     }
 }
 
+/// Have the C library load the local time zone (`TZ`'s zone file or
+/// `/etc/localtime`) while files can still be opened: it does so lazily,
+/// on the first local-time call, and keeps it. After [`crate::harden`]
+/// the open is refused and glibc silently falls back to UTC, so `Date`
+/// would no longer keep local time as TS's guest did.
+fn warm_time_zone() {
+    let Ok(runtime) = Runtime::new() else {
+        return;
+    };
+    let Ok(context) = Context::full(&runtime) else {
+        return;
+    };
+    context.with(|ctx| {
+        let _: rquickjs::Result<f64> = ctx.eval("new Date(0).getTimezoneOffset()");
+    });
+}
+
 /// Entry of the internal `ptc-guest` command; only an agent starts it,
 /// with its stdin and stdout as the channel.
 pub fn run() -> ExitCode {
@@ -199,6 +216,7 @@ pub fn run() -> ExitCode {
     // An agent already gone is caught by the interrupt handler's check.
     #[cfg(target_os = "linux")]
     let _ = nix::sys::prctl::set_pdeathsig(nix::sys::signal::Signal::SIGKILL);
+    warm_time_zone();
     // Rust-only (security audit S6): no file, process, socket or inherited
     // descriptor from here on, before any script is read. A guest that
     // cannot harden runs nothing.
