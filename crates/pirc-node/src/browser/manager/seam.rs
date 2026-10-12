@@ -158,6 +158,10 @@ pub trait PageApi: Send + Sync {
         sink: FrameSink,
     ) -> BoxFuture<'_, Result<()>>;
     fn stop_screencast(&self) -> BoxFuture<'_, Result<()>>;
+    /// `page.screencast.showActions({duration: 600})`: Playwright's action
+    /// overlay (every later input action shows on the page and takes
+    /// 600 ms longer).
+    fn show_actions(&self) -> BoxFuture<'_, Result<()>>;
     fn bring_to_front(&self) -> BoxFuture<'_, Result<()>>;
     fn close(&self) -> BoxFuture<'_, Result<()>>;
     fn is_closed(&self) -> bool;
@@ -341,6 +345,13 @@ impl PageApi for Page {
 
     fn stop_screencast(&self) -> BoxFuture<'_, Result<()>> {
         Box::pin(Page::stop_screencast(self))
+    }
+
+    fn show_actions(&self) -> BoxFuture<'_, Result<()>> {
+        // MERGE(netio): `engine::screencast::show_actions(self,
+        // Some(ShowActions { duration: Duration::from_millis(600) }))`, which
+        // is on m8-netio and not in this branch's layout.
+        Box::pin(async { Ok(()) })
     }
 
     fn bring_to_front(&self) -> BoxFuture<'_, Result<()>> {

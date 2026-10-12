@@ -34,6 +34,7 @@ struct FakePage {
     url: Mutex<String>,
     subscribers: Mutex<Vec<mpsc::UnboundedSender<PageEvent>>>,
     closed: AtomicBool,
+    shows_actions: AtomicBool,
 }
 
 impl FakePage {
@@ -130,6 +131,10 @@ impl PageApi for FakePage {
         Box::pin(async { Ok(()) })
     }
     fn stop_screencast(&self) -> BoxFuture<'_, engine::Result<()>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn show_actions(&self) -> BoxFuture<'_, engine::Result<()>> {
+        self.shows_actions.store(true, Ordering::SeqCst);
         Box::pin(async { Ok(()) })
     }
     fn bring_to_front(&self) -> BoxFuture<'_, engine::Result<()>> {
@@ -641,6 +646,8 @@ async fn adopts_the_spare_blank_page_then_opens_new_ones_up_to_eight() {
         .await
         .unwrap();
     assert_eq!(context.stats().0, 0);
+    settle().await;
+    assert!(spare.shows_actions.load(Ordering::SeqCst));
     // The spare page is taken: the next session gets a new one.
     let second = target("s2", "w");
     let view = manager

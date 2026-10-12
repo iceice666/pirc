@@ -766,6 +766,10 @@ impl Inner {
             st.pages.push(page.clone());
             st.active = Some(page.clone());
         }
+        let overlay = page.clone();
+        spawn(async move {
+            let _ = overlay.show_actions().await;
+        });
         spawn(listen(Arc::downgrade(self), tab.clone(), page, events));
         self.sync_screencast(tab);
         self.emit_state(tab);
