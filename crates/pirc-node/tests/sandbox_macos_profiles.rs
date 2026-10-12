@@ -230,6 +230,7 @@ fn profiles_match_srts() {
             literal_roots: &[],
             // srt has no read-only profile.
             readonly: false,
+            temp_parent: None,
         };
         let actual = profile::generate(&input).unwrap();
         let expected = expected(&format!("{FIXTURES}/{}.sb", case.name), &case.root);
@@ -280,6 +281,7 @@ fn production_profile(case: &Case) -> String {
             log_tag: TAG,
             readonly: case.readonly,
             literal_roots: &literal_roots,
+            temp_parent: None,
         },
     )
     .unwrap()

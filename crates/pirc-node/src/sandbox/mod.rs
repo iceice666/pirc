@@ -19,7 +19,15 @@
 //!   (`<srt> --settings <file> --control-fd 3 -- <agent...>`, settings 0600
 //!   in `<state>/sandbox/<session>.json`, approvals as a whole new settings
 //!   line on fd 3). The development stand-in, used by the conformance
-//!   harness's fake srt.
+//!   harness's fake srt. It has TS's gaps, which the native backends
+//!   close: on Linux the host's name-service sockets (nscd,
+//!   systemd-resolved) stay visible, since srt renders the policy's host
+//!   sockets only (the native plan adds `linux::plan::RESOLVER_SOCKETS`);
+//!   srt's own proxy sockets (`claude-http-*.sock`, `claude-socks-*.sock`)
+//!   sit in its `os.tmpdir()`, the node's `TMPDIR`, where every srt
+//!   session sees them; and on macOS a session can write into later
+//!   sessions' temp directories when `TMPDIR` lies in a write root
+//!   (`common::NodeTmp`, which warns).
 //! - [`linux`]: the native backend from `spikes/linux-sandbox`: bubblewrap
 //!   with srt's argument order, a filtering proxy in the node process whose
 //!   allowlist grows in place on approval, and the in-sandbox bridge
@@ -31,9 +39,15 @@
 //! [`Sandbox::prepare_readonly`] wraps one host command (the Git panel's
 //! `git`, security audit S8) in a sandbox that may read what a session of
 //! the workspace may read, write nothing (but its temp directory) and reach
-//! no network: no route out, and on Linux the host's name-service sockets
-//! hidden too (another host daemon's visible socket is the residual risk,
-//! see [`linux`]).
+//! no network: no route out, and with the native Linux backend the host's
+//! name-service sockets hidden too (another host daemon's visible socket
+//! is the residual risk, see [`linux`]; the [`srt`] stand-in leaves them
+//! visible).
+//!
+//! Each session's temporary directory sits in the node's private parent
+//! of them all (`common::NodeTmp`), which keeps sessions out of each
+//! other's directories and (native Linux) proxy sockets; how far depends
+//! on the backend, see there.
 //!
 //! `check` probes once (`/bin/sh -c 'exit 0'` in the sandbox, 30 s
 //! deadline); success holds for the node's life, a failure is probed again
@@ -41,7 +55,8 @@
 //! (`pirc_policy::session::read_agent_config`), makes the session's temp
 //! directory, builds the policy (`pirc_policy::session::session_policy`)
 //! with the node's private directories, and warns about config problems
-//! and state inside a writable path.
+//! and state inside a writable path (the temp parent too, on a backend
+//! that does not keep writes out of it).
 
 pub mod bridge;
 mod common;

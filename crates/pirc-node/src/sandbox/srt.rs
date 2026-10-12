@@ -72,17 +72,46 @@ pub fn srt_settings(policy: &SessionPolicy, extra_domains: &[String], platform: 
     })
 }
 
-/// How srt 0.0.78's `cli.js` and the sandbox it runs (bubblewrap on Linux,
-/// `sandbox-exec` on macOS) start their own errors on stderr: what tells a
-/// failed sandbox from the command's exit status ([`StderrPrefixes`]).
-/// Not srt's "Process killed by signal": the command ran.
-const SRT_FAILURES: &[&str] = &[
-    "bwrap: ",
-    "sandbox-exec: ",
-    "Error: ",
-    "Failed to execute command: ",
-    "Fatal error: ",
-];
+/// How the sandbox srt runs (bubblewrap on Linux, `sandbox-exec` on
+/// macOS) starts its own errors on stderr, with whatever non-zero code it
+/// exits with, as for the native backends ([`StderrPrefixes`]).
+const WRAPPER_FAILURES: StderrPrefixes = StderrPrefixes(&["bwrap: ", "sandbox-exec: "]);
+/// How srt 0.0.78's `cli.js` starts its own errors on stderr; it exits 1
+/// after each. Not "Process killed by signal": the command ran.
+const SRT_FAILURES: &[&str] = &["Failed to execute command: ", "Fatal error: "];
+/// srt's catch-all (`Error: <message>`, also `refuseSettings`' first
+/// line). A git filter, hook or helper may start a line so too: it counts
+/// only as the whole of stderr, but `refuseSettings`' second line.
+const SRT_ERROR: &str = "Error: ";
+/// [`SRT_ERROR`]'s only companion line (`refuseSettings`).
+const SRT_REFUSAL: &str = "Refusing to run ";
+
+/// [`super::WrapperStatus`] for srt: [`WRAPPER_FAILURES`], or exit 1 with
+/// stderr starting with one of [`SRT_FAILURES`], or exit 1 with stderr
+/// all srt's [`SRT_ERROR`]. Tighter than a list of prefixes: git exits 1
+/// for some answers, and what it runs may print `Error: ` lines.
+struct SrtStatus;
+
+impl super::WrapperStatus for SrtStatus {
+    fn prepare_command(&self, command: &mut tokio::process::Command) -> std::io::Result<()> {
+        let _ = command;
+        Ok(())
+    }
+
+    fn failure(&self, code: i32, stderr: &str) -> Option<String> {
+        if let Some(failure) = WRAPPER_FAILURES.failure(code, stderr) {
+            return Some(failure);
+        }
+        if code != 1 {
+            return None;
+        }
+        let mut lines = stderr.trim().lines().map(str::trim_end);
+        let first = lines.next()?;
+        let srt = SRT_FAILURES.iter().any(|prefix| first.starts_with(prefix))
+            || (first.starts_with(SRT_ERROR) && lines.all(|line| line.starts_with(SRT_REFUSAL)));
+        srt.then(|| first.to_owned())
+    }
+}
 
 /// The probe's settings: nothing allowed, nothing denied.
 const PROBE_SETTINGS: &str = r#"{"network":{"allowedDomains":[],"deniedDomains":[]},"filesystem":{"denyRead":[],"allowWrite":[],"denyWrite":[]}}"#;
@@ -112,7 +141,13 @@ pub struct SrtSandbox {
 
 impl SrtSandbox {
     pub fn new(srt: String, config: NodeConfig, env: Env) -> Self {
-        let node_tmp = common::NodeTmp::new(&env);
+        // srt's Seatbelt profile renders the policy's read deny of the temp
+        // parent only; its bwrap mounts a tmpfs there ([`common::NodeTmp`]).
+        let node_tmp = if cfg!(target_os = "macos") {
+            common::NodeTmp::with_writable_siblings(&env)
+        } else {
+            common::NodeTmp::new(&env)
+        };
         Self {
             srt,
             config,
@@ -264,7 +299,7 @@ impl Sandbox for SrtSandbox {
                 },
             )
             .with_temp_dir(temp_dir)
-            .with_wrapper_status(Box::new(StderrPrefixes(SRT_FAILURES))))
+            .with_wrapper_status(Box::new(SrtStatus)))
         })
     }
 }
@@ -324,6 +359,38 @@ mod tests {
     use pirc_policy::session::NetworkPolicy;
 
     use super::*;
+
+    #[test]
+    fn only_srts_own_failures_are_the_sandboxs() {
+        use crate::sandbox::WrapperStatus as _;
+        let failure = |code, stderr| SrtStatus.failure(code, stderr);
+        // The wrapped sandbox's own spellings, with any code.
+        assert_eq!(
+            failure(1, "bwrap: execvp git: No such file or directory\n").as_deref(),
+            Some("bwrap: execvp git: No such file or directory")
+        );
+        assert!(failure(65, "sandbox-exec: invalid profile\n").is_some());
+        // srt's, with its exit code 1.
+        for stderr in [
+            "Failed to execute command: spawn /bin/sh ENOENT",
+            "Fatal error: TypeError: x",
+            "Error: Sandbox dependencies are not available",
+            "Error: cannot read x.json\nRefusing to run with the built-in defaults, which would drop y.\n",
+        ] {
+            assert!(failure(1, stderr).is_some(), "{stderr}");
+            assert!(failure(2, stderr).is_none(), "{stderr}");
+        }
+        // What git runs may print `Error: ` too: not the sandbox's.
+        for stderr in [
+            "Error: lfs object missing\nerror: external filter 'git-lfs smudge' failed\n",
+            "Error: hook says no\nfatal: x\n",
+            "error: pathspec 'x' did not match\n",
+            "",
+        ] {
+            assert!(failure(1, stderr).is_none(), "{stderr}");
+        }
+        assert!(failure(128, "Error: x").is_none());
+    }
 
     fn policy() -> SessionPolicy {
         SessionPolicy {
@@ -459,13 +526,15 @@ exec "$@"
             String::from_utf8_lossy(&output.stdout),
             format!("hi\n{}\n", tmp.display())
         );
-        assert!(!root.join(FAKE_SRT_LOG).exists(), "no control fd");
+        // No control fd asked for. (Not checked through the fake srt's log:
+        // it reads any fd 3 it finds, and on macOS, which has no `pipe2` or
+        // `SOCK_CLOEXEC`, a descriptor another test thread is making can
+        // leak into this spawn as fd 3.)
+        assert!(!args.iter().any(|arg| arg == "--control-fd"), "{args:?}");
 
         prepared.cleanup();
         assert!(!tmp.exists() && !settings_file.exists());
     }
-
-    const FAKE_SRT_LOG: &str = "fake-srt-control.log";
 
     #[tokio::test]
     async fn readonly_commands_need_a_working_sandbox() {
