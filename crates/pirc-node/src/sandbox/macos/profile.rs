@@ -28,7 +28,35 @@ use super::paths::{
 /// The profile's fixed part after the log tag: process, Mach, IPC, IOKit,
 /// sysctl and device rules (srt's `generateSandboxProfile` prelude, with
 /// none of the opt-in Mach services).
+///
+/// It also allows a few host side effects that are not file writes or
+/// network access: POSIX shared memory of any name, writing the
+/// `kern.tcsm_enable` sysctl, posting distributed notifications, and
+/// lookups of the LaunchServices and security daemons. Sessions keep them
+/// (srt's agent profile); the read-only profile drops them
+/// ([`READONLY_BASE_DROPS`]).
 const BASE: &str = include_str!("base.sb");
+
+/// Not srt's: what the read-only profile ([`ProfileInput::readonly`])
+/// leaves out of [`BASE`], so the Git panel's command has no host side
+/// effects beyond its temp directory either. Semaphores, user preferences,
+/// the other Mach services and IOKit stay.
+pub const READONLY_BASE_DROPS: [&str; 7] = [
+    "  (global-name \"com.apple.distributed_notifications@Uv3\")\n",
+    "  (global-name \"com.apple.securityd.xpc\")\n",
+    "  (global-name \"com.apple.coreservices.launchservicesd\")\n",
+    "; POSIX IPC - shared memory\n(allow ipc-posix-shm)\n\n",
+    "; V8 thread calculations\n(allow sysctl-write\n  (sysctl-name \"kern.tcsm_enable\")\n)\n\n",
+    "; Distributed notifications\n(allow distributed-notification-post)\n\n",
+    "; Specific mach-lookup permissions for security operations\n(allow mach-lookup (global-name \"com.apple.SecurityServer\"))\n\n",
+];
+
+/// [`BASE`] for [`ProfileInput::readonly`].
+fn readonly_base() -> String {
+    READONLY_BASE_DROPS
+        .iter()
+        .fold(BASE.to_owned(), |base, drop| base.replacen(drop, "", 1))
+}
 
 /// `DANGEROUS_FILES`.
 const DANGEROUS_FILES: [&str; 9] = [
@@ -784,7 +812,12 @@ pub fn generate(input: &ProfileInput<'_>) -> Result<String, String> {
         String::new(),
     ];
     // BASE ends with the blank line before the network section.
-    profile.extend(BASE.trim_end_matches('\n').split('\n').map(str::to_owned));
+    let base = if input.readonly {
+        readonly_base()
+    } else {
+        BASE.to_owned()
+    };
+    profile.extend(base.trim_end_matches('\n').split('\n').map(str::to_owned));
     profile.push(String::new());
 
     profile.push("; Network".to_owned());
@@ -944,6 +977,12 @@ mod tests {
             assert!(srt.contains(filter), "{filter}");
             assert!(!readonly.contains(filter), "{filter}");
         }
+        for drop in READONLY_BASE_DROPS {
+            assert!(BASE.contains(drop), "{drop}");
+            assert!(srt.contains(drop.trim_end()), "{drop}");
+            assert!(!readonly.contains(drop.trim_end()), "{drop}");
+        }
+        assert!(readonly.contains("(allow ipc-posix-sem)"));
         for path in READONLY_WRITE_PATHS
             .iter()
             .chain([&"/nonexistent-pirc/tmp"])

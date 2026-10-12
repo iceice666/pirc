@@ -49,7 +49,11 @@
 //!   only `/dev/null`, `/dev/stdout` and `/dev/stderr` of srt's default
 //!   write paths: srt also opened `/tmp/claude` (shared with every
 //!   session), `~/.npm/_logs`, `~/.claude/debug` and `/dev/tty` (and two
-//!   more devices) to every command it wrapped.
+//!   more devices) to every command it wrapped. It also leaves out the
+//!   base rules with host side effects that are not file writes (POSIX
+//!   shared memory, a sysctl write, distributed notifications, the
+//!   security and LaunchServices daemons: [`profile::READONLY_BASE_DROPS`]).
+//!   Agent sessions keep srt's base as it is.
 //! - No log monitor (srt's `log stream` of violations) and no JVM proxy
 //!   agent jar (`-Djava.net.preferIPv4Stack=true` is still set).
 //! - The log tag's command is the agent's arguments joined by spaces

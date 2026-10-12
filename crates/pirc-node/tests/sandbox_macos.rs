@@ -1115,6 +1115,22 @@ async fn the_readonly_sandbox_reads_but_never_writes() {
     };
     let w = f.w();
     assert_eq!(run(format!("cat {w}/README && git -C {w} status")).await, 0);
+    // The narrower base (no shared memory, notifications or security
+    // daemons) still runs git's reading commands.
+    let commit = std::process::Command::new("git")
+        .args(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q"])
+        .args(["--allow-empty", "-m", "first"])
+        .current_dir(&f.workspace)
+        .status()
+        .unwrap();
+    assert!(commit.success());
+    assert_eq!(
+        run(format!(
+            "git -C {w} log --oneline -1 && git -C {w} diff HEAD && git -C {w} show --stat HEAD"
+        ))
+        .await,
+        0
+    );
     assert_ne!(run(format!("echo x > {w}/x")).await, 0);
     assert_ne!(run(format!("echo x >> {w}/.git/config")).await, 0);
     assert_ne!(run("echo x > /tmp/pirc-ro-$$".to_owned()).await, 0);
