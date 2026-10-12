@@ -934,3 +934,28 @@ async fn reaches_the_inference_socket_inside_the_hidden_state() {
     assert!(child.wait().await.unwrap().success());
     prepared.cleanup();
 }
+
+/// A start dropped mid-await (the node shutting down during the first
+/// probe) leaves no temp directory behind: neither the session's nor the
+/// probe's.
+#[tokio::test]
+async fn a_dropped_start_leaves_no_temp_dir() {
+    let Some(f) = fixture("dropped") else {
+        return;
+    };
+    // The first start probes bubblewrap, which takes far longer.
+    let started = tokio::time::timeout(Duration::from_millis(1), f.try_prepare("pi_dropped")).await;
+    assert!(started.is_err(), "the start finished within 1 ms");
+    let tmp = f.tmp.path();
+    let mut left = Vec::new();
+    for entry in fs::read_dir(tmp).unwrap().flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with("pirc-n-") {
+            left.extend(fs::read_dir(&path).unwrap().flatten().map(|e| e.path()));
+        } else {
+            left.push(path);
+        }
+    }
+    assert!(left.is_empty(), "{left:?}");
+}

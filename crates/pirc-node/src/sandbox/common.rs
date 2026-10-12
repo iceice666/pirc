@@ -256,10 +256,37 @@ pub fn sandbox_bin_dir(config: &NodeConfig) -> PathBuf {
     config.state_dir.join("sandbox").join("bin")
 }
 
+/// A session's (or read-only command's) temporary directory, removed when
+/// dropped: a prepare future dropped mid-await (node shutdown during a
+/// probe) leaves nothing behind. The backends move it into
+/// [`super::Prepared`]'s cleanup, which removes it at the latest.
+#[derive(Debug)]
+pub struct SessionTmp(PathBuf);
+
+impl SessionTmp {
+    pub fn new(dir: PathBuf) -> Self {
+        Self(dir)
+    }
+}
+
+impl std::ops::Deref for SessionTmp {
+    type Target = Path;
+
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for SessionTmp {
+    fn drop(&mut self) {
+        Session::remove_tmp(&self.0);
+    }
+}
+
 /// A session's policy and what goes with it, before the backend wraps it.
 pub struct Session {
     /// The session's own temporary directory (`CLAUDE_CODE_TMPDIR`).
-    pub tmp: PathBuf,
+    pub tmp: SessionTmp,
     pub policy: SessionPolicy,
     pub warnings: Vec<String>,
 }
@@ -294,6 +321,7 @@ pub fn session(
         ));
         ApiError::internal()
     })?;
+    let tmp = SessionTmp::new(tmp);
     let mut warnings = Vec::new();
     if let Some(problem) = &agent_config.problem {
         warnings.push(format!("Sandbox settings ignored: {problem}"));
@@ -408,6 +436,7 @@ pub fn readonly_session(
         ));
         ApiError::internal()
     })?;
+    let tmp = SessionTmp::new(tmp);
     let mut warnings = Vec::new();
     if let Some(problem) = &agent_config.problem {
         warnings.push(format!("Sandbox settings ignored: {problem}"));

@@ -283,8 +283,9 @@ impl NativeSandbox {
         {
             return SandboxStatus::Unavailable { reason };
         }
+        // Removed however the probe ends (a dropped `check` too).
         let tmp = match common::make_temp_dir(&common::tmpdir(&self.env), "pirc-") {
-            Ok(tmp) => tmp,
+            Ok(tmp) => common::SessionTmp::new(tmp),
             Err(error) => {
                 return SandboxStatus::Unavailable {
                     reason: format!("bubblewrap: {error}"),
@@ -330,7 +331,7 @@ impl NativeSandbox {
                 .await
             }
         };
-        Session::remove_tmp(&tmp);
+        drop(tmp);
         status
     }
 
@@ -423,7 +424,7 @@ impl NativeSandbox {
             ApiError::internal()
         })?;
         let session = Session {
-            tmp,
+            tmp: common::SessionTmp::new(tmp),
             policy,
             warnings: Vec::new(),
         };
