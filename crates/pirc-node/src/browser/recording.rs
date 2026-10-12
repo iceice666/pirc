@@ -208,9 +208,12 @@ impl Recording {
             });
         }
         tokio::spawn(async move {
+            // Only an explicit kill (a stop that timed out) kills ffmpeg: a
+            // dropped `Recording` drops the sender, which disables this
+            // branch, and ffmpeg ends with its input.
             let status = tokio::select! {
                 status = child.wait() => status,
-                _ = kill_rx => {
+                Ok(()) = kill_rx => {
                     let _ = child.start_kill();
                     child.wait().await
                 }
@@ -274,7 +277,7 @@ impl Recording {
 
 impl Drop for Recording {
     /// A recording dropped without [`Recording::stop`] (a failed start)
-    /// stops writing; ffmpeg ends with its input.
+    /// stops writing; ffmpeg ends with its input and is not killed.
     fn drop(&mut self) {
         if let Some(end) = self.end.take() {
             let _ = end.send(());
@@ -441,6 +444,37 @@ mod tests {
         assert_eq!(bytes % 4, 0);
         assert!((12..=28).contains(&bytes), "{bytes}");
         assert!(result["durationMs"].as_i64().unwrap() >= 500);
+    }
+
+    #[tokio::test]
+    async fn a_dropped_recording_ends_ffmpeg_with_its_input() {
+        let dir = tempfile::tempdir().unwrap();
+        let ffmpeg = fake_ffmpeg(
+            dir.path(),
+            r#"for last; do :; done; cat > "$last"; echo end >> "$last""#,
+        );
+        let file = dir.path().join("a.webm");
+        let frame = Arc::new(b"JPEG".to_vec());
+        let recording = Recording::start(
+            &ffmpeg,
+            &sh_env(),
+            file.clone(),
+            "r".into(),
+            Arc::new(move || Some(frame.clone())),
+            Arc::new(|| true),
+        );
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        let mut exited = recording.exited.clone();
+        drop(recording);
+        let code = *tokio::time::timeout(Duration::from_secs(10), exited.wait_for(Option::is_some))
+            .await
+            .unwrap()
+            .unwrap();
+        let code = code.flatten();
+        // Killed, it would have no exit code and no "end".
+        assert_eq!(code, Some(0));
+        let written = std::fs::read_to_string(&file).unwrap();
+        assert!(written.starts_with("JPEG") && written.ends_with("end\n"), "{written}");
     }
 
     #[tokio::test]
