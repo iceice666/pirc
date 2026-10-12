@@ -182,23 +182,49 @@ pub fn make_temp_dir(base: &Path, prefix: &str) -> std::io::Result<PathBuf> {
 /// whose session directories sat side by side in `TMPDIR`: every sandbox
 /// runs as the node's uid and may read the filesystem and write `/tmp`,
 /// so their 0700 mode kept no session from another's files and proxy
-/// socket. The parent is one of every session's private directories, so
-/// a session sees only its own temporary directory in it. Its name is
-/// short, as the sessions' are (macOS's 104-byte socket paths). Removed,
-/// when empty, with the backend (its last clone).
+/// socket. The parent is one of every session's private directories
+/// (closed to reads, its own temporary directory reopened). What keeps a
+/// session out of the others' depends on the backend:
+///
+/// - Linux, native and srt: an empty tmpfs over the parent, so neither
+///   reads nor writes reach the others' directories.
+/// - macOS, native: the read deny, and a write deny on the parent but for
+///   the session's own directory (`macos::profile::TempParent`).
+/// - macOS, srt: the read deny only. With the parent in a write root
+///   (`TMPDIR` unset or `/tmp`), a session can write into the directories
+///   of sessions started after it; [`NodeTmp::with_writable_siblings`]
+///   makes [`session`] warn about it.
+///
+/// Its name is short, as the sessions' are (macOS's 104-byte socket
+/// paths). Removed, when empty, with the backend (its last clone).
 #[derive(Clone)]
 pub struct NodeTmp(Arc<NodeTmpDir>);
 
 struct NodeTmpDir {
     base: PathBuf,
     dir: Mutex<Option<PathBuf>>,
+    /// The backend's sandboxes do not keep writes out of the parent.
+    writable_siblings: bool,
 }
 
 impl NodeTmp {
+    /// For a backend whose sandboxes keep each session out of the others'
+    /// temporary directories.
     pub fn new(env: &Env) -> Self {
+        Self::with(env, false)
+    }
+
+    /// For a backend whose sandboxes hide the parent from reads only (srt
+    /// on macOS): [`session`] warns when the parent lies in a write root.
+    pub fn with_writable_siblings(env: &Env) -> Self {
+        Self::with(env, true)
+    }
+
+    fn with(env: &Env, writable_siblings: bool) -> Self {
         Self(Arc::new(NodeTmpDir {
             base: tmpdir(env),
             dir: Mutex::new(None),
+            writable_siblings,
         }))
     }
 
@@ -387,26 +413,39 @@ pub fn session(
             return Err(ApiError::internal());
         }
     };
-    // The temp parent may sit in a write root (`/tmp`) by design: the
-    // sandboxes hide it whole (Linux mounts an empty directory there).
-    let node_tmp = real_resolve(&text(&parent));
+    // The temp parent may sit in a write root (`/tmp`) by design, where
+    // the backend keeps writes out of it ([`NodeTmp`]); otherwise it is
+    // exposed as state is.
+    let node_tmp_dir = real_resolve(&text(&parent));
     let private_dirs: Vec<String> = private_dirs.iter().map(|dir| real_resolve(dir)).collect();
-    let exposed: Vec<&str> = policy
-        .paths
-        .allow_write
-        .iter()
-        .filter(|root| {
-            let root = real_resolve(root);
-            private_dirs
-                .iter()
-                .any(|dir| is_inside(dir, &root) && *dir != root && *dir != node_tmp)
-        })
-        .map(String::as_str)
-        .collect();
-    if !exposed.is_empty() {
+    let inside = |dir: &str, root: &str| is_inside(dir, root) && dir != root;
+    let exposed = |dir_filter: &dyn Fn(&String) -> bool| -> Vec<&str> {
+        policy
+            .paths
+            .allow_write
+            .iter()
+            .filter(|root| {
+                let root = real_resolve(root);
+                private_dirs
+                    .iter()
+                    .filter(|dir| dir_filter(dir))
+                    .any(|dir| inside(dir, &root))
+            })
+            .map(String::as_str)
+            .collect()
+    };
+    let state = exposed(&|dir| *dir != node_tmp_dir);
+    if !state.is_empty() {
         warnings.push(format!(
             "pirc's state lies inside a writable path of this session ({}). What exists now is protected, but anything the node creates there later (other sessions) is not: move PIRC_STATE_DIR out of it.",
-            exposed.join(", ")
+            state.join(", ")
+        ));
+    }
+    let temp = exposed(&|dir| *dir == node_tmp_dir);
+    if node_tmp.0.writable_siblings && !temp.is_empty() {
+        warnings.push(format!(
+            "pirc's temporary directory lies inside a writable path of this session ({}), and this sandbox does not keep sessions out of each other's temporary directories there: set the node's TMPDIR outside it.",
+            temp.join(", ")
         ));
     }
     Ok(Session {
@@ -654,6 +693,38 @@ mod tests {
         let parent = c.tmp.parent().unwrap().to_path_buf();
         drop(node_tmp);
         assert!(!parent.exists(), "removed with the backend");
+    }
+
+    #[test]
+    fn a_temp_parent_in_a_write_root_warns_where_sandboxes_let_writes_in() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        // The node's `TMPDIR` is a write root of the session, as `/tmp` is.
+        std::fs::create_dir_all(root.join("config")).unwrap();
+        let settings = serde_json::json!({
+            "sandbox": {"filesystem": {"allowWrite": [text(&root.join("tmp"))]}}
+        });
+        std::fs::write(root.join("config/config.json"), settings.to_string()).unwrap();
+        let (config, env) = test_support::node(&root, &[]);
+        let input = PrepareInput {
+            session_id: "pi_a".to_owned(),
+            workspace_root: root.join("workspace"),
+            session_dir: config.sessions_dir.join("pi_a"),
+            inference_socket: None,
+            protected_paths: Vec::new(),
+        };
+        let temp_warning = |node_tmp: &NodeTmp| {
+            let session = session(&config, &env, node_tmp, &input).unwrap();
+            Session::remove_tmp(&session.tmp);
+            // Only this warning: the checkout (and so `root`) may itself
+            // lie in a write root, which warns about the node's state.
+            session
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("pirc's temporary directory"))
+        };
+        assert!(!temp_warning(&NodeTmp::new(&env)));
+        assert!(temp_warning(&NodeTmp::with_writable_siblings(&env)));
     }
 
     #[test]

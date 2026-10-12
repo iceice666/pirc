@@ -172,6 +172,8 @@ struct Options {
     workspace: Option<&'static str>,
     /// `sandbox.network` in the agent config, besides `defaultDomains:false`.
     network: Option<&'static str>,
+    /// The node's `TMPDIR` instead of `<root>/tmp`.
+    tmpdir: Option<&'static str>,
 }
 
 fn fixture(name: &str) -> Fixture {
@@ -217,7 +219,9 @@ fn fixture_with(name: &str, options: Options) -> Fixture {
         path(&root, "home"),
         path(&root, "state"),
         path(&root, config_rel),
-        path(&root, "tmp"),
+        options
+            .tmpdir
+            .map_or_else(|| path(&root, "tmp"), str::to_owned),
     );
     let path_var = std::env::var("PATH").unwrap_or_default();
     let vars = [
@@ -1172,6 +1176,96 @@ async fn the_readonly_sandbox_reads_but_never_writes() {
         run(format!("cat {}", path(&f.root, "state/secret"))).await,
         0
     );
+}
+
+/// Two sessions of one node whose `TMPDIR` is `/tmp` (the default when it
+/// is unset), a write root of every session: neither reaches the other's
+/// temporary directory, whichever started first. The policy only denies
+/// the node's temp parent to reads, and its write denies around it list
+/// the directories that exist when it is built, so without the profile's
+/// own write deny on the parent the first session could write into the
+/// second's (second review, issue 2).
+#[tokio::test]
+async fn sessions_cannot_reach_each_others_temp_dir() {
+    let f = fixture_with(
+        "tmps",
+        Options {
+            tmpdir: Some("/tmp"),
+            ..Options::default()
+        },
+    );
+    let a = f.prepare("pi_a").await;
+    let b = f.prepare("pi_b").await;
+    let tmp_of = |prepared: &Prepared| {
+        prepared
+            .env
+            .iter()
+            .find(|(name, _)| name == "TMPDIR")
+            .map(|(_, value)| value.clone())
+            .unwrap()
+    };
+    let (a_tmp, b_tmp) = (tmp_of(&a), tmp_of(&b));
+    let parent = Path::new(&a_tmp).parent().unwrap().display().to_string();
+    assert_eq!(Path::new(&b_tmp).parent(), Some(Path::new(&parent)));
+    assert!(parent.starts_with("/tmp/pirc-n-"), "{parent}");
+    let run = async |prepared: &Prepared, script: &str| {
+        let mut command = prepared.command().unwrap();
+        command
+            .args(["-c", script])
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+            .envs(prepared.env.iter().map(|(k, v)| (k, v)))
+            .current_dir(&f.workspace)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
+        tokio::time::timeout(Duration::from_secs(30), command.status())
+            .await
+            .unwrap()
+            .unwrap()
+            .code()
+            .unwrap_or(-1)
+    };
+    let mut failures = Vec::new();
+    for (name, own, other) in [("a", &a, &b_tmp), ("b", &b, &a_tmp)] {
+        let refused = [
+            format!("echo x > {other}/planted"),
+            format!("mkdir {other}/d"),
+            format!("ls {other}"),
+            format!("ls {parent}"),
+            format!("echo x > {parent}/planted"),
+            format!("mkdir {parent}/pirc-squat"),
+            format!("mv {other} {parent}/moved"),
+            format!("mv {parent} /tmp/pirc-moved-$$"),
+            format!("rm -r {other}"),
+        ];
+        for script in &refused {
+            if run(own, script).await == 0 {
+                failures.push(format!("{name}: {script}: allowed"));
+            }
+        }
+        let allowed = [
+            "echo x > \"$TMPDIR/x\" && cat \"$TMPDIR/x\"",
+            "mkdir \"$TMPDIR/d\" && mv \"$TMPDIR/d\" \"$TMPDIR/e\" && rm -r \"$TMPDIR/e\"",
+            "cd \"$TMPDIR\" && rm x",
+            "echo x > /tmp/pirc-macos-$$ && rm /tmp/pirc-macos-$$",
+        ];
+        for script in allowed {
+            let code = run(own, script).await;
+            if code != 0 {
+                failures.push(format!("{name}: {script}: exit {code}"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+    for tmp in [&a_tmp, &b_tmp] {
+        let entries: Vec<_> = fs::read_dir(tmp).unwrap().collect();
+        assert!(entries.is_empty(), "{tmp}: {entries:?}");
+    }
+    assert!(!Path::new(&parent).join("planted").exists());
+    a.cleanup();
+    b.cleanup();
 }
 
 /// A user's glob deny whose static directory is a link out of its tree:

@@ -132,6 +132,21 @@ pub struct ProfileInput<'a> {
     /// allow (read or write) spelled with glob characters inside one of
     /// them is that one path (`allow_entry`).
     pub literal_roots: &'a [String],
+    /// Not srt's: the node's private parent of every session's temporary
+    /// directory (`common::NodeTmp`), closed to writes but for the
+    /// session's own one. Seatbelt has no mount to hide it with, and the
+    /// policy's read deny does not stop writes: when the parent lies in a
+    /// write root (`TMPDIR=/tmp`), a session could otherwise write into
+    /// the temporary directories of sessions started after it.
+    pub temp_parent: Option<TempParent<'a>>,
+}
+
+/// [`ProfileInput::temp_parent`], both paths resolved.
+#[derive(Clone, Copy, Debug)]
+pub struct TempParent<'a> {
+    pub parent: &'a str,
+    /// The session's own temporary directory, inside `parent`.
+    pub own: &'a str,
 }
 
 /// `generateLogTag`: `CMD64_<base64 of the command's first 100
@@ -738,6 +753,22 @@ fn write_rules(
     }
     deny_filters.extend(ungrouped.iter().map(deny_path_filter));
     rules.extend(render_rule("deny", &["file-write*"], &deny_filters, tag));
+    if let Some(temp) = input.temp_parent {
+        let subpath = |path: &str| format!("(subpath {})", escape(&paths::normalize(path)));
+        let filter = IndexSet::from([carve_filter(subpath(temp.parent), vec![subpath(temp.own)])]);
+        rules.extend(render_rule("deny", &["file-write*"], &filter, tag));
+        // Seatbelt lets a rule naming an operation win over a
+        // `file-write*` one, whatever their order: the read rules'
+        // `allow file-write-create` on the write roots would let files and
+        // directories be created there (srt's own denies are repeated in
+        // its move-blocking rule for the same reason).
+        rules.extend(render_rule(
+            "deny",
+            &["file-write-unlink", "file-write-create"],
+            &filter,
+            tag,
+        ));
+    }
     let mut move_filters = move_blocking_filters(&ungrouped);
     for (group, (deny, pins)) in groups.iter().zip(&group_filters) {
         move_filters.extend(deny.iter().chain(pins).cloned());
@@ -965,6 +996,7 @@ mod tests {
             extra_move_blocks: &[],
             literal_roots: &[],
             readonly,
+            temp_parent: None,
         };
         let dropped = [
             // `/tmp/claude` and `/private/tmp/claude` are one filter on a
@@ -997,6 +1029,47 @@ mod tests {
                 "{path}"
             );
         }
+    }
+
+    /// The node's temp parent is closed to writes but for the session's
+    /// own directory, after the write roots that may hold it.
+    #[test]
+    fn the_temp_parent_is_closed_to_writes_but_for_the_own_dir() {
+        let allow_write = ["/nonexistent-pirc/tmp".to_owned()];
+        let input = |temp_parent| ProfileInput {
+            deny_read: &[],
+            allow_read: &[],
+            allow_write: &allow_write,
+            deny_write: &[],
+            allow_git_config: false,
+            allow_unix_sockets: &[],
+            allow_local_binding: false,
+            proxy_port: None,
+            allow_pty: false,
+            cwd: "/nonexistent-pirc/ws",
+            home: "/nonexistent-pirc/home",
+            log_tag: "t",
+            extra_read_denies: &[],
+            extra_write_denies: &[],
+            extra_move_blocks: &[],
+            literal_roots: &[],
+            readonly: false,
+            temp_parent,
+        };
+        let filter = "(require-all (subpath \"/nonexistent-pirc/tmp/pirc-n-x\") (require-not (subpath \"/nonexistent-pirc/tmp/pirc-n-x/pirc-\\x01y\")))";
+        let rule = format!(
+            "(deny file-write*\n  {filter}\n  (with message \"t\"))\n(deny file-write-unlink file-write-create\n  {filter}\n  (with message \"t\"))"
+        );
+        let without = generate(&input(None)).unwrap();
+        assert!(!without.contains("pirc-n-x"), "{without}");
+        let with = generate(&input(Some(TempParent {
+            parent: "/nonexistent-pirc/tmp/pirc-n-x",
+            own: "/nonexistent-pirc/tmp/pirc-n-x/pirc-\u{1}y",
+        })))
+        .unwrap();
+        let at = with.find(&rule).unwrap_or_else(|| panic!("{with}"));
+        let allow = with.find("(subpath \"/nonexistent-pirc/tmp\")").unwrap();
+        assert!(allow < at, "{with}");
     }
 
     /// Glob characters are read literally only inside pirc's own paths: a

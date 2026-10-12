@@ -112,7 +112,13 @@ pub struct SrtSandbox {
 
 impl SrtSandbox {
     pub fn new(srt: String, config: NodeConfig, env: Env) -> Self {
-        let node_tmp = common::NodeTmp::new(&env);
+        // srt's Seatbelt profile renders the policy's read deny of the temp
+        // parent only; its bwrap mounts a tmpfs there ([`common::NodeTmp`]).
+        let node_tmp = if cfg!(target_os = "macos") {
+            common::NodeTmp::with_writable_siblings(&env)
+        } else {
+            common::NodeTmp::new(&env)
+        };
         Self {
             srt,
             config,

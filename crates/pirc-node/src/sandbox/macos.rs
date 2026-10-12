@@ -54,6 +54,16 @@
 //!   shared memory, a sysctl write, distributed notifications, the
 //!   security and LaunchServices daemons: [`profile::READONLY_BASE_DROPS`]).
 //!   Agent sessions keep srt's base as it is.
+//! - The node's private temp parent (`common::NodeTmp`) is closed to
+//!   writes but for the session's own temporary directory
+//!   ([`ProfileInput::temp_parent`]). The policy only denies it to reads,
+//!   which is all srt's profile would render, and Seatbelt has no mount to
+//!   hide it with: with the node's `TMPDIR` in a write root (`/tmp`, the
+//!   default when it is unset), a session could write into every later
+//!   session's temp directory. The deny names `file-write-create` and
+//!   `file-write-unlink` too: Seatbelt lets a rule naming an operation win
+//!   over a `file-write*` one whatever their order, and srt's read rules
+//!   allow `file-write-create` on every write root.
 //! - No log monitor (srt's `log stream` of violations) and no JVM proxy
 //!   agent jar (`-Djava.net.preferIPv4Stack=true` is still set).
 //! - The log tag's command is the agent's arguments joined by spaces
@@ -71,7 +81,7 @@ use pirc_policy::real_resolve;
 use pirc_policy::session::{SessionPolicy, WalkError, walk_links};
 
 use self::paths::{Context, contains_glob_chars, is_literal_spelling, normalize_path_for_sandbox};
-use self::profile::ProfileInput;
+use self::profile::{ProfileInput, TempParent};
 use super::common::{self, ProbeCache, Session};
 use super::proxy;
 use super::{
@@ -96,6 +106,8 @@ pub struct Settings<'a> {
     pub readonly: bool,
     /// pirc's own paths besides `cwd` ([`ProfileInput::literal_roots`]).
     pub literal_roots: &'a [String],
+    /// [`ProfileInput::temp_parent`].
+    pub temp_parent: Option<TempParent<'a>>,
 }
 
 /// Not srt's (see the module documentation): what [`profile::generate`]
@@ -262,6 +274,7 @@ pub fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result
         extra_move_blocks: &move_blocks,
         readonly: settings.readonly,
         literal_roots: &literal_roots,
+        temp_parent: settings.temp_parent,
     })
 }
 
@@ -299,6 +312,15 @@ fn text(path: &Path) -> Result<String, String> {
     path.to_str()
         .map(str::to_owned)
         .ok_or_else(|| format!("{} is not UTF-8", path.display()))
+}
+
+/// The node's temp parent and `tmp` in it, resolved as Seatbelt matches
+/// them ([`ProfileInput::temp_parent`]).
+fn temp_parent(tmp: &Path) -> Result<(String, String), String> {
+    let parent = tmp
+        .parent()
+        .ok_or_else(|| format!("{} has no parent", tmp.display()))?;
+    Ok((real_resolve(&text(parent)?), real_resolve(&text(tmp)?)))
 }
 
 /// `-p <profile>` and the command.
@@ -412,6 +434,7 @@ impl MacSandbox {
                     log_tag: &tag,
                     readonly: false,
                     literal_roots: &[],
+                    temp_parent: None,
                 },
             )?;
             Ok((profile, tmp_text))
@@ -490,6 +513,7 @@ impl Sandbox for MacSandbox {
                     .chain(input.protected_paths.iter().map(PathBuf::as_path))
                     .collect();
                 let literal_roots = self.own_paths(&home, &extra)?;
+                let (parent, own) = temp_parent(&tmp)?;
                 let profile = policy_profile(
                     &policy,
                     &Settings {
@@ -500,6 +524,10 @@ impl Sandbox for MacSandbox {
                         log_tag: &tag,
                         readonly: false,
                         literal_roots: &literal_roots,
+                        temp_parent: Some(TempParent {
+                            parent: &parent,
+                            own: &own,
+                        }),
                     },
                 )?;
                 Ok::<_, String>((profile, tmp_text))
@@ -558,6 +586,8 @@ impl Sandbox for MacSandbox {
             let built = (|| {
                 let (tmp_text, home) = (text(&tmp)?, self.home()?);
                 let literal_roots = self.own_paths(&home, &[&input.workspace_root, &tmp])?;
+                // As a session's (only its temp dir is writable anyway).
+                let (parent, own) = temp_parent(&tmp)?;
                 // No proxy port: the profile allows no network at all.
                 let profile = policy_profile(
                     &policy,
@@ -569,6 +599,10 @@ impl Sandbox for MacSandbox {
                         log_tag: &tag,
                         readonly: true,
                         literal_roots: &literal_roots,
+                        temp_parent: Some(TempParent {
+                            parent: &parent,
+                            own: &own,
+                        }),
                     },
                 )?;
                 Ok::<_, String>((profile, tmp_text))
@@ -711,6 +745,7 @@ mod tests {
             log_tag: "t",
             readonly: false,
             literal_roots: &[],
+            temp_parent: None,
         };
         assert!(policy_profile(&SessionPolicy::default(), &settings).is_ok());
         let target = OsStr::from_bytes(b"repo\xff");
@@ -754,6 +789,7 @@ mod tests {
                     log_tag: "t",
                     readonly: false,
                     literal_roots: &[],
+                    temp_parent: None,
                 },
             )
         };
