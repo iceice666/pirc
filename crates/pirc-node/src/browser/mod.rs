@@ -1,16 +1,27 @@
-//! The agent browser's seam (`node/browser.ts` `BrowserManager`). Until M8
-//! the node has no browser: [`UnavailableBrowser`] reports it unavailable
-//! whatever the settings say (plans/rust-rewrite.md, M6 decisions), so
-//! agents get `PIRC_BROWSER=0`, a `browser_request` is answered 403
-//! "The browser is not available on this node", and a browser stream closes
-//! with 4403 and the same reason. M8 implements [`BrowserService`] with the
-//! CDP client.
+//! The agent browser (`node/browser.ts`): [`BrowserService`] is what the
+//! rest of the node calls, [`manager::BrowserManager`] implements it over
+//! [`engine`], a port of the parts of Playwright the TS node used, speaking
+//! CDP to an external Chromium. [`UnavailableBrowser`] stays for tests.
 //!
-//! Layout: implemented here (the stub). The runner calls
-//! [`BrowserService::handle`] for `browser_request`s (dropping the future is
-//! `browser_cancel`); streams call [`BrowserService::attach`] and
-//! [`BrowserService::input`]; core calls `close_session` on chat deletion
-//! and `shutdown` on close.
+//! The runner calls [`BrowserService::handle`] for `browser_request`s
+//! (dropping the future is `browser_cancel`: as in TS, that only abandons
+//! waits; an operation already running finishes); streams call
+//! [`BrowserService::attach`] and [`BrowserService::input`]; core calls
+//! `close_session` on chat deletion and `shutdown` on close.
+//!
+//! | Module | Port of | Owner (M8 layout) |
+//! |---|---|---|
+//! | this file, [`assets`] | the seam; the embedded in-page scripts | layout |
+//! | [`engine`] | Playwright (see its table) | core, netio, locator |
+//! | [`hosts`] | `node/browser-hosts.ts` | netio |
+//! | [`manager`], [`recording`], [`util`] | `node/browser.ts` | manager |
+
+pub mod assets;
+pub mod engine;
+pub mod hosts;
+pub mod manager;
+pub mod recording;
+pub mod util;
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -75,7 +86,7 @@ pub fn unavailable() -> ApiError {
     ApiError::forbidden("The browser is not available on this node")
 }
 
-/// The M6 node's browser: none.
+/// A browser that is never available (tests; the M6 node's).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct UnavailableBrowser;
 
