@@ -34,7 +34,6 @@
 
 pub mod paths;
 pub mod profile;
-mod proxy_shim;
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -45,9 +44,8 @@ use pirc_policy::session::SessionPolicy;
 
 use self::paths::{Context, contains_glob_chars, normalize_path_for_sandbox, resolve_existing};
 use self::profile::ProfileInput;
-// M7 merge: `use super::proxy;` (the network worker's interface).
-use self::proxy_shim as proxy;
 use super::common::{self, ProbeCache, Session};
+use super::proxy;
 use super::{
     BoxFuture, NetworkControl, PrepareInput, Prepared, ReadonlyInput, Sandbox, SandboxStatus,
 };
@@ -511,7 +509,10 @@ mod tests {
                 sandbox_env(tmp, proxy.then_some((40000, &auth)), local_binding)
                     .into_iter()
                     .filter(|(name, _)| {
-                        name != "CLAUDE_CODE_TMPDIR" && name != "PIRC_SANDBOX_BACKEND"
+                        name != "CLAUDE_CODE_TMPDIR"
+                            && name != "PIRC_SANDBOX_BACKEND"
+                            && !name.starts_with("CLOUDSDK_PROXY_USERNAME")
+                            && !name.starts_with("CLOUDSDK_PROXY_PASSWORD")
                     })
                     .map(|(name, value)| (name, strip(&value)))
                     .collect();

@@ -908,10 +908,8 @@ async fn a_workspace_with_glob_characters_keeps_its_denies() {
 }
 
 /// The Git panel's sandbox (security audit S8): the workspace readable,
-/// nothing writable but its temp directory, no network. Needs
-/// `common::readonly_session` (the hardening worker's).
+/// nothing writable but its temp directory, no network.
 #[tokio::test]
-#[ignore = "needs sandbox::common::readonly_session (M7 hardening); run after the merge"]
 async fn the_readonly_sandbox_reads_but_never_writes() {
     let f = fixture("readonly");
     let port = upstream().await;
