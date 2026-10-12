@@ -8,11 +8,15 @@
 //! reports. Cases are skipped, with a message, where `bwrap`, `unshare`,
 //! `setpriv`/`capsh` or `podman` are missing or user namespaces are off.
 //! The real-root cases are `#[ignore]`d: run them with `sudo` (see each).
+//! They need the target directory where a uid 0 without capabilities can
+//! reach it (not below a 0700 home), hence `CARGO_TARGET_DIR` in their
+//! commands.
 
 #![cfg(target_os = "linux")]
 
 mod sandbox_linux_support;
 
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -326,12 +330,66 @@ fn container_root_with_podman_defaults_never_runs_unconfined() {
     }
 }
 
+/// Where the real-root cases build: outside a home directory (often
+/// 0700) and outside `/tmp` (a write root of every session).
+const ROOT_TARGET_DIR: &str = "/var/tmp/pirc-root-target";
+
+/// Whether uid 0 *without capabilities* can search `dir` (and so reach
+/// what is below it): the sandbox's root is that (`--cap-drop ALL`), so
+/// mode bits apply to it as to any user. Root's own groups are taken to be
+/// gid 0 only.
+fn searchable_by_capless_root(dir: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(dir) else {
+        return false;
+    };
+    let mode = meta.mode();
+    if meta.uid() == 0 {
+        mode & 0o100 != 0
+    } else if meta.gid() == 0 {
+        mode & 0o010 != 0
+    } else {
+        mode & 0o001 != 0
+    }
+}
+
+/// Fail with what to do when the sandboxed root cannot reach this
+/// package's `pirc-node` (the in-sandbox bridge) or the fixtures: bubblewrap
+/// would only say `execvp …: Permission denied`.
+fn assert_reachable_by_sandboxed_root() {
+    let paths = [
+        PathBuf::from(env!("CARGO_BIN_EXE_pirc-node")),
+        PathBuf::from(env!("CARGO_TARGET_TMPDIR")),
+    ];
+    for path in paths {
+        let path = std::fs::canonicalize(&path).unwrap_or(path);
+        let blocked = path
+            .ancestors()
+            .skip(1)
+            .find(|dir| !searchable_by_capless_root(dir));
+        if let Some(dir) = blocked {
+            let meta = std::fs::metadata(dir).ok();
+            panic!(
+                "the sandbox's uid 0 has no capabilities (--cap-drop ALL), so it cannot enter {} \
+                 (mode {:o}, owner uid {}) on the way to {}. Build where any user can reach it, \
+                 outside /tmp: sudo -E env \"PATH=$PATH\" CARGO_TARGET_DIR={ROOT_TARGET_DIR} \
+                 cargo test -p pirc-node --test sandbox_linux_uid0 -- --ignored host_root",
+                dir.display(),
+                meta.as_ref().map_or(0, |m| m.mode() & 0o7777),
+                meta.as_ref().map_or(0, MetadataExt::uid),
+                path.display(),
+            );
+        }
+    }
+}
+
 /// Real root on the host. Run with:
-/// `sudo -E env "PATH=$PATH" cargo test -p pirc-node --test sandbox_linux_uid0 -- --ignored host_root`
+/// `sudo -E env "PATH=$PATH" CARGO_TARGET_DIR=/var/tmp/pirc-root-target cargo test -p pirc-node --test sandbox_linux_uid0 -- --ignored host_root_sandboxes`
+/// (then `sudo rm -rf /var/tmp/pirc-root-target`).
 #[test]
 #[ignore = "needs real root: see the doc comment"]
 fn host_root_sandboxes() {
     assert_eq!(caps::euid(), 0, "run this test as root");
+    assert_reachable_by_sandboxed_root();
     let Some(reports) = reports("root", Command::new("env")) else {
         panic!("the child did not run");
     };
@@ -340,11 +398,13 @@ fn host_root_sandboxes() {
 }
 
 /// Real root without `CAP_SETFCAP`. Run with:
-/// `sudo -E env "PATH=$PATH" capsh --drop=cap_setfcap -- -c 'cargo test -p pirc-node --test sandbox_linux_uid0 -- --ignored host_root_without'`
+/// `sudo -E env "PATH=$PATH" CARGO_TARGET_DIR=/var/tmp/pirc-root-target capsh --drop=cap_setfcap -- -c 'cargo test -p pirc-node --test sandbox_linux_uid0 -- --ignored host_root_without'`
+/// (then `sudo rm -rf /var/tmp/pirc-root-target`).
 #[test]
 #[ignore = "needs real root: see the doc comment"]
 fn host_root_without_setfcap_is_refused() {
     assert_eq!(caps::euid(), 0, "run this test as root");
+    assert_reachable_by_sandboxed_root();
     let Some(reports) = reports("root-nocap", Command::new("env")) else {
         panic!("the child did not run");
     };
@@ -353,4 +413,17 @@ fn host_root_without_setfcap_is_refused() {
         get(&reports, "status").starts_with(&format!("unavailable: {CAP_SETFCAP_MISSING_MESSAGE}")),
         "{reports:?}"
     );
+}
+
+#[test]
+fn a_capless_root_is_judged_by_mode_bits() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
+    // Owned by this user (or by root when the suite runs as root).
+    assert_eq!(searchable_by_capless_root(path), caps::euid() == 0);
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o711)).unwrap();
+    assert!(searchable_by_capless_root(path));
+    assert!(!searchable_by_capless_root(&path.join("missing")));
 }
