@@ -38,6 +38,14 @@ impl CdpError {
     pub fn closed() -> Self {
         Self::new("Target page, context or browser has been closed")
     }
+
+    /// Whether the command failed because its session or the connection is
+    /// gone (Playwright's `isSessionClosedError`).
+    pub fn is_closed(&self) -> bool {
+        self.message == Self::closed().message
+            || self.message.contains("Session with given id not found")
+            || self.message.contains("Target closed")
+    }
 }
 
 impl std::fmt::Display for CdpError {
@@ -58,9 +66,22 @@ pub struct Event {
 
 type Reply = oneshot::Sender<Result<Value, CdpError>>;
 
+/// A command's reply also delivered, in wire order, as an [`Event`] (see
+/// [`Session::call_echo`]).
+struct Echo {
+    to: mpsc::UnboundedSender<Event>,
+    method: String,
+    tag: Value,
+}
+
+struct Pending {
+    reply: Reply,
+    echo: Option<Echo>,
+}
+
 #[derive(Default)]
 struct State {
-    pending: HashMap<u64, Reply>,
+    pending: HashMap<u64, Pending>,
     listeners: HashMap<Option<Arc<str>>, Vec<mpsc::UnboundedSender<Event>>>,
     closed: bool,
 }
@@ -157,6 +178,7 @@ impl Connection {
         session: Option<&Arc<str>>,
         method: &str,
         params: Value,
+        echo: Option<Echo>,
     ) -> Result<Value, CdpError> {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         let (reply, answer) = oneshot::channel();
@@ -165,7 +187,7 @@ impl Connection {
             if state.closed {
                 return Err(CdpError::closed());
             }
-            state.pending.insert(id, reply);
+            state.pending.insert(id, Pending { reply, echo });
         }
         let mut message = json!({ "id": id, "method": method, "params": params });
         if let Some(session) = session {
@@ -184,18 +206,22 @@ impl Connection {
 
     fn listen(&self, session: Option<Arc<str>>) -> mpsc::UnboundedReceiver<Event> {
         let (tx, rx) = mpsc::unbounded_channel();
+        self.listen_into(session, tx);
+        rx
+    }
+
+    fn listen_into(&self, session: Option<Arc<str>>, tx: mpsc::UnboundedSender<Event>) {
         let mut state = self.state.lock().unwrap();
         if !state.closed {
             state.listeners.entry(session).or_default().push(tx);
         }
-        rx
     }
 }
 
 fn dispatch(state: &Mutex<State>, message: Value) {
     let mut state = state.lock().unwrap();
     if let Some(id) = message.get("id").and_then(Value::as_u64) {
-        if let Some(reply) = state.pending.remove(&id) {
+        if let Some(pending) = state.pending.remove(&id) {
             let result = match message.get("error") {
                 Some(error) => Err(CdpError::new(
                     error
@@ -205,7 +231,22 @@ fn dispatch(state: &Mutex<State>, message: Value) {
                 )),
                 None => Ok(message.get("result").cloned().unwrap_or(Value::Null)),
             };
-            let _ = reply.send(result);
+            if let Some(echo) = pending.echo {
+                let params = match &result {
+                    Ok(result) => json!({ "tag": echo.tag, "result": result }),
+                    Err(error) => json!({ "tag": echo.tag, "error": error.message }),
+                };
+                let session = message
+                    .get("sessionId")
+                    .and_then(Value::as_str)
+                    .map(Arc::from);
+                let _ = echo.to.send(Event {
+                    session,
+                    method: echo.method,
+                    params,
+                });
+            }
+            let _ = pending.reply.send(result);
         }
         return;
     }
@@ -236,8 +277,8 @@ fn dispatch(state: &Mutex<State>, message: Value) {
 fn close(state: &Mutex<State>, closed: &watch::Sender<bool>) {
     let mut state = state.lock().unwrap();
     state.closed = true;
-    for (_, reply) in state.pending.drain() {
-        let _ = reply.send(Err(CdpError::closed()));
+    for (_, pending) in state.pending.drain() {
+        let _ = pending.reply.send(Err(CdpError::closed()));
     }
     state.listeners.clear();
     drop(state);
@@ -262,13 +303,44 @@ impl Session {
 
     /// Send a command and wait for its result.
     pub async fn call(&self, method: &str, params: Value) -> Result<Value, CdpError> {
-        self.connection.call(self.id.as_ref(), method, params).await
+        self.connection
+            .call(self.id.as_ref(), method, params, None)
+            .await
+    }
+
+    /// [`Session::call`], with the reply also sent to `to` as an event
+    /// `method` (params `{tag, result}` or `{tag, error}`, `session` the
+    /// replying session's) in its place among the events read from the
+    /// pipe: a listener on `to` sees it after every event Chromium sent
+    /// before the reply, as Playwright's single event loop does.
+    pub async fn call_echo(
+        &self,
+        method: &str,
+        params: Value,
+        to: &mpsc::UnboundedSender<Event>,
+        echo_method: &str,
+        tag: Value,
+    ) -> Result<Value, CdpError> {
+        let echo = Echo {
+            to: to.clone(),
+            method: echo_method.to_owned(),
+            tag,
+        };
+        self.connection
+            .call(self.id.as_ref(), method, params, Some(echo))
+            .await
     }
 
     /// This session's events from now on, until it detaches or the
     /// connection closes.
     pub fn listen(&self) -> mpsc::UnboundedReceiver<Event> {
         self.connection.listen(self.id.clone())
+    }
+
+    /// This session's events from now on into `to`, which may collect
+    /// several sessions' events: they keep the order they were read in.
+    pub fn listen_into(&self, to: mpsc::UnboundedSender<Event>) {
+        self.connection.listen_into(self.id.clone(), to)
     }
 }
 

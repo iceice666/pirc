@@ -9,7 +9,8 @@
 //! WebSocket.
 //!
 //! Errors carry Playwright's message text ([`Error`]), because the agent
-//! reads it (`cleanError` in the manager keeps its first lines).
+//! reads it (`cleanError` in the manager keeps its first lines), prefixed
+//! as the production TS node shows it (see [`Error::api`]).
 //!
 //! | Module | Port of | Owner |
 //! |---|---|---|
@@ -37,7 +38,7 @@ use std::time::Duration;
 pub use cdp::CdpError;
 
 /// A failed engine operation, with the message Playwright would have
-/// thrown for it (e.g. `locator.click: Timeout 10000ms exceeded.`).
+/// thrown for it (e.g. `click: Timeout 10000ms exceeded.`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Error {
     pub message: String,
@@ -50,12 +51,27 @@ impl Error {
         }
     }
 
-    /// Playwright's timeout text for `api` (e.g. `locator.click`).
+    /// The error of Playwright API call `api` failing with `message`:
+    /// `<api>: <message>`. Playwright's client prefixes the API name it
+    /// finds in the JS stack; the production TS node (Bun, with
+    /// playwright-core on disk) finds the bare client method name, so `api`
+    /// is that name (`goto`, `goBack`, `evaluate`, `waitForLoadState`,
+    /// `click`, `fill`, `waitFor`…). A `page.`/`locator.`-style qualifier
+    /// is dropped; an empty `api` (an internal step, prefixed by the API
+    /// call it is part of) leaves `message` as it is. Every engine error
+    /// goes through here.
+    pub fn api(api: &str, message: impl Into<String>) -> Self {
+        let message = message.into();
+        match api.rsplit('.').next().unwrap_or_default() {
+            "" => Self::new(message),
+            name => Self::new(format!("{name}: {message}")),
+        }
+    }
+
+    /// Playwright's timeout text for `api` (e.g. `click`):
+    /// `click: Timeout 10000ms exceeded.` (see [`Error::api`]).
     pub fn timeout(api: &str, timeout: Duration) -> Self {
-        Self::new(format!(
-            "{api}: Timeout {}ms exceeded.",
-            timeout.as_millis()
-        ))
+        Self::api(api, format!("Timeout {}ms exceeded.", timeout.as_millis()))
     }
 }
 
