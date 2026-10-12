@@ -142,7 +142,7 @@ impl Sandbox for SrtSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::session(&self.config, &self.env, &self.node_tmp, &input)?;
+            } = common::spawn_session(&self.config, &self.env, &self.node_tmp, &input).await?;
             if let SandboxStatus::Unavailable { reason } = self.check().await {
                 Session::remove_tmp(&tmp);
                 return Err(super::unavailable_error(&reason));
@@ -212,7 +212,8 @@ impl Sandbox for SrtSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::readonly_session(&self.config, &self.env, &self.node_tmp, &input)?;
+            } = common::spawn_readonly_session(&self.config, &self.env, &self.node_tmp, &input)
+                .await?;
             let mut file_name = OsString::from("readonly-");
             file_name.push(tmp.file_name().unwrap_or_default());
             file_name.push(".json");

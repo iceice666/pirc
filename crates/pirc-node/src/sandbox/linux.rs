@@ -443,7 +443,7 @@ impl Sandbox for NativeSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::session(&self.config, &self.env, &self.node_tmp, &input)?;
+            } = common::spawn_session(&self.config, &self.env, &self.node_tmp, &input).await?;
             let fail = |tmp: &Path, error: ApiError| {
                 Session::remove_tmp(tmp);
                 Err(error)
@@ -527,7 +527,8 @@ impl Sandbox for NativeSandbox {
     fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>> {
         Box::pin(async move {
             let session =
-                common::readonly_session(&self.config, &self.env, &self.node_tmp, &input)?;
+                common::spawn_readonly_session(&self.config, &self.env, &self.node_tmp, &input)
+                    .await?;
             self.readonly(session, &input.workspace_root, input.command)
                 .await
         })

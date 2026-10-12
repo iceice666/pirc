@@ -185,24 +185,27 @@ pub fn make_temp_dir(base: &Path, prefix: &str) -> std::io::Result<PathBuf> {
 /// socket. The parent is one of every session's private directories, so
 /// a session sees only its own temporary directory in it. Its name is
 /// short, as the sessions' are (macOS's 104-byte socket paths). Removed,
-/// when empty, with the backend.
-pub struct NodeTmp {
+/// when empty, with the backend (its last clone).
+#[derive(Clone)]
+pub struct NodeTmp(Arc<NodeTmpDir>);
+
+struct NodeTmpDir {
     base: PathBuf,
     dir: Mutex<Option<PathBuf>>,
 }
 
 impl NodeTmp {
     pub fn new(env: &Env) -> Self {
-        Self {
+        Self(Arc::new(NodeTmpDir {
             base: tmpdir(env),
             dir: Mutex::new(None),
-        }
+        }))
     }
 
     /// The parent, made when needed.
     pub fn dir(&self) -> std::io::Result<PathBuf> {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        let mut dir = self.dir.lock().unwrap_or_else(|p| p.into_inner());
+        let mut dir = self.0.dir.lock().unwrap_or_else(|p| p.into_inner());
         let private = |path: &Path| {
             std::fs::symlink_metadata(path).is_ok_and(|meta| {
                 meta.is_dir()
@@ -215,7 +218,7 @@ impl NodeTmp {
         {
             return Ok(existing.to_path_buf());
         }
-        let made = make_temp_dir(&self.base, "pirc-n-")?;
+        let made = make_temp_dir(&self.0.base, "pirc-n-")?;
         *dir = Some(made.clone());
         Ok(made)
     }
@@ -228,7 +231,7 @@ impl NodeTmp {
     }
 }
 
-impl Drop for NodeTmp {
+impl Drop for NodeTmpDir {
     fn drop(&mut self) {
         let dir = self.dir.get_mut().unwrap_or_else(|p| p.into_inner());
         if let Some(dir) = dir.take() {
@@ -300,6 +303,35 @@ impl Session {
 
 fn text(path: &Path) -> String {
     path.display().to_string()
+}
+
+/// [`session`] on tokio's blocking pool: it reads the agent config, makes
+/// directories and resolves dozens of paths.
+pub async fn spawn_session(
+    config: &NodeConfig,
+    env: &Env,
+    node_tmp: &NodeTmp,
+    input: &PrepareInput,
+) -> ApiResult<Session> {
+    let (config, env, node_tmp, input) =
+        (config.clone(), env.clone(), node_tmp.clone(), input.clone());
+    tokio::task::spawn_blocking(move || session(&config, &env, &node_tmp, &input))
+        .await
+        .map_err(|_| ApiError::internal())?
+}
+
+/// [`readonly_session`] on tokio's blocking pool.
+pub async fn spawn_readonly_session(
+    config: &NodeConfig,
+    env: &Env,
+    node_tmp: &NodeTmp,
+    input: &super::ReadonlyInput,
+) -> ApiResult<Session> {
+    let (config, env, node_tmp, input) =
+        (config.clone(), env.clone(), node_tmp.clone(), input.clone());
+    tokio::task::spawn_blocking(move || readonly_session(&config, &env, &node_tmp, &input))
+        .await
+        .map_err(|_| ApiError::internal())?
 }
 
 /// The first half of `NodeSandbox.prepare`: read the agent config, make

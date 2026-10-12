@@ -299,7 +299,7 @@ impl Sandbox for MacSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::session(&self.config, &self.env, &self.node_tmp, &input)?;
+            } = common::spawn_session(&self.config, &self.env, &self.node_tmp, &input).await?;
             self.require(&tmp).await?;
             let (listener, port) = match ProxyListener::loopback().await {
                 Ok(bound) => bound,
@@ -368,7 +368,8 @@ impl Sandbox for MacSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::readonly_session(&self.config, &self.env, &self.node_tmp, &input)?;
+            } = common::spawn_readonly_session(&self.config, &self.env, &self.node_tmp, &input)
+                .await?;
             self.require(&tmp).await?;
             let (tmp_text, home) = (text(&tmp), self.home());
             let tag = self.log_tag(&input.command);
