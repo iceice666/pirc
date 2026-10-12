@@ -255,7 +255,16 @@ async fn launches_opens_pages_and_closes_killing_the_browser() {
         let mut events = second.subscribe();
         second.close().await.unwrap();
         assert!(second.is_closed());
-        assert!(matches!(events.recv().await, Some(PageEvent::Closed)));
+        // Its `about:blank` may still report `load` first (Playwright's
+        // `newPage` does not wait for it either).
+        loop {
+            match events.recv().await {
+                Some(PageEvent::Closed) => break,
+                Some(PageEvent::Load | PageEvent::MainFrameNavigated) => {}
+                Some(PageEvent::Popup(_)) | None => panic!("closed last"),
+            }
+        }
+        assert!(events.recv().await.is_none());
         assert_eq!(context.pages().len(), 1);
 
         let pid = context.pid().unwrap() as i32;
