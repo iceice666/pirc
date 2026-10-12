@@ -436,41 +436,83 @@ async fn ssh_style_tunnels_go_through_the_helper_and_approvals_widen_them() {
     prepared.cleanup();
 }
 
+/// Whether `address` is one the resolved-address guard refuses for a name
+/// that is not listed: loopback, private or link-local.
+fn is_internal(address: &std::net::IpAddr) -> bool {
+    match address {
+        std::net::IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
+        std::net::IpAddr::V6(v6) => {
+            v6.is_loopback() || v6.is_unique_local() || v6.is_unicast_link_local()
+        }
+    }
+}
+
+/// A dotted name resolving to this host only (loopback, private or
+/// link-local addresses), for the resolved-address guard: the host's name
+/// when dotted, `<hostname>.localdomain` or `localhost.localdomain`.
+async fn dotted_name_of_this_host(hostname: &str) -> Option<String> {
+    let candidates = [
+        hostname.to_owned(),
+        format!("{hostname}.localdomain"),
+        "localhost.localdomain".to_owned(),
+    ];
+    for name in candidates.into_iter().filter(|name| name.contains('.')) {
+        let Ok(addresses) = tokio::net::lookup_host((name.as_str(), 80)).await else {
+            continue;
+        };
+        let addresses: Vec<_> = addresses.map(|address| address.ip()).collect();
+        if !addresses.is_empty() && addresses.iter().all(is_internal) {
+            return Some(name);
+        }
+    }
+    None
+}
+
 #[tokio::test]
 async fn names_resolving_to_this_host_are_refused() {
-    // The host's own name resolves to one of its addresses (or loopback):
+    // A name resolving to one of this host's addresses (or loopback):
     // allowing the name grants neither. srt's schema refuses a
     // single-label name, so as an approval it has no effect at all; a
-    // dotted host name reaches the resolved-address guard.
-    let Ok(hostname) = fs::read_to_string("/proc/sys/kernel/hostname") else {
-        return;
-    };
-    let hostname = hostname.trim().to_ascii_lowercase();
-    if tokio::net::lookup_host((hostname.as_str(), 80))
-        .await
-        .is_err()
-    {
-        eprintln!("skipped: {hostname} does not resolve here");
-        return;
-    }
+    // dotted name reaches the resolved-address guard.
+    let hostname = fs::read_to_string("/proc/sys/kernel/hostname")
+        .map(|name| name.trim().to_ascii_lowercase())
+        .unwrap_or_default();
+    let dotted = dotted_name_of_this_host(&hostname).await;
+    let single_label = !hostname.is_empty() && !hostname.contains('.');
     let Some(f) = fixture("resolved", &["*.localhost"], &["bad.localhost"]) else {
         return;
     };
     let port = upstream().await;
     let prepared = f.prepare("pi_resolved").await;
-    prepared
-        .approve_domains(std::slice::from_ref(&hostname))
-        .unwrap();
-    let run = f
-        .run(&prepared, &proxy_command(&hostname, port, "x\\n"))
-        .await;
-    assert_eq!(run.code, 1, "{}", run.stdout);
-    let expected = if hostname.contains('.') {
-        format!("Connection to {hostname} blocked: resolved to ")
-    } else {
-        "blocked by network allowlist".to_owned()
-    };
-    assert!(run.stderr.contains(&expected), "{}", run.stderr);
+    let approved: Vec<String> = dotted
+        .iter()
+        .cloned()
+        .chain(single_label.then(|| hostname.clone()))
+        .collect();
+    prepared.approve_domains(&approved).unwrap();
+    match &dotted {
+        Some(name) => {
+            let run = f.run(&prepared, &proxy_command(name, port, "x\\n")).await;
+            assert_eq!(run.code, 1, "{}", run.stdout);
+            let expected = format!("Connection to {name} blocked: resolved to ");
+            assert!(run.stderr.contains(&expected), "{}", run.stderr);
+        }
+        None => eprintln!(
+            "NOT RUN: the resolved-address guard case (no dotted name resolves to this host here: \
+             {hostname}, {hostname}.localdomain, localhost.localdomain)"
+        ),
+    }
+    if single_label {
+        let run = f
+            .run(&prepared, &proxy_command(&hostname, port, "x\\n"))
+            .await;
+        assert_eq!(run.code, 1, "{}", run.stdout);
+        assert!(
+            run.stderr.contains("blocked by network allowlist"),
+            "{}",
+            run.stderr
+        );
+    }
     // `*.localhost` (which `DOMAIN_PATTERN` admits) is not an entry srt
     // takes: no `*.localhost` name is allowed.
     for name in ["app.localhost", "bad.localhost"] {
