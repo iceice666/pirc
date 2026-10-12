@@ -1023,3 +1023,95 @@ async fn drags_and_drops_as_playwright() {
         browser.context.close().await;
     });
 }
+
+/// Kill the renderers of the context's browser (`SIGKILL`, found by their
+/// process group): its pages crash.
+fn kill_renderers(context: &Context) {
+    let group = context.pid().unwrap().to_string();
+    let listing = std::process::Command::new("ps")
+        .args(["-A", "-o", "pid=,pgid=,command="])
+        .output()
+        .unwrap();
+    let mut killed = 0;
+    for line in String::from_utf8_lossy(&listing.stdout).lines() {
+        let mut fields = line.split_whitespace();
+        let (Some(pid), Some(pgid)) = (fields.next(), fields.next()) else {
+            continue;
+        };
+        if pgid == group && line.contains("--type=renderer") {
+            nix::sys::signal::kill(
+                nix::unistd::Pid::from_raw(pid.parse().unwrap()),
+                nix::sys::signal::Signal::SIGKILL,
+            )
+            .unwrap();
+            killed += 1;
+        }
+    }
+    assert!(killed > 0, "no renderer found");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_crashed_page_fails_its_calls_as_playwright() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let page = browser.context.pages()[0].clone();
+        page.goto(
+            &format!("http://127.0.0.1:{port}/plain"),
+            LoadState::Load,
+            T,
+        )
+        .await
+        .unwrap();
+        let pending = {
+            let page = page.clone();
+            tokio::spawn(async move {
+                page.evaluate("() => new Promise(() => {})", Value::Null)
+                    .await
+            })
+        };
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        kill_renderers(&browser.context);
+        // Playwright 1.63.0 after the same crash.
+        let error = tokio::time::timeout(Duration::from_secs(5), pending)
+            .await
+            .expect("the evaluation ends")
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.message, "evaluate: Target crashed ");
+        let short = Duration::from_secs(5);
+        let error = page.evaluate("() => 1", Value::Null).await.unwrap_err();
+        assert_eq!(error.message, "evaluate: Target crashed ");
+        assert_eq!(page.title().await.unwrap(), "");
+        assert_eq!(
+            page.content().await.unwrap_err().message,
+            "content: Target crashed "
+        );
+        let shot = page.screenshot(ScreenshotOptions {
+            quality: 50,
+            full_page: false,
+            timeout: short,
+        });
+        assert_eq!(
+            shot.await.unwrap_err().message,
+            "screenshot: Target crashed "
+        );
+        assert_eq!(
+            aria_snapshot(&page, short).await.unwrap_err().message,
+            "ariaSnapshot: Target crashed "
+        );
+        let error = page
+            .goto(
+                &format!("http://127.0.0.1:{port}/same"),
+                LoadState::Load,
+                short,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(error.message, "goto: Page crashed");
+        assert!(!page.is_closed());
+        browser.context.close().await;
+    });
+}

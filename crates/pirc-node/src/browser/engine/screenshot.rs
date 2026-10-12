@@ -288,7 +288,7 @@ const INNER_SIZE: &str =
     "function() { return { width: window.innerWidth, height: window.innerHeight }; }";
 
 fn api_error(method: &str, error: CdpError) -> Error {
-    if error == CdpError::closed() {
+    if error == CdpError::closed() || error.is_crashed() {
         Error::new(format!("screenshot: {}", error.message))
     } else {
         Error::new(format!(

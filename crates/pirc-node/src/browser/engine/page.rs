@@ -528,6 +528,8 @@ enum Route {
 
 pub(super) struct State {
     pub(super) closed: bool,
+    /// The page's renderer crashed (`Page._didCrash`); it stays open.
+    pub(super) crashed: bool,
     pub(super) initialized: Option<std::result::Result<(), String>>,
     pub(super) frames: HashMap<FrameKey, FrameState>,
     ids: HashMap<String, FrameKey>,
@@ -707,6 +709,7 @@ impl Page {
             installer: setup.installer,
             state: Mutex::new(State {
                 closed: false,
+                crashed: false,
                 initialized: None,
                 frames: HashMap::new(),
                 ids: HashMap::new(),
@@ -865,6 +868,9 @@ impl FrameSession {
 /// A protocol error as Playwright reports it (`Protocol error (<method>):
 /// <message>`), or its closed-target error.
 pub(super) fn protocol_error(api: &str, method: &str, error: CdpError) -> Error {
+    if error.is_crashed() {
+        return Error::api(api, error.message);
+    }
     if error.is_closed() {
         return closed_error(api);
     }
@@ -1144,6 +1150,9 @@ fn frame_event(shared: &Arc<Shared>, state: &mut State, target: &str, event: &Ev
         "pirc.echo" => echo_event(shared, state, target, params),
         "Target.attachedToTarget" => attached(shared, state, target, params),
         "Target.detachedFromTarget" => detached(shared, state, target, params),
+        // `_onTargetCrashed` (the session's commands fail in the
+        // connection).
+        "Inspector.targetCrashed" if target == shared.target_id => state.crashed = true,
         "Page.windowOpen" => {
             let features = params["windowFeatures"]
                 .as_array()
@@ -2340,8 +2349,15 @@ impl Frame {
         work: impl std::future::Future<Output = Result<T>>,
     ) -> Result<T> {
         let deadline = deadline(timeout);
+        // `raceMultiple([_detachedScope, openScope])`: a crashed page fails
+        // it at once.
+        let crashed = self
+            .shared
+            .wait(|state| state.crashed.then(|| Error::api(api, "Page crashed")));
         let raced = async {
             tokio::select! {
+                biased;
+                error = crashed => Err(error),
                 result = work => result,
                 error = self.gone(api) => Err(error),
             }

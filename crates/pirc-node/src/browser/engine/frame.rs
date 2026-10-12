@@ -202,6 +202,8 @@ fn evaluation_reply(
                     )
                 } else if error.message.contains("Promise was collected") {
                     ("Resulting promise was garbage collected.".to_owned(), false)
+                } else if error.is_crashed() {
+                    (error.message, true)
                 } else if error.is_closed() {
                     (CdpError::closed().message, true)
                 } else {

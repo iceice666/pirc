@@ -12,7 +12,7 @@
 //!
 //! Layout: implemented here.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -37,6 +37,17 @@ impl CdpError {
     /// The connection (or the session's target) is gone.
     pub fn closed() -> Self {
         Self::new("Target page, context or browser has been closed")
+    }
+
+    /// The session's renderer crashed (`Inspector.targetCrashed`): what
+    /// Playwright's dispatcher makes of a `crashed` protocol error (`Target
+    /// crashed ` and the browser's log, none here).
+    pub fn crashed() -> Self {
+        Self::new("Target crashed ")
+    }
+
+    pub fn is_crashed(&self) -> bool {
+        self.message == Self::crashed().message
     }
 
     /// Whether the command failed because its session or the connection is
@@ -103,6 +114,9 @@ impl Pending {
 struct State {
     pending: HashMap<u64, Pending>,
     listeners: HashMap<Option<Arc<str>>, Vec<mpsc::UnboundedSender<Event>>>,
+    /// Sessions whose renderer crashed, until they detach: their commands
+    /// fail at once (`CRSession._crashed`).
+    crashed: HashSet<Arc<str>>,
     closed: bool,
 }
 
@@ -207,6 +221,9 @@ impl Connection {
             if state.closed {
                 return Err(CdpError::closed());
             }
+            if session.is_some_and(|session| state.crashed.contains(session)) {
+                return Err(CdpError::crashed());
+            }
             state.pending.insert(
                 id,
                 Pending {
@@ -284,6 +301,14 @@ fn dispatch(state: &Mutex<State>, message: Value) {
     if let Some(listeners) = state.listeners.get_mut(&session) {
         listeners.retain(|listener| listener.send(event.clone()).is_ok());
     }
+    // A crashed renderer answers nothing more: its commands fail
+    // (`_markAsCrashed`), now and from now on.
+    if method == "Inspector.targetCrashed"
+        && let Some(session) = &session
+    {
+        state.crashed.insert(session.clone());
+        fail_pending(&mut state, session, &CdpError::crashed());
+    }
     // Chromium never answers a detached session's commands still in flight:
     // they fail as Playwright's `CRSession.dispose` fails them
     // (`Inspector.detached` comes first when the target goes away).
@@ -295,6 +320,7 @@ fn dispatch(state: &Mutex<State>, message: Value) {
     // A detached session's listeners see their channel end.
     if let Some(detached) = detached {
         fail_pending(&mut state, &detached, &CdpError::closed());
+        state.crashed.remove(&detached);
         state.listeners.remove(&Some(detached));
     }
 }
@@ -471,5 +497,32 @@ mod tests {
             on_other.abort();
             on_browser.abort();
         }
+    }
+
+    #[tokio::test]
+    async fn a_crashed_session_fails_its_commands() {
+        let mut fake = Fake::new();
+        let page = fake.connection.session("S");
+        let mut pending = {
+            let page = page.clone();
+            tokio::spawn(async move { page.call("Runtime.evaluate", json!({})).await })
+        };
+        fake.command().await;
+        fake.send(json!({ "method": "Inspector.targetCrashed", "params": {}, "sessionId": "S" }))
+            .await;
+        assert_eq!(settled(&mut pending).await, Some(Err(CdpError::crashed())));
+        assert_eq!(
+            page.call("Runtime.evaluate", json!({})).await,
+            Err(CdpError::crashed())
+        );
+        // Once detached, the session id is closed, not crashed.
+        fake.send(json!({ "method": "Target.detachedFromTarget",
+            "params": { "sessionId": "S", "targetId": "T" } }))
+            .await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let later = tokio::spawn(async move { page.call("Runtime.enable", json!({})).await });
+        assert_eq!(fake.command().await["method"], "Runtime.enable");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(!later.is_finished());
     }
 }

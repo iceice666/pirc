@@ -212,11 +212,11 @@ impl Failure {
     }
 
     /// An error of a step of an operation retried by `owner`: retriable
-    /// unless `owner` (or the page) is gone.
+    /// unless `owner` (or the page) is gone or its renderer crashed.
     pub(super) fn of(owner: &Frame, error: Error) -> Self {
         Self {
+            retriable: !owner.is_detached() && error.message != CdpError::crashed().message,
             error,
-            retriable: !owner.is_detached(),
         }
     }
 
