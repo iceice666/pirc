@@ -146,6 +146,7 @@ fn route(path: &str, port: u16) -> Option<(u16, String)> {
     let html = |body: &str| Some((200, body.replace("PORT", &port.to_string())));
     match path {
         "/plain" | "/plain#x" => html("<title>Plain</title><h1>Plain</h1>"),
+        "/input" => html("<title>Input</title><input id=i>"),
         "/same" => {
             html(r#"<title>Same</title><h1>Outer</h1><iframe title="Inner" src="/plain"></iframe>"#)
         }
@@ -940,6 +941,63 @@ async fn screenshots_skip_a_frame_that_is_still_loading() {
             );
             assert_eq!(shot[..2], [0xff, 0xd8]);
         }
+        browser.context.close().await;
+    });
+}
+
+/// A screenshot of a page whose main thread is busy times out at its
+/// timeout (not when the page answers), and its cleanup is still sent: the
+/// page runs it once it is free, and the next screenshot works.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_timed_out_screenshot_still_cleans_up() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let page = browser.context.pages()[0].clone();
+        page.goto(
+            &format!("http://127.0.0.1:{port}/input"),
+            LoadState::Load,
+            T,
+        )
+        .await
+        .unwrap();
+        let caret = "() => document.getElementById('i').style.getPropertyValue('caret-color')";
+        let options = |timeout| ScreenshotOptions {
+            quality: 50,
+            full_page: false,
+            timeout,
+        };
+        page.screenshot(options(T)).await.unwrap();
+        assert_eq!(page.evaluate(caret, Value::Null).await.unwrap(), "");
+        page.evaluate(
+            "() => { setTimeout(() => { const end = Date.now() + 3000; while (Date.now() < end); }, 0); }",
+            Value::Null,
+        )
+        .await
+        .unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let started = Instant::now();
+        let error = tokio::time::timeout(
+            Duration::from_secs(10),
+            page.screenshot(options(Duration::from_millis(500))),
+        )
+        .await
+        .expect("the screenshot returns")
+        .unwrap_err();
+        assert_eq!(error.message, "screenshot: Timeout 500ms exceeded.");
+        // Not held until the page is free again.
+        assert!(
+            started.elapsed() < Duration::from_millis(2500),
+            "{:?}",
+            started.elapsed()
+        );
+        // Once free, the page ran the prepare call and then the cleanup
+        // (the caret is shown again).
+        assert_eq!(page.evaluate(caret, Value::Null).await.unwrap(), "");
+        let shot = page.screenshot(options(T)).await.unwrap();
+        assert_eq!(shot[..2], [0xff, 0xd8]);
         browser.context.close().await;
     });
 }

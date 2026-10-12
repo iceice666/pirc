@@ -13,7 +13,7 @@ use tokio::sync::{oneshot, watch};
 
 use super::process::{Inner, NODE_DIALOG_PREFIX, Runner, SideRequest, session_root};
 use super::reducer::js_string;
-use crate::browser::BrowserTarget;
+use crate::browser::{BrowserService, BrowserTarget};
 use crate::services::Node;
 use crate::store::{RunStatus, Store};
 use crate::util::{now_ms, uuid};
@@ -266,13 +266,25 @@ impl Runner {
         self: &Arc<Self>,
         message: &Map<String, Value>,
     ) -> Result<(), String> {
-        let Some(id) = request_id(message) else {
+        if request_id(message).is_none() {
             return Ok(());
-        };
+        }
         let Some(node) = self.node() else {
             return Ok(());
         };
-        if !node.browser.enabled() {
+        self.handle_browser_with(&node.browser, message)
+    }
+
+    /// [`Runner::handle_browser`] from `browser`.
+    fn handle_browser_with(
+        self: &Arc<Self>,
+        browser: &Arc<dyn BrowserService>,
+        message: &Map<String, Value>,
+    ) -> Result<(), String> {
+        let Some(id) = request_id(message) else {
+            return Ok(());
+        };
+        if !browser.enabled() {
             let error = crate::browser::unavailable();
             self.browser_fail(&id, error.status, &error.code, &error.message);
             return Ok(());
@@ -324,17 +336,12 @@ impl Runner {
         let (abort, aborted) = watch::channel(false);
         let abort = Arc::new(abort);
         let runner = self.clone();
+        let browser = browser.clone();
         let request = id.clone();
         let entry = abort.clone();
         let mut inner = self.lock();
         let task = tokio::spawn(async move {
-            let Some(node) = runner.node() else {
-                return;
-            };
-            let answer = node
-                .browser
-                .handle_with_abort(target, op, args, aborted)
-                .await;
+            let answer = browser.handle_with_abort(target, op, args, aborted).await;
             match answer {
                 Ok(result) => runner.reply(
                     json!({ "type": "browser_response", "id": request, "ok": true, "result": result }),
@@ -359,6 +366,17 @@ impl Runner {
             },
         );
         Ok(())
+    }
+
+    /// The agent's `browser_cancel`: the request's abort fires; its entry
+    /// stays until the operation settles (its task removes it), holding its
+    /// in-flight slot as in TS.
+    pub(super) fn cancel_browser(&self, message: &Map<String, Value>) {
+        if let Some(Value::String(id)) = message.get("id")
+            && let Some(request) = self.lock().browser_requests.get(id)
+        {
+            request.abort.send_replace(true);
+        }
     }
 
     /// `confirmFromNode`: ask the human, from the node itself (the agent
@@ -705,7 +723,253 @@ impl Runner {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    use pirc_policy::session::SessionPolicy;
+    use tokio::sync::mpsc;
+
+    use super::super::process::Outbound;
     use super::*;
+    use crate::browser::{BoxFuture, Detach, FrameSink};
+    use crate::error::{ApiError, ApiResult};
+    use crate::sandbox::Prepared;
+    use crate::store::{Workspace, WorkspaceKind};
+
+    /// A browser whose operations (named by `args.tag`) settle only when the
+    /// test releases them, whether or not they were aborted (as the
+    /// manager's do): it reports `started <tag>` and `aborted <tag>`.
+    struct GatedBrowser {
+        gates: Mutex<HashMap<String, oneshot::Sender<ApiResult<Value>>>>,
+        seen: mpsc::UnboundedSender<String>,
+    }
+
+    impl GatedBrowser {
+        fn release(&self, tag: &str, result: ApiResult<Value>) {
+            let gate = self.gates.lock().unwrap().remove(tag);
+            gate.expect("an operation waiting").send(result).unwrap();
+        }
+    }
+
+    impl BrowserService for GatedBrowser {
+        fn enabled(&self) -> bool {
+            true
+        }
+
+        fn handle(&self, _: BrowserTarget, _: String, _: Value) -> BoxFuture<'_, ApiResult<Value>> {
+            unreachable!("the runner aborts through handle_with_abort")
+        }
+
+        fn handle_with_abort(
+            &self,
+            _: BrowserTarget,
+            _: String,
+            args: Value,
+            mut abort: watch::Receiver<bool>,
+        ) -> BoxFuture<'_, ApiResult<Value>> {
+            let tag = args["tag"].as_str().unwrap().to_owned();
+            let (gate, settled) = oneshot::channel();
+            self.gates.lock().unwrap().insert(tag.clone(), gate);
+            let _ = self.seen.send(format!("started {tag}"));
+            Box::pin(async move {
+                let mut settled = settled;
+                let mut aborted = false;
+                loop {
+                    tokio::select! {
+                        result = &mut settled => return result.unwrap(),
+                        changed = abort.changed(), if !aborted => {
+                            if changed.is_err() || *abort.borrow() {
+                                aborted = true;
+                                let _ = self.seen.send(format!("aborted {tag}"));
+                            }
+                        }
+                    }
+                }
+            })
+        }
+
+        fn attach(&self, _: &str, _: FrameSink) -> Detach {
+            unreachable!()
+        }
+
+        fn input(&self, _: BrowserTarget, _: Value) -> BoxFuture<'_, ApiResult<Option<Value>>> {
+            unreachable!()
+        }
+
+        fn close_session(&self, _: &str) -> BoxFuture<'_, ()> {
+            unreachable!()
+        }
+
+        fn shutdown(&self) -> BoxFuture<'_, ()> {
+            unreachable!()
+        }
+    }
+
+    struct Agent {
+        runner: Arc<Runner>,
+        browser: Arc<GatedBrowser>,
+        replies: mpsc::UnboundedReceiver<Outbound>,
+        seen: mpsc::UnboundedReceiver<String>,
+    }
+
+    impl Agent {
+        fn new() -> Self {
+            let workspace = Workspace {
+                id: "w".into(),
+                host_id: "h".into(),
+                display_name: "w".into(),
+                canonical_path: "/".into(),
+                defaults: Map::new(),
+                kind: WorkspaceKind::Directory,
+            };
+            let prepared = Prepared::new(
+                "/bin/false".into(),
+                Vec::new(),
+                Vec::new(),
+                SessionPolicy::default(),
+                Vec::new(),
+                None,
+                || {},
+            );
+            let (runner, replies) = Runner::detached("s", workspace, prepared);
+            let (seen_tx, seen) = mpsc::unbounded_channel();
+            let browser = Arc::new(GatedBrowser {
+                gates: Mutex::default(),
+                seen: seen_tx,
+            });
+            Self {
+                runner,
+                browser,
+                replies,
+                seen,
+            }
+        }
+
+        fn request(&self, id: &str, tag: &str) {
+            let browser: Arc<dyn BrowserService> = self.browser.clone();
+            let message = json!({ "type": "browser_request", "id": id, "op": "snapshot",
+                "args": { "tag": tag } });
+            self.runner
+                .handle_browser_with(&browser, message.as_object().unwrap())
+                .unwrap();
+        }
+
+        fn cancel(&self, id: &str) {
+            let message = json!({ "type": "browser_cancel", "id": id });
+            self.runner.cancel_browser(message.as_object().unwrap());
+        }
+
+        async fn seen(&mut self) -> String {
+            tokio::time::timeout(Duration::from_secs(5), self.seen.recv())
+                .await
+                .expect("the browser within 5 s")
+                .unwrap()
+        }
+
+        async fn reply(&mut self) -> Value {
+            let line = tokio::time::timeout(Duration::from_secs(5), self.replies.recv())
+                .await
+                .expect("a reply within 5 s")
+                .unwrap();
+            serde_json::from_str(&line.line).unwrap()
+        }
+
+        fn in_flight(&self) -> Vec<String> {
+            let mut ids: Vec<String> = self
+                .runner
+                .lock()
+                .browser_requests
+                .keys()
+                .cloned()
+                .collect();
+            ids.sort();
+            ids
+        }
+
+        /// Wait until exactly `expected` are in flight.
+        async fn settled(&self, expected: &[&str]) {
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while self.in_flight() != expected {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            })
+            .await
+            .expect("the request settled within 5 s");
+        }
+    }
+
+    fn aborted() -> ApiError {
+        ApiError::new(499, "aborted", "Aborted")
+    }
+
+    /// `browser_cancel` aborts the operation but keeps its slot until the
+    /// operation settles, and its late reply still goes out (TS).
+    #[tokio::test]
+    async fn a_cancelled_browser_request_keeps_its_slot_until_it_settles() {
+        let mut agent = Agent::new();
+        for n in 1..=4 {
+            agent.request(&format!("r{n}"), &format!("t{n}"));
+            assert_eq!(agent.seen().await, format!("started t{n}"));
+        }
+        agent.cancel("r1");
+        assert_eq!(agent.seen().await, "aborted t1");
+        // Still in flight: the cancelled request's entry survives.
+        assert_eq!(agent.in_flight(), ["r1", "r2", "r3", "r4"]);
+        // A fifth request while the cancelled one runs.
+        agent.request("r5", "t5");
+        assert_eq!(
+            agent.reply().await,
+            json!({ "type": "browser_response", "id": "r5", "ok": false, "error": {
+                "status": 429, "code": "too_many_requests",
+                "message": "Too many browser requests are in flight" } })
+        );
+        // The operation settles: its late reply goes out, the slot is free.
+        agent.browser.release("t1", Err(aborted()));
+        assert_eq!(
+            agent.reply().await,
+            json!({ "type": "browser_response", "id": "r1", "ok": false, "error": {
+                "status": 499, "code": "aborted", "message": "Aborted" } })
+        );
+        agent.settled(&["r2", "r3", "r4"]).await;
+        agent.request("r6", "t6");
+        assert_eq!(agent.seen().await, "started t6");
+        for n in [2, 3, 4, 6] {
+            agent
+                .browser
+                .release(&format!("t{n}"), Ok(json!({ "n": n })));
+            assert_eq!(
+                agent.reply().await,
+                json!({ "type": "browser_response", "id": format!("r{n}"), "ok": true,
+                    "result": { "n": n } })
+            );
+        }
+        agent.settled(&[]).await;
+        assert!(agent.seen.try_recv().is_err());
+    }
+
+    /// A request that settles after a later one took its id leaves the later
+    /// one's entry (`Arc::ptr_eq`).
+    #[tokio::test]
+    async fn a_settled_browser_request_removes_only_its_own_entry() {
+        let mut agent = Agent::new();
+        agent.request("r", "first");
+        assert_eq!(agent.seen().await, "started first");
+        agent.cancel("r");
+        assert_eq!(agent.seen().await, "aborted first");
+        agent.request("r", "second");
+        assert_eq!(agent.seen().await, "started second");
+        agent.browser.release("first", Err(aborted()));
+        assert_eq!(agent.reply().await["error"]["status"], 499);
+        // Give the first task time to (wrongly) remove the entry.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(agent.in_flight(), ["r"]);
+        // The entry is the second request's: a cancel reaches it.
+        agent.cancel("r");
+        assert_eq!(agent.seen().await, "aborted second");
+        agent.browser.release("second", Ok(json!(2)));
+        assert_eq!(agent.reply().await["result"], 2);
+        agent.settled(&[]).await;
+    }
 
     #[test]
     fn request_ids_and_paths() {

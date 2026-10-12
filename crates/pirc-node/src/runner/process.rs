@@ -210,6 +210,32 @@ impl Runner {
         }
     }
 
+    /// A runner with no agent process and no node, for tests of its side
+    /// channels: its stdin lines (the agent's replies) come out of the
+    /// receiver.
+    #[cfg(test)]
+    pub(super) fn detached(
+        session_id: &str,
+        workspace: Workspace,
+        prepared: Prepared,
+    ) -> (Arc<Self>, mpsc::UnboundedReceiver<Outbound>) {
+        let (stdin, lines) = mpsc::unbounded_channel();
+        let runner = Arc::new(Self {
+            node: WeakNode::new(),
+            session_id: session_id.to_owned(),
+            workspace,
+            epoch: 1,
+            pid: None,
+            prepared,
+            stdin,
+            inner: Mutex::default(),
+            view: Mutex::default(),
+            reaped: AtomicBool::new(true),
+            exited: watch::channel(false).0,
+        });
+        (runner, lines)
+    }
+
     pub fn set_run(&self, run_id: &str) {
         self.lock().current_run = Some(run_id.to_owned());
     }
@@ -545,13 +571,7 @@ impl Runner {
             }
             "browser_request" => return self.handle_browser(&message),
             "browser_cancel" => {
-                // The entry stays until the operation settles (its task
-                // removes it), holding its in-flight slot as in TS.
-                if let Some(Value::String(id)) = message.get("id")
-                    && let Some(request) = self.lock().browser_requests.get(id)
-                {
-                    request.abort.send_replace(true);
-                }
+                self.cancel_browser(&message);
                 return Ok(());
             }
             "sandbox_request" => return self.handle_sandbox(&message),

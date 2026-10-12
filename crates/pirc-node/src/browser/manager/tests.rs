@@ -1622,3 +1622,131 @@ async fn an_operation_aborted_while_queued_never_runs() {
     assert_eq!(manager.inner.lock().tabs["s"].lock().log_count, 1);
     manager.shutdown().await;
 }
+
+/// Issue: a `log_entry` broadcast while a viewer attaches was lost (taken
+/// after the viewer's `log`, sent before it was registered) or sent twice
+/// (in its `log` and again). Every viewer, attached while entries are
+/// logged on another thread, sees each entry exactly once, in order, after
+/// its `state` and `log`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_viewer_attaching_while_entries_are_logged_gets_each_once() {
+    const ENTRIES: usize = 2000;
+    const VIEWERS: usize = 100;
+    let context = FakeContext::new();
+    let fixture = ready(&context);
+    let manager = &fixture.manager;
+    manager
+        .handle(target("s", "w"), "release".into(), json!({}))
+        .await
+        .unwrap();
+    let tab = manager.inner.lock().tabs["s"].clone();
+    // One entry already: every viewer's `log` has at least one.
+    manager.inner.log(&tab, "agent", "first", None);
+    let start = Arc::new(std::sync::Barrier::new(2));
+    let logging = {
+        let inner = manager.inner.clone();
+        let tab = tab.clone();
+        let start = start.clone();
+        tokio::task::spawn_blocking(move || {
+            start.wait();
+            for n in 0..ENTRIES {
+                inner.log(&tab, "agent", &format!("entry {n}"), None);
+            }
+        })
+    };
+    // Spread over the logging: a viewer every ENTRIES / VIEWERS entries.
+    let attaching = {
+        let manager = manager.clone();
+        let tab = tab.clone();
+        tokio::task::spawn_blocking(move || {
+            start.wait();
+            (0..VIEWERS)
+                .map(|n| {
+                    while tab.lock().log_count < (1 + n * ENTRIES / VIEWERS) as u64 {
+                        std::thread::yield_now();
+                    }
+                    let (sink, frames) = viewer();
+                    let detach = manager.attach("s", sink);
+                    (frames, detach)
+                })
+                .collect::<Vec<_>>()
+        })
+    };
+    let viewers = attaching.await.unwrap();
+    logging.await.unwrap();
+    let last = ENTRIES as i64;
+    for (frames, detach) in viewers {
+        let frames = frames.lock().unwrap().clone();
+        assert_eq!(frames[0]["type"], "state");
+        assert_eq!(frames[1]["type"], "log");
+        let mut indices: Vec<i64> = frames[1]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| entry["index"].as_i64().unwrap())
+            .collect();
+        assert!(!indices.is_empty());
+        indices.extend(
+            frames[2..]
+                .iter()
+                .filter(|frame| frame["type"] == "log_entry")
+                .map(|frame| frame["entry"]["index"].as_i64().unwrap()),
+        );
+        let first = indices[0];
+        let expected: Vec<i64> = (first..=last).collect();
+        assert_eq!(indices, expected, "lost or repeated entries");
+        detach();
+    }
+    manager.shutdown().await;
+}
+
+/// Issue: a dropped tab's empty state went out at once, before the tab's
+/// earlier states still reading their titles, so a viewer could end on a
+/// stale state of a tab that no longer exists.
+#[tokio::test(start_paused = true)]
+async fn a_dropped_tabs_empty_state_goes_out_last() {
+    let context = FakeContext::new();
+    let fixture = ready(&context);
+    let manager = &fixture.manager;
+    manager
+        .handle(target("s", "w"), "release".into(), json!({}))
+        .await
+        .unwrap();
+    let (sink, frames) = viewer();
+    let detach = manager.attach("s", sink);
+    settle().await;
+    let page = context.page(0);
+    frames.lock().unwrap().clear();
+    page.title_delays
+        .lock()
+        .unwrap()
+        .push_back(Duration::from_millis(500));
+    page.set_url("https://a.example/");
+    page.emit(|| PageEvent::Load);
+    settle().await;
+    // Chromium goes away while that state reads its title.
+    context.crash();
+    settle().await;
+    assert!(manager.inner.lock().tabs.is_empty());
+    assert!(of_type(&frames, "state").is_empty());
+    tokio::time::advance(Duration::from_millis(500)).await;
+    settle().await;
+    let states: Vec<(Value, Value)> = of_type(&frames, "state")
+        .iter()
+        .map(|state| {
+            (
+                state["state"]["url"].clone(),
+                state["state"]["active"].clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        states,
+        [
+            (json!("https://a.example/"), json!(true)),
+            (json!(""), json!(false)),
+        ]
+    );
+    detach();
+    manager.shutdown().await;
+}
