@@ -28,44 +28,44 @@
 //! - service workers (and shared workers): see the deviations.
 //!
 //! `Fetch.requestPaused`: an intercepted CORS preflight is fulfilled with
-//! Playwright's 204; a redirect hop continues unchecked, as Playwright does
-//! not route redirects (the manager's `assertAllowed` covers the final
-//! URLs); every other request is checked: `Fetch.failRequest {errorReason:
-//! 'BlockedByClient'}` or `Fetch.continueRequest {requestId}`.
+//! Playwright's 204; a redirect hop of a document continues unchecked, as
+//! Playwright does not route redirects (the manager's `assertAllowed`
+//! covers the final URLs); every other request is checked:
+//! `Fetch.failRequest {errorReason: 'BlockedByClient'}` or
+//! `Fetch.continueRequest {requestId}`. `Fetch.authRequired` answers
+//! `Default` (Playwright without credentials).
 //!
 //! A redirect hop pauses again with the request's `networkId` and the new
 //! URL (Chromium 153 sets no `redirectedRequestId` at the `Request`
 //! stage). Playwright continues it unrouted, either because its
 //! `Network.requestWillBeSent` carries the `redirectResponse` or because
-//! the request was already continued (it replays that `continue`). Here: a
-//! pause whose `networkId` this session already continued is continued
-//! again unchecked. Checking hops instead would cost nothing more than
-//! dropping that rule ([`CHECK_REDIRECT_HOPS`]): each hop's pause has its
-//! URL.
-//! `Fetch.authRequired` answers `Default` (Playwright without credentials).
+//! the request was already continued (it replays that `continue`). Here a
+//! pause whose `networkId` this session already continued is a hop.
 //!
 //! Deviations (each blocks more than Playwright, never less):
 //!
+//! - Redirect hops of everything but documents (subresources, `fetch`/XHR,
+//!   workers' requests: `resourceType` other than `Document`) are checked
+//!   like any request. With Playwright (and so TS) they are not, so a page
+//!   could reach a blocked host through a public redirect, unseen by
+//!   `assertAllowed`, which looks only at frame URLs. A document's hops
+//!   (main frame and iframes) stay unchecked, so a navigation redirected to
+//!   a blocked host fails as in TS: `assertAllowed` reports
+//!   `blockedError(<final frame URL>, reason)`.
 //! - Playwright continues a paused request without a `networkId`, and one
 //!   whose frame it does not know, without routing it: such a request's URL
 //!   would reach the network unchecked. Here every paused request that is
-//!   not a redirect hop or preflight is checked. A dedicated worker's
-//!   `fetch` pauses without a `networkId` (seen with Chromium 153 when the
-//!   worker's session has not enabled `Network`).
+//!   not a document's redirect hop or a preflight is checked. A dedicated
+//!   worker's `fetch` pauses without a `networkId` (seen with Chromium 153
+//!   when the worker's session has not enabled `Network`).
 //! - With `serviceWorkers: 'block'` Playwright gives a service worker no
 //!   network manager, so a service worker that runs anyway (the init script
 //!   only replaces `navigator.serviceWorker.register` on the instance;
 //!   `ServiceWorkerContainer.prototype.register` still works) fetches
 //!   unchecked. Here service workers get the same `Fetch` guard as pages.
 //!   Likewise shared workers, whose requests the page's `Fetch` does not
-//!   see (Playwright detaches them, so they run unguarded).
-//!
-//! Known gaps kept from Playwright's WebSocket mock (an untrusted page can
-//! open a socket to a blocked host): `ws.url` is a writable property the
-//! mock connects to after the verdict on the original URL, and
-//! `__pwWebSocketDispatch` is a page-visible global that connects any
-//! pending socket. WebSockets of workers are not guarded at all (the mock
-//! is a main-world init script; `Fetch` does not see WebSocket handshakes).
+//!   see (Playwright detaches them, so they run unguarded): the context
+//!   installs them as [`TargetKind::ServiceWorker`].
 //! - The bindings controller is pirc's own few lines rather than
 //!   Playwright's `BindingsController` (not among the extracted assets): it
 //!   defines the same globals and wire envelope (`{name, seq,
@@ -83,6 +83,19 @@
 //!   `connect` and relays every message through its client: the page sees
 //!   the same socket. A page `close()` before the verdict is relayed as
 //!   Playwright's client does (`closeServer`, then `closePage`).
+//!
+//! Known gaps kept from Playwright's WebSocket mock (an untrusted page can
+//! open a socket to a blocked host; verified with Chromium 153):
+//!
+//! - `ws.url` is a writable property, and the mock connects to it after the
+//!   verdict on the URL it reported at construction: set right after `new
+//!   WebSocket(<allowed URL>)`, the socket connects to the new URL.
+//! - `__pwWebSocketDispatch` is a page-visible global: called with a
+//!   pending socket's `_id` (also page-visible) and `type: 'passthrough'`,
+//!   it connects that socket whatever the verdict.
+//! - WebSockets of dedicated and shared workers are not guarded at all (the
+//!   mock is a main-world init script; `Fetch` does not see WebSocket
+//!   handshakes).
 //!
 //! Owner: netio.
 
@@ -238,10 +251,6 @@ pub async fn install(
     Ok(installed)
 }
 
-/// Whether a redirect hop is checked like any request (`false`: as TS
-/// with Playwright, which does not route redirects).
-pub const CHECK_REDIRECT_HOPS: bool = false;
-
 /// The `networkId`s this session continued (their later pauses are
 /// redirect hops or repeats), forgotten when the request ends; cleared
 /// when it grows past [`CONTINUED_MAX`] (a later hop is then checked).
@@ -318,7 +327,7 @@ async fn handle_events(
 /// What to do with a paused request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Verdict {
-    /// `Fetch.continueRequest` unchecked (a redirect hop).
+    /// `Fetch.continueRequest` unchecked (a document's redirect hop).
     Continue,
     /// Playwright's answer to an intercepted CORS preflight.
     FulfillPreflight(Vec<Value>),
@@ -328,7 +337,8 @@ pub enum Verdict {
 
 /// How `_onRequestPaused`/`_onRequest` treat a `Fetch.requestPaused`;
 /// `hop`: its `networkId` was already continued (see the module
-/// documentation).
+/// documentation): a document's hop continues unchecked, any other is
+/// checked.
 pub fn classify(paused: &Value, hop: bool) -> Verdict {
     let request = &paused["request"];
     let headers = &request["headers"];
@@ -351,7 +361,7 @@ pub fn classify(paused: &Value, hop: bool) -> Verdict {
         }
         return Verdict::FulfillPreflight(response);
     }
-    if hop && !CHECK_REDIRECT_HOPS {
+    if hop && paused["resourceType"] == "Document" {
         return Verdict::Continue;
     }
     Verdict::Check(request["url"].as_str().unwrap_or_default().to_owned())
@@ -490,12 +500,23 @@ mod tests {
         );
         assert_eq!(
             classify(
-                &json!({ "requestId": "1", "networkId": "9",
+                &json!({ "requestId": "1", "networkId": "9", "resourceType": "Document",
                 "request": { "url": "http://10.0.0.1/", "method": "GET" } }),
                 true
             ),
             Verdict::Continue
         );
+        // Other hops are checked (tighter than TS).
+        for kind in ["XHR", "Fetch", "Image", "Script", "Other"] {
+            assert_eq!(
+                classify(
+                    &json!({ "requestId": "1", "networkId": "9", "resourceType": kind,
+                    "request": { "url": "http://10.0.0.1/", "method": "GET" } }),
+                    true
+                ),
+                Verdict::Check("http://10.0.0.1/".into())
+            );
+        }
         // No networkId: checked (Playwright continues it).
         // A page's own OPTIONS request is no preflight.
         assert_eq!(
