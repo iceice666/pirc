@@ -44,7 +44,8 @@ way. One HTTP server on `127.0.0.1:<port>` stands for two sites:
   They are different sites, so a page of one framed by the other is an
   out-of-process iframe (`oopif.json` checks that with `targets`).
 - `GET /<name>.html` serves `pages/<name>.html` (`text/html; charset=utf-8`,
-  `cache-control: no-store`) with `{{HOST_A}}` and `{{HOST_B}}` replaced.
+  `cache-control: no-store`) with `{{HOST_A}}`, `{{HOST_B}}` and `{{PORT}}`
+  (the port alone) replaced.
 - `GET /slow?ms=<n>&text=<t>` answers `t` as `text/plain` after `n` ms (at most 10000).
 - `GET /redirect?to=<url>` answers 302 to `url`.
 - `GET /status/<code>` answers that status with
@@ -59,13 +60,13 @@ hosts; this is the only normalization.
 A case is `{ "description": "…", "steps": [step, …] }`. Steps run in order on
 one page. Each step has an `op`; `"error": true` means the step must fail, and
 its error is recorded as `browser.ts`'s `cleanError` produces it (the message
-up to `\nCall log:`, at most 4 lines and 1000 characters), in the form the
-production TS node (`apps/gateway/dist`, built with `bun build --compile
---minify`) sees it. Playwright prefixes messages with the api name it reads
-from the caller's stack: `goto: …` from source under Bun, `page.goto: …` under
-V8, nothing in the minified executable. The recorder strips exactly that
-prefix (`<method>: ` or `<object>.<method>: `, for the Playwright method the
-failing step called); the rest of the message is Playwright's. A step that fails
+up to `\nCall log:`, at most 4 lines and 1000 characters). Playwright
+prefixes messages with the api name it reads from the caller's stack: the
+bare method under Bun (`fill: …`, `goto: …`), which is what the TS node
+reports with on-disk playwright-core (`PIRC_PLAYWRIGHT_CORE`, set by its Nix
+and release wrappers and by the conformance scenarios); `page.goto: …` under
+V8; no prefix when the node uses the playwright-core minified into its
+executable. The corpus keeps the Bun form. A step that fails
 without `"error": true`, or succeeds with it, fails the recording. `note` is a
 comment.
 
@@ -112,7 +113,7 @@ Every recorded step also has the page's `url` afterwards, except a failed
   `iframe` node; `[active]` marks the focused path through frames.
 - **Errors** an agent can hit, as `cleanError` leaves them: timeouts (hidden,
   covered, disabled, read-only, stale or unknown refs all end as
-  `Timeout <n>ms exceeded.`), `Invalid frame in aria-ref selector`,
+  `<method>: Timeout <n>ms exceeded.`), `Invalid frame in aria-ref selector`,
   `Unknown key: "…"` (also inside a chord), `Element is not a <select>
 element`, `Input of type "checkbox" cannot be filled`, `Element is not an
 <input>, <textarea> or [contenteditable] element`, navigation errors.

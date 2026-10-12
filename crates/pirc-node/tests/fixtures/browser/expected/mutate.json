@@ -21,7 +21,7 @@
     },
     {
       "op": "click",
-      "error": "Timeout 1000ms exceeded.",
+      "error": "click: Timeout 1000ms exceeded.",
       "ref": "e7",
       "url": "http://{{HOST_A}}/mutate.html"
     },
@@ -33,7 +33,7 @@
     },
     {
       "op": "click",
-      "error": "Timeout 1000ms exceeded.",
+      "error": "click: Timeout 1000ms exceeded.",
       "ref": "e9",
       "url": "http://{{HOST_A}}/mutate.html"
     },
@@ -45,13 +45,13 @@
     },
     {
       "op": "click",
-      "error": "Timeout 1000ms exceeded.",
+      "error": "click: Timeout 1000ms exceeded.",
       "ref": "e5",
       "url": "http://{{HOST_A}}/mutate.html"
     },
     {
       "op": "click",
-      "error": "Timeout 1000ms exceeded.",
+      "error": "click: Timeout 1000ms exceeded.",
       "ref": "e999",
       "url": "http://{{HOST_A}}/mutate.html"
     }

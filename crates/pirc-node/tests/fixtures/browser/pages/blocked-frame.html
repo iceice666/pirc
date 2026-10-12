@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Blocked frame</title>
+  </head>
+  <body>
+    <h1>A frame on a refused host</h1>
+    <!-- other.localhost is a loopback name the fixtures do not allow. -->
+    <iframe title="Elsewhere" src="http://other.localhost:{{PORT}}/details.html"></iframe>
+  </body>
+</html>

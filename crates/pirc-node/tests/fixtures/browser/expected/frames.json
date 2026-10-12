@@ -37,7 +37,7 @@
     },
     {
       "op": "click",
-      "error": "Invalid frame in aria-ref selector \"aria-ref=f99e1\"",
+      "error": "click: Invalid frame in aria-ref selector \"aria-ref=f99e1\"",
       "ref": "f99e1",
       "url": "http://{{HOST_A}}/frames.html"
     }

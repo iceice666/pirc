@@ -16,13 +16,13 @@
     },
     {
       "op": "fill",
-      "error": "Error: Input of type \"checkbox\" cannot be filled",
+      "error": "fill: Error: Input of type \"checkbox\" cannot be filled",
       "ref": "e9",
       "url": "http://{{HOST_A}}/form.html"
     },
     {
       "op": "click",
-      "error": "Timeout 1000ms exceeded.",
+      "error": "click: Timeout 1000ms exceeded.",
       "ref": "e13",
       "url": "http://{{HOST_A}}/form.html"
     }

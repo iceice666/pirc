@@ -116,7 +116,8 @@ function startServer() {
         try {
           const html = readFileSync(path.join(pagesDir, name), 'utf8')
             .replaceAll('{{HOST_A}}', host)
-            .replaceAll('{{HOST_B}}', other);
+            .replaceAll('{{HOST_B}}', other)
+            .replaceAll('{{PORT}}', String(server.port));
           return new Response(html, {
             headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
           });
@@ -136,40 +137,15 @@ function startServer() {
 // ---- browser.ts mirrors ------------------------------------------------------------
 
 /**
- * The Playwright methods each op calls. Playwright prefixes an error's message
- * with the api name it reads from the caller's stack (`goto: …` when this
- * script runs from source under Bun, `page.goto: …` under V8). The production
- * TS node (`bun build --compile --minify`, apps/gateway/dist) gets no prefix,
- * and that is what agents see and the Rust node reproduces: the recorder
- * strips exactly that prefix, for the method the failing step called.
+ * browser.ts's `cleanError`. Playwright prefixes a message with the api name
+ * it reads from the caller's stack: under Bun, as here and in the TS node
+ * with on-disk playwright-core (PIRC_PLAYWRIGHT_CORE, as its Nix and release
+ * wrappers set it), the bare method (`fill: …`, `goto: …`); `page.goto: …`
+ * under V8; nothing when the node runs the playwright-core minified into its
+ * executable. The corpus keeps the first form, which the node reports.
  */
-const API_NAMES: Record<string, string[]> = {
-  goto: ['goto'],
-  back: ['goBack'],
-  snapshot: ['ariaSnapshot'],
-  click: ['click'],
-  hover: ['hover'],
-  fill: ['fill'],
-  type: ['fill', 'pressSequentially'],
-  press: ['press'],
-  select: ['selectOption'],
-  keyboard: ['press'],
-  insertText: ['insertText'],
-  waitFor: ['waitFor'],
-  evaluate: ['evaluate'],
-};
-
-function withoutApiPrefix(op: string, message: string): string {
-  for (const name of API_NAMES[op] ?? []) {
-    const prefix = new RegExp(`^(?:[A-Za-z]+\\.)?${name}: `);
-    if (prefix.test(message)) return message.replace(prefix, '');
-  }
-  return message;
-}
-
-/** browser.ts's `cleanError`, of the message as the compiled TS node sees it. */
-function cleanError(op: string, error: unknown): string {
-  const text = withoutApiPrefix(op, error instanceof Error ? error.message : String(error));
+function cleanError(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error);
   return text.split('\nCall log:')[0]!.split('\n').slice(0, 4).join('\n').slice(0, 1_000);
 }
 
@@ -448,7 +424,7 @@ try {
           entry = { op: step.op, ...result };
         } catch (error) {
           if (!step.error || String(error).includes('should have failed')) throw error;
-          entry = { op: step.op, error: cleanError(step.op, error) };
+          entry = { op: step.op, error: cleanError(error) };
           // The ref the failing step used, when it resolved one.
           if (step.target || step.ref)
             try {

@@ -26,7 +26,7 @@
       "url": "http://{{HOST_A}}/nothing-here"
     },
     { "op": "goto", "status": 200, "title": "Details", "url": "http://{{HOST_A}}/details.html" },
-    { "op": "goto", "error": "Timeout 500ms exceeded." },
-    { "op": "goto", "error": "net::ERR_UNSAFE_PORT at http://127.0.0.1:1/" }
+    { "op": "goto", "error": "goto: Timeout 500ms exceeded." },
+    { "op": "goto", "error": "goto: net::ERR_UNSAFE_PORT at http://127.0.0.1:1/" }
   ]
 }

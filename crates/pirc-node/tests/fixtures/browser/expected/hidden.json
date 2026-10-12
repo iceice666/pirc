@@ -10,7 +10,7 @@
     { "op": "click", "ref": "e10", "url": "http://{{HOST_A}}/hidden.html" },
     {
       "op": "click",
-      "error": "Timeout 1000ms exceeded.",
+      "error": "click: Timeout 1000ms exceeded.",
       "ref": "e9",
       "url": "http://{{HOST_A}}/hidden.html"
     },
@@ -22,13 +22,13 @@
     { "op": "click", "ref": "e13", "url": "http://{{HOST_A}}/hidden.html" },
     {
       "op": "click",
-      "error": "Timeout 1000ms exceeded.",
+      "error": "click: Timeout 1000ms exceeded.",
       "ref": "e12",
       "url": "http://{{HOST_A}}/hidden.html"
     },
     {
       "op": "hover",
-      "error": "Timeout 1000ms exceeded.",
+      "error": "hover: Timeout 1000ms exceeded.",
       "ref": "e12",
       "url": "http://{{HOST_A}}/hidden.html"
     },
@@ -39,13 +39,13 @@
     },
     {
       "op": "click",
-      "error": "Timeout 1000ms exceeded.",
+      "error": "click: Timeout 1000ms exceeded.",
       "ref": "e14",
       "url": "http://{{HOST_A}}/hidden.html"
     },
     {
       "op": "fill",
-      "error": "Timeout 1000ms exceeded.",
+      "error": "fill: Timeout 1000ms exceeded.",
       "ref": "e18",
       "url": "http://{{HOST_A}}/hidden.html"
     },

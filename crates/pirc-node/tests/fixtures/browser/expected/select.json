@@ -28,31 +28,31 @@
     },
     {
       "op": "select",
-      "error": "Timeout 1000ms exceeded.",
+      "error": "selectOption: Timeout 1000ms exceeded.",
       "ref": "e3",
       "url": "http://{{HOST_A}}/select.html"
     },
     {
       "op": "select",
-      "error": "Error: Element is not a <select> element",
+      "error": "selectOption: Error: Element is not a <select> element",
       "ref": "e12",
       "url": "http://{{HOST_A}}/select.html"
     },
     {
       "op": "select",
-      "error": "Error: Element is not a <select> element",
+      "error": "selectOption: Error: Element is not a <select> element",
       "ref": "e10",
       "url": "http://{{HOST_A}}/select.html"
     },
     {
       "op": "fill",
-      "error": "Error: Input of type \"checkbox\" cannot be filled",
+      "error": "fill: Error: Input of type \"checkbox\" cannot be filled",
       "ref": "e10",
       "url": "http://{{HOST_A}}/select.html"
     },
     {
       "op": "fill",
-      "error": "Error: Element is not an <input>, <textarea> or [contenteditable] element",
+      "error": "fill: Error: Element is not an <input>, <textarea> or [contenteditable] element",
       "ref": "e3",
       "url": "http://{{HOST_A}}/select.html"
     }
