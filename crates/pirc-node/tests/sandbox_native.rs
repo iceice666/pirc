@@ -71,7 +71,18 @@ fn sandbox_client() {
                         .split('/')
                         .next()
                         .unwrap();
-                    write!(stream, "GET {target} HTTP/1.1\r\nHost: {host}\r\n\r\n").unwrap();
+                    // The proxy wants the session's token, from `HTTP_PROXY`'s userinfo.
+                    let proxy = std::env::var("HTTP_PROXY").unwrap_or_default();
+                    let credential = proxy
+                        .trim_start_matches("http://")
+                        .split_once('@')
+                        .map_or("", |(credential, _)| credential);
+                    let authorization = pirc_node::sandbox::proxy::basic_authorization(credential);
+                    write!(
+                        stream,
+                        "GET {target} HTTP/1.1\r\nHost: {host}\r\nProxy-Authorization: {authorization}\r\n\r\n"
+                    )
+                    .unwrap();
                     let mut reply = String::new();
                     let _ = stream.read_to_string(&mut reply);
                     reply.lines().next().unwrap_or_default().to_owned()
