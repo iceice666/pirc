@@ -49,6 +49,16 @@ pub fn have_bwrap() -> bool {
 /// agent is `/bin/sh`, or `None` without bubblewrap. `config_json` is the
 /// agent config.
 pub fn fixture_in(base: Option<&Path>, name: &str, config_json: &str) -> Option<Fixture> {
+    fixture_env(base, name, config_json, &[])
+}
+
+/// [`fixture_in`] with `extra` in the node's environment.
+pub fn fixture_env(
+    base: Option<&Path>,
+    name: &str,
+    config_json: &str,
+    extra: &[(&str, &str)],
+) -> Option<Fixture> {
     if !have_bwrap() {
         return None;
     }
@@ -103,6 +113,7 @@ pub fn fixture_in(base: Option<&Path>, name: &str, config_json: &str) -> Option<
     ];
     let vars: Vec<(String, String)> = vars
         .iter()
+        .chain(extra)
         .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
         .collect();
     let env = Env::new(vars.iter().map(|(k, v)| (k.as_str(), v.as_str())), &root);

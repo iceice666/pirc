@@ -140,7 +140,11 @@
 //!   made after the plan (a reattach, another login during the session)
 //!   is visible in running sandboxes, which bind the host's `/tmp`: its
 //!   agent socket is reachable through the link or by name. Unix-socket
-//!   connects are not filtered otherwise (see `linux.rs`).
+//!   connects are not filtered otherwise (see `linux.rs`). One removed
+//!   between the plan and bubblewrap's mounts (its login ending as a
+//!   session starts) fails that start (bubblewrap cannot create or
+//!   remount it), or bubblewrap makes it again, empty, on the host: fail
+//!   closed, and an empty leftover.
 //! - A hard link to a protected file that already existed (in a writable
 //!   root, say) is another name for it that no deny covers: writing through
 //!   it writes the file. The agent cannot make one during its session: a

@@ -811,8 +811,8 @@ async fn refuses_a_private_dir_behind_a_replaceable_link() {
 /// tmux's recipe, `SSH_AUTH_SOCK` a stable link in `/tmp` (a write root of
 /// every session) to the agent's socket, starts sessions: host sockets are
 /// hidden from reading, not protected for host tools. The link's target
-/// at plan time is hidden, here outside every writable root (the next
-/// tests have it under `/tmp`).
+/// at plan time is hidden, here outside every writable root
+/// (`sandbox_linux_ssh_agent.rs` has it under `/tmp`).
 #[tokio::test]
 async fn a_linked_ssh_agent_socket_is_hidden_and_refuses_nothing() {
     let link = Path::new("/tmp").join(format!("pirc-ssh-agent-{}", std::process::id()));
@@ -841,131 +841,6 @@ async fn a_linked_ssh_agent_socket_is_hidden_and_refuses_nothing() {
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let result = next_result(&mut lines).await;
     assert!(result.starts_with("unreachable"), "{result}");
-    assert!(child.wait().await.unwrap().success());
-    prepared.cleanup();
-}
-
-/// A directory under `/tmp` (sshd's forwarded agent's, or a stand-in),
-/// removed with its contents when dropped.
-struct TmpEntry(PathBuf);
-
-impl Drop for TmpEntry {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-        let _ = fs::remove_file(&self.0);
-    }
-}
-
-/// A Unix socket at `path` answering `agent` to every request line.
-fn agent_socket(path: &Path) {
-    let listener = std::os::unix::net::UnixListener::bind(path).unwrap();
-    std::thread::spawn(move || {
-        for mut stream in listener.incoming().flatten() {
-            let mut line = String::new();
-            let _ = std::io::BufReader::new(&stream).read_line(&mut line);
-            let _ = stream.write_all(b"agent");
-        }
-    });
-}
-
-/// sshd's forwarded agent, `/tmp/ssh-XXXX/agent.N` (`/tmp` a write root of
-/// every session), behind tmux's `/tmp/ssh-agent-$USER` link: hidden,
-/// through the link or by name, while the link stays in place.
-#[tokio::test]
-async fn a_forwarded_ssh_agent_in_tmp_is_hidden() {
-    let id = std::process::id();
-    let dir = TmpEntry(PathBuf::from(format!("/tmp/ssh-pirc{id}a")));
-    let link = TmpEntry(PathBuf::from(format!("/tmp/pirc-ssh-agent-{id}a")));
-    let _ = fs::remove_dir_all(&dir.0);
-    let _ = fs::remove_file(&link.0);
-    fs::create_dir(&dir.0).unwrap();
-    let socket = dir.0.join("agent.1");
-    agent_socket(&socket);
-    std::os::unix::fs::symlink(&socket, &link.0).unwrap();
-    let link_var = link.0.display().to_string();
-    let Some(f) = fixture_env("ssh-agent-tmp", false, |_| {
-        vec![("SSH_AUTH_SOCK".to_owned(), link_var.clone())]
-    }) else {
-        return;
-    };
-    let prepared = f.try_prepare("pi_ssh_tmp").await.unwrap();
-    let mut child = client(
-        &prepared,
-        &format!("unix:{} unix:{}", link.0.display(), socket.display()),
-    )
-    .spawn()
-    .unwrap();
-    let mut stdin = child.stdin.take().unwrap();
-    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
-    let result = next_result(&mut lines).await;
-    assert!(
-        result.starts_with("unreachable"),
-        "through the link: {result}"
-    );
-    stdin.write_all(b"\n").await.unwrap();
-    let result = next_result(&mut lines).await;
-    assert!(result.starts_with("unreachable"), "by name: {result}");
-    assert!(child.wait().await.unwrap().success());
-    prepared.cleanup();
-}
-
-/// A reattach while the session runs: sshd makes a new socket and tmux's
-/// link is pointed at it. In a `/tmp/ssh-*` directory that existed at
-/// plan time it stays hidden. (A new `/tmp/ssh-*` directory made after
-/// the plan is not: an accepted gap, see `plan`'s docs.)
-#[tokio::test]
-async fn an_ssh_agent_socket_made_after_the_start_is_hidden() {
-    let id = std::process::id();
-    let dir = TmpEntry(PathBuf::from(format!("/tmp/ssh-pirc{id}b")));
-    let link = TmpEntry(PathBuf::from(format!("/tmp/pirc-ssh-agent-{id}b")));
-    let _ = fs::remove_dir_all(&dir.0);
-    let _ = fs::remove_file(&link.0);
-    fs::create_dir(&dir.0).unwrap();
-    let first = dir.0.join("agent.1");
-    let second = dir.0.join("agent.2");
-    agent_socket(&first);
-    std::os::unix::fs::symlink(&first, &link.0).unwrap();
-    let link_var = link.0.display().to_string();
-    let Some(f) = fixture_env("ssh-agent-later", false, |_| {
-        vec![("SSH_AUTH_SOCK".to_owned(), link_var.clone())]
-    }) else {
-        return;
-    };
-    let prepared = f.try_prepare("pi_ssh_later").await.unwrap();
-    let mut child = client(
-        &prepared,
-        &format!(
-            "unix:{} unix:{} unix:{}",
-            link.0.display(),
-            link.0.display(),
-            second.display()
-        ),
-    )
-    .spawn()
-    .unwrap();
-    let mut stdin = child.stdin.take().unwrap();
-    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
-    let result = next_result(&mut lines).await;
-    assert!(result.starts_with("unreachable"), "before: {result}");
-    // The reattach, on the host.
-    agent_socket(&second);
-    let retarget = link.0.with_extension("new");
-    std::os::unix::fs::symlink(&second, &retarget).unwrap();
-    fs::rename(&retarget, &link.0).unwrap();
-    let mut host = std::os::unix::net::UnixStream::connect(&link.0).unwrap();
-    host.write_all(b"ping\n").unwrap();
-    let mut reply = String::new();
-    host.read_to_string(&mut reply).unwrap();
-    assert_eq!(reply, "agent", "the host reaches the new socket");
-    stdin.write_all(b"\n").await.unwrap();
-    let result = next_result(&mut lines).await;
-    assert!(
-        result.starts_with("unreachable"),
-        "through the link: {result}"
-    );
-    stdin.write_all(b"\n").await.unwrap();
-    let result = next_result(&mut lines).await;
-    assert!(result.starts_with("unreachable"), "by name: {result}");
     assert!(child.wait().await.unwrap().success());
     prepared.cleanup();
 }
