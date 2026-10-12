@@ -93,15 +93,19 @@ pub struct SrtSandbox {
     config: NodeConfig,
     env: Env,
     probe: ProbeCache,
+    /// The private parent of the sessions' temporary directories.
+    node_tmp: common::NodeTmp,
 }
 
 impl SrtSandbox {
     pub fn new(srt: String, config: NodeConfig, env: Env) -> Self {
+        let node_tmp = common::NodeTmp::new(&env);
         Self {
             srt,
             config,
             env,
             probe: ProbeCache::default(),
+            node_tmp,
         }
     }
 
@@ -138,7 +142,7 @@ impl Sandbox for SrtSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::session(&self.config, &self.env, &input)?;
+            } = common::session(&self.config, &self.env, &self.node_tmp, &input)?;
             if let SandboxStatus::Unavailable { reason } = self.check().await {
                 Session::remove_tmp(&tmp);
                 return Err(super::unavailable_error(&reason));
@@ -208,7 +212,7 @@ impl Sandbox for SrtSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::readonly_session(&self.config, &self.env, &input)?;
+            } = common::readonly_session(&self.config, &self.env, &self.node_tmp, &input)?;
             let mut file_name = OsString::from("readonly-");
             file_name.push(tmp.file_name().unwrap_or_default());
             file_name.push(".json");

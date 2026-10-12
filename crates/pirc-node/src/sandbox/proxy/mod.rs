@@ -16,8 +16,11 @@
 //!   by default (`proxyAuthToken`, only absent when an external proxy port
 //!   is configured): HTTP `Proxy-Authorization: Basic`, SOCKS5 RFC 1929.
 //!   On macOS the proxy's port is reachable by every local process (and by
-//!   other sessions with `allowLocalBinding`); on Linux the socket sits in
-//!   the session's 0700 temp directory, and the token is defence in depth.
+//!   other sessions with `allowLocalBinding`). On Linux the socket sits in
+//!   the session's temp directory, inside the node's private parent of
+//!   them all (`common::NodeTmp`), which every other session's read rules
+//!   hide: the 0700 modes alone keep nothing apart, since every sandbox
+//!   runs as the node's uid. The token is defence in depth there.
 //! - A destination passes [`Allowlist::check`] (`filterNetworkRequest`:
 //!   [`pattern::is_valid_host`], canonicalization, denied entries first,
 //!   then allowed and approved ones), then a host name is resolved and its
@@ -37,9 +40,13 @@
 //! ([`ProxyListener::loopback`]).
 //!
 //! Beyond srt (M6): per-session and node-wide connection caps, since this
-//! proxy shares the node's fd table; a 30 s deadline for request heads and
-//! SOCKS handshakes (Node's server had its own header timeouts, the SOCKS
-//! library none).
+//! proxy shares the node's fd table; deadlines for request heads and SOCKS
+//! handshakes (Node's server had its own header timeouts, the SOCKS
+//! library none). Only authenticated connections count against a
+//! session's cap; until a client authenticates it holds one of a small
+//! separate set ([`MAX_UNAUTHENTICATED`]) for at most [`AUTH_TIMEOUT`], so
+//! a client without the token cannot use up the session's own
+//! connections.
 
 mod address;
 mod env;
@@ -56,15 +63,22 @@ use tokio::io::{
     AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, ReadHalf, WriteHalf,
 };
 use tokio::net::{TcpListener, TcpStream, UnixListener};
-use tokio::sync::Semaphore;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinSet;
 
 pub use env::{EnvPlatform, NO_PROXY, PROXY_USER, basic_authorization, env_vars};
 
-/// Connections one session may hold open through the proxy. Each costs
-/// the node two fds (client and upstream): srt's proxy lived in the
-/// session's own process, this one shares the node's fd table.
+/// Authenticated connections one session may hold open through the proxy.
+/// Each costs the node two fds (client and upstream): srt's proxy lived in
+/// the session's own process, this one shares the node's fd table.
 const MAX_CONNECTIONS: usize = 64;
+/// Connections one session's proxy holds before they authenticate (one
+/// fd each), apart from [`MAX_CONNECTIONS`].
+const MAX_UNAUTHENTICATED: usize = 16;
+/// How long a client has, from its connection, to present the token: its
+/// first byte, then its HTTP request head or its SOCKS5 greeting and
+/// credentials (clients send them at once).
+const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
 /// Connections all sessions' proxies may hold open together: 1024 fds,
 /// small next to the soft `RLIMIT_NOFILE` the node raises to its hard limit
 /// at start-up (systemd's default hard limit is 524288), so sandboxed
@@ -74,9 +88,8 @@ pub const MAX_NODE_CONNECTIONS: usize = 512;
 /// Pause after a failed `accept` (`EMFILE` and the like), so the loop does
 /// not spin while the condition lasts.
 const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
-/// How long a client may take to send its request head or finish its SOCKS
-/// handshake, and the proxy to reach the destination (srt's
-/// `CONNECT_TIMEOUT_MS`).
+/// How long an authenticated SOCKS client may take to send its request,
+/// and the proxy to reach the destination (srt's `CONNECT_TIMEOUT_MS`).
 const TIMEOUT: Duration = Duration::from_secs(30);
 /// srt's mux: how long a client may wait before its first byte.
 const FIRST_BYTE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -260,6 +273,33 @@ impl ProxyListener {
 struct Session {
     allowlist: Arc<Allowlist>,
     auth: Arc<ProxyAuth>,
+    /// [`MAX_CONNECTIONS`]: the authenticated connections.
+    connections: Arc<Semaphore>,
+}
+
+/// A connection's place under its session's caps: one of the
+/// [`MAX_UNAUTHENTICATED`] until it presents the token by `deadline`, then
+/// one of the session's [`MAX_CONNECTIONS`] ([`Gate::admit`]).
+struct Gate {
+    waiting: Option<OwnedSemaphorePermit>,
+    admitted: Option<OwnedSemaphorePermit>,
+    connections: Arc<Semaphore>,
+    deadline: tokio::time::Instant,
+}
+
+impl Gate {
+    /// The client authenticated: it leaves the unauthenticated cap for the
+    /// session's. `false` when the session's cap is full (close it).
+    fn admit(&mut self) -> bool {
+        if self.admitted.is_none() {
+            let Ok(permit) = self.connections.clone().try_acquire_owned() else {
+                return false;
+            };
+            self.admitted = Some(permit);
+            self.waiting = None;
+        }
+        true
+    }
 }
 
 /// Serve the session's proxy until the task is aborted (the session's
@@ -271,7 +311,12 @@ pub async fn serve(
     auth: Arc<ProxyAuth>,
     node: Arc<Semaphore>,
 ) {
-    let session = Arc::new(Session { allowlist, auth });
+    let session = Arc::new(Session {
+        allowlist,
+        auth,
+        connections: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
+    });
+    let unauthenticated = Arc::new(Semaphore::new(MAX_UNAUTHENTICATED));
     let mut connections = JoinSet::new();
     loop {
         tokio::select! {
@@ -280,17 +325,23 @@ pub async fn serve(
                     tokio::time::sleep(ACCEPT_BACKOFF).await;
                     continue;
                 };
-                if connections.len() >= MAX_CONNECTIONS {
+                let Ok(waiting) = unauthenticated.clone().try_acquire_owned() else {
                     drop(client);
                     continue;
-                }
+                };
                 let Ok(permit) = node.clone().try_acquire_owned() else {
                     drop(client);
                     continue;
                 };
+                let gate = Gate {
+                    waiting: Some(waiting),
+                    admitted: None,
+                    connections: session.connections.clone(),
+                    deadline: tokio::time::Instant::now() + AUTH_TIMEOUT,
+                };
                 let session = session.clone();
                 connections.spawn(async move {
-                    let _ = handle(client, &session).await;
+                    let _ = handle(client, &session, gate).await;
                     drop(permit);
                 });
             }
@@ -299,18 +350,22 @@ pub async fn serve(
     }
 }
 
-/// srt's mux: peek the first byte, then SOCKS or HTTP.
-async fn handle(client: Box<dyn Client>, session: &Session) -> std::io::Result<()> {
+/// srt's mux: peek the first byte, then SOCKS or HTTP. `gate` is held
+/// until the connection ends.
+async fn handle(client: Box<dyn Client>, session: &Session, mut gate: Gate) -> std::io::Result<()> {
     let (reader, writer) = tokio::io::split(client);
     let mut reader = BufReader::new(reader);
-    let first = match tokio::time::timeout(FIRST_BYTE_TIMEOUT, reader.fill_buf()).await {
+    let first_byte_by = gate
+        .deadline
+        .min(tokio::time::Instant::now() + FIRST_BYTE_TIMEOUT);
+    let first = match tokio::time::timeout_at(first_byte_by, reader.fill_buf()).await {
         Ok(Ok(buffer)) => buffer.first().copied(),
         Ok(Err(_)) | Err(_) => None,
     };
     match first {
         None => Ok(()),
-        Some(0x04 | 0x05) => socks::handle(reader, writer, session).await,
-        Some(_) => http::handle(reader, writer, session).await,
+        Some(0x04 | 0x05) => socks::handle(reader, writer, session, &mut gate).await,
+        Some(_) => http::handle(reader, writer, session, &mut gate).await,
     }
 }
 

@@ -21,6 +21,8 @@ pub struct Fixture {
     pub env: Env,
     pub sandbox: NativeSandbox,
     vars: Vec<(String, String)>,
+    /// `TMPDIR`.
+    pub tmp: tempfile::TempDir,
 }
 
 impl Drop for Fixture {
@@ -62,7 +64,6 @@ pub fn fixture_in(base: Option<&Path>, name: &str, config_json: &str) -> Option<
         "config",
         "workspace/.git/hooks",
         "outside",
-        "tmp",
     ] {
         fs::create_dir_all(root.join(dir)).unwrap();
     }
@@ -73,12 +74,21 @@ pub fn fixture_in(base: Option<&Path>, name: &str, config_json: &str) -> Option<
     fs::write(root.join("workspace/.git/config"), "[core]").unwrap();
     fs::write(root.join("config/config.json"), config_json).unwrap();
     let path_var = std::env::var("PATH").unwrap_or_default();
-    let (home, state, config_dir, tmp) = (
+    let (home, state, config_dir) = (
         path(&root, "home"),
         path(&root, "state"),
         path(&root, "config"),
-        path(&root, "tmp"),
     );
+    // `TMPDIR` short and in `/tmp`, as on a node: the proxy socket's path
+    // (`<TMPDIR>/pirc-n-*/pirc-*/proxy.sock`) must fit `sun_path`.
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("pirc-t")
+        .tempdir_in("/tmp")
+        .unwrap();
+    let tmp = fs::canonicalize(tmp_dir.path())
+        .unwrap()
+        .display()
+        .to_string();
     let vars = [
         ("PIRC_NODE_ID", "test-node"),
         ("PIRC_NODE_TOKEN", "0123456789abcdef0123456789abcdef"),
@@ -110,6 +120,7 @@ pub fn fixture_in(base: Option<&Path>, name: &str, config_json: &str) -> Option<
         env,
         sandbox,
         vars,
+        tmp: tmp_dir,
     })
 }
 

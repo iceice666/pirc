@@ -27,6 +27,7 @@ struct Fixture {
     config: NodeConfig,
     sandbox: NativeSandbox,
     path: String,
+    _tmp: tempfile::TempDir,
 }
 
 impl Drop for Fixture {
@@ -45,7 +46,7 @@ fn fixture(name: &str, allowed: &[&str], denied: &[&str]) -> Option<Fixture> {
     }
     let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("sandbox-network-{name}"));
     let _ = fs::remove_dir_all(&root);
-    for dir in ["home", "state", "config", "workspace", "tmp"] {
+    for dir in ["home", "state", "config", "workspace"] {
         fs::create_dir_all(root.join(dir)).unwrap();
     }
     let root = fs::canonicalize(&root).unwrap();
@@ -60,7 +61,17 @@ fn fixture(name: &str, allowed: &[&str], denied: &[&str]) -> Option<Fixture> {
     )
     .unwrap();
     let dir = |rest: &str| root.join(rest).display().to_string();
-    let (home, state, config_dir, tmp) = (dir("home"), dir("state"), dir("config"), dir("tmp"));
+    let (home, state, config_dir) = (dir("home"), dir("state"), dir("config"));
+    // `TMPDIR` short and in `/tmp`, as on a node: the proxy socket's path
+    // (`<TMPDIR>/pirc-n-*/pirc-*/proxy.sock`) must fit `sun_path`.
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("pirc-t")
+        .tempdir_in("/tmp")
+        .unwrap();
+    let tmp = fs::canonicalize(tmp_dir.path())
+        .unwrap()
+        .display()
+        .to_string();
     let vars = [
         ("PIRC_NODE_ID", "test-node"),
         ("PIRC_NODE_TOKEN", "0123456789abcdef0123456789abcdef"),
@@ -87,6 +98,7 @@ fn fixture(name: &str, allowed: &[&str], denied: &[&str]) -> Option<Fixture> {
         config,
         sandbox,
         path: path_var,
+        _tmp: tmp_dir,
     })
 }
 
@@ -289,6 +301,64 @@ async fn the_hosts_resolver_sockets_are_hidden() {
         String::from_utf8_lossy(&output.stderr)
     );
     readonly.cleanup();
+}
+
+/// Every session runs as the node's uid with `/tmp` writable: the node's
+/// private parent of the temp directories keeps one session from another's
+/// files and proxy socket.
+#[tokio::test]
+async fn sessions_cannot_reach_each_others_temp_dir_or_proxy() {
+    let Some(f) = fixture("neighbours", &["localhost"], &[]) else {
+        return;
+    };
+    let port = upstream().await;
+    let tmp = |prepared: &Prepared| {
+        let (_, dir) = prepared
+            .env
+            .iter()
+            .find(|(name, _)| name == "CLAUDE_CODE_TMPDIR")
+            .unwrap();
+        PathBuf::from(dir)
+    };
+    let a = f.prepare("pi_a").await;
+    let b = f.prepare("pi_b").await;
+    let (a_tmp, b_tmp) = (tmp(&a), tmp(&b));
+    let parent = a_tmp.parent().unwrap();
+    assert_eq!(b_tmp.parent(), Some(parent));
+    assert!(b_tmp.join("proxy.sock").exists());
+    let script = format!(
+        r#"ls -a '{parent}' | grep -v '^\.\.\?$'
+[ -e '{b}/proxy.sock' ] && echo 'sees the socket'
+ls '{b}' 2>/dev/null && echo 'lists the directory'
+(echo x > '{b}/planted') 2>/dev/null && echo 'writes the directory'
+printf 'GET / HTTP/1.1\r\n\r\n' | nc -U '{b}/proxy.sock' 2>/dev/null && echo 'connects'
+echo x > "$TMPDIR/own" && cat "$TMPDIR/own"
+exit 0
+"#,
+        parent = parent.display(),
+        b = b_tmp.display(),
+    );
+    let run = f.run(&a, &script).await;
+    let own_name = a_tmp.file_name().unwrap().to_string_lossy();
+    assert_eq!(
+        (run.code, run.stdout.as_str()),
+        (0, format!("{own_name}\nx\n").as_str()),
+        "{}",
+        run.stderr
+    );
+    assert!(!b_tmp.join("planted").exists());
+    // B's proxy still serves B.
+    if has("curl", &f.path) {
+        let run = f
+            .run(
+                &b,
+                &format!("curl -sS --noproxy '' --max-time 10 http://localhost:{port}/"),
+            )
+            .await;
+        assert_eq!(run.stdout, "ok\n", "{}", run.stderr);
+    }
+    a.cleanup();
+    b.cleanup();
 }
 
 #[tokio::test]

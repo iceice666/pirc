@@ -183,6 +183,8 @@ pub struct MacSandbox {
     config: NodeConfig,
     env: Env,
     probe: ProbeCache,
+    /// The private parent of the sessions' temporary directories.
+    node_tmp: common::NodeTmp,
     /// srt's `sessionSuffix`: one per node, as one per srt process.
     session_suffix: String,
     /// Connections every session's proxy may still open together.
@@ -191,10 +193,12 @@ pub struct MacSandbox {
 
 impl MacSandbox {
     pub fn new(config: NodeConfig, env: Env) -> Self {
+        let node_tmp = common::NodeTmp::new(&env);
         Self {
             config,
             env,
             probe: ProbeCache::default(),
+            node_tmp,
             session_suffix: profile::session_suffix(),
             connections: Arc::new(tokio::sync::Semaphore::new(proxy::MAX_NODE_CONNECTIONS)),
         }
@@ -295,7 +299,7 @@ impl Sandbox for MacSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::session(&self.config, &self.env, &input)?;
+            } = common::session(&self.config, &self.env, &self.node_tmp, &input)?;
             self.require(&tmp).await?;
             let (listener, port) = match ProxyListener::loopback().await {
                 Ok(bound) => bound,
@@ -364,7 +368,7 @@ impl Sandbox for MacSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::readonly_session(&self.config, &self.env, &input)?;
+            } = common::readonly_session(&self.config, &self.env, &self.node_tmp, &input)?;
             self.require(&tmp).await?;
             let (tmp_text, home) = (text(&tmp), self.home());
             let tag = self.log_tag(&input.command);

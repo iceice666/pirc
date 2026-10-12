@@ -218,17 +218,21 @@ pub struct NativeSandbox {
     /// The `pirc-node` executable that has the `sandbox-bridge` subcommand.
     helper: PathBuf,
     probe: ProbeCache,
+    /// The private parent of the sessions' temporary directories.
+    node_tmp: common::NodeTmp,
     /// Connections every session's proxy may still open together.
     connections: Arc<tokio::sync::Semaphore>,
 }
 
 impl NativeSandbox {
     pub fn new(config: NodeConfig, env: Env, helper: PathBuf) -> Self {
+        let node_tmp = common::NodeTmp::new(&env);
         Self {
             config,
             env,
             helper,
             probe: ProbeCache::default(),
+            node_tmp,
             connections: Arc::new(tokio::sync::Semaphore::new(proxy::MAX_NODE_CONNECTIONS)),
         }
     }
@@ -412,7 +416,7 @@ impl NativeSandbox {
         workspace_root: &Path,
         command: Vec<OsString>,
     ) -> ApiResult<Prepared> {
-        let tmp = common::make_temp_dir(&common::tmpdir(&self.env), "pirc-").map_err(|error| {
+        let (tmp, _) = self.node_tmp.make_session_dir().map_err(|error| {
             crate::log::error(&format!(
                 "cannot make the command's temp directory: {error}"
             ));
@@ -438,7 +442,7 @@ impl Sandbox for NativeSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::session(&self.config, &self.env, &input)?;
+            } = common::session(&self.config, &self.env, &self.node_tmp, &input)?;
             let fail = |tmp: &Path, error: ApiError| {
                 Session::remove_tmp(tmp);
                 Err(error)
@@ -521,7 +525,8 @@ impl Sandbox for NativeSandbox {
 
     fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>> {
         Box::pin(async move {
-            let session = common::readonly_session(&self.config, &self.env, &input)?;
+            let session =
+                common::readonly_session(&self.config, &self.env, &self.node_tmp, &input)?;
             self.readonly(session, &input.workspace_root, input.command)
                 .await
         })
