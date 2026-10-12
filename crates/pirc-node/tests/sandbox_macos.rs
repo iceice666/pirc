@@ -1069,10 +1069,16 @@ async fn a_workspace_with_control_characters_keeps_its_denies() {
 }
 
 /// The Git panel's sandbox (security audit S8): the workspace readable,
-/// nothing writable but its temp directory, no network.
+/// nothing writable but its temp directory, no network. Not even srt's
+/// default write paths (review finding 4): its home convenience
+/// directories, `/tmp/claude` (shared with every session) or `/dev/tty`.
 #[tokio::test]
 async fn the_readonly_sandbox_reads_but_never_writes() {
     let f = fixture("readonly");
+    let home = path(&f.root, "home");
+    fs::create_dir_all(f.root.join("home/.claude/debug")).unwrap();
+    fs::create_dir_all(f.root.join("home/.npm/_logs")).unwrap();
+    let _ = fs::create_dir_all("/tmp/claude");
     // A real repository for `git status` (the fixture's `.git` is a stub).
     let init = std::process::Command::new("git")
         .args(["init", "-q"])
@@ -1113,6 +1119,18 @@ async fn the_readonly_sandbox_reads_but_never_writes() {
     assert_ne!(run(format!("echo x >> {w}/.git/config")).await, 0);
     assert_ne!(run("echo x > /tmp/pirc-ro-$$".to_owned()).await, 0);
     assert_eq!(run("echo x > \"$TMPDIR/x\"".to_owned()).await, 0);
+    assert_eq!(run("echo x > /dev/null".to_owned()).await, 0);
+    for script in [
+        format!("echo x > {home}/.claude/debug/planted"),
+        format!("mkdir {home}/.claude/debug/d"),
+        format!("echo x > {home}/.npm/_logs/planted"),
+        "echo x > /tmp/claude/pirc-ro-$$".to_owned(),
+        "echo x > /private/tmp/claude/pirc-ro-$$".to_owned(),
+        "echo x > /dev/tty".to_owned(),
+    ] {
+        assert_ne!(run(script.clone()).await, 0, "{script}");
+    }
+    assert!(!f.root.join("home/.claude/debug/planted").exists());
     assert_ne!(
         run(format!("curl -s -m 5 http://127.0.0.1:{port}/")).await,
         0,

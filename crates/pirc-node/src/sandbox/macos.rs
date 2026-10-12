@@ -34,6 +34,11 @@
 //!   ancestors, so a link a writable root holds (`~/.ssh` linking
 //!   elsewhere, `~` in `allowedPaths`) cannot be replaced by a directory
 //!   of the agent's.
+//! - The Git panel's read-only profile ([`ProfileInput::readonly`]) keeps
+//!   only `/dev/null`, `/dev/stdout` and `/dev/stderr` of srt's default
+//!   write paths: srt also opened `/tmp/claude` (shared with every
+//!   session), `~/.npm/_logs`, `~/.claude/debug` and `/dev/tty` (and two
+//!   more devices) to every command it wrapped.
 //! - No log monitor (srt's `log stream` of violations) and no JVM proxy
 //!   agent jar (`-Djava.net.preferIPv4Stack=true` is still set).
 //! - The log tag's command is the agent's arguments joined by spaces
@@ -69,6 +74,8 @@ struct Settings<'a> {
     proxy_port: Option<u16>,
     allow_pty: bool,
     log_tag: &'a str,
+    /// [`ProfileInput::readonly`].
+    readonly: bool,
 }
 
 /// Not srt's (see the module documentation): what [`profile::generate`]
@@ -205,6 +212,7 @@ fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<Str
         extra_read_denies: &extra.read,
         extra_write_denies: &extra.write,
         extra_move_blocks: &move_blocks,
+        readonly: settings.readonly,
         literal_existing_allows: true,
     })
 }
@@ -333,6 +341,7 @@ impl MacSandbox {
                     proxy_port: Some(9),
                     allow_pty: false,
                     log_tag: &tag,
+                    readonly: false,
                 },
             )?;
             Ok((profile, tmp_text))
@@ -419,6 +428,7 @@ impl Sandbox for MacSandbox {
                         proxy_port: Some(port),
                         allow_pty: true,
                         log_tag: &tag,
+                        readonly: false,
                     },
                 )?;
                 Ok::<_, String>((profile, tmp_text))
@@ -485,6 +495,7 @@ impl Sandbox for MacSandbox {
                         proxy_port: None,
                         allow_pty: false,
                         log_tag: &tag,
+                        readonly: true,
                     },
                 )?;
                 Ok::<_, String>((profile, tmp_text))
@@ -610,6 +621,7 @@ mod tests {
             proxy_port: None,
             allow_pty: false,
             log_tag: "t",
+            readonly: false,
         };
         assert!(policy_profile(&SessionPolicy::default(), &settings).is_ok());
         let target = OsStr::from_bytes(b"repo\xff");

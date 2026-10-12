@@ -46,6 +46,10 @@ const DANGEROUS_FILES: [&str; 9] = [
 /// `getDangerousDirectories()`.
 const DANGEROUS_DIRECTORIES: [&str; 4] = [".vscode", ".idea", ".claude/commands", ".claude/agents"];
 
+/// What a read-only profile ([`ProfileInput::readonly`]) keeps of srt's
+/// default write paths.
+pub const READONLY_WRITE_PATHS: [&str; 3] = ["/dev/stdout", "/dev/stderr", "/dev/null"];
+
 /// `SBPL_STRING_MAX_BYTES`: sandbox-exec refuses longer string literals.
 const SBPL_STRING_MAX_BYTES: usize = 900;
 /// `MIN_DENY_GROUP_SIZE`.
@@ -90,6 +94,12 @@ pub struct ProfileInput<'a> {
     /// [`super::extra_denies`]): a deny names where the link leads, so the
     /// link itself must not be replaced.
     pub extra_move_blocks: &'a [String],
+    /// Not srt's: the Git panel's read-only sandbox. Of srt's default
+    /// write paths ([`paths::default_write_paths`]) only
+    /// [`READONLY_WRITE_PATHS`] stay: not `/tmp/claude` (shared with every
+    /// session), the home convenience directories or `/dev/tty`, so it
+    /// writes nothing but its temp directory (security audit S8).
+    pub readonly: bool,
     /// Not srt's: an allow (read or write) spelled with glob characters
     /// that names an existing path is that path ([`allow_entry`]).
     pub literal_existing_allows: bool,
@@ -741,16 +751,20 @@ pub fn generate(input: &ProfileInput<'_>) -> Result<String, String> {
     let tag = input.log_tag;
     // `wrapWithSandbox`: the default write paths, `/**` stripped (macOS
     // keeps globs).
-    let allow_only: Vec<String> =
+    let default_writes = if input.readonly {
+        READONLY_WRITE_PATHS.map(str::to_owned).to_vec()
+    } else {
         paths::default_write_paths(input.deny_read, input.allow_read, ctx)
-            .into_iter()
-            .chain(
-                input
-                    .allow_write
-                    .iter()
-                    .map(|p| remove_trailing_glob_suffix(p)),
-            )
-            .collect();
+    };
+    let allow_only: Vec<String> = default_writes
+        .into_iter()
+        .chain(
+            input
+                .allow_write
+                .iter()
+                .map(|p| remove_trailing_glob_suffix(p)),
+        )
+        .collect();
     let deny_within_allow: Vec<String> = input
         .deny_write
         .iter()
@@ -895,6 +909,55 @@ mod tests {
         // srt's spelling for everything else.
         let plain = "/w[s] \"q\" \\ ü*?(x)|{1}+$^.\t";
         assert_eq!(escape(plain), serde_json::to_string(plain).unwrap());
+    }
+
+    #[test]
+    fn readonly_profiles_drop_srts_default_write_paths() {
+        let allow_write = ["/nonexistent-pirc/tmp".to_owned()];
+        let input = |readonly| ProfileInput {
+            deny_read: &[],
+            allow_read: &[],
+            allow_write: &allow_write,
+            deny_write: &[],
+            allow_git_config: false,
+            allow_unix_sockets: &[],
+            allow_local_binding: false,
+            proxy_port: None,
+            allow_pty: false,
+            cwd: "/nonexistent-pirc/ws",
+            home: "/nonexistent-pirc/home",
+            log_tag: "t",
+            extra_read_denies: &[],
+            extra_write_denies: &[],
+            extra_move_blocks: &[],
+            literal_existing_allows: false,
+            readonly,
+        };
+        let dropped = [
+            // `/tmp/claude` and `/private/tmp/claude` are one filter on a
+            // Mac where it exists (both resolve).
+            "tmp/claude",
+            "(subpath \"/dev/tty\")",
+            "(subpath \"/dev/dtracehelper\")",
+            "(subpath \"/dev/autofs_nowait\")",
+            "(subpath \"/nonexistent-pirc/home/.npm/_logs\")",
+            "(subpath \"/nonexistent-pirc/home/.claude/debug\")",
+        ];
+        let srt = generate(&input(false)).unwrap();
+        let readonly = generate(&input(true)).unwrap();
+        for filter in dropped {
+            assert!(srt.contains(filter), "{filter}");
+            assert!(!readonly.contains(filter), "{filter}");
+        }
+        for path in READONLY_WRITE_PATHS
+            .iter()
+            .chain([&"/nonexistent-pirc/tmp"])
+        {
+            assert!(
+                readonly.contains(&format!("(subpath \"{path}\")")),
+                "{path}"
+            );
+        }
     }
 
     #[test]

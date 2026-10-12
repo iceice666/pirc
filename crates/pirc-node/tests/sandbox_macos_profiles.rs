@@ -112,6 +112,7 @@ fn profiles_match_srts() {
             extra_read_denies: &[],
             extra_write_denies: &[],
             extra_move_blocks: &[],
+            readonly: false,
             literal_existing_allows: false,
         };
         let actual = profile::generate(&input).unwrap();
