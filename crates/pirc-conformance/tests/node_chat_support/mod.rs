@@ -7,7 +7,6 @@
 #![allow(dead_code)]
 
 use std::fs::{self, File};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
@@ -208,8 +207,7 @@ impl NodeRoot {
         )
         .unwrap();
         let srt = root.join("fake-srt.sh");
-        fs::write(&srt, FAKE_SRT).unwrap();
-        fs::set_permissions(&srt, fs::Permissions::from_mode(0o755)).unwrap();
+        pirc_conformance::write_executable(&srt, FAKE_SRT);
         Self { dir, root }
     }
 
