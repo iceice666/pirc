@@ -248,6 +248,22 @@ impl Connection {
         answer.await.unwrap_or_else(|_| Err(CdpError::closed()))
     }
 
+    /// Write a command now; its reply is ignored.
+    fn send(&self, session: Option<&Arc<str>>, method: &str, params: Value) {
+        let id = self.next.fetch_add(1, Ordering::Relaxed);
+        {
+            let state = self.state.lock().unwrap();
+            if state.closed || session.is_some_and(|session| state.crashed.contains(session)) {
+                return;
+            }
+        }
+        let mut message = json!({ "id": id, "method": method, "params": params });
+        if let Some(session) = session {
+            message["sessionId"] = json!(session.as_ref());
+        }
+        let _ = self.outgoing.send(message.to_string().into_bytes());
+    }
+
     fn listen(&self, session: Option<Arc<str>>) -> mpsc::UnboundedReceiver<Event> {
         let (tx, rx) = mpsc::unbounded_channel();
         self.listen_into(session, tx);
@@ -374,6 +390,13 @@ impl Session {
             .await
     }
 
+    /// Send a command now (after every command sent before it) without
+    /// waiting for its reply, which is ignored: for cleanups that cannot
+    /// wait (a `Drop`).
+    pub fn send(&self, method: &str, params: Value) {
+        self.connection.send(self.id.as_ref(), method, params);
+    }
+
     /// [`Session::call`], with the reply also sent to `to` as an event
     /// `method` (params `{tag, result}` or `{tag, error}`, `session` the
     /// replying session's) in its place among the events read from the
@@ -437,10 +460,14 @@ impl Fake {
         }
     }
 
-    /// The next command the connection wrote.
+    /// The next command the connection wrote (failing after 5 s).
     pub(super) async fn command(&mut self) -> Value {
         let mut buffer = Vec::new();
-        self.commands.read_until(0, &mut buffer).await.unwrap();
+        let read = self.commands.read_until(0, &mut buffer);
+        tokio::time::timeout(std::time::Duration::from_secs(5), read)
+            .await
+            .expect("a command within 5 s")
+            .unwrap();
         buffer.pop();
         serde_json::from_slice(&buffer).unwrap()
     }

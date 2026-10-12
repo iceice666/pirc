@@ -1124,3 +1124,37 @@ async fn a_crashed_page_fails_its_calls_as_playwright() {
         browser.context.close().await;
     });
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_key_press_cut_short_leaves_no_modifier_held() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let page = browser.context.pages()[0].clone();
+        page.goto(&format!("http://127.0.0.1:{port}/form"), LoadState::Load, T)
+            .await
+            .unwrap();
+        page.evaluate("() => document.querySelector('input').focus()", Value::Null)
+            .await
+            .unwrap();
+        let keyboard = page.keyboard();
+        // Its action's timeout drops it while Control is down.
+        let press = keyboard.press("Control+a", Duration::from_secs(60));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(300), press)
+                .await
+                .is_err()
+        );
+        assert_eq!(keyboard.modifiers(), 0);
+        keyboard.type_text("x", Duration::ZERO).await.unwrap();
+        assert_eq!(
+            page.evaluate("() => document.querySelector('input').value", Value::Null)
+                .await
+                .unwrap(),
+            "x"
+        );
+        browser.context.close().await;
+    });
+}
