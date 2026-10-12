@@ -69,7 +69,9 @@
 //!   an ancestor of it (srt's "Fix 2"; one placeholder per destination, the
 //!   directory winning). Missing read denies get one too, hidden (not
 //!   srt's, which placed them for write denies only: the agent could
-//!   create the path and read what it put or the host later puts there). srt bound an empty host directory there; this uses
+//!   create the path and read what it put or the host later puts there).
+//!   A missing name holding `*`, `?` or `[` gets none (a glob, taken
+//!   literally: the placeholder would be a stray `**` on the host). srt bound an empty host directory there; this uses
 //!   a read-only tmpfs, which needs no host source to keep unwritable.
 //!   bubblewrap creates each placeholder's mount point on the host; they are
 //!   tracked ([`MountPoints`]) and removed when the last sandbox using them
@@ -304,6 +306,21 @@ fn empty_directory(path: impl AsRef<Path>) -> bool {
     let path = path.as_ref();
     std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir())
         && std::fs::read_dir(path).is_ok_and(|mut entries| entries.next().is_none())
+}
+
+/// Warn, once per path, that a missing deny path's glob characters are
+/// taken literally.
+fn warn_glob(path: &str) {
+    static WARNED: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+    if WARNED
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .insert(path.to_owned())
+    {
+        crate::log::warn(&format!(
+            "the sandbox path {path} looks like a glob; the Linux sandbox takes it literally and places nothing for it"
+        ));
+    }
 }
 
 /// srt's `isAbsenceErrno`.
@@ -578,6 +595,14 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
             // Cannot be inspected: srt's stand-in (above) hides it.
             Err(error) if hide && !absent(&error) => continue,
             Err(_) => {}
+        }
+        // A glob (srt's `denyRead` globs, say) is taken literally: a
+        // placeholder would only put a stray `**` directory on the host.
+        // Names that exist are literal whatever they hold.
+        let missing = &denied[parent(&first_missing_component(denied)).len()..];
+        if missing.contains(['*', '?', '[']) {
+            warn_glob(denied);
+            continue;
         }
         if let Some(file) = file_ancestor(&parent(denied)) {
             if !kernel_top_level(&file) && access(&effective, &parent(&file)) == Access::Writable {
@@ -1182,6 +1207,40 @@ mod tests {
             plan.mount_points,
             [p("ws/.env"), p("ws/secrets")].map(PathBuf::from)
         );
+    }
+
+    /// Globs are taken literally: their missing names get no placeholder
+    /// (no stray `**` on the host); a name that exists is literal.
+    #[test]
+    fn missing_glob_spellings_get_no_placeholders() {
+        let (_dir, root) = temp();
+        let p = |rest: &str| format!("{root}/{rest}");
+        fs::create_dir_all(p("ws/lit[1]")).unwrap();
+        let paths = PathPolicy {
+            deny_read: vec![p("ws/**/.env"), p("ws/lit[1]/.env")],
+            allow_write: vec![p("ws")],
+            deny_write: vec![p("ws/.claude/*.json"), p("ws/a?"), p("ws/[x]/y")],
+            ..PathPolicy::default()
+        };
+        let plan = plan(&paths, &Options::default()).unwrap();
+        assert_eq!(
+            plan.args,
+            strings(&[
+                "--ro-bind",
+                "/",
+                "/",
+                "--bind",
+                &p("ws"),
+                &p("ws"),
+                "--bind",
+                &p("ws/lit[1]"),
+                &p("ws/lit[1]"),
+                "--ro-bind",
+                "/dev/null",
+                &p("ws/lit[1]/.env"),
+            ])
+        );
+        assert_eq!(plan.mount_points, [PathBuf::from(p("ws/lit[1]/.env"))]);
     }
 
     #[test]

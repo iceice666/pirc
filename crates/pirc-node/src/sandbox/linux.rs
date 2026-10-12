@@ -54,7 +54,8 @@
 //!   before the session (see [`plan`]'s accepted gaps).
 //! - Glob patterns in the policy's paths are taken literally (srt expanded
 //!   `denyRead` globs on Linux and dropped write globs); pirc's policies
-//!   hold resolved paths.
+//!   hold resolved paths. A missing deny path with `*`, `?` or `[` in its
+//!   missing names gets no placeholder, and a warning (once per path).
 
 mod args;
 pub mod caps;
