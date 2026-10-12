@@ -17,7 +17,9 @@
 mod node_browser_support;
 mod node_link_side_support;
 
-use node_browser_support::{Browsing, Viewer, entry, ffmpeg, images, kind, required, start, state};
+use node_browser_support::{
+    Browsing, Viewer, entry, ffmpeg, images, kind, required, start, state, viewport_frame,
+};
 use node_link_side_support::settled_in;
 use serde_json::{Value, json};
 
@@ -355,7 +357,8 @@ async fn node_browser_viewer() {
     b.t.note("the action shown meanwhile", json!(busy));
     let entry_1 = v.wait(&mut b.gw, kind("log_entry")).await;
     b.t.note("the log entry", entry_1.clone());
-    let live = v.wait(&mut b.gw, kind("frame")).await;
+    // Of the viewport's size: not a stale first frame (see `viewport_frame`).
+    let live = v.wait(&mut b.gw, viewport_frame).await;
     b.t.note("a live frame", live);
 
     // Input needs user mode.

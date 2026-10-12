@@ -239,7 +239,10 @@ fn browser_env(executable: &Path, extra: &[(&'static str, String)]) -> Vec<(&'st
             "PIRC_BROWSER_PROFILES_DIR",
             "{run_dir}/browser-profiles".to_owned(),
         ),
-        ("PIRC_BROWSER_VIEWPORT", "1280x800".to_owned()),
+        (
+            "PIRC_BROWSER_VIEWPORT",
+            format!("{}x{}", VIEWPORT.0, VIEWPORT.1),
+        ),
     ];
     let playwright = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../apps/gateway/node_modules/playwright-core");
@@ -675,4 +678,15 @@ pub fn entry(action: &str) -> impl Fn(&Value) -> bool + '_ {
 /// A frame of type `kind`.
 pub fn kind(kind: &str) -> impl Fn(&Value) -> bool + '_ {
     move |frame: &Value| frame["type"] == kind
+}
+
+/// The browsers' viewport (`PIRC_BROWSER_VIEWPORT`).
+pub const VIEWPORT: (u16, u16) = (1280, 800);
+
+/// A live `frame` whose image has the viewport's size. Chromium may
+/// capture a screencast's first frames before the viewport emulation's
+/// resize (their metadata already says the viewport's size); Playwright
+/// hands them on, so the TS node may send one first.
+pub fn viewport_frame(frame: &Value) -> bool {
+    frame["type"] == "frame" && frame["data"] == format!("<jpeg {}x{}>", VIEWPORT.0, VIEWPORT.1)
 }
