@@ -48,8 +48,9 @@
 //!   (where it never hits), applied to the spelling. Every link crossed
 //!   while the spelling resolves counts, the links a link's target leads
 //!   through included (`/entry -> /hop -> /real`), and so does every
-//!   directory a link's target leaves through `..` ([`walk_links`]). The
-//!   resolved target is protected as srt protects it. Decided with the user
+//!   directory a link's target leaves through `..` ([`walk_links`]) that
+//!   the agent may write (one it may not write is pinned). The resolved
+//!   target is protected as srt protects it. Decided with the user
 //!   (M7); no opt-out. The policy lists some denies only resolved (the
 //!   sensitive home paths, private, read-only and protected paths, the
 //!   agent config dir): their spellings come from
@@ -386,16 +387,25 @@ pub struct Plan {
 ///
 /// A directory the agent may not write cannot be replaced either: where
 /// its parent is writable it is a verdict boundary, a rule path, so it is
-/// pinned (see [`pinned`]).
+/// pinned (see [`pinned`]). So a directory left through `..` counts only
+/// when the agent may write it too; a link always does (bubblewrap cannot
+/// mount on one).
 fn replaceable_symlink(effective: &PathPolicy, protected: &str) -> Option<Refusal> {
     walk_links(protected)
         .links
         .into_iter()
-        .find(|link| access(effective, &parent(link)) == Access::Writable)
-        .map(|link| Refusal {
+        .map(|link| {
+            let left = !std::fs::symlink_metadata(&link).is_ok_and(|m| m.file_type().is_symlink());
+            (link, left)
+        })
+        .find(|(link, left)| {
+            access(effective, &parent(link)) == Access::Writable
+                && (!left || access(effective, link) == Access::Writable)
+        })
+        .map(|(link, left)| Refusal {
             protected: protected.to_owned(),
-            parent: !std::fs::symlink_metadata(&link).is_ok_and(|m| m.file_type().is_symlink()),
             link,
+            parent: left,
         })
 }
 
@@ -1468,6 +1478,20 @@ mod tests {
             ..PathPolicy::default()
         };
         assert!(plan(&paths, &Options::default()).is_ok());
+        // `..` out of a directory the agent may not write, in one it may:
+        // that directory is pinned, so it cannot be replaced.
+        fs::create_dir_all(p("ws/prot")).unwrap();
+        fs::create_dir_all(p("ws/target")).unwrap();
+        symlink("../target", p("ws/prot/l")).unwrap();
+        let paths = PathPolicy {
+            allow_write: vec![p("ws")],
+            deny_write: vec![p("ws/prot"), p("ws/prot/l/f")],
+            ..PathPolicy::default()
+        };
+        let plan = plan(&paths, &Options::default()).unwrap();
+        let has = |a: &str, b: &str, c: &str| plan.args.windows(3).any(|w| w == [a, b, c]);
+        assert!(has("--ro-bind", &p("ws/prot"), &p("ws/prot")));
+        assert!(has("--ro-bind", "/dev/null", &p("ws/target/f")));
     }
 
     #[test]
