@@ -244,7 +244,12 @@ fn pinned(paths: &PathPolicy, points: &[String]) -> Vec<String> {
 /// environment, filesystem, `/dev`, PID and user namespaces, capabilities,
 /// `/proc`). The proxy socket is bound after the filesystem rather than
 /// before it, so no mount of the plan can cover it.
-pub fn bwrap_args(paths: &PathPolicy, tmp: &str, socket: &str) -> Vec<OsString> {
+pub fn bwrap_args(
+    paths: &PathPolicy,
+    tmp: &str,
+    socket: &str,
+    proxy_env: &[(String, String)],
+) -> Vec<OsString> {
     let mut args: Vec<String> = ["--new-session", "--die-with-parent", "--unshare-net"]
         .map(String::from)
         .to_vec();
@@ -252,7 +257,7 @@ pub fn bwrap_args(paths: &PathPolicy, tmp: &str, socket: &str) -> Vec<OsString> 
         ("SANDBOX_RUNTIME".to_owned(), "1".to_owned()),
         ("TMPDIR".to_owned(), tmp.to_owned()),
     ];
-    setenv.extend(proxy::env_vars(BRIDGE_PORT, BRIDGE_SOCKS_PORT));
+    setenv.extend(proxy_env.iter().cloned());
     // Not srt's: says which kind of sandbox this is.
     setenv.push(("PIRC_SANDBOX_BACKEND".to_owned(), "native".to_owned()));
     for (name, value) in setenv {
@@ -300,6 +305,15 @@ impl NativeSandbox {
         }
     }
 
+    /// The proxy variables for the bridge's ports (`GIT_SSH_COMMAND` runs
+    /// the helper's `sandbox-bridge connect`).
+    fn proxy_env(&self, auth: &proxy::ProxyAuth) -> Vec<(String, String)> {
+        let platform = proxy::EnvPlatform::Linux {
+            helper: &self.helper,
+        };
+        proxy::env_vars(platform, BRIDGE_PORT, BRIDGE_SOCKS_PORT, auth)
+    }
+
     /// `bwrap` with `args`, then the bridge on `socket` running `command`.
     fn command_args(
         &self,
@@ -343,11 +357,13 @@ impl NativeSandbox {
             },
             Ok(_listener) => {
                 let tmp_text = tmp.display().to_string();
+                let proxy_env = self.proxy_env(&proxy::ProxyAuth::generate());
                 let args = self.command_args(
                     bwrap_args(
                         &PathPolicy::default(),
                         &tmp_text,
                         &socket.display().to_string(),
+                        &proxy_env,
                     ),
                     &socket,
                     &["/bin/sh".into(), "-c".into(), "exit 0".into()],
@@ -405,16 +421,24 @@ impl Sandbox for NativeSandbox {
                 policy.network.allowed_domains.clone(),
                 policy.network.denied_domains.clone(),
             ));
+            let auth = Arc::new(proxy::ProxyAuth::generate());
+            let proxy_env = self.proxy_env(&auth);
             let proxy = tokio::spawn(proxy::serve(
                 ProxyListener::Unix(listener),
                 allowlist.clone(),
+                auth,
                 self.connections.clone(),
             ));
             let tmp_text = tmp.display().to_string();
             let mut agent: Vec<OsString> = vec![self.config.agent_command.clone().into()];
             agent.extend(self.config.agent_args.iter().map(OsString::from));
             let args = self.command_args(
-                bwrap_args(&policy.paths, &tmp_text, &socket.display().to_string()),
+                bwrap_args(
+                    &policy.paths,
+                    &tmp_text,
+                    &socket.display().to_string(),
+                    &proxy_env,
+                ),
                 &socket,
                 &agent,
             );
@@ -645,10 +669,19 @@ mod tests {
 
     #[test]
     fn bwrap_arguments_keep_srts_order() {
+        let proxy_env = proxy::env_vars(
+            proxy::EnvPlatform::Linux {
+                helper: Path::new("/bin/pirc-node"),
+            },
+            BRIDGE_PORT,
+            BRIDGE_SOCKS_PORT,
+            &proxy::ProxyAuth::generate(),
+        );
         let args: Vec<String> = bwrap_args(
             &PathPolicy::default(),
             "/tmp/pirc-x",
             "/tmp/pirc-x/proxy.sock",
+            &proxy_env,
         )
         .into_iter()
         .map(|arg| arg.into_string().unwrap())
@@ -677,7 +710,12 @@ mod tests {
         let at = position("TMPDIR");
         assert_eq!(args[at + 1], "/tmp/pirc-x");
         let at = position("HTTPS_PROXY");
-        assert_eq!(args[at + 1], "http://localhost:3128");
+        assert!(args[at + 1].starts_with("http://srt:"), "{}", args[at + 1]);
+        assert!(
+            args[at + 1].ends_with("@localhost:3128"),
+            "{}",
+            args[at + 1]
+        );
     }
 
     #[test]
