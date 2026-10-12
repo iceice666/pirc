@@ -169,7 +169,7 @@ mod tests {
     async fn the_shell_starts_as_a_session_leader_on_the_terminal() {
         let dir = tempfile::tempdir().unwrap();
         let script = dir.path().join("probe");
-        std::fs::write(
+        crate::test_support::executable(
             &script,
             "#!/bin/sh\n\
              [ \"$1\" = -l ] && echo login\n\
@@ -178,10 +178,7 @@ mod tests {
              [ -r /proc/$$/stat ] && cut -d' ' -f6 /proc/$$/stat > sid\n\
              echo $$ > pid\n\
              echo done\n",
-        )
-        .unwrap();
-        std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-            .unwrap();
+        );
         let (master, slave) = open(24, 80).unwrap();
         let mut env = std::collections::BTreeMap::new();
         env.insert("PATH".to_owned(), std::env::var("PATH").unwrap_or_default());
