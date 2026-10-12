@@ -127,9 +127,32 @@ struct Entry {
     anchor: Option<String>,
 }
 
-/// `escapePath`: `JSON.stringify`.
+/// `escapePath`, as an SBPL string literal. Not srt's spelling: srt used
+/// `JSON.stringify`, whose `\u00XX`, `\b` and `\f` escapes Seatbelt's
+/// reader does not know (it reads `\u0001` as `u0001`), so a rule naming
+/// a path with a control character named another path and a deny did not
+/// hold. Here `"` and `\` get a backslash, `\t` and `\n` keep JSON's
+/// escapes (Seatbelt reads them alike), and every other control character
+/// and DEL is written `\xHH` (Seatbelt reads exactly two hex digits). A
+/// string without such characters is spelled as srt spelled it.
 fn escape(text: &str) -> String {
-    serde_json::to_string(text).unwrap_or_default()
+    use std::fmt::Write as _;
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\t' => out.push_str("\\t"),
+            '\n' => out.push_str("\\n"),
+            c if c < ' ' || c == '\u{7f}' => {
+                let _ = write!(out, "\\x{:02x}", u32::from(c));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// `toPathEntry`: a caller's spelling, a glob when it reads as one.
@@ -858,6 +881,20 @@ mod tests {
         let long = "é".repeat(150);
         let tag = log_tag(&long, "_x_SBX");
         assert!(tag.len() < 300, "{tag}");
+    }
+
+    #[test]
+    fn strings_are_sbpl_literals() {
+        assert_eq!(escape("/a b/ü"), "\"/a b/ü\"");
+        assert_eq!(escape("q\"\\"), "\"q\\\"\\\\\"");
+        assert_eq!(escape("\t\n"), "\"\\t\\n\"");
+        assert_eq!(
+            escape("\u{1}\u{8}\u{c}\r\u{1b}\u{1f}\u{7f}"),
+            "\"\\x01\\x08\\x0c\\x0d\\x1b\\x1f\\x7f\""
+        );
+        // srt's spelling for everything else.
+        let plain = "/w[s] \"q\" \\ ü*?(x)|{1}+$^.\t";
+        assert_eq!(escape(plain), serde_json::to_string(plain).unwrap());
     }
 
     #[test]

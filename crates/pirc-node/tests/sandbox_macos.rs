@@ -1016,6 +1016,58 @@ async fn a_workspace_with_glob_characters_keeps_its_denies() {
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
+/// srt wrote rule strings as JSON, whose `\u0001`-style escapes Seatbelt
+/// does not read: every deny naming a path with a control character named
+/// another path (review finding 3). Also regex metacharacters, quotes, a
+/// backslash and non-ASCII: srt's anchored `**/` denies still match.
+#[tokio::test]
+async fn a_workspace_with_control_characters_keeps_its_denies() {
+    for (name, workspace) in [
+        ("ctl", "home/ws\u{1}\u{1b}\t\u{7f}x"),
+        ("meta", "w[s] \"q\" \\ ü*?(x)|{1}+$^."),
+    ] {
+        let f = fixture_with(
+            name,
+            Options {
+                home_writable: true,
+                workspace: Some(workspace),
+                ..Options::default()
+            },
+        );
+        let w = f.w();
+        // The workspace as the script's `$1`: no quoting of its name.
+        let sh = |script: &str| format!("set -- \"$PWD\"; {script}");
+        let failures = f
+            .expect(
+                &[
+                    ("write .git/hooks", sh("echo x > \"$1/.git/hooks/pre-commit\"")),
+                    ("append .git/config", sh("echo x >> \"$1/.git/config\"")),
+                    ("create .pirc", sh("mkdir \"$1/.pirc\"")),
+                    ("rename .git", sh("mv \"$1/.git\" \"$1/.git2\"")),
+                    ("nested .zshrc", sh("mkdir -p \"$1/sub\" && echo x > \"$1/sub/.zshrc\"")),
+                    (
+                        "nested hooks",
+                        sh("mkdir -p \"$1/s/.git/hooks\" && echo x > \"$1/s/.git/hooks/pre-commit\""),
+                    ),
+                    (
+                        "write .vscode",
+                        sh("mkdir -p \"$1/.vscode\" && echo x > \"$1/.vscode/settings.json\""),
+                    ),
+                ],
+                &[
+                    ("write the workspace", sh("echo x > \"$1/x\"")),
+                    ("read the workspace", sh("cat \"$1/README\"")),
+                ],
+            )
+            .await;
+        assert!(failures.is_empty(), "{w:?}: {failures:#?}");
+        assert_eq!(
+            fs::read_to_string(f.workspace.join(".git/config")).unwrap(),
+            "[core]"
+        );
+    }
+}
+
 /// The Git panel's sandbox (security audit S8): the workspace readable,
 /// nothing writable but its temp directory, no network.
 #[tokio::test]

@@ -47,7 +47,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use pirc_config::{Env, NodeConfig};
-use pirc_policy::session::{SessionPolicy, walk_links};
+use pirc_policy::session::{SessionPolicy, WalkError, walk_links};
 
 use self::paths::{Context, contains_glob_chars, normalize_path_for_sandbox};
 use self::profile::ProfileInput;
@@ -139,9 +139,42 @@ pub fn extra_denies(
     }
 }
 
+/// `Err` when resolving one of `entries` (or srt's protected names in
+/// `cwd`) reaches a symlink whose target is not UTF-8: a rule cannot name
+/// that path (srt converted it lossily, so its rule named another path).
+fn refuse_non_utf8<'a>(
+    entries: impl IntoIterator<Item = &'a String>,
+    cwd: &str,
+) -> Result<(), String> {
+    let names = profile::mandatory_names(false)
+        .into_iter()
+        .map(|name| paths::resolve(cwd, name));
+    for entry in entries
+        .into_iter()
+        .cloned()
+        .chain([cwd.to_owned()])
+        .chain(names)
+    {
+        if let Err(WalkError::NotUtf8(link)) = walk_links(&entry).target {
+            return Err(format!("{link} links to a path that is not UTF-8"));
+        }
+    }
+    Ok(())
+}
+
 /// The profile for `policy` (as `srtSettings` passes it on macOS).
 fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<String, String> {
     let paths = &policy.paths;
+    refuse_non_utf8(
+        paths
+            .deny_read
+            .iter()
+            .chain(&paths.allow_read)
+            .chain(&paths.allow_write)
+            .chain(&paths.deny_write)
+            .chain(&policy.network.allow_unix_sockets),
+        settings.cwd,
+    )?;
     let extra = extra_denies(
         &paths.deny_read,
         &paths.deny_write,
@@ -203,8 +236,13 @@ fn sandbox_env(
     env
 }
 
-fn text(path: &Path) -> String {
-    path.display().to_string()
+/// `path` as text, or `Err` when it is not UTF-8: the agent does not
+/// start, since no rule can name such a path (srt converted it lossily,
+/// so its rule named another path). Not srt's.
+fn text(path: &Path) -> Result<String, String> {
+    path.to_str()
+        .map(str::to_owned)
+        .ok_or_else(|| format!("{} is not UTF-8", path.display()))
 }
 
 /// `-p <profile>` and the command.
@@ -236,8 +274,26 @@ impl MacSandbox {
         }
     }
 
-    fn home(&self) -> String {
+    fn home(&self) -> Result<String, String> {
         text(&self.env.home())
+    }
+
+    /// The node's own paths, which the policy is built from: each must be
+    /// UTF-8 ([`text`]).
+    fn check_node_paths(&self) -> Result<(), String> {
+        let config = &self.config;
+        for path in [
+            &config.config_dir,
+            &config.state_dir,
+            &config.sessions_dir,
+            &config.uploads_dir,
+            &config.database_path,
+            &config.browser.profiles_dir,
+            &config.workspace_memory_dir,
+        ] {
+            text(path)?;
+        }
+        Ok(())
     }
 
     fn log_tag(&self, command: &[OsString]) -> String {
@@ -265,25 +321,27 @@ impl MacSandbox {
             }
         };
         let command: Vec<OsString> = vec!["/bin/sh".into(), "-c".into(), "exit 0".into()];
-        let tmp_text = text(&tmp);
-        let home = self.home();
         let tag = self.log_tag(&command);
-        // A port nothing listens on: the probe makes no connection.
-        let profile = policy_profile(
-            &SessionPolicy::default(),
-            &Settings {
-                cwd: &tmp_text,
-                home: &home,
-                proxy_port: Some(9),
-                allow_pty: false,
-                log_tag: &tag,
-            },
-        );
+        let profile = text(&tmp).and_then(|tmp_text| {
+            let home = self.home()?;
+            // A port nothing listens on: the probe makes no connection.
+            let profile = policy_profile(
+                &SessionPolicy::default(),
+                &Settings {
+                    cwd: &tmp_text,
+                    home: &home,
+                    proxy_port: Some(9),
+                    allow_pty: false,
+                    log_tag: &tag,
+                },
+            )?;
+            Ok((profile, tmp_text))
+        });
         let status = match profile {
             Err(error) => SandboxStatus::Unavailable {
                 reason: format!("sandbox-exec: {error}"),
             },
-            Ok(profile) => {
+            Ok((profile, tmp_text)) => {
                 let mut probe = tokio::process::Command::new(SANDBOX_EXEC);
                 probe
                     .args(exec_args(profile, command))
@@ -342,19 +400,31 @@ impl Sandbox for MacSandbox {
             };
             let mut agent: Vec<OsString> = vec![self.config.agent_command.clone().into()];
             agent.extend(self.config.agent_args.iter().map(OsString::from));
-            let (tmp_text, home) = (text(&tmp), self.home());
             let tag = self.log_tag(&agent);
-            let profile = match policy_profile(
-                &policy,
-                &Settings {
-                    cwd: &text(&input.workspace_root),
-                    home: &home,
-                    proxy_port: Some(port),
-                    allow_pty: true,
-                    log_tag: &tag,
-                },
-            ) {
-                Ok(profile) => profile,
+            let built = (|| {
+                self.check_node_paths()?;
+                for path in [&input.session_dir]
+                    .into_iter()
+                    .chain(&input.inference_socket)
+                    .chain(&input.protected_paths)
+                {
+                    text(path)?;
+                }
+                let (tmp_text, home) = (text(&tmp)?, self.home()?);
+                let profile = policy_profile(
+                    &policy,
+                    &Settings {
+                        cwd: &text(&input.workspace_root)?,
+                        home: &home,
+                        proxy_port: Some(port),
+                        allow_pty: true,
+                        log_tag: &tag,
+                    },
+                )?;
+                Ok::<_, String>((profile, tmp_text))
+            })();
+            let (profile, tmp_text) = match built {
+                Ok(built) => built,
                 Err(error) => {
                     Session::remove_tmp(&tmp);
                     return Err(internal(
@@ -402,20 +472,25 @@ impl Sandbox for MacSandbox {
                 warnings,
             } = common::readonly_session(&self.config, &self.env, &input)?;
             self.require(&tmp).await?;
-            let (tmp_text, home) = (text(&tmp), self.home());
             let tag = self.log_tag(&input.command);
-            // No proxy port: the profile allows no network at all.
-            let profile = match policy_profile(
-                &policy,
-                &Settings {
-                    cwd: &text(&input.workspace_root),
-                    home: &home,
-                    proxy_port: None,
-                    allow_pty: false,
-                    log_tag: &tag,
-                },
-            ) {
-                Ok(profile) => profile,
+            let built = (|| {
+                self.check_node_paths()?;
+                let (tmp_text, home) = (text(&tmp)?, self.home()?);
+                // No proxy port: the profile allows no network at all.
+                let profile = policy_profile(
+                    &policy,
+                    &Settings {
+                        cwd: &text(&input.workspace_root)?,
+                        home: &home,
+                        proxy_port: None,
+                        allow_pty: false,
+                        log_tag: &tag,
+                    },
+                )?;
+                Ok::<_, String>((profile, tmp_text))
+            })();
+            let (profile, tmp_text) = match built {
+                Ok(built) => built,
                 Err(error) => {
                     Session::remove_tmp(&tmp);
                     return Err(internal(
@@ -515,6 +590,46 @@ mod tests {
         let extra = extra_denies(&[], &[p("ws2/.git/config")], true, &p("dot"), &p("home"));
         assert_eq!(extra.write, [p("repo/config")]);
         assert_eq!(extra.move_blocks, [p("ws2/.git"), p("hop")]);
+    }
+
+    /// A rule cannot name a path that is not UTF-8: the profile is refused
+    /// (the agent does not start) rather than naming another path.
+    #[test]
+    fn paths_that_are_not_utf8_refuse_the_profile() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        assert!(text(Path::new(OsStr::from_bytes(b"/a\xff"))).is_err());
+        assert_eq!(text(Path::new("/a\u{1}b")), Ok("/a\u{1}b".to_owned()));
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap().display().to_string();
+        let ws = format!("{root}/ws");
+        fs::create_dir_all(&ws).unwrap();
+        let settings = Settings {
+            cwd: &ws,
+            home: &root,
+            proxy_port: None,
+            allow_pty: false,
+            log_tag: "t",
+        };
+        assert!(policy_profile(&SessionPolicy::default(), &settings).is_ok());
+        let target = OsStr::from_bytes(b"repo\xff");
+        if std::os::unix::fs::symlink(target, format!("{ws}/.git")).is_err() {
+            // The file system refuses such names: nothing to name.
+            return;
+        }
+        let error = policy_profile(&SessionPolicy::default(), &settings).unwrap_err();
+        assert!(error.contains("not UTF-8"), "{error}");
+        fs::remove_file(format!("{ws}/.git")).unwrap();
+        std::os::unix::fs::symlink(target, format!("{root}/link")).unwrap();
+        let policy = SessionPolicy {
+            paths: pirc_policy::PathPolicy {
+                deny_read: vec![format!("{root}/link/secret")],
+                ..pirc_policy::PathPolicy::default()
+            },
+            ..SessionPolicy::default()
+        };
+        let error = policy_profile(&policy, &settings).unwrap_err();
+        assert!(error.contains("not UTF-8"), "{error}");
     }
 
     /// What the backend sets, against the environment srt set in the
