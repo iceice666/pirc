@@ -9,7 +9,10 @@
 //! WebSocket.
 //!
 //! Errors carry Playwright's message text ([`Error`]), because the agent
-//! reads it (`cleanError` in the manager keeps its first lines).
+//! reads it (`cleanError` in the manager keeps its first lines). That is
+//! the text the production TS node shows: compiled by `bun build --compile
+//! --minify`, Playwright's client finds no API name in its stack, so its
+//! messages have no `page.goto: `-style prefix (see [`Error::api`]).
 //!
 //! | Module | Port of | Owner |
 //! |---|---|---|
@@ -37,7 +40,7 @@ use std::time::Duration;
 pub use cdp::CdpError;
 
 /// A failed engine operation, with the message Playwright would have
-/// thrown for it (e.g. `locator.click: Timeout 10000ms exceeded.`).
+/// thrown for it (e.g. `Timeout 10000ms exceeded.`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Error {
     pub message: String,
@@ -50,12 +53,21 @@ impl Error {
         }
     }
 
-    /// Playwright's timeout text for `api` (e.g. `locator.click`).
+    /// The error of Playwright API call `api` (e.g. `page.goto`) failing
+    /// with `message`. Playwright's client prefixes the API name it finds
+    /// in the JS stack (`page.goto: ` under V8, `goto: ` under Bun from
+    /// source); the compiled TS node finds none, so the message is
+    /// unprefixed. Every engine error goes through here, so the choice
+    /// lives in one place.
+    pub fn api(api: &str, message: impl Into<String>) -> Self {
+        let _ = api;
+        Self::new(message)
+    }
+
+    /// Playwright's timeout text for `api` (e.g. `locator.click`):
+    /// `Timeout 10000ms exceeded.` (see [`Error::api`]).
     pub fn timeout(api: &str, timeout: Duration) -> Self {
-        Self::new(format!(
-            "{api}: Timeout {}ms exceeded.",
-            timeout.as_millis()
-        ))
+        Self::api(api, format!("Timeout {}ms exceeded.", timeout.as_millis()))
     }
 }
 
