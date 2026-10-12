@@ -1400,6 +1400,11 @@ async fn stops_a_recording_after_thirty_minutes() {
 async fn fails_a_start_whose_ffmpeg_reports_an_error() {
     let root = tempfile::tempdir().unwrap();
     let ffmpeg = fake_ffmpeg(root.path(), "echo 'Unknown encoder' >&2; exit 1");
+    // The start gives ffmpeg 150 ms to fail: run the script once first, as
+    // the first exec of a new file can take longer than that (macOS checks
+    // it).
+    let warm = std::process::Command::new(&ffmpeg).output().unwrap();
+    assert_eq!(warm.stderr, b"Unknown encoder\n");
     let context = FakeContext::new();
     let fixture = with_ffmpeg(&context, &ffmpeg);
     let manager = &fixture.manager;
