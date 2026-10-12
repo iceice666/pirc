@@ -390,11 +390,25 @@ mod tests {
 
     /// A stand-in ffmpeg: a shell script that copies stdin to the output
     /// file (its last argument) or fails with a message.
+    ///
+    /// The executable is written by a short-lived `sh`, under a fresh name,
+    /// never by this process: a write fd open here would be inherited by a
+    /// child that another test thread forks meanwhile, and exec'ing the
+    /// script while that child still holds it fails with ETXTBSY
+    /// (rust-lang/rust#114554).
     fn fake_ffmpeg(dir: &std::path::Path, body: &str) -> String {
-        use std::os::unix::fs::PermissionsExt as _;
-        let path = dir.join("ffmpeg");
-        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let source = dir.join(format!("ffmpeg-{n}.sh"));
+        let path = dir.join(format!("ffmpeg-{n}"));
+        std::fs::write(&source, format!("#!/bin/sh\n{body}\n")).unwrap();
+        let status = std::process::Command::new("/bin/sh")
+            .args(["-c", r#"cp "$1" "$2" && chmod 755 "$2""#, "sh"])
+            .arg(&source)
+            .arg(&path)
+            .status()
+            .unwrap();
+        assert!(status.success(), "{status}");
         path.display().to_string()
     }
 
