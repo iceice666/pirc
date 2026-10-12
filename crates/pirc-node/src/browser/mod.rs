@@ -72,23 +72,17 @@ pub trait BrowserService: Send + Sync {
     /// the future still resolves only once the operation has settled, as
     /// TS's `handle` promise did, so the runner can hold the request's
     /// in-flight slot until then. Dropping the future also aborts.
+    ///
+    /// Required (no default): resolving at the abort instead of at the
+    /// operation's end would free the in-flight slot of an operation still
+    /// running.
     fn handle_with_abort(
         &self,
         target: BrowserTarget,
         op: String,
         args: Value,
-        mut abort: tokio::sync::watch::Receiver<bool>,
-    ) -> BoxFuture<'_, ApiResult<Value>> {
-        let handle = self.handle(target, op, args);
-        Box::pin(async move {
-            tokio::select! {
-                result = handle => result,
-                () = async { let _ = abort.wait_for(|aborted| *aborted).await; } => {
-                    Err(ApiError::new(499, "aborted", "Aborted"))
-                }
-            }
-        })
-    }
+        abort: tokio::sync::watch::Receiver<bool>,
+    ) -> BoxFuture<'_, ApiResult<Value>>;
 
     /// A viewer of the session's browser: frames go to `send` until the
     /// returned function runs. Called only when [`BrowserService::enabled`].
