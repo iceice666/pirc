@@ -265,6 +265,15 @@ Done 2026-10-12. `pirc-node` sandboxes agents natively on Linux (bubblewrap, `sa
 
 ### M8 Native browser
 
+Decided with the user before starting (2026-10-12):
+
+- **Conformance first:** scenarios against local fixture pages are recorded with the TS node (Playwright) and replayed against the Rust node, as in M2–M6. Chromium is in the Linux dev shell (`flake.nix`); the fixtures are on loopback, so they run with `PIRC_BROWSER_ALLOW_PRIVATE`.
+- **The injected script is committed:** Playwright's injected script (playwright-core 1.63.0, Apache-2.0) and the in-page helpers of `browser-extract.ts` are extracted into the repository and embedded at build time, with a `bun run` check that fails when they are stale (as the model catalog in M3). Building the Rust node needs no `node_modules`.
+- **Frames as Playwright does, including out-of-process iframes** (`Target.setAutoAttach`), with per-frame refs (`f<n>e<n>`).
+- **Recording keeps the external ffmpeg** (`PIRC_FFMPEG`).
+- **macOS is tested on m3air** with Chromium from Homebrew (`brew install --cask chromium`).
+- **Cadence as in M4–M7:** a layout commit, parallel worktrees, reviews through several lenses, one commit per sub-item.
+
 - [ ] CDP client: persistent per-workspace profile, tabs per session, snapshot/ref interaction model from spike A (pinned, embedded injected script in an isolated world; child frames merged with per-frame refs as Playwright does), host guard (`browser-hosts.ts`) via the `Fetch` domain, screencast live view with backpressure, input forwarding, handoff lease, extraction, ffmpeg recording and chunked upload.
 - [ ] Port `browser.test.ts`, `browser-hosts.test.ts`, `browser.integration.test.ts`.
 

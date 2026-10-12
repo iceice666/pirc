@@ -68,7 +68,12 @@
           ]
           # The node's native sandbox tests run the agent under it
           # (crates/pirc-node/tests/sandbox_native.rs; they skip without it).
-          ++ lib.optionals stdenv.hostPlatform.isLinux [ bubblewrap ];
+          # The agent browser's tests and conformance scenarios drive a real
+          # Chromium (crates/pirc-node/src/browser/; they skip without one).
+          ++ lib.optionals stdenv.hostPlatform.isLinux [
+            bubblewrap
+            chromium
+          ];
           shellHook = ''
             echo "pirc development shell (Bun $(bun --version))"
           '';
