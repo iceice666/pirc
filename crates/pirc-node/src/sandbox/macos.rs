@@ -388,8 +388,9 @@ impl MacSandbox {
                 reason: format!("sandbox-exec ({SANDBOX_EXEC}) was not found"),
             };
         }
+        // Removed however the probe ends (a dropped `check` too).
         let tmp = match common::make_temp_dir(&common::tmpdir(&self.env), "pirc-") {
-            Ok(tmp) => tmp,
+            Ok(tmp) => common::SessionTmp::new(tmp),
             Err(error) => {
                 return SandboxStatus::Unavailable {
                     reason: format!("sandbox-exec: {error}"),
@@ -425,7 +426,7 @@ impl MacSandbox {
                     .args(exec_args(profile, command))
                     .env_clear()
                     .envs(sandbox_env(&tmp_text, None, false))
-                    .current_dir(&tmp);
+                    .current_dir(&*tmp);
                 common::run_probe(
                     "sandbox-exec",
                     probe,
@@ -434,7 +435,7 @@ impl MacSandbox {
                 .await
             }
         };
-        Session::remove_tmp(&tmp);
+        drop(tmp);
         status
     }
 
