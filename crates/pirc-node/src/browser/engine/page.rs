@@ -190,12 +190,24 @@ impl Page {
 
     /// `page.goBack({waitUntil, timeout})`; no history entry is not an error.
     pub async fn go_back(&self, wait_until: LoadState, timeout: Duration) -> Result<()> {
+        self.go(-1, "goBack", wait_until, timeout).await.map(drop)
+    }
+
+    /// [`Page::go_back`] with the main frame's response (`None` without a
+    /// history entry, for a same-document or `about:` navigation).
+    pub async fn go_back_response(
+        &self,
+        wait_until: LoadState,
+        timeout: Duration,
+    ) -> Result<Option<Response>> {
         self.go(-1, "goBack", wait_until, timeout).await
     }
 
     /// `page.goForward({timeout})` (waits for `load`).
     pub async fn go_forward(&self, timeout: Duration) -> Result<()> {
-        self.go(1, "goForward", LoadState::Load, timeout).await
+        self.go(1, "goForward", LoadState::Load, timeout)
+            .await
+            .map(drop)
     }
 
     async fn go(
@@ -204,7 +216,7 @@ impl Page {
         api: &'static str,
         wait_until: LoadState,
         timeout: Duration,
-    ) -> Result<()> {
+    ) -> Result<Option<Response>> {
         let main = self.main_frame();
         let session = self.shared.session.clone();
         let work = async {
@@ -231,7 +243,7 @@ impl Page {
             main.wait_for_navigation(api, navigations, false, wait_until)
                 .await
         };
-        main.race_navigation(api, timeout, work).await.map(|_| ())
+        main.race_navigation(api, timeout, work).await
     }
 
     /// `page.reload({timeout})` (waits for `load`).
@@ -449,7 +461,7 @@ pub(super) struct FrameState {
     pub(super) parent: Option<FrameKey>,
     children: Vec<FrameKey>,
     pub(super) url: String,
-    name: String,
+    pub(super) name: String,
     lifecycle: HashSet<LoadState>,
     /// How many times each state was added (a waiter misses no transient
     /// state).
@@ -531,6 +543,11 @@ pub(super) struct State {
     viewport: (u32, u32),
     /// The last [`Shared::barrier`] the event loop reached.
     barrier: u64,
+    /// Playwright's `SignalBarrier`s of the input actions running now: per
+    /// barrier, how many main-frame navigations it still waits for (see
+    /// [`Shared::add_signal_barrier`]).
+    signal_barriers: HashMap<u64, u32>,
+    next_signal_barrier: u64,
 }
 
 impl State {
@@ -613,9 +630,36 @@ impl Shared {
         self.state.lock().unwrap().window_features.pop_front()
     }
 
+    /// `FrameManager.waitForSignalsCreatedBy`'s barrier: from now on, every
+    /// navigation the main frame requests (`Page.frameRequestedNavigation`
+    /// in the current tab) holds it until the main frame's next navigation
+    /// event (committed or failed). Remove it with
+    /// [`Shared::remove_signal_barrier`].
+    pub(super) fn add_signal_barrier(&self) -> u64 {
+        let mut state = self.state.lock().unwrap();
+        state.next_signal_barrier += 1;
+        let id = state.next_signal_barrier;
+        state.signal_barriers.insert(id, 0);
+        id
+    }
+
+    pub(super) fn remove_signal_barrier(&self, id: u64) {
+        self.state.lock().unwrap().signal_barriers.remove(&id);
+    }
+
+    /// `SignalBarrier.waitFor`: resolves once the navigations the barrier
+    /// holds for were committed or failed (or the page closed).
+    pub(super) async fn wait_signal_barrier(&self, id: u64) {
+        self.wait(|state| {
+            (state.closed || state.signal_barriers.get(&id).is_none_or(|held| *held == 0))
+                .then_some(())
+        })
+        .await
+    }
+
     /// Resolves once the event loop applied every event received so far
     /// (or the page closed).
-    async fn barrier(&self) {
+    pub(super) async fn barrier(&self) {
         let id = self
             .barriers
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -677,6 +721,8 @@ impl Page {
                 window_features: VecDeque::new(),
                 viewport: setup.viewport,
                 barrier: 0,
+                signal_barriers: HashMap::new(),
+                next_signal_barrier: 0,
             }),
             changed,
             events: events.clone(),
@@ -1136,6 +1182,12 @@ fn frame_event(shared: &Arc<Shared>, state: &mut State, target: &str, event: &Ev
             }
             if params["disposition"].as_str() == Some("currentTab") {
                 let key = state.ids[frame_id];
+                if state.frames[&key].parent.is_none() {
+                    // `SignalBarrier.addFrameNavigation`.
+                    for held in state.signal_barriers.values_mut() {
+                        *held += 1;
+                    }
+                }
                 let frame = state.frames.get_mut(&key).unwrap();
                 if frame
                     .pending
@@ -1540,6 +1592,12 @@ fn fire_navigation(state: &mut State, key: FrameKey, navigation: Navigation) {
     frame
         .navigations
         .retain(|listener| listener.send(navigation.clone()).is_ok());
+    if state.main == Some(key) {
+        // `SignalBarrier.addFrameNavigation`'s waiters.
+        for held in state.signal_barriers.values_mut() {
+            *held = 0;
+        }
+    }
     if state.main == Some(key) && navigation.error.is_none() {
         state.emit(PageEvent::MainFrameNavigated);
     }

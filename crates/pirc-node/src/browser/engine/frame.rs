@@ -56,6 +56,21 @@ impl JsHandle {
     }
 
     async fn call_function(&self, function: &str, args: Vec<Arg>, by_value: bool) -> Result<Value> {
+        self.call_raw(function, args, by_value)
+            .await
+            .map(|result| json!({ "result": result }))
+            .map_err(|error| error.error)
+    }
+
+    /// [`JsHandle::call`] (`by_value`) or [`JsHandle::call_handle`]
+    /// returning the result's `RemoteObject` (see [`handle_of`]), and on
+    /// failure whether a retry can help.
+    pub(super) async fn call_raw(
+        &self,
+        function: &str,
+        args: Vec<Arg>,
+        by_value: bool,
+    ) -> std::result::Result<Value, EvalError> {
         let arguments: Vec<Value> = args.iter().map(Arg::to_cdp).collect();
         let reply = self
             .session
@@ -71,7 +86,7 @@ impl JsHandle {
                 }),
             )
             .await;
-        evaluation_reply("", reply).map_err(|error| error.error)
+        evaluation_reply("", reply).map(|reply| reply["result"].clone())
     }
 
     /// `Runtime.releaseObject` (failures ignored).
@@ -102,7 +117,9 @@ impl Arg {
     }
 }
 
-fn handle_of(session: &Session, object: &Value) -> Option<JsHandle> {
+/// The handle of a `RemoteObject` of `session`'s; `None` for `null`,
+/// `undefined` and other values without an object id.
+pub(super) fn handle_of(session: &Session, object: &Value) -> Option<JsHandle> {
     if object["subtype"] == "null" || object["type"] == "undefined" {
         return None;
     }
@@ -276,6 +293,17 @@ impl Frame {
             .frames
             .get(&self.key)
             .map(|frame| frame.url.clone())
+            .unwrap_or_default()
+    }
+
+    /// The frame's `name` attribute as of its last navigation ("" once
+    /// detached; `frame.name()`).
+    pub fn name(&self) -> String {
+        let state = self.shared.state.lock().unwrap();
+        state
+            .frames
+            .get(&self.key)
+            .map(|frame| frame.name.clone())
             .unwrap_or_default()
     }
 
