@@ -1,0 +1,58 @@
+{
+  "case": "hidden",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Hidden", "url": "http://{{HOST_A}}/hidden.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - heading \"Visibility\" [level=1] [ref=e2]\n  - button \"Visible button\" [ref=e3]\n  - button [ref=e5]: Aria hidden button\n  - button \"Transparent button\" [ref=e6]\n  - button \"Zero size button\" [ref=e7]\n  - paragraph [aria-hidden] [ref=e8]: Aria hidden text\n  - button \"Target\" [ref=e9]\n  - button \"Hide target\" [ref=e10]\n  - button \"Covered button\" [ref=e12]\n  - button \"Show cover\" [ref=e13]\n  - button \"Disabled button\" [disabled] [ref=e14]\n  - generic [ref=e15]:\n    - text: Disabled input\n    - textbox \"Disabled input\" [disabled] [ref=e16]: fixed\n  - generic [ref=e17]:\n    - text: Read-only input\n    - textbox \"Read-only input\" [ref=e18]: fixed\n  - paragraph",
+      "url": "http://{{HOST_A}}/hidden.html"
+    },
+    { "op": "click", "ref": "e10", "url": "http://{{HOST_A}}/hidden.html" },
+    {
+      "op": "click",
+      "error": "Timeout 1000ms exceeded.",
+      "ref": "e9",
+      "url": "http://{{HOST_A}}/hidden.html"
+    },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - heading \"Visibility\" [level=1] [ref=e2]\n  - button \"Visible button\" [ref=e3]\n  - button [ref=e5]: Aria hidden button\n  - button \"Transparent button\" [ref=e6]\n  - button \"Zero size button\" [ref=e7]\n  - paragraph [aria-hidden] [ref=e8]: Aria hidden text\n  - button \"Hide target\" [active] [ref=e10]\n  - button \"Covered button\" [ref=e12]\n  - button \"Show cover\" [ref=e13]\n  - button \"Disabled button\" [disabled] [ref=e14]\n  - generic [ref=e15]:\n    - text: Disabled input\n    - textbox \"Disabled input\" [disabled] [ref=e16]: fixed\n  - generic [ref=e17]:\n    - text: Read-only input\n    - textbox \"Read-only input\" [ref=e18]: fixed\n  - paragraph",
+      "url": "http://{{HOST_A}}/hidden.html"
+    },
+    { "op": "click", "ref": "e13", "url": "http://{{HOST_A}}/hidden.html" },
+    {
+      "op": "click",
+      "error": "Timeout 1000ms exceeded.",
+      "ref": "e12",
+      "url": "http://{{HOST_A}}/hidden.html"
+    },
+    {
+      "op": "hover",
+      "error": "Timeout 1000ms exceeded.",
+      "ref": "e12",
+      "url": "http://{{HOST_A}}/hidden.html"
+    },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - heading \"Visibility\" [level=1] [ref=e2]\n  - button \"Visible button\" [ref=e3]\n  - button [ref=e5]: Aria hidden button\n  - button \"Transparent button\" [ref=e6]\n  - button \"Zero size button\" [ref=e7]\n  - paragraph [aria-hidden] [ref=e8]: Aria hidden text\n  - button \"Hide target\" [ref=e10]\n  - generic [ref=e11]:\n    - button \"Covered button\" [ref=e12]\n    - generic [ref=e19]: Cover\n  - button \"Show cover\" [active] [ref=e13]\n  - button \"Disabled button\" [disabled] [ref=e14]\n  - generic [ref=e15]:\n    - text: Disabled input\n    - textbox \"Disabled input\" [disabled] [ref=e16]: fixed\n  - generic [ref=e17]:\n    - text: Read-only input\n    - textbox \"Read-only input\" [ref=e18]: fixed\n  - paragraph",
+      "url": "http://{{HOST_A}}/hidden.html"
+    },
+    {
+      "op": "click",
+      "error": "Timeout 1000ms exceeded.",
+      "ref": "e14",
+      "url": "http://{{HOST_A}}/hidden.html"
+    },
+    {
+      "op": "fill",
+      "error": "Timeout 1000ms exceeded.",
+      "ref": "e18",
+      "url": "http://{{HOST_A}}/hidden.html"
+    },
+    {
+      "op": "evaluate",
+      "result": "# Visibility\n\nAria hidden text\n\nCover\n\nDisabled input  Read-only input",
+      "url": "http://{{HOST_A}}/hidden.html"
+    }
+  ]
+}

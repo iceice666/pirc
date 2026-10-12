@@ -1,0 +1,17 @@
+{
+  "case": "pointer",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Pointer", "url": "http://{{HOST_A}}/pointer.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - generic [ref=e2] [cursor=pointer]: Clickable div\n  - generic [ref=e3] [cursor=pointer]:\n    - text: Nested span in pointer\n    - button \"Button inside pointer\" [ref=e4]\n  - text: Pointer span\n  - link \"Link\" [ref=e5] [cursor=pointer]:\n    - /url: \"#anchor\"\n  - button \"Role button\" [ref=e6] [cursor=pointer]\n  - paragraph [ref=e7]: Default cursor\n  - generic [ref=e8] [cursor=pointer]:\n    - checkbox \"Pointer label\" [ref=e9]\n    - text: Pointer label\n  - button \"Default cursor button\" [ref=e10]",
+      "url": "http://{{HOST_A}}/pointer.html"
+    },
+    { "op": "click", "ref": "e9", "url": "http://{{HOST_A}}/pointer.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - generic [ref=e2] [cursor=pointer]: Clickable div\n  - generic [ref=e3] [cursor=pointer]:\n    - text: Nested span in pointer\n    - button \"Button inside pointer\" [ref=e4]\n  - text: Pointer span\n  - link \"Link\" [ref=e5] [cursor=pointer]:\n    - /url: \"#anchor\"\n  - button \"Role button\" [ref=e6] [cursor=pointer]\n  - paragraph [ref=e7]: Default cursor\n  - generic [ref=e8] [cursor=pointer]:\n    - checkbox \"Pointer label\" [checked] [active] [ref=e9]\n    - text: Pointer label\n  - button \"Default cursor button\" [ref=e10]",
+      "url": "http://{{HOST_A}}/pointer.html"
+    }
+  ]
+}

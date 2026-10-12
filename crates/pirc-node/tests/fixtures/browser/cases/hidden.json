@@ -1,0 +1,64 @@
+{
+  "description": "What is left out of snapshots (display:none, visibility:hidden, hidden, aria-hidden, zero size), which elements get refs, and the errors of acting on an element that became hidden, is covered, disabled or read-only.",
+  "steps": [
+    {
+      "op": "goto",
+      "url": "http://{{HOST_A}}/hidden.html"
+    },
+    {
+      "op": "snapshot",
+      "name": "first"
+    },
+    {
+      "op": "click",
+      "target": "button \"Hide target\""
+    },
+    {
+      "op": "click",
+      "target": "button \"Target\"",
+      "in": "first",
+      "timeout": 1000,
+      "error": true,
+      "note": "the ref of the first snapshot; the element is now visibility:hidden"
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "click",
+      "target": "button \"Show cover\""
+    },
+    {
+      "op": "click",
+      "target": "button \"Covered button\"",
+      "timeout": 1000,
+      "error": true
+    },
+    {
+      "op": "hover",
+      "target": "button \"Covered button\"",
+      "timeout": 1000,
+      "error": true
+    },
+    {
+      "op": "snapshot"
+    },
+    {
+      "op": "click",
+      "target": "button \"Disabled button\"",
+      "timeout": 1000,
+      "error": true
+    },
+    {
+      "op": "fill",
+      "target": "textbox \"Read-only input\"",
+      "text": "x",
+      "timeout": 1000,
+      "error": true
+    },
+    {
+      "op": "evaluate",
+      "helper": "pageMarkdown"
+    }
+  ]
+}

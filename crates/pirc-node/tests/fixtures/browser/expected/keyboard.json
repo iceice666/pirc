@@ -1,0 +1,55 @@
+{
+  "case": "keyboard",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Keyboard", "url": "http://{{HOST_A}}/keyboard.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - generic [ref=e2]:\n    - text: Field\n    - textbox \"Field\" [ref=e3]\n  - generic [ref=e4]:\n    - text: Area\n    - textbox \"Area\" [ref=e5]\n  - button \"Clear log\" [ref=e6]\n  - list \"Events\"",
+      "url": "http://{{HOST_A}}/keyboard.html"
+    },
+    { "op": "fill", "ref": "e3", "url": "http://{{HOST_A}}/keyboard.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: Field\n    - textbox \"Field\" [active] [ref=e3]: héllo\n  - generic [ref=e4]:\n    - text: Area\n    - textbox \"Area\" [ref=e5]\n  - button \"Clear log\" [ref=e6]\n  - list \"Events\" [ref=e7]:\n    - listitem [ref=e8]: field input insertText \"héllo\"",
+      "url": "http://{{HOST_A}}/keyboard.html"
+    },
+    { "op": "click", "ref": "e6", "url": "http://{{HOST_A}}/keyboard.html" },
+    { "op": "type", "ref": "e3", "url": "http://{{HOST_A}}/keyboard.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: Field\n    - textbox \"Field\" [active] [ref=e3]: aB1 é!\n  - generic [ref=e4]:\n    - text: Area\n    - textbox \"Area\" [ref=e5]\n  - button \"Clear log\" [ref=e6]\n  - list \"Events\" [ref=e7]:\n    - listitem [ref=e9]: field keydown \"Delete\" Delete 46\n    - listitem [ref=e10]: field input deleteContentForward \"\"\n    - listitem [ref=e11]: field keydown \"a\" KeyA 65\n    - listitem [ref=e12]: field input insertText \"a\"\n    - listitem [ref=e13]: field keydown \"B\" KeyB 66\n    - listitem [ref=e14]: field input insertText \"aB\"\n    - listitem [ref=e15]: field keydown \"1\" Digit1 49\n    - listitem [ref=e16]: field input insertText \"aB1\"\n    - listitem [ref=e17]: field keydown \" \" Space 32\n    - listitem [ref=e18]: field input insertText \"aB1 \"\n    - listitem [ref=e19]: field input insertText \"aB1 é\"\n    - listitem [ref=e20]: field keydown \"!\" Digit1 49\n    - listitem [ref=e21]: field input insertText \"aB1 é!\"",
+      "url": "http://{{HOST_A}}/keyboard.html"
+    },
+    { "op": "click", "ref": "e6", "url": "http://{{HOST_A}}/keyboard.html" },
+    { "op": "press", "ref": "e3", "url": "http://{{HOST_A}}/keyboard.html" },
+    { "op": "keyboard", "url": "http://{{HOST_A}}/keyboard.html" },
+    { "op": "keyboard", "url": "http://{{HOST_A}}/keyboard.html" },
+    { "op": "keyboard", "url": "http://{{HOST_A}}/keyboard.html" },
+    { "op": "keyboard", "url": "http://{{HOST_A}}/keyboard.html" },
+    { "op": "keyboard", "url": "http://{{HOST_A}}/keyboard.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: Field\n    - textbox \"Field\" [ref=e3]: a\n  - generic [ref=e4]:\n    - text: Area\n    - textbox \"Area\" [ref=e5]\n  - button \"Clear log\" [ref=e6]\n  - list \"Events\" [ref=e7]:\n    - listitem [ref=e22]: field keydown \"Enter\" Enter 13\n    - listitem [ref=e23]: field keydown \"Backspace\" Backspace 8\n    - listitem [ref=e24]: field keydown \"Shift\" ShiftLeft 16 shift\n    - listitem [ref=e25]: field keydown \"ArrowLeft\" ArrowLeft 37 shift\n    - listitem [ref=e26]: field keydown \"Control\" ControlLeft 17 ctrl\n    - listitem [ref=e27]: field keydown \"a\" KeyA 65 ctrl\n    - listitem [ref=e28]: field keydown \"a\" KeyA 65\n    - listitem [ref=e29]: field input insertText \"a\"\n    - listitem [ref=e30]: field keydown \"Shift\" ShiftLeft 16 shift\n    - listitem [ref=e31]: field keydown \"Tab\" Tab 9 shift\n    - listitem [ref=e32]: field change \"a\"",
+      "url": "http://{{HOST_A}}/keyboard.html"
+    },
+    { "op": "click", "ref": "e6", "url": "http://{{HOST_A}}/keyboard.html" },
+    { "op": "click", "ref": "e5", "url": "http://{{HOST_A}}/keyboard.html" },
+    { "op": "insertText", "url": "http://{{HOST_A}}/keyboard.html" },
+    { "op": "keyboard", "url": "http://{{HOST_A}}/keyboard.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: Field\n    - textbox \"Field\" [ref=e3]: a\n  - generic [ref=e4]:\n    - text: Area\n    - textbox \"Area\" [active] [ref=e5]: inserted 文字\n  - button \"Clear log\" [ref=e6]\n  - list \"Events\" [ref=e7]:\n    - listitem [ref=e33]: area input insertText \"inserted 文字\"\n    - listitem [ref=e34]: area keydown \"Enter\" Enter 13\n    - listitem [ref=e35]: area input insertLineBreak \"inserted 文字\\n\"",
+      "url": "http://{{HOST_A}}/keyboard.html"
+    },
+    {
+      "op": "keyboard",
+      "error": "Unknown key: \"NotAKey\"",
+      "url": "http://{{HOST_A}}/keyboard.html"
+    },
+    {
+      "op": "keyboard",
+      "error": "Unknown key: \"NotAKey\"",
+      "url": "http://{{HOST_A}}/keyboard.html"
+    }
+  ]
+}

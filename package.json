@@ -26,6 +26,7 @@
     "test:conformance:rust-gateway": "cargo build -p pirc-gateway && PIRC_CONFORMANCE_REQUIRED=1 PIRC_CONFORMANCE_BIN_DIR=apps/gateway/dist PIRC_CONFORMANCE_GATEWAY_BIN=target/debug/pirc-gateway INSTA_UPDATE=no cargo test -p pirc-conformance",
     "catalog:check": "bun scripts/model-catalog.ts --check",
     "catalog:update": "bun scripts/model-catalog.ts",
+    "browser:reference": "bun scripts/browser-reference.ts",
     "test:conformance:rust-agent": "cargo build -p pirc-node && PIRC_CONFORMANCE_REQUIRED=1 PIRC_CONFORMANCE_BIN_DIR=apps/gateway/dist PIRC_CONFORMANCE_AGENT_BIN=target/debug/pirc-node INSTA_UPDATE=no cargo test -p pirc-conformance --test 'agent_*' --test session",
     "test:conformance:rust-node": "cargo build -p pirc-gateway -p pirc-node && PIRC_CONFORMANCE_REQUIRED=1 PIRC_CONFORMANCE_BIN_DIR=apps/gateway/dist PIRC_CONFORMANCE_GATEWAY_BIN=target/debug/pirc-gateway PIRC_CONFORMANCE_NODE_BIN=target/debug/pirc-node PIRC_CONFORMANCE_AGENT_BIN=target/debug/pirc-node INSTA_UPDATE=no cargo test -p pirc-conformance",
     "size:check": "bun scripts/binary-size.ts",

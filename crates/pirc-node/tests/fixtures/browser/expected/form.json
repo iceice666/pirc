@@ -1,0 +1,30 @@
+{
+  "case": "form",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Form", "url": "http://{{HOST_A}}/form.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - heading \"Sign up\" [level=1] [ref=e2]\n  - generic [ref=e3]:\n    - generic [ref=e4]:\n      - text: Name\n      - textbox \"Name\" [ref=e5]\n    - generic [ref=e6]:\n      - text: Password\n      - textbox \"Password\" [ref=e7]\n    - generic [ref=e8]:\n      - checkbox \"Remember me\" [checked] [ref=e9]\n      - text: Remember me\n    - generic [ref=e10]:\n      - text: Plan\n      - combobox \"Plan\" [ref=e11]:\n        - option \"Free\"\n        - option \"Pro\" [selected]\n    - button \"Submit\" [ref=e12]\n    - button \"Later\" [disabled] [ref=e13]\n  - paragraph",
+      "url": "http://{{HOST_A}}/form.html"
+    },
+    { "op": "fill", "ref": "e5", "url": "http://{{HOST_A}}/form.html" },
+    { "op": "click", "ref": "e12", "url": "http://{{HOST_A}}/form.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - heading \"Sign up\" [level=1] [ref=e2]\n  - generic [ref=e3]:\n    - generic [ref=e4]:\n      - text: Name\n      - textbox \"Name\" [ref=e5]: Ada\n    - generic [ref=e6]:\n      - text: Password\n      - textbox \"Password\" [ref=e7]\n    - generic [ref=e8]:\n      - checkbox \"Remember me\" [checked] [ref=e9]\n      - text: Remember me\n    - generic [ref=e10]:\n      - text: Plan\n      - combobox \"Plan\" [ref=e11]:\n        - option \"Free\"\n        - option \"Pro\" [selected]\n    - button \"Submit\" [active] [ref=e12]\n    - button \"Later\" [disabled] [ref=e13]\n  - paragraph [ref=e14]: Hello Ada",
+      "url": "http://{{HOST_A}}/form.html"
+    },
+    {
+      "op": "fill",
+      "error": "Error: Input of type \"checkbox\" cannot be filled",
+      "ref": "e9",
+      "url": "http://{{HOST_A}}/form.html"
+    },
+    {
+      "op": "click",
+      "error": "Timeout 1000ms exceeded.",
+      "ref": "e13",
+      "url": "http://{{HOST_A}}/form.html"
+    }
+  ]
+}

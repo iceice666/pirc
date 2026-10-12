@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Keyboard</title>
+  </head>
+  <body>
+    <label>Field <input id="field" /></label>
+    <label>Area <textarea id="area"></textarea></label>
+    <button id="clear">Clear log</button>
+    <ol id="log" aria-label="Events"></ol>
+    <script>
+      const log = document.getElementById('log');
+      const add = (text) => {
+        const li = document.createElement('li');
+        li.textContent = text;
+        log.append(li);
+      };
+      for (const id of ['field', 'area']) {
+        const el = document.getElementById(id);
+        el.addEventListener('keydown', (e) =>
+          add(
+            `${id} keydown ${JSON.stringify(e.key)} ${e.code} ${e.keyCode}` +
+              `${e.shiftKey ? ' shift' : ''}${e.ctrlKey ? ' ctrl' : ''}${e.altKey ? ' alt' : ''}${e.metaKey ? ' meta' : ''}`,
+          ),
+        );
+        el.addEventListener('input', (e) =>
+          add(`${id} input ${e.inputType} ${JSON.stringify(el.value)}`),
+        );
+        el.addEventListener('change', () => add(`${id} change ${JSON.stringify(el.value)}`));
+      }
+      document.getElementById('clear').onclick = () => log.replaceChildren();
+    </script>
+  </body>
+</html>

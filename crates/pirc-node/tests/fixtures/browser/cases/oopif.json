@@ -1,0 +1,18 @@
+{
+  "description": "A cross-site iframe ({{HOST_B}} inside {{HOST_A}}) is an out-of-process iframe, and inside it a frame back on {{HOST_A}}: snapshot merge and actions through refs in other renderers.",
+  "steps": [
+    { "op": "goto", "url": "http://{{HOST_A}}/oopif.html" },
+    { "op": "targets" },
+    { "op": "frames" },
+    { "op": "snapshot" },
+    { "op": "click", "target": "button \"Remote button\"" },
+    { "op": "type", "target": "textbox \"Remote input\"", "text": "über 1" },
+    { "op": "hover", "target": "button \"Grandchild button\"" },
+    { "op": "click", "target": "button \"Grandchild button\"" },
+    { "op": "snapshot", "mask": true },
+    { "op": "evaluate", "helper": "passwordValues", "frames": "all" },
+    { "op": "click", "target": "textbox \"Frame password\"" },
+    { "op": "evaluate", "helper": "sensitiveField", "frames": "all" },
+    { "op": "evaluate", "helper": "pageMarkdown" }
+  ]
+}

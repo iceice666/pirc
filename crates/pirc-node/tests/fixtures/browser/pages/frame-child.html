@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Child</title>
+  </head>
+  <body>
+    <h2>Child frame</h2>
+    <label>Child input <input name="child" /></label>
+    <button onclick="document.getElementById('out').textContent = 'child clicked'">
+      Child button
+    </button>
+    <p id="out"></p>
+    <iframe title="Grandchild" src="/frame-grandchild.html" width="500" height="200"></iframe>
+  </body>
+</html>

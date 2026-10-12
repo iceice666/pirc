@@ -1,0 +1,28 @@
+{
+  "case": "slow",
+  "steps": [
+    { "op": "goto", "status": 200, "title": "Loaded", "url": "http://{{HOST_A}}/slow.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [active] [ref=e1]:\n  - heading \"Slow page\" [level=1] [ref=e2]\n  - paragraph [ref=e3]: Loaded content\n  - main [ref=e4]:\n    - heading \"Rendered by script\" [level=2] [ref=e5]\n    - paragraph [ref=e6]:\n      - text: This paragraph came from\n      - code [ref=e7]: setTimeout\n      - text: .\n  - button \"Load more\" [ref=e8]\n  - button \"Dismiss toast\" [ref=e9]\n  - status [ref=e10]: Toast message\n  - paragraph [ref=e11]: \"Fetched: payload\"",
+      "url": "http://{{HOST_A}}/slow.html"
+    },
+    {
+      "op": "evaluate",
+      "result": "## Rendered by script\n\nThis paragraph came from `setTimeout`.",
+      "url": "http://{{HOST_A}}/slow.html"
+    },
+    { "op": "click", "ref": "e8", "url": "http://{{HOST_A}}/slow.html" },
+    { "op": "waitFor", "url": "http://{{HOST_A}}/slow.html" },
+    { "op": "click", "ref": "e9", "url": "http://{{HOST_A}}/slow.html" },
+    { "op": "waitFor", "url": "http://{{HOST_A}}/slow.html" },
+    {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - heading \"Slow page\" [level=1] [ref=e2]\n  - paragraph [ref=e3]: Loaded content\n  - main [ref=e4]:\n    - heading \"Rendered by script\" [level=2] [ref=e5]\n    - paragraph [ref=e6]:\n      - text: This paragraph came from\n      - code [ref=e7]: setTimeout\n      - text: .\n  - button \"Load more\" [ref=e8]\n  - button \"Dismiss toast\" [active] [ref=e9]\n  - paragraph [ref=e11]: \"Fetched: payload\"\n  - paragraph [ref=e12]: More content",
+      "url": "http://{{HOST_A}}/slow.html"
+    },
+    { "op": "waitFor", "error": "Timeout 500ms exceeded.", "url": "http://{{HOST_A}}/slow.html" },
+    { "op": "waitFor", "error": "Timeout 500ms exceeded.", "url": "http://{{HOST_A}}/slow.html" },
+    { "op": "waitFor", "url": "http://{{HOST_A}}/slow.html" }
+  ]
+}

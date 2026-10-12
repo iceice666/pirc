@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Select</title>
+  </head>
+  <body>
+    <label
+      >Color
+      <select id="color">
+        <option value="r">Red</option>
+        <option value="g" selected>Green</option>
+        <option value="b">Blue</option>
+        <option value="x" disabled>Unavailable</option>
+      </select>
+    </label>
+    <label
+      >Toppings
+      <select id="toppings" multiple size="4">
+        <option>Cheese</option>
+        <option>Olives</option>
+        <option>Basil</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="agree" /> Agree</label>
+    <label>Plain input <input id="plain" /></label>
+    <p id="out" role="status"></p>
+    <script>
+      for (const id of ['color', 'toppings'])
+        document.getElementById(id).addEventListener('change', (e) => {
+          document.getElementById('out').textContent =
+            id + ': ' + [...e.target.selectedOptions].map((o) => o.value).join(',');
+        });
+    </script>
+  </body>
+</html>

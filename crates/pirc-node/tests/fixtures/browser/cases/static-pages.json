@@ -1,0 +1,13 @@
+{
+  "description": "AI snapshots of the spike's other pages: links, inline text, details, aria-hidden, alert, img, cursor=pointer; tables, tabs, slider, textarea; a srcdoc iframe.",
+  "steps": [
+    { "op": "goto", "url": "http://{{HOST_A}}/nav.html" },
+    { "op": "snapshot" },
+    { "op": "goto", "url": "http://{{HOST_A}}/table.html" },
+    { "op": "snapshot" },
+    { "op": "goto", "url": "http://{{HOST_A}}/iframe.html" },
+    { "op": "snapshot" },
+    { "op": "click", "target": "button \"Inside the frame\"" },
+    { "op": "frames" }
+  ]
+}

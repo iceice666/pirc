@@ -1,0 +1,16 @@
+{
+  "description": "web_fetch's extraction: pageMarkdown on main/article, tables, lists, code, links, images, hidden content; the body when main is small; text and html formats.",
+  "steps": [
+    { "op": "goto", "url": "http://{{HOST_A}}/markdown.html" },
+    { "op": "evaluate", "helper": "pageMarkdown" },
+    { "op": "evaluate", "helper": "innerText" },
+    { "op": "snapshot" },
+    { "op": "goto", "url": "http://{{HOST_A}}/markdown-body.html" },
+    { "op": "evaluate", "helper": "pageMarkdown" },
+    { "op": "evaluate", "helper": "content" },
+    { "op": "goto", "url": "http://{{HOST_A}}/nav.html" },
+    { "op": "evaluate", "helper": "pageMarkdown" },
+    { "op": "goto", "url": "http://{{HOST_A}}/table.html" },
+    { "op": "evaluate", "helper": "pageMarkdown" }
+  ]
+}

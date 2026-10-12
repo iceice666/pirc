@@ -1,0 +1,10 @@
+{
+  "description": "details/summary: closed content is not in the snapshot until opened.",
+  "steps": [
+    { "op": "goto", "url": "http://{{HOST_A}}/details.html" },
+    { "op": "snapshot" },
+    { "op": "click", "target": "Closed section" },
+    { "op": "snapshot" },
+    { "op": "evaluate", "helper": "pageMarkdown" }
+  ]
+}

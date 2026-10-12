@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Frames</title>
+  </head>
+  <body>
+    <h1>Outer page</h1>
+    <button onclick="document.getElementById('out').textContent = 'outer clicked'">
+      Outer button
+    </button>
+    <p id="out"></p>
+    <iframe title="Child" src="/frame-child.html" width="600" height="400"></iframe>
+  </body>
+</html>

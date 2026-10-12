@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Cross-site</title>
+  </head>
+  <body>
+    <h1>Host page</h1>
+    <!-- {{HOST_B}} is another site than this page's {{HOST_A}}: an out-of-process iframe. -->
+    <iframe
+      title="Remote"
+      src="http://{{HOST_B}}/oopif-child.html"
+      width="700"
+      height="500"
+    ></iframe>
+    <p>After the frame</p>
+  </body>
+</html>

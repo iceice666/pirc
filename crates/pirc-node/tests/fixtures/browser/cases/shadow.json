@@ -1,0 +1,11 @@
+{
+  "description": "Shadow DOM: open roots are in the snapshot and act by ref; closed roots; slots.",
+  "steps": [
+    { "op": "goto", "url": "http://{{HOST_A}}/shadow.html" },
+    { "op": "snapshot" },
+    { "op": "click", "target": "button \"Shadow button\"" },
+    { "op": "fill", "target": "textbox \"Shadow input\"", "text": "inside" },
+    { "op": "snapshot" },
+    { "op": "evaluate", "helper": "pageMarkdown" }
+  ]
+}
