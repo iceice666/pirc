@@ -70,7 +70,7 @@ fn main() -> ExitCode {
             failures.push(format!("{case}: {output:?}"));
         }
     }
-    let checks: [(&str, fn(&std::path::Path) -> Result<(), String>); 3] = [
+    let checks: [(&str, Check); 3] = [
         ("inherited descriptors", inherited_descriptors),
         ("a fault kills", a_fault_kills),
         ("local time", local_time),
@@ -100,6 +100,9 @@ fn main() -> ExitCode {
         ExitCode::FAILURE
     }
 }
+
+/// A check run by the parent, with this executable.
+type Check = fn(&std::path::Path) -> Result<(), String>;
 
 /// A descriptor open before hardening is gone after it (Linux: read from
 /// `/proc/<pid>/fd` while the child waits on stdin; elsewhere skipped).
@@ -150,6 +153,7 @@ fn a_fault_kills(exe: &std::path::Path) -> Result<(), String> {
     stdout.read_line(&mut line).unwrap();
     if line.trim() != "hardened" {
         let _ = child.kill();
+        let _ = child.wait();
         return Err(format!("fault: {line:?}"));
     }
     let pid = nix::unistd::Pid::from_raw(i32::try_from(child.id()).unwrap());
