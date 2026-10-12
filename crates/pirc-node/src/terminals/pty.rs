@@ -169,7 +169,7 @@ mod tests {
     async fn the_shell_starts_as_a_session_leader_on_the_terminal() {
         let dir = tempfile::tempdir().unwrap();
         let script = dir.path().join("probe");
-        std::fs::write(
+        crate::test_support::executable(
             &script,
             "#!/bin/sh\n\
              [ \"$1\" = -l ] && echo login\n\
@@ -178,10 +178,7 @@ mod tests {
              [ -r /proc/$$/stat ] && cut -d' ' -f6 /proc/$$/stat > sid\n\
              echo $$ > pid\n\
              echo done\n",
-        )
-        .unwrap();
-        std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-            .unwrap();
+        );
         let (master, slave) = open(24, 80).unwrap();
         let mut env = std::collections::BTreeMap::new();
         env.insert("PATH".to_owned(), std::env::var("PATH").unwrap_or_default());
@@ -215,28 +212,35 @@ mod tests {
     /// are opened ever holds a master. `pty-process` 0.5's open, which set
     /// `FD_CLOEXEC` afterwards, leaked into about 4% of such spawns in a
     /// two-second run of this shape; this one into none.
+    ///
+    /// It runs for 1.5 s and on until it has made enough opens and spawns
+    /// (at most 30 s), so a loaded machine makes it longer, not failing.
     #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread")]
     async fn a_concurrent_spawn_never_inherits_a_master() {
         use std::sync::Arc;
-        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
         use std::time::Instant;
 
+        const MIN_OPENS: u32 = 100;
+        const MIN_SPAWNS: u32 = 50;
         let stop = Arc::new(AtomicBool::new(false));
+        let opens = Arc::new(AtomicU32::new(0));
         let opener = {
-            let stop = stop.clone();
+            let (stop, opens) = (stop.clone(), opens.clone());
             tokio::task::spawn_blocking(move || {
-                let mut opened = 0_u32;
                 while !stop.load(Ordering::Relaxed) {
                     drop(open(24, 80).unwrap());
-                    opened += 1;
+                    opens.fetch_add(1, Ordering::Relaxed);
                 }
-                opened
             })
         };
         let started = Instant::now();
         let (mut spawns, mut leaks) = (0, Vec::new());
-        while started.elapsed() < Duration::from_millis(1500) {
+        while started.elapsed() < Duration::from_millis(1500)
+            || (started.elapsed() < Duration::from_secs(30)
+                && (opens.load(Ordering::Relaxed) < MIN_OPENS || spawns < MIN_SPAWNS))
+        {
             let output = std::process::Command::new("ls")
                 .args(["-l", "/proc/self/fd"])
                 .output()
@@ -248,9 +252,10 @@ mod tests {
             }
         }
         stop.store(true, Ordering::Relaxed);
-        let opened = opener.await.unwrap();
+        opener.await.unwrap();
+        let opened = opens.load(Ordering::Relaxed);
         assert!(
-            opened > 100 && spawns > 50,
+            opened >= MIN_OPENS && spawns >= MIN_SPAWNS,
             "{opened} opens, {spawns} spawns"
         );
         assert!(

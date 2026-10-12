@@ -3,9 +3,8 @@
 //! `HOME`, configuration and state.
 
 use std::fs::{self, File};
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write as _};
 use std::net::TcpListener;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -42,6 +41,29 @@ const GATEWAY_VARIABLE: &str = "PIRC_CONFORMANCE_GATEWAY_BIN";
 const NODE_VARIABLE: &str = "PIRC_CONFORMANCE_NODE_BIN";
 /// The top-level chats workspace of a chat node, as the gateway names it.
 pub const CHATS_WORKSPACE_ID: &str = "test:chats";
+
+/// Creates the executable `path` (which must not exist yet) holding
+/// `contents`.
+///
+/// The file is written and made executable by a short-lived `sh`, never by
+/// the test process: a write fd open there would be inherited by a child
+/// that another test thread forks meanwhile, and exec'ing the script while
+/// that child still holds it fails with ETXTBSY, "Text file busy"
+/// (rust-lang/rust#114554).
+pub fn write_executable(path: &Path, contents: &str) {
+    assert!(!path.exists(), "{} already exists", path.display());
+    let mut child = Command::new("/bin/sh")
+        .args(["-c", r#"cat > "$1" && chmod 755 "$1""#, "sh"])
+        .arg(path)
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    stdin.write_all(contents.as_bytes()).unwrap();
+    drop(stdin);
+    let status = child.wait().unwrap();
+    assert!(status.success(), "writing {}: {status}", path.display());
+}
 
 /// Replaces the sandbox runtime: answers the node's probe and runs the agent
 /// unconfined. What the node writes to the control fd (3, runtime network
@@ -228,8 +250,7 @@ impl Cluster {
         )
         .unwrap();
         let srt = root.join("fake-srt.sh");
-        fs::write(&srt, FAKE_SRT).unwrap();
-        fs::set_permissions(&srt, fs::Permissions::from_mode(0o755)).unwrap();
+        write_executable(&srt, FAKE_SRT);
         let mut env = vec![
             ("PIRC_NODE_ID", NODE_ID.to_owned()),
             ("PIRC_NODE_TOKEN", NODE_TOKEN.to_owned()),
