@@ -8,6 +8,9 @@
 //! Skipped (with a message) when no Chromium is found the way the node
 //! finds one (`PIRC_BROWSER_EXECUTABLE`, else `chromium`, … on `PATH`, else
 //! the macOS application bundles); the recording test also needs `ffmpeg`.
+//! With `PIRC_BROWSER_REQUIRED=1` (CI) they fail instead, and need
+//! `PIRC_BROWSER_EXECUTABLE`; an explicit one that is not a file always
+//! fails.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -54,8 +57,27 @@ fn config(root: &Path, extra: &[(&str, &str)]) -> (NodeConfig, Env) {
     (NodeConfig::load(&env, NodeRole::Node).unwrap(), env)
 }
 
-/// The manager, or `None` (and a message) without a Chromium.
+/// `PIRC_BROWSER_REQUIRED=1` (CI): nothing is skipped. The Chromium must be
+/// `PIRC_BROWSER_EXECUTABLE` (no fallback to another browser on `PATH`),
+/// and a missing one, or a missing ffmpeg, fails the test.
+fn required() -> bool {
+    std::env::var_os("PIRC_BROWSER_REQUIRED").is_some_and(|value| value == "1")
+}
+
+/// The manager, or `None` (and a message) without a Chromium. An explicit
+/// `PIRC_BROWSER_EXECUTABLE` that is not a file fails, as in the engine's
+/// tests.
 fn chromium(root: &Path, extra: &[(&str, &str)]) -> Option<Arc<BrowserManager>> {
+    match std::env::var_os("PIRC_BROWSER_EXECUTABLE").filter(|path| !path.is_empty()) {
+        Some(explicit) => assert!(
+            Path::new(&explicit).is_file(),
+            "PIRC_BROWSER_EXECUTABLE={explicit:?} is not a file"
+        ),
+        None => assert!(
+            !required(),
+            "PIRC_BROWSER_REQUIRED=1 needs PIRC_BROWSER_EXECUTABLE"
+        ),
+    }
     let (config, env) = config(root, extra);
     match &config.browser.executable {
         Some(executable) if executable.is_file() => {}
@@ -556,6 +578,7 @@ async fn drives_a_real_chromium() {
             }
         }
     } else {
+        assert!(!required(), "no ffmpeg on PATH (PIRC_BROWSER_REQUIRED=1)");
         eprintln!("skipping the recording: no ffmpeg on PATH");
     }
 

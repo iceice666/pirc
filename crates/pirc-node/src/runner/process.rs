@@ -545,14 +545,12 @@ impl Runner {
             }
             "browser_request" => return self.handle_browser(&message),
             "browser_cancel" => {
-                if let Some(Value::String(id)) = message.get("id") {
-                    let request = self.lock().browser_requests.remove(id);
-                    if let Some(request) = request {
-                        if let Some(task) = &request.task {
-                            task.abort();
-                        }
-                        request.abort.send_replace(true);
-                    }
+                // The entry stays until the operation settles (its task
+                // removes it), holding its in-flight slot as in TS.
+                if let Some(Value::String(id)) = message.get("id")
+                    && let Some(request) = self.lock().browser_requests.get(id)
+                {
+                    request.abort.send_replace(true);
                 }
                 return Ok(());
             }

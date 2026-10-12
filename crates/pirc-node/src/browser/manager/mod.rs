@@ -14,12 +14,13 @@
 //! returned future is TS's abort, which only ends waits for the user
 //! (`waitForAgentMode`) and the check before an operation starts; an
 //! operation already running (a launch, a navigation, a recording) finishes
-//! and its result is discarded.
+//! and its result is discarded. The runner aborts through
+//! [`BrowserService::handle_with_abort`] instead, which still waits for the
+//! operation to settle (TS's `browser_cancel` kept the request in flight
+//! until then).
 //!
 //! The engine is reached through [`seam`] (TS's `settings.launch` test
 //! hook), so the session lifecycle is unit-tested with a fake context.
-//!
-//! Owner: manager (with [`super::recording`] and [`super::util`]).
 
 mod input;
 mod ops;
@@ -113,6 +114,29 @@ impl BrowserService for BrowserManager {
         Box::pin(async move {
             let result = task.await;
             drop(abort);
+            result.unwrap_or_else(|error| Err(panicked(error)))
+        })
+    }
+
+    fn handle_with_abort(
+        &self,
+        target: BrowserTarget,
+        op: String,
+        args: Value,
+        mut abort: watch::Receiver<bool>,
+    ) -> BoxFuture<'_, ApiResult<Value>> {
+        let signal = Signal::new();
+        let mut task = tokio::spawn(self.inner.clone().handle(target, op, args, signal.clone()));
+        let abort_on_drop = AbortOnDrop(signal.clone());
+        Box::pin(async move {
+            let result = tokio::select! {
+                result = &mut task => result,
+                () = async { let _ = abort.wait_for(|aborted| *aborted).await; } => {
+                    signal.abort();
+                    task.await
+                }
+            };
+            drop(abort_on_drop);
             result.unwrap_or_else(|error| Err(panicked(error)))
         })
     }
@@ -254,13 +278,22 @@ struct State {
     closing: bool,
     workspaces: HashMap<String, Workspace>,
     tabs: HashMap<String, Arc<Tab>>,
-    viewers: HashMap<String, Vec<(u64, FrameSink)>>,
+    viewers: HashMap<String, Vec<Viewer>>,
     /// Accepted requests per session (`sessionOperations`).
     operations: HashMap<String, usize>,
     operation_waiters: HashMap<String, Vec<oneshot::Sender<()>>>,
     closing_sessions: HashSet<String>,
     /// Running `closeSession`s: true once done.
     closures: HashMap<String, watch::Receiver<bool>>,
+}
+
+/// An attached viewer (`attach`).
+struct Viewer {
+    id: u64,
+    sink: FrameSink,
+    /// The tab whose log the viewer got in full when it attached, and that
+    /// log's length: that tab's earlier `log_entry`s are not sent again.
+    log_from: Option<(Weak<Tab>, u64)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -342,6 +375,9 @@ pub(crate) struct TabState {
     frame_timer: Option<AbortHandle>,
     last_sent: Option<Instant>,
     recording: Option<ActiveRecording>,
+    /// A start in progress before its recording is installed (its seq):
+    /// another start sees the slot taken (see `Inner::reserve_recording`).
+    recording_starting: Option<u64>,
     log: VecDeque<LogEntry>,
     log_count: u64,
     last_activity: Instant,
@@ -365,6 +401,7 @@ impl Tab {
                 frame_timer: None,
                 last_sent: None,
                 recording: None,
+                recording_starting: None,
                 log: VecDeque::new(),
                 log_count: 0,
                 last_activity: Instant::now(),
@@ -815,7 +852,7 @@ impl Inner {
     /// `dropTab(tab)`: forget the tab (its pages are closed by the caller,
     /// or already gone); viewers stay registered.
     fn drop_tab(self: &Arc<Self>, tab: &Arc<Tab>) {
-        let stop = {
+        let (stop, empty_seq) = {
             let mut st = tab.lock();
             if st.closed {
                 return;
@@ -828,7 +865,9 @@ impl Inner {
             }
             st.mode = Mode::Agent;
             self.wake_waiters(tab, &mut st, None);
-            st.recording.take()
+            // Numbered after the woken waiters' states: it goes out last.
+            let empty_seq = tab.states_emitted.fetch_add(1, Ordering::Relaxed);
+            (st.recording.take(), empty_seq)
         };
         if let Some(recording) = stop {
             let stopping = self.finish_recording(tab, recording);
@@ -849,8 +888,7 @@ impl Inner {
                 workspace.sessions.remove(tab.session());
             }
         }
-        let empty = json!({ "type": "state", "state": self.view_of(None) });
-        self.broadcast(tab.session(), &empty);
+        self.emit_dropped(tab, empty_seq);
     }
 
     /// `closeSession(sessionId)`: fence new requests, fail the waits for the

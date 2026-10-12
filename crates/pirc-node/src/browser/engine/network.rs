@@ -156,7 +156,12 @@
 //! node-local proxy that applies [`HostGuard`] to every connection
 //! Chromium makes), which is not done.
 //!
-//! Owner: netio.
+//! Ported from playwright-core 1.63.0
+//! `src/server/chromium/crNetworkManager.ts`,
+//! `src/server/chromium/crPage.ts`,
+//! `src/server/chromium/crServiceWorker.ts`,
+//! `src/server/dispatchers/webSocketRouteDispatcher.ts` (Apache-2.0, see
+//! `crates/pirc-node/NOTICE`).
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};

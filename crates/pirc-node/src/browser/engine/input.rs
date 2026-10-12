@@ -23,7 +23,9 @@
 //! timeout (forever for a viewer's move); this waits a second and treats
 //! the move as no drag.
 //!
-//! Owner: netio.
+//! Ported from playwright-core 1.63.0 `src/server/input.ts`,
+//! `src/server/chromium/crInput.ts`, `src/server/chromium/crDragDrop.ts`
+//! (Apache-2.0, see `crates/pirc-node/NOTICE`).
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock, Weak};

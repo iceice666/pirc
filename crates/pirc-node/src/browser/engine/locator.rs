@@ -39,7 +39,9 @@
 //! `position`, modifiers, `noWaitAfter`, locator handlers (no handlers are
 //! ever registered, so their checkpoint is a no-op), the call log.
 //!
-//! Owner: locator.
+//! Ported from playwright-core 1.63.0 `src/server/frames.ts`,
+//! `src/server/frameSelectors.ts`, `src/server/dom.ts` (Apache-2.0, see
+//! `crates/pirc-node/NOTICE`).
 
 use std::sync::Arc;
 use std::time::Duration;

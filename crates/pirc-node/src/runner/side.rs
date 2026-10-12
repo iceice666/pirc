@@ -318,26 +318,42 @@ impl Runner {
             workspace_id: self.workspace.id.clone(),
             root,
         };
-        let (abort, _) = watch::channel(false);
+        // `browser_cancel` aborts through `abort` and leaves the entry: the
+        // request keeps its slot until the browser settles it, and still
+        // answers (the agent ignores it), as TS did.
+        let (abort, aborted) = watch::channel(false);
+        let abort = Arc::new(abort);
         let runner = self.clone();
         let request = id.clone();
+        let entry = abort.clone();
         let mut inner = self.lock();
         let task = tokio::spawn(async move {
             let Some(node) = runner.node() else {
                 return;
             };
-            match node.browser.handle(target, op, args).await {
+            let answer = node
+                .browser
+                .handle_with_abort(target, op, args, aborted)
+                .await;
+            match answer {
                 Ok(result) => runner.reply(
                     json!({ "type": "browser_response", "id": request, "ok": true, "result": result }),
                 ),
                 Err(error) => runner.browser_fail(&request, error.status, &error.code, &error.message),
             }
-            runner.lock().browser_requests.remove(&request);
+            let mut inner = runner.lock();
+            if inner
+                .browser_requests
+                .get(&request)
+                .is_some_and(|current| Arc::ptr_eq(&current.abort, &entry))
+            {
+                inner.browser_requests.remove(&request);
+            }
         });
         inner.browser_requests.insert(
             id,
             SideRequest {
-                abort: Arc::new(abort),
+                abort,
                 dialog: None,
                 task: Some(task.abort_handle()),
             },

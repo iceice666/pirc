@@ -24,11 +24,27 @@ const root = path.resolve(import.meta.dir, '..');
 const playwright = path.join(root, 'apps/gateway/node_modules/playwright-core');
 const output = path.join(root, 'crates/pirc-node/src/browser/assets');
 
-/** The JS string literal assigned to `name` after `marker` in the bundle. */
-function literal(bundle: string, marker: string, name: string): string {
-  const at = bundle.indexOf(marker);
-  if (at < 0) throw new Error(`${marker} not found in playwright-core`);
-  const start = bundle.indexOf(`${name} = `, at) + `${name} = `.length;
+/**
+ * The JS string literal of a generated source module of the bundle: esbuild
+ * emits `// packages/playwright-core/src/<module>`, then `var <name>;` (a
+ * minified name, renumbered between releases), then the module's body,
+ * which assigns the literal to `<name>` before the next module begins.
+ */
+function literal(bundle: string, module: string): string {
+  const escaped = module.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const header = new RegExp(`^// packages/playwright-core/src/${escaped}\nvar (\\w+);\n`, 'm').exec(
+    bundle,
+  );
+  if (!header) throw new Error(`${module} (with its var) not found in playwright-core`);
+  const name = header[1]!;
+  const body = header.index + header[0].length;
+  const next = bundle.indexOf('\n// packages/', body);
+  const assignment = new RegExp(`\\b${name} = `, 'g');
+  assignment.lastIndex = body;
+  const found = assignment.exec(bundle);
+  if (!found || (next >= 0 && found.index > next))
+    throw new Error(`${module}: no assignment to ${name} in the module`);
+  const start = found.index + found[0].length;
   const quote = bundle[start];
   if (quote !== "'" && quote !== '`') throw new Error(`${name}: not a string literal`);
   let end = start + 1;
@@ -53,8 +69,8 @@ const helper = (what: string, fn: (...args: never[]) => unknown) =>
   `${banner(`${what}, as Playwright's evaluate sends it.`)}${fn.toString()}\n`;
 
 const files: Record<string, string> = {
-  'injected.js': `${pw('The injected script (generated/injectedScriptSource.ts)')}${literal(bundle, 'generated/injectedScriptSource.ts', 'source4')}\n`,
-  'websocket-mock.js': `${pw('The WebSocket mock (generated/webSocketMockSource.ts)')}${literal(bundle, 'generated/webSocketMockSource.ts', 'source11')}\n`,
+  'injected.js': `${pw('The injected script (generated/injectedScriptSource.ts)')}${literal(bundle, 'generated/injectedScriptSource.ts')}\n`,
+  'websocket-mock.js': `${pw('The WebSocket mock (generated/webSocketMockSource.ts)')}${literal(bundle, 'generated/webSocketMockSource.ts')}\n`,
   'page-markdown.js': helper(
     'pageMarkdown (apps/gateway/src/node/browser-extract.ts)',
     pageMarkdown,

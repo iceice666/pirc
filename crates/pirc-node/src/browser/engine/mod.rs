@@ -12,14 +12,19 @@
 //! reads it (`cleanError` in the manager keeps its first lines), prefixed
 //! as the production TS node shows it (see [`Error::api`]).
 //!
-//! | Module | Port of | Owner |
-//! |---|---|---|
-//! | [`cdp`], [`launch`] | Playwright's pipe transport, `launchPersistentContext` | layout |
-//! | [`context`], [`page`], [`frame`] | `crBrowser`, `crPage`, `frames`, `page`, lifecycle and `networkidle` | core |
-//! | [`network`] | `crNetworkManager` routing, `routeWebSocket`, `serviceWorkers: 'block'` | netio |
-//! | [`input`], [`keyboard_layout`] | `input.ts`, `usKeyboardLayout.ts`, `crInput`, `crDragDrop` | netio |
-//! | [`screenshot`], [`screencast`] | `screenshotter`, `crPage` screencast | netio |
-//! | [`snapshot`], [`locator`] | `ariaSnapshotJSONForFrame`, `aria-ref` routing, `dom.ts` actions | locator |
+//! Ported from playwright-core 1.63.0 (Apache-2.0, see
+//! `crates/pirc-node/NOTICE`); files under its `src/server/`:
+//!
+//! | Module | Ported from |
+//! |---|---|
+//! | [`cdp`] | `chromium/crConnection.ts`, `pipeTransport.ts` (the pipe transport) |
+//! | [`launch`] | `chromium/chromium.ts`, `chromium/chromiumSwitches.ts`, `browserType.ts` (`launchPersistentContext`) |
+//! | [`context`] | `chromium/crBrowser.ts`, `browserContext.ts` |
+//! | [`page`], [`frame`] | `page.ts`, `frames.ts`, `chromium/crPage.ts`, `dom.ts`, `javascript.ts`, `chromium/crExecutionContext.ts` (lifecycle, `networkidle`) |
+//! | [`network`] | `chromium/crNetworkManager.ts` routing, `dispatchers/webSocketRouteDispatcher.ts` (`routeWebSocket`), `chromium/crServiceWorker.ts` (`serviceWorkers: 'block'`) |
+//! | [`input`], [`keyboard_layout`] | `input.ts`, `usKeyboardLayout.ts`, `macEditingCommands.ts`, `chromium/crInput.ts`, `chromium/crDragDrop.ts` |
+//! | [`screenshot`], [`screencast`] | `screenshotter.ts`, `screencast.ts`, `chromium/crPage.ts` screencast |
+//! | [`snapshot`], [`locator`] | `page.ts` (`ariaSnapshotJSONForFrame`), `frameSelectors.ts` (`aria-ref` routing), `frames.ts`, `dom.ts` (actions) |
 
 pub mod cdp;
 pub mod context;

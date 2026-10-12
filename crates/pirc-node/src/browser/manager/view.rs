@@ -11,7 +11,8 @@ use tokio::time::Instant;
 
 use super::seam::{FrameSink as CastSink, PageRef};
 use super::{
-    Detach, FrameSink, Inner, LOG_LIMIT, LastFrame, LogEntry, Mode, Tab, TabState, same, spawn,
+    Detach, FrameSink, Inner, LOG_LIMIT, LastFrame, LogEntry, Mode, Tab, TabState, Viewer, same,
+    spawn,
 };
 use crate::browser::engine::screencast::{ScreencastFrame, ScreencastOptions};
 use crate::browser::engine::screenshot::ScreenshotOptions;
@@ -31,36 +32,48 @@ fn frame_message(frame: &LastFrame) -> Value {
 
 impl Inner {
     /// `attach(sessionId, viewer)`: never launches anything.
+    ///
+    /// As atomic as TS's synchronous `attach`: the viewer is registered,
+    /// its state, log and frame are taken and sent under the manager's lock
+    /// (a broadcast copies the sinks under it, so nothing reaches the
+    /// viewer before them; the sinks only queue), and the log entries it
+    /// got in its `log` are not sent again as `log_entry`s.
     pub(super) fn attach(self: &Arc<Self>, session: &str, send: FrameSink) -> Detach {
         let id = self.next_seq();
         let tab = {
             let mut state = self.lock();
+            let tab = state.tabs.get(session).cloned();
+            let (view, entries, frame, log_from) = match &tab {
+                Some(tab) => {
+                    let st = tab.lock();
+                    (
+                        self.view_of(Some(&st)),
+                        st.log.iter().map(LogEntry::view).collect::<Vec<_>>(),
+                        st.last_frame.clone(),
+                        Some((Arc::downgrade(tab), st.log_count)),
+                    )
+                }
+                None => (self.view_of(None), Vec::new(), None, None),
+            };
             state
                 .viewers
                 .entry(session.to_owned())
                 .or_default()
-                .push((id, send.clone()));
-            state.tabs.get(session).cloned()
-        };
-        let (view, entries, frame) = match &tab {
-            Some(tab) => {
-                let st = tab.lock();
-                (
-                    self.view_of(Some(&st)),
-                    st.log.iter().map(LogEntry::view).collect::<Vec<_>>(),
-                    st.last_frame.clone(),
-                )
-            }
-            None => (self.view_of(None), Vec::new(), None),
-        };
-        send(json!({ "type": "state", "state": view }));
-        send(json!({ "type": "log", "entries": entries }));
-        if let Some(tab) = &tab {
-            tab.touch();
-            self.sync_screencast(tab);
+                .push(Viewer {
+                    id,
+                    sink: send.clone(),
+                    log_from,
+                });
+            send(json!({ "type": "state", "state": view }));
+            send(json!({ "type": "log", "entries": entries }));
             if let Some(frame) = frame {
                 send(frame_message(&frame));
             }
+            tab
+        };
+        if let Some(tab) = &tab {
+            tab.touch();
+            self.sync_screencast(tab);
         }
         let inner = self.clone();
         let session = session.to_owned();
@@ -68,7 +81,7 @@ impl Inner {
             let current = {
                 let mut state = inner.lock();
                 if let Some(viewers) = state.viewers.get_mut(&session) {
-                    viewers.retain(|(viewer, _)| *viewer != id);
+                    viewers.retain(|viewer| viewer.id != id);
                     if viewers.is_empty() {
                         state.viewers.remove(&session);
                     }
@@ -91,11 +104,21 @@ impl Inner {
     /// Send `frame` to the session's viewers; a failing (panicking) viewer
     /// does not stop the others.
     pub(super) fn broadcast(&self, session: &str, frame: &Value) {
+        self.broadcast_to(session, frame, |_| true);
+    }
+
+    fn broadcast_to(&self, session: &str, frame: &Value, wanted: impl Fn(&Viewer) -> bool) {
         let sinks: Vec<FrameSink> = self
             .lock()
             .viewers
             .get(session)
-            .map(|viewers| viewers.iter().map(|(_, sink)| sink.clone()).collect())
+            .map(|viewers| {
+                viewers
+                    .iter()
+                    .filter(|viewer| wanted(viewer))
+                    .map(|viewer| viewer.sink.clone())
+                    .collect()
+            })
             .unwrap_or_default();
         for sink in sinks {
             let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| sink(frame.clone())));
@@ -199,10 +222,36 @@ impl Inner {
         });
     }
 
+    /// `dropTab`'s `view(undefined)`: the empty state as the tab's state
+    /// number `seq`, after the tab's earlier states (which may still be
+    /// reading titles), so none of them lands after it. Skipped when the
+    /// session has a new tab by then: that tab's states are current (TS
+    /// sent the empty state at once, before any new tab's).
+    pub(super) fn emit_dropped(self: &Arc<Self>, tab: &Arc<Tab>, seq: u64) {
+        let inner = self.clone();
+        let tab = tab.clone();
+        let send = async move {
+            let sent = tab.states_sent.clone();
+            let mut earlier = sent.subscribe();
+            let _ = tokio::time::timeout(
+                Duration::from_secs(1),
+                earlier.wait_for(|done| *done >= seq),
+            )
+            .await;
+            let replaced = inner.lock().tabs.contains_key(tab.session());
+            if !replaced {
+                let empty = json!({ "type": "state", "state": inner.view_of(None) });
+                inner.broadcast(tab.session(), &empty);
+            }
+            sent.send_modify(|done| *done = (*done).max(seq + 1));
+        };
+        spawn(send);
+    }
+
     /// `log(tab, actor, action, jpeg)`: an action log entry (at most 300
     /// UTF-16 code units of text; typed text is never logged).
     pub(super) fn log(&self, tab: &Tab, actor: &'static str, action: &str, jpeg: Option<Vec<u8>>) {
-        let view = {
+        let (index, view) = {
             let mut st = tab.lock();
             let entry = LogEntry {
                 index: st.log_count,
@@ -218,15 +267,21 @@ impl Inner {
             };
             st.log_count += 1;
             let view = entry.view();
+            let index = entry.index;
             st.log.push_back(entry);
             while st.log.len() > LOG_LIMIT {
                 st.log.pop_front();
             }
-            view
+            (index, view)
         };
-        self.broadcast(
+        // A viewer that attached after the push has the entry in its log.
+        self.broadcast_to(
             tab.session(),
             &json!({ "type": "log_entry", "entry": view }),
+            |viewer| match &viewer.log_from {
+                Some((from, count)) if std::ptr::eq(from.as_ptr(), tab) => index >= *count,
+                _ => true,
+            },
         );
     }
 

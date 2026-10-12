@@ -1,0 +1,16 @@
+{
+  "case": "keyboard",
+  "platform": "macos",
+  "steps": {
+    "14": {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: Field\n    - textbox \"Field\" [ref=e3]: aaB1 é!\n  - generic [ref=e4]:\n    - text: Area\n    - textbox \"Area\" [ref=e5]\n  - button \"Clear log\" [ref=e6]\n  - list \"Events\" [ref=e7]:\n    - listitem [ref=e22]: field keydown \"Enter\" Enter 13\n    - listitem [ref=e23]: field keydown \"Backspace\" Backspace 8\n    - listitem [ref=e24]: field keydown \"Shift\" ShiftLeft 16 shift\n    - listitem [ref=e25]: field keydown \"ArrowLeft\" ArrowLeft 37 shift\n    - listitem [ref=e26]: field keydown \"Control\" ControlLeft 17 ctrl\n    - listitem [ref=e27]: field keydown \"a\" KeyA 65 ctrl\n    - listitem [ref=e28]: field keydown \"a\" KeyA 65\n    - listitem [ref=e29]: field input insertText \"aaB1 é!\"\n    - listitem [ref=e30]: field keydown \"Shift\" ShiftLeft 16 shift\n    - listitem [ref=e31]: field keydown \"Tab\" Tab 9 shift\n    - listitem [ref=e32]: field change \"aaB1 é!\"",
+      "url": "http://{{HOST_A}}/keyboard.html"
+    },
+    "19": {
+      "op": "snapshot",
+      "snapshot": "- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: Field\n    - textbox \"Field\" [ref=e3]: aaB1 é!\n  - generic [ref=e4]:\n    - text: Area\n    - textbox \"Area\" [active] [ref=e5]: inserted 文字\n  - button \"Clear log\" [ref=e6]\n  - list \"Events\" [ref=e7]:\n    - listitem [ref=e33]: area input insertText \"inserted 文字\"\n    - listitem [ref=e34]: area keydown \"Enter\" Enter 13\n    - listitem [ref=e35]: area input insertLineBreak \"inserted 文字\\n\"",
+      "url": "http://{{HOST_A}}/keyboard.html"
+    }
+  }
+}

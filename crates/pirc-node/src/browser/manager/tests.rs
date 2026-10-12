@@ -2,7 +2,7 @@
 //! (`browser.test.ts`'s "BrowserManager session lifecycle"), and the rest
 //! of the manager's bookkeeping that needs no Chromium.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -18,10 +18,13 @@ use super::seam::{
     ContextApi, ContextRef, FrameApi, FrameSink as CastSink, Launcher, LocatorApi, PageApi,
     PageEvent, PageRef, Selector,
 };
-use super::{BrowserManager, LazyHosts};
+use super::{ActiveRecording, BrowserManager, LazyHosts};
+use crate::browser::engine::screencast::ScreencastFrame;
 use crate::browser::engine::screencast::ScreencastOptions;
 use crate::browser::engine::screenshot::ScreenshotOptions;
 use crate::browser::engine::{self, LoadState, MouseButton};
+use crate::browser::recording::test_support::fake_ffmpeg;
+use crate::browser::recording::{RECORD_MAX, Recording};
 use crate::browser::{BoxFuture, BrowserService, BrowserTarget, FrameSink};
 use crate::error::ApiError;
 
@@ -35,6 +38,12 @@ struct FakePage {
     subscribers: Mutex<Vec<mpsc::UnboundedSender<PageEvent>>>,
     closed: AtomicBool,
     shows_actions: AtomicBool,
+    /// The screencast's frame sink while it runs.
+    cast: Mutex<Option<CastSink>>,
+    /// How long each `title()` takes, in call order (then at once).
+    title_delays: Mutex<VecDeque<Duration>>,
+    /// How long `aria_snapshot` takes.
+    snapshot_delay: Mutex<Duration>,
 }
 
 impl FakePage {
@@ -49,6 +58,24 @@ impl FakePage {
         for subscriber in self.subscribers.lock().unwrap().iter() {
             let _ = subscriber.send(event());
         }
+    }
+
+    fn set_url(&self, url: &str) {
+        url.clone_into(&mut self.url.lock().unwrap());
+    }
+
+    /// A screencast frame from Chromium.
+    fn frame(&self, jpeg: &[u8]) {
+        let sink = self.cast.lock().unwrap().clone().expect("a screencast");
+        sink(ScreencastFrame {
+            jpeg: Arc::new(jpeg.to_vec()),
+            width: 800,
+            height: 600,
+        });
+    }
+
+    fn casting(&self) -> bool {
+        self.cast.lock().unwrap().is_some()
     }
 }
 
@@ -65,7 +92,13 @@ impl PageApi for FakePage {
         self.url.lock().unwrap().clone()
     }
     fn title(&self) -> BoxFuture<'_, engine::Result<String>> {
-        Box::pin(async { Ok("Fake".to_owned()) })
+        let delay = self.title_delays.lock().unwrap().pop_front();
+        Box::pin(async move {
+            if let Some(delay) = delay {
+                tokio::time::sleep(delay).await;
+            }
+            Ok("Fake".to_owned())
+        })
     }
     fn content(&self) -> BoxFuture<'_, engine::Result<String>> {
         Box::pin(async { fake_error() })
@@ -97,7 +130,11 @@ impl PageApi for FakePage {
         Box::pin(async { fake_error() })
     }
     fn aria_snapshot(&self, _: Duration) -> BoxFuture<'_, engine::Result<String>> {
-        Box::pin(async { Ok("- generic [ref=e1]".to_owned()) })
+        let delay = *self.snapshot_delay.lock().unwrap();
+        Box::pin(async move {
+            tokio::time::sleep(delay).await;
+            Ok("- generic [ref=e1]".to_owned())
+        })
     }
     fn locator(self: Arc<Self>, _: Selector) -> Box<dyn LocatorApi> {
         unimplemented!("no locators on the fake page")
@@ -126,11 +163,13 @@ impl PageApi for FakePage {
     fn start_screencast(
         &self,
         _: ScreencastOptions,
-        _: CastSink,
+        sink: CastSink,
     ) -> BoxFuture<'_, engine::Result<()>> {
+        *self.cast.lock().unwrap() = Some(sink);
         Box::pin(async { Ok(()) })
     }
     fn stop_screencast(&self) -> BoxFuture<'_, engine::Result<()>> {
+        *self.cast.lock().unwrap() = None;
         Box::pin(async { Ok(()) })
     }
     fn show_actions(&self) -> BoxFuture<'_, engine::Result<()>> {
@@ -161,6 +200,8 @@ struct FakeContext {
     new_page_calls: AtomicUsize,
     close_calls: AtomicUsize,
     gone: Mutex<Option<watch::Sender<bool>>>,
+    /// The next `new_page` waits for this.
+    page_gate: Mutex<Option<oneshot::Receiver<()>>>,
 }
 
 impl FakeContext {
@@ -195,7 +236,11 @@ impl ContextApi for FakeContext {
         self.initial.clone()
     }
     fn new_page(&self) -> BoxFuture<'_, engine::Result<PageRef>> {
+        let gate = self.page_gate.lock().unwrap().take();
         Box::pin(async {
+            if let Some(gate) = gate {
+                let _ = gate.await;
+            }
             self.new_page_calls.fetch_add(1, Ordering::SeqCst);
             let page = FakePage::new("about:blank");
             self.created.lock().unwrap().push(page.clone());
@@ -403,6 +448,51 @@ async fn an_abandoned_request_still_drains_with_its_launch() {
     let _ = open.send(fake.clone());
     closing.await.unwrap();
     assert_eq!(fake.stats(), (0, 1));
+    manager.shutdown().await;
+}
+
+/// `browser_cancel` through the runner: the abort ends a wait at once but
+/// the request settles (and keeps its slot) only when its launch does.
+#[tokio::test]
+async fn an_aborted_request_settles_with_its_operation() {
+    let (fixture, open, launch_started) = gated_manager();
+    let manager = &fixture.manager;
+    let target = target("s", "w");
+    let (abort, aborted) = watch::channel(false);
+    let request = {
+        let manager = manager.clone();
+        let target = target.clone();
+        tokio::spawn(async move {
+            manager
+                .handle_with_abort(target, "snapshot".into(), json!({}), aborted)
+                .await
+        })
+    };
+    launch_started.await.unwrap();
+    abort.send_replace(true);
+    settle().await;
+    assert!(!request.is_finished());
+    let _ = open.send(FakeContext::new() as ContextRef);
+    // The launch went on; the aborted operation never starts.
+    let error = request.await.unwrap().unwrap_err();
+    assert_eq!(
+        (error.status, &*error.message),
+        (500, "This operation was aborted")
+    );
+
+    // A wait for the user ends with the abort.
+    manager
+        .handle(target.clone(), "handoff".into(), json!({ "reason": "x" }))
+        .await
+        .unwrap();
+    let (abort, aborted) = watch::channel(false);
+    let waiting = manager.handle_with_abort(target, "wait_control".into(), json!({}), aborted);
+    let cancel = async {
+        settle().await;
+        abort.send_replace(true);
+    };
+    let (error, ()) = tokio::join!(waiting, cancel);
+    assert_eq!(error.unwrap_err().status, 499);
     manager.shutdown().await;
 }
 
@@ -1023,5 +1113,512 @@ async fn stops_a_recording_when_ffmpeg_is_missing() {
         (error.status, &*error.message),
         (400, "action is start or stop")
     );
+    manager.shutdown().await;
+}
+
+// ---- timing, ordering and races ------------------------------------------------
+
+/// A viewer that keeps what it gets.
+fn viewer() -> (FrameSink, Arc<Mutex<Vec<Value>>>) {
+    let frames = Arc::new(Mutex::new(Vec::new()));
+    let sink: FrameSink = {
+        let frames = frames.clone();
+        Arc::new(move |frame| frames.lock().unwrap().push(frame))
+    };
+    (sink, frames)
+}
+
+fn of_type(frames: &Mutex<Vec<Value>>, kind: &str) -> Vec<Value> {
+    frames
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|frame| frame["type"] == kind)
+        .cloned()
+        .collect()
+}
+
+/// The screencast frames a viewer got, decoded.
+fn sent_frames(frames: &Mutex<Vec<Value>>) -> Vec<String> {
+    use base64::Engine as _;
+    of_type(frames, "frame")
+        .iter()
+        .map(|frame| {
+            let data = base64::engine::general_purpose::STANDARD
+                .decode(frame["data"].as_str().unwrap())
+                .unwrap();
+            String::from_utf8(data).unwrap()
+        })
+        .collect()
+}
+
+/// A manager whose launches return `context` and whose ffmpeg is `ffmpeg`.
+fn with_ffmpeg(context: &Arc<FakeContext>, ffmpeg: &str) -> Fixture {
+    let context = context.clone();
+    let ffmpeg = ffmpeg.to_owned();
+    manager_with(
+        move |dir| BrowserSettings {
+            ffmpeg,
+            ..settings(dir)
+        },
+        Box::new(move || {
+            let context = context.clone() as ContextRef;
+            Box::pin(async move { Ok(context) })
+        }),
+    )
+}
+
+/// A stand-in ffmpeg that creates its output and reads its input to the
+/// end, with shell builtins only (the manager's environment has no PATH).
+const CONSUMING_FFMPEG: &str = r#"for last; do :; done; : > "$last"; while read -r _; do :; done"#;
+
+#[tokio::test(start_paused = true)]
+async fn sends_at_most_one_frame_per_80_ms_and_always_the_latest() {
+    let context = FakeContext::new();
+    let fixture = ready(&context);
+    let manager = &fixture.manager;
+    manager
+        .handle(target("s", "w"), "release".into(), json!({}))
+        .await
+        .unwrap();
+    let page = context.page(0);
+    settle().await;
+    // Nobody watches: no screencast.
+    assert!(!page.casting());
+    let (sink, frames) = viewer();
+    let detach = manager.attach("s", sink);
+    settle().await;
+    assert!(page.casting());
+
+    // The first frame goes out at once.
+    page.frame(b"one");
+    settle().await;
+    assert_eq!(sent_frames(&frames), ["one"]);
+    // Within the interval: held back, then only the latest.
+    page.frame(b"two");
+    page.frame(b"three");
+    settle().await;
+    tokio::time::advance(Duration::from_millis(79)).await;
+    settle().await;
+    assert_eq!(sent_frames(&frames), ["one"]);
+    tokio::time::advance(Duration::from_millis(1)).await;
+    settle().await;
+    assert_eq!(sent_frames(&frames), ["one", "three"]);
+    // After a quiet interval the next one goes out at once again.
+    tokio::time::advance(Duration::from_millis(200)).await;
+    page.frame(b"four");
+    settle().await;
+    assert_eq!(sent_frames(&frames), ["one", "three", "four"]);
+    // A new viewer starts with the latest frame.
+    let (sink, late) = viewer();
+    let detach_late = manager.attach("s", sink);
+    assert_eq!(sent_frames(&late), ["four"]);
+
+    detach();
+    detach_late();
+    settle().await;
+    assert!(!page.casting());
+    manager.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn sends_a_tabs_states_in_the_order_they_were_taken() {
+    let context = FakeContext::new();
+    let fixture = ready(&context);
+    let manager = &fixture.manager;
+    manager
+        .handle(target("s", "w"), "release".into(), json!({}))
+        .await
+        .unwrap();
+    let (sink, frames) = viewer();
+    let detach = manager.attach("s", sink);
+    settle().await;
+    let page = context.page(0);
+    frames.lock().unwrap().clear();
+
+    // The first state's title is slow: the second one waits for it.
+    page.title_delays
+        .lock()
+        .unwrap()
+        .push_back(Duration::from_millis(500));
+    page.set_url("https://a.example/");
+    page.emit(|| PageEvent::Load);
+    settle().await;
+    page.set_url("https://b.example/");
+    page.emit(|| PageEvent::Load);
+    settle().await;
+    assert!(of_type(&frames, "state").is_empty());
+    tokio::time::advance(Duration::from_millis(500)).await;
+    settle().await;
+    let urls: Vec<Value> = of_type(&frames, "state")
+        .iter()
+        .map(|state| state["state"]["url"].clone())
+        .collect();
+    assert_eq!(
+        urls,
+        [json!("https://a.example/"), json!("https://b.example/")]
+    );
+
+    // A title that takes more than a second lets later states pass.
+    frames.lock().unwrap().clear();
+    page.title_delays
+        .lock()
+        .unwrap()
+        .push_back(Duration::from_secs(5));
+    page.set_url("https://c.example/");
+    page.emit(|| PageEvent::Load);
+    settle().await;
+    page.set_url("https://d.example/");
+    page.emit(|| PageEvent::Load);
+    settle().await;
+    tokio::time::advance(Duration::from_secs(1)).await;
+    settle().await;
+    let urls: Vec<Value> = of_type(&frames, "state")
+        .iter()
+        .map(|state| state["state"]["url"].clone())
+        .collect();
+    assert_eq!(urls, [json!("https://d.example/")]);
+    detach();
+    manager.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn reaps_idle_sessions_unless_recording_in_user_mode_or_watched() {
+    let context = FakeContext::new();
+    let fixture = ready(&context);
+    let manager = &fixture.manager;
+    let sessions = ["idle", "recording", "user", "watched"];
+    for session in sessions {
+        manager
+            .handle(target(session, "w"), "release".into(), json!({}))
+            .await
+            .unwrap();
+    }
+    manager
+        .handle(
+            target("user", "w"),
+            "handoff".into(),
+            json!({ "reason": "x" }),
+        )
+        .await
+        .unwrap();
+    let detach = manager.attach("watched", Arc::new(|_| {}));
+    {
+        // A recording without ffmpeg: only its presence matters here.
+        let tab = manager.inner.lock().tabs["recording"].clone();
+        let recording = Recording::start(
+            "/nonexistent/ffmpeg",
+            &BTreeMap::new(),
+            PathBuf::from("/nonexistent/a.webm"),
+            "r".into(),
+            Arc::new(|| None),
+            Arc::new(|| true),
+        );
+        tab.lock().recording = Some(ActiveRecording {
+            seq: 0,
+            recording,
+            limit: None,
+        });
+    }
+    let open = || {
+        let mut open: Vec<String> = manager.inner.lock().tabs.keys().cloned().collect();
+        open.sort();
+        open
+    };
+    // idle_ms is 60 s.
+    tokio::time::advance(Duration::from_secs(59)).await;
+    manager.inner.reap_idle();
+    settle().await;
+    assert_eq!(open(), sessions);
+    tokio::time::advance(Duration::from_secs(2)).await;
+    manager.inner.reap_idle();
+    settle().await;
+    settle().await;
+    assert_eq!(open(), ["recording", "user", "watched"]);
+    // Activity counts.
+    manager
+        .handle(target("user", "w"), "release".into(), json!({}))
+        .await
+        .unwrap();
+    detach();
+    manager.inner.reap_idle();
+    settle().await;
+    settle().await;
+    assert_eq!(open(), ["recording", "user"]);
+    manager.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn stops_a_recording_after_thirty_minutes() {
+    let root = tempfile::tempdir().unwrap();
+    let ffmpeg = fake_ffmpeg(root.path(), CONSUMING_FFMPEG);
+    let context = FakeContext::new();
+    let fixture = with_ffmpeg(&context, &ffmpeg);
+    let manager = &fixture.manager;
+    let target = BrowserTarget {
+        root: root.path().join("session"),
+        ..target("s", "w")
+    };
+    let started = manager
+        .handle(
+            target.clone(),
+            "record".into(),
+            json!({ "action": "start", "name": "cap" }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(started["recording"], true);
+    let path = started["path"].as_str().unwrap().to_owned();
+    assert!(path.starts_with(".pirc/recordings/cap-"), "{path}");
+    let recording = |manager: &BrowserManager| {
+        let tab = manager.inner.lock().tabs["s"].clone();
+        let st = tab.lock();
+        st.recording
+            .as_ref()
+            .map(|active| active.recording.relative.clone())
+    };
+    // Watched, so that the idle sweep (also due at 30:00) keeps the tab.
+    let (sink, frames) = viewer();
+    let detach = manager.attach("s", sink);
+    tokio::time::advance(RECORD_MAX - Duration::from_secs(1)).await;
+    settle().await;
+    assert_eq!(recording(manager), Some(path));
+    tokio::time::advance(Duration::from_secs(1)).await;
+    settle().await;
+    assert_eq!(recording(manager), None);
+    // Viewers see it once ffmpeg is gone (a real process: real time).
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while of_type(&frames, "state").pop().unwrap()["state"]["recording"] != Value::Null {
+        assert!(std::time::Instant::now() < deadline, "no final state");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    detach();
+    manager.shutdown().await;
+}
+
+#[tokio::test]
+async fn fails_a_start_whose_ffmpeg_reports_an_error() {
+    let root = tempfile::tempdir().unwrap();
+    let ffmpeg = fake_ffmpeg(root.path(), "echo 'Unknown encoder' >&2; exit 1");
+    // The start gives ffmpeg 150 ms to fail: run the script once first, as
+    // the first exec of a new file can take longer than that (macOS checks
+    // it).
+    let warm = std::process::Command::new(&ffmpeg).output().unwrap();
+    assert_eq!(warm.stderr, b"Unknown encoder\n");
+    let context = FakeContext::new();
+    let fixture = with_ffmpeg(&context, &ffmpeg);
+    let manager = &fixture.manager;
+    let target = BrowserTarget {
+        root: root.path().join("session"),
+        ..target("s", "w")
+    };
+    let error = manager
+        .handle(
+            target.clone(),
+            "record".into(),
+            json!({ "action": "start" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        (error.status, &*error.code, &*error.message),
+        (503, "runner_unavailable", "Unknown encoder\n")
+    );
+    let status = manager
+        .handle(target, "status".into(), json!({}))
+        .await
+        .unwrap();
+    assert_eq!(status["recording"], Value::Null);
+    manager.shutdown().await;
+}
+
+/// Issue: two starts on different threads could both pass the "Already
+/// recording" check. A start reserves the slot before it awaits (here, a
+/// viewer's start opening the tab's page).
+#[tokio::test]
+async fn refuses_a_recording_start_racing_another() {
+    let root = tempfile::tempdir().unwrap();
+    let ffmpeg = fake_ffmpeg(root.path(), CONSUMING_FFMPEG);
+    let context = FakeContext::new();
+    let fixture = with_ffmpeg(&context, &ffmpeg);
+    let manager = &fixture.manager;
+    let target = BrowserTarget {
+        root: root.path().join("session"),
+        ..target("s", "w")
+    };
+    manager
+        .handle(target.clone(), "release".into(), json!({}))
+        .await
+        .unwrap();
+    manager
+        .handle(
+            target.clone(),
+            "tabs".into(),
+            json!({ "action": "close", "index": 0 }),
+        )
+        .await
+        .unwrap();
+    settle().await;
+    assert!(manager.inner.lock().tabs["s"].active().is_none());
+    let (open, gate) = oneshot::channel();
+    *context.page_gate.lock().unwrap() = Some(gate);
+    let viewer_start = {
+        let manager = manager.clone();
+        let target = target.clone();
+        tokio::spawn(async move {
+            manager
+                .input(target, json!({ "type": "record", "action": "start" }))
+                .await
+        })
+    };
+    settle().await;
+    assert!(!viewer_start.is_finished());
+    let error = manager
+        .handle(
+            target.clone(),
+            "record".into(),
+            json!({ "action": "start" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!((error.status, &*error.message), (409, "Already recording"));
+    // A second viewer start is ignored.
+    assert_eq!(
+        manager
+            .input(
+                target.clone(),
+                json!({ "type": "record", "action": "start" })
+            )
+            .await
+            .unwrap(),
+        None
+    );
+    open.send(()).unwrap();
+    assert_eq!(viewer_start.await.unwrap().unwrap(), None);
+    let stopped = manager
+        .handle(target.clone(), "record".into(), json!({ "action": "stop" }))
+        .await
+        .unwrap();
+    let path = stopped["path"].as_str().unwrap();
+    assert!(path.starts_with(".pirc/recordings/recording-"), "{path}");
+    let files = std::fs::read_dir(root.path().join("session/.pirc/recordings"))
+        .unwrap()
+        .count();
+    assert_eq!(files, 1);
+    manager.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn concurrent_closes_share_one_closing() {
+    let context = FakeContext::new();
+    let fixture = ready(&context);
+    let manager = &fixture.manager;
+    let target = target("s", "w");
+    manager
+        .handle(target.clone(), "release".into(), json!({}))
+        .await
+        .unwrap();
+    *context.page(0).snapshot_delay.lock().unwrap() = Duration::from_secs(10);
+    let running = spawn_handle(manager, &target, "snapshot", json!({}));
+    settle().await;
+    let close = || {
+        let manager = manager.clone();
+        tokio::spawn(async move { manager.close_session("s").await })
+    };
+    let (first, second) = (close(), close());
+    settle().await;
+    // Both wait for the running operation, in one closing.
+    assert!(!first.is_finished() && !second.is_finished());
+    assert_eq!(manager.inner.lock().closures.len(), 1);
+    // New requests are fenced meanwhile.
+    let error = manager
+        .handle(target.clone(), "snapshot".into(), json!({}))
+        .await
+        .unwrap_err();
+    assert_eq!(
+        (error.status, &*error.message),
+        (409, "The browser session is closing")
+    );
+    tokio::time::advance(Duration::from_secs(10)).await;
+    running.await.unwrap().unwrap();
+    first.await.unwrap();
+    second.await.unwrap();
+    assert_eq!(context.stats().1, 1);
+    assert!(manager.inner.lock().closures.is_empty());
+    manager.shutdown().await;
+}
+
+/// Parity with TS: after Chromium went away, the agents waiting for the
+/// user are woken as if control came back; a queued operation then opens a
+/// page in a relaunched browser.
+#[tokio::test]
+async fn a_crash_wakes_the_agents_waiting_for_the_user() {
+    let contexts = Arc::new(Mutex::new(Vec::<Arc<FakeContext>>::new()));
+    let fixture = manager_with(settings, {
+        let contexts = contexts.clone();
+        Box::new(move || {
+            let context = FakeContext::new();
+            contexts.lock().unwrap().push(context.clone());
+            Box::pin(async move { Ok(context as ContextRef) })
+        })
+    });
+    let manager = &fixture.manager;
+    let target = target("s", "w");
+    manager
+        .handle(target.clone(), "handoff".into(), json!({ "reason": "x" }))
+        .await
+        .unwrap();
+    let queued = spawn_handle(manager, &target, "snapshot", json!({}));
+    settle().await;
+    let status = manager
+        .handle(target.clone(), "status".into(), json!({}))
+        .await
+        .unwrap();
+    assert_eq!(status["agentWaiting"], true);
+    let first = contexts.lock().unwrap()[0].clone();
+    first.crash();
+    let summary = queued.await.unwrap().unwrap();
+    assert_eq!(summary["snapshot"], "- generic [ref=e1]");
+    assert_eq!(fixture.launcher.calls.load(Ordering::SeqCst), 2);
+    manager.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_operation_aborted_while_queued_never_runs() {
+    let context = FakeContext::new();
+    let fixture = ready(&context);
+    let manager = &fixture.manager;
+    let target = target("s", "w");
+    manager
+        .handle(target.clone(), "release".into(), json!({}))
+        .await
+        .unwrap();
+    *context.page(0).snapshot_delay.lock().unwrap() = Duration::from_secs(10);
+    let running = spawn_handle(manager, &target, "snapshot", json!({}));
+    settle().await;
+    let (abort, aborted) = watch::channel(false);
+    let queued = {
+        let manager = manager.clone();
+        let target = target.clone();
+        tokio::spawn(async move {
+            manager
+                .handle_with_abort(target, "snapshot".into(), json!({}), aborted)
+                .await
+        })
+    };
+    settle().await;
+    abort.send_replace(true);
+    settle().await;
+    // Settled only once the running operation lets go of the tab.
+    assert!(!queued.is_finished());
+    tokio::time::advance(Duration::from_secs(10)).await;
+    running.await.unwrap().unwrap();
+    let error = queued.await.unwrap().unwrap_err();
+    assert_eq!(
+        (error.status, &*error.code, &*error.message),
+        (500, "browser_error", "This operation was aborted")
+    );
+    // Only the first one ran (and was logged).
+    assert_eq!(manager.inner.lock().tabs["s"].lock().log_count, 1);
     manager.shutdown().await;
 }

@@ -10,7 +10,9 @@
 //! listener, in order, on unbounded channels (as Playwright's event
 //! emitters do).
 //!
-//! Layout: implemented here.
+//! Ported from playwright-core 1.63.0 `src/server/chromium/crConnection.ts`,
+//! `src/server/pipeTransport.ts` (Apache-2.0, see
+//! `crates/pirc-node/NOTICE`).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};

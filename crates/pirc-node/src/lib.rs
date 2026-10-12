@@ -23,7 +23,7 @@
 //! | [`models`] | `models.ts` `ModelStore` | layout |
 //! | [`router`] | Fastify and `app.inject` | layout (matching), core ([`router::Router::handle`]) |
 //! | [`link`] | `node/runtime.ts` (link) | layout ([`link::LinkSender`]), core ([`link::run`]) |
-//! | [`browser`] | `node/browser.ts` (Playwright ported in `browser::engine`) | M8 |
+//! | [`browser`] | `node/browser.ts`, `node/browser-hosts.ts`, `node/browser-extract.ts` (in-page helpers), `node/browser-executable.ts` (in `pirc_config::node`); Playwright 1.63.0 in `browser::engine` | M8 (manager, core, netio, locator) |
 //! | [`store`] | `database.ts` (node half), `schema.sql` | layout (open, rows), core (queries) |
 //! | [`services`], [`node`] | `buildNodeApp`, `startNode`, `node/main.ts` | core |
 //! | [`app`], [`chat`], [`assistant_prompts`] | `node/app.ts`, `node/chat.ts`, `assistant-prompts.ts`, `session-name.ts` | core |

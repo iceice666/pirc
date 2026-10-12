@@ -2,7 +2,9 @@
 //! for `node/browser.ts` (headless, the workspace's profile, its default
 //! switches; see the M8 scout report), with the CDP pipe on fds 3 and 4.
 //!
-//! Layout: implemented here.
+//! Ported from playwright-core 1.63.0 `src/server/chromium/chromium.ts`,
+//! `src/server/chromium/chromiumSwitches.ts`, `src/server/browserType.ts`
+//! (Apache-2.0, see `crates/pirc-node/NOTICE`).
 
 use std::collections::BTreeMap;
 use std::os::fd::OwnedFd;

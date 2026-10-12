@@ -7,10 +7,11 @@
 //! Skipped, with a message, when no Chromium is found (`chromium`,
 //! `chromium-browser`, `google-chrome-stable`, `google-chrome`,
 //! `microsoft-edge` on PATH, or the macOS application bundles), or
-//! `PIRC_BROWSER_EXECUTABLE`.
+//! `PIRC_BROWSER_EXECUTABLE`; with `PIRC_BROWSER_REQUIRED=1` (CI) they fail
+//! instead, and use `PIRC_BROWSER_EXECUTABLE` only.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -31,7 +32,32 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
+/// `PIRC_BROWSER_REQUIRED=1` (CI): nothing is skipped. The Chromium must be
+/// `PIRC_BROWSER_EXECUTABLE`, an existing file (no fallback to another
+/// browser on `PATH`), and a missing one fails the test.
+fn required() -> bool {
+    std::env::var_os("PIRC_BROWSER_REQUIRED").is_some_and(|value| value == "1")
+}
+
+/// Under [`required`], the explicit Chromium, or a panic.
+fn required_chromium() -> Option<PathBuf> {
+    if !required() {
+        return None;
+    }
+    let explicit = std::env::var_os("PIRC_BROWSER_EXECUTABLE")
+        .filter(|path| !path.is_empty())
+        .expect("PIRC_BROWSER_REQUIRED=1 needs PIRC_BROWSER_EXECUTABLE");
+    assert!(
+        Path::new(&explicit).is_file(),
+        "PIRC_BROWSER_EXECUTABLE={explicit:?} is not a file"
+    );
+    Some(explicit.into())
+}
+
 fn chromium() -> Option<PathBuf> {
+    if let Some(explicit) = required_chromium() {
+        return Some(explicit);
+    }
     if let Some(explicit) = std::env::var_os("PIRC_BROWSER_EXECUTABLE") {
         return Some(explicit.into());
     }

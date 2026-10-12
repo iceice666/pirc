@@ -26,8 +26,6 @@
 //!
 //! URLs are parsed with the `url` crate (WHATWG, as `new URL` is: e.g.
 //! `http://2130706433/` is `127.0.0.1`).
-//!
-//! Owner: netio.
 
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;

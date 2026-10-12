@@ -14,7 +14,9 @@
 //! ([`Session::call_echo`]). The state lives under one lock that is never
 //! held across an `await`; waiters watch a change counter.
 //!
-//! Owner: core.
+//! Ported from playwright-core 1.63.0 `src/server/page.ts`,
+//! `src/server/frames.ts`, `src/server/chromium/crPage.ts` (Apache-2.0, see
+//! `crates/pirc-node/NOTICE`).
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock};

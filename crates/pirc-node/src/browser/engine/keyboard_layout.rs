@@ -1,11 +1,11 @@
 //! Playwright's US keyboard layout (`usKeyboardLayout.ts`) and the key
 //! descriptions `input.ts` builds from it (`buildLayoutClosure` with its
 //! aliases), plus the macOS editing commands Chromium gets with key events
-//! (`macEditingCommands.ts`), copied verbatim from playwright-core 1.63.0
-//! (Apache-2.0, Copyright (c) Microsoft Corporation; see
-//! `assets/PLAYWRIGHT-LICENSE` and `assets/PLAYWRIGHT-NOTICE`).
+//! (`macEditingCommands.ts`), copied verbatim from playwright-core 1.63.0.
 //!
-//! Owner: netio.
+//! Ported from playwright-core 1.63.0 `src/server/usKeyboardLayout.ts`,
+//! `src/server/macEditingCommands.ts`, `src/server/input.ts` (Apache-2.0,
+//! Copyright (c) Microsoft Corporation, see `crates/pirc-node/NOTICE`).
 
 use std::collections::HashMap;
 use std::sync::OnceLock;

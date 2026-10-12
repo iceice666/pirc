@@ -12,7 +12,9 @@
 //! waits for the process indefinitely, the process group is killed if it
 //! has not exited [`CLOSE_GRACE`] after `Browser.close`.
 //!
-//! Owner: core.
+//! Ported from playwright-core 1.63.0 `src/server/chromium/crBrowser.ts`,
+//! `src/server/browserContext.ts` (Apache-2.0, see
+//! `crates/pirc-node/NOTICE`).
 
 use std::any::Any;
 use std::collections::{BTreeMap, HashMap};

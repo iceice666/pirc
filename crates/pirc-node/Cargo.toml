@@ -17,7 +17,8 @@ path = "src/main.rs"
 
 [dependencies]
 base64 = "0.22"
-# srt's control channel on the agent's fd 3 (sandbox/srt.rs), without
+# srt's control channel on the agent's fd 3 (sandbox/srt.rs) and
+# Chromium's CDP pipe on its fds 3/4 (browser/engine/launch.rs), without
 # unsafe code of our own.
 command-fds = { version = "0.3", features = ["tokio"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }

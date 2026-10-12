@@ -8,7 +8,10 @@
 //! of `chromium`, `chromium-browser`, `google-chrome-stable`, `google-chrome`,
 //! `microsoft-edge` on `PATH` (as the node itself looks), else the macOS
 //! application bundles. Without one they are skipped with a message, also
-//! under `PIRC_CONFORMANCE_REQUIRED`.
+//! under `PIRC_CONFORMANCE_REQUIRED`, but not under `PIRC_BROWSER_REQUIRED=1`
+//! (CI): then the Chromium must be `PIRC_BROWSER_EXECUTABLE`, an existing
+//! file (no fallback to another browser on `PATH`), and the recording
+//! scenario's ffmpeg must be found; anything missing fails the scenario.
 
 #![allow(dead_code)]
 
@@ -42,8 +45,25 @@ pub fn pages_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../pirc-node/tests/fixtures/browser/pages")
 }
 
+/// `PIRC_BROWSER_REQUIRED=1`: a missing Chromium or ffmpeg fails instead
+/// of skipping.
+pub fn required() -> bool {
+    std::env::var_os("PIRC_BROWSER_REQUIRED").is_some_and(|value| value == "1")
+}
+
 /// The Chromium the scenarios use, found the way the node finds one.
 pub fn browser_executable() -> Option<PathBuf> {
+    if required() {
+        let explicit = std::env::var_os("PIRC_BROWSER_EXECUTABLE")
+            .filter(|path| !path.is_empty())
+            .expect("PIRC_BROWSER_REQUIRED=1 needs PIRC_BROWSER_EXECUTABLE");
+        let explicit = PathBuf::from(explicit);
+        assert!(
+            explicit.is_absolute() && explicit.is_file(),
+            "PIRC_BROWSER_EXECUTABLE={explicit:?} is not an absolute path to a file"
+        );
+        return Some(explicit);
+    }
     if let Some(path) = std::env::var_os("PIRC_BROWSER_EXECUTABLE").filter(|p| !p.is_empty()) {
         let path = PathBuf::from(path);
         return Some(if path.is_absolute() {

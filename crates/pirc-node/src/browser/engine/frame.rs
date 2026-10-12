@@ -13,7 +13,10 @@
 //! line, but the stack lines after it name other frames than Playwright's
 //! `UtilityScript.evaluate` ones.
 //!
-//! Owner: core.
+//! Ported from playwright-core 1.63.0 `src/server/frames.ts`,
+//! `src/server/dom.ts`, `src/server/javascript.ts`,
+//! `src/server/chromium/crExecutionContext.ts` (Apache-2.0, see
+//! `crates/pirc-node/NOTICE`).
 
 use std::sync::Arc;
 use std::time::Duration;

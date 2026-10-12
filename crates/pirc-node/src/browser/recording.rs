@@ -4,8 +4,6 @@
 //! `node/browser.ts` does (`startRecording`/`stopRecording`). The manager
 //! owns the parts that touch the tab (the seed frame, the screencast, the
 //! 30-minute cap, the log); this is the ffmpeg process.
-//!
-//! Owner: manager.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -208,9 +206,12 @@ impl Recording {
             });
         }
         tokio::spawn(async move {
+            // Only an explicit kill (a stop that timed out) kills ffmpeg: a
+            // dropped `Recording` drops the sender, which disables this
+            // branch, and ffmpeg ends with its input.
             let status = tokio::select! {
                 status = child.wait() => status,
-                _ = kill_rx => {
+                Ok(()) = kill_rx => {
                     let _ = child.start_kill();
                     child.wait().await
                 }
@@ -274,7 +275,7 @@ impl Recording {
 
 impl Drop for Recording {
     /// A recording dropped without [`Recording::stop`] (a failed start)
-    /// stops writing; ffmpeg ends with its input.
+    /// stops writing; ffmpeg ends with its input and is not killed.
     fn drop(&mut self) {
         if let Some(end) = self.end.take() {
             let _ = end.send(());
@@ -338,7 +339,35 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 #[cfg(test)]
+pub(crate) mod test_support {
+    /// A stand-in ffmpeg: a shell script that copies stdin to the output
+    /// file (its last argument) or fails with a message.
+    ///
+    /// The executable is written by a short-lived `sh`, under a fresh name,
+    /// never by this process: a write fd open here would be inherited by a
+    /// child that another test thread forks meanwhile, and exec'ing the
+    /// script while that child still holds it fails with ETXTBSY
+    /// (rust-lang/rust#114554).
+    pub(crate) fn fake_ffmpeg(dir: &std::path::Path, body: &str) -> String {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let source = dir.join(format!("ffmpeg-{n}.sh"));
+        let path = dir.join(format!("ffmpeg-{n}"));
+        std::fs::write(&source, format!("#!/bin/sh\n{body}\n")).unwrap();
+        let status = std::process::Command::new("/bin/sh")
+            .args(["-c", r#"cp "$1" "$2" && chmod 755 "$2""#, "sh"])
+            .arg(&source)
+            .arg(&path)
+            .status()
+            .unwrap();
+        assert!(status.success(), "{status}");
+        path.display().to_string()
+    }
+}
+
+#[cfg(test)]
 mod tests {
+    use super::test_support::fake_ffmpeg;
     use super::*;
 
     #[test]
@@ -388,16 +417,6 @@ mod tests {
         );
     }
 
-    /// A stand-in ffmpeg: a shell script that copies stdin to the output
-    /// file (its last argument) or fails with a message.
-    fn fake_ffmpeg(dir: &std::path::Path, body: &str) -> String {
-        use std::os::unix::fs::PermissionsExt as _;
-        let path = dir.join("ffmpeg");
-        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-        path.display().to_string()
-    }
-
     fn sh_env() -> BTreeMap<String, String> {
         std::env::var("PATH")
             .map(|path| BTreeMap::from([("PATH".to_owned(), path)]))
@@ -427,6 +446,40 @@ mod tests {
         assert_eq!(bytes % 4, 0);
         assert!((12..=28).contains(&bytes), "{bytes}");
         assert!(result["durationMs"].as_i64().unwrap() >= 500);
+    }
+
+    #[tokio::test]
+    async fn a_dropped_recording_ends_ffmpeg_with_its_input() {
+        let dir = tempfile::tempdir().unwrap();
+        let ffmpeg = fake_ffmpeg(
+            dir.path(),
+            r#"for last; do :; done; cat > "$last"; echo end >> "$last""#,
+        );
+        let file = dir.path().join("a.webm");
+        let frame = Arc::new(b"JPEG".to_vec());
+        let recording = Recording::start(
+            &ffmpeg,
+            &sh_env(),
+            file.clone(),
+            "r".into(),
+            Arc::new(move || Some(frame.clone())),
+            Arc::new(|| true),
+        );
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        let mut exited = recording.exited.clone();
+        drop(recording);
+        let code = *tokio::time::timeout(Duration::from_secs(10), exited.wait_for(Option::is_some))
+            .await
+            .unwrap()
+            .unwrap();
+        let code = code.flatten();
+        // Killed, it would have no exit code and no "end".
+        assert_eq!(code, Some(0));
+        let written = std::fs::read_to_string(&file).unwrap();
+        assert!(
+            written.starts_with("JPEG") && written.ends_with("end\n"),
+            "{written}"
+        );
     }
 
     #[tokio::test]
