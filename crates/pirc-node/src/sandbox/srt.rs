@@ -526,13 +526,15 @@ exec "$@"
             String::from_utf8_lossy(&output.stdout),
             format!("hi\n{}\n", tmp.display())
         );
-        assert!(!root.join(FAKE_SRT_LOG).exists(), "no control fd");
+        // No control fd asked for. (Not checked through the fake srt's log:
+        // it reads any fd 3 it finds, and on macOS, which has no `pipe2` or
+        // `SOCK_CLOEXEC`, a descriptor another test thread is making can
+        // leak into this spawn as fd 3.)
+        assert!(!args.iter().any(|arg| arg == "--control-fd"), "{args:?}");
 
         prepared.cleanup();
         assert!(!tmp.exists() && !settings_file.exists());
     }
-
-    const FAKE_SRT_LOG: &str = "fake-srt-control.log";
 
     #[tokio::test]
     async fn readonly_commands_need_a_working_sandbox() {
