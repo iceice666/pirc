@@ -14,9 +14,14 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use pirc_node::browser::BoxFuture;
 use pirc_node::browser::engine::cdp::{Connection, Session};
 use pirc_node::browser::engine::launch;
 use pirc_node::browser::engine::network::{self, TargetKind};
+use pirc_node::browser::engine::screencast::{
+    self, ScreencastFrame, ScreencastOptions, ScreencastState,
+};
+use pirc_node::browser::engine::screenshot::{self, ScreenshotOptions};
 use pirc_node::browser::hosts::HostGuard;
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -507,4 +512,436 @@ async fn guards_a_service_worker_that_registers_anyway() {
         assert!(private.hits().is_empty(), "{:?}", private.hits());
     }
     watcher.abort();
+}
+
+// ---- input ------------------------------------------------------------------
+
+/// The input fixture: every key, input and mouse event logged.
+const INPUT_PAGE: &str = r#"<textarea id=t></textarea><div id=d style="width:300px;height:300px;overflow:scroll"><div style="height:2000px"></div></div>
+<script>
+window.__log = [];
+const mods = e => (e.altKey?'A':'')+(e.ctrlKey?'C':'')+(e.metaKey?'M':'')+(e.shiftKey?'S':'');
+for (const type of ['keydown','keyup','keypress']) addEventListener(type, e => __log.push([type, e.key, e.code, e.keyCode, e.location, e.repeat, mods(e)]), true);
+addEventListener('input', e => __log.push(['input', e.inputType, e.data]), true);
+for (const type of ['mousedown','mouseup','mousemove','click','dblclick','contextmenu','auxclick']) addEventListener(type, e => __log.push([type, e.button, e.buttons, e.clientX, e.clientY, e.detail, mods(e)]), true);
+addEventListener('wheel', e => __log.push(['wheel', e.deltaX, e.deltaY, e.clientX, e.clientY, mods(e)]), true);
+</script>"#;
+
+/// What Playwright 1.63.0 logged for [`drive_input`]'s calls (Linux,
+/// Chromium 153, `launchPersistentContext({headless: true, viewport:
+/// {width: 1280, height: 800}})`), recorded with this bun script run from
+/// the repository root with the dev shell's Chromium in `CHROME`:
+///
+/// ```ts
+/// import { chromium } from 'playwright-core';
+/// const ctx = await chromium.launchPersistentContext(dir, { headless: true,
+///   executablePath: process.env.CHROME, viewport: { width: 1280, height: 800 } });
+/// const page = ctx.pages()[0];
+/// await page.goto('data:text/html,' + encodeURIComponent(INPUT_PAGE));
+/// await page.evaluate(() => document.getElementById('t').focus());
+/// // the calls of `drive_input`, with `page.keyboard` / `page.mouse`
+/// const log = await page.evaluate(() => window.__log);
+/// console.log(JSON.stringify({ value1, value2, error, log }));
+/// ```
+#[cfg(not(target_os = "macos"))]
+const INPUT_EXPECTED: &str = r#"{"value1":"aaAbbHi!\n\n+é😀x","value2":"","error":"press: Unknown key: \"Foo\"","log":[
+["keydown","a","KeyA",65,0,false,""],
+["keypress","a","KeyA",97,0,false,""],
+["input","insertText","a"],
+["keyup","a","KeyA",65,0,false,""],
+["keydown","Shift","ShiftLeft",16,1,false,"S"],
+["keydown","a","KeyA",65,0,false,"S"],
+["keypress","a","KeyA",97,0,false,"S"],
+["input","insertText","a"],
+["keyup","a","KeyA",65,0,false,"S"],
+["keyup","Shift","ShiftLeft",16,1,false,""],
+["keydown","Shift","ShiftLeft",16,1,false,"S"],
+["keydown","A","KeyA",65,0,false,"S"],
+["keypress","A","KeyA",65,0,false,"S"],
+["input","insertText","A"],
+["keyup","A","KeyA",65,0,false,"S"],
+["keyup","Shift","ShiftLeft",16,1,false,""],
+["keydown","b","KeyB",66,0,false,""],
+["keypress","b","KeyB",98,0,false,""],
+["input","insertText","b"],
+["keydown","b","KeyB",66,0,true,""],
+["keypress","b","KeyB",98,0,true,""],
+["input","insertText","b"],
+["keyup","b","KeyB",66,0,false,""],
+["keydown","H","KeyH",72,0,false,""],
+["keypress","H","KeyH",72,0,false,""],
+["input","insertText","H"],
+["keyup","H","KeyH",72,0,false,""],
+["keydown","i","KeyI",73,0,false,""],
+["keypress","i","KeyI",105,0,false,""],
+["input","insertText","i"],
+["keyup","i","KeyI",73,0,false,""],
+["keydown","!","Digit1",49,0,false,""],
+["keypress","!","Digit1",33,0,false,""],
+["input","insertText","!"],
+["keyup","!","Digit1",49,0,false,""],
+["keydown","Enter","Enter",13,0,false,""],
+["keypress","Enter","Enter",13,0,false,""],
+["input","insertLineBreak",null],
+["keyup","Enter","Enter",13,0,false,""],
+["input","insertText","é"],
+["input","insertText","😀"],
+["keydown","x","KeyX",88,0,false,""],
+["keypress","x","KeyX",120,0,false,""],
+["input","insertText","x"],
+["keyup","x","KeyX",88,0,false,""],
+["keydown","Shift","ShiftLeft",16,1,false,"S"],
+["keydown","7","Numpad7",36,3,false,"S"],
+["keyup","7","Numpad7",36,1,false,"S"],
+["keyup","Shift","ShiftLeft",16,1,false,""],
+["keydown","Home","Numpad7",36,3,false,""],
+["keyup","Home","Numpad7",36,1,false,""],
+["keydown","Enter","NumpadEnter",13,3,false,""],
+["keypress","Enter","NumpadEnter",13,3,false,""],
+["input","insertLineBreak",null],
+["keyup","Enter","NumpadEnter",13,1,false,""],
+["keydown","Shift","ShiftLeft",16,1,false,"S"],
+["keydown","+","Equal",187,0,false,"S"],
+["keypress","+","Equal",43,0,false,"S"],
+["input","insertText","+"],
+["keyup","+","Equal",187,0,false,"S"],
+["keyup","Shift","ShiftLeft",16,1,false,""],
+["keydown","Control","ControlLeft",17,1,false,"C"],
+["keydown","ArrowLeft","ArrowLeft",37,0,false,"C"],
+["keyup","ArrowLeft","ArrowLeft",37,0,false,"C"],
+["keyup","Control","ControlLeft",17,1,false,""],
+["keydown","Control","ControlLeft",17,1,false,"C"],
+["keydown","a","KeyA",65,0,false,"C"],
+["keyup","a","KeyA",65,0,false,"C"],
+["keyup","Control","ControlLeft",17,1,false,""],
+["keydown","Backspace","Backspace",8,0,false,""],
+["input","deleteContentBackward",null],
+["keyup","Backspace","Backspace",8,0,false,""],
+["mousemove",0,0,50,400,0,""],
+["mousedown",0,1,50,400,1,""],
+["mousemove",0,1,60,410,0,""],
+["mouseup",0,0,60,410,1,""],
+["click",0,0,60,410,1,""],
+["mousedown",0,1,60,410,1,""],
+["mouseup",0,0,60,410,1,""],
+["click",0,0,60,410,1,""],
+["mousedown",0,1,60,410,2,""],
+["mouseup",0,0,60,410,2,""],
+["click",0,0,60,410,2,""],
+["dblclick",0,0,60,410,2,""],
+["mousedown",2,2,60,410,1,""],
+["contextmenu",2,2,60,410,0,""],
+["mouseup",2,0,60,410,1,""],
+["auxclick",2,0,60,410,1,""],
+["mousemove",0,0,70,420,0,""],
+["mousedown",0,1,70,420,1,""],
+["mouseup",0,0,70,420,1,""],
+["click",0,0,70,420,1,""],
+["mousedown",0,1,70,420,2,""],
+["mouseup",0,0,70,420,2,""],
+["click",0,0,70,420,2,""],
+["dblclick",0,0,70,420,2,""],
+["keydown","Shift","ShiftLeft",16,1,false,"S"],
+["mousemove",0,0,5,5,0,"S"],
+["mousedown",0,1,5,5,1,"S"],
+["mouseup",0,0,5,5,1,"S"],
+["click",0,0,5,5,1,"S"],
+["keyup","Shift","ShiftLeft",16,1,false,""],
+["mousemove",0,0,100,100,0,""],
+["wheel",0,120,100,100,""]
+]}"#;
+
+async fn drive_input(page: &Session) -> Value {
+    use pirc_node::browser::engine::MouseButton;
+    use pirc_node::browser::engine::input::{Keyboard, Mouse};
+    let kb = Keyboard::new(page.clone());
+    let m = Mouse::new(page.clone());
+    let zero = Duration::ZERO;
+    eval(page, "document.getElementById('t').focus()").await;
+    kb.press("a", zero).await.unwrap();
+    kb.press("Shift+a", zero).await.unwrap();
+    kb.press("Shift+KeyA", zero).await.unwrap();
+    kb.down("b").await.unwrap();
+    kb.down("b").await.unwrap();
+    kb.up("b").await.unwrap();
+    kb.type_text("Hi!\n", zero).await.unwrap();
+    kb.insert_text("é").await.unwrap();
+    kb.type_text("😀x", zero).await.unwrap();
+    kb.press("Shift+Numpad7", zero).await.unwrap();
+    kb.press("Numpad7", zero).await.unwrap();
+    kb.press("NumpadEnter", zero).await.unwrap();
+    kb.press("Shift++", zero).await.unwrap();
+    kb.press("ControlOrMeta+ArrowLeft", zero).await.unwrap();
+    let value1 = eval(page, "document.getElementById('t').value").await;
+    kb.press("Control+a", zero).await.unwrap();
+    kb.press("Backspace", zero).await.unwrap();
+    let value2 = eval(page, "document.getElementById('t').value").await;
+    let error = kb.press("Foo", zero).await.unwrap_err().message;
+    m.move_to(50.0, 400.0, kb.modifiers()).await.unwrap();
+    m.down(MouseButton::Left, 1, kb.modifiers()).await.unwrap();
+    m.move_to(60.0, 410.0, kb.modifiers()).await.unwrap();
+    m.up(MouseButton::Left, 1, kb.modifiers()).await.unwrap();
+    m.down(MouseButton::Left, 1, kb.modifiers()).await.unwrap();
+    m.up(MouseButton::Left, 1, kb.modifiers()).await.unwrap();
+    m.down(MouseButton::Left, 2, kb.modifiers()).await.unwrap();
+    m.up(MouseButton::Left, 2, kb.modifiers()).await.unwrap();
+    m.down(MouseButton::Right, 1, kb.modifiers()).await.unwrap();
+    m.up(MouseButton::Right, 1, kb.modifiers()).await.unwrap();
+    m.click(70.0, 420.0, MouseButton::Left, 2, kb.modifiers())
+        .await
+        .unwrap();
+    kb.down("Shift").await.unwrap();
+    m.click(5.0, 5.0, MouseButton::Left, 1, kb.modifiers())
+        .await
+        .unwrap();
+    kb.up("Shift").await.unwrap();
+    m.move_to(100.0, 100.0, kb.modifiers()).await.unwrap();
+    m.wheel(0.0, 120.0, kb.modifiers()).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let log = eval(page, "window.__log").await;
+    json!({ "value1": value1, "value2": value2, "error": error, "log": log })
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn types_and_clicks_as_playwright() {
+    let Some(browser) = Browser::start() else {
+        return;
+    };
+    let page = browser.page().await;
+    page.call(
+        "Emulation.setDeviceMetricsOverride",
+        json!({ "mobile": false, "width": 1280, "height": 800, "deviceScaleFactor": 1,
+            "screenOrientation": { "angle": 0, "type": "landscapePrimary" } }),
+    )
+    .await
+    .unwrap();
+    goto(&page, &format!("data:text/html,{}", urlencode(INPUT_PAGE))).await;
+    let actual = drive_input(&page).await;
+    assert_eq!(actual["error"], "press: Unknown key: \"Foo\"");
+    #[cfg(not(target_os = "macos"))]
+    {
+        let expected: Value = serde_json::from_str(INPUT_EXPECTED).unwrap();
+        assert_eq!(actual["value1"], expected["value1"]);
+        assert_eq!(actual["value2"], expected["value2"]);
+        let (actual, expected) = (
+            actual["log"].as_array().unwrap(),
+            expected["log"].as_array().unwrap(),
+        );
+        for (i, (a, e)) in actual.iter().zip(expected).enumerate() {
+            assert_eq!(a, e, "event {i}");
+        }
+        assert_eq!(actual.len(), expected.len());
+    }
+}
+
+fn urlencode(text: &str) -> String {
+    text.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+// ---- screenshots and the screencast ------------------------------------------
+
+/// A bare page session as a screenshot surface (main frame only, main
+/// world).
+struct SessionSurface(Session);
+
+impl screenshot::Surface for SessionSurface {
+    fn session(&self) -> &Session {
+        &self.0
+    }
+
+    fn viewport(&self) -> Option<(u32, u32)> {
+        Some((1280, 800))
+    }
+
+    fn device_scale_factor(&self) -> Option<f64> {
+        Some(1.0)
+    }
+
+    fn in_all_frames<'a>(&'a self, function: &'a str) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            let _ = self.in_main_frame(function).await;
+        })
+    }
+
+    fn in_main_frame<'a>(
+        &'a self,
+        function: &'a str,
+    ) -> BoxFuture<'a, pirc_node::browser::engine::Result<Value>> {
+        Box::pin(async move {
+            let result = self
+                .0
+                .call(
+                    "Runtime.evaluate",
+                    json!({ "expression": format!("({function})()"), "awaitPromise": true,
+                        "returnByValue": true }),
+                )
+                .await?;
+            Ok(result["result"]["value"].clone())
+        })
+    }
+}
+
+/// A JPEG's size from its first SOF marker.
+fn jpeg_size(jpeg: &[u8]) -> (u32, u32) {
+    assert_eq!(&jpeg[..2], [0xff, 0xd8], "not a JPEG");
+    let mut at = 2;
+    while at + 9 < jpeg.len() {
+        assert_eq!(jpeg[at], 0xff);
+        let marker = jpeg[at + 1];
+        let length = usize::from(u16::from_be_bytes([jpeg[at + 2], jpeg[at + 3]]));
+        if matches!(marker, 0xc0..=0xc3) {
+            let height = u16::from_be_bytes([jpeg[at + 5], jpeg[at + 6]]);
+            let width = u16::from_be_bytes([jpeg[at + 7], jpeg[at + 8]]);
+            return (u32::from(width), u32::from(height));
+        }
+        at += 2 + length;
+    }
+    panic!("no SOF marker");
+}
+
+async fn viewport_page(browser: &Browser, body: &str) -> Session {
+    let page = browser.page().await;
+    page.call(
+        "Emulation.setDeviceMetricsOverride",
+        json!({ "mobile": false, "width": 1280, "height": 800, "deviceScaleFactor": 1,
+            "screenOrientation": { "angle": 0, "type": "landscapePrimary" } }),
+    )
+    .await
+    .unwrap();
+    goto(&page, &format!("data:text/html,{}", urlencode(body))).await;
+    page
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn takes_screenshots_as_playwright() {
+    let Some(browser) = Browser::start() else {
+        return;
+    };
+    let page = viewport_page(
+        &browser,
+        "<body style='margin:0'><textarea id=t style='caret-color: red'></textarea><div style='height:3000px;width:100px;background:#08f'></div></body>",
+    )
+    .await;
+    eval(&page, "document.getElementById('t').focus()").await;
+    let surface = SessionSurface(page.clone());
+    let options = ScreenshotOptions {
+        quality: 70,
+        full_page: false,
+        timeout: Duration::from_secs(15),
+    };
+    let viewport = screenshot::capture_on(&surface, options).await.unwrap();
+    assert_eq!(jpeg_size(&viewport), (1280, 800));
+    let full = screenshot::capture_on(
+        &surface,
+        ScreenshotOptions {
+            full_page: true,
+            ..options
+        },
+    )
+    .await
+    .unwrap();
+    // The textarea's line plus the 3000 px block.
+    let (width, height) = jpeg_size(&full);
+    assert_eq!(width, 1280);
+    assert!(height > 3000, "{height}");
+    let small = screenshot::capture_on(
+        &surface,
+        ScreenshotOptions {
+            quality: 10,
+            ..options
+        },
+    )
+    .await
+    .unwrap();
+    assert!(small.len() < viewport.len());
+    // The caret is hidden only while capturing.
+    assert_eq!(
+        eval(
+            &page,
+            "[document.getElementById('t').style.caretColor, typeof window.__pwCleanupScreenshot].join()"
+        )
+        .await,
+        "red,undefined"
+    );
+    let error = screenshot::capture_on(
+        &surface,
+        ScreenshotOptions {
+            timeout: Duration::from_millis(1),
+            ..options
+        },
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.message, "page.screenshot: Timeout 1ms exceeded.");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn streams_the_screencast_and_stops() {
+    let Some(browser) = Browser::start() else {
+        return;
+    };
+    let page = viewport_page(&browser, "<h1 id=h>0</h1>").await;
+    let state = ScreencastState::default();
+    let frames: Arc<Mutex<Vec<ScreencastFrame>>> = Arc::default();
+    let sink = {
+        let frames = frames.clone();
+        Arc::new(move |frame: ScreencastFrame| frames.lock().unwrap().push(frame))
+    };
+    // Odd sizes are rounded down to even ones.
+    let options = ScreencastOptions {
+        width: 641,
+        height: 401,
+        quality: 60,
+    };
+    screencast::start_on(&page, &state, options, sink.clone())
+        .await
+        .unwrap();
+    assert!(state.is_running());
+    // Frames keep coming while the page changes (each is acknowledged).
+    for i in 1..=5 {
+        eval(
+            &page,
+            &format!("document.getElementById('h').textContent = '{i}'"),
+        )
+        .await;
+        tokio::time::sleep(Duration::from_millis(150)).await;
+    }
+    let received = frames.lock().unwrap().clone();
+    assert!(received.len() >= 2, "{} frames", received.len());
+    for frame in &received {
+        assert_eq!((frame.width, frame.height), (1280, 800));
+        assert_eq!(jpeg_size(&frame.jpeg), (640, 400));
+    }
+    screencast::stop_on(&page, &state).await.unwrap();
+    assert!(!state.is_running());
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let stopped = frames.lock().unwrap().len();
+    eval(&page, "document.getElementById('h').textContent = 'after'").await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(frames.lock().unwrap().len(), stopped);
+    // A restart with other options.
+    screencast::start_on(
+        &page,
+        &state,
+        ScreencastOptions {
+            width: 320,
+            height: 200,
+            quality: 60,
+        },
+        sink,
+    )
+    .await
+    .unwrap();
+    eval(&page, "document.getElementById('h').textContent = 'again'").await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let last = frames.lock().unwrap().last().cloned().unwrap();
+    assert_eq!(jpeg_size(&last.jpeg), (320, 200));
+    screencast::stop_on(&page, &state).await.unwrap();
 }
