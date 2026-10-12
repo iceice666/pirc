@@ -8,6 +8,9 @@
 //! tests (profiles recorded from srt 0.0.78) run on Linux CI too; only
 //! [`super::create`] picks this backend, on macOS.
 
+pub mod paths;
+pub mod profile;
+
 use pirc_config::{Env, NodeConfig};
 
 use super::{BoxFuture, PrepareInput, Prepared, ReadonlyInput, Sandbox, SandboxStatus};
