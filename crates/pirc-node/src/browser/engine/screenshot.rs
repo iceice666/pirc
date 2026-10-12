@@ -22,10 +22,11 @@
 //! 5. `window.__pwCleanupScreenshot()` in every frame's utility world,
 //!    also after a failure or timeout.
 //!
-//! Errors carry Playwright's `page.screenshot: ` prefix (a timeout is
-//! `page.screenshot: Timeout <n>ms exceeded.`). Deviation: the utility
-//! worlds are reached through the frames' injected scripts, so a frame
-//! without one gets it (Playwright evaluates only in existing contexts).
+//! Errors start with `screenshot: `, as the TS node's (Bun's) Playwright
+//! client words them (a timeout is `screenshot: Timeout <n>ms exceeded.`).
+//! Deviation: the utility worlds are reached through the frames' injected
+//! scripts, so a frame without one gets it (Playwright evaluates only in
+//! existing contexts).
 //!
 //! Owner: netio.
 
@@ -108,7 +109,7 @@ pub async fn capture(page: &Page, options: ScreenshotOptions) -> Result<Vec<u8>>
     let Ok(_queue) =
         tokio::time::timeout(options.timeout, page.screencast_state().screenshots.lock()).await
     else {
-        return Err(Error::timeout("page.screenshot", options.timeout));
+        return Err(Error::timeout("screenshot", options.timeout));
     };
     let remaining = options.timeout.saturating_sub(started.elapsed());
     let shot = capture_on(
@@ -121,8 +122,8 @@ pub async fn capture(page: &Page, options: ScreenshotOptions) -> Result<Vec<u8>>
     .await;
     // The message names the whole timeout.
     shot.map_err(|error| {
-        if error == Error::timeout("page.screenshot", remaining) {
-            Error::timeout("page.screenshot", options.timeout)
+        if error == Error::timeout("screenshot", remaining) {
+            Error::timeout("screenshot", options.timeout)
         } else {
             error
         }
@@ -272,10 +273,10 @@ const INNER_SIZE: &str =
 
 fn api_error(method: &str, error: CdpError) -> Error {
     if error == CdpError::closed() {
-        Error::new(format!("page.screenshot: {}", error.message))
+        Error::new(format!("screenshot: {}", error.message))
     } else {
         Error::new(format!(
-            "page.screenshot: Protocol error ({method}): {}",
+            "screenshot: Protocol error ({method}): {}",
             error.message
         ))
     }
@@ -323,7 +324,7 @@ pub async fn capture_on(surface: &dyn Surface, options: ScreenshotOptions) -> Re
                 // Playwright's cleanup still runs after its timeout.
                 surface.in_all_frames(RESTORE).await;
             }
-            Err(Error::timeout("page.screenshot", options.timeout))
+            Err(Error::timeout("screenshot", options.timeout))
         }
     }
 }
@@ -383,5 +384,5 @@ async fn take(
         .map_err(|e| api_error("Page.captureScreenshot", e))?;
     base64::engine::general_purpose::STANDARD
         .decode(result["data"].as_str().unwrap_or_default())
-        .map_err(|e| Error::new(format!("page.screenshot: {e}")))
+        .map_err(|e| Error::new(format!("screenshot: {e}")))
 }

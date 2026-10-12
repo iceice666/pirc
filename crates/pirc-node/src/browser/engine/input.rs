@@ -68,7 +68,8 @@ fn resolve_smart_modifier(key: &str) -> &str {
 }
 
 /// An API call's error as Playwright's client words it: the method's name
-/// first (`press: Unknown key: "Foo"`, as `page.keyboard.press` throws).
+/// first (`press: Unknown key: "Foo"`, as `page.keyboard.press` throws in
+/// the TS node: Bun's stack gives the client the bare method name).
 fn api<T>(name: &str, result: Result<T>) -> Result<T> {
     result.map_err(|error| Error::new(format!("{name}: {}", error.message)))
 }

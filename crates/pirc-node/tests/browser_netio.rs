@@ -299,6 +299,14 @@ async fn guards_requests_websockets_and_service_workers() {
                 )],
                 String::new(),
             ),
+            "/redirect-doc" => (
+                302,
+                vec![(
+                    "location".into(),
+                    format!("http://127.0.0.2:{private_port}/hopdoc"),
+                )],
+                String::new(),
+            ),
             "/worker.js" => (
                 200,
                 vec![("content-type".into(), "text/javascript".into())],
@@ -382,26 +390,33 @@ async fn guards_requests_websockets_and_service_workers() {
         "{hits:?}"
     );
 
-    // Redirect hops are not routed (TS parity): the hop reaches the
-    // blocked host.
+    // Redirect hops: a subresource's are checked (tighter than TS), a
+    // document's are not (TS parity: the manager's `assertAllowed` reports
+    // the final frame URL).
     if let Some(private) = &private {
-        let _ = eval(
+        let fetched = eval(
             &page,
             &format!("fetch('{base}/redirect').then(() => 'ok', () => 'error')"),
         )
         .await;
+        assert_eq!(fetched, "error");
+        eval(
+            &page,
+            &format!(
+                "new Promise(resolve => {{ const f = document.createElement('iframe'); f.onload = () => resolve(0); f.src = '{base}/redirect-doc'; document.body.append(f); }})"
+            ),
+        )
+        .await;
+        let hits = private.hits();
         assert!(
-            private.hits().iter().any(|hit| hit.starts_with("GET /hop")),
-            "{:?}",
-            private.hits()
+            hits.iter().any(|hit| hit.starts_with("GET /hopdoc ")),
+            "{hits:?}"
         );
         assert!(
-            !private
-                .hits()
-                .iter()
-                .any(|hit| hit.contains("/fetch") || hit.contains("/worker")),
-            "{:?}",
-            private.hits()
+            !hits.iter().any(|hit| hit.starts_with("GET /hop ")
+                || hit.contains("/fetch")
+                || hit.contains("/worker")),
+            "{hits:?}"
         );
     }
 
@@ -879,7 +894,7 @@ async fn takes_screenshots_as_playwright() {
     )
     .await
     .unwrap_err();
-    assert_eq!(error.message, "page.screenshot: Timeout 1ms exceeded.");
+    assert_eq!(error.message, "screenshot: Timeout 1ms exceeded.");
 }
 
 #[tokio::test(flavor = "multi_thread")]
