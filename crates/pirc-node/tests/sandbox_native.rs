@@ -914,6 +914,51 @@ async fn missing_protected_paths_cannot_be_created() {
     assert!(root.join("workspace/src/main.rs").exists());
 }
 
+/// A path denied for reading that does not exist yet cannot be created
+/// (and then read) inside a writable root either: it gets a hidden
+/// placeholder, gone after the session.
+#[tokio::test]
+async fn missing_read_denies_cannot_be_created() {
+    let Some(f) = fixture_env("missing-read", false, |root| {
+        let w = path(root, "workspace");
+        fs::write(
+            root.join("config/config.json"),
+            format!(
+                r#"{{"sandbox":{{"network":{{"defaultDomains":false}},"filesystem":{{"denyRead":["{w}/.env","{w}/secrets/token"]}}}}}}"#
+            ),
+        )
+        .unwrap();
+        Vec::new()
+    }) else {
+        return;
+    };
+    let w = path(&f.root, "workspace");
+    let refused = [
+        ("create .env", format!("echo x > {w}/.env && cat {w}/.env")),
+        (
+            "create secrets/token",
+            format!("mkdir -p {w}/secrets && echo x > {w}/secrets/token && cat {w}/secrets/token"),
+        ),
+        ("remove a placeholder", format!("rm -f {w}/.env")),
+    ];
+    let mut failures = Vec::new();
+    for (name, script) in &refused {
+        if f.sh(script).await == 0 {
+            failures.push(format!("{name}: allowed"));
+        }
+    }
+    if f.sh(&format!("echo x > {w}/notes && cat {w}/notes")).await != 0 {
+        failures.push("write the workspace: refused".to_owned());
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+    for gone in [".env", "secrets"] {
+        assert!(
+            !f.root.join("workspace").join(gone).exists(),
+            "{gone} left on the host"
+        );
+    }
+}
+
 /// What the mandatory scan finds below the workspace stays read-only even
 /// though the policy does not list it: nested repositories' config, editor
 /// settings, shell rc files and `.mcp.json`.

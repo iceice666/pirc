@@ -66,7 +66,9 @@
 //!   write get a read-only placeholder on their first missing component:
 //!   `/dev/null` when that is the path itself, an empty directory when it is
 //!   an ancestor of it (srt's "Fix 2"; one placeholder per destination, the
-//!   directory winning). srt bound an empty host directory there; this uses
+//!   directory winning). Missing read denies get one too, hidden (not
+//!   srt's, which placed them for write denies only: the agent could
+//!   create the path and read what it put or the host later puts there). srt bound an empty host directory there; this uses
 //!   a read-only tmpfs, which needs no host source to keep unwritable.
 //!   bubblewrap creates each placeholder's mount point on the host; they are
 //!   tracked ([`MountPoints`]) and removed when the last sandbox using them
@@ -460,21 +462,32 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
         }
     }
 
-    // Missing deny paths: a placeholder on the first missing component
-    // (`true`: an empty directory), or the file above them pinned.
+    // Missing deny paths, for writing or reading: a placeholder on the
+    // first missing component (`true`: an empty directory), hidden for a
+    // read deny, or the file above them pinned.
     let mut placeholders: BTreeMap<String, bool> = BTreeMap::new();
+    let mut hidden: Vec<String> = Vec::new();
     let mut stale: Vec<String> = Vec::new();
     let mut added: Vec<String> = Vec::new();
-    for denied in &effective.deny_write {
+    let denies = (effective.deny_write.iter().map(|denied| (denied, false)))
+        .chain(effective.deny_read.iter().map(|denied| (denied, true)));
+    for (denied, hide) in denies {
         if denied == "/" || kernel_path(denied) {
             continue;
         }
-        if std::fs::symlink_metadata(denied).is_ok() {
-            if stale_mount_point(denied) && access(&effective, &parent(denied)) == Access::Writable
-            {
-                stale.push(denied.clone());
+        match std::fs::symlink_metadata(denied) {
+            Ok(_) => {
+                if stale_mount_point(denied)
+                    && access(&effective, &parent(denied)) == Access::Writable
+                    && !stale.contains(denied)
+                {
+                    stale.push(denied.clone());
+                }
+                continue;
             }
-            continue;
+            // Cannot be inspected: srt's stand-in (above) hides it.
+            Err(error) if hide && !absent(&error) => continue,
+            Err(_) => {}
         }
         if let Some(file) = file_ancestor(&parent(denied)) {
             if !kernel_top_level(&file) && access(&effective, &parent(&file)) == Access::Writable {
@@ -491,10 +504,14 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
         }
         let first = first_missing_component(denied);
         let directory = first != *denied;
+        if hide && !hidden.contains(&first) {
+            hidden.push(first.clone());
+        }
         *placeholders.entry(first).or_insert(directory) |= directory;
     }
     effective.deny_write.extend(added);
     effective.deny_write.extend(placeholders.keys().cloned());
+    effective.deny_read.extend(hidden);
 
     let mut points: Vec<String> = effective
         .allow_write
@@ -888,6 +905,42 @@ mod tests {
         assert_eq!(
             plan.mount_points,
             [p("ws/.claude"), p("ws/.pirc"), p("ws/a/b")].map(PathBuf::from)
+        );
+    }
+
+    #[test]
+    fn missing_read_denies_get_hidden_placeholders() {
+        let (_dir, root) = temp();
+        let p = |rest: &str| format!("{root}/{rest}");
+        fs::create_dir_all(p("ws")).unwrap();
+        fs::create_dir_all(p("ro")).unwrap();
+        let paths = PathPolicy {
+            deny_read: vec![p("ws/.env"), p("ws/secrets/token"), p("ro/x")],
+            allow_write: vec![p("ws")],
+            ..PathPolicy::default()
+        };
+        let plan = plan(&paths, &Options::default()).unwrap();
+        assert_eq!(
+            plan.args,
+            strings(&[
+                "--ro-bind",
+                "/",
+                "/",
+                "--bind",
+                &p("ws"),
+                &p("ws"),
+                "--ro-bind",
+                "/dev/null",
+                &p("ws/.env"),
+                "--tmpfs",
+                &p("ws/secrets"),
+                "--remount-ro",
+                &p("ws/secrets"),
+            ])
+        );
+        assert_eq!(
+            plan.mount_points,
+            [p("ws/.env"), p("ws/secrets")].map(PathBuf::from)
         );
     }
 
