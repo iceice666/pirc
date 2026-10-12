@@ -390,46 +390,47 @@ impl std::fmt::Debug for Session {
     }
 }
 
+/// A fake browser for unit tests: a [`Connection`] whose commands it
+/// reads and to which it sends replies and events.
+#[cfg(test)]
+pub(super) struct Fake {
+    pub(super) connection: Arc<Connection>,
+    commands: BufReader<pipe::Receiver>,
+    replies: pipe::Sender,
+}
+
+#[cfg(test)]
+impl Fake {
+    pub(super) fn new() -> Self {
+        let (commands_tx, commands_rx) = pipe::pipe().unwrap();
+        let (replies_tx, replies_rx) = pipe::pipe().unwrap();
+        Self {
+            connection: Connection::new(commands_tx, replies_rx),
+            commands: BufReader::new(commands_rx),
+            replies: replies_tx,
+        }
+    }
+
+    /// The next command the connection wrote.
+    pub(super) async fn command(&mut self) -> Value {
+        let mut buffer = Vec::new();
+        self.commands.read_until(0, &mut buffer).await.unwrap();
+        buffer.pop();
+        serde_json::from_slice(&buffer).unwrap()
+    }
+
+    pub(super) async fn send(&mut self, message: Value) {
+        let mut bytes = message.to_string().into_bytes();
+        bytes.push(0);
+        self.replies.write_all(&bytes).await.unwrap();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
 
-    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-
     use super::*;
-
-    /// A connection to a fake browser: the commands it reads, a way to
-    /// send it messages.
-    struct Fake {
-        connection: Arc<Connection>,
-        commands: BufReader<pipe::Receiver>,
-        replies: pipe::Sender,
-    }
-
-    impl Fake {
-        fn new() -> Self {
-            let (commands_tx, commands_rx) = pipe::pipe().unwrap();
-            let (replies_tx, replies_rx) = pipe::pipe().unwrap();
-            Self {
-                connection: Connection::new(commands_tx, replies_rx),
-                commands: BufReader::new(commands_rx),
-                replies: replies_tx,
-            }
-        }
-
-        async fn command(&mut self) -> Value {
-            let mut buffer = Vec::new();
-            self.commands.read_until(0, &mut buffer).await.unwrap();
-            buffer.pop();
-            serde_json::from_slice(&buffer).unwrap()
-        }
-
-        async fn send(&mut self, message: Value) {
-            let mut bytes = message.to_string().into_bytes();
-            bytes.push(0);
-            self.replies.write_all(&bytes).await.unwrap();
-        }
-    }
 
     async fn settled<T>(task: &mut tokio::task::JoinHandle<T>) -> Option<T> {
         tokio::time::timeout(Duration::from_secs(2), task)

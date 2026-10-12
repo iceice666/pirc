@@ -976,6 +976,8 @@ async fn init_session(
         }
     };
     let viewport = shared.state.lock().unwrap().viewport;
+    // The guard lets the target run once it is in place.
+    let (guarded_tx, guarded_rx) = oneshot::channel::<()>();
     let network = {
         let session = session.clone();
         let shared = shared.clone();
@@ -999,16 +1001,28 @@ async fn init_session(
                 {
                     frame_session.guard = installed;
                 }
-                // Never before the guard is in place.
-                session
-                    .call("Runtime.runIfWaitingForDebugger", json!({}))
-                    .await
-                    .map_err(fail("Runtime.runIfWaitingForDebugger"))?;
+                let _ = guarded_tx.send(());
                 replies.await.map_err(|error| error.message)
             };
             let (enabled, guarded) = tokio::join!(enable, guard);
             enabled.map_err(fail("Network.enable"))?;
             guarded
+        }
+    };
+    // Last, as Playwright sends it, and never before the guard is in place
+    // (a failed guard leaves the target paused).
+    let resume = {
+        let session = session.clone();
+        async move {
+            if guarded_rx.await.is_err() {
+                // The guard failed: its step reports why.
+                std::future::pending::<()>().await;
+            }
+            session
+                .call("Runtime.runIfWaitingForDebugger", json!({}))
+                .await
+                .map(|_| ())
+                .map_err(fail("Runtime.runIfWaitingForDebugger"))
         }
     };
     let mut steps: Vec<futures_util::future::BoxFuture<'_, std::result::Result<(), String>>> = vec![
@@ -1078,6 +1092,9 @@ async fn init_session(
             { "name": "prefers-contrast", "value": "no-preference" },
         ] }),
     )));
+    // Polled after every step above was polled (and wrote its command)
+    // once.
+    steps.push(Box::pin(resume));
     if let Some(first) = first_navigation {
         steps.push(Box::pin(async move {
             first
@@ -2352,5 +2369,74 @@ impl std::fmt::Debug for Page {
         f.debug_struct("Page")
             .field("target_id", &self.shared.target_id)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::cdp::Fake;
+    use super::*;
+
+    #[tokio::test]
+    async fn lets_the_target_run_once_every_initialization_command_is_sent() {
+        let mut fake = Fake::new();
+        let connection = fake.connection.clone();
+        // An installer done at once (the engine tests' unguarded one).
+        let installer: Installer = Arc::new(|_, _| {
+            Box::pin(async {
+                Ok((
+                    None,
+                    Box::pin(async { Ok(()) }) as super::super::network::Replies,
+                ))
+            })
+        });
+        let _page = Page::attach(PageSetup {
+            target_id: "T".to_owned(),
+            session: connection.session("S"),
+            browser: connection.browser(),
+            installer,
+            viewport: (1280, 800),
+            mac: false,
+            opener: None,
+        });
+        let mut sent = Vec::new();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !sent.iter().any(|m| m == "Runtime.runIfWaitingForDebugger")
+                || !sent.iter().any(|m| m == "Emulation.setEmulatedMedia")
+            {
+                let command = fake.command().await;
+                let method = command["method"].as_str().unwrap().to_owned();
+                if method == "Browser.getWindowForTarget" {
+                    fake.send(json!({ "id": command["id"], "sessionId": "S",
+                        "result": { "windowId": 1, "bounds": {} } }))
+                        .await;
+                }
+                sent.push(method);
+            }
+        })
+        .await
+        .expect("the initialization commands");
+        // Playwright's `FrameSession._initialize` order: the target runs
+        // once everything else was sent.
+        assert_eq!(
+            sent,
+            [
+                "Browser.getWindowForTarget",
+                "Page.enable",
+                "Page.getFrameTree",
+                "Log.enable",
+                "Page.setLifecycleEventsEnabled",
+                "Runtime.enable",
+                "Page.addScriptToEvaluateOnNewDocument",
+                "Network.enable",
+                "Target.setAutoAttach",
+                "Emulation.setFocusEmulationEnabled",
+                "Browser.setWindowBounds",
+                "Emulation.setDeviceMetricsOverride",
+                "Page.setFontFamilies",
+                "Emulation.setEmulatedMedia",
+                "Runtime.runIfWaitingForDebugger",
+            ]
+        );
     }
 }
