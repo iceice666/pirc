@@ -656,18 +656,22 @@ async fn reaches_the_inference_socket_and_no_other() {
         assert!(path.as_os_str().len() < 104, "{}", path.display());
         unix_server(path);
     }
+    // Another socket through a link in the workspace.
+    let linked = f.workspace.join("l.sock");
+    std::os::unix::fs::symlink(&other, &linked).unwrap();
     let prepared = f
         .prepare_with("pi_inference", Some(socket.clone()), Vec::new())
         .await;
     let results = run_client(
         &prepared,
         &format!(
-            "unix:{} unix:{} unix:{} read:{} read:{}",
+            "unix:{} unix:{} unix:{} read:{} read:{} unix:{}",
             socket.display(),
             other.display(),
             in_workspace.display(),
             f.root.join("state/secret").display(),
             f.workspace.join("README").display(),
+            linked.display(),
         ),
     )
     .await;
@@ -685,6 +689,10 @@ async fn reaches_the_inference_socket_and_no_other() {
         "the rest of the state stays denied"
     );
     assert_eq!(results[4], "read");
+    assert_eq!(
+        results[5], "unreachable: PermissionDenied",
+        "another socket through a link"
+    );
     prepared.cleanup();
 }
 
@@ -1147,6 +1155,14 @@ async fn the_readonly_sandbox_reads_but_never_writes() {
         assert_ne!(run(script.clone()).await, 0, "{script}");
     }
     assert!(!f.root.join("home/.claude/debug/planted").exists());
+    // No Unix socket at all.
+    let socket = f.root.join("outside/ro.sock");
+    unix_server(&socket);
+    assert_ne!(
+        run(format!("/usr/bin/nc -U {} </dev/null", socket.display())).await,
+        0,
+        "no Unix socket"
+    );
     assert_ne!(
         run(format!("curl -s -m 5 http://127.0.0.1:{port}/")).await,
         0,
@@ -1156,6 +1172,78 @@ async fn the_readonly_sandbox_reads_but_never_writes() {
         run(format!("cat {}", path(&f.root, "state/secret"))).await,
         0
     );
+}
+
+/// A user's glob deny whose static directory is a link out of its tree:
+/// the policy resolves the glob's directory (`real_resolve`), so both
+/// spellings stay denied.
+#[tokio::test]
+async fn a_glob_deny_through_a_link_holds() {
+    let f = fixture("globlink");
+    let root = &f.root;
+    fs::create_dir_all(root.join("outside/keys")).unwrap();
+    fs::write(root.join("outside/keys/a.key"), "k").unwrap();
+    std::os::unix::fs::symlink(root.join("outside"), root.join("link")).unwrap();
+    fs::write(
+        root.join("config/config.json"),
+        format!(
+            r#"{{"sandbox":{{"network":{{"defaultDomains":false,"allowedDomains":["localhost"]}},"filesystem":{{"denyRead":["{}/link/**/*.key"]}}}}}}"#,
+            root.display()
+        ),
+    )
+    .unwrap();
+    let failures = f
+        .expect(
+            &[
+                (
+                    "through the link",
+                    format!("cat {}", path(root, "link/keys/a.key")),
+                ),
+                (
+                    "resolved",
+                    format!("cat {}", path(root, "outside/keys/a.key")),
+                ),
+            ],
+            &[],
+        )
+        .await;
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// `/dev/tty` stays ioctl-able in srt's base profile: pushing input into
+/// the node's terminal (TIOCSTI) must still be refused, from a session and
+/// from the read-only sandbox. Needs a controlling terminal (skipped
+/// otherwise, as under CI).
+#[tokio::test]
+async fn tiocsti_into_the_nodes_terminal_is_refused() {
+    if std::fs::File::open("/dev/tty").is_err() {
+        eprintln!("no controlling terminal: skipped");
+        return;
+    }
+    let f = fixture("tty");
+    // TIOCSTI through perl (shipped with macOS): 3 no tty, 4 refused.
+    let inject = r##"/usr/bin/perl -e 'open(my $t, "+<", "/dev/tty") or exit 3; my $c = "#"; ioctl($t, 0x80017472, $c) or exit 4; exit 0'"##;
+    assert_ne!(f.sh(inject).await, 0, "from a session");
+    let prepared = f
+        .sandbox
+        .prepare_readonly(ReadonlyInput {
+            workspace_root: f.workspace.clone(),
+            command: vec!["/bin/sh".into(), "-c".into(), inject.into()],
+        })
+        .await
+        .unwrap();
+    let status = prepared
+        .command()
+        .unwrap()
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .envs(prepared.env.iter().map(|(k, v)| (k, v)))
+        .current_dir(&f.workspace)
+        .status()
+        .await
+        .unwrap();
+    prepared.cleanup();
+    assert!(!status.success(), "from the read-only sandbox");
 }
 
 /// srt's hole that remains (as on Linux under srt): its mandatory denies
