@@ -77,12 +77,13 @@
 //!   placeholder an earlier run left behind, and removed it: that deletes a
 //!   user's own empty read-only file. Here the node records the placeholders
 //!   it makes ([`Options::record`], `<state>/sandbox/placeholders`), and only
-//!   a recorded one is tracked again and removed; an unrecorded match is
-//!   covered with `/dev/null` (as srt did) but left in place. An empty
-//!   directory where another sandbox's directory placeholder is (or a
-//!   recorded one) is that placeholder, claimed again with nothing planned
-//!   below it: planned as the user's, the later session's placeholders
-//!   inside would keep it from ever being removed.
+//!   a recorded one is removed (at the node's start, [`sweep_record`]) or
+//!   tracked again; an unrecorded match is covered with `/dev/null` (as srt
+//!   did) but left in place. An empty directory where another sandbox's
+//!   directory placeholder is (or a recorded one) is that placeholder,
+//!   claimed again with nothing planned below it (planned as the user's,
+//!   the later session's placeholders inside would keep it from ever being
+//!   removed), unless the policy allows something at or below it.
 //! - **A denied `/`** is expanded into its children (srt: a tmpfs on `/`
 //!   would wipe every mount before it), without `/proc`, `/dev` and `/sys`,
 //!   each child at its canonical location (`/bin` may link to `/usr/bin`).
@@ -292,14 +293,15 @@ fn first_missing_component(path: &str) -> String {
 /// `--ro-bind /dev/null <absent path>` (an empty regular file without
 /// write bits and with one link). A user's file can look the same, so
 /// only a recorded one counts as a placeholder.
-fn stale_mount_point(path: &str) -> bool {
+fn stale_mount_point(path: impl AsRef<Path>) -> bool {
     std::fs::symlink_metadata(path).is_ok_and(|meta| {
         meta.is_file() && meta.len() == 0 && meta.mode() & 0o222 == 0 && meta.nlink() == 1
     })
 }
 
 /// An empty directory (not a link to one).
-fn empty_directory(path: &str) -> bool {
+fn empty_directory(path: impl AsRef<Path>) -> bool {
+    let path = path.as_ref();
     std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir())
         && std::fs::read_dir(path).is_ok_and(|mut entries| entries.next().is_none())
 }
@@ -538,9 +540,17 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
         }
         // Another sandbox's directory placeholder (or a recorded leftover)
         // on the way is this one's too, with nothing planned below it.
+        // Not where this policy allows something at or below it: that is
+        // a directory the user took over (a new workspace, say), not to be
+        // covered or removed.
+        let allowed_within = |prefix: &str| {
+            (effective.allow_write.iter())
+                .chain(&effective.allow_read)
+                .any(|rule| is_inside(rule, prefix))
+        };
         let reused = prefixes(denied)
             .take_while(|prefix| std::fs::symlink_metadata(prefix).is_ok_and(|m| m.is_dir()))
-            .find(|prefix| known(prefix) && empty_directory(prefix));
+            .find(|prefix| known(prefix) && empty_directory(prefix) && !allowed_within(prefix));
         if let Some(first) = reused {
             if access(&effective, &parent(&first)) == Access::Writable {
                 if hide && !hidden.contains(&first) {
@@ -780,6 +790,43 @@ fn write_record(file: &Path, entries: BTreeSet<PathBuf>, claimed: &BTreeMap<Path
     }
 }
 
+/// The node's start, before its first plan with `file`: remove the
+/// recorded placeholders that no sandbox of this process claims and that
+/// are still what bubblewrap made (an empty file without write bits, an
+/// empty directory), then drop everything unclaimed from the record. The
+/// sandboxes of a node that died died with it (`--die-with-parent`, their
+/// own PID namespace), so the record then names only live claims and the
+/// leftovers of a crash since. Not srt's (see [`MountPoints`]). Later
+/// calls with the same `file` do nothing.
+pub fn sweep_record(file: &Path) {
+    static SWEPT: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
+    let claimed = CLAIMED.lock().unwrap_or_else(|p| p.into_inner());
+    if !SWEPT
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .insert(file.to_path_buf())
+    {
+        return;
+    }
+    let entries = read_record(file);
+    if entries.is_empty() {
+        return;
+    }
+    let (live, leftovers): (BTreeSet<PathBuf>, BTreeSet<PathBuf>) = entries
+        .into_iter()
+        .partition(|entry| claimed.contains_key(entry));
+    let mut leftovers: Vec<PathBuf> = leftovers.into_iter().collect();
+    leftovers.sort_by_key(|entry| std::cmp::Reverse(entry.components().count()));
+    for entry in &leftovers {
+        if stale_mount_point(entry) {
+            let _ = std::fs::remove_file(entry);
+        } else if empty_directory(entry) {
+            let _ = std::fs::remove_dir(entry);
+        }
+    }
+    write_record(file, live, &claimed);
+}
+
 /// One sandbox's claim on the placeholders bubblewrap makes for it on the
 /// host (srt's `bwrapMountPoints` and `cleanupBwrapMountPoints`).
 ///
@@ -791,7 +838,8 @@ fn write_record(file: &Path, entries: BTreeSet<PathBuf>, claimed: &BTreeMap<Path
 ///
 /// Not srt's: claimed placeholders are recorded in a file
 /// ([`Options::record`]) until they are removed, so the next node knows
-/// which leftovers of a node that died are its own to remove.
+/// which leftovers of a node that died are its own to remove (at its
+/// start, [`sweep_record`]).
 ///
 /// Dropped on the async runtime, the claim is released on its blocking
 /// pool (file removals under a process-wide lock), a moment later; a
@@ -1606,6 +1654,87 @@ mod tests {
             "{:?}",
             users.args
         );
+    }
+
+    /// An empty directory the record names that the policy now allows (a
+    /// leftover the user made a workspace of) is the user's: never
+    /// covered as a placeholder, and the denies below it get their own.
+    #[test]
+    fn a_recorded_directory_the_policy_allows_is_not_reused() {
+        let (_dir, root) = temp();
+        let p = |rest: &str| format!("{root}/{rest}");
+        fs::create_dir_all(p("home/newproj")).unwrap();
+        let record = PathBuf::from(p("record"));
+        fs::write(&record, format!("{}\n", p("home/newproj"))).unwrap();
+        let options = Options {
+            record: Some(record),
+            ..Options::default()
+        };
+        for allowed in ["home", "home/newproj", "home/newproj/sub"] {
+            let paths = PathPolicy {
+                allow_write: vec![p("home"), p(allowed)],
+                deny_write: vec![p("home/newproj/.bashrc")],
+                ..PathPolicy::default()
+            };
+            let plan = plan(&paths, &options).unwrap();
+            let reused = plan
+                .args
+                .windows(2)
+                .any(|w| w == ["--tmpfs", &p("home/newproj")]);
+            assert_eq!(reused, allowed == "home", "{allowed}: {:?}", plan.args);
+            if allowed != "home" {
+                assert_eq!(
+                    plan.mount_points,
+                    [PathBuf::from(p("home/newproj/.bashrc"))]
+                );
+            }
+        }
+    }
+
+    /// At the node's start the record's leftovers no sandbox claims are
+    /// removed when still what bubblewrap made, and the record keeps only
+    /// the claimed ones; once per record.
+    #[test]
+    fn the_record_is_swept_at_the_first_plan() {
+        let (_dir, root) = temp();
+        let p = |rest: &str| PathBuf::from(format!("{root}/{rest}"));
+        let record = p("record");
+        let (file, dir, nested, written, users, claimed) = (
+            p(".bashrc"),
+            p(".claude"),
+            p("a/.git"),
+            p(".zshrc"),
+            p(".profile"),
+            p(".mcp.json"),
+        );
+        fs::create_dir_all(&dir).unwrap();
+        fs::create_dir_all(&nested).unwrap();
+        for (path, contents, mode) in [
+            (&file, "", 0o444),
+            (&written, "x", 0o444),
+            (&users, "", 0o644),
+            (&claimed, "", 0o444),
+        ] {
+            fs::write(path, contents).unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
+        }
+        let all = [&file, &dir, &p("a"), &nested, &written, &users, &claimed];
+        let text: String = all.iter().map(|e| format!("{}\n", e.display())).collect();
+        fs::write(&record, &text).unwrap();
+        let mut claim = MountPoints::claim(vec![claimed.clone()], None);
+        sweep_record(&record);
+        assert!(!file.exists() && !dir.exists());
+        assert!(!p("a").exists(), "deepest first: emptied, then removed");
+        assert!(
+            written.exists() && users.exists(),
+            "not what bubblewrap made"
+        );
+        assert!(claimed.exists(), "claimed");
+        assert_eq!(read_record(&record), BTreeSet::from([claimed.clone()]));
+        fs::write(&record, &text).unwrap();
+        sweep_record(&record);
+        assert_eq!(fs::read_to_string(&record).unwrap(), text, "once");
+        claim.release();
     }
 
     #[test]

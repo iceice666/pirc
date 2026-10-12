@@ -1062,8 +1062,9 @@ async fn mandatory_deny_paths_hold() {
 }
 
 /// A placeholder left by a node that died (an empty read-only file the
-/// node recorded) is covered again and removed after the next session; a
-/// user's own file that looks the same (unrecorded) is covered but kept.
+/// node recorded) is removed at the node's first plan (and placed again
+/// for the session, then removed after it); a user's own file that looks
+/// the same (unrecorded) is covered but kept.
 /// Two sessions of one workspace share placeholders, which stay until the
 /// last one ends.
 #[tokio::test]

@@ -237,6 +237,9 @@ async fn plan_for(
                 None
             }
         };
+        if let Some(file) = &record {
+            plan::sweep_record(file);
+        }
         let options = Options {
             record: record.clone(),
             ..options
