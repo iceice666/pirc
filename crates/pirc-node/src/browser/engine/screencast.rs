@@ -26,6 +26,10 @@
 //! that), where Playwright waits for the main frame's utility world within
 //! the action's timeout.
 //!
+//! Ported from playwright-core 1.63.0 `src/server/screencast.ts`,
+//! `src/server/chromium/crPage.ts` (Apache-2.0, see
+//! `crates/pirc-node/NOTICE`).
+//!
 //! Owner: netio.
 
 use std::sync::{Arc, Mutex};

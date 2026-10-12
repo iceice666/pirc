@@ -11,6 +11,33 @@ filtering proxies and proxy environment to Rust. Files ported from it say
 so in their headers. Changes: rewritten in Rust; only the behaviour pirc
 uses is kept; differences are documented in the code.
 
+Playwright 1.63.0 (https://github.com/microsoft/playwright)
+Copyright (c) Microsoft Corporation
+Licensed under the Apache License, Version 2.0 (below).
+
+Playwright's NOTICE:
+
+    Playwright
+    Copyright (c) Microsoft Corporation
+
+    This software contains code derived from the Puppeteer project (https://github.com/puppeteer/puppeteer),
+    available under the Apache 2.0 license (https://github.com/puppeteer/puppeteer/blob/master/LICENSE).
+
+The browser engine (src/browser/engine/) ports the parts of
+playwright-core's server that pirc's TypeScript node used (the CDP pipe
+transport, Chromium's launch switches, the persistent context, pages,
+frames, execution contexts, request and WebSocket routing, keyboard and
+mouse with the US layout and the macOS editing commands, screenshots, the
+screencast and its action overlay, aria snapshots, aria-ref and text
+locators with their actionability checks) to Rust. Files ported from it
+say so in their headers. src/browser/assets/injected.js and
+src/browser/assets/websocket-mock.js are Playwright's injected script and
+WebSocket mock, copied unmodified from the playwright-core bundle by
+scripts/browser-assets.ts and embedded in the binary, with Playwright's
+LICENSE and NOTICE (src/browser/assets/PLAYWRIGHT-LICENSE and
+PLAYWRIGHT-NOTICE). Changes: rewritten in Rust; only what pirc's node
+used is kept; differences are documented in the code.
+
 --------------------------------------------------------------------------
 
                                  Apache License

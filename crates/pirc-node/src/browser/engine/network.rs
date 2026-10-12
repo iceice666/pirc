@@ -97,6 +97,13 @@
 //!   mock is a main-world init script; `Fetch` does not see WebSocket
 //!   handshakes).
 //!
+//! Ported from playwright-core 1.63.0
+//! `src/server/chromium/crNetworkManager.ts`,
+//! `src/server/chromium/crPage.ts`,
+//! `src/server/chromium/crServiceWorker.ts`,
+//! `src/server/dispatchers/webSocketRouteDispatcher.ts` (Apache-2.0, see
+//! `crates/pirc-node/NOTICE`).
+//!
 //! Owner: netio.
 
 use std::collections::HashSet;

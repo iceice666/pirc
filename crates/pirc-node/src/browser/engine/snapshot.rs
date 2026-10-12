@@ -28,6 +28,9 @@
 //! away between the snapshot and the rendering, the rendering waits for
 //! the next one (Playwright cannot fail there).
 //!
+//! Ported from playwright-core 1.63.0 `src/server/page.ts`,
+//! `src/server/frames.ts` (Apache-2.0, see `crates/pirc-node/NOTICE`).
+//!
 //! Owner: locator.
 
 use std::time::Duration;

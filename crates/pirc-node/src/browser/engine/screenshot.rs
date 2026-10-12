@@ -28,6 +28,9 @@
 //! scripts, so a frame without one gets it (Playwright evaluates only in
 //! existing contexts).
 //!
+//! Ported from playwright-core 1.63.0 `src/server/screenshotter.ts`
+//! (Apache-2.0, see `crates/pirc-node/NOTICE`).
+//!
 //! Owner: netio.
 
 use std::time::Duration;
