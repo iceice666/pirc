@@ -85,4 +85,5 @@ jobs:
           cargo test -p pirc-node
           --test sandbox_native --test sandbox_linux_uid0
           --test sandbox_linux_readonly --test sandbox_linux_agent
+          --test sandbox_linux_panel_git
           -- --nocapture
