@@ -36,7 +36,21 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
 
+      # The browser conformance scenarios (crates/pirc-conformance/tests/node_browser.rs)
+      # need a Chromium and, for recordings, ffmpeg; they skip without them.
+      # Chrome for Testing of the dev shell's Chromium version, which the
+      # snapshots were recorded with. The tests hand it to the node under
+      # test as PIRC_BROWSER_EXECUTABLE (its environment is cleared).
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with:
+          chrome-version: 153.0.8010.47
+          install-dependencies: true
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       - run: bun run check
+        env:
+          PIRC_BROWSER_EXECUTABLE: ${{ steps.chrome.outputs.chrome-path }}
 
   size:
     name: Rust executable sizes
