@@ -341,6 +341,7 @@ mod tests {
                 allow_unix_sockets: vec!["/state/i-1/socket".into()],
             },
             allow_git_config: false,
+            ..SessionPolicy::default()
         }
     }
 

@@ -84,6 +84,12 @@ pub struct ProfileInput<'a> {
     pub extra_read_denies: &'a [String],
     /// Literal write denies besides `deny_write`. Not srt's either.
     pub extra_write_denies: &'a [String],
+    /// Not srt's: paths kept in place (unlinking and creating them denied,
+    /// as for every ancestor of a deny), with their ancestors. The symlinks
+    /// a protected path's spelling crosses (`SessionPolicy::linked_denies`,
+    /// [`super::extra_denies`]): a deny names where the link leads, so the
+    /// link itself must not be replaced.
+    pub extra_move_blocks: &'a [String],
     /// Not srt's: an allow (read or write) spelled with glob characters
     /// that names an existing path is that path ([`allow_entry`]).
     pub literal_existing_allows: bool,
@@ -683,6 +689,13 @@ fn write_rules(
         dirs.extend(ancestor_directories(&group.dir));
         for dir in dirs {
             move_filters.insert(format!("(literal {})", escape(&dir)));
+        }
+    }
+    for path in input.extra_move_blocks {
+        let path = paths::normalize(path);
+        move_filters.insert(format!("(literal {})", escape(&path)));
+        for ancestor in ancestor_directories(&path) {
+            move_filters.insert(format!("(literal {})", escape(&ancestor)));
         }
     }
     rules.extend(render_rule(
