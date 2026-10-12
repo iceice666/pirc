@@ -1024,9 +1024,11 @@ async fn mandatory_deny_paths_hold() {
     );
 }
 
-/// A placeholder left by a node that died (an empty read-only file) is
-/// covered again and removed after the next session; two sessions of one
-/// workspace share placeholders, which stay until the last one ends.
+/// A placeholder left by a node that died (an empty read-only file the
+/// node recorded) is covered again and removed after the next session; a
+/// user's own file that looks the same (unrecorded) is covered but kept.
+/// Two sessions of one workspace share placeholders, which stay until the
+/// last one ends.
 #[tokio::test]
 async fn placeholders_outlive_no_session_and_are_shared() {
     use std::os::unix::fs::PermissionsExt;
@@ -1034,9 +1036,15 @@ async fn placeholders_outlive_no_session_and_are_shared() {
     let Some(f) = fixture("placeholders") else {
         return;
     };
-    let stale = f.root.join("workspace/.zshrc");
-    fs::write(&stale, "").unwrap();
-    fs::set_permissions(&stale, fs::Permissions::from_mode(0o444)).unwrap();
+    let stale = f.root.join("workspace/.zprofile");
+    let users = f.root.join("workspace/.zshrc");
+    for file in [&stale, &users] {
+        fs::write(file, "").unwrap();
+        fs::set_permissions(file, fs::Permissions::from_mode(0o444)).unwrap();
+    }
+    let record = f.root.join("state/sandbox/placeholders");
+    fs::create_dir_all(record.parent().unwrap()).unwrap();
+    fs::write(&record, format!("{}\n", stale.display())).unwrap();
     let first = f.prepare("pi_one").await;
     let second = f.prepare("pi_two").await;
     let mut child = first.command().unwrap();
@@ -1055,6 +1063,15 @@ async fn placeholders_outlive_no_session_and_are_shared() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     assert!(bashrc.exists());
+    let recorded = fs::read_to_string(&record).unwrap();
+    assert!(
+        recorded.lines().any(|line| Path::new(line) == bashrc),
+        "{recorded}"
+    );
+    assert_eq!(
+        fs::metadata(&record).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
     assert_eq!(f.sh("exit 0").await, 0);
     drop(second);
     assert!(bashrc.exists(), "the first session still uses it");
@@ -1063,6 +1080,12 @@ async fn placeholders_outlive_no_session_and_are_shared() {
     first.cleanup();
     assert!(!bashrc.exists());
     assert!(!stale.exists());
+    assert!(users.exists(), "a user's file is never removed");
+    let recorded = fs::read_to_string(&record).unwrap();
+    assert!(
+        !recorded.contains(&path(&f.root, "workspace")),
+        "{recorded}"
+    );
 }
 
 /// The node's inference socket lives in a private directory of its state,

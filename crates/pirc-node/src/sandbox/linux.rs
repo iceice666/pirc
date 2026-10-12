@@ -88,6 +88,9 @@ pub const BRIDGE_SOCKS_PORT: u16 = 1080;
 /// its sockets in the temp directory too).
 const PROXY_SOCKET: &str = "proxy.sock";
 
+/// The placeholders this node made, in `<state>/sandbox` ([`MountPoints`]).
+const PLACEHOLDER_RECORD: &str = "placeholders";
+
 /// `bwrap` on `PATH` (the node's environment), as an executable file.
 pub fn find_bwrap(env: &Env) -> Option<PathBuf> {
     env.get("PATH")?
@@ -180,15 +183,17 @@ pub fn readonly_bwrap_args(filesystem: Vec<String>, tmp: &str) -> BwrapArgs {
     }
 }
 
-/// The filesystem plan for a policy whose agent works in `cwd`, off the
-/// async runtime (the mandatory scan walks the workspace).
+/// The filesystem plan for a policy whose agent works in `cwd`, and the
+/// claim on its placeholders (recorded in `<state>/sandbox/placeholders`),
+/// off the async runtime (the mandatory scan walks the workspace).
 async fn plan_for(
     config: &NodeConfig,
     env: &Env,
     policy: &SessionPolicy,
     cwd: &Path,
-) -> Result<Plan, String> {
+) -> Result<(Vec<String>, MountPoints), String> {
     let paths = policy.paths.clone();
+    let config = config.clone();
     let database_dir = config.database_path.parent().map(Path::to_path_buf);
     let options = Options {
         cwd: Some(pirc_policy::real_resolve(&cwd.display().to_string())),
@@ -219,11 +224,26 @@ async fn plan_for(
             nix::unistd::getuid().as_raw(),
             env.get("SSH_AUTH_SOCK"),
         ),
+        record: None,
     };
-    tokio::task::spawn_blocking(move || plan::plan(&paths, &options))
-        .await
-        .map_err(|error| format!("the filesystem plan failed: {error}"))?
-        .map_err(|refusal| refusal.to_string())
+    tokio::task::spawn_blocking(move || {
+        let record = match common::sandbox_state_dir(&config) {
+            Ok(dir) => Some(dir.join(PLACEHOLDER_RECORD)),
+            Err(error) => {
+                crate::log::warn(&format!("cannot record the sandbox placeholders: {error}"));
+                None
+            }
+        };
+        let options = Options {
+            record: record.clone(),
+            ..options
+        };
+        let Plan { args, mount_points } =
+            plan::plan(&paths, &options).map_err(|refusal| refusal.to_string())?;
+        Ok((args, MountPoints::claim(mount_points, record)))
+    })
+    .await
+    .map_err(|error| format!("the filesystem plan failed: {error}"))?
 }
 
 /// The native backend.
@@ -379,13 +399,13 @@ impl NativeSandbox {
             Ok(bwrap) => bwrap,
             Err(error) => return fail(&tmp, error),
         };
-        let plan = match plan_for(&self.config, &self.env, &policy, workspace_root).await {
-            Ok(plan) => plan,
-            Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
-        };
-        let mounts = MountPoints::claim(plan.mount_points);
+        let (filesystem, mounts) =
+            match plan_for(&self.config, &self.env, &policy, workspace_root).await {
+                Ok(plan) => plan,
+                Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
+            };
         let tmp_text = tmp.display().to_string();
-        let options = readonly_bwrap_args(plan.args, &tmp_text);
+        let options = readonly_bwrap_args(filesystem, &tmp_text);
         let mut tail: Vec<OsString> = vec!["--".into()];
         tail.extend(command);
         let invocation = match args::render(
@@ -463,11 +483,11 @@ impl Sandbox for NativeSandbox {
                 Ok(bwrap) => bwrap,
                 Err(error) => return fail(&tmp, error),
             };
-            let plan = match plan_for(&self.config, &self.env, &policy, &input.workspace_root).await
-            {
-                Ok(plan) => plan,
-                Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
-            };
+            let (filesystem, mounts) =
+                match plan_for(&self.config, &self.env, &policy, &input.workspace_root).await {
+                    Ok(plan) => plan,
+                    Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
+                };
             let socket = tmp.join(PROXY_SOCKET);
             let listener = match tokio::net::UnixListener::bind(&socket) {
                 Ok(listener) => listener,
@@ -482,7 +502,7 @@ impl Sandbox for NativeSandbox {
             let auth = Arc::new(proxy::ProxyAuth::generate());
             let proxy_env = self.proxy_env(&auth);
             let options = bwrap_args(
-                plan.args,
+                filesystem,
                 &tmp_text,
                 &socket.display().to_string(),
                 &proxy_env,
@@ -499,7 +519,6 @@ impl Sandbox for NativeSandbox {
                 Ok(invocation) => invocation,
                 Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
             };
-            let mounts = MountPoints::claim(plan.mount_points);
             let allowlist = Arc::new(Allowlist::new(
                 policy.network.allowed_domains.clone(),
                 policy.network.denied_domains.clone(),
