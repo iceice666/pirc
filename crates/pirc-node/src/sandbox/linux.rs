@@ -43,15 +43,21 @@
 //!   `LINUX_HOST_SOCKETS` and, beyond srt, the host's name-service sockets
 //!   (`plan::RESOLVER_SOCKETS`: nscd, systemd-resolved, sssd, avahi), which
 //!   would resolve any name for the agent and so leak data over DNS past
-//!   the allowlist; this holds for [`Sandbox::prepare_readonly`] too.
+//!   the allowlist, and the node's uid's `/tmp/ssh-*` directories (sshd's
+//!   forwarded agents, `plan::SSH_AGENT_TMP`) that exist at plan time;
+//!   this holds for [`Sandbox::prepare_readonly`] too. `SSH_AUTH_SOCK`
+//!   spelled through a link is hidden where the link leads at plan time:
+//!   a socket it leads to later, or a `/tmp/ssh-*` directory made during
+//!   the session, is reachable (see [`plan`]'s accepted gaps).
 //!   Residual risk: any other host daemon whose socket stays visible (and
 //!   connectable: `connect` works on a read-only bind) and that resolves
 //!   names or connects on a client's behalf is a way out past the proxy.
 //!   An allowlist of Unix sockets (the inference socket and the configured
 //!   ones) would close it; not done (srt has none on Linux either).
 //! - Changes between the plan and bubblewrap's start: a symlink
-//!   retargeted in between, or a hard link to a protected file made
-//!   before the session (see [`plan`]'s accepted gaps).
+//!   retargeted in between (by the host, or by another session's agent
+//!   where its policy lets it write), or a hard link to a protected file
+//!   made before the session (see [`plan`]'s accepted gaps).
 //! - Glob patterns in the policy's paths are taken literally (srt expanded
 //!   `denyRead` globs on Linux and dropped write globs); pirc's policies
 //!   hold resolved paths. A missing deny path with `*`, `?` or `[` in its

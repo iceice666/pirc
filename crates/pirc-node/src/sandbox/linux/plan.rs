@@ -21,6 +21,8 @@
 //!   policy, which pirc always has);
 //! - the host's name-service sockets hidden ([`RESOLVER_SOCKETS`], not
 //!   srt's: they resolve names past the proxy);
+//! - the node's uid's `/tmp/ssh-*` directories hidden, where sshd puts
+//!   forwarded agents' sockets ([`SSH_AGENT_TMP`], not srt's);
 //! - for a denied path that does not exist, its first missing component
 //!   (srt's stub, below);
 //! - for a denied path below a *file* (a worktree's `.git` file), that file
@@ -61,8 +63,10 @@
 //!   policy's `LINUX_HOST_SOCKETS` and `SSH_AUTH_SOCK`, as spelled) are
 //!   exempt: they are hidden from reading, not protected for host tools, and
 //!   a stable link in `/tmp` to the ssh-agent's socket (tmux's recipe) would
-//!   otherwise refuse every session. Their targets are hidden as for any
-//!   deny.
+//!   otherwise refuse every session. Their targets at plan time are hidden
+//!   as for any deny, and sshd's agent directories wholesale
+//!   ([`SSH_AGENT_TMP`]); the link itself stays visible, and writable in
+//!   `/tmp` (see the accepted gaps).
 //! - **Missing deny paths** whose deepest existing ancestor the agent may
 //!   write get a read-only placeholder on their first missing component:
 //!   `/dev/null` when that is the path itself, an empty directory when it is
@@ -105,9 +109,22 @@
 //!
 //! - A symlink retargeted between planning and bubblewrap's start is
 //!   followed by bubblewrap, wherever it now leads (the plan resolved it
-//!   before). Not by the agent: it does not run before its sandbox exists,
+//!   before). This session's agent does not run before its sandbox exists,
 //!   and the links of protected spellings lie where it may not write
-//!   (otherwise the plan refuses).
+//!   (otherwise the plan refuses). Other sessions' agents do run: one whose
+//!   policy lets it write where such a link lies (its own workspace,
+//!   `/tmp`) can retarget it in that window.
+//! - A host socket spelled through a link (`SSH_AUTH_SOCK` in tmux's
+//!   layout, `/tmp/ssh-agent-$USER`) is hidden where the link led at plan
+//!   time. The link stays visible and, in `/tmp`, writable by every
+//!   session. Retargeted later (each tmux reattach), or by another
+//!   session's agent to a decoy while this one plans, it leads to a socket
+//!   that is hidden only if it lies in a `/tmp/ssh-*` directory that
+//!   existed at plan time ([`SSH_AGENT_TMP`]). A `/tmp/ssh-*` directory
+//!   made after the plan (a reattach, another login during the session)
+//!   is visible in running sandboxes, which bind the host's `/tmp`: its
+//!   agent socket is reachable through the link or by name. Unix-socket
+//!   connects are not filtered otherwise (see `linux.rs`).
 //! - A hard link to a protected file that already existed (in a writable
 //!   root, say) is another name for it that no deny covers: writing through
 //!   it writes the file. The agent cannot make one during its session: a
@@ -152,6 +169,36 @@ pub const RESOLVER_SOCKETS: [&str; 5] = [
     "/var/lib/sss/pipes",
     "/run/avahi-daemon/socket",
 ];
+
+/// Where sshd puts forwarded agents' sockets (`ssh-XXXXXXXXXX/agent.<pid>`,
+/// OpenSSH's fixed layout), and `ssh-agent` its own (in `$TMPDIR`, this by
+/// default). Each `ssh-*` directory here the node's uid owns when the plan
+/// is made is hidden whenever there is a read policy ([`ssh_agent_dirs`]).
+/// Not srt's: `SSH_AUTH_SOCK`'s target is hidden as a policy deny, but in
+/// tmux's layout that is a link in `/tmp` each reattach points at a new
+/// forwarded socket, and other logins' sockets are never named at all.
+/// A directory made after the plan stays visible (see the accepted gaps).
+pub const SSH_AGENT_TMP: &str = "/tmp";
+
+/// The `ssh-*` directories (not links) in `tmp` that `uid` owns, each at
+/// its canonical path ([`SSH_AGENT_TMP`]).
+pub fn ssh_agent_dirs(tmp: &str, uid: u32) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(tmp) else {
+        return Vec::new();
+    };
+    let mut dirs: Vec<String> = entries
+        .flatten()
+        .filter(|entry| entry.file_name().to_string_lossy().starts_with("ssh-"))
+        .filter(|entry| {
+            std::fs::symlink_metadata(entry.path())
+                .is_ok_and(|meta| meta.is_dir() && meta.uid() == uid)
+        })
+        .filter_map(|entry| std::fs::canonicalize(entry.path()).ok())
+        .map(|dir| text(&dir))
+        .collect();
+    dirs.sort();
+    dirs
+}
 
 /// What a path's mount gives the agent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -342,8 +389,9 @@ pub struct Options {
     pub cwd: Option<String>,
     /// srt's `allowGitConfig`, for the mandatory deny paths.
     pub allow_git_config: bool,
-    /// Hide [`SSH_CONFIG_D`] (srt's host-wide rule) and the
-    /// [`RESOLVER_SOCKETS`] (off for golden tests).
+    /// Hide [`SSH_CONFIG_D`] (srt's host-wide rule), the
+    /// [`RESOLVER_SOCKETS`] and the node's uid's `/tmp/ssh-*` directories
+    /// ([`SSH_AGENT_TMP`]) (off for golden tests).
     pub host_rules: bool,
     /// The file recording the placeholders this node made (see
     /// [`MountPoints`]); `None` records nothing, so no leftover is removed.
@@ -506,6 +554,11 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
                 && !effective.deny_read.contains(&text(&real))
             {
                 effective.deny_read.push(text(&real));
+            }
+        }
+        for dir in ssh_agent_dirs(SSH_AGENT_TMP, nix::unistd::getuid().as_raw()) {
+            if !effective.deny_read.contains(&dir) {
+                effective.deny_read.push(dir);
             }
         }
     }
@@ -1525,6 +1578,23 @@ mod tests {
                 &p("agent/socket"),
             ])
         );
+    }
+
+    /// sshd's agent directories: `ssh-*` directories the uid owns, not
+    /// links to one nor files.
+    #[test]
+    fn ssh_agent_dirs_are_the_uids_ssh_directories() {
+        let (_dir, root) = temp();
+        let p = |rest: &str| format!("{root}/{rest}");
+        for dir in ["ssh-AbC123", "ssh-x/agent.1", "other"] {
+            fs::create_dir_all(p(dir)).unwrap();
+        }
+        fs::write(p("ssh-file"), "").unwrap();
+        symlink(p("other"), p("ssh-link")).unwrap();
+        let uid = nix::unistd::getuid().as_raw();
+        assert_eq!(ssh_agent_dirs(&root, uid), [p("ssh-AbC123"), p("ssh-x")]);
+        assert!(ssh_agent_dirs(&root, uid + 1).is_empty());
+        assert!(ssh_agent_dirs(&p("missing"), uid).is_empty());
     }
 
     /// A link the agent cannot replace that leads through one it can (or
