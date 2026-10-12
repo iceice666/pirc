@@ -1042,7 +1042,9 @@ mod tests {
         );
     }
 
+    /// Linux's root (`/etc` is a symlink to `/private/etc` on macOS).
     #[test]
+    #[cfg(target_os = "linux")]
     fn a_denied_root_is_expanded_and_kernel_paths_are_left_alone() {
         let paths = PathPolicy {
             deny_read: vec!["/".into(), "/proc/1".into()],
