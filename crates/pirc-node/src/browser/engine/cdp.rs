@@ -77,6 +77,26 @@ struct Echo {
 struct Pending {
     reply: Reply,
     echo: Option<Echo>,
+    /// The session the command was sent to (`None`: the browser).
+    session: Option<Arc<str>>,
+}
+
+impl Pending {
+    /// Answer the command (and its echo, as from `session`).
+    fn resolve(self, result: Result<Value, CdpError>, session: Option<Arc<str>>) {
+        if let Some(echo) = self.echo {
+            let params = match &result {
+                Ok(result) => json!({ "tag": echo.tag, "result": result }),
+                Err(error) => json!({ "tag": echo.tag, "error": error.message }),
+            };
+            let _ = echo.to.send(Event {
+                session,
+                method: echo.method,
+                params,
+            });
+        }
+        let _ = self.reply.send(result);
+    }
 }
 
 #[derive(Default)]
@@ -187,7 +207,14 @@ impl Connection {
             if state.closed {
                 return Err(CdpError::closed());
             }
-            state.pending.insert(id, Pending { reply, echo });
+            state.pending.insert(
+                id,
+                Pending {
+                    reply,
+                    echo,
+                    session: session.cloned(),
+                },
+            );
         }
         let mut message = json!({ "id": id, "method": method, "params": params });
         if let Some(session) = session {
@@ -231,22 +258,11 @@ fn dispatch(state: &Mutex<State>, message: Value) {
                 )),
                 None => Ok(message.get("result").cloned().unwrap_or(Value::Null)),
             };
-            if let Some(echo) = pending.echo {
-                let params = match &result {
-                    Ok(result) => json!({ "tag": echo.tag, "result": result }),
-                    Err(error) => json!({ "tag": echo.tag, "error": error.message }),
-                };
-                let session = message
-                    .get("sessionId")
-                    .and_then(Value::as_str)
-                    .map(Arc::from);
-                let _ = echo.to.send(Event {
-                    session,
-                    method: echo.method,
-                    params,
-                });
-            }
-            let _ = pending.reply.send(result);
+            let session = message
+                .get("sessionId")
+                .and_then(Value::as_str)
+                .map(Arc::from);
+            pending.resolve(result, session);
         }
         return;
     }
@@ -268,9 +284,33 @@ fn dispatch(state: &Mutex<State>, message: Value) {
     if let Some(listeners) = state.listeners.get_mut(&session) {
         listeners.retain(|listener| listener.send(event.clone()).is_ok());
     }
+    // Chromium never answers a detached session's commands still in flight:
+    // they fail as Playwright's `CRSession.dispose` fails them
+    // (`Inspector.detached` comes first when the target goes away).
+    if method == "Inspector.detached"
+        && let Some(session) = &session
+    {
+        fail_pending(&mut state, session, &CdpError::closed());
+    }
     // A detached session's listeners see their channel end.
     if let Some(detached) = detached {
+        fail_pending(&mut state, &detached, &CdpError::closed());
         state.listeners.remove(&Some(detached));
+    }
+}
+
+/// Fail every command still waiting for `session`'s reply with `error`.
+fn fail_pending(state: &mut State, session: &Arc<str>, error: &CdpError) {
+    let ids: Vec<u64> = state
+        .pending
+        .iter()
+        .filter(|(_, pending)| pending.session.as_ref() == Some(session))
+        .map(|(id, _)| *id)
+        .collect();
+    for id in ids {
+        if let Some(pending) = state.pending.remove(&id) {
+            pending.resolve(Err(error.clone()), Some(session.clone()));
+        }
     }
 }
 
@@ -347,5 +387,88 @@ impl Session {
 impl std::fmt::Debug for Session {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Session").field("id", &self.id).finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+    use super::*;
+
+    /// A connection to a fake browser: the commands it reads, a way to
+    /// send it messages.
+    struct Fake {
+        connection: Arc<Connection>,
+        commands: BufReader<pipe::Receiver>,
+        replies: pipe::Sender,
+    }
+
+    impl Fake {
+        fn new() -> Self {
+            let (commands_tx, commands_rx) = pipe::pipe().unwrap();
+            let (replies_tx, replies_rx) = pipe::pipe().unwrap();
+            Self {
+                connection: Connection::new(commands_tx, replies_rx),
+                commands: BufReader::new(commands_rx),
+                replies: replies_tx,
+            }
+        }
+
+        async fn command(&mut self) -> Value {
+            let mut buffer = Vec::new();
+            self.commands.read_until(0, &mut buffer).await.unwrap();
+            buffer.pop();
+            serde_json::from_slice(&buffer).unwrap()
+        }
+
+        async fn send(&mut self, message: Value) {
+            let mut bytes = message.to_string().into_bytes();
+            bytes.push(0);
+            self.replies.write_all(&bytes).await.unwrap();
+        }
+    }
+
+    async fn settled<T>(task: &mut tokio::task::JoinHandle<T>) -> Option<T> {
+        tokio::time::timeout(Duration::from_secs(2), task)
+            .await
+            .ok()
+            .map(Result::unwrap)
+    }
+
+    #[tokio::test]
+    async fn a_detached_session_fails_its_commands_in_flight() {
+        for detach in [
+            json!({ "method": "Target.detachedFromTarget",
+                "params": { "sessionId": "S", "targetId": "T" } }),
+            json!({ "method": "Inspector.detached",
+                "params": { "reason": "Render process gone." }, "sessionId": "S" }),
+        ] {
+            let mut fake = Fake::new();
+            let page = fake.connection.session("S");
+            let other = fake.connection.session("O");
+            let browser = fake.connection.browser();
+            let mut on_page = tokio::spawn(async move {
+                page.call("Runtime.evaluate", json!({ "expression": "1" }))
+                    .await
+            });
+            let on_other =
+                tokio::spawn(async move { other.call("Runtime.enable", json!({})).await });
+            let on_browser =
+                tokio::spawn(async move { browser.call("Browser.getVersion", json!({})).await });
+            for _ in 0..3 {
+                fake.command().await;
+            }
+            fake.send(detach).await;
+            assert_eq!(settled(&mut on_page).await, Some(Err(CdpError::closed())));
+            // Other sessions' commands still wait for their replies.
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            assert!(!on_other.is_finished());
+            assert!(!on_browser.is_finished());
+            on_other.abort();
+            on_browser.abort();
+        }
     }
 }

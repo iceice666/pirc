@@ -903,3 +903,33 @@ async fn screenshots_skip_a_frame_that_is_still_loading() {
         browser.context.close().await;
     });
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn calls_in_flight_fail_when_their_page_closes() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let page = browser.context.new_page().await.unwrap();
+        let pending = {
+            let page = page.clone();
+            tokio::spawn(async move {
+                page.evaluate("() => new Promise(() => {})", Value::Null)
+                    .await
+            })
+        };
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        page.close().await.unwrap();
+        // Playwright 1.63.0 rejects it at once.
+        let error = tokio::time::timeout(Duration::from_secs(5), pending)
+            .await
+            .expect("the evaluation ends")
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(
+            error.message,
+            "evaluate: Target page, context or browser has been closed"
+        );
+        browser.context.close().await;
+    });
+}
