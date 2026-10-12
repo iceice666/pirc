@@ -98,7 +98,7 @@ The native sandbox (`plans/rust-rewrite.md` M7) was reviewed before merge in two
 
 Accepted, as in srt (documented in `sandbox/linux/plan.rs`): mounts are by path, so a link retargeted, or a hard link to a protected file made, before bubblewrap's start is followed (the agent cannot make cross-mount hard links during a session: EXDEV, tested); placeholders appear in workspaces while a session runs; nested repositories below the scan's depth (3) are not protected; macOS sessions with `allowLocalBinding` reach any loopback port (other sessions' proxies need the token).
 
-Not verified: the podman cases (CI job `sandbox-podman`, not yet run on GitHub), real host root (`#[ignore]`d, commands in `plans/rust-rewrite.md`; it must be built outside a 0700 home), the srt stand-in against real srt 0.0.78 with the read-only settings.
+Real host root: both `#[ignore]`d cases passed when the user ran them (2026-10-12; commands in `plans/rust-rewrite.md`). Not verified: the podman cases (CI job `sandbox-podman`, not yet run on GitHub), the srt stand-in against real srt 0.0.78 with the read-only settings.
 
 ## High
 
