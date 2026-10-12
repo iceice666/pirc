@@ -17,6 +17,7 @@ use pirc_node::browser::engine::context::{Context, LaunchOptions};
 use pirc_node::browser::engine::frame::Arg;
 use pirc_node::browser::engine::page::{Page, PageEvent};
 use pirc_node::browser::engine::screenshot::ScreenshotOptions;
+use pirc_node::browser::engine::snapshot::aria_snapshot;
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -929,6 +930,36 @@ async fn calls_in_flight_fail_when_their_page_closes() {
         assert_eq!(
             error.message,
             "evaluate: Target page, context or browser has been closed"
+        );
+        browser.context.close().await;
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn snapshots_leave_out_a_frame_still_loading_at_the_timeout() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let page = hanging_page(&browser).await;
+        // Playwright 1.63.0 returns this after the timeout (2003 ms): the
+        // iframe's snapshot timed out and is left empty.
+        let started = Instant::now();
+        let snapshot = tokio::time::timeout(
+            Duration::from_secs(10),
+            aria_snapshot(&page, Duration::from_secs(2)),
+        )
+        .await
+        .expect("the snapshot returns")
+        .unwrap();
+        assert_eq!(
+            snapshot,
+            "- generic [active] [ref=e1]:\n  - heading \"Outer\" [level=1] [ref=e2]\n  - textbox [ref=e3]\n  - iframe [ref=e4]"
+        );
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= Duration::from_secs(2) && elapsed < Duration::from_secs(4),
+            "{elapsed:?}"
         );
         browser.context.close().await;
     });
