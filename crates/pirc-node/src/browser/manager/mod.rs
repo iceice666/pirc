@@ -254,13 +254,22 @@ struct State {
     closing: bool,
     workspaces: HashMap<String, Workspace>,
     tabs: HashMap<String, Arc<Tab>>,
-    viewers: HashMap<String, Vec<(u64, FrameSink)>>,
+    viewers: HashMap<String, Vec<Viewer>>,
     /// Accepted requests per session (`sessionOperations`).
     operations: HashMap<String, usize>,
     operation_waiters: HashMap<String, Vec<oneshot::Sender<()>>>,
     closing_sessions: HashSet<String>,
     /// Running `closeSession`s: true once done.
     closures: HashMap<String, watch::Receiver<bool>>,
+}
+
+/// An attached viewer (`attach`).
+struct Viewer {
+    id: u64,
+    sink: FrameSink,
+    /// The tab whose log the viewer got in full when it attached, and that
+    /// log's length: that tab's earlier `log_entry`s are not sent again.
+    log_from: Option<(Weak<Tab>, u64)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
