@@ -27,10 +27,14 @@ indexmap.workspace = true
 # opens (recap), getuid (the sandbox policy's host sockets), the fd limit
 # raised at start-up (node.rs).
 nix = { version = "0.31", features = ["fs", "process", "resource", "signal", "user"] }
-# Panel terminals: setsid and TIOCSCTTY before exec, as the agent's
-# background tasks (no unsafe code of our own).
-pty-process = { version = "0.5", features = ["async"] }
+# Panel terminals (terminals/pty.rs, security audit S9): `setsid` before
+# exec without unsafe code of our own (watchexec's process-wrap, tokio
+# flavour, the session wrapper only).
+process-wrap = { version = "10", default-features = false, features = ["tokio1", "process-session"] }
 regex-lite = "0.1"
+# Panel terminals: the PTY master opened close-on-exec atomically, its
+# size, non-blocking reads and writes (already linked through tempfile).
+rustix = { version = "1", features = ["fs", "pty", "termios"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
 # The node link's `wss://`: rustls with ring (no aws-lc), the platform's
 # roots as the gateway's reqwest uses them.

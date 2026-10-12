@@ -199,6 +199,51 @@ async fn runs_a_login_shell_in_a_pty() {
     );
 }
 
+/// The shell leads its own session with the PTY as its controlling
+/// terminal (`/dev/tty` opens; Linux: its session id is its pid) and job
+/// control on, as with pty-process's `setsid` and `TIOCSCTTY`.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_shell_leads_a_session_on_its_terminal() {
+    let terminals = terminals();
+    let info = open(&terminals, "s", 80.0, 24.0).unwrap();
+    let (_, mut events) = watch(&terminals, "s", &info.id);
+    // Markers are quoted apart so the echoed input never matches them.
+    terminals
+        .input(
+            "s",
+            &info.id,
+            "if : </dev/tty; then echo CT\"\"TY-yes; else echo CT\"\"TY-no; fi\n",
+        )
+        .unwrap();
+    until(&mut events, "CTTY-yes").await;
+    terminals
+        .input(
+            "s",
+            &info.id,
+            "case $- in *m*) echo JO\"\"BS-on;; *) echo JO\"\"BS-off;; esac\n",
+        )
+        .unwrap();
+    until(&mut events, "JOBS-on").await;
+    if cfg!(target_os = "linux") {
+        terminals
+            .input(
+                "s",
+                &info.id,
+                "set -- $(cut -d' ' -f5,6 /proc/$$/stat); echo \"S\"\"ID=$1:$2:$$=E\"\"ND\"\n",
+            )
+            .unwrap();
+        let output = until(&mut events, "=END").await;
+        let ids = output.rsplit("SID=").next().unwrap();
+        let ids: Vec<&str> = ids.split("=END").next().unwrap().split(':').collect();
+        // Process group, session and pid are one.
+        assert!(
+            ids.len() == 3 && ids[0] == ids[2] && ids[1] == ids[2],
+            "{output:?}"
+        );
+    }
+    terminals.close("s", &info.id).unwrap();
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn limits_and_closing() {
     let terminals = terminals();
