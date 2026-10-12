@@ -303,11 +303,21 @@ impl Drop for Prepared {
     }
 }
 
+/// What [`unavailable_error`] says before the reason.
+const UNAVAILABLE: &str = "Agents on this node must run in the sandbox, and it is unavailable: ";
+
 /// 503 `runner_unavailable` for an unavailable sandbox.
 pub fn unavailable_error(reason: &str) -> ApiError {
-    ApiError::runner_unavailable(format!(
-        "Agents on this node must run in the sandbox, and it is unavailable: {reason}"
-    ))
+    ApiError::runner_unavailable(format!("{UNAVAILABLE}{reason}"))
+}
+
+/// The reason of an [`unavailable_error`], for a caller that is not an
+/// agent start to say in its own words; `None` for another error.
+pub fn unavailable_reason(error: &ApiError) -> Option<&str> {
+    if error.status != 503 {
+        return None;
+    }
+    error.message.strip_prefix(UNAVAILABLE)
 }
 
 /// The node's backend (owner: **macos**): [`srt`] when
@@ -413,6 +423,11 @@ mod tests {
             unavailable_error("no bwrap").message,
             "Agents on this node must run in the sandbox, and it is unavailable: no bwrap"
         );
+        assert_eq!(
+            unavailable_reason(&unavailable_error("no bwrap")),
+            Some("no bwrap")
+        );
+        assert_eq!(unavailable_reason(&ApiError::internal()), None);
     }
 
     #[test]
