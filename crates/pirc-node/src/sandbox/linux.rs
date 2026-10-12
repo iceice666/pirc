@@ -182,21 +182,17 @@ pub fn readonly_bwrap_args(filesystem: Vec<String>, tmp: &str) -> BwrapArgs {
 
 /// The filesystem plan for a policy whose agent works in `cwd`, off the
 /// async runtime (the mandatory scan walks the workspace).
-async fn plan_for(
-    config: &NodeConfig,
-    paths: &PathPolicy,
-    cwd: &Path,
-    allow_git_config: bool,
-) -> Result<Plan, String> {
-    let paths = paths.clone();
+async fn plan_for(config: &NodeConfig, policy: &SessionPolicy, cwd: &Path) -> Result<Plan, String> {
+    let paths = policy.paths.clone();
     let database_dir = config.database_path.parent().map(Path::to_path_buf);
     let options = Options {
         cwd: Some(pirc_policy::real_resolve(&cwd.display().to_string())),
-        allow_git_config,
+        allow_git_config: policy.allow_git_config,
         host_rules: true,
         // What the node itself reads and writes by these names: an agent
         // replacing a link on the way would hand the node its own config
-        // (`allowedPaths`) or state.
+        // (`allowedPaths`) or state. And the denies the policy lists only
+        // by their targets.
         spellings: [
             Some(config.config_dir.clone()),
             Some(config.state_dir.clone()),
@@ -207,6 +203,12 @@ async fn plan_for(
         .into_iter()
         .flatten()
         .map(|dir| dir.display().to_string())
+        .chain(
+            policy
+                .linked_denies
+                .iter()
+                .map(|entry| entry.spelled.clone()),
+        )
         .collect(),
     };
     tokio::task::spawn_blocking(move || plan::plan(&paths, &options))
@@ -368,14 +370,7 @@ impl NativeSandbox {
             Ok(bwrap) => bwrap,
             Err(error) => return fail(&tmp, error),
         };
-        let plan = match plan_for(
-            &self.config,
-            &policy.paths,
-            workspace_root,
-            policy.allow_git_config,
-        )
-        .await
-        {
+        let plan = match plan_for(&self.config, &policy, workspace_root).await {
             Ok(plan) => plan,
             Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
         };
@@ -459,14 +454,7 @@ impl Sandbox for NativeSandbox {
                 Ok(bwrap) => bwrap,
                 Err(error) => return fail(&tmp, error),
             };
-            let plan = match plan_for(
-                &self.config,
-                &policy.paths,
-                &input.workspace_root,
-                policy.allow_git_config,
-            )
-            .await
-            {
+            let plan = match plan_for(&self.config, &policy, &input.workspace_root).await {
                 Ok(plan) => plan,
                 Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
             };

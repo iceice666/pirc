@@ -45,12 +45,18 @@
 //!   the node reading `<ws>/.pirc`) follow the spelling. bubblewrap cannot
 //!   pin a link, so the plan is refused instead ([`Refusal`]): srt's
 //!   `findSymlinkInPath` intent, which it only checked on the resolved path
-//!   (where it never hits), applied to the spelling. The resolved target is
-//!   protected as srt protects it. Decided with the user (M7); no opt-out.
-//!   The node's own spellings of its config and state directories are
-//!   checked too ([`Options::spellings`]): the policy holds them resolved,
-//!   and a replaced link there would hand the node a config
-//!   (`allowedPaths`) the agent wrote.
+//!   (where it never hits), applied to the spelling. Every link crossed
+//!   while the spelling resolves counts, the links a link's target leads
+//!   through included (`/entry -> /hop -> /real`), and so does every
+//!   directory a link's target leaves through `..` ([`walk_links`]). The
+//!   resolved target is protected as srt protects it. Decided with the user
+//!   (M7); no opt-out. The policy lists some denies only resolved (the
+//!   sensitive home paths, private, read-only and protected paths, the
+//!   agent config dir): their spellings come from
+//!   `SessionPolicy::linked_denies`, and the node's own spellings of its
+//!   config and state directories are checked too ([`Options::spellings`]):
+//!   a replaced link there would hand the node a config (`allowedPaths`)
+//!   the agent wrote.
 //! - **Missing deny paths** whose deepest existing ancestor the agent may
 //!   write get a read-only placeholder on their first missing component:
 //!   `/dev/null` when that is the path itself, an empty directory when it is
@@ -78,6 +84,7 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use pirc_policy::session::walk_links;
 use pirc_policy::{PathPolicy, is_inside, read_allowed, resolve_path, write_allowed};
 
 use super::scan;
@@ -278,9 +285,10 @@ pub struct Options {
     /// Hide [`SSH_CONFIG_D`] (srt's host-wide rule) and the
     /// [`RESOLVER_SOCKETS`] (off for golden tests).
     pub host_rules: bool,
-    /// Protected paths as the node spells them (its config and state
-    /// directories), whose policy entries arrive already resolved: checked
-    /// for replaceable symlinks like the policy's own spellings.
+    /// Protected paths as spelled whose policy entries arrive already
+    /// resolved (the node's config and state directories,
+    /// `SessionPolicy::linked_denies`): checked for replaceable symlinks
+    /// like the policy's own spellings.
     pub spellings: Vec<String>,
 }
 
@@ -289,16 +297,27 @@ pub struct Options {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Refusal {
     pub protected: String,
+    /// The symlink, or (`parent`) the directory a symlink's target leaves
+    /// through `..`.
     pub link: String,
+    pub parent: bool,
 }
 
 impl std::fmt::Display for Refusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "the protected path {} goes through the symbolic link {}, which the agent could replace (bubblewrap cannot pin a link); replace the link with the file or directory it points to",
-            self.protected, self.link
-        )
+        if self.parent {
+            write!(
+                f,
+                "the protected path {} goes through the directory {} (a symbolic link's target leaves it through ..), which the agent could replace (bubblewrap cannot pin a link); replace the link with the file or directory it points to",
+                self.protected, self.link
+            )
+        } else {
+            write!(
+                f,
+                "the protected path {} goes through the symbolic link {}, which the agent could replace (bubblewrap cannot pin a link); replace the link with the file or directory it points to",
+                self.protected, self.link
+            )
+        }
     }
 }
 
@@ -311,24 +330,26 @@ pub struct Plan {
     pub mount_points: Vec<PathBuf>,
 }
 
-/// srt's `findSymlinkInPath` on a protected spelling: the first symlink on
-/// the way to `path` (the path itself included) whose directory the agent
-/// may write. The walk stops at the first missing component.
-fn replaceable_symlink(effective: &PathPolicy, path: &str) -> Option<String> {
-    for prefix in prefixes(path) {
-        match std::fs::symlink_metadata(&prefix) {
-            Ok(meta) if meta.file_type().is_symlink() => {
-                let dir = resolve_symlinked_deny_path(&parent(&prefix))
-                    .unwrap_or_else(|| parent(&prefix));
-                if access(effective, &dir) == Access::Writable {
-                    return Some(prefix);
-                }
-            }
-            Ok(_) => {}
-            Err(_) => return None,
-        }
-    }
-    None
+/// srt's `findSymlinkInPath` on a protected spelling: the first symlink
+/// crossed resolving `path` (the path itself, and the links its links'
+/// targets go through, included), or directory a link's target leaves
+/// through `..`, whose directory the agent may write ([`walk_links`]: each
+/// is named with its directory resolved). The walk stops at the first
+/// missing component.
+///
+/// A directory the agent may not write cannot be replaced either: where
+/// its parent is writable it is a verdict boundary, a rule path, so it is
+/// pinned (see [`pinned`]).
+fn replaceable_symlink(effective: &PathPolicy, protected: &str) -> Option<Refusal> {
+    walk_links(protected)
+        .links
+        .into_iter()
+        .find(|link| access(effective, &parent(link)) == Access::Writable)
+        .map(|link| Refusal {
+            protected: protected.to_owned(),
+            parent: !std::fs::symlink_metadata(&link).is_ok_and(|m| m.file_type().is_symlink()),
+            link,
+        })
 }
 
 /// The plan for `paths` (see the module documentation), or why it cannot
@@ -420,11 +441,8 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
         .chain(&options.spellings)
         .filter(absolute)
     {
-        if let Some(link) = replaceable_symlink(&effective, spelling) {
-            return Err(Refusal {
-                protected: spelling.clone(),
-                link,
-            });
+        if let Some(refusal) = replaceable_symlink(&effective, spelling) {
+            return Err(refusal);
         }
     }
 
@@ -986,7 +1004,8 @@ mod tests {
             refusal,
             Refusal {
                 protected: p("ws/.git/config"),
-                link: p("ws/.git")
+                link: p("ws/.git"),
+                parent: false,
             }
         );
         assert_eq!(
@@ -1023,6 +1042,66 @@ mod tests {
         let paths = PathPolicy {
             allow_write: vec![p("ws/sub")],
             deny_write: vec![p("ws/.mcp.json")],
+            ..PathPolicy::default()
+        };
+        assert!(plan(&paths, &Options::default()).is_ok());
+    }
+
+    /// A link the agent cannot replace that leads through one it can (or
+    /// through a directory it can replace, by `..`) is refused too: the
+    /// spelling follows whatever the agent puts there.
+    #[test]
+    fn links_in_the_middle_of_a_chain_are_refused() {
+        let (_dir, root) = temp();
+        let p = |rest: &str| format!("{root}/{rest}");
+        for dir in ["ws/sub", "ro", "real/pirc"] {
+            fs::create_dir_all(p(dir)).unwrap();
+        }
+        // ro/entry -> ws/hop -> real
+        symlink(p("ws/hop"), p("ro/entry")).unwrap();
+        symlink(p("real"), p("ws/hop")).unwrap();
+        // ro/up -> ws/sub/../../real: `ws/sub` replaced by a link moves it.
+        symlink(format!("{root}/ws/sub/../../real"), p("ro/up")).unwrap();
+        let paths = PathPolicy {
+            allow_write: vec![p("ws")],
+            deny_write: vec![p("ro/entry/pirc")],
+            ..PathPolicy::default()
+        };
+        assert_eq!(
+            plan(&paths, &Options::default()).unwrap_err(),
+            Refusal {
+                protected: p("ro/entry/pirc"),
+                link: p("ws/hop"),
+                parent: false,
+            }
+        );
+        let paths = PathPolicy {
+            allow_write: vec![p("ws")],
+            ..PathPolicy::default()
+        };
+        let options = Options {
+            spellings: vec![p("ro/up/pirc")],
+            ..Options::default()
+        };
+        let refusal = plan(&paths, &options).unwrap_err();
+        assert_eq!(
+            refusal,
+            Refusal {
+                protected: p("ro/up/pirc"),
+                link: p("ws/sub"),
+                parent: true,
+            }
+        );
+        assert!(
+            refusal
+                .to_string()
+                .starts_with(&format!("the protected path {} goes through the directory {} (a symbolic link's target leaves it through ..)", p("ro/up/pirc"), p("ws/sub"))),
+            "{refusal}"
+        );
+        // Nothing the agent may write on the way: protected at the target.
+        let paths = PathPolicy {
+            allow_write: vec![p("real/pirc")],
+            deny_write: vec![p("ro/entry/pirc"), p("ro/up/pirc")],
             ..PathPolicy::default()
         };
         assert!(plan(&paths, &Options::default()).is_ok());

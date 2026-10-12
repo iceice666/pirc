@@ -676,6 +676,87 @@ async fn refuses_protected_paths_behind_replaceable_symlinks() {
     assert!(!f.root.join("workspace/.bashrc").exists());
 }
 
+/// The links in the middle of a protected path's chain count too: a link
+/// the agent cannot replace that leads through one it can (or through a
+/// directory it can replace, left by `..`) follows whatever the agent puts
+/// there. So do the links of the denies the policy lists only by their
+/// targets (`~/.ssh` linking out of a writable home).
+#[tokio::test]
+async fn refuses_links_in_the_middle_of_a_protected_chain() {
+    let Some(f) = fixture_with("chain", true) else {
+        return;
+    };
+    let (root, home) = (&f.root, path(&f.root, "home"));
+    fs::create_dir_all(root.join("workspace/project")).unwrap();
+    fs::create_dir_all(root.join("home/sub")).unwrap();
+    fs::write(root.join("workspace/project/AGENTS.md"), "be nice").unwrap();
+    // outside/entry -> ~/hop -> workspace/project
+    std::os::unix::fs::symlink(root.join("home/hop"), root.join("outside/entry")).unwrap();
+    std::os::unix::fs::symlink(root.join("workspace/project"), root.join("home/hop")).unwrap();
+    let refused = async |protected: &str| {
+        let protected = root.join(protected);
+        let Err(error) = f
+            .try_prepare_with("pi_chain", None, vec![protected.clone()])
+            .await
+        else {
+            panic!("started with {}", protected.display());
+        };
+        assert_eq!(error.status, 503);
+        error.message
+    };
+    assert_eq!(
+        refused("outside/entry/AGENTS.md").await,
+        format!(
+            "Agents on this node must run in the sandbox, and it is unavailable: the protected path {} goes through the symbolic link {home}/hop, which the agent could replace (bubblewrap cannot pin a link); replace the link with the file or directory it points to",
+            path(root, "outside/entry/AGENTS.md")
+        )
+    );
+    // outside/up -> ~/sub/../../workspace/project: `~/sub` replaced by a
+    // link moves where `..` leads.
+    std::os::unix::fs::symlink(
+        format!("{home}/sub/../../workspace/project"),
+        root.join("outside/up"),
+    )
+    .unwrap();
+    let message = refused("outside/up/AGENTS.md").await;
+    assert!(
+        message.contains(&format!("goes through the directory {home}/sub ")),
+        "{message}"
+    );
+    // A sensitive path the policy lists by its target.
+    fs::rename(root.join("home/.ssh"), root.join("outside/ssh")).unwrap();
+    std::os::unix::fs::symlink(root.join("outside/ssh"), root.join("home/.ssh")).unwrap();
+    let Err(error) = f.try_prepare("pi_chain").await else {
+        panic!("started with a replaceable ~/.ssh link");
+    };
+    assert!(
+        error.message.contains(&format!(
+            "the protected path {home}/.ssh goes through the symbolic link {home}/.ssh,"
+        )),
+        "{}",
+        error.message
+    );
+    // Not replaceable: the target is protected and the session starts.
+    fs::remove_file(root.join("home/.ssh")).unwrap();
+    fs::rename(root.join("outside/ssh"), root.join("home/.ssh")).unwrap();
+    fs::remove_file(root.join("home/hop")).unwrap();
+    std::os::unix::fs::symlink(root.join("workspace/project"), root.join("outside/hop")).unwrap();
+    fs::remove_file(root.join("outside/entry")).unwrap();
+    std::os::unix::fs::symlink(root.join("outside/hop"), root.join("outside/entry")).unwrap();
+    let protected = vec![root.join("outside/entry/AGENTS.md")];
+    let code = f
+        .sh_protecting(
+            &format!("echo x > {}", path(root, "workspace/project/AGENTS.md")),
+            protected,
+        )
+        .await;
+    assert_ne!(code, 0);
+    assert_eq!(
+        fs::read_to_string(root.join("workspace/project/AGENTS.md")).unwrap(),
+        "be nice"
+    );
+}
+
 /// Protected paths that do not exist yet get placeholders, so the agent
 /// cannot create them, and the placeholders' parents are pinned so they
 /// cannot be renamed away either. Everything bubblewrap made on the host
