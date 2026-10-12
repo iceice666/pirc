@@ -169,9 +169,16 @@ fn refuse_non_utf8<'a>(
     Ok(())
 }
 
-/// The profile for `policy` (as `srtSettings` passes it on macOS).
+/// The profile for `policy` (as `srtSettings` passes it on macOS), with
+/// `settings.cwd` resolved as srt's `process.cwd()` (`getcwd`) is: the
+/// mandatory `**/` denies are anchored there, and Seatbelt matches
+/// resolved paths. `Err` when it cannot be resolved.
 fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<String, String> {
     let paths = &policy.paths;
+    let cwd = std::fs::canonicalize(settings.cwd)
+        .map_err(|error| format!("cannot resolve {}: {error}", settings.cwd))
+        .and_then(|cwd| text(&cwd))?;
+    let cwd = cwd.as_str();
     refuse_non_utf8(
         paths
             .deny_read
@@ -180,13 +187,13 @@ fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<Str
             .chain(&paths.allow_write)
             .chain(&paths.deny_write)
             .chain(&policy.network.allow_unix_sockets),
-        settings.cwd,
+        cwd,
     )?;
     let extra = extra_denies(
         &paths.deny_read,
         &paths.deny_write,
         policy.allow_git_config,
-        settings.cwd,
+        cwd,
         settings.home,
     );
     // The links the policy resolved its denies through stay in place too.
@@ -206,7 +213,7 @@ fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result<Str
         allow_local_binding: policy.network.allow_local_binding,
         proxy_port: settings.proxy_port,
         allow_pty: settings.allow_pty,
-        cwd: settings.cwd,
+        cwd,
         home: settings.home,
         log_tag: settings.log_tag,
         extra_read_denies: &extra.read,
@@ -642,6 +649,36 @@ mod tests {
         };
         let error = policy_profile(&policy, &settings).unwrap_err();
         assert!(error.contains("not UTF-8"), "{error}");
+    }
+
+    /// srt anchored its mandatory denies at `process.cwd()`, the physical
+    /// path: a workspace spelled through a link that leaves its tree
+    /// (which `normalizePathForSandbox` keeps as spelled) is anchored at
+    /// where it is (review finding 6).
+    #[test]
+    fn the_cwd_is_resolved() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap().display().to_string();
+        fs::create_dir_all(format!("{root}/b/ws")).unwrap();
+        std::os::unix::fs::symlink(format!("{root}/b"), format!("{root}/a")).unwrap();
+        let profile = |cwd: &str| {
+            policy_profile(
+                &SessionPolicy::default(),
+                &Settings {
+                    cwd,
+                    home: &root,
+                    proxy_port: None,
+                    allow_pty: false,
+                    log_tag: "t",
+                    readonly: false,
+                },
+            )
+        };
+        let linked = profile(&format!("{root}/a/ws")).unwrap();
+        assert_eq!(linked, profile(&format!("{root}/b/ws")).unwrap());
+        assert!(linked.contains("/b/ws/(.*/)?"), "{linked}");
+        assert!(!linked.contains("/a/ws/"), "{linked}");
+        assert!(profile(&format!("{root}/missing")).is_err());
     }
 
     /// What the backend sets, against the environment srt set in the
