@@ -68,7 +68,7 @@ pub struct Services {
     pub mirror: MemoryMirror,
     // sandbox
     pub sandbox: Arc<dyn Sandbox>,
-    // layout (the M6 stub; M8 replaces it)
+    // manager: the agent browser (`browser::manager::BrowserManager`).
     pub browser: Arc<dyn BrowserService>,
     // core: the link's stop (TS `stopped` and `socket.terminate()`).
     closing: AtomicBool,
@@ -125,6 +125,9 @@ impl Services {
             ));
         }
         let sandbox = crate::sandbox::create(&config, &env);
+        // Launches nothing until an agent or a viewer opens a page.
+        let browser: Arc<dyn BrowserService> =
+            Arc::new(crate::browser::manager::BrowserManager::new(&config, &env));
         let events = EventHub::new(config.event_buffer_size);
         let router = Router::new(
             crate::app::routes(&config)
@@ -150,7 +153,7 @@ impl Services {
             streams: Streams::new(weak.clone()),
             mirror: MemoryMirror::new(weak.clone()),
             sandbox,
-            browser: Arc::new(crate::browser::UnavailableBrowser),
+            browser,
             closing: AtomicBool::new(false),
             terminate,
         });
