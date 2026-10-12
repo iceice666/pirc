@@ -630,15 +630,14 @@ mod tests {
         // Inside `/tmp`, a write root of every session, by design: no
         // warning about exposed state.
         assert!(a.warnings.is_empty(), "{:?}", a.warnings);
-        let text = |path: &Path| path.display().to_string();
+        // The policy holds resolved paths (`/tmp` is `/private/tmp` on
+        // macOS).
+        let resolved = |tmp: &Path| real_resolve(&text(&tmp.join("x")));
         for (own, other) in [(&a, &b), (&b, &a)] {
             let paths = &own.policy.paths;
-            assert!(pirc_policy::read_allowed(paths, &text(&own.tmp.join("x"))));
-            assert!(pirc_policy::write_allowed(paths, &text(&own.tmp.join("x"))));
-            assert!(!pirc_policy::read_allowed(
-                paths,
-                &text(&other.tmp.join("x"))
-            ));
+            assert!(pirc_policy::read_allowed(paths, &resolved(&own.tmp)));
+            assert!(pirc_policy::write_allowed(paths, &resolved(&own.tmp)));
+            assert!(!pirc_policy::read_allowed(paths, &resolved(&other.tmp)));
         }
         // A parent that is gone is made again.
         Session::remove_tmp(&a.tmp);
