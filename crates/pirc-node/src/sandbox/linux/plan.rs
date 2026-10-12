@@ -580,6 +580,8 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
         *placeholders.entry(first).or_insert(directory) |= directory;
     }
     drop(claimed);
+    #[cfg(test)]
+    tests::after_classification();
     effective.deny_write.extend(added);
     effective.deny_write.extend(placeholders.keys().cloned());
     effective.deny_read.extend(hidden);
@@ -591,8 +593,13 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
         .chain(&effective.allow_read)
         .chain(&effective.deny_write)
         .filter(|path| *path != "/" && !kernel_path(path))
+        // Placeholders found in place stay points whatever happens to them
+        // now: a release may remove one once the lock is dropped (above),
+        // and `--ro-bind /dev/null` makes it again.
         .filter(|path| {
             placeholders.contains_key(*path)
+                || stale.contains(path)
+                || covered.contains(path)
                 || std::fs::symlink_metadata(path).is_ok_and(|m| !m.file_type().is_symlink())
         })
         .cloned()
@@ -878,6 +885,19 @@ mod tests {
     use std::os::unix::fs::{PermissionsExt, symlink};
 
     use super::*;
+
+    std::thread_local! {
+        /// Run by [`plan`] on this thread once its classification is done
+        /// and [`CLAIMED`] is dropped (a release racing the plan).
+        static AFTER_CLASSIFICATION: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
+    pub(super) fn after_classification() {
+        if let Some(hook) = AFTER_CLASSIFICATION.with_borrow_mut(Option::take) {
+            hook();
+        }
+    }
 
     fn temp() -> (tempfile::TempDir, String) {
         let dir = tempfile::tempdir().unwrap();
@@ -1187,6 +1207,57 @@ mod tests {
         let plan = super::plan(&paths, &Options::default()).unwrap();
         assert!(plan.mount_points.is_empty());
         assert_eq!(plan.args, expected);
+    }
+
+    /// Another session's release can remove a placeholder found in place
+    /// once the plan has classified it: the plan still covers it (and
+    /// bubblewrap makes it again), it does not drop the mount.
+    #[test]
+    fn a_stale_placeholder_removed_during_the_plan_is_still_covered() {
+        let (_dir, root) = temp();
+        let p = |rest: &str| format!("{root}/{rest}");
+        fs::create_dir_all(p("ws")).unwrap();
+        for file in [".bashrc", ".zshrc"] {
+            fs::write(p(&format!("ws/{file}")), "").unwrap();
+            fs::set_permissions(p(&format!("ws/{file}")), fs::Permissions::from_mode(0o444))
+                .unwrap();
+        }
+        let record = PathBuf::from(p("record"));
+        fs::write(&record, format!("{}\n", p("ws/.bashrc"))).unwrap();
+        let paths = PathPolicy {
+            allow_write: vec![p("ws")],
+            deny_write: vec![p("ws/.bashrc"), p("ws/.zshrc")],
+            ..PathPolicy::default()
+        };
+        let options = Options {
+            record: Some(record),
+            ..Options::default()
+        };
+        let (bashrc, zshrc) = (p("ws/.bashrc"), p("ws/.zshrc"));
+        AFTER_CLASSIFICATION.set(Some(Box::new(move || {
+            fs::remove_file(bashrc).unwrap();
+            fs::remove_file(zshrc).unwrap();
+        })));
+        let plan = plan(&paths, &options).unwrap();
+        assert!(!Path::new(&p("ws/.bashrc")).exists(), "the hook ran");
+        assert_eq!(
+            plan.args,
+            strings(&[
+                "--ro-bind",
+                "/",
+                "/",
+                "--bind",
+                &p("ws"),
+                &p("ws"),
+                "--ro-bind",
+                "/dev/null",
+                &p("ws/.bashrc"),
+                "--ro-bind",
+                "/dev/null",
+                &p("ws/.zshrc"),
+            ])
+        );
+        assert_eq!(plan.mount_points, [PathBuf::from(p("ws/.bashrc"))]);
     }
 
     #[test]
