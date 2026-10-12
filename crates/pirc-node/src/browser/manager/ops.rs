@@ -7,7 +7,9 @@ use std::time::Duration;
 use pirc_agent::tools::js::truthy;
 use serde_json::{Map, Value, json};
 
-use super::seam::{PageRef, Selector};
+use futures_util::StreamExt as _;
+
+use super::seam::{PageEvent, PageRef, Selector};
 use super::view::base64;
 use super::{
     ActiveRecording, Inner, LastFrame, Mode, OpError, OpResult, Signal, Tab, closing_error,
@@ -508,6 +510,26 @@ impl Inner {
         {
             Ok(status) => status,
             Err(error) if error.message.contains("ERR_BLOCKED_BY_CLIENT") => {
+                // Refused at a redirect hop (see `engine::network`): TS's
+                // Playwright followed the hop, and `assertAllowed` then left
+                // the page and named the URL it landed on.
+                if let Some((hop, reason)) = self.hosts().refused_hop(&page.main_frame_id()) {
+                    // Chromium's error page commits after the failure; leave
+                    // it, not the navigation still committing.
+                    let mut events = page.subscribe();
+                    if !page.url().starts_with("chrome-error:") {
+                        let committed = async {
+                            while let Some(event) = events.next().await {
+                                if matches!(event, PageEvent::MainFrameNavigated) {
+                                    break;
+                                }
+                            }
+                        };
+                        let _ = tokio::time::timeout(ms(2_000), committed).await;
+                    }
+                    let _ = page.goto("about:blank", LoadState::Load, ms(10_000)).await;
+                    return Err(blocked_error(&hop, &reason).into());
+                }
                 return Err(
                     blocked_error(url, "it (or a page it loads) is on a blocked host").into(),
                 );
@@ -521,12 +543,29 @@ impl Inner {
         Ok(status)
     }
 
-    /// `assertAllowed(page)`: when any frame is on a blocked host (after a
-    /// redirect, say), leave the page and refuse: the agent never reads it.
+    /// `assertAllowed(page)`: when any frame is on a blocked host, leave the
+    /// page and refuse: the agent never reads it.
+    ///
+    /// The request interception refuses a navigation's redirect hop to a
+    /// blocked host (see `engine::network`), so such a frame shows
+    /// Chromium's error page instead; TS's Playwright followed the hop and
+    /// this check named the URL the frame landed on. A frame on the error
+    /// page whose latest navigation was refused at a hop is refused here
+    /// with that hop's URL, which is the same text when the blocked host
+    /// would have answered. Where TS's text depended on what the blocked
+    /// host did with the forwarded request, it is stricter here: an
+    /// unreachable blocked host (TS: Playwright's `net::ERR_…` error, or no
+    /// error), a chain that leaves the blocked host again (TS: no error),
+    /// several blocked hops (TS named the last, this the first).
     async fn assert_allowed(self: &Arc<Self>, page: &PageRef) -> OpResult<()> {
         for frame in page.frames() {
             let url = frame.url();
-            if let Some(reason) = self.hosts().blocked_reason(&url).await {
+            let refused = match self.hosts().blocked_reason(&url).await {
+                Some(reason) => Some((url, reason)),
+                None if url.starts_with("chrome-error:") => self.hosts().refused_hop(&frame.id()),
+                None => None,
+            };
+            if let Some((url, reason)) = refused {
                 let _ = page.goto("about:blank", LoadState::Load, ms(10_000)).await;
                 return Err(blocked_error(&url, &reason).into());
             }

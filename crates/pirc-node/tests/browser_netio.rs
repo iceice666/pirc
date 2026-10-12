@@ -15,14 +15,18 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use pirc_node::browser::BoxFuture;
+use pirc_node::browser::engine::LoadState;
 use pirc_node::browser::engine::cdp::{Connection, Session};
+use pirc_node::browser::engine::context::{Context, LaunchOptions};
 use pirc_node::browser::engine::launch;
 use pirc_node::browser::engine::network::{self, TargetKind};
 use pirc_node::browser::engine::screencast::{
     self, ScreencastFrame, ScreencastOptions, ScreencastState,
 };
 use pirc_node::browser::engine::screenshot::{self, ScreenshotOptions};
-use pirc_node::browser::hosts::HostGuard;
+use pirc_node::browser::hosts::{HostGuard, blocked_error};
+use pirc_node::browser::manager::BrowserManager;
+use pirc_node::browser::{BrowserService, BrowserTarget};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -303,7 +307,15 @@ async fn guards_requests_websockets_and_service_workers() {
                 302,
                 vec![(
                     "location".into(),
-                    format!("http://127.0.0.2:{private_port}/hopdoc"),
+                    format!("http://127.0.0.2:{private_port}/hopdoc#part"),
+                )],
+                String::new(),
+            ),
+            "/redirect-post" => (
+                307,
+                vec![(
+                    "location".into(),
+                    format!("http://127.0.0.2:{private_port}/post-hop"),
                 )],
                 String::new(),
             ),
@@ -326,7 +338,8 @@ async fn guards_requests_websockets_and_service_workers() {
     .unwrap();
     let page = browser.page().await;
     let mut network_events = page.listen();
-    let _installed = network::install(&page, TargetKind::Page, guard())
+    let guard = guard();
+    let _installed = network::install(&page, TargetKind::Page, guard.clone())
         .await
         .unwrap();
     let base = format!("http://127.0.0.1:{}", public.port);
@@ -390,30 +403,52 @@ async fn guards_requests_websockets_and_service_workers() {
         "{hits:?}"
     );
 
-    // Redirect hops: a subresource's are checked (tighter than TS), a
-    // document's are not (TS parity: the manager's `assertAllowed` reports
-    // the final frame URL).
+    // Redirect hops are checked, a document's too (both tighter than TS);
+    // a document's refused hop is remembered for the manager's error text.
+    let fetched = eval(
+        &page,
+        &format!("fetch('{base}/redirect').then(() => 'ok', () => 'error')"),
+    )
+    .await;
+    assert_eq!(fetched, "error");
+    eval(
+        &page,
+        &format!(
+            "new Promise(resolve => {{ const f = document.createElement('iframe'); f.onload = () => resolve(0); f.src = '{base}/redirect-doc'; document.body.append(f); }})"
+        ),
+    )
+    .await;
+    let tree = page.call("Page.getFrameTree", json!({})).await.unwrap();
+    let frame = &tree["frameTree"]["childFrames"][0]["frame"];
+    assert_eq!(frame["url"], "chrome-error://chromewebdata/", "{tree}");
+    assert_eq!(
+        guard.refused_hop(frame["id"].as_str().unwrap()),
+        Some((
+            format!("http://127.0.0.2:{private_port}/hopdoc#part"),
+            "127.0.0.2 is a loopback address".to_owned()
+        ))
+    );
+    // A form POST through a public 307 (which keeps the method and body).
+    eval(
+        &page,
+        &format!(
+            "new Promise(resolve => {{ const f = document.createElement('iframe'); f.name = 'post'; document.body.append(f); f.onload = () => resolve(0); const form = document.createElement('form'); form.method = 'POST'; form.action = '{base}/redirect-post'; form.target = 'post'; const input = document.createElement('input'); input.name = 'a'; input.value = 'secret'; form.append(input); document.body.append(form); form.submit(); }})"
+        ),
+    )
+    .await;
+    assert!(
+        public
+            .hits()
+            .iter()
+            .any(|hit| hit.starts_with("POST /redirect-post ")),
+        "{:?}",
+        public.hits()
+    );
     if let Some(private) = &private {
-        let fetched = eval(
-            &page,
-            &format!("fetch('{base}/redirect').then(() => 'ok', () => 'error')"),
-        )
-        .await;
-        assert_eq!(fetched, "error");
-        eval(
-            &page,
-            &format!(
-                "new Promise(resolve => {{ const f = document.createElement('iframe'); f.onload = () => resolve(0); f.src = '{base}/redirect-doc'; document.body.append(f); }})"
-            ),
-        )
-        .await;
         let hits = private.hits();
         assert!(
-            hits.iter().any(|hit| hit.starts_with("GET /hopdoc ")),
-            "{hits:?}"
-        );
-        assert!(
-            !hits.iter().any(|hit| hit.starts_with("GET /hop ")
+            !hits.iter().any(|hit| hit.contains("/hop")
+                || hit.contains("/post-hop")
                 || hit.contains("/fetch")
                 || hit.contains("/worker")),
             "{hits:?}"
@@ -527,6 +562,175 @@ async fn guards_a_service_worker_that_registers_anyway() {
         assert!(private.hits().is_empty(), "{:?}", private.hits());
     }
     watcher.abort();
+}
+
+/// A guarded context as the manager launches it ([`Context::launch`]).
+async fn guarded_context() -> Option<(Arc<Context>, tempfile::TempDir)> {
+    let Some(executable) = chromium() else {
+        eprintln!("skipped: no Chromium found");
+        return None;
+    };
+    let profile = tempfile::tempdir().unwrap();
+    let env: BTreeMap<String, String> = std::env::vars()
+        .filter(|(name, _)| {
+            matches!(
+                name.as_str(),
+                "PATH" | "HOME" | "TMPDIR" | "LANG" | "FONTCONFIG_FILE" | "XDG_RUNTIME_DIR"
+            )
+        })
+        .collect();
+    let context = Context::launch(
+        &executable,
+        profile.path(),
+        LaunchOptions {
+            viewport: (1280, 800),
+            env,
+        },
+        guard(),
+    )
+    .await
+    .expect("launch");
+    Some((context, profile))
+}
+
+/// A shared worker's requests pause on no target session (not even its
+/// own): the context's browser-session backstop checks them.
+#[tokio::test(flavor = "multi_thread")]
+async fn guards_shared_workers_through_the_browser_session() {
+    let private = serve("127.0.0.2:0", Arc::new(|_| html("private"))).await;
+    let private_port = private.as_ref().map_or(9, |server| server.port);
+    let public = serve(
+        "127.0.0.1:0",
+        Arc::new(move |path| match path {
+            "/shared.js" => (
+                200,
+                vec![("content-type".into(), "text/javascript".into())],
+                format!(
+                    "onconnect = async e => {{ const r = []; for (const url of ['http://127.0.0.2:{private_port}/shared-fetch', '/allowed']) {{ try {{ await fetch(url, {{ mode: 'no-cors', method: 'POST', body: 'x' }}); r.push('ok'); }} catch (x) {{ r.push('blocked'); }} }} e.ports[0].postMessage(r.join(' ')); }};"
+                ),
+            ),
+            _ => html("<title>public</title>"),
+        }),
+    )
+    .await
+    .unwrap();
+    let Some((context, _profile)) = guarded_context().await else {
+        return;
+    };
+    let page = context.new_page().await.unwrap();
+    page.goto(
+        &format!("http://127.0.0.1:{}/", public.port),
+        LoadState::Load,
+        Duration::from_secs(10),
+    )
+    .await
+    .unwrap();
+    let answer = page
+        .evaluate(
+            "() => new Promise(resolve => { const w = new SharedWorker('/shared.js'); w.port.onmessage = e => resolve(e.data); })",
+            Value::Null,
+        )
+        .await
+        .unwrap();
+    assert_eq!(answer, "blocked ok");
+    assert!(
+        public
+            .hits()
+            .iter()
+            .any(|hit| hit.starts_with("POST /allowed ")),
+        "{:?}",
+        public.hits()
+    );
+    if let Some(private) = private {
+        assert!(private.hits().is_empty(), "{:?}", private.hits());
+    }
+    context.close().await;
+}
+
+/// A navigation refused at a redirect hop fails with the error TS gave
+/// once Playwright had followed the hop (`assertAllowed` naming the URL
+/// the frame landed on, then `about:blank`), through `goto` and through
+/// a frame, and nothing reaches the blocked host.
+#[tokio::test(flavor = "multi_thread")]
+async fn names_a_refused_redirect_hop_as_ts() {
+    let Some(executable) = chromium() else {
+        eprintln!("skipped: no Chromium found");
+        return;
+    };
+    let private = serve("127.0.0.2:0", Arc::new(|_| html("private"))).await;
+    let private_port = private.as_ref().map_or(9, |server| server.port);
+    let hop = format!("http://127.0.0.2:{private_port}/landed?x=1#part");
+    let location = hop.clone();
+    let public = serve(
+        "127.0.0.1:0",
+        Arc::new(move |path| match path {
+            "/redirect" => (
+                302,
+                vec![("location".into(), location.clone())],
+                String::new(),
+            ),
+            "/framed" => html("<title>Framed</title><iframe src=\"/redirect\"></iframe>"),
+            _ => html("<title>public</title>"),
+        }),
+    )
+    .await
+    .unwrap();
+    let root = tempfile::tempdir().unwrap();
+    for dir in ["state", "config", "home", "work"] {
+        std::fs::create_dir_all(root.path().join(dir)).unwrap();
+    }
+    let path = |name: &str| root.path().join(name).display().to_string();
+    let (state, config, home) = (path("state"), path("config"), path("home"));
+    let executable = executable.display().to_string();
+    let inherited = std::env::var("PATH").unwrap_or_default();
+    let env = pirc_config::Env::new(
+        [
+            ("PATH", inherited.as_str()),
+            ("PIRC_NODE_ID", "test-node"),
+            ("PIRC_NODE_TOKEN", "0123456789abcdef0123456789abcdef"),
+            ("PIRC_DAEMON_URL", "ws://127.0.0.1:8787"),
+            ("PIRC_ALLOWED_USERS", "test-user"),
+            ("PIRC_STATE_DIR", state.as_str()),
+            ("PIRC_CONFIG_DIR", config.as_str()),
+            ("HOME", home.as_str()),
+            ("PIRC_BROWSER_EXECUTABLE", executable.as_str()),
+            ("PIRC_BROWSER_ALLOW_PRIVATE", "127.0.0.1"),
+        ],
+        root.path(),
+    );
+    let config = pirc_config::NodeConfig::load(&env, pirc_protocol::NodeRole::Node).unwrap();
+    let manager = BrowserManager::new(&config, &env);
+    let target = BrowserTarget {
+        session_id: "s1".into(),
+        workspace_id: "w1".into(),
+        root: root.path().join("work"),
+    };
+    let expected = blocked_error(&hop, "127.0.0.2 is a loopback address");
+    let base = format!("http://127.0.0.1:{}", public.port);
+    for page in ["/redirect", "/framed"] {
+        let error = manager
+            .handle(
+                target.clone(),
+                "navigate".into(),
+                json!({ "url": format!("{base}{page}") }),
+            )
+            .await
+            .expect_err(page);
+        assert_eq!(
+            (error.status, &*error.code, &error.message),
+            (expected.status, &*expected.code, &expected.message),
+            "{page}"
+        );
+        let status = manager
+            .handle(target.clone(), "status".into(), json!({}))
+            .await
+            .unwrap();
+        assert_eq!(status["url"], "about:blank", "{page}");
+    }
+    if let Some(private) = private {
+        assert!(private.hits().is_empty(), "{:?}", private.hits());
+    }
+    manager.shutdown().await;
 }
 
 // ---- input ------------------------------------------------------------------

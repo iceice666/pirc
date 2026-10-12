@@ -165,6 +165,11 @@ pub trait PageApi: Send + Sync {
     fn bring_to_front(&self) -> BoxFuture<'_, Result<()>>;
     fn close(&self) -> BoxFuture<'_, Result<()>>;
     fn is_closed(&self) -> bool;
+    /// The main frame's CDP frame id, for the host guard's refused redirect
+    /// hops (`HostGuard::refused_hop`); "" (none) by default.
+    fn main_frame_id(&self) -> String {
+        String::new()
+    }
 }
 
 /// `Frame` as the manager uses it.
@@ -172,6 +177,10 @@ pub trait FrameApi: Send + Sync {
     fn url(&self) -> String;
     /// `frame.evaluate(fn)`: called without an argument.
     fn evaluate<'a>(&'a self, function: &'a str) -> BoxFuture<'a, Result<Value>>;
+    /// The CDP frame id, as [`PageApi::main_frame_id`]; "" by default.
+    fn id(&self) -> String {
+        String::new()
+    }
 }
 
 /// `Locator` as the manager uses it.
@@ -368,6 +377,10 @@ impl PageApi for Page {
     fn is_closed(&self) -> bool {
         Page::is_closed(self)
     }
+
+    fn main_frame_id(&self) -> String {
+        self.main_frame().id().to_owned()
+    }
 }
 
 impl FrameApi for Frame {
@@ -379,6 +392,10 @@ impl FrameApi for Frame {
         Box::pin(
             async move { Frame::evaluate(self, &without_argument(function), Value::Null).await },
         )
+    }
+
+    fn id(&self) -> String {
+        Frame::id(self).to_owned()
     }
 }
 

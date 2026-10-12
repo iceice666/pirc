@@ -1,5 +1,6 @@
-//! The host guard on every request and WebSocket of the context, as
-//! `node/browser.ts` set it up with Playwright: `context.route('**/*')`
+//! The host guard on every request and WebSocket of the context (but for
+//! the accepted gaps listed at the end), as `node/browser.ts` set it up
+//! with Playwright: `context.route('**/*')`
 //! (the `Fetch` domain: a blocked request fails with `BlockedByClient`, the
 //! rest continue; `Network.setCacheDisabled` as Playwright does while
 //! routing), `context.routeWebSocket` (Playwright's main-world WebSocket
@@ -26,11 +27,14 @@
 //! - dedicated workers: `Network.setCacheDisabled {true}` only (Playwright
 //!   skips `Fetch` on worker sessions: their requests pause on the page's).
 //! - service workers (and shared workers): see the deviations.
+//! - the browser session ([`TargetKind::Browser`], a pirc backstop, see
+//!   the deviations): `Fetch.enable {patterns: [{urlPattern: '*',
+//!   requestStage: 'Request'}]}` only, installed by the context before
+//!   `Target.setAutoAttach`.
 //!
 //! `Fetch.requestPaused`: an intercepted CORS preflight is fulfilled with
-//! Playwright's 204; a redirect hop of a document continues unchecked, as
-//! Playwright does not route redirects (the manager's `assertAllowed`
-//! covers the final URLs); every other request is checked:
+//! Playwright's 204; every other request, redirect hops included (see the
+//! deviations), is checked:
 //! `Fetch.failRequest {errorReason: 'BlockedByClient'}` or
 //! `Fetch.continueRequest {requestId}`. `Fetch.authRequired` answers
 //! `Default` (Playwright without credentials).
@@ -40,22 +44,36 @@
 //! stage). Playwright continues it unrouted, either because its
 //! `Network.requestWillBeSent` carries the `redirectResponse` or because
 //! the request was already continued (it replays that `continue`). Here a
-//! pause whose `networkId` this session already continued is a hop.
+//! pause whose `networkId` this session already continued is a hop; hops
+//! are told apart only to remember a document's refused hop (below).
 //!
 //! Deviations (each blocks more than Playwright, never less):
 //!
-//! - Redirect hops of everything but documents (subresources, `fetch`/XHR,
-//!   workers' requests: `resourceType` other than `Document`) are checked
-//!   like any request. With Playwright (and so TS) they are not, so a page
-//!   could reach a blocked host through a public redirect, unseen by
-//!   `assertAllowed`, which looks only at frame URLs. A document's hops
-//!   (main frame and iframes) stay unchecked, so a navigation redirected to
-//!   a blocked host fails as in TS: `assertAllowed` reports
-//!   `blockedError(<final frame URL>, reason)`.
+//! - Redirect hops are checked like any request. With Playwright (and so
+//!   TS) they are not: a subresource's hop reached a blocked host unseen
+//!   by `assertAllowed`, which looks only at frame URLs, and a document's
+//!   hop (main frame, iframe or popup; a 307/308 keeps a form POST's method
+//!   and body) was sent before `assertAllowed` refused the frame that
+//!   landed there. A document's refused hop fails its navigation with
+//!   `BlockedByClient` (the frame shows Chromium's error page); its URL
+//!   (with the fragment) and reason are remembered by frame id
+//!   ([`HostGuard::note_refused_hop`], forgotten at the frame's next
+//!   navigation), and the manager names them as TS's `assertAllowed` named
+//!   the URL the frame landed on (`goto`'s `ERR_BLOCKED_BY_CLIENT`, a frame
+//!   on the error page), then leaves the page for `about:blank` as TS did.
+//!   The text is TS's whenever the blocked host would have answered; it is
+//!   stricter where TS's depended on what the blocked host did with the
+//!   request: an unreachable blocked host (TS: Playwright's `net::ERR_…`
+//!   goto error), a chain that leaves the blocked host again (TS: no
+//!   error), several blocked hops (TS named the last, this the first), and
+//!   the history (the error page's entry where TS had the blocked page's).
+//!   As no frame can then commit a blocked host's document (DNS rebinding
+//!   aside, see [`crate::browser::hosts`]), the manager reads a page after
+//!   `assertAllowed` without a second check, as TS did.
 //! - Playwright continues a paused request without a `networkId`, and one
 //!   whose frame it does not know, without routing it: such a request's URL
 //!   would reach the network unchecked. Here every paused request that is
-//!   not a document's redirect hop or a preflight is checked. A dedicated
+//!   not a preflight is checked. A dedicated
 //!   worker's `fetch` pauses without a `networkId` (seen with Chromium 153
 //!   when the worker's session has not enabled `Network`).
 //! - With `serviceWorkers: 'block'` Playwright gives a service worker no
@@ -63,9 +81,22 @@
 //!   only replaces `navigator.serviceWorker.register` on the instance;
 //!   `ServiceWorkerContainer.prototype.register` still works) fetches
 //!   unchecked. Here service workers get the same `Fetch` guard as pages.
-//!   Likewise shared workers, whose requests the page's `Fetch` does not
-//!   see (Playwright detaches them, so they run unguarded): the context
-//!   installs them as [`TargetKind::ServiceWorker`].
+//! - A backstop on the browser session: `Fetch` enabled there pauses every
+//!   target's requests, after the target session's own `Fetch` (if any)
+//!   continued them, and the same handler checks them. It is what guards
+//!   shared workers (Playwright detaches them, so they run unguarded):
+//!   Chromium 153 pauses a shared worker's requests on neither the page's
+//!   session nor the worker's own (the context still installs
+//!   [`TargetKind::ServiceWorker`] there), only on the browser session's.
+//!   It equally sees the targets the context resumes and detaches without
+//!   a guard of their own (prerender pages, worklets, future types, which
+//!   Playwright leaves unguarded; not exercised: with the cache disabled
+//!   Chromium 153 made no preload request at all). A request a
+//!   target session refused never reaches the backstop; one it continued
+//!   pauses once more and is checked again (the verdict is cached by
+//!   [`HostGuard`], so this costs one CDP round trip per request; no
+//!   measurable change on the corpus run). Authentication challenges are
+//!   left to the target sessions (`handleAuthRequests` unset here).
 //! - The bindings controller is pirc's own few lines rather than
 //!   Playwright's `BindingsController` (not among the extracted assets): it
 //!   defines the same globals and wire envelope (`{name, seq,
@@ -84,18 +115,46 @@
 //!   the same socket. A page `close()` before the verdict is relayed as
 //!   Playwright's client does (`closeServer`, then `closePage`).
 //!
-//! Known gaps kept from Playwright's WebSocket mock (an untrusted page can
-//! open a socket to a blocked host; verified with Chromium 153):
+//! Accepted gaps (decided with the user on 2026-10-12): each is equal to
+//! TS, whose Playwright guard has the same holes, and through each an
+//! untrusted page reaches a blocked host (verified with Chromium 153
+//! unless noted):
 //!
-//! - `ws.url` is a writable property, and the mock connects to it after the
-//!   verdict on the URL it reported at construction: set right after `new
-//!   WebSocket(<allowed URL>)`, the socket connects to the new URL.
-//! - `__pwWebSocketDispatch` is a page-visible global: called with a
-//!   pending socket's `_id` (also page-visible) and `type: 'passthrough'`,
-//!   it connects that socket whatever the verdict.
-//! - WebSockets of dedicated and shared workers are not guarded at all (the
-//!   mock is a main-world init script; `Fetch` does not see WebSocket
-//!   handshakes).
+//! - WebSockets. `Fetch` never sees a handshake, and no CDP command blocks
+//!   one (`Network.setBlockedURLs` on page and worker sessions let the
+//!   sockets connect); `Network.webSocketCreated` only reports one after
+//!   the fact. The only guard is Playwright's main-world mock, in the realm
+//!   the page's own scripts share:
+//!   - `ws.url` is a writable property, and the mock connects to it after
+//!     the verdict on the URL it reported at construction: set right after
+//!     `new WebSocket(<allowed URL>)`, the socket connects to the new URL.
+//!   - `__pwWebSocketDispatch` is a page-visible global: called with a
+//!     pending socket's `_id` (also page-visible) and `type:
+//!     'passthrough'`, it connects that socket whatever the verdict.
+//!   - An allowed socket in passthrough keeps the native socket in its
+//!     page-visible `_ws`: `new (ws._ws.constructor)(<blocked URL>)`
+//!     connects with the native `WebSocket`, unchecked.
+//!   - Workers have no mock: dedicated workers (nested ones too), shared
+//!     workers and service workers (registered through
+//!     `ServiceWorkerContainer.prototype.register`) open sockets to any
+//!     host and port.
+//!
+//!   A handshake is an HTTP GET with a path and `Origin` the page chooses,
+//!   and WebSockets have no CORS: a local WebSocket server that does not
+//!   check `Origin` (dev servers' hot reload, local agents, debuggers)
+//!   gives the page full read and write.
+//! - Connections that are no request `Fetch` pauses:
+//!   - `<link rel=preconnect>` and Chromium's own preconnect for a
+//!     navigation open TCP connections to a blocked host (no bytes are
+//!     sent; the request that would follow is refused);
+//!   - WebRTC: STUN and TURN (UDP, and TURN/TCP allocations) reach blocked
+//!     hosts, which is how browser LAN scans work (`icecandidateerror`);
+//!   - WebTransport (HTTP/3 over QUIC) is not intercepted either (not
+//!     tested).
+//!
+//! Closing them takes egress enforced outside the page (for example a
+//! node-local proxy that applies [`HostGuard`] to every connection
+//! Chromium makes), which is not done.
 //!
 //! Owner: netio.
 
@@ -121,8 +180,13 @@ pub enum TargetKind {
     Worker,
     /// A worker with its own network: service workers, and shared workers
     /// (which Playwright detaches, letting them run unguarded: the context
-    /// should install this instead; see the module documentation).
+    /// installs this on them, though only [`TargetKind::Browser`] sees
+    /// their requests; see the module documentation).
     ServiceWorker,
+    /// The browser session: the backstop (`Fetch` only, no bindings or
+    /// scripts) that sees every target's requests, see the module
+    /// documentation.
+    Browser,
 }
 
 /// The guard's state for one target session; dropping it stops handling
@@ -154,6 +218,13 @@ fn fetch_enable() -> Value {
         "handleAuthRequests": true,
         "patterns": [{ "urlPattern": "*", "requestStage": "Request" }],
     })
+}
+
+/// `Fetch.enable` of the browser-session backstop: authentication
+/// challenges are left to the target sessions (unanswered here, Chromium's
+/// default applies, which is what `Default` asks for).
+fn fetch_enable_backstop() -> Value {
+    json!({ "patterns": [{ "urlPattern": "*", "requestStage": "Request" }] })
 }
 
 /// Playwright's `InitScript` wrapper.
@@ -252,6 +323,12 @@ pub async fn install_split(
     let events = session.listen();
     let task = tokio::spawn(handle_events(session.clone(), events, guard));
     let installed = Installed { task: Some(task) };
+    if kind == TargetKind::Browser {
+        session
+            .call("Fetch.enable", fetch_enable_backstop())
+            .await?;
+        return Ok((installed, done()));
+    }
     let (fetched_tx, fetched) = tokio::sync::oneshot::channel();
     let session = session.clone();
     // Its first poll sends every command.
@@ -375,19 +452,17 @@ async fn handle_events(
 /// What to do with a paused request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Verdict {
-    /// `Fetch.continueRequest` unchecked (a document's redirect hop).
-    Continue,
     /// Playwright's answer to an intercepted CORS preflight.
     FulfillPreflight(Vec<Value>),
     /// Ask the guard about this URL.
     Check(String),
 }
 
-/// How `_onRequestPaused`/`_onRequest` treat a `Fetch.requestPaused`;
-/// `hop`: its `networkId` was already continued (see the module
-/// documentation): a document's hop continues unchecked, any other is
+/// How a `Fetch.requestPaused` is treated: a CORS preflight is answered as
+/// Playwright's `_onRequestPaused`/`_onRequest` answer it, every other
+/// request (redirect hops included, see the module documentation) is
 /// checked.
-pub fn classify(paused: &Value, hop: bool) -> Verdict {
+pub fn classify(paused: &Value) -> Verdict {
     let request = &paused["request"];
     let headers = &request["headers"];
     let preflight = request["method"] == "OPTIONS"
@@ -409,9 +484,6 @@ pub fn classify(paused: &Value, hop: bool) -> Verdict {
         }
         return Verdict::FulfillPreflight(response);
     }
-    if hop && paused["resourceType"] == "Document" {
-        return Verdict::Continue;
-    }
     Verdict::Check(request["url"].as_str().unwrap_or_default().to_owned())
 }
 
@@ -424,14 +496,24 @@ async fn on_request_paused(
     let request_id = paused["requestId"].clone();
     let network_id = paused["networkId"].as_str();
     let hop = network_id.is_some_and(|id| continued.contains(id));
+    // A frame's navigation (not one of its hops) forgets the hop refused in
+    // its previous one, before anything continues: its own hops pause
+    // only after that.
+    let frame = (paused["resourceType"] == "Document")
+        .then(|| paused["frameId"].as_str())
+        .flatten();
+    if let Some(frame) = frame
+        && !hop
+    {
+        guard.forget_refused_hop(frame);
+    }
     let proceed = || {
         if let Some(id) = network_id {
             continued.insert(id);
         }
         ("Fetch.continueRequest", json!({ "requestId": request_id }))
     };
-    let (method, params) = match classify(&paused, hop) {
-        Verdict::Continue => proceed(),
+    let (method, params) = match classify(&paused) {
         Verdict::FulfillPreflight(headers) => (
             "Fetch.fulfillRequest",
             json!({
@@ -443,10 +525,19 @@ async fn on_request_paused(
             }),
         ),
         Verdict::Check(url) => match guard.blocked_reason(&url).await {
-            Some(_) => (
-                "Fetch.failRequest",
-                json!({ "requestId": request_id, "errorReason": "BlockedByClient" }),
-            ),
+            Some(reason) => {
+                if let Some(frame) = frame
+                    && hop
+                {
+                    let fragment = paused["request"]["urlFragment"].as_str();
+                    let url = url + fragment.unwrap_or_default();
+                    guard.note_refused_hop(frame, url, reason);
+                }
+                (
+                    "Fetch.failRequest",
+                    json!({ "requestId": request_id, "errorReason": "BlockedByClient" }),
+                )
+            }
             None => proceed(),
         },
     };
@@ -541,26 +632,16 @@ mod tests {
     fn classifies_paused_requests() {
         assert_eq!(
             classify(
-                &json!({ "requestId": "1", "request": { "url": "http://a/", "method": "GET" } }),
-                false
+                &json!({ "requestId": "1", "request": { "url": "http://a/", "method": "GET" } })
             ),
             Verdict::Check("http://a/".into())
         );
-        assert_eq!(
-            classify(
-                &json!({ "requestId": "1", "networkId": "9", "resourceType": "Document",
-                "request": { "url": "http://10.0.0.1/", "method": "GET" } }),
-                true
-            ),
-            Verdict::Continue
-        );
-        // Other hops are checked (tighter than TS).
-        for kind in ["XHR", "Fetch", "Image", "Script", "Other"] {
+        // Redirect hops are checked, documents' too (tighter than TS).
+        for kind in ["Document", "XHR", "Fetch", "Image", "Script", "Other"] {
             assert_eq!(
                 classify(
                     &json!({ "requestId": "1", "networkId": "9", "resourceType": kind,
-                    "request": { "url": "http://10.0.0.1/", "method": "GET" } }),
-                    true
+                    "request": { "url": "http://10.0.0.1/", "method": "GET" } })
                 ),
                 Verdict::Check("http://10.0.0.1/".into())
             );
@@ -570,26 +651,21 @@ mod tests {
         assert_eq!(
             classify(
                 &json!({ "requestId": "1", "request": { "url": "http://c/", "method": "OPTIONS",
-                "headers": { "Origin": "http://a" } } }),
-                false
+                "headers": { "Origin": "http://a" } } })
             ),
             Verdict::Check("http://c/".into())
         );
         assert_eq!(
             classify(
-                &json!({ "requestId": "1", "request": { "url": "http://b/", "method": "POST" } }),
-                false
+                &json!({ "requestId": "1", "request": { "url": "http://b/", "method": "POST" } })
             ),
             Verdict::Check("http://b/".into())
         );
         assert_eq!(
-            classify(
-                &json!({ "requestId": "1", "resourceType": "XHR",
+            classify(&json!({ "requestId": "1", "resourceType": "XHR",
                 "request": { "url": "http://b/", "method": "OPTIONS", "headers": {
                     "Origin": "http://a", "Access-Control-Request-Method": "PUT",
-                    "Access-Control-Request-Headers": "x-a" } } }),
-                false
-            ),
+                    "Access-Control-Request-Headers": "x-a" } } })),
             Verdict::FulfillPreflight(vec![
                 json!({ "name": "Access-Control-Allow-Origin", "value": "http://a" }),
                 json!({ "name": "Access-Control-Allow-Methods", "value": "PUT" }),
@@ -598,12 +674,9 @@ mod tests {
             ])
         );
         assert_eq!(
-            classify(
-                &json!({ "requestId": "1", "resourceType": "XHR",
+            classify(&json!({ "requestId": "1", "resourceType": "XHR",
                 "request": { "url": "http://b/", "method": "OPTIONS", "headers": {
-                    "Origin": "", "Access-Control-Request-Method": "" } } }),
-                false
-            ),
+                    "Origin": "", "Access-Control-Request-Method": "" } } })),
             Verdict::FulfillPreflight(vec![
                 json!({ "name": "Access-Control-Allow-Origin", "value": "*" }),
                 json!({ "name": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS, DELETE" }),

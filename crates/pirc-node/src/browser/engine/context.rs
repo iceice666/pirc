@@ -87,6 +87,8 @@ struct State {
     /// Every page target, in the order it attached (initialized or not).
     pages: Vec<Arc<Page>>,
     service_workers: HashMap<String, Option<Installed>>,
+    /// The host guard's browser-session backstop ([`TargetKind::Browser`]).
+    backstop: Option<Installed>,
     /// The attachments of the targets that existed at launch are known.
     attached: bool,
     closed: bool,
@@ -204,6 +206,15 @@ impl Context {
             .as_str()
             .is_some_and(|agent| agent.contains("Macintosh"));
         let _ = shared.mac.set(mac);
+        // The host guard's backstop on the browser session, before any
+        // target is attached (a pirc deviation: it sees the requests the
+        // target sessions do not, such as shared workers'; see
+        // `network`'s module documentation).
+        let (backstop, replies) = (shared.installer)(browser.clone(), TargetKind::Browser)
+            .await
+            .map_err(|error| error.message)?;
+        replies.await.map_err(|error| error.message)?;
+        shared.state.lock().unwrap().backstop = backstop;
         let attach = async {
             browser
                 .call(
@@ -475,8 +486,9 @@ fn attached(shared: &Arc<Shared>, params: &Value) {
             });
         }
         // Playwright detaches shared workers, which lets them run with no
-        // request interception; they are guarded as service workers are
-        // (a deviation for the host guard).
+        // request interception; they are installed as service workers are
+        // (a deviation for the host guard), though Chromium pauses a
+        // shared worker's requests only on the browser session's backstop.
         Some("service_worker" | "shared_worker") => {
             shared
                 .state
