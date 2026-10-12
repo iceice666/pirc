@@ -16,7 +16,7 @@
 //! 3. Linux: `PR_SET_NO_NEW_PRIVS`, then on x86_64 and aarch64 a seccomp
 //!    filter for every thread ([`allowed_syscalls`]): reads on fd 0,
 //!    writes on fds 1 and 2, anonymous memory that is never executable,
-//!    futex, clocks, the signal mask, `getppid` (the orphan check),
+//!    futex, clocks, the signal mask and actions, `getppid` (the orphan check),
 //!    `getrandom`, aborting itself, and exit. Anything else fails with
 //!    `EPERM`, so opening a file, starting a process or making a socket
 //!    is refused. Other architectures get no filter (the rest still
@@ -29,7 +29,11 @@
 //! on a failed QuickJS assertion `getpid`/`gettid`/`tgkill(self,
 //! SIGABRT)`. `madvise`, `mprotect` (never executable), `sigaltstack`,
 //! `rt_sigreturn`, `sched_yield`, `restart_syscall` and the clocks are
-//! allowed besides, for allocator, signal and vDSO fallback paths.
+//! allowed besides, for allocator, signal and vDSO fallback paths, and
+//! `rt_sigaction`: Rust's SIGSEGV/SIGBUS handler resets the action to the
+//! default and returns so that a fault off the stack guard repeats and
+//! kills the process; with the reset refused, a wild access (the QuickJS
+//! bug this bounds) would fault and return forever at full CPU.
 //!
 //! On macOS only the portable part applies: descriptors closed, no new
 //! descriptor (so a spawned dynamically linked program cannot load its
@@ -165,6 +169,7 @@ mod seccomp {
             libc::SYS_getpid,
             libc::SYS_gettid,
             libc::SYS_rt_sigprocmask,
+            libc::SYS_rt_sigaction,
             libc::SYS_rt_sigreturn,
             libc::SYS_sigaltstack,
             libc::SYS_sched_yield,

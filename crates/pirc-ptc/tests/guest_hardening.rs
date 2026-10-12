@@ -42,15 +42,21 @@ fn main() -> ExitCode {
             failures.push(format!("{case}: {output:?}"));
         }
     }
-    match inherited_descriptors(&exe) {
-        Ok(()) => println!("test inherited descriptors ... ok"),
-        Err(error) => {
-            println!("test inherited descriptors ... FAILED");
-            failures.push(error);
+    let checks: [(&str, fn(&std::path::Path) -> Result<(), String>); 2] = [
+        ("inherited descriptors", inherited_descriptors),
+        ("a fault kills", a_fault_kills),
+    ];
+    for (name, check) in checks {
+        match check(&exe) {
+            Ok(()) => println!("test {name} ... ok"),
+            Err(error) => {
+                println!("test {name} ... FAILED");
+                failures.push(error);
+            }
         }
     }
     if failures.is_empty() {
-        println!("\ntest result: ok. {} passed", ESCAPES.len() + 1);
+        println!("\ntest result: ok. {} passed", ESCAPES.len() + checks.len());
         ExitCode::SUCCESS
     } else {
         println!("\nfailures:\n{}", failures.join("\n"));
@@ -87,6 +93,51 @@ fn inherited_descriptors(exe: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
+/// A hardened process that faults dies of it at once. Rust's runtime
+/// handles SIGSEGV: off the stack guard it resets the action to the
+/// default and returns, so the fault repeats and kills; with that reset
+/// refused, a wild access in QuickJS would spin forever. The fault is the
+/// parent's `kill(SIGSEGV)`, repeated as a faulting instruction repeats
+/// (no `unsafe` here).
+fn a_fault_kills(exe: &std::path::Path) -> Result<(), String> {
+    use std::os::unix::process::ExitStatusExt;
+    use std::time::{Duration, Instant};
+    let mut child = Command::new(exe)
+        .args(["child", "fault"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdout = std::io::BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    stdout.read_line(&mut line).unwrap();
+    if line.trim() != "hardened" {
+        let _ = child.kill();
+        return Err(format!("fault: {line:?}"));
+    }
+    let pid = nix::unistd::Pid::from_raw(i32::try_from(child.id()).unwrap());
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break Some(status);
+        }
+        if Instant::now() > deadline {
+            break None;
+        }
+        let _ = nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGSEGV);
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    let Some(status) = status else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err("fault: the hardened child survived SIGSEGV for 1 s".to_owned());
+    };
+    if status.signal() != Some(nix::libc::SIGSEGV) {
+        return Err(format!("fault: {status}"));
+    }
+    Ok(())
+}
+
 fn child(case: &str) -> ExitCode {
     // Opened before hardening, without close-on-exec mattering: the
     // descriptor case checks it is closed.
@@ -95,6 +146,13 @@ fn child(case: &str) -> ExitCode {
     pirc_ptc::harden::harden().unwrap();
     let dir = std::env::temp_dir();
     let attempt: Result<(), String> = match case {
+        "fault" => {
+            println!("hardened");
+            std::io::stdout().flush().unwrap();
+            let mut rest = String::new();
+            let _ = std::io::stdin().lock().read_line(&mut rest);
+            return ExitCode::SUCCESS;
+        }
         "descriptors" => {
             println!("hardened {fd}");
             std::io::stdout().flush().unwrap();
