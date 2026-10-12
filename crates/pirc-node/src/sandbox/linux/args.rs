@@ -134,6 +134,13 @@ pub fn render(
     })
 }
 
+/// `O_TMPFILE`, which only Linux has; the module is compiled on macOS too
+/// (no bubblewrap runs there).
+#[cfg(target_os = "linux")]
+const TMPFILE: Option<OFlag> = Some(OFlag::O_TMPFILE);
+#[cfg(not(target_os = "linux"))]
+const TMPFILE: Option<OFlag> = None;
+
 /// Where the shell opens the profile held on `fd`.
 fn profile_path(fd: &OwnedFd) -> String {
     format!("/proc/{}/fd/{}", std::process::id(), fd.as_raw_fd())
@@ -143,6 +150,9 @@ fn profile_path(fd: &OwnedFd) -> String {
 /// read-only, checked to open again through `/proc`. Nothing is ever
 /// named, so nothing can be substituted between now and bubblewrap's read.
 fn open_profile(words: &[String], tmpdir: &Path) -> Result<OwnedFd, String> {
+    let Some(tmpfile) = TMPFILE else {
+        return Err("unnamed files (O_TMPFILE) are Linux-only".to_owned());
+    };
     let contents: String = words.iter().map(|word| format!("{word}\0")).collect();
     let mut failures = Vec::new();
     let mut dirs = vec![tmpdir.to_path_buf()];
@@ -152,7 +162,7 @@ fn open_profile(words: &[String], tmpdir: &Path) -> Result<OwnedFd, String> {
     for dir in dirs {
         let fd = match nix::fcntl::open(
             &dir,
-            OFlag::O_TMPFILE | OFlag::O_RDWR | OFlag::O_CLOEXEC,
+            tmpfile | OFlag::O_RDWR | OFlag::O_CLOEXEC,
             Mode::from_bits_truncate(0o600),
         ) {
             Ok(fd) => fd,
@@ -221,6 +231,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn long_profiles_go_through_an_unnamed_file() {
         let (words, mounts) = options(100);
         let dir = tempfile::tempdir().unwrap();
@@ -307,20 +318,23 @@ mod tests {
             .unwrap_err()
             .contains("NUL")
         );
-        // Too long even through the file.
-        let (words, mounts) = options(10);
-        let long = vec![OsString::from("x".repeat(5000))];
-        assert!(
-            render(
-                Path::new("/bin/bwrap"),
-                words,
-                mounts,
-                long,
-                1000,
-                Path::new("/tmp")
-            )
-            .unwrap_err()
-            .contains("too long even")
-        );
+        // Too long even through the file (which only Linux can open).
+        #[cfg(target_os = "linux")]
+        {
+            let (words, mounts) = options(10);
+            let long = vec![OsString::from("x".repeat(5000))];
+            assert!(
+                render(
+                    Path::new("/bin/bwrap"),
+                    words,
+                    mounts,
+                    long,
+                    1000,
+                    Path::new("/tmp")
+                )
+                .unwrap_err()
+                .contains("too long even")
+            );
+        }
     }
 }
