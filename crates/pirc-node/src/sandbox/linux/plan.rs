@@ -104,9 +104,24 @@
 //!
 //! # Accepted gaps
 //!
-//! Mounts are by path, as in srt, and the plan is made a moment before
-//! bubblewrap mounts it:
+//! Mounts are by path, as in srt: each holds the file or directory its
+//! path named when bubblewrap mounted it, a moment after the plan.
 //!
+//! - A host-side replace of a protected path detaches the sandbox's mount
+//!   on it. Since Linux 3.18 the host may unlink or rename over a path that
+//!   is a mount point only in another mount namespace, and the kernel then
+//!   detaches those mounts there. The running sandbox sees the new file
+//!   through its parent's writable bind, unprotected. Common host
+//!   operations do this: `git config` (and `git remote`, `git branch -u`,
+//!   `git push -u`, `git checkout -b x origin/x`) rewrites `.git/config`
+//!   through `config.lock` and a rename; a checkout or pull of tracked
+//!   `.vscode/`, `.claude/`, `.mcp.json` or rc files replaces them; an
+//!   editor's atomic save replaces `.env` or `.bashrc`. The agent can then
+//!   write `.git/config` (`core.fsmonitor`, `core.pager`: host code on the
+//!   next host git command) or read the new `.env`; a placeholder the host
+//!   replaces goes the same way. srt behaves the same (its binds are by
+//!   path too); the pinning (S7) only stops renames from inside the
+//!   sandbox. Not mitigated: an open item for the M7 security gate.
 //! - A symlink retargeted between planning and bubblewrap's start is
 //!   followed by bubblewrap, wherever it now leads (the plan resolved it
 //!   before). This session's agent does not run before its sandbox exists,
@@ -130,7 +145,8 @@
 //!   it writes the file. The agent cannot make one during its session: a
 //!   protected path is a mount point, and `link(2)` across mounts fails
 //!   with `EXDEV` (`tests/sandbox_native.rs` tries it); nor before, as
-//!   above.
+//!   it does not run yet. Another session's agent can, where its own
+//!   policy puts no mount on the file and lets it write next to it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;

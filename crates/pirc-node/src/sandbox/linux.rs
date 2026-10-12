@@ -54,6 +54,11 @@
 //!   names or connects on a client's behalf is a way out past the proxy.
 //!   An allowlist of Unix sockets (the inference socket and the configured
 //!   ones) would close it; not done (srt has none on Linux either).
+//! - A protected path the host replaces during a session (git's
+//!   `config.lock` rename over `.git/config`, a checkout of tracked
+//!   `.vscode/`, an editor's atomic save): the kernel detaches the
+//!   sandbox's mount on it, and the agent can then write or read the new
+//!   file. srt's too; see [`plan`]'s accepted gaps.
 //! - Changes between the plan and bubblewrap's start: a symlink
 //!   retargeted in between (by the host, or by another session's agent
 //!   where its policy lets it write), or a hard link to a protected file
