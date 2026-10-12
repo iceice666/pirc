@@ -17,7 +17,9 @@ jobs:
   check:
     name: bun run check
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The browser tests (the corpus alone takes about 80 s) and scenarios,
+    # these against both nodes, made 60 minutes tight.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v7
 
