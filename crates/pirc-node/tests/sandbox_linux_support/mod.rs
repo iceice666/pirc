@@ -188,3 +188,15 @@ pub async fn run(prepared: &Prepared, args: &[&str], cwd: &Path) -> i32 {
         .unwrap();
     status.code().unwrap_or(-1)
 }
+
+/// Whether `path` is gone within two seconds: a session's placeholders
+/// are removed on the blocking pool a moment after its cleanup.
+pub async fn gone(path: &Path) -> bool {
+    for _ in 0..200 {
+        if std::fs::symlink_metadata(path).is_err() {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    false
+}

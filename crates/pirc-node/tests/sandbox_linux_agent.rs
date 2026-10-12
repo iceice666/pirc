@@ -29,7 +29,7 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 
-use sandbox_linux_support::{fixture, fixture_in, path};
+use sandbox_linux_support::{fixture, fixture_in, gone, path};
 
 const TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -330,7 +330,7 @@ async fn a_real_agent_is_confined() {
         "[core]"
     );
     assert!(!PathBuf::from(&home_probe).exists());
-    for gone in [".pirc", ".bashrc", ".git/hooks/pre-commit"] {
-        assert!(!Path::new(&w).join(gone).exists(), "{gone}");
+    for name in [".pirc", ".bashrc", ".git/hooks/pre-commit"] {
+        assert!(gone(&Path::new(&w).join(name)).await, "{name}");
     }
 }

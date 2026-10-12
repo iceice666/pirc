@@ -758,6 +758,10 @@ fn write_record(file: &Path, entries: BTreeSet<PathBuf>, claimed: &BTreeMap<Path
 /// Not srt's: claimed placeholders are recorded in a file
 /// ([`Options::record`]) until they are removed, so the next node knows
 /// which leftovers of a node that died are its own to remove.
+///
+/// Dropped on the async runtime, the claim is released on its blocking
+/// pool (file removals under a process-wide lock), a moment later; a
+/// release the runtime's shutdown cancels runs where it is dropped.
 #[derive(Debug, Default)]
 pub struct MountPoints {
     points: Vec<PathBuf>,
@@ -783,48 +787,71 @@ impl MountPoints {
     /// Drop the claim and remove the placeholders no other sandbox uses,
     /// when they are still what bubblewrap made: an empty file, or an empty
     /// directory. Anything else is left alone. Either way they leave the
-    /// record.
+    /// record. Blocks (see [`MountPoints`] for the drop).
     pub fn release(&mut self) {
-        let mut unused: Vec<PathBuf> = Vec::new();
-        let mut claimed = CLAIMED.lock().unwrap_or_else(|p| p.into_inner());
-        for point in self.points.drain(..) {
-            if let Some(count) = claimed.get_mut(&point) {
-                *count -= 1;
-                if *count == 0 {
-                    claimed.remove(&point);
-                    unused.push(point);
-                }
+        release(std::mem::take(&mut self.points), self.record.as_deref());
+    }
+}
+
+/// [`MountPoints::release`].
+fn release(points: Vec<PathBuf>, record: Option<&Path>) {
+    let mut unused: Vec<PathBuf> = Vec::new();
+    let mut claimed = CLAIMED.lock().unwrap_or_else(|p| p.into_inner());
+    for point in points {
+        if let Some(count) = claimed.get_mut(&point) {
+            *count -= 1;
+            if *count == 0 {
+                claimed.remove(&point);
+                unused.push(point);
             }
         }
-        unused.sort_by_key(|point| std::cmp::Reverse(point.components().count()));
-        // Removed under the lock: a sandbox starting meanwhile would
-        // otherwise claim a placeholder about to go.
+    }
+    unused.sort_by_key(|point| std::cmp::Reverse(point.components().count()));
+    // Removed under the lock: a sandbox starting meanwhile would
+    // otherwise claim a placeholder about to go.
+    for point in &unused {
+        match std::fs::symlink_metadata(point) {
+            Ok(meta) if meta.is_file() && meta.len() == 0 => {
+                let _ = std::fs::remove_file(point);
+            }
+            Ok(meta) if meta.is_dir() => {
+                let _ = std::fs::remove_dir(point);
+            }
+            _ => {}
+        }
+    }
+    if let Some(file) = record
+        && !unused.is_empty()
+    {
+        let mut entries = read_record(file);
         for point in &unused {
-            match std::fs::symlink_metadata(point) {
-                Ok(meta) if meta.is_file() && meta.len() == 0 => {
-                    let _ = std::fs::remove_file(point);
-                }
-                Ok(meta) if meta.is_dir() => {
-                    let _ = std::fs::remove_dir(point);
-                }
-                _ => {}
-            }
+            entries.remove(point);
         }
-        if let Some(file) = &self.record
-            && !unused.is_empty()
-        {
-            let mut entries = read_record(file);
-            for point in &unused {
-                entries.remove(point);
-            }
-            write_record(file, entries, &claimed);
-        }
+        write_record(file, entries, &claimed);
     }
 }
 
 impl Drop for MountPoints {
     fn drop(&mut self) {
-        self.release();
+        if self.points.is_empty() {
+            return;
+        }
+        let pending = Release(std::mem::take(&mut self.points), self.record.take());
+        match tokio::runtime::Handle::try_current() {
+            Ok(runtime) => {
+                runtime.spawn_blocking(move || drop(pending));
+            }
+            Err(_) => drop(pending),
+        }
+    }
+}
+
+/// A claim being released: releases when dropped, run or not.
+struct Release(Vec<PathBuf>, Option<PathBuf>);
+
+impl Drop for Release {
+    fn drop(&mut self) {
+        release(std::mem::take(&mut self.0), self.1.as_deref());
     }
 }
 
@@ -1491,6 +1518,38 @@ mod tests {
         claim.release();
         assert!(!ours.exists());
         assert_eq!(read_record(&record), BTreeSet::from([kept]));
+    }
+
+    /// A claim dropped on the async runtime does not wait there for the
+    /// process-wide lock (or the removals): the blocking pool releases it.
+    #[tokio::test]
+    async fn dropped_claims_are_released_off_the_runtime() {
+        let (_dir, root) = temp();
+        let file = PathBuf::from(format!("{root}/.bashrc"));
+        let claim = MountPoints::claim(vec![file.clone()], None);
+        fs::write(&file, "").unwrap();
+        let (locked, wait) = std::sync::mpsc::channel();
+        let holder = std::thread::spawn(move || {
+            let _claimed = CLAIMED.lock().unwrap_or_else(|p| p.into_inner());
+            locked.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(600));
+        });
+        wait.recv().unwrap();
+        let started = std::time::Instant::now();
+        drop(claim);
+        assert!(
+            started.elapsed() < std::time::Duration::from_millis(300),
+            "the drop waited {:?}",
+            started.elapsed()
+        );
+        holder.join().unwrap();
+        for _ in 0..200 {
+            if !file.exists() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(!file.exists());
     }
 
     #[test]

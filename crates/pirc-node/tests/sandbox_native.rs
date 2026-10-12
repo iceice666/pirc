@@ -96,6 +96,18 @@ fn sandbox_client() {
     std::process::exit(0);
 }
 
+/// Whether `path` is gone within two seconds: a session's placeholders
+/// are removed on the blocking pool a moment after its cleanup.
+async fn gone(path: &Path) -> bool {
+    for _ in 0..200 {
+        if std::fs::symlink_metadata(path).is_err() {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    false
+}
+
 struct Fixture {
     root: PathBuf,
     config: NodeConfig,
@@ -907,7 +919,7 @@ async fn missing_protected_paths_cannot_be_created() {
         "p",
     ] {
         assert!(
-            !root.join("workspace").join(gone).exists(),
+            self::gone(&root.join("workspace").join(gone)).await,
             "{gone} left on the host"
         );
     }
@@ -953,7 +965,7 @@ async fn missing_read_denies_cannot_be_created() {
     assert!(failures.is_empty(), "{failures:#?}");
     for gone in [".env", "secrets"] {
         assert!(
-            !f.root.join("workspace").join(gone).exists(),
+            self::gone(&f.root.join("workspace").join(gone)).await,
             "{gone} left on the host"
         );
     }
@@ -1078,10 +1090,18 @@ async fn placeholders_outlive_no_session_and_are_shared() {
     drop(first_child.stdin.take());
     first_child.wait().await.unwrap();
     first.cleanup();
-    assert!(!bashrc.exists());
-    assert!(!stale.exists());
+    assert!(gone(&bashrc).await);
+    assert!(gone(&stale).await);
     assert!(users.exists(), "a user's file is never removed");
-    let recorded = fs::read_to_string(&record).unwrap();
+    // The record is rewritten just after the removals.
+    let mut recorded = String::new();
+    for _ in 0..200 {
+        recorded = fs::read_to_string(&record).unwrap();
+        if !recorded.contains(&path(&f.root, "workspace")) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
     assert!(
         !recorded.contains(&path(&f.root, "workspace")),
         "{recorded}"
@@ -1134,7 +1154,7 @@ async fn overlapping_sessions_share_directory_placeholders() {
     drop(b.stdin.take());
     assert!(b.wait().await.unwrap().success());
     second.cleanup();
-    assert!(!claude.exists(), ".claude left on the host");
+    assert!(gone(&claude).await, ".claude left on the host");
 }
 
 /// The node's inference socket lives in a private directory of its state,
