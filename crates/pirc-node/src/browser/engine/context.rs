@@ -26,7 +26,7 @@ use tokio::sync::{mpsc, oneshot, watch};
 
 use super::cdp::{CdpError, Connection, Event, Session};
 use super::launch;
-use super::network::TargetKind;
+use super::network::{Replies, TargetKind};
 use super::page::{Page, PageEvent, PageSetup};
 use super::{Error, Result};
 use crate::browser::BoxFuture;
@@ -54,9 +54,13 @@ pub struct LaunchOptions {
 /// ([`super::network::Installed`]).
 pub(super) type Installed = Box<dyn Any + Send>;
 
-/// Guards a target before it runs.
-pub(super) type Installer =
-    Arc<dyn Fn(Session, TargetKind) -> BoxFuture<'static, Result<Option<Installed>>> + Send + Sync>;
+/// Guards a target before it runs: resolves once the target may run (see
+/// [`super::network::install_split`]), with the replies still to come.
+pub(super) type Installer = Arc<
+    dyn Fn(Session, TargetKind) -> BoxFuture<'static, Result<(Option<Installed>, Replies)>>
+        + Send
+        + Sync,
+>;
 
 /// A persistent browser context.
 pub struct Context {
@@ -120,8 +124,9 @@ impl Context {
         let installer: Installer = Arc::new(move |session: Session, kind| {
             let guard = guard.clone();
             Box::pin(async move {
-                let installed = super::network::install(&session, kind, guard).await?;
-                Ok(Some(Box::new(installed) as Installed))
+                let (installed, replies) =
+                    super::network::install_split(&session, kind, guard).await?;
+                Ok((Some(Box::new(installed) as Installed), replies))
             })
         });
         Self::launch_with(executable, profile_dir, options, installer).await
@@ -135,7 +140,8 @@ impl Context {
         profile_dir: &Path,
         options: LaunchOptions,
     ) -> std::result::Result<Arc<Self>, String> {
-        let installer: Installer = Arc::new(|_, _| Box::pin(async { Ok(None) }));
+        let installer: Installer =
+            Arc::new(|_, _| Box::pin(async { Ok((None, Box::pin(async { Ok(()) }) as Replies)) }));
         Self::launch_with(executable, profile_dir, options, installer).await
     }
 
@@ -481,12 +487,15 @@ fn attached(shared: &Arc<Shared>, params: &Value) {
             let shared = shared.clone();
             tokio::spawn(async move {
                 let _ = session.call("Runtime.enable", json!({})).await;
-                let Ok(installed) =
+                let Ok((installed, replies)) =
                     (shared.installer)(session.clone(), TargetKind::ServiceWorker).await
                 else {
                     // Unguarded: it stays paused.
                     return;
                 };
+                if replies.await.is_err() {
+                    return;
+                }
                 if let Some(slot) = shared
                     .state
                     .lock()

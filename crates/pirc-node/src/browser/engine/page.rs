@@ -981,27 +981,34 @@ async fn init_session(
         let shared = shared.clone();
         let target = target.clone();
         async move {
-            session
-                .call("Network.enable", json!({}))
-                .await
-                .map_err(fail("Network.enable"))?;
-            let kind = if is_main {
-                TargetKind::Page
-            } else {
-                TargetKind::Iframe
+            // Sent in order without awaiting the replies a paused target
+            // (a `noopener` popup) only gives once it runs; the guard's
+            // request interception is on before it runs
+            // ([`super::network::install_split`]).
+            let enable = session.call("Network.enable", json!({}));
+            let guard = async {
+                let kind = if is_main {
+                    TargetKind::Page
+                } else {
+                    TargetKind::Iframe
+                };
+                let (installed, replies) = (shared.installer)(session.clone(), kind)
+                    .await
+                    .map_err(|error| error.message)?;
+                if let Some(frame_session) = shared.state.lock().unwrap().sessions.get_mut(&target)
+                {
+                    frame_session.guard = installed;
+                }
+                // Never before the guard is in place.
+                session
+                    .call("Runtime.runIfWaitingForDebugger", json!({}))
+                    .await
+                    .map_err(fail("Runtime.runIfWaitingForDebugger"))?;
+                replies.await.map_err(|error| error.message)
             };
-            let installed = (shared.installer)(session.clone(), kind)
-                .await
-                .map_err(|error| error.message)?;
-            if let Some(frame_session) = shared.state.lock().unwrap().sessions.get_mut(&target) {
-                frame_session.guard = installed;
-            }
-            // Never before the guard is in place.
-            session
-                .call("Runtime.runIfWaitingForDebugger", json!({}))
-                .await
-                .map(|_| ())
-                .map_err(fail("Runtime.runIfWaitingForDebugger"))
+            let (enabled, guarded) = tokio::join!(enable, guard);
+            enabled.map_err(fail("Network.enable"))?;
+            guarded
         }
     };
     let mut steps: Vec<futures_util::future::BoxFuture<'_, std::result::Result<(), String>>> = vec![
@@ -1770,11 +1777,15 @@ fn attached(shared: &Arc<Shared>, state: &mut State, target: &str, params: &Valu
             tokio::spawn(async move {
                 let _ = session.call("Runtime.enable", json!({})).await;
                 let _ = session.call("Network.enable", json!({})).await;
-                let Ok(installed) = (shared.installer)(session.clone(), TargetKind::Worker).await
+                let Ok((installed, replies)) =
+                    (shared.installer)(session.clone(), TargetKind::Worker).await
                 else {
                     // Unguarded: it stays paused.
                     return;
                 };
+                if replies.await.is_err() {
+                    return;
+                }
                 if let Some(slot) = shared
                     .state
                     .lock()

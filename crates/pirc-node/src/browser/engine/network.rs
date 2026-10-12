@@ -105,8 +105,10 @@ use std::sync::{Arc, Mutex};
 use serde_json::{Value, json};
 use tokio::task::JoinHandle;
 
+use futures_util::future::{BoxFuture, join_all};
+
 use super::Result;
-use super::cdp::{Event, Session};
+use super::cdp::{CdpError, Event, Session};
 use crate::browser::assets;
 use crate::browser::hosts::HostGuard;
 
@@ -215,40 +217,86 @@ pub async fn install(
     kind: TargetKind,
     guard: Arc<HostGuard>,
 ) -> Result<Installed> {
+    let (installed, replies) = install_split(session, kind, guard).await?;
+    replies.await?;
+    Ok(installed)
+}
+
+/// The replies of a guard's commands still to come (see [`install_split`]).
+pub type Replies = BoxFuture<'static, Result<()>>;
+
+/// [`install`] in two steps: resolves once every command of the guard was
+/// sent, in order, and request interception (`Fetch.enable`) replied, with
+/// the other replies still to come. A target paused on start may be
+/// resumed from then on: Chromium applies a session's commands in the
+/// order they were sent, while a popup not yet running (a `noopener`
+/// window) answers `Network.setCacheDisabled`, `Runtime.addBinding` and
+/// `Page.addScriptToEvaluateOnNewDocument` only once it runs. (Playwright
+/// sends all of its initialization, `Runtime.runIfWaitingForDebugger`
+/// included, before awaiting any reply.) A failed `Fetch.enable` fails
+/// the install, so the target never runs without request interception.
+pub async fn install_split(
+    session: &Session,
+    kind: TargetKind,
+    guard: Arc<HostGuard>,
+) -> Result<(Installed, Replies)> {
+    let done = || Box::pin(async { Ok(()) }) as Replies;
     if kind == TargetKind::Worker {
         // `_updateProtocolRequestInterceptionForSession` for a `workerFrame`.
         session
             .call("Network.setCacheDisabled", json!({ "cacheDisabled": true }))
             .await?;
-        return Ok(Installed { task: None });
+        return Ok((Installed { task: None }, done()));
     }
     // Listen before anything can pause.
     let events = session.listen();
     let task = tokio::spawn(handle_events(session.clone(), events, guard));
     let installed = Installed { task: Some(task) };
-    let cache = session.call("Network.setCacheDisabled", json!({ "cacheDisabled": true }));
-    let fetch = session.call("Fetch.enable", fetch_enable());
-    if kind == TargetKind::ServiceWorker {
-        let (cache, fetch) = tokio::join!(cache, fetch);
-        cache?;
-        fetch?;
-        return Ok(installed);
-    }
-    // The binding exists before the scripts that capture it run.
-    let binding = session.call("Runtime.addBinding", json!({ "name": PLAYWRIGHT_BINDING }));
-    let (cache, fetch, binding) = tokio::join!(cache, fetch, binding);
-    cache?;
-    fetch?;
-    binding?;
-    for source in init_scripts() {
-        session
-            .call(
+    let (fetched_tx, fetched) = tokio::sync::oneshot::channel();
+    let session = session.clone();
+    // Its first poll sends every command.
+    let mut replies: Replies = Box::pin(async move {
+        let cache = session.call("Network.setCacheDisabled", json!({ "cacheDisabled": true }));
+        let fetch = async {
+            let reply = session.call("Fetch.enable", fetch_enable()).await;
+            let _ = fetched_tx.send(reply.clone());
+            reply
+        };
+        if kind == TargetKind::ServiceWorker {
+            let (cache, fetch) = tokio::join!(cache, fetch);
+            cache?;
+            fetch?;
+            return Ok(());
+        }
+        // The binding exists before the scripts that capture it run.
+        let binding = session.call("Runtime.addBinding", json!({ "name": PLAYWRIGHT_BINDING }));
+        let sources = init_scripts();
+        let scripts = join_all(sources.iter().map(|source| {
+            session.call(
                 "Page.addScriptToEvaluateOnNewDocument",
                 json!({ "source": source, "runImmediately": true }),
             )
-            .await?;
+        }));
+        let (cache, fetch, binding, scripts) = tokio::join!(cache, fetch, binding, scripts);
+        cache?;
+        fetch?;
+        binding?;
+        for script in scripts {
+            script?;
+        }
+        Ok(())
+    });
+    tokio::select! {
+        biased;
+        fetched = fetched => {
+            fetched.unwrap_or_else(|_| Err(CdpError::closed()))?;
+            Ok((installed, replies))
+        }
+        result = &mut replies => {
+            result?;
+            Ok((installed, done()))
+        }
     }
-    Ok(installed)
 }
 
 /// The `networkId`s this session continued (their later pauses are
