@@ -17,7 +17,7 @@
 mod node_browser_support;
 mod node_link_side_support;
 
-use node_browser_support::{Browsing, Viewer, entry, ffmpeg, images, kind, start, state};
+use node_browser_support::{Browsing, Viewer, entry, ffmpeg, images, kind, required, start, state};
 use node_link_side_support::settled_in;
 use serde_json::{Value, json};
 
@@ -604,6 +604,10 @@ fn positive(value: &Value, keys: &[&str]) -> Value {
 #[tokio::test(flavor = "multi_thread")]
 async fn node_browser_record() {
     if ffmpeg().is_none() {
+        assert!(
+            !required(),
+            "no ffmpeg (PIRC_FFMPEG, ffmpeg on PATH) under PIRC_BROWSER_REQUIRED=1"
+        );
         eprintln!("no ffmpeg (PIRC_FFMPEG, ffmpeg on PATH); skipping the recording scenario");
         return;
     }

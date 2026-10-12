@@ -37,7 +37,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       # The browser conformance scenarios (crates/pirc-conformance/tests/node_browser.rs)
-      # need a Chromium and, for recordings, ffmpeg; they skip without them.
+      # and the pirc-node browser tests need a Chromium and, for recordings,
+      # ffmpeg; they skip without them, except under PIRC_BROWSER_REQUIRED=1
+      # (below), where a missing one fails them.
       # Chrome for Testing of the dev shell's Chromium version, which the
       # snapshots were recorded with. The tests hand it to the node under
       # test as PIRC_BROWSER_EXECUTABLE (its environment is cleared).
@@ -51,6 +53,7 @@ jobs:
       - run: bun run check
         env:
           PIRC_BROWSER_EXECUTABLE: ${{ steps.chrome.outputs.chrome-path }}
+          PIRC_BROWSER_REQUIRED: '1'
 
   size:
     name: Rust executable sizes

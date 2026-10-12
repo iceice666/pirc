@@ -12,8 +12,9 @@
 //! Skipped, with a message, when no Chromium is found (`chromium`,
 //! `chromium-browser`, `google-chrome-stable`, `google-chrome`,
 //! `microsoft-edge` on PATH, the macOS application bundles, or
-//! `PIRC_BROWSER_EXECUTABLE`). `PIRC_BROWSER_CORPUS=form,oopif` runs some
-//! cases only.
+//! `PIRC_BROWSER_EXECUTABLE`); with `PIRC_BROWSER_REQUIRED=1` (CI) it fails
+//! instead, and uses `PIRC_BROWSER_EXECUTABLE` only.
+//! `PIRC_BROWSER_CORPUS=form,oopif` runs some cases only (each must exist).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -41,7 +42,32 @@ fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/browser")
 }
 
+/// `PIRC_BROWSER_REQUIRED=1` (CI): nothing is skipped. The Chromium must be
+/// `PIRC_BROWSER_EXECUTABLE`, an existing file (no fallback to another
+/// browser on `PATH`), and a missing one fails the test.
+fn required() -> bool {
+    std::env::var_os("PIRC_BROWSER_REQUIRED").is_some_and(|value| value == "1")
+}
+
+/// Under [`required`], the explicit Chromium, or a panic.
+fn required_chromium() -> Option<PathBuf> {
+    if !required() {
+        return None;
+    }
+    let explicit = std::env::var_os("PIRC_BROWSER_EXECUTABLE")
+        .filter(|path| !path.is_empty())
+        .expect("PIRC_BROWSER_REQUIRED=1 needs PIRC_BROWSER_EXECUTABLE");
+    assert!(
+        Path::new(&explicit).is_file(),
+        "PIRC_BROWSER_EXECUTABLE={explicit:?} is not a file"
+    );
+    Some(explicit.into())
+}
+
 fn chromium() -> Option<PathBuf> {
+    if let Some(explicit) = required_chromium() {
+        return Some(explicit);
+    }
     if let Some(explicit) = std::env::var_os("PIRC_BROWSER_EXECUTABLE") {
         return Some(explicit.into());
     }
@@ -624,10 +650,6 @@ async fn run_case(context: &Context, name: &str, port: u16) -> Result<Vec<Value>
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_engine_does_what_playwright_recorded() {
-    let Some(executable) = chromium() else {
-        eprintln!("skipped: no Chromium found");
-        return;
-    };
     let only: Vec<String> = std::env::var("PIRC_BROWSER_CORPUS")
         .unwrap_or_default()
         .split(',')
@@ -643,6 +665,14 @@ async fn the_engine_does_what_playwright_recorded() {
         .filter(|name| only.is_empty() || only.contains(name))
         .collect();
     names.sort();
+    // A misspelt filter must not pass by running nothing.
+    for name in &only {
+        assert!(names.contains(name), "PIRC_BROWSER_CORPUS: no case {name}");
+    }
+    let Some(executable) = chromium() else {
+        eprintln!("skipped: no Chromium found");
+        return;
+    };
 
     let port = serve().await;
     let profile = tempfile::tempdir().unwrap();
