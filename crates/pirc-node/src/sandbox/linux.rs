@@ -49,6 +49,9 @@
 //!   names or connects on a client's behalf is a way out past the proxy.
 //!   An allowlist of Unix sockets (the inference socket and the configured
 //!   ones) would close it; not done (srt has none on Linux either).
+//! - Changes between the plan and bubblewrap's start: a symlink
+//!   retargeted in between, or a hard link to a protected file made
+//!   before the session (see [`plan`]'s accepted gaps).
 //! - Glob patterns in the policy's paths are taken literally (srt expanded
 //!   `denyRead` globs on Linux and dropped write globs); pirc's policies
 //!   hold resolved paths.

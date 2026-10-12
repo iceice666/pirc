@@ -93,6 +93,23 @@
 //!   point, and so is each such ancestor, so none can be renamed away (srt
 //!   pins only up to its deny binds, and not under a `/` write root without
 //!   its "covers"; the verdict plan needs neither).
+//!
+//! # Accepted gaps
+//!
+//! Mounts are by path, as in srt, and the plan is made a moment before
+//! bubblewrap mounts it:
+//!
+//! - A symlink retargeted between planning and bubblewrap's start is
+//!   followed by bubblewrap, wherever it now leads (the plan resolved it
+//!   before). Not by the agent: it does not run before its sandbox exists,
+//!   and the links of protected spellings lie where it may not write
+//!   (otherwise the plan refuses).
+//! - A hard link to a protected file that already existed (in a writable
+//!   root, say) is another name for it that no deny covers: writing through
+//!   it writes the file. The agent cannot make one during its session: a
+//!   protected path is a mount point, and `link(2)` across mounts fails
+//!   with `EXDEV` (`tests/sandbox_native.rs` tries it); nor before, as
+//!   above.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
