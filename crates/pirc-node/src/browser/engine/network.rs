@@ -26,6 +26,10 @@
 //! - dedicated workers: `Network.setCacheDisabled {true}` only (Playwright
 //!   skips `Fetch` on worker sessions: their requests pause on the page's).
 //! - service workers (and shared workers): see the deviations.
+//! - the browser session ([`TargetKind::Browser`], a pirc backstop, see
+//!   the deviations): `Fetch.enable {patterns: [{urlPattern: '*',
+//!   requestStage: 'Request'}]}` only, installed by the context before
+//!   `Target.setAutoAttach`.
 //!
 //! `Fetch.requestPaused`: an intercepted CORS preflight is fulfilled with
 //! Playwright's 204; a redirect hop of a document continues unchecked, as
@@ -63,9 +67,22 @@
 //!   only replaces `navigator.serviceWorker.register` on the instance;
 //!   `ServiceWorkerContainer.prototype.register` still works) fetches
 //!   unchecked. Here service workers get the same `Fetch` guard as pages.
-//!   Likewise shared workers, whose requests the page's `Fetch` does not
-//!   see (Playwright detaches them, so they run unguarded): the context
-//!   installs them as [`TargetKind::ServiceWorker`].
+//! - A backstop on the browser session: `Fetch` enabled there pauses every
+//!   target's requests, after the target session's own `Fetch` (if any)
+//!   continued them, and the same handler checks them. It is what guards
+//!   shared workers (Playwright detaches them, so they run unguarded):
+//!   Chromium 153 pauses a shared worker's requests on neither the page's
+//!   session nor the worker's own (the context still installs
+//!   [`TargetKind::ServiceWorker`] there), only on the browser session's.
+//!   It equally sees the targets the context resumes and detaches without
+//!   a guard of their own (prerender pages, worklets, future types, which
+//!   Playwright leaves unguarded; not exercised: with the cache disabled
+//!   Chromium 153 made no preload request at all). A request a
+//!   target session refused never reaches the backstop; one it continued
+//!   pauses once more and is checked again (the verdict is cached by
+//!   [`HostGuard`], so this costs one CDP round trip per request; no
+//!   measurable change on the corpus run). Authentication challenges are
+//!   left to the target sessions (`handleAuthRequests` unset here).
 //! - The bindings controller is pirc's own few lines rather than
 //!   Playwright's `BindingsController` (not among the extracted assets): it
 //!   defines the same globals and wire envelope (`{name, seq,
@@ -121,8 +138,13 @@ pub enum TargetKind {
     Worker,
     /// A worker with its own network: service workers, and shared workers
     /// (which Playwright detaches, letting them run unguarded: the context
-    /// should install this instead; see the module documentation).
+    /// installs this on them, though only [`TargetKind::Browser`] sees
+    /// their requests; see the module documentation).
     ServiceWorker,
+    /// The browser session: the backstop (`Fetch` only, no bindings or
+    /// scripts) that sees every target's requests, see the module
+    /// documentation.
+    Browser,
 }
 
 /// The guard's state for one target session; dropping it stops handling
@@ -154,6 +176,13 @@ fn fetch_enable() -> Value {
         "handleAuthRequests": true,
         "patterns": [{ "urlPattern": "*", "requestStage": "Request" }],
     })
+}
+
+/// `Fetch.enable` of the browser-session backstop: authentication
+/// challenges are left to the target sessions (unanswered here, Chromium's
+/// default applies, which is what `Default` asks for).
+fn fetch_enable_backstop() -> Value {
+    json!({ "patterns": [{ "urlPattern": "*", "requestStage": "Request" }] })
 }
 
 /// Playwright's `InitScript` wrapper.
@@ -252,6 +281,12 @@ pub async fn install_split(
     let events = session.listen();
     let task = tokio::spawn(handle_events(session.clone(), events, guard));
     let installed = Installed { task: Some(task) };
+    if kind == TargetKind::Browser {
+        session
+            .call("Fetch.enable", fetch_enable_backstop())
+            .await?;
+        return Ok((installed, done()));
+    }
     let (fetched_tx, fetched) = tokio::sync::oneshot::channel();
     let session = session.clone();
     // Its first poll sends every command.

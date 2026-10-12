@@ -15,7 +15,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use pirc_node::browser::BoxFuture;
+use pirc_node::browser::engine::LoadState;
 use pirc_node::browser::engine::cdp::{Connection, Session};
+use pirc_node::browser::engine::context::{Context, LaunchOptions};
 use pirc_node::browser::engine::launch;
 use pirc_node::browser::engine::network::{self, TargetKind};
 use pirc_node::browser::engine::screencast::{
@@ -527,6 +529,89 @@ async fn guards_a_service_worker_that_registers_anyway() {
         assert!(private.hits().is_empty(), "{:?}", private.hits());
     }
     watcher.abort();
+}
+
+/// A guarded context as the manager launches it ([`Context::launch`]).
+async fn guarded_context() -> Option<(Arc<Context>, tempfile::TempDir)> {
+    let Some(executable) = chromium() else {
+        eprintln!("skipped: no Chromium found");
+        return None;
+    };
+    let profile = tempfile::tempdir().unwrap();
+    let env: BTreeMap<String, String> = std::env::vars()
+        .filter(|(name, _)| {
+            matches!(
+                name.as_str(),
+                "PATH" | "HOME" | "TMPDIR" | "LANG" | "FONTCONFIG_FILE" | "XDG_RUNTIME_DIR"
+            )
+        })
+        .collect();
+    let context = Context::launch(
+        &executable,
+        profile.path(),
+        LaunchOptions {
+            viewport: (1280, 800),
+            env,
+        },
+        guard(),
+    )
+    .await
+    .expect("launch");
+    Some((context, profile))
+}
+
+/// A shared worker's requests pause on no target session (not even its
+/// own): the context's browser-session backstop checks them.
+#[tokio::test(flavor = "multi_thread")]
+async fn guards_shared_workers_through_the_browser_session() {
+    let private = serve("127.0.0.2:0", Arc::new(|_| html("private"))).await;
+    let private_port = private.as_ref().map_or(9, |server| server.port);
+    let public = serve(
+        "127.0.0.1:0",
+        Arc::new(move |path| match path {
+            "/shared.js" => (
+                200,
+                vec![("content-type".into(), "text/javascript".into())],
+                format!(
+                    "onconnect = async e => {{ const r = []; for (const url of ['http://127.0.0.2:{private_port}/shared-fetch', '/allowed']) {{ try {{ await fetch(url, {{ mode: 'no-cors', method: 'POST', body: 'x' }}); r.push('ok'); }} catch (x) {{ r.push('blocked'); }} }} e.ports[0].postMessage(r.join(' ')); }};"
+                ),
+            ),
+            _ => html("<title>public</title>"),
+        }),
+    )
+    .await
+    .unwrap();
+    let Some((context, _profile)) = guarded_context().await else {
+        return;
+    };
+    let page = context.new_page().await.unwrap();
+    page.goto(
+        &format!("http://127.0.0.1:{}/", public.port),
+        LoadState::Load,
+        Duration::from_secs(10),
+    )
+    .await
+    .unwrap();
+    let answer = page
+        .evaluate(
+            "() => new Promise(resolve => { const w = new SharedWorker('/shared.js'); w.port.onmessage = e => resolve(e.data); })",
+            Value::Null,
+        )
+        .await
+        .unwrap();
+    assert_eq!(answer, "blocked ok");
+    assert!(
+        public
+            .hits()
+            .iter()
+            .any(|hit| hit.starts_with("POST /allowed ")),
+        "{:?}",
+        public.hits()
+    );
+    if let Some(private) = private {
+        assert!(private.hits().is_empty(), "{:?}", private.hits());
+    }
+    context.close().await;
 }
 
 // ---- input ------------------------------------------------------------------
