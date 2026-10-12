@@ -1246,6 +1246,74 @@ async fn tiocsti_into_the_nodes_terminal_is_refused() {
     assert!(!status.success(), "from the read-only sandbox");
 }
 
+/// Panel git through the read-only sandbox: git's reading commands work,
+/// and the sandbox's own failure is 503, never git's "no". `sandbox-exec`
+/// reports its failures (a profile it refuses, `execvp` failing) on
+/// stderr as `sandbox-exec: …`, which `StderrPrefixes` relies on.
+#[tokio::test]
+async fn panel_git_answers_503_when_the_sandbox_fails() {
+    use pirc_node::panels::inspect::{ChildEnv, git_log, git_status};
+
+    let f = fixture("panelgit");
+    let w = &f.workspace;
+    fs::remove_dir_all(w.join(".git")).unwrap();
+    // A commit that touches a file: the panel's log is `-- .`.
+    for args in [
+        &["init", "-q"][..],
+        &["add", "README"],
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-qm",
+            "first",
+        ],
+    ] {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(w)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?}");
+    }
+    let env = |path: &str| -> ChildEnv {
+        [("PATH", path.to_owned()), ("HOME", path_of(&f, "home"))]
+            .into_iter()
+            .map(|(k, v)| (k.to_owned(), v))
+            .collect()
+    };
+    let status = git_status(&f.sandbox, w, &env("/usr/bin:/bin"))
+        .await
+        .unwrap();
+    assert_eq!(status["repo"], true, "{status}");
+    let log = git_log(&f.sandbox, w, &env("/usr/bin:/bin"), 0, 10)
+        .await
+        .unwrap();
+    assert_eq!(log["commits"][0]["subject"], "first", "{log}");
+
+    // git off PATH: `execvp` fails inside sandbox-exec.
+    let error = git_status(&f.sandbox, w, &env("/nonexistent-pirc"))
+        .await
+        .unwrap_err();
+    assert_eq!(error.status, 503, "{error:?}");
+    assert!(error.message.contains("sandbox-exec: "), "{error:?}");
+
+    // A profile sandbox-exec refuses says so on stderr, the same way.
+    let refused = std::process::Command::new(pirc_node::sandbox::macos::SANDBOX_EXEC)
+        .args(["-p", "(version 1)(not-a-rule", "/usr/bin/true"])
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(stderr.starts_with("sandbox-exec: "), "{stderr}");
+}
+
+fn path_of(f: &Fixture, rest: &str) -> String {
+    path(&f.root, rest)
+}
+
 /// srt's hole that remains (as on Linux under srt): its mandatory denies
 /// match `**/.git/config` and `**/.git/hooks/**` by name below the
 /// workspace, but a nested repository's `.git` is not move-blocked, so the
