@@ -31,7 +31,9 @@
 //! [`Sandbox::prepare_readonly`] wraps one host command (the Git panel's
 //! `git`, security audit S8) in a sandbox that may read what a session of
 //! the workspace may read, write nothing (but its temp directory) and reach
-//! no network.
+//! no network: no route out, and on Linux the host's name-service sockets
+//! hidden too (another host daemon's visible socket is the residual risk,
+//! see [`linux`]).
 //!
 //! `check` probes once (`/bin/sh -c 'exit 0'` in the sandbox, 30 s
 //! deadline); success holds for the node's life, a failure is probed again
@@ -113,8 +115,11 @@ pub trait Sandbox: Send + Sync {
     fn prepare(&self, input: PrepareInput) -> BoxFuture<'_, ApiResult<Prepared>>;
 
     /// `input.command` read-only and without network, or 503
-    /// [`unavailable_error`]. The [`Prepared`] has no network control and
-    /// its args end with the command; cleanup as for [`Sandbox::prepare`].
+    /// [`unavailable_error`]. The [`Prepared`] has no network control, its
+    /// args end with the command, and it says where the command may write
+    /// ([`Prepared::temp_dir`]) and how to tell the sandbox's own failure
+    /// from the command's exit status ([`Prepared::wrapper_failure`]);
+    /// cleanup as for [`Sandbox::prepare`].
     fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>>;
 }
 
@@ -133,6 +138,48 @@ pub trait NetworkControl: Send + Sync {
     fn approve(&self, approved: &[String]) -> Result<(), String>;
 }
 
+/// How the caller of a read-only command tells the sandbox wrapper's own
+/// failure (it never ran the command: a set-up error, `execvp` failing, a
+/// path gone before it was mounted) from the command's exit status.
+/// bubblewrap, `sandbox-exec` and srt exit 1 for most of their own
+/// failures, which is also git's "no": read as git's, a broken sandbox
+/// looked like a clean repository in the Git panel.
+pub trait WrapperStatus: Send + Sync {
+    /// Called on the command before it is spawned.
+    fn prepare_command(&self, command: &mut tokio::process::Command) -> std::io::Result<()>;
+
+    /// After the command exited with `code` (not 0, and not killed by the
+    /// caller) and wrote `stderr`: why the sandbox failed, or `None` when
+    /// the command ran.
+    fn failure(&self, code: i32, stderr: &str) -> Option<String>;
+}
+
+/// [`WrapperStatus`] for wrappers that report only on stderr: a failure is
+/// a non-zero exit whose stderr starts with one of the prefixes (the
+/// wrapper speaks before the command can). Its first line is the reason.
+/// A command that prints such a prefix itself is taken for a failed
+/// sandbox, which costs it nothing but the status code.
+pub struct StderrPrefixes(pub &'static [&'static str]);
+
+impl WrapperStatus for StderrPrefixes {
+    fn prepare_command(&self, command: &mut tokio::process::Command) -> std::io::Result<()> {
+        let _ = command;
+        Ok(())
+    }
+
+    fn failure(&self, code: i32, stderr: &str) -> Option<String> {
+        let stderr = stderr.trim_start();
+        (code != 0 && self.0.iter().any(|prefix| stderr.starts_with(prefix))).then(|| {
+            stderr
+                .lines()
+                .next()
+                .unwrap_or_default()
+                .trim_end()
+                .to_owned()
+        })
+    }
+}
+
 /// One session's sandbox: the command that runs the agent inside it.
 pub struct Prepared {
     /// The program to spawn (srt, bubblewrap).
@@ -146,6 +193,10 @@ pub struct Prepared {
     /// For the session (config problems, exposed state).
     pub warnings: Vec<String>,
     control: Option<Box<dyn NetworkControl>>,
+    /// A read-only command's writable directory ([`Prepared::with_temp_dir`]).
+    temp_dir: Option<PathBuf>,
+    /// A read-only command's ([`Prepared::with_wrapper_status`]).
+    status: Option<Box<dyn WrapperStatus>>,
     cleanup: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
@@ -166,18 +217,52 @@ impl Prepared {
             policy,
             warnings,
             control,
+            temp_dir: None,
+            status: None,
             cleanup: Mutex::new(Some(Box::new(cleanup))),
         }
     }
 
-    /// `program` with `args`, prepared by the network control. The runner
-    /// sets the rest: the agent's flags, environment, `cwd`, piped stdio
-    /// and its own process group.
+    /// A read-only command's ([`Sandbox::prepare_readonly`]) one writable
+    /// directory, its temp directory: the Git panel puts Git LFS's storage
+    /// there.
+    #[must_use]
+    pub fn with_temp_dir(mut self, temp_dir: PathBuf) -> Self {
+        self.temp_dir = Some(temp_dir);
+        self
+    }
+
+    /// See [`Prepared::with_temp_dir`].
+    pub fn temp_dir(&self) -> Option<&std::path::Path> {
+        self.temp_dir.as_deref()
+    }
+
+    /// How a read-only command's wrapper reports its own failure.
+    #[must_use]
+    pub fn with_wrapper_status(mut self, status: Box<dyn WrapperStatus>) -> Self {
+        self.status = Some(status);
+        self
+    }
+
+    /// Why the sandbox itself failed, when the command exited with `code`
+    /// (not 0, and not killed by the caller) and wrote `stderr`; `None`
+    /// when the command ran, or nothing tells.
+    pub fn wrapper_failure(&self, code: i32, stderr: &str) -> Option<String> {
+        self.status.as_ref()?.failure(code, stderr)
+    }
+
+    /// `program` with `args`, prepared by the network control (or a
+    /// read-only command's wrapper status). The runner sets the rest: the
+    /// agent's flags, environment, `cwd`, piped stdio and its own process
+    /// group.
     pub fn command(&self) -> std::io::Result<tokio::process::Command> {
         let mut command = tokio::process::Command::new(&self.program);
         command.args(&self.args);
         if let Some(control) = &self.control {
             control.prepare_command(&mut command)?;
+        }
+        if let Some(status) = &self.status {
+            status.prepare_command(&mut command)?;
         }
         Ok(command)
     }
@@ -220,11 +305,21 @@ impl Drop for Prepared {
     }
 }
 
+/// What [`unavailable_error`] says before the reason.
+const UNAVAILABLE: &str = "Agents on this node must run in the sandbox, and it is unavailable: ";
+
 /// 503 `runner_unavailable` for an unavailable sandbox.
 pub fn unavailable_error(reason: &str) -> ApiError {
-    ApiError::runner_unavailable(format!(
-        "Agents on this node must run in the sandbox, and it is unavailable: {reason}"
-    ))
+    ApiError::runner_unavailable(format!("{UNAVAILABLE}{reason}"))
+}
+
+/// The reason of an [`unavailable_error`], for a caller that is not an
+/// agent start to say in its own words; `None` for another error.
+pub fn unavailable_reason(error: &ApiError) -> Option<&str> {
+    if error.status != 503 {
+        return None;
+    }
+    error.message.strip_prefix(UNAVAILABLE)
 }
 
 /// The node's backend (owner: **macos**): [`srt`] when
@@ -317,6 +412,9 @@ mod tests {
             || {},
         );
         assert!(!closed.has_control());
+        assert_eq!(closed.temp_dir(), None);
+        let closed = closed.with_temp_dir(PathBuf::from("/tmp/pirc-x"));
+        assert_eq!(closed.temp_dir(), Some(std::path::Path::new("/tmp/pirc-x")));
         drop(prepared);
         assert_eq!(cleaned.load(Ordering::SeqCst), 1, "cleaned once");
         assert_eq!(
@@ -327,6 +425,23 @@ mod tests {
             unavailable_error("no bwrap").message,
             "Agents on this node must run in the sandbox, and it is unavailable: no bwrap"
         );
+        assert_eq!(
+            unavailable_reason(&unavailable_error("no bwrap")),
+            Some("no bwrap")
+        );
+        assert_eq!(unavailable_reason(&ApiError::internal()), None);
+    }
+
+    #[test]
+    fn stderr_prefixes_tell_the_wrappers_failures() {
+        let status = StderrPrefixes(&["sandbox-exec: "]);
+        assert_eq!(
+            status.failure(71, "sandbox-exec: execvp() of 'git' failed\nmore\n"),
+            Some("sandbox-exec: execvp() of 'git' failed".to_owned())
+        );
+        assert_eq!(status.failure(1, ""), None, "git's no");
+        assert_eq!(status.failure(128, "fatal: not a git repository"), None);
+        assert_eq!(status.failure(0, "sandbox-exec: noise"), None);
     }
 
     #[test]

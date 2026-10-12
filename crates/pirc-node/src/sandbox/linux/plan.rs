@@ -19,6 +19,8 @@
 //! - the mandatory deny paths of the working directory ([`super::scan`]);
 //! - `/etc/ssh/ssh_config.d` hidden (srt hides it whenever there is a read
 //!   policy, which pirc always has);
+//! - the host's name-service sockets hidden ([`RESOLVER_SOCKETS`], not
+//!   srt's: they resolve names past the proxy);
 //! - for a denied path that does not exist, its first missing component
 //!   (srt's stub, below);
 //! - for a denied path below a *file* (a worktree's `.git` file), that file
@@ -89,6 +91,23 @@ const KERNEL_TOP_LEVEL_DIRS: [&str; 3] = ["/proc", "/dev", "/sys"];
 /// srt's `/etc/ssh/ssh_config.d`: hidden whenever there is a read policy
 /// (ssh is strict about its ownership, which looks wrong in the sandbox).
 const SSH_CONFIG_D: &str = "/etc/ssh/ssh_config.d";
+
+/// The host's name-service sockets (nscd, systemd-resolved, sssd, avahi),
+/// hidden whenever there is a read policy. Not srt's, and not in the
+/// policy's `LINUX_HOST_SOCKETS` (the srt backend's recorded settings keep
+/// TS's shape): through them glibc's NSS has the host resolve any name,
+/// and the query reaches the name's authoritative server whatever the
+/// allowlist says (a DNS exfiltration channel past the proxy). Nothing in
+/// the sandbox needs them: its network namespace has no route to a
+/// resolver, and clients reach names through the proxy (`CONNECT host`,
+/// `socks5h`).
+pub const RESOLVER_SOCKETS: [&str; 5] = [
+    "/run/nscd",
+    "/var/run/nscd",
+    "/run/systemd/resolve",
+    "/var/lib/sss/pipes",
+    "/run/avahi-daemon/socket",
+];
 
 /// What a path's mount gives the agent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -256,7 +275,8 @@ pub struct Options {
     pub cwd: Option<String>,
     /// srt's `allowGitConfig`, for the mandatory deny paths.
     pub allow_git_config: bool,
-    /// Hide [`SSH_CONFIG_D`] (srt's host-wide rule; off for golden tests).
+    /// Hide [`SSH_CONFIG_D`] (srt's host-wide rule) and the
+    /// [`RESOLVER_SOCKETS`] (off for golden tests).
     pub host_rules: bool,
     /// Protected paths as the node spells them (its config and state
     /// directories), whose policy entries arrive already resolved: checked
@@ -383,10 +403,14 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
             }
         }
     }
-    if options.host_rules
-        && let Ok(real) = std::fs::canonicalize(SSH_CONFIG_D)
-    {
-        effective.deny_read.push(text(&real));
+    if options.host_rules {
+        for host_path in std::iter::once(SSH_CONFIG_D).chain(RESOLVER_SOCKETS) {
+            if let Ok(real) = std::fs::canonicalize(host_path)
+                && !effective.deny_read.contains(&text(&real))
+            {
+                effective.deny_read.push(text(&real));
+            }
+        }
     }
     for spelling in paths
         .deny_write

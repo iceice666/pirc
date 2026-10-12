@@ -30,7 +30,7 @@ use tokio::io::{
 use tokio::net::tcp::OwnedReadHalf;
 
 use super::pattern::{format_authority, strip_brackets};
-use super::{DialError, Reader, Session, TIMEOUT, Writer, dial, relay};
+use super::{DialError, Gate, Reader, Session, Writer, dial, relay};
 
 /// Longest request or response head (srt answered 431 past Node's limit).
 const MAX_HEAD: usize = 64 * 1024;
@@ -282,8 +282,11 @@ pub(super) async fn handle(
     mut reader: Reader,
     mut writer: Writer,
     session: &Session,
+    gate: &mut Gate,
 ) -> io::Result<()> {
-    let head = match tokio::time::timeout(TIMEOUT, read_head(&mut reader)).await {
+    // The head carries the credential: it is read under the
+    // unauthenticated deadline ([`Gate`]).
+    let head = match tokio::time::timeout_at(gate.deadline, read_head(&mut reader)).await {
         Err(_) => return Ok(()),
         Ok(head) => head?,
     };
@@ -304,6 +307,10 @@ pub(super) async fn handle(
     let auth = session
         .auth
         .accepts_basic(request.first("proxy-authorization"));
+    // Over the session's cap: closed unanswered, as at `accept` before.
+    if auth && !gate.admit() {
+        return Ok(());
+    }
     if request.start[0] == "CONNECT" {
         if !auth {
             return writer.write_all(PROXY_AUTH_REQUIRED.as_bytes()).await;
@@ -316,7 +323,7 @@ pub(super) async fn handle(
                 .write_all(raw_denied(ALLOWLIST_REASON, ALLOWLIST_TAG).as_bytes())
                 .await;
         };
-        let upstream = match dial(&host, port, &session.allowlist).await {
+        let upstream = match dial(&host, port, session).await {
             Ok(upstream) => upstream,
             Err(DialError::Denied(reason)) => {
                 return writer
@@ -368,7 +375,7 @@ async fn forward(
     let Some(body) = body(request) else {
         return writer.write_all(BAD_REQUEST.as_bytes()).await;
     };
-    let upstream = match dial(&host, port, &session.allowlist).await {
+    let upstream = match dial(&host, port, session).await {
         Ok(upstream) => upstream,
         Err(DialError::Denied(reason)) => {
             return writer

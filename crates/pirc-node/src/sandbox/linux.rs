@@ -1,8 +1,10 @@
 //! The native Linux backend (`spikes/linux-sandbox`). Owner: **linux-fs** (M7).
 //!
 //! bubblewrap with srt's argument order and the session policy's paths, a
-//! network namespace whose only way out is the filtering HTTP and SOCKS5
-//! proxy ([`super::proxy`]) on a Unix socket served by the node itself,
+//! network namespace whose only network route out is the filtering HTTP
+//! and SOCKS5 proxy ([`super::proxy`]) on a Unix socket served by the node
+//! itself (host daemons behind visible Unix sockets are another way out:
+//! see below),
 //! and the in-sandbox bridge (`pirc-node sandbox-bridge`, [`super::bridge`])
 //! that exposes it as `127.0.0.1:3128` and `:1080` and then runs the agent. The proxy's allowlist is
 //! shared with the session's [`super::NetworkControl`], so an approval
@@ -27,7 +29,8 @@
 //! - `args`: profiles past bubblewrap's or the kernel's argument limits.
 //!
 //! [`Sandbox::prepare_readonly`] runs one host command (panel git) under
-//! bubblewrap with the read-only policy, `--unshare-net` and no proxy.
+//! bubblewrap with the read-only policy, `--unshare-net` and no proxy (the
+//! name-service sockets hidden as for a session).
 //!
 //! # What the native backend does not enforce
 //!
@@ -36,6 +39,16 @@
 //!   has its own network namespace (its localhost is its own) and Unix
 //!   sockets are filtered only by the read rules, as with srt on Linux
 //!   (`allowAllUnixSockets`, no seccomp).
+//! - Unix sockets of host daemons. The read rules hide the policy's
+//!   `LINUX_HOST_SOCKETS` and, beyond srt, the host's name-service sockets
+//!   (`plan::RESOLVER_SOCKETS`: nscd, systemd-resolved, sssd, avahi), which
+//!   would resolve any name for the agent and so leak data over DNS past
+//!   the allowlist; this holds for [`Sandbox::prepare_readonly`] too.
+//!   Residual risk: any other host daemon whose socket stays visible (and
+//!   connectable: `connect` works on a read-only bind) and that resolves
+//!   names or connects on a client's behalf is a way out past the proxy.
+//!   An allowlist of Unix sockets (the inference socket and the configured
+//!   ones) would close it; not done (srt has none on Linux either).
 //! - Glob patterns in the policy's paths are taken literally (srt expanded
 //!   `denyRead` globs on Linux and dropped write globs); pirc's policies
 //!   hold resolved paths.
@@ -44,6 +57,7 @@ mod args;
 pub mod caps;
 pub mod plan;
 pub mod scan;
+mod status;
 
 use std::ffi::OsString;
 use std::ops::Range;
@@ -141,11 +155,14 @@ pub fn bwrap_args(
 }
 
 /// bubblewrap's options for [`Sandbox::prepare_readonly`]: no network at
-/// all (no proxy socket, no proxy variables), the read-only filesystem.
+/// all (no proxy socket, no proxy variables), the read-only filesystem,
+/// and a status descriptor that tells bubblewrap's failures from the
+/// command's (`status`).
 pub fn readonly_bwrap_args(filesystem: Vec<String>, tmp: &str) -> BwrapArgs {
     let mut args: Vec<String> = ["--new-session", "--die-with-parent", "--unshare-net"]
         .map(String::from)
         .to_vec();
+    args.extend(["--json-status-fd".to_owned(), status::STATUS_FD.to_string()]);
     for (name, value) in [
         ("SANDBOX_RUNTIME", "1"),
         ("TMPDIR", tmp),
@@ -205,17 +222,21 @@ pub struct NativeSandbox {
     /// The `pirc-node` executable that has the `sandbox-bridge` subcommand.
     helper: PathBuf,
     probe: ProbeCache,
+    /// The private parent of the sessions' temporary directories.
+    node_tmp: common::NodeTmp,
     /// Connections every session's proxy may still open together.
     connections: Arc<tokio::sync::Semaphore>,
 }
 
 impl NativeSandbox {
     pub fn new(config: NodeConfig, env: Env, helper: PathBuf) -> Self {
+        let node_tmp = common::NodeTmp::new(&env);
         Self {
             config,
             env,
             helper,
             probe: ProbeCache::default(),
+            node_tmp,
             connections: Arc::new(tokio::sync::Semaphore::new(proxy::MAX_NODE_CONNECTIONS)),
         }
     }
@@ -266,8 +287,9 @@ impl NativeSandbox {
         {
             return SandboxStatus::Unavailable { reason };
         }
+        // Removed however the probe ends (a dropped `check` too).
         let tmp = match common::make_temp_dir(&common::tmpdir(&self.env), "pirc-") {
-            Ok(tmp) => tmp,
+            Ok(tmp) => common::SessionTmp::new(tmp),
             Err(error) => {
                 return SandboxStatus::Unavailable {
                     reason: format!("bubblewrap: {error}"),
@@ -313,7 +335,7 @@ impl NativeSandbox {
                 .await
             }
         };
-        Session::remove_tmp(&tmp);
+        drop(tmp);
         status
     }
 
@@ -375,6 +397,7 @@ impl NativeSandbox {
         };
         caps::warn_if_setfcap_missing();
         let profile = invocation.profile;
+        let temp_dir = tmp.to_path_buf();
         Ok(Prepared::new(
             invocation.program,
             invocation.args,
@@ -387,7 +410,9 @@ impl NativeSandbox {
                 drop(mounts);
                 Session::remove_tmp(&tmp);
             },
-        ))
+        )
+        .with_temp_dir(temp_dir)
+        .with_wrapper_status(Box::new(status::JsonStatus::default())))
     }
 
     /// [`Sandbox::prepare_readonly`] for `policy` built by the caller
@@ -399,14 +424,14 @@ impl NativeSandbox {
         workspace_root: &Path,
         command: Vec<OsString>,
     ) -> ApiResult<Prepared> {
-        let tmp = common::make_temp_dir(&common::tmpdir(&self.env), "pirc-").map_err(|error| {
+        let (tmp, _) = self.node_tmp.make_session_dir().map_err(|error| {
             crate::log::error(&format!(
                 "cannot make the command's temp directory: {error}"
             ));
             ApiError::internal()
         })?;
         let session = Session {
-            tmp,
+            tmp: common::SessionTmp::new(tmp),
             policy,
             warnings: Vec::new(),
         };
@@ -425,7 +450,7 @@ impl Sandbox for NativeSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::session(&self.config, &self.env, &input)?;
+            } = common::spawn_session(&self.config, &self.env, &self.node_tmp, &input).await?;
             let fail = |tmp: &Path, error: ApiError| {
                 Session::remove_tmp(tmp);
                 Err(error)
@@ -508,7 +533,9 @@ impl Sandbox for NativeSandbox {
 
     fn prepare_readonly(&self, input: ReadonlyInput) -> BoxFuture<'_, ApiResult<Prepared>> {
         Box::pin(async move {
-            let session = common::readonly_session(&self.config, &self.env, &input)?;
+            let session =
+                common::spawn_readonly_session(&self.config, &self.env, &self.node_tmp, &input)
+                    .await?;
             self.readonly(session, &input.workspace_root, input.command)
                 .await
         })
@@ -608,6 +635,7 @@ mod tests {
             ["--new-session", "--die-with-parent", "--unshare-net"]
         );
         assert_eq!(args[mounts.clone()], ["--ro-bind", "/", "/"]);
+        assert_eq!(args[3..5], ["--json-status-fd", "3"]);
         assert!(
             !args
                 .iter()

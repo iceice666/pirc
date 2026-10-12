@@ -5,13 +5,18 @@
 //! git: `git --no-pager -c core.quotepath=false -c core.fsmonitor=false -c
 //! color.ui=false <args>`, no shell, `cwd` the real root, the environment
 //! `without_secrets` plus `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`,
-//! `GIT_PAGER=cat`, `LC_ALL=C`; 15 s then SIGKILL; stdout capped at 1 MiB
-//! (`truncated`); exit codes other than 0 and 1 are 400 with the last three
-//! stderr lines. Rust-only (security audit S8): git runs in the node's
-//! sandbox, read-only and without network ([`Sandbox::prepare_readonly`]);
-//! without a working sandbox every git route is 503 [`git_unavailable`],
-//! where TS ran git on the host. Files: `resolve_inside` (404 for a missing path or an
-//! absolute one outside, 403 for a relative or symlink escape, 400 for NUL),
+//! `GIT_PAGER=cat`, `LC_ALL=C`; stdout capped at 1 MiB (`truncated`); after
+//! 15 s (TS: SIGKILL to git) the sandbox wrapper's process group is
+//! SIGKILLed, and output still arriving is read for at most 1 s more
+//! (`KILL_DRAIN`); exit codes other than 0 and 1 are 400 with the last
+//! three stderr lines, but a sandbox that failed before git ran is 503
+//! [`git_unavailable`] ([`Prepared::wrapper_failure`]). Rust-only (security
+//! audit S8): git runs in the node's sandbox, read-only and without
+//! network ([`Sandbox::prepare_readonly`]), with Git LFS's storage in the
+//! sandbox's temp directory (`lfs_storage`); without a working sandbox
+//! every git route is 503 [`git_unavailable`], where TS ran git on the
+//! host. Files: `resolve_inside` (404 for a missing path or an absolute one
+//! outside, 403 for a relative or symlink escape, 400 for NUL),
 //! directory listings without `.git`, dirs first in `localeCompare` order
 //! (the agent's `ls` ordering), 2000 entries; file reads with the 1 MiB
 //! text and 8 MiB image limits.
@@ -100,8 +105,13 @@ pub fn git_unavailable(reason: &str) -> ApiError {
     ))
 }
 
-/// SIGKILL the process group `pid` leads until it has been reaped (the
-/// sandbox wrapper's own children included).
+/// SIGKILL the process group `pid` leads until it has been reaped: the
+/// sandbox wrapper's. What git runs ends with it, though not always as a
+/// member of the group: `sandbox-exec` execs git in place, so git and its
+/// filters are in the group; bubblewrap (native, and srt's on Linux) starts
+/// git in a session of its own (`--new-session`), which ends because
+/// bubblewrap dies (`--die-with-parent`) and with it the PID namespace's
+/// init, which takes every process of the namespace along.
 struct Group(Option<i32>);
 
 impl Group {
@@ -164,10 +174,48 @@ async fn git(
             command,
         })
         .await
-        .map_err(GitError::Sandbox)?;
+        .map_err(|error| {
+            // Refused after the probe passed (a plan refusal, a profile too
+            // long): the Git panel's words, not an agent start's.
+            GitError::Sandbox(match crate::sandbox::unavailable_reason(&error) {
+                Some(reason) => git_unavailable(reason),
+                None => error,
+            })
+        })?;
     let result = run_prepared(&prepared, root, env, GIT_TIMEOUT).await;
     prepared.cleanup();
     result
+}
+
+/// `-c lfs.storage=<temp_dir>/lfs`, as environment variables. Git LFS's
+/// clean filter (`filter.lfs.process`, `required`), which `status` and
+/// `diff` run on every changed LFS file, writes the object into
+/// `lfs.storage` (`.git/lfs` by default). The read-only sandbox refuses
+/// that, and a required filter's failure fails git (400 for the whole
+/// status). Pointed at the sandbox's temp directory, the filter works and
+/// the panel shows what the host shows. Through `GIT_CONFIG_COUNT` (git
+/// 2.31; the same scope as `-c`) because the command line is fixed before
+/// the sandbox, and its temp directory, exist; after any pairs the
+/// node's environment already has.
+///
+/// Other filters that write into the repository have no such setting
+/// (git-annex's `.git/annex`): a required one still fails the request with
+/// git's message. The fallback, if one turns out to matter, is
+/// `filter.<name>.required=false`: git then compares the raw content, so
+/// status still works and its diff reads "Binary files differ".
+fn lfs_storage(env: &ChildEnv, temp_dir: &Path) -> [(String, String); 3] {
+    let index = env
+        .get("GIT_CONFIG_COUNT")
+        .and_then(|count| count.trim().parse::<usize>().ok())
+        .unwrap_or(0);
+    [
+        (format!("GIT_CONFIG_KEY_{index}"), "lfs.storage".to_owned()),
+        (
+            format!("GIT_CONFIG_VALUE_{index}"),
+            display(&temp_dir.join("lfs")),
+        ),
+        ("GIT_CONFIG_COUNT".to_owned(), (index + 1).to_string()),
+    ]
 }
 
 /// Run a prepared git with `timeout` (15 s; shorter in tests).
@@ -189,6 +237,13 @@ async fn run_prepared(
         .env("GIT_PAGER", "cat")
         .env("LC_ALL", "C")
         .envs(prepared.env.iter().cloned())
+        .envs(
+            prepared
+                .temp_dir()
+                .map(|temp_dir| lfs_storage(env, temp_dir))
+                .into_iter()
+                .flatten(),
+        )
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -265,6 +320,15 @@ async fn run_prepared(
         }
         Err(error) => return Err(GitError::Spawn(error)),
     };
+    // The sandbox's own failure (it exits 1, as git's "no" does): 503,
+    // never a clean repository, an empty history or an empty diff.
+    if code != 0
+        && !truncated
+        && !timed_out
+        && let Some(reason) = prepared.wrapper_failure(code, &String::from_utf8_lossy(&stderr))
+    {
+        return Err(GitError::Sandbox(git_unavailable(&reason)));
+    }
     if code != 0 && !truncated && code != 1 {
         let stderr = String::from_utf8_lossy(&stderr);
         let lines: Vec<&str> = trim(&stderr).split('\n').collect();

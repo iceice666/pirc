@@ -26,7 +26,7 @@ use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::pattern::{canonicalize_host, is_valid_host};
-use super::{DialError, Reader, Session, TIMEOUT, Writer, dial, relay};
+use super::{DialError, Gate, Reader, Session, TIMEOUT, Writer, dial, relay};
 
 const VERSION: u8 = 0x05;
 const NO_AUTH: u8 = 0x00;
@@ -52,12 +52,13 @@ fn reply(status: u8) -> [u8; 10] {
     [VERSION, status, 0x00, 0x01, 0, 0, 0, 0, 0, 0]
 }
 
-enum Handshake {
-    /// Authenticated, with the destination it asks for.
-    Connect(String, u16),
+/// How the greeting and authentication ended.
+enum Greeting {
+    /// Authenticated with the session's token.
+    Authenticated,
     /// The client offered no user/password: refuse it.
     Unauthenticated,
-    /// Answered and done (bad credentials, unsupported command, garbage).
+    /// Answered and done (bad credentials, garbage).
     Closed,
 }
 
@@ -65,24 +66,36 @@ pub(super) async fn handle(
     mut reader: Reader,
     mut writer: Writer,
     session: &Session,
+    gate: &mut Gate,
 ) -> io::Result<()> {
-    let handshake =
-        tokio::time::timeout(TIMEOUT, handshake(&mut reader, &mut writer, session)).await;
-    let (host, port) = match handshake {
+    // Until it authenticates, the client is under the unauthenticated
+    // cap and deadline ([`Gate`]).
+    let greeting =
+        tokio::time::timeout_at(gate.deadline, greet(&mut reader, &mut writer, session)).await;
+    match greeting {
         Err(_) => return Ok(()),
-        Ok(handshake) => match handshake? {
-            Handshake::Closed => return Ok(()),
-            Handshake::Unauthenticated => {
+        Ok(greeting) => match greeting? {
+            Greeting::Closed => return Ok(()),
+            Greeting::Unauthenticated => {
                 return refuse_unauthenticated(reader, writer, session).await;
             }
-            Handshake::Connect(host, port) => (host, port),
+            Greeting::Authenticated => {}
         },
+    }
+    if !gate.admit() {
+        return Ok(());
+    }
+    let (host, port) = match tokio::time::timeout(TIMEOUT, request(&mut reader, &mut writer)).await
+    {
+        Ok(Ok(Some(destination))) => destination,
+        Err(_) | Ok(Ok(None)) => return Ok(()),
+        Ok(Err(error)) => return Err(error),
     };
     // The ruleset validator: a malformed or off-list host is not allowed.
     let Some(host) = session.allowlist.check(&host, port) else {
         return writer.write_all(&reply(NOT_ALLOWED)).await;
     };
-    match dial(&host, port, &session.allowlist).await {
+    match dial(&host, port, session).await {
         Ok(upstream) => {
             writer.write_all(&reply(GRANTED)).await?;
             relay(reader, writer, upstream).await;
@@ -93,24 +106,24 @@ pub(super) async fn handle(
     }
 }
 
-/// The library's greeting, authentication and request, as it reads them.
-async fn handshake(
+/// The library's greeting and authentication, as it reads them.
+async fn greet(
     reader: &mut Reader,
     writer: &mut Writer,
     session: &Session,
-) -> io::Result<Handshake> {
+) -> io::Result<Greeting> {
     // srt's `readSocksGreeting` (only SOCKS5), then the library's checks.
     if reader.read_u8().await? != VERSION {
-        return Ok(Handshake::Closed);
+        return Ok(Greeting::Closed);
     }
     let count = reader.read_u8().await?;
     let mut methods = vec![0u8; usize::from(count)];
     reader.read_exact(&mut methods).await?;
     if !methods.contains(&USER_PASSWORD) {
-        return Ok(Handshake::Unauthenticated);
+        return Ok(Greeting::Unauthenticated);
     }
     if count > 128 {
-        return Ok(Handshake::Closed);
+        return Ok(Greeting::Closed);
     }
     writer.write_all(&[VERSION, USER_PASSWORD]).await?;
     // RFC 1929; the library ignores the subnegotiation's version byte.
@@ -119,25 +132,31 @@ async fn handshake(
     let password = read_counted(reader).await?;
     if !session.auth.accepts_socks(&user, &password) {
         writer.write_all(&[0x01, 0x01]).await?;
-        return Ok(Handshake::Closed);
+        return Ok(Greeting::Closed);
     }
     writer.write_all(&[0x01, 0x00]).await?;
-    // The request; the library ignores its version and reserved bytes.
+    Ok(Greeting::Authenticated)
+}
+
+/// The library's request, as it reads it: the destination of a `CONNECT`;
+/// `None` once answered and done (unsupported command, garbage).
+async fn request(reader: &mut Reader, writer: &mut Writer) -> io::Result<Option<(String, u16)>> {
+    // The library ignores the request's version and reserved bytes.
     reader.read_u8().await?;
     let command = reader.read_u8().await?;
     if !(1..=3).contains(&command) {
-        return Ok(Handshake::Closed);
+        return Ok(None);
     }
     reader.read_u8().await?;
     let Some(host) = read_address(reader, ipv6_padded).await? else {
-        return Ok(Handshake::Closed);
+        return Ok(None);
     };
     let port = reader.read_u16().await?;
     if command != CONNECT {
         writer.write_all(&[VERSION, COMMAND_NOT_SUPPORTED]).await?;
-        return Ok(Handshake::Closed);
+        return Ok(None);
     }
-    Ok(Handshake::Connect(host, port))
+    Ok(Some((host, port)))
 }
 
 async fn read_counted(reader: &mut Reader) -> io::Result<Vec<u8>> {

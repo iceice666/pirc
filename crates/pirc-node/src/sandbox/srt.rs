@@ -32,6 +32,7 @@ use serde_json::{Value, json};
 use super::common::{self, ProbeCache, Session};
 use super::{
     BoxFuture, NetworkControl, PrepareInput, Prepared, ReadonlyInput, Sandbox, SandboxStatus,
+    StderrPrefixes,
 };
 use crate::error::{ApiError, ApiResult};
 
@@ -71,6 +72,18 @@ pub fn srt_settings(policy: &SessionPolicy, extra_domains: &[String], platform: 
     })
 }
 
+/// How srt 0.0.78's `cli.js` and the sandbox it runs (bubblewrap on Linux,
+/// `sandbox-exec` on macOS) start their own errors on stderr: what tells a
+/// failed sandbox from the command's exit status ([`StderrPrefixes`]).
+/// Not srt's "Process killed by signal": the command ran.
+const SRT_FAILURES: &[&str] = &[
+    "bwrap: ",
+    "sandbox-exec: ",
+    "Error: ",
+    "Failed to execute command: ",
+    "Fatal error: ",
+];
+
 /// The probe's settings: nothing allowed, nothing denied.
 const PROBE_SETTINGS: &str = r#"{"network":{"allowedDomains":[],"deniedDomains":[]},"filesystem":{"denyRead":[],"allowWrite":[],"denyWrite":[]}}"#;
 
@@ -93,15 +106,19 @@ pub struct SrtSandbox {
     config: NodeConfig,
     env: Env,
     probe: ProbeCache,
+    /// The private parent of the sessions' temporary directories.
+    node_tmp: common::NodeTmp,
 }
 
 impl SrtSandbox {
     pub fn new(srt: String, config: NodeConfig, env: Env) -> Self {
+        let node_tmp = common::NodeTmp::new(&env);
         Self {
             srt,
             config,
             env,
             probe: ProbeCache::default(),
+            node_tmp,
         }
     }
 
@@ -138,7 +155,7 @@ impl Sandbox for SrtSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::session(&self.config, &self.env, &input)?;
+            } = common::spawn_session(&self.config, &self.env, &self.node_tmp, &input).await?;
             if let SandboxStatus::Unavailable { reason } = self.check().await {
                 Session::remove_tmp(&tmp);
                 return Err(super::unavailable_error(&reason));
@@ -208,7 +225,8 @@ impl Sandbox for SrtSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::readonly_session(&self.config, &self.env, &input)?;
+            } = common::spawn_readonly_session(&self.config, &self.env, &self.node_tmp, &input)
+                .await?;
             let mut file_name = OsString::from("readonly-");
             file_name.push(tmp.file_name().unwrap_or_default());
             file_name.push(".json");
@@ -232,6 +250,7 @@ impl Sandbox for SrtSandbox {
             ];
             args.extend(input.command);
             let env = vec![("CLAUDE_CODE_TMPDIR".to_owned(), tmp.display().to_string())];
+            let temp_dir = tmp.to_path_buf();
             Ok(Prepared::new(
                 PathBuf::from(&self.srt),
                 args,
@@ -243,7 +262,9 @@ impl Sandbox for SrtSandbox {
                     let _ = std::fs::remove_file(&settings_file);
                     Session::remove_tmp(&tmp);
                 },
-            ))
+            )
+            .with_temp_dir(temp_dir)
+            .with_wrapper_status(Box::new(StderrPrefixes(SRT_FAILURES))))
         })
     }
 }
@@ -408,6 +429,7 @@ exec "$@"
         let tmp = PathBuf::from(&prepared.env[0].1);
         assert_eq!(prepared.env[0].0, "CLAUDE_CODE_TMPDIR");
         assert!(tmp.is_dir());
+        assert_eq!(prepared.temp_dir(), Some(tmp.as_path()));
         let settings: Value =
             serde_json::from_str(&std::fs::read_to_string(&settings_file).unwrap()).unwrap();
         assert_eq!(

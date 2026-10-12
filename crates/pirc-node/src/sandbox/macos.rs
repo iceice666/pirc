@@ -313,6 +313,8 @@ pub struct MacSandbox {
     config: NodeConfig,
     env: Env,
     probe: ProbeCache,
+    /// The private parent of the sessions' temporary directories.
+    node_tmp: common::NodeTmp,
     /// srt's `sessionSuffix`: one per node, as one per srt process.
     session_suffix: String,
     /// Connections every session's proxy may still open together.
@@ -321,10 +323,12 @@ pub struct MacSandbox {
 
 impl MacSandbox {
     pub fn new(config: NodeConfig, env: Env) -> Self {
+        let node_tmp = common::NodeTmp::new(&env);
         Self {
             config,
             env,
             probe: ProbeCache::default(),
+            node_tmp,
             session_suffix: profile::session_suffix(),
             connections: Arc::new(tokio::sync::Semaphore::new(proxy::MAX_NODE_CONNECTIONS)),
         }
@@ -463,7 +467,7 @@ impl Sandbox for MacSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::session(&self.config, &self.env, &input)?;
+            } = common::spawn_session(&self.config, &self.env, &self.node_tmp, &input).await?;
             self.require(&tmp).await?;
             let (listener, port) = match ProxyListener::loopback().await {
                 Ok(bound) => bound,
@@ -546,7 +550,8 @@ impl Sandbox for MacSandbox {
                 tmp,
                 policy,
                 warnings,
-            } = common::readonly_session(&self.config, &self.env, &input)?;
+            } = common::spawn_readonly_session(&self.config, &self.env, &self.node_tmp, &input)
+                .await?;
             self.require(&tmp).await?;
             let tag = self.log_tag(&input.command);
             let built = (|| {
@@ -578,6 +583,7 @@ impl Sandbox for MacSandbox {
                 }
             };
             let env = sandbox_env(&tmp_text, None, false);
+            let temp_dir = tmp.to_path_buf();
             Ok(Prepared::new(
                 PathBuf::from(SANDBOX_EXEC),
                 exec_args(profile, input.command),
@@ -586,7 +592,10 @@ impl Sandbox for MacSandbox {
                 warnings,
                 None,
                 move || Session::remove_tmp(&tmp),
-            ))
+            )
+            .with_temp_dir(temp_dir)
+            // `sandbox-exec: <what failed>` (a profile it refused, `execvp`).
+            .with_wrapper_status(Box::new(super::StderrPrefixes(&["sandbox-exec: "]))))
         })
     }
 }

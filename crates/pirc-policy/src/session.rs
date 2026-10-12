@@ -119,6 +119,8 @@ pub struct SessionPolicyInput {
     pub session_dir: String,
     pub workspace_memory_dir: String,
     pub inference_socket: Option<String>,
+    /// Shared write roots; one inside `private_dirs` (the session's own
+    /// temp dir in the node's private parent) is read back as well.
     pub tmp_dirs: Vec<String>,
     /// Files next to the session that no agent may write (a project's instructions).
     pub protected_paths: Vec<String>,
@@ -955,8 +957,19 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
             .chain(shared_write.iter().cloned())
             .chain(configured(&filesystem.allow_write)),
     );
-    // What a session may write inside the node's private dirs: its own state.
-    let own_state = [workspace.clone(), session_dir.clone(), memory_dir.clone()];
+    // What a session may write inside the node's private dirs: its own
+    // state, and its own temp dir (the node keeps every session's temp dir
+    // in a private parent, so sessions cannot reach each other's).
+    // Not in TS, whose temp dirs sat beside each other.
+    let private_tmp_dirs: Vec<String> = tmp_dirs
+        .iter()
+        .filter(|tmp| private_dirs.iter().any(|dir| is_inside(tmp, dir)))
+        .cloned()
+        .collect();
+    let own_state: Vec<String> = [workspace.clone(), session_dir.clone(), memory_dir.clone()]
+        .into_iter()
+        .chain(private_tmp_dirs.iter().cloned())
+        .collect();
     let mut prompt_paths = Vec::new();
     for name in ["SOUL.md", "CHAT.md"] {
         prompt_paths.extend(prompt_write_paths(
@@ -979,6 +992,7 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
             [workspace.clone(), session_dir.clone(), memory_dir.clone()]
                 .into_iter()
                 .chain(socket_dir)
+                .chain(private_tmp_dirs)
                 .chain(read_only_dirs.iter().cloned())
                 .chain(configured(&filesystem.allow_read)),
         ),
@@ -1202,6 +1216,31 @@ mod tests {
             assert!(network.allowed_domains.iter().any(|d| d == domain));
         }
         assert_eq!(network.allow_unix_sockets, std::slice::from_ref(&d.socket));
+    }
+
+    #[test]
+    fn a_temp_dir_in_a_private_parent_is_the_sessions_own() {
+        let d = layout();
+        // The node's private parent of every session's temp dir, inside a
+        // shared write root (`/tmp`).
+        let parent = p(&d.tmp, "pirc-n-abc");
+        let (own, other) = (p(&parent, "pirc-1"), p(&parent, "pirc-2"));
+        fs::create_dir_all(&own).unwrap();
+        fs::create_dir_all(&other).unwrap();
+        let mut input = input(&d, &d.workspace, json!({}));
+        input.private_dirs.push(parent.clone());
+        input.tmp_dirs = vec![own.clone(), d.tmp.clone()];
+        let paths = session_policy(&input).unwrap().paths;
+        assert!(read_allowed(&paths, &p(&own, "proxy.sock")));
+        assert!(write_allowed(&paths, &p(&own, "x")));
+        assert!(!read_allowed(&paths, &p(&other, "proxy.sock")));
+        assert!(!write_allowed(&paths, &p(&other, "proxy.sock")));
+        // As for the sessions directory: closed to reads (the sandboxes
+        // mount an empty directory there), siblings closed to writes.
+        assert!(!read_allowed(&paths, &p(&parent, "pirc-3")));
+        assert!(write_allowed(&paths, &p(&d.tmp, "x")));
+        // The shared root itself is not reopened.
+        assert!(!paths.allow_read.contains(&d.tmp));
     }
 
     #[test]

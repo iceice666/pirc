@@ -100,6 +100,8 @@ struct Fixture {
     root: PathBuf,
     config: NodeConfig,
     sandbox: NativeSandbox,
+    /// `TMPDIR`.
+    tmp: tempfile::TempDir,
 }
 
 impl Drop for Fixture {
@@ -140,7 +142,6 @@ fn fixture_with(name: &str, home_writable: bool) -> Option<Fixture> {
         config_rel,
         "workspace/.git/hooks",
         "outside",
-        "tmp",
     ] {
         fs::create_dir_all(root.join(dir)).unwrap();
     }
@@ -161,12 +162,21 @@ fn fixture_with(name: &str, home_writable: bool) -> Option<Fixture> {
         ),
     )
     .unwrap();
-    let (home, state, config_dir, tmp) = (
+    let (home, state, config_dir) = (
         path(&root, "home"),
         path(&root, "state"),
         path(&root, config_rel),
-        path(&root, "tmp"),
     );
+    // `TMPDIR` short and in `/tmp`, as on a node: the proxy socket's path
+    // (`<TMPDIR>/pirc-n-*/pirc-*/proxy.sock`) must fit `sun_path`.
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("pirc-t")
+        .tempdir_in("/tmp")
+        .unwrap();
+    let tmp = fs::canonicalize(tmp_dir.path())
+        .unwrap()
+        .display()
+        .to_string();
     let vars = [
         ("PIRC_NODE_ID", "test-node"),
         ("PIRC_NODE_TOKEN", "0123456789abcdef0123456789abcdef"),
@@ -192,6 +202,7 @@ fn fixture_with(name: &str, home_writable: bool) -> Option<Fixture> {
         root,
         config,
         sandbox,
+        tmp: tmp_dir,
     })
 }
 
@@ -327,8 +338,8 @@ async fn confines_the_agent_to_the_session_policy() {
         (
             "TMPDIR is the session's",
             format!(
-                "case \"$TMPDIR\" in {}/pirc-*) exit 0;; esac; exit 1",
-                path(root, "tmp")
+                "case \"$TMPDIR\" in {}/pirc-n-*/pirc-*) exit 0;; esac; exit 1",
+                fs::canonicalize(f.tmp.path()).unwrap().display()
             ),
             true,
         ),
@@ -922,4 +933,40 @@ async fn reaches_the_inference_socket_inside_the_hidden_state() {
     assert_eq!(next_result(&mut lines).await, "read");
     assert!(child.wait().await.unwrap().success());
     prepared.cleanup();
+}
+
+/// A start dropped mid-await (the node shutting down during the first
+/// probe) leaves no temp directory behind: neither the session's nor the
+/// probe's.
+#[tokio::test]
+async fn a_dropped_start_leaves_no_temp_dir() {
+    let Some(f) = fixture("dropped") else {
+        return;
+    };
+    // The first start probes bubblewrap, which takes far longer.
+    let started = tokio::time::timeout(Duration::from_millis(1), f.try_prepare("pi_dropped")).await;
+    assert!(started.is_err(), "the start finished within 1 ms");
+    let tmp = f.tmp.path();
+    let left = || {
+        let mut left = Vec::new();
+        for entry in fs::read_dir(tmp).unwrap().flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with("pirc-n-") {
+                left.extend(fs::read_dir(&path).unwrap().flatten().map(|e| e.path()));
+            } else {
+                left.push(path);
+            }
+        }
+        left
+    };
+    // The policy is built on the blocking pool, which finishes (and drops
+    // its result, the directory with it) after the start was dropped.
+    for _ in 0..100 {
+        if left().is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(left().is_empty(), "{:?}", left());
 }

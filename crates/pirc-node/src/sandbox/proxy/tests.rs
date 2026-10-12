@@ -63,6 +63,23 @@ fn matches_as_srt_does() {
     assert!(!list.allows("evil.com", 443));
 }
 
+#[test]
+fn entries_srts_schema_refuses_are_ignored() {
+    let list = Allowlist::new(
+        vec!["*.localhost".into(), "intranet".into(), "::1".into()],
+        Vec::new(),
+    );
+    assert!(!list.allows("app.localhost", 80));
+    assert!(!list.allows("intranet", 80));
+    assert!(!list.allows("::1", 80));
+    list.set_approved(&["*.localhost".into(), "localhost:3000".into()]);
+    assert!(!list.allows("app.localhost", 3000));
+    assert!(list.allows("localhost", 3000));
+    // Denied entries stay as written.
+    let list = Allowlist::new(vec!["localhost".into()], vec!["*.localhost".into()]);
+    assert!(list.allows("localhost", 80));
+}
+
 /// A host server: answers each request with its head (`|` for CRLF) and
 /// body; `/echo` echoes raw bytes instead.
 async fn upstream() -> u16 {
@@ -605,4 +622,70 @@ async fn every_sessions_proxy_shares_the_nodes_connection_cap() {
     for task in tasks {
         task.abort();
     }
+}
+
+#[tokio::test]
+async fn only_authenticated_connections_count_against_the_sessions_cap() {
+    let port = upstream().await;
+    let p = proxy(&["127.0.0.1"], &[]);
+    let auth = authorization();
+    // More tunnels than the unauthenticated cap: each left it once it
+    // presented the token.
+    let mut tunnels = Vec::new();
+    for _ in 0..MAX_UNAUTHENTICATED + 4 {
+        let mut tunnel = UnixStream::connect(&p.socket).await.unwrap();
+        tunnel
+            .write_all(format!("CONNECT 127.0.0.1:{port} HTTP/1.1\r\n{auth}\r\n").as_bytes())
+            .await
+            .unwrap();
+        let mut established = [0u8; 39];
+        tunnel.read_exact(&mut established).await.unwrap();
+        assert_eq!(&established, b"HTTP/1.1 200 Connection Established\r\n\r\n");
+        tunnels.push(tunnel);
+    }
+    // Clients without the token get a small cap of their own...
+    let mut idle = Vec::new();
+    for _ in 0..MAX_UNAUTHENTICATED {
+        idle.push(UnixStream::connect(&p.socket).await.unwrap());
+    }
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let get = format!("GET http://127.0.0.1:{port}/ HTTP/1.1\r\n{auth}\r\n");
+    assert_eq!(ask(&p.socket, get.as_bytes()).await, "");
+    // ...and once they are gone the session's clients get in again, its
+    // tunnels untouched.
+    drop(idle);
+    let mut reply = String::new();
+    for _ in 0..50 {
+        reply = ask(&p.socket, get.as_bytes()).await;
+        if !reply.is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(reply.starts_with("HTTP/1.1 200 OK"), "{reply}");
+    let tunnel = &mut tunnels[0];
+    tunnel.write_all(b"ECHO\r\nping").await.unwrap();
+    let mut echoed = [0u8; 4];
+    tunnel.read_exact(&mut echoed).await.unwrap();
+    assert_eq!(&echoed, b"ping");
+}
+
+#[tokio::test]
+async fn lookups_hold_a_session_permit_until_they_return() {
+    let lookups = Arc::new(Semaphore::new(1));
+    let held = lookups.clone().acquire_owned().await.unwrap();
+    // No permit: the lookup waits (and the dial's deadline would end it).
+    let waiting = tokio::time::timeout(
+        Duration::from_millis(100),
+        lookup("localhost", 80, &lookups),
+    )
+    .await;
+    assert!(waiting.is_err());
+    drop(held);
+    let (a, b) = tokio::join!(
+        lookup("localhost", 80, &lookups),
+        lookup("localhost", 80, &lookups)
+    );
+    assert!(a.is_ok() && b.is_ok());
+    assert_eq!(lookups.available_permits(), 1);
 }

@@ -16,8 +16,9 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use pirc_config::{Env, NodeConfig};
+use pirc_node::sandbox::linux::plan::RESOLVER_SOCKETS;
 use pirc_node::sandbox::linux::{NativeSandbox, find_bwrap};
-use pirc_node::sandbox::{PrepareInput, Prepared, Sandbox};
+use pirc_node::sandbox::{PrepareInput, Prepared, ReadonlyInput, Sandbox};
 use pirc_protocol::NodeRole;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
@@ -26,6 +27,7 @@ struct Fixture {
     config: NodeConfig,
     sandbox: NativeSandbox,
     path: String,
+    _tmp: tempfile::TempDir,
 }
 
 impl Drop for Fixture {
@@ -44,7 +46,7 @@ fn fixture(name: &str, allowed: &[&str], denied: &[&str]) -> Option<Fixture> {
     }
     let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("sandbox-network-{name}"));
     let _ = fs::remove_dir_all(&root);
-    for dir in ["home", "state", "config", "workspace", "tmp"] {
+    for dir in ["home", "state", "config", "workspace"] {
         fs::create_dir_all(root.join(dir)).unwrap();
     }
     let root = fs::canonicalize(&root).unwrap();
@@ -59,7 +61,17 @@ fn fixture(name: &str, allowed: &[&str], denied: &[&str]) -> Option<Fixture> {
     )
     .unwrap();
     let dir = |rest: &str| root.join(rest).display().to_string();
-    let (home, state, config_dir, tmp) = (dir("home"), dir("state"), dir("config"), dir("tmp"));
+    let (home, state, config_dir) = (dir("home"), dir("state"), dir("config"));
+    // `TMPDIR` short and in `/tmp`, as on a node: the proxy socket's path
+    // (`<TMPDIR>/pirc-n-*/pirc-*/proxy.sock`) must fit `sun_path`.
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("pirc-t")
+        .tempdir_in("/tmp")
+        .unwrap();
+    let tmp = fs::canonicalize(tmp_dir.path())
+        .unwrap()
+        .display()
+        .to_string();
     let vars = [
         ("PIRC_NODE_ID", "test-node"),
         ("PIRC_NODE_TOKEN", "0123456789abcdef0123456789abcdef"),
@@ -86,6 +98,7 @@ fn fixture(name: &str, allowed: &[&str], denied: &[&str]) -> Option<Fixture> {
         config,
         sandbox,
         path: path_var,
+        _tmp: tmp_dir,
     })
 }
 
@@ -197,6 +210,157 @@ fn has(tool: &str, path: &str) -> bool {
     found
 }
 
+/// The host's name-service sockets ([`RESOLVER_SOCKETS`]: the socket
+/// itself, or the sockets in the directory).
+fn resolver_sockets() -> Vec<PathBuf> {
+    use std::os::unix::fs::FileTypeExt;
+    let is_socket = |path: &Path| fs::metadata(path).is_ok_and(|meta| meta.file_type().is_socket());
+    let mut found = Vec::new();
+    for entry in RESOLVER_SOCKETS {
+        let entry = Path::new(entry);
+        if is_socket(entry) {
+            found.push(entry.to_path_buf());
+        } else if let Ok(dir) = fs::read_dir(entry) {
+            found.extend(
+                dir.flatten()
+                    .map(|item| item.path())
+                    .filter(|path| is_socket(path)),
+            );
+        }
+    }
+    found
+}
+
+/// The host's resolver daemons (nscd, systemd-resolved, ...) would resolve
+/// any name for the sandbox, and their queries reach the name's
+/// authoritative server whatever the allowlist says: their sockets are
+/// hidden from sessions and from the read-only sandbox alike.
+#[tokio::test]
+async fn the_hosts_resolver_sockets_are_hidden() {
+    let sockets = resolver_sockets();
+    if sockets.is_empty() {
+        eprintln!("skipped: this host has no name-service socket");
+        return;
+    }
+    let Some(f) = fixture("resolver", &["localhost"], &[]) else {
+        return;
+    };
+    // Through the host resolver when the host itself resolves the name
+    // (it may be offline); the sockets' visibility either way.
+    let name = "example.com";
+    let resolves = has("getent", &f.path)
+        && std::process::Command::new("getent")
+            .args(["hosts", name])
+            .stdout(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success());
+    if !resolves {
+        eprintln!("the host cannot resolve {name}: only the sockets' visibility is checked");
+    }
+    let mut script = String::new();
+    for socket in &sockets {
+        script.push_str(&format!(
+            "[ -S '{0}' ] && echo 'visible {0}'\n",
+            socket.display()
+        ));
+    }
+    if resolves {
+        script.push_str(&format!("getent hosts {name} && echo 'resolved {name}'\n"));
+    }
+    script.push_str("exit 0\n");
+
+    let prepared = f.prepare("pi_resolver").await;
+    let run = f.run(&prepared, &script).await;
+    assert_eq!((run.code, run.stdout.as_str()), (0, ""), "{}", run.stderr);
+    prepared.cleanup();
+
+    let readonly = f
+        .sandbox
+        .prepare_readonly(ReadonlyInput {
+            workspace_root: f.root.join("workspace"),
+            command: vec!["/bin/sh".into(), "-c".into(), script.into()],
+        })
+        .await
+        .unwrap();
+    let output = readonly
+        .command()
+        .unwrap()
+        .env("PATH", &f.path)
+        .current_dir(f.root.join("workspace"))
+        .stdin(Stdio::null())
+        .output()
+        .await
+        .unwrap();
+    assert_eq!(
+        (
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout)
+        ),
+        (Some(0), "".into()),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    readonly.cleanup();
+}
+
+/// Every session runs as the node's uid with `/tmp` writable: the node's
+/// private parent of the temp directories keeps one session from another's
+/// files and proxy socket.
+#[tokio::test]
+async fn sessions_cannot_reach_each_others_temp_dir_or_proxy() {
+    let Some(f) = fixture("neighbours", &["localhost"], &[]) else {
+        return;
+    };
+    let port = upstream().await;
+    let tmp = |prepared: &Prepared| {
+        let (_, dir) = prepared
+            .env
+            .iter()
+            .find(|(name, _)| name == "CLAUDE_CODE_TMPDIR")
+            .unwrap();
+        PathBuf::from(dir)
+    };
+    let a = f.prepare("pi_a").await;
+    let b = f.prepare("pi_b").await;
+    let (a_tmp, b_tmp) = (tmp(&a), tmp(&b));
+    let parent = a_tmp.parent().unwrap();
+    assert_eq!(b_tmp.parent(), Some(parent));
+    assert!(b_tmp.join("proxy.sock").exists());
+    let script = format!(
+        r#"ls -a '{parent}' | grep -v '^\.\.\?$'
+[ -e '{b}/proxy.sock' ] && echo 'sees the socket'
+ls '{b}' 2>/dev/null && echo 'lists the directory'
+(echo x > '{b}/planted') 2>/dev/null && echo 'writes the directory'
+printf 'GET / HTTP/1.1\r\n\r\n' | nc -U '{b}/proxy.sock' 2>/dev/null && echo 'connects'
+echo x > "$TMPDIR/own" && cat "$TMPDIR/own"
+exit 0
+"#,
+        parent = parent.display(),
+        b = b_tmp.display(),
+    );
+    let run = f.run(&a, &script).await;
+    let own_name = a_tmp.file_name().unwrap().to_string_lossy();
+    assert_eq!(
+        (run.code, run.stdout.as_str()),
+        (0, format!("{own_name}\nx\n").as_str()),
+        "{}",
+        run.stderr
+    );
+    assert!(!b_tmp.join("planted").exists());
+    // B's proxy still serves B.
+    if has("curl", &f.path) {
+        let run = f
+            .run(
+                &b,
+                &format!("curl -sS --noproxy '' --max-time 10 http://localhost:{port}/"),
+            )
+            .await;
+        assert_eq!(run.stdout, "ok\n", "{}", run.stderr);
+    }
+    a.cleanup();
+    b.cleanup();
+}
+
 #[tokio::test]
 async fn ssh_style_tunnels_go_through_the_helper_and_approvals_widen_them() {
     let Some(f) = fixture("helper", &["localhost"], &[]) else {
@@ -240,8 +404,9 @@ async fn ssh_style_tunnels_go_through_the_helper_and_approvals_widen_them() {
 #[tokio::test]
 async fn names_resolving_to_this_host_are_refused() {
     // The host's own name resolves to one of its addresses (or loopback):
-    // allowing the name grants neither. (Approved: `DOMAIN_PATTERN` admits
-    // no single-label names in the config.)
+    // allowing the name grants neither. srt's schema refuses a
+    // single-label name, so as an approval it has no effect at all; a
+    // dotted host name reaches the resolved-address guard.
     let Ok(hostname) = fs::read_to_string("/proc/sys/kernel/hostname") else {
         return;
     };
@@ -265,21 +430,22 @@ async fn names_resolving_to_this_host_are_refused() {
         .run(&prepared, &proxy_command(&hostname, port, "x\\n"))
         .await;
     assert_eq!(run.code, 1, "{}", run.stdout);
-    assert!(
-        run.stderr
-            .contains(&format!("Connection to {hostname} blocked: resolved to ")),
-        "{}",
-        run.stderr
-    );
-    // `*.localhost` names may be loopback (RFC 6761), but not when denied.
-    let run = f
-        .run(&prepared, &proxy_command("bad.localhost", port, "x\\n"))
-        .await;
-    assert!(
-        run.stderr.contains("blocked by network allowlist"),
-        "{}",
-        run.stderr
-    );
+    let expected = if hostname.contains('.') {
+        format!("Connection to {hostname} blocked: resolved to ")
+    } else {
+        "blocked by network allowlist".to_owned()
+    };
+    assert!(run.stderr.contains(&expected), "{}", run.stderr);
+    // `*.localhost` (which `DOMAIN_PATTERN` admits) is not an entry srt
+    // takes: no `*.localhost` name is allowed.
+    for name in ["app.localhost", "bad.localhost"] {
+        let run = f.run(&prepared, &proxy_command(name, port, "x\\n")).await;
+        assert!(
+            run.stderr.contains("blocked by network allowlist"),
+            "{}",
+            run.stderr
+        );
+    }
     prepared.cleanup();
 }
 

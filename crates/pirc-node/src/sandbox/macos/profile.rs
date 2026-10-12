@@ -27,7 +27,7 @@ use super::paths::{
 
 /// The profile's fixed part after the log tag: process, Mach, IPC, IOKit,
 /// sysctl and device rules (srt's `generateSandboxProfile` prelude, with
-/// none of the opt-in Mach services).
+/// none of the opt-in Mach services), after its `;;` header.
 ///
 /// It also allows a few host side effects that are not file writes or
 /// network access: POSIX shared memory of any name, writing the
@@ -817,7 +817,12 @@ pub fn generate(input: &ProfileInput<'_>) -> Result<String, String> {
     } else {
         BASE.to_owned()
     };
-    profile.extend(base.trim_end_matches('\n').split('\n').map(str::to_owned));
+    profile.extend(
+        base.trim_end_matches('\n')
+            .split('\n')
+            .skip_while(|line| line.starts_with(";;"))
+            .map(str::to_owned),
+    );
     profile.push(String::new());
 
     profile.push("; Network".to_owned());

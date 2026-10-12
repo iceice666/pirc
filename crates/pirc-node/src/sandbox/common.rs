@@ -176,6 +176,71 @@ pub fn make_temp_dir(base: &Path, prefix: &str) -> std::io::Result<PathBuf> {
     }
 }
 
+/// The node's private parent of every session's temporary directory,
+/// `<TMPDIR>/pirc-n-XXXXXX` (0700), made on first use and made again when
+/// it is gone or no longer the node's own private directory. Not TS's,
+/// whose session directories sat side by side in `TMPDIR`: every sandbox
+/// runs as the node's uid and may read the filesystem and write `/tmp`,
+/// so their 0700 mode kept no session from another's files and proxy
+/// socket. The parent is one of every session's private directories, so
+/// a session sees only its own temporary directory in it. Its name is
+/// short, as the sessions' are (macOS's 104-byte socket paths). Removed,
+/// when empty, with the backend (its last clone).
+#[derive(Clone)]
+pub struct NodeTmp(Arc<NodeTmpDir>);
+
+struct NodeTmpDir {
+    base: PathBuf,
+    dir: Mutex<Option<PathBuf>>,
+}
+
+impl NodeTmp {
+    pub fn new(env: &Env) -> Self {
+        Self(Arc::new(NodeTmpDir {
+            base: tmpdir(env),
+            dir: Mutex::new(None),
+        }))
+    }
+
+    /// The parent, made when needed.
+    pub fn dir(&self) -> std::io::Result<PathBuf> {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let mut dir = self.0.dir.lock().unwrap_or_else(|p| p.into_inner());
+        let private = |path: &Path| {
+            std::fs::symlink_metadata(path).is_ok_and(|meta| {
+                meta.is_dir()
+                    && meta.uid() == nix::unistd::getuid().as_raw()
+                    && meta.permissions().mode() & 0o077 == 0
+            })
+        };
+        if let Some(existing) = dir.as_deref()
+            && private(existing)
+        {
+            return Ok(existing.to_path_buf());
+        }
+        let made = make_temp_dir(&self.0.base, "pirc-n-")?;
+        *dir = Some(made.clone());
+        Ok(made)
+    }
+
+    /// A new session temporary directory in the parent, and the parent.
+    pub fn make_session_dir(&self) -> std::io::Result<(PathBuf, PathBuf)> {
+        let parent = self.dir()?;
+        let tmp = make_temp_dir(&parent, "pirc-")?;
+        Ok((tmp, parent))
+    }
+}
+
+impl Drop for NodeTmpDir {
+    fn drop(&mut self) {
+        let dir = self.dir.get_mut().unwrap_or_else(|p| p.into_inner());
+        if let Some(dir) = dir.take() {
+            // Only when empty: a running command's directory stays.
+            let _ = std::fs::remove_dir(dir);
+        }
+    }
+}
+
 /// `<state>/sandbox`, made 0700 when missing.
 pub fn sandbox_state_dir(config: &NodeConfig) -> std::io::Result<PathBuf> {
     let dir = config.state_dir.join("sandbox");
@@ -194,10 +259,37 @@ pub fn sandbox_bin_dir(config: &NodeConfig) -> PathBuf {
     config.state_dir.join("sandbox").join("bin")
 }
 
+/// A session's (or read-only command's) temporary directory, removed when
+/// dropped: a prepare future dropped mid-await (node shutdown during a
+/// probe) leaves nothing behind. The backends move it into
+/// [`super::Prepared`]'s cleanup, which removes it at the latest.
+#[derive(Debug)]
+pub struct SessionTmp(PathBuf);
+
+impl SessionTmp {
+    pub fn new(dir: PathBuf) -> Self {
+        Self(dir)
+    }
+}
+
+impl std::ops::Deref for SessionTmp {
+    type Target = Path;
+
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for SessionTmp {
+    fn drop(&mut self) {
+        Session::remove_tmp(&self.0);
+    }
+}
+
 /// A session's policy and what goes with it, before the backend wraps it.
 pub struct Session {
     /// The session's own temporary directory (`CLAUDE_CODE_TMPDIR`).
-    pub tmp: PathBuf,
+    pub tmp: SessionTmp,
     pub policy: SessionPolicy,
     pub warnings: Vec<String>,
 }
@@ -213,44 +305,60 @@ fn text(path: &Path) -> String {
     path.display().to_string()
 }
 
+/// [`session`] on tokio's blocking pool: it reads the agent config, makes
+/// directories and resolves dozens of paths.
+pub async fn spawn_session(
+    config: &NodeConfig,
+    env: &Env,
+    node_tmp: &NodeTmp,
+    input: &PrepareInput,
+) -> ApiResult<Session> {
+    let (config, env, node_tmp, input) =
+        (config.clone(), env.clone(), node_tmp.clone(), input.clone());
+    tokio::task::spawn_blocking(move || session(&config, &env, &node_tmp, &input))
+        .await
+        .map_err(|_| ApiError::internal())?
+}
+
+/// [`readonly_session`] on tokio's blocking pool.
+pub async fn spawn_readonly_session(
+    config: &NodeConfig,
+    env: &Env,
+    node_tmp: &NodeTmp,
+    input: &super::ReadonlyInput,
+) -> ApiResult<Session> {
+    let (config, env, node_tmp, input) =
+        (config.clone(), env.clone(), node_tmp.clone(), input.clone());
+    tokio::task::spawn_blocking(move || readonly_session(&config, &env, &node_tmp, &input))
+        .await
+        .map_err(|_| ApiError::internal())?
+}
+
 /// The first half of `NodeSandbox.prepare`: read the agent config, make
 /// the session's temporary directory, build the policy and the warnings.
-pub fn session(config: &NodeConfig, env: &Env, input: &PrepareInput) -> ApiResult<Session> {
+pub fn session(
+    config: &NodeConfig,
+    env: &Env,
+    node_tmp: &NodeTmp,
+    input: &PrepareInput,
+) -> ApiResult<Session> {
     let home = text(&env.home());
     let agent_config = read_agent_config(&text(&config.config_dir), &home);
     // The session's own temporary directory: TMPDIR inside the sandbox,
     // and the only temp dir it may write besides /tmp. Kept short: srt may
     // put Unix sockets there, and macOS caps their paths at 104 bytes.
-    let tmp = make_temp_dir(&tmpdir(env), "pirc-").map_err(|error| {
+    let (tmp, parent) = node_tmp.make_session_dir().map_err(|error| {
         crate::log::error(&format!(
             "cannot make the session's temp directory: {error}"
         ));
         ApiError::internal()
     })?;
+    let tmp = SessionTmp::new(tmp);
     let mut warnings = Vec::new();
     if let Some(problem) = &agent_config.problem {
         warnings.push(format!("Sandbox settings ignored: {problem}"));
     }
-    let database_dir = config
-        .database_path
-        .parent()
-        .map_or_else(|| PathBuf::from("/"), Path::to_path_buf);
-    let private_dirs: Vec<String> = [
-        config.state_dir.clone(),
-        config.sessions_dir.clone(),
-        config.uploads_dir.clone(),
-        database_dir,
-        config.browser.profiles_dir.clone(),
-    ]
-    .into_iter()
-    // systemd credentials (the NixOS module hands the node its token there).
-    .chain(
-        env.get("CREDENTIALS_DIRECTORY")
-            .filter(|dir| !dir.is_empty())
-            .map(PathBuf::from),
-    )
-    .map(|dir| real_resolve(&text(&dir)))
-    .collect();
+    let private_dirs = private_dirs(config, env, &parent);
     let policy_input = SessionPolicyInput {
         config: agent_config.sandbox,
         config_dir: agent_config.config_dir,
@@ -279,6 +387,9 @@ pub fn session(config: &NodeConfig, env: &Env, input: &PrepareInput) -> ApiResul
             return Err(ApiError::internal());
         }
     };
+    // The temp parent may sit in a write root (`/tmp`) by design: the
+    // sandboxes hide it whole (Linux mounts an empty directory there).
+    let node_tmp = real_resolve(&text(&parent));
     let exposed: Vec<&str> = policy
         .paths
         .allow_write
@@ -287,7 +398,7 @@ pub fn session(config: &NodeConfig, env: &Env, input: &PrepareInput) -> ApiResul
             let root = real_resolve(root);
             private_dirs
                 .iter()
-                .any(|dir| is_inside(dir, &root) && *dir != root)
+                .any(|dir| is_inside(dir, &root) && *dir != root && *dir != node_tmp)
         })
         .map(String::as_str)
         .collect();
@@ -304,9 +415,9 @@ pub fn session(config: &NodeConfig, env: &Env, input: &PrepareInput) -> ApiResul
     })
 }
 
-/// The node's private directories, as [`session`] lists them: closed to
-/// reads (`deny_read`) unless the policy reopens a part.
-fn private_dirs(config: &NodeConfig, env: &Env) -> Vec<String> {
+/// The node's private directories: closed to reads (`deny_read`) unless
+/// the policy reopens a part. `node_tmp` is [`NodeTmp`]'s parent.
+fn private_dirs(config: &NodeConfig, env: &Env, node_tmp: &Path) -> Vec<String> {
     let database_dir = config
         .database_path
         .parent()
@@ -319,11 +430,13 @@ fn private_dirs(config: &NodeConfig, env: &Env) -> Vec<String> {
         config.browser.profiles_dir.clone(),
     ]
     .into_iter()
+    // systemd credentials (the NixOS module hands the node its token there).
     .chain(
         env.get("CREDENTIALS_DIRECTORY")
             .filter(|dir| !dir.is_empty())
             .map(PathBuf::from),
     )
+    .chain([node_tmp.to_path_buf()])
     .map(|dir| real_resolve(&text(&dir)))
     .collect()
 }
@@ -344,16 +457,18 @@ fn private_dirs(config: &NodeConfig, env: &Env) -> Vec<String> {
 pub fn readonly_session(
     config: &NodeConfig,
     env: &Env,
+    node_tmp: &NodeTmp,
     input: &super::ReadonlyInput,
 ) -> ApiResult<Session> {
     let home = text(&env.home());
     let agent_config = read_agent_config(&text(&config.config_dir), &home);
-    let tmp = make_temp_dir(&tmpdir(env), "pirc-").map_err(|error| {
+    let (tmp, parent) = node_tmp.make_session_dir().map_err(|error| {
         crate::log::error(&format!(
             "cannot make a read-only sandbox's temp directory: {error}"
         ));
         ApiError::internal()
     })?;
+    let tmp = SessionTmp::new(tmp);
     let mut warnings = Vec::new();
     if let Some(problem) = &agent_config.problem {
         warnings.push(format!("Sandbox settings ignored: {problem}"));
@@ -363,7 +478,7 @@ pub fn readonly_session(
         config: agent_config.sandbox,
         config_dir: agent_config.config_dir,
         home,
-        private_dirs: private_dirs(config, env),
+        private_dirs: private_dirs(config, env, &parent),
         workspace_root: workspace.clone(),
         allowed_paths: agent_config.allowed_paths,
         session_dir: workspace,
@@ -446,6 +561,7 @@ mod tests {
         )
         .unwrap();
         let (config, env) = test_support::node(&root, &[]);
+        let node_tmp = NodeTmp::new(&env);
         let workspace = root.join("workspace");
         let input = super::super::ReadonlyInput {
             workspace_root: workspace.clone(),
@@ -455,7 +571,7 @@ mod tests {
             tmp,
             policy,
             warnings,
-        } = readonly_session(&config, &env, &input).unwrap();
+        } = readonly_session(&config, &env, &node_tmp, &input).unwrap();
         assert!(warnings.is_empty(), "{warnings:?}");
         assert!(tmp.is_dir() && tmp.starts_with(root.join("tmp")), "{tmp:?}");
         let text = |path: &Path| path.display().to_string();
@@ -467,7 +583,10 @@ mod tests {
         assert_eq!(policy.network, NetworkPolicy::default());
         // Reads: a session's.
         assert!(policy.paths.allow_read.contains(&text(&workspace)));
-        for denied in [root.join("state"), root.join("home/secret")] {
+        // The node's temp parent is private, its own temp dir read back.
+        let parent = tmp.parent().unwrap().to_path_buf();
+        assert!(policy.paths.allow_read.contains(&text(&tmp)));
+        for denied in [root.join("state"), root.join("home/secret"), parent] {
             assert!(
                 policy.paths.deny_read.contains(&text(&denied)),
                 "{denied:?} in {:?}",
@@ -478,9 +597,59 @@ mod tests {
 
         // A broken agent config warns and keeps the defaults.
         std::fs::write(root.join("config/config.json"), r#"{"sandbox":{"x":1}}"#).unwrap();
-        let session = readonly_session(&config, &env, &input).unwrap();
+        let session = readonly_session(&config, &env, &node_tmp, &input).unwrap();
         assert_eq!(session.warnings.len(), 1, "{:?}", session.warnings);
         Session::remove_tmp(&session.tmp);
+    }
+
+    #[test]
+    fn session_temp_dirs_share_the_nodes_private_parent() {
+        use std::os::unix::fs::PermissionsExt;
+        // The node's state outside `/tmp`, whose temp parent is in it.
+        let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
+        std::fs::create_dir_all(&base).unwrap();
+        let dir = tempfile::tempdir_in(&base).unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let (config, env) = test_support::node(&root, &[("TMPDIR", "/tmp")]);
+        let node_tmp = NodeTmp::new(&env);
+        let input = |name: &str| PrepareInput {
+            session_id: name.to_owned(),
+            workspace_root: root.join("workspace"),
+            session_dir: config.sessions_dir.join(name),
+            inference_socket: None,
+            protected_paths: Vec::new(),
+        };
+        let a = session(&config, &env, &node_tmp, &input("pi_a")).unwrap();
+        let b = session(&config, &env, &node_tmp, &input("pi_b")).unwrap();
+        let parent = a.tmp.parent().unwrap().to_path_buf();
+        assert_eq!(b.tmp.parent(), Some(parent.as_path()));
+        let name = parent.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("pirc-n-") && name.len() == 13, "{name}");
+        let mode = std::fs::metadata(&parent).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o700);
+        // Inside `/tmp`, a write root of every session, by design: no
+        // warning about exposed state.
+        assert!(a.warnings.is_empty(), "{:?}", a.warnings);
+        let text = |path: &Path| path.display().to_string();
+        for (own, other) in [(&a, &b), (&b, &a)] {
+            let paths = &own.policy.paths;
+            assert!(pirc_policy::read_allowed(paths, &text(&own.tmp.join("x"))));
+            assert!(pirc_policy::write_allowed(paths, &text(&own.tmp.join("x"))));
+            assert!(!pirc_policy::read_allowed(
+                paths,
+                &text(&other.tmp.join("x"))
+            ));
+        }
+        // A parent that is gone is made again.
+        Session::remove_tmp(&a.tmp);
+        Session::remove_tmp(&b.tmp);
+        std::fs::remove_dir(&parent).unwrap();
+        let c = session(&config, &env, &node_tmp, &input("pi_c")).unwrap();
+        assert!(c.tmp.is_dir());
+        Session::remove_tmp(&c.tmp);
+        let parent = c.tmp.parent().unwrap().to_path_buf();
+        drop(node_tmp);
+        assert!(!parent.exists(), "removed with the backend");
     }
 
     #[test]
