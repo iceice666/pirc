@@ -1,3 +1,6 @@
+;; Ported from sandbox-runtime 0.0.78 `sandbox/macos-sandbox-utils.js`
+;; (`generateSandboxProfile`'s fixed rules; Apache-2.0, see
+;; `crates/pirc-node/NOTICE`). The `;;` lines are left out of the profile.
 ; Essential permissions - based on Chrome sandbox policy
 ; Process permissions
 (allow process-exec)
