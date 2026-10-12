@@ -8,5 +8,7 @@
 pub mod contracts;
 #[cfg(feature = "guest")]
 pub mod guest;
+#[cfg(feature = "guest")]
+pub mod harden;
 pub mod preflight;
 pub mod protocol;

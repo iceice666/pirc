@@ -10,7 +10,7 @@ publish.workspace = true
 default = ["guest"]
 # The `ptc-guest` process (QuickJS). The agent needs only the preflight and
 # the shared contracts, so it builds without it.
-guest = ["dep:rquickjs", "dep:nix"]
+guest = ["dep:rquickjs", "dep:nix", "dep:seccompiler", "dep:libc"]
 
 [dependencies]
 # TypeScript type stripping and the preflight's AST checks (Bun.Transpiler
@@ -21,10 +21,22 @@ rquickjs = { version = "0.14", optional = true }
 serde_json.workspace = true
 
 # The guest's parent-death signal (Linux): it dies with its agent even inside
-# a regular expression, which QuickJS cannot interrupt. Already linked by the
-# agent for process-group kills.
+# a regular expression, which QuickJS cannot interrupt; and its hardening
+# (`harden`: rlimits, closing inherited descriptors, no_new_privs). Already
+# linked by the agent for process-group kills.
+nix = { version = "0.31", features = ["fs", "process", "resource", "signal"], optional = true }
+
+# The guest's seccomp filter (`harden`, security audit S6): rust-vmm's
+# BPF compiler (libc only); libc for the system call numbers.
 [target.'cfg(target_os = "linux")'.dependencies]
-nix = { version = "0.31", features = ["process", "signal"], optional = true }
+seccompiler = { version = "0.5", optional = true }
+libc = { version = "0.2", optional = true }
 
 [lints]
 workspace = true
+
+# Escape tests for the hardened guest; each case runs in a re-executed child.
+[[test]]
+name = "guest_hardening"
+harness = false
+required-features = ["guest"]
