@@ -4,11 +4,11 @@
 //! network namespace whose only network route out is the filtering HTTP
 //! and SOCKS5 proxy ([`super::proxy`]) on a Unix socket served by the node
 //! itself (host daemons behind visible Unix sockets are another way out:
-//! see below),
-//! and the in-sandbox bridge (`pirc-node sandbox-bridge`, [`super::bridge`])
-//! that exposes it as `127.0.0.1:3128` and `:1080` and then runs the agent. The proxy's allowlist is
-//! shared with the session's [`super::NetworkControl`], so an approval
-//! widens it in place (no control fd). The agent's stdio passes through
+//! see below), and the in-sandbox bridge (`pirc-node sandbox-bridge`,
+//! [`super::bridge`]) that exposes it as `127.0.0.1:3128` and `:1080` and
+//! then runs the agent. The proxy's allowlist is shared with the session's
+//! [`super::NetworkControl`], so an approval widens it in place (no
+//! control fd). The agent's stdio passes through
 //! unchanged; `--die-with-parent`, and the agent runs in its own PID
 //! namespace, so killing bubblewrap (the runner's process group) ends
 //! everything inside.

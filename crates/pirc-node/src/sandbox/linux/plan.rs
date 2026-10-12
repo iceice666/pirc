@@ -71,19 +71,20 @@
 //!   write get a read-only placeholder on their first missing component:
 //!   `/dev/null` when that is the path itself, an empty directory when it is
 //!   an ancestor of it (srt's "Fix 2"; one placeholder per destination, the
-//!   directory winning). Missing read denies get one too, hidden (not
-//!   srt's, which placed them for write denies only: the agent could
-//!   create the path and read what it put or the host later puts there).
-//!   A missing name holding `*`, `?` or `[` gets none (a glob, taken
-//!   literally: the placeholder would be a stray `**` on the host). srt bound an empty host directory there; this uses
+//!   directory winning). srt bound an empty host directory there; this uses
 //!   a read-only tmpfs, which needs no host source to keep unwritable.
-//!   bubblewrap creates each placeholder's mount point on the host; they are
-//!   tracked ([`MountPoints`]) and removed when the last sandbox using them
-//!   ends. srt took any empty file without write bits at a deny path for a
-//!   placeholder an earlier run left behind, and removed it: that deletes a
-//!   user's own empty read-only file. Here the node records the placeholders
-//!   it makes ([`Options::record`], `<state>/sandbox/placeholders`), and only
-//!   a recorded one is removed (at the node's start, [`sweep_record`]) or
+//!   Missing read denies get one too, hidden (not srt's, which placed them
+//!   for write denies only: the agent could create the path and read what
+//!   it put or the host later puts there). A missing name holding `*`, `?`
+//!   or `[` gets none (a glob, taken literally: the placeholder would be a
+//!   stray `**` on the host). bubblewrap creates each placeholder's mount
+//!   point on the host; they are tracked ([`MountPoints`]) and removed when
+//!   the last sandbox using them ends. srt took any empty file without
+//!   write bits at a deny path for a placeholder an earlier run left
+//!   behind, and removed it: that deletes a user's own empty read-only
+//!   file. Here the node records the placeholders it makes
+//!   ([`Options::record`], `<state>/sandbox/placeholders`), and only a
+//!   recorded one is removed (at the node's start, [`sweep_record`]) or
 //!   tracked again; an unrecorded match is covered with `/dev/null` (as srt
 //!   did) but left in place. An empty directory where another sandbox's
 //!   directory placeholder is (or a recorded one) is that placeholder,
