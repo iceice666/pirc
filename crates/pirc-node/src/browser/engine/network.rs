@@ -103,8 +103,6 @@
 //! `src/server/chromium/crServiceWorker.ts`,
 //! `src/server/dispatchers/webSocketRouteDispatcher.ts` (Apache-2.0, see
 //! `crates/pirc-node/NOTICE`).
-//!
-//! Owner: netio.
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};

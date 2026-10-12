@@ -13,8 +13,6 @@
 //! Ported from playwright-core 1.63.0 `src/server/chromium/crConnection.ts`,
 //! `src/server/pipeTransport.ts` (Apache-2.0, see
 //! `crates/pirc-node/NOTICE`).
-//!
-//! Layout: implemented here.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};

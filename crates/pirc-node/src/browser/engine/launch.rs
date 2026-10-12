@@ -5,8 +5,6 @@
 //! Ported from playwright-core 1.63.0 `src/server/chromium/chromium.ts`,
 //! `src/server/chromium/chromiumSwitches.ts`, `src/server/browserType.ts`
 //! (Apache-2.0, see `crates/pirc-node/NOTICE`).
-//!
-//! Layout: implemented here.
 
 use std::collections::BTreeMap;
 use std::os::fd::OwnedFd;

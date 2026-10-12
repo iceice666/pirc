@@ -17,8 +17,6 @@
 //! `src/server/dom.ts`, `src/server/javascript.ts`,
 //! `src/server/chromium/crExecutionContext.ts` (Apache-2.0, see
 //! `crates/pirc-node/NOTICE`).
-//!
-//! Owner: core.
 
 use std::sync::Arc;
 use std::time::Duration;

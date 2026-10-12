@@ -26,8 +26,6 @@
 //! Ported from playwright-core 1.63.0 `src/server/input.ts`,
 //! `src/server/chromium/crInput.ts`, `src/server/chromium/crDragDrop.ts`
 //! (Apache-2.0, see `crates/pirc-node/NOTICE`).
-//!
-//! Owner: netio.
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock, Weak};

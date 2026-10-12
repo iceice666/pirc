@@ -6,8 +6,6 @@
 //! Ported from playwright-core 1.63.0 `src/server/usKeyboardLayout.ts`,
 //! `src/server/macEditingCommands.ts`, `src/server/input.ts` (Apache-2.0,
 //! Copyright (c) Microsoft Corporation, see `crates/pirc-node/NOTICE`).
-//!
-//! Owner: netio.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;

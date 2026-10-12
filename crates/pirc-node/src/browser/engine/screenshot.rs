@@ -30,8 +30,6 @@
 //!
 //! Ported from playwright-core 1.63.0 `src/server/screenshotter.ts`
 //! (Apache-2.0, see `crates/pirc-node/NOTICE`).
-//!
-//! Owner: netio.
 
 use std::time::Duration;
 

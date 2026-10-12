@@ -21,8 +21,6 @@
 //!
 //! The engine is reached through [`seam`] (TS's `settings.launch` test
 //! hook), so the session lifecycle is unit-tested with a fake context.
-//!
-//! Owner: manager (with [`super::recording`] and [`super::util`]).
 
 mod input;
 mod ops;

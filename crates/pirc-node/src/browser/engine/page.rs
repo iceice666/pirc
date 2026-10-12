@@ -17,8 +17,6 @@
 //! Ported from playwright-core 1.63.0 `src/server/page.ts`,
 //! `src/server/frames.ts`, `src/server/chromium/crPage.ts` (Apache-2.0, see
 //! `crates/pirc-node/NOTICE`).
-//!
-//! Owner: core.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock};

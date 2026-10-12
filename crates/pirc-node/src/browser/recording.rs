@@ -4,8 +4,6 @@
 //! `node/browser.ts` does (`startRecording`/`stopRecording`). The manager
 //! owns the parts that touch the tab (the seed frame, the screencast, the
 //! 30-minute cap, the log); this is the ffmpeg process.
-//!
-//! Owner: manager.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

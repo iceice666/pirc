@@ -3,8 +3,6 @@
 //! its LICENSE and NOTICE are kept verbatim in `assets/PLAYWRIGHT-LICENSE`
 //! and `assets/PLAYWRIGHT-NOTICE`) and the TS node's own helpers;
 //! `bun run browser-assets:check` fails when they are stale.
-//!
-//! Layout: implemented here.
 
 /// Playwright's injected script. Evaluate as
 /// `(() => { const module = {}; <INJECTED>; return new (module.exports.InjectedScript())(globalThis, <options>); })()`.

@@ -1,7 +1,7 @@
 //! The agent browser (`node/browser.ts`): [`BrowserService`] is what the
 //! rest of the node calls, [`manager::BrowserManager`] implements it over
 //! [`engine`], a port of the parts of Playwright the TS node used, speaking
-//! CDP to an external Chromium. [`UnavailableBrowser`] stays for tests.
+//! CDP to an external Chromium.
 //!
 //! The runner calls [`BrowserService::handle_with_abort`] for
 //! `browser_request`s (`browser_cancel` aborts it: as in TS, that only
@@ -10,12 +10,16 @@
 //! [`BrowserService::attach`] and [`BrowserService::input`]; core calls
 //! `close_session` on chat deletion and `shutdown` on close.
 //!
-//! | Module | Port of | Owner (M8 layout) |
-//! |---|---|---|
-//! | this file, [`assets`] | the seam; the embedded in-page scripts | layout |
-//! | [`engine`] | Playwright (see its table) | core, netio, locator |
-//! | [`hosts`] | `node/browser-hosts.ts` | netio |
-//! | [`manager`], [`recording`], [`util`] | `node/browser.ts` | manager |
+//! | Module | Ported from |
+//! |---|---|
+//! | this file | the public methods of `node/browser.ts`'s `BrowserManager` |
+//! | [`assets`] | playwright-core 1.63.0's injected script and WebSocket mock (generated, verbatim); `node/browser-extract.ts`'s and `node/browser.ts`'s in-page helpers |
+//! | [`engine`] | playwright-core 1.63.0's server (see its table) |
+//! | [`hosts`] | `node/browser-hosts.ts` |
+//! | [`manager`], [`recording`], [`util`] | `node/browser.ts` |
+//!
+//! Executable discovery (`node/browser-executable.ts`) is in
+//! `pirc_config::node`.
 
 pub mod assets;
 pub mod engine;
@@ -110,62 +114,18 @@ pub fn unavailable() -> ApiError {
     ApiError::forbidden("The browser is not available on this node")
 }
 
-/// A browser that is never available (tests; the M6 node's).
-#[derive(Clone, Copy, Debug, Default)]
-pub struct UnavailableBrowser;
-
-impl BrowserService for UnavailableBrowser {
-    fn enabled(&self) -> bool {
-        false
-    }
-
-    fn handle(&self, _: BrowserTarget, _: String, _: Value) -> BoxFuture<'_, ApiResult<Value>> {
-        Box::pin(async { Err(unavailable()) })
-    }
-
-    fn attach(&self, _: &str, _: FrameSink) -> Detach {
-        Box::new(|| {})
-    }
-
-    fn input(&self, _: BrowserTarget, _: Value) -> BoxFuture<'_, ApiResult<Option<Value>>> {
-        Box::pin(async { Err(unavailable()) })
-    }
-
-    fn close_session(&self, _: &str) -> BoxFuture<'_, ()> {
-        Box::pin(async {})
-    }
-
-    fn shutdown(&self) -> BoxFuture<'_, ()> {
-        Box::pin(async {})
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn answers_unavailable() {
-        let browser: Arc<dyn BrowserService> = Arc::new(UnavailableBrowser);
-        assert!(!browser.enabled());
-        let target = BrowserTarget {
-            session_id: "s".into(),
-            workspace_id: "w".into(),
-            root: PathBuf::from("/w"),
-        };
-        let error = browser
-            .handle(target.clone(), "open".into(), Value::Null)
-            .await
-            .unwrap_err();
+    #[test]
+    fn words_unavailable_as_ts() {
+        let error = unavailable();
+        assert_eq!(error.status, 403);
         assert_eq!(
             error.body(),
             serde_json::json!({ "error": { "code": "forbidden",
                 "message": "The browser is not available on this node" } })
         );
-        assert_eq!(error.status, 403);
-        assert!(browser.input(target, Value::Null).await.is_err());
-        browser.attach("s", Arc::new(|_| {}))();
-        browser.close_session("s").await;
-        browser.shutdown().await;
     }
 }
