@@ -185,8 +185,13 @@ mod tests {
         let mut child = spawn(slave, script.to_str().unwrap(), dir.path(), &env).unwrap();
         let mut output = Vec::new();
         let mut buffer = [0; 4096];
+        // Up to the end of the last line: its `\r\n` may come in a later
+        // read than `done`.
         let read = async {
-            while !String::from_utf8_lossy(&output).contains("done") {
+            while !String::from_utf8_lossy(&output)
+                .replace('\r', "")
+                .contains("done\n")
+            {
                 match master.read(&mut buffer).await {
                     Ok(n @ 1..) => output.extend_from_slice(&buffer[..n]),
                     _ => break,
