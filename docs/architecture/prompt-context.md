@@ -16,7 +16,7 @@ The gateway persistently binds the first chat-node ID across disconnects/restart
 
 ## Section and snapshot contracts
 
-`apps/gateway/src/agent/context.ts` defines `PromptSection`: `id`, `title`, `source`, optional `frozen`, and `text`. Sections join with blank lines; trimming preserves interior whitespace. Features can supply section arrays or a string wrapped with their feature source. Sectioning is for inspection, not permission to reorder or rewrite the provider prompt.
+`crates/pirc-agent/src/context.rs` defines `PromptSection`: `id`, `title`, `source`, optional `frozen`, and `text`. Sections join with blank lines; trimming preserves interior whitespace. Features can supply section arrays or a string wrapped with their feature source. Sectioning is for inspection, not permission to reorder or rewrite the provider prompt.
 
 A version-1 `ContextSnapshot` records an ID, timestamp, request model/context window, sections with estimated tokens, the actual provider tool specifications with estimates, optional internal capability metadata, and input-usage buckets. The hybrid surface's provider tools and script capabilities are distinct: capability metadata is not an extra provider schema list.
 

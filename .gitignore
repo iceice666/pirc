@@ -10,6 +10,7 @@ coverage/
 .env.*
 !.env.example
 state/
+.state/
 data/
 *.sqlite
 *.sqlite-shm

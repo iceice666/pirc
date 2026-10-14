@@ -10,7 +10,7 @@ It consists of:
 - a responsive Svelte PWA;
 - a native Android client in progress ([`apps/android`](apps/android/README.md)), which pairs through device tokens.
 
-The gateway never runs agents or tools; it only runs model requests on their behalf (see [Model backends](docs/guides/model-backends.md)). On a single machine, run the gateway and a node side by side; across devices, each device runs a node that connects to one central gateway over a private VPN. See [`apps/gateway/README.md`](apps/gateway/README.md) for setup and the current limitations.
+The gateway never runs agents or tools; it only runs model requests on their behalf (see [Model backends](docs/guides/model-backends.md)). On a single machine, run the gateway and a node side by side; across devices, each device runs a node that connects to one central gateway over a private VPN. See [gateway and node reference](docs/development/gateway-and-node.md) for setup and the current limitations.
 
 ## Security model
 
@@ -31,7 +31,7 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 - Authenticated user identities, `Host`, and `Origin` are checked against exact allowlists.
 - There is no trust-all or unauthenticated production default.
 - Nodes authenticate to the gateway with per-node secrets and connect outbound only; they listen on no port.
-- Phones running the native app authenticate with device tokens paired from the web **Settings → Devices**. A device token still needs the trusted proxy and an allowed `Host`, cannot manage devices or model backends, and dies after 7 days without use, 30 days after pairing, or on revocation. Otherwise, it acts as you, including shells on your nodes; revoke a lost phone at once. The proxy must pass these requests past forward auth and strip the identity header (see [`apps/gateway/README.md`](apps/gateway/README.md#device-tokens)).
+- Phones running the native app authenticate with device tokens paired from the web **Settings → Devices**. A device token still needs the trusted proxy and an allowed `Host`, cannot manage devices or model backends, and dies after 7 days without use, 30 days after pairing, or on revocation. Otherwise, it acts as you, including shells on your nodes; revoke a lost phone at once. The proxy must pass these requests past forward auth and strip the identity header (see [device tokens](docs/development/gateway-and-node.md#device-tokens)).
 - Workspaces are allowlisted. Each agent runs in a native OS sandbox (bubblewrap on Linux, Seatbelt on macOS, with a filtering proxy); see [Agent sandbox](docs/guides/agent.md#agent-sandbox). A node where the sandbox cannot work starts no agents.
 - The web side panel can browse workspace files, show Git changes and history, and open interactive shells in the workspace. Shells run as the node's account, just like the agent's tools, and require holding session control; set `PIRC_TERMINALS=false` on the node to disable them.
 - The agent's browser (see [Browser](docs/guides/browser.md)) loads pages with the node account's network access and keeps each workspace's logins in a persistent profile. Taking it over from the side panel requires holding session control; set `PIRC_BROWSER=false` on the node to disable it.
@@ -49,7 +49,7 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 
 ```sh
 bun install
-# Export configuration from apps/gateway/.env.example (never source untrusted files).
+# Export configuration from .env.example (never source untrusted files).
 # Rust does not auto-load .env files. Fill every security allowlist.
 # Gateway, chat and coding nodes take separate environments.
 bun run dev        # gateway
@@ -58,7 +58,7 @@ bun run dev:node   # coding node, with PIRC_DAEMON_URL=ws://127.0.0.1:8787
 bun run dev:web
 ```
 
-The node's first workspace can point to this repository. See [`apps/gateway/README.md`](apps/gateway/README.md) for configuration and API details, and [`apps/web/README.md`](apps/web/README.md) for the client.
+The node's first workspace can point to this repository. See the [gateway and node reference](docs/development/gateway-and-node.md) for configuration and API details, and [`apps/web/README.md`](apps/web/README.md) for the client.
 
 ## Role-specific executables
 

@@ -1,19 +1,19 @@
 # Model Backends and Subscription Logins — Architecture Reference
 
-This documents how pirc's gateway manages model backends and subscription logins: single-user, trusted-network threat model; gateway-centralized inference; the three subscription logins built into the pinned `@mariozechner/pi-ai@0.73.1`. Implementation: `apps/gateway/src/backends/` (settings, OAuth bridge, pi-ai adapter, inference), `inference-wire.ts`, `node/inference.ts`, `agent/providers/remote.ts`, `apps/web/src/lib/components/BackendSettings.svelte`.
+This documents how pirc's gateway manages model backends and subscription logins: single-user, trusted-network threat model; gateway-centralized inference; the three subscription logins built into the pinned `@mariozechner/pi-ai@0.73.1`, whose logins, catalog and transports are ported to Rust (no JS runtime). Implementation: `crates/pirc-providers/src/backends/` (settings, OAuth logins and refresh, discovery), `crates/pirc-providers/src/` (pi-ai adapter mapping in `pi.rs`, transports, gateway inference in `inference.rs`, embedded `catalog.json`), `crates/pirc-gateway/src/backends.rs` (browser routes), `crates/pirc-protocol/src/inference.rs` (inference wire), `crates/pirc-node/src/inference.rs` (node inference socket), `crates/pirc-agent/src/remote.rs` (agent client), `apps/web/src/lib/components/BackendSettings.svelte`.
 
 Deliberate deviations from the upstream/library defaults:
 
 - Codex requests never send `max_output_tokens`: pi-ai 0.73.1 itself doesn't, the Codex subscription backend isn't the public Responses API, and sending it risks per-request rejection; `maxTokens` is not a hard cap for Codex.
-- Errors from the pi-ai path keep only a classification (HTTP status, context overflow, usage limit) and never forward upstream response bodies; Codex errors surface as `status NNN`, to avoid the agent's own retries stacking on top of pi-ai's built-in three retries.
-- A custom endpoint with no configured key uses a fixed placeholder bearer, so pi-ai never falls back to reading a key from the gateway's own environment variables; a subscription account missing credentials fails immediately instead of silently reusing another backend's key.
+- Errors from the pi-ai path keep only a classification (HTTP status, context overflow, usage limit) and never forward upstream response bodies; Codex errors surface as `status NNN`, to avoid the agent's own retries stacking on top of the three built-in retries the Codex transport keeps from pi-ai.
+- A custom endpoint with no configured key uses a fixed placeholder bearer, so the transport never falls back to reading a key from the gateway's own environment variables; a subscription account missing credentials fails immediately instead of silently reusing another backend's key.
 - Changing settings (login, logout, edit, reload) cancels in-flight inference; a token refresh does not.
 
 ## 1. Requirements and threat model
 
 The goal is to let the **pirc web UI configure model backends and hold real conversations using every subscription login built into the pinned pi-ai version** — not just Codex, and not by requiring a CLI login on a node first.
 
-pirc reuses `@mariozechner/pi-ai`'s OAuth registry, login/refresh functions, and model transport layer; it keeps its own agent loop, tools, sessions, compaction, memory, and team features. The web UI bridges the interactive login flow; the gateway holds account state.
+pirc ports `@mariozechner/pi-ai`'s OAuth registry, login/refresh functions, model catalog and model transport layer to Rust (`crates/pirc-providers`); it keeps its own agent loop, tools, sessions, compaction, memory, and team features. The web UI bridges the interactive login flow; the gateway holds account state.
 
 ### Threat model (confirmed)
 
@@ -21,7 +21,7 @@ pirc reuses `@mariozechner/pi-ai`'s OAuth registry, login/refresh functions, and
 - **Account scope:** backends, API keys, subscription logins, and the default model are deployment-wide settings for this single-user deployment. The operator manages them directly; there is no multi-tenant credential partitioning, per-user RBAC, or admin/user role split. Supporting multiple real users would need a fresh threat-model review; `PIRC_ALLOWED_USERS` listing several names is not a multi-user security guarantee.
 - **Centralized inference:** the gateway holds provider credentials, refreshes tokens, and makes every model request. Nodes keep the agent loop, tools, workspaces, and session runtime; they receive model metadata and streamed results, never provider tokens. This covers both OAuth and existing API-key/custom-endpoint backends, not just Codex.
 - **Protection goals:** avoid unintended endpoint exposure, unauthorized browser/node access, cross-site requests, credentials leaking into logs/UI/session files, OAuth state confusion, concurrent refresh/cancel races, and runaway retries or resource use.
-- **Not guaranteed:** protection against an already-compromised trusted node/gateway, a malicious process under the same OS account, or arbitrary shell access; agent tools and the OAuth login worker are not sandboxes, and centralizing storage on the gateway is not hard isolation on the same host. Separate OS users, per-user quotas, and encrypted-at-rest credential storage are not required at this stage.
+- **Not guaranteed:** protection against an already-compromised trusted node/gateway, a malicious process under the same OS account, or arbitrary shell access; agent tools and the OAuth login tasks are not sandboxes, and centralizing storage on the gateway is not hard isolation on the same host. Separate OS users, per-user quotas, and encrypted-at-rest credential storage are not required at this stage.
 - **Still untrusted:** model output, repository/web content, provider errors, browser input, and login-flow return values. A trusted network does not turn any of that into authorization, and does not remove the need for XSS/CSRF and OAuth state checks.
 - **Unchanged:** existing trusted-proxy/forward-auth, Host/Origin, and node-token checks, and existing transport-security requirements. The VPN/LAN assumption is not approval to remove authentication or make the service public. Simplifying deployment auth is a separate decision.
 - **Logout semantics:** removes pirc's local credentials, blocks new model requests/refreshes, and cancels or bounds in-flight requests/connections. It cannot guarantee revocation of content already sent upstream, and local logout is not the same as revoking the account itself.
@@ -45,6 +45,8 @@ The published model catalog per provider is a static list, not a live query of w
 
 ## 3. Reused interfaces
 
+The names below are pi-ai's; the Rust port is in `crates/pirc-providers/src/backends/oauth/` (registry `OAUTH_PROVIDERS`, flows in `flows.rs`) and `crates/pirc-providers/src/backends/auth.rs` (login sessions and refresh).
+
 `@mariozechner/pi-ai/oauth` provides `getOAuthProviders()`/`getOAuthProvider(id)` (registry for the login UI), `provider.login(callbacks)` (returns credentials the host persists), `provider.refreshToken(credentials)`, `provider.getApiKey(credentials)`, `provider.modifyModels?(models, credentials)` (e.g. Copilot rewrites endpoints based on token/Enterprise domain), and `getOAuthApiKey(providerId, credentialsMap)` (refreshes if expired, returns `{newCredentials, apiKey}`).
 
 Credentials keep `refresh`, `access`, `expires`, plus provider-specific fields (Codex: `accountId`; Copilot: `enterpriseUrl`) — the full provider credential object is stored, not just two token strings.
@@ -59,10 +61,10 @@ The web login bridge implements the full callback vocabulary, not just the autho
 | `onPrompt({message,placeholder,allowEmpty})` | a text field that waits for a reply                              |
 | `onProgress(message)`                        | transient progress                                               |
 | `onManualCodeInput()`                        | a paste field shown alongside the callback                       |
-| `onSelect({message,options})`                | a choice UI; cancel returns undefined, never treated as consent  |
+| `onSelect({message,options})`                | not ported (no built-in provider uses it)                        |
 | `signal`                                     | cancellation, though not every provider implementation honors it |
 
-None of the three built-in 0.73.1 providers call `onSelect`, but the bridge covers it anyway. OAuth code runs on the gateway/server only, never shipped to the browser.
+None of the three built-in 0.73.1 providers call `onSelect`, so the Rust port has no select prompts. OAuth code runs on the gateway/server only, never shipped to the browser.
 
 ## 4. Per-provider constraints
 
@@ -72,9 +74,9 @@ Fixed redirect `http://localhost:53692/callback`; a callback server is started e
 
 - "localhost" in the redirect is the user's own machine, not the gateway.
 - `onManualCodeInput` accepts the final redirect URL; the UI offers a paste field next to the authorization link immediately, not only after the callback would fire.
-- The login wrapper does not honor `callbacks.signal`; cancellation can reject a pending manual-input promise, but token exchange still needs a host-side deadline/worker termination and must refuse to persist a late result.
-- Logins on the same fixed port must be serialized/mutexed, including multiple tabs or repeated logins by the same user; the login worker subprocess does not itself isolate the TCP port.
-- Model calls are not a plain `x-api-key`: OAuth Bearer, specific headers, a system prefix, and tool-name translation apply. This provider-specific behavior is exactly why pirc reuses pi-ai's transport rather than reimplementing it.
+- The login wrapper does not honor `callbacks.signal`; cancellation can reject a pending manual-input promise, but token exchange still needs a host-side deadline/task abort and must refuse to persist a late result.
+- Logins on the same fixed port must be serialized/mutexed, including multiple tabs or repeated logins by the same user; the gateway refuses a second login for a provider while one is in progress.
+- Model calls are not a plain `x-api-key`: OAuth Bearer, specific headers, a system prefix, and tool-name translation apply. This provider-specific behavior is exactly why pirc ports pi-ai's transport faithfully rather than designing its own.
 
 ### OpenAI Codex
 
@@ -100,12 +102,12 @@ Device flow suits a remote web UI well: enter an optional Enterprise domain (bla
 Two architectures were considered:
 
 - **A — agent calls the provider directly, gateway issues short-lived credentials.** Closer to the pre-existing architecture, but does not fit "no credential broadcast": a full live credential-update channel between agent, node, and gateway would be required for every code path (root turn, team, subagents, memory, title, compaction), and logout could not guarantee revoking a bearer token already handed to a node.
-- **B — gateway executes the model stream itself; the node keeps the agent loop.** The node sends a normalized model request, the gateway resolves credentials and calls pi-ai, then streams normalized events back. This is a model-transport proxy, not moving agents/tools into the gateway. **This is what's implemented.**
+- **B — gateway executes the model stream itself; the node keeps the agent loop.** The node sends a normalized model request, the gateway resolves credentials and runs the ported pi-ai transport, then streams normalized events back. This is a model-transport proxy, not moving agents/tools into the gateway. **This is what's implemented.**
 
 Consequences of B, as built:
 
 - Refresh and access tokens never reach a node; account authorization stays centralized.
-- The node↔gateway link (`apps/gateway/src/protocol.ts`) carries model-request/chunk/end/error/cancel messages, multiplexed with size limits, timeouts, and disconnect cleanup.
+- The node↔gateway link (`crates/pirc-protocol/src/link.rs`) carries model-request/chunk/end/error/cancel messages, multiplexed with size limits, timeouts, and disconnect cleanup.
 - Prompts, images, and tool schemas pass through the gateway, which is now a dependency for every model call's availability.
 - This is not "one more OpenAI-compatible proxy": Copilot's multi-API model list, and Codex/Anthropic OAuth-specific behavior, are preserved end to end.
 - The same model-request channel serves ordinary chat, team/subagent calls, memory, title generation, and compaction; the gateway resolves fresh credentials on every call, so agents never need a credential-update RPC or a restart when a token expires.
@@ -120,20 +122,20 @@ Consequences of B, as built:
 - `POST /api/provider-auth/sessions/:id/input`: a one-shot reply to the current prompt; checked against the current prompt and owner.
 - `DELETE /api/provider-auth/sessions/:id`: cancels the login in progress ("cancel login" is not "remove a saved account" — that's a separate logout/remove API).
 
-API-key backend setup (`apps/gateway/src/backends/discovery.ts`):
+API-key backend setup (`crates/pirc-providers/src/backends/discovery.rs`):
 
 - `GET /api/providers/presets`: pi-ai catalog providers usable with a plain key (one supported API, one concrete endpoint; subscription-only catalogs excluded) plus local Ollama/LM Studio servers. A backend saved with `preset` stores it as `piProvider` and keeps the catalog's gateway-only compat/headers/thinking map for known model IDs, so requests behave like pi-ai's own provider.
 - `POST /api/providers/discover`: lists an unsaved form's models from the endpoint (`/models`, or `/v1/models` for Anthropic Messages). `POST /api/providers/test`: sends one tiny request through the normal inference path. Both accept the form without saving it; an omitted `apiKey` reuses only the saved key of the web-managed `backendId` being edited. Redirects are refused (a key is never forwarded), bodies are size- and time-capped, at most four probes run at once, and only curated messages come back — never upstream bodies.
 
 Each login session has a random ID, TTL, generation counter, and count limit; every query/input/cancel checks ownership. `onAuth` and a manual-paste prompt can coexist; the state model must not collapse them into a single screen and lose information.
 
-Cancellation invalidates the session/generation first, then rejects pending callbacks/aborts/terminates the worker if needed; a login that completes checks the generation again before persisting. Unfinished sessions live only in memory; a gateway restart requires retrying.
+Cancellation invalidates the session/generation first, then rejects pending prompts and aborts the login task; a login that completes checks the generation again before persisting. Unfinished sessions live only in memory; a gateway restart requires retrying.
 
-The OAuth login worker provides lifecycle/failure isolation, **not a permission sandbox**. All login/settings responses use `Cache-Control: no-store`; external URLs are protocol-checked and opened with `noopener noreferrer`; instructions render as plain text. Upstream errors may contain response bodies or token fields and must never be written verbatim to pirc logs, UI, or ordinary session events — only a redacted error code/message is kept.
+Logins run as tasks inside the gateway process: cancelling one aborts it and closes its callback server, but this is lifecycle control only, with no process isolation and **not a permission sandbox**. All login/settings responses use `Cache-Control: no-store`; external URLs are protocol-checked and opened with `noopener noreferrer`; instructions render as plain text. Upstream errors may contain response bodies or token fields and must never be written verbatim to pirc logs, UI, or ordinary session events — only a redacted error code/message is kept.
 
 ## 7. pi-ai transport adapter notes
 
-The integration boundary is `apps/gateway/src/agent/providers/types.ts`'s `StreamFn`; the whole agent runtime is not replaced. Notable points:
+The integration boundary is the agent's model call (`StreamRequest` in `crates/pirc-agent/src/stream.rs`, the TS `StreamFn`), served under a node by `RemoteStream` (`crates/pirc-agent/src/remote.rs`); on the gateway the adapter mapping is `crates/pirc-providers/src/pi.rs`. The whole agent runtime is not replaced. Notable points:
 
 1. Models keep their per-model API, canonical pi-ai provider, base URL, and capability/thinking mapping; the UI's backend alias is kept separate from pi-ai's provider identity, since pi-ai's replay logic compares provider/api/model identity.
 2. Optional replay metadata (e.g. a Responses message ID/phase, `responseId`) is preserved; `signature` maps to pi-ai's `thinkingSignature`; opaque tool signatures are kept as-is rather than dropped after a restart.
@@ -142,15 +144,15 @@ The integration boundary is `apps/gateway/src/agent/providers/types.ts`'s `Strea
 5. Non-overlapping usage token buckets are preserved (they feed compaction, not just UI stats); pi-ai's cost estimate is not treated as an actual subscription bill.
 6. Provider-specific options such as tool-choice are checked per call, not assumed uniform; compaction sends tools with `toolChoice: none` and this must not be silently dropped.
 7. The legacy `openai-chat` alias and pi-ai's `openai-completions` are mapped compatibly; existing custom endpoints, keyless backends, and header/compat options are not force-migrated in one step.
-8. The pi-ai adapter runs on the gateway; the agent-side `StreamFn` is a remote-request adapter. It never reads a node's environment for keys, and the gateway's own environment keys are only used via explicit configuration, never silently swapped on logout.
-9. Codex defaults to `auto` transport, which may reuse a cached WebSocket; pirc uses SSE explicitly to bound replay/connection lifetime risk. This does not reduce provider coverage.
-10. pi-ai 0.73.1's Codex SSE path hardcodes three retries; passing `maxRetries: 0` does not disable that. pirc's own retry logic must not stack on top, and must not blindly replay a request that has already streamed output.
+8. The pi-ai adapter runs on the gateway; the agent-side stream (`RemoteStream`) is a remote-request adapter. It never reads a node's environment for keys, and the gateway's own environment keys are only used via explicit configuration, never silently swapped on logout.
+9. pi-ai's Codex defaults to `auto` transport, which may reuse a cached WebSocket; pirc uses SSE explicitly to bound replay/connection lifetime risk, and the WebSocket transport is not ported. This does not reduce provider coverage.
+10. pi-ai 0.73.1's Codex SSE path hardcodes three retries, and the Rust port keeps them; they are not configurable. pirc's own retry logic must not stack on top, and must not blindly replay a request that has already streamed output.
 
-The existing OpenAI prompt-cache warming path keys off `api === 'openai-chat'`; it is not assumed to apply to every subscription backend — cache, reasoning, and tool-choice support are capability-checked per backend.
+The existing OpenAI prompt-cache warming path (`crates/pirc-agent/src/compaction.rs`) keys off the `openai-chat` API; it is not assumed to apply to every subscription backend — cache, reasoning, and tool-choice support are capability-checked per backend.
 
 ## 8. Acceptance bar
 
-- The UI's login list matches the pinned version's `getOAuthProviders()`; a registry change in a future pi-ai bump surfaces as a compatibility-test failure, not a silent gap.
+- The UI's login list matches the pinned version's `getOAuthProviders()` (ported as `OAUTH_PROVIDERS`); a future pi-ai bump means re-porting the registry and regenerating the catalog (`bun scripts/model-catalog.ts --check` flags a stale snapshot), not a silent gap.
 - All three providers can complete login and hold a real multi-turn conversation with tool calls from the web UI; no CLI or public callback port is required on a node.
 - Error states, wrong-owner access, duplicate prompts, cancel/TTL/restart/port-conflict are all handled; a late login result never gets persisted.
 - Concurrent refreshes collapse to one in-flight request; the rotated result persists; logout is never overwritten by a refresh that was already in flight.
@@ -160,4 +162,4 @@ The existing OpenAI prompt-cache warming path keys off `api === 'openai-chat'`; 
 - Both API-key and OAuth-backed requests run on the gateway; nodes only receive secret-free metadata/results. Covered by tests for gateway disconnects, stream cancellation, multiplexing correctness, backpressure, and node-local-endpoint reachability errors — with no secret-broadcast fallback.
 - Responses signature/phase/thinking survive persistence, restarts, and cross-model replay correctly.
 
-Related tests: `models.integration.test.ts`, `nodes.integration.test.ts`, `remote.integration.test.ts`, `agent-core.test.ts`, `agent-compaction.test.ts`, memory/title/team/subagent tests, `events-reducer.test.ts`; the web side uses Vitest + jsdom. Real logins, paid model calls, and each provider's third-party-client terms are outside the automated suite.
+Related tests: `crates/pirc-conformance/tests/` `backends.rs`, `provider_auth.rs`, `node_link.rs`, `agent_node.rs`, `agent_core.rs`, `agent_compaction.rs`, `agent_memory.rs`, `agent_title.rs`, `agent_team.rs`; `crates/pirc-providers/tests/parity.rs` (transport replays recorded from the TS gateway) and the unit tests in `crates/pirc-providers/src/backends/tests.rs`; the web side uses Vitest + jsdom (`apps/web/src/lib/events.test.ts`). Real logins, paid model calls, and each provider's third-party-client terms are outside the automated suite.

@@ -35,7 +35,7 @@ Each message lists every session with an open run (queued, running, waiting_inpu
 - schedule: `{kind:'schedule', scheduleId, title, dueAt}`;
 - delegation: `{kind:'delegation', delegationId, title, fromSessionId}`.
 
-The events WebSocket opt-in `sessions=1` emits `sessions_changed` outside a session's event sequence when runs, leases or session names change. Web uses these updates while a session is open, plus a 60-second poll. Android's recorded implementation polls. The regression anchor is `apps/gateway/test/session-activity.integration.test.ts`; pure web work/grouping helpers and Android Work helpers have corresponding unit tests. This documentation migration does not itself establish fresh runtime validation.
+The events WebSocket opt-in `sessions=1` emits `sessions_changed` outside a session's event sequence when runs, leases or session names change. Web uses these updates while a session is open, plus a 60-second poll. Android's recorded implementation polls. The regression anchor is the `event_stream` conformance test in `crates/pirc-conformance/tests/events.rs` (snapshot `events__event_stream.snap`); pure web work/grouping helpers and Android Work helpers have corresponding unit tests. This documentation migration does not itself establish fresh runtime validation.
 
 ## Scope and remaining work
 

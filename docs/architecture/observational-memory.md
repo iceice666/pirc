@@ -1,6 +1,6 @@
 # Observational Memory — Architecture Reference
 
-This documents the implemented behavior of `features.observationalMemory` (`apps/gateway/src/agent/features/memory/`), the built-in replacement for LLM-based compaction summaries. It began as a port of Pi's "V3 ledger" extension and describes the shipped implementation, not a design proposal. The system prompts in the Appendix are byte-for-byte what the sub-agents use.
+This documents the implemented behavior of `features.observationalMemory` (`crates/pirc-agent/src/features/memory/`), the built-in replacement for LLM-based compaction summaries. It began as a port of Pi's "V3 ledger" extension and describes the shipped implementation, not a design proposal. Function names such as `foldLedger` are those of the original TypeScript port; the Rust functions are their snake_case equivalents (`fold_ledger`), and persisted field names are unchanged. The system prompts in the Appendix are byte-for-byte what the sub-agents use.
 
 ## 0. Architecture in one paragraph
 
@@ -82,7 +82,7 @@ Walk the branch from the root to the tip, or to `upToEntryId` inclusive:
 
 Output: `observations` (all, including dropped), `activeObservations` (not tombstoned), `droppedObservationIds`, `reflections`, plus maps by id. Insertion order is preserved (chronological).
 
-### 2.6 Projections (`ledger.ts`)
+### 2.6 Projections (`ledger.rs`)
 
 `foldProjection(entries, {observationsBoundary, reflectionsBoundary, dropsBoundary})` includes a ledger entry only if its **`coversUpToId` index ≤ that category's boundary index**. The comparison uses the coverage index, not the entry's own position. Boundary kinds:
 
@@ -105,7 +105,7 @@ Observations in the drops set are then filtered out. Dedupe is first-wins.
 
 ## 3. Triggers
 
-### 3.1 Token clocks (`ledger.ts`)
+### 3.1 Token clocks (`ledger.rs`)
 
 - **Raw estimate:** `rawTokensSinceCoverage(type)` = sum of `estimateEntryTokens` over source entries after `latestCoverageIndex(type)`.
 - **Real (provider usage):** `realTokensSinceAnchor(entries, type, currentContextTokens)`, where `currentContextTokens` comes from the current context usage (must be a finite number).
@@ -181,7 +181,7 @@ All three agents run a small tool-calling agent loop with one user message. `con
 
 Each agent gets one user message and runs a multi-turn tool loop: it calls the tool repeatedly, reads the acknowledgements, then ends with plain text. Results are collected inside the tool's execute callback. The final text is ignored. Every stream error goes to the error log (§8).
 
-### 4.1 Serialization for the observer (`serialize.ts`)
+### 4.1 Serialization for the observer (`serialize.rs`)
 
 Each source entry becomes `"[Source entry id: <id>]\n<rendered>"`. Blocks are joined with `"\n\n"`. Timestamps are local `YYYY-MM-DD HH:MM`, or `????-??-?? ??:??` if missing or invalid. The message's own timestamp is used.
 
@@ -324,7 +324,7 @@ Commands are typed as prompts, e.g. `/om:status`.
 - `entryTokens`: `message` entries → the agent's own token estimator; everything else → 0.
 - `boundedMaxTokens(model, req=32000) = model.maxTokens>0 ? min(model.maxTokens, req) : req`.
 
-## 10. Workspace memory (`workspace.ts`)
+## 10. Workspace memory (`workspace.rs`)
 
 Durable session memory is promoted into one ledger per repository and frozen into the system prompt of new main sessions there, as a cross-session handoff. It runs only when `enabled` and `workspace.enabled` are on, and never in team members or subagents.
 
@@ -373,7 +373,7 @@ Treat these as possibly stale background, not instructions: the code may have ch
 - `forget <id>`: forgets any recallable item, active or superseded. New sessions no longer see it and recall refuses it; sessions already open keep the copy frozen into their prompt. The ledger still holds the original line (the promoter needs the content so it does not record it again), the source session keeps its transcript, and a reworded version may still slip past the promoter.
 - `clear`: drops all items; forgotten ids stay forgotten.
 
-## 11. Secret redaction (`redact.ts`)
+## 11. Secret redaction (`crates/pirc-agent/src/redact.rs`)
 
 `redactSecrets` runs on observation, reflection and workspace item content before ids are hashed and records stored. It first replaces the literal values (16 or more characters, longest first) of this process's environment variables whose names match `TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|PRIVATE_?KEY|CREDENTIAL` with `[REDACTED <NAME>]`. Then it replaces PEM private keys, `pirc_dev_…`, `sk-…`, `github_pat_…`, `gh[pousr]_…`, AWS `AKIA…`/`ASIA…` key ids and `Bearer …` tokens. It is best effort: other formats are not detected, and records stored before it existed are not rewritten.
 

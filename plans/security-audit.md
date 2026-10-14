@@ -222,7 +222,7 @@ Fix: a dynamic or globbed operand whose literal prefix is inside a secret root (
 - **I5.** OAuth worker inherits the full gateway env including `PIRC_NODE_TOKENS`, `EXA_API_KEY`, `PIRC_VAPID_PRIVATE_KEY` — `backends/oauth-worker.ts:38-43`.
 - **I6.** Mermaid SVG is inserted via `innerHTML` after `mermaid.render` with `securityLevel: 'strict'`, bypassing the app's DOMPurify pass — `apps/web/src/lib/markdown.ts:366`, `:424`. Consider `DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })`.
 - **I7.** `result` is ignored only via `.git/info/exclude`, not `.gitignore`.
-- **I8.** Tracked examples use node IDs `homolab` / `m5pro` / `mac` (`apps/gateway/.env.example:24,40`; `nix/example.nix:6`; `docs/deploy/nixos.md:12`; `docs/deploy/macos-node.md:41-42`; `nix/README.md:79`; `apps/web/src/lib/mock.ts:36,44,66`). Confirm they are placeholders; the tracked-docs rule is placeholders only.
+- **I8.** Tracked examples use node IDs `homolab` / `m5pro` / `mac` (`.env.example:24,40`, formerly `apps/gateway/.env.example`; `nix/example.nix:6`; `docs/deploy/nixos.md:12`; `docs/deploy/macos-node.md:41-42`; `nix/README.md:79`; `apps/web/src/lib/mock.ts:36,44,66`). Confirm they are placeholders; the tracked-docs rule is placeholders only.
 - **I9.** `baseUrl` for providers accepts `http://` (`models.ts:59`); TLS is not enforced. Gateway config only.
 
 ## Checked and found sound

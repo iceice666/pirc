@@ -27,7 +27,7 @@ Vite proxies `/api` and WebSocket upgrades to `http://localhost:8787` in develop
 
 ## API contract
 
-The gateway API is documented in [`apps/gateway/README.md`](../gateway/README.md#api); the client's types live in `src/lib/types.ts` and the calls in `src/lib/api.ts`. Points that differ from what a generic client might assume:
+The gateway API is documented in [gateway and node reference](../../docs/development/gateway-and-node.md#api); the client's types live in `src/lib/types.ts` and the calls in `src/lib/api.ts`. Points that differ from what a generic client might assume:
 
 - List endpoints return envelopes (`{ sessions }`, `{ workspaces }`, `{ models }`), not bare arrays.
 - `POST /api/sessions` takes only `{ workspaceId }`; the agent titles the session from the first message. `PATCH /api/sessions/:id` renames, pins or settles it.

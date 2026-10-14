@@ -252,7 +252,7 @@ in
         "pirc"
         "piPackage"
       ]
-      "pirc now runs its built-in agent on pirc-chat/pirc-node; configure it with services.pirc.agentConfig."
+      "pirc now runs its built-in agent on pirc-node; configure it with services.pirc.agentConfig."
     )
     (mkRemovedOptionModule
       [
@@ -260,7 +260,7 @@ in
         "pirc"
         "piArgs"
       ]
-      "pirc now runs its built-in agent on pirc-chat/pirc-node; configure it with services.pirc.agentConfig."
+      "pirc now runs its built-in agent on pirc-node; configure it with services.pirc.agentConfig."
     )
     (mkRenamedOptionModule [ "services" "pirc" "hostId" ] [ "services" "pirc" "localNode" "id" ])
     (mkRemovedOptionModule [

@@ -10,7 +10,7 @@
 
 ## Subscription logins
 
-Open **Settings → Model backends** and choose **Log in**. The gateway runs pi-ai's login flow in an isolated, time-limited subprocess and shows its steps in the browser: the authorization link and instructions, device codes, questions (such as a GitHub Enterprise domain), and progress. Nothing needs a CLI on a node.
+Open **Settings → Model backends** and choose **Log in**. The gateway runs the login flow (ported from pi-ai) as a time-limited task (10 minutes) and shows its steps in the browser: the authorization link and instructions, device codes, questions (such as a GitHub Enterprise domain), and progress. Nothing needs a CLI on a node.
 
 - **Claude Pro/Max** and **ChatGPT/Codex** use fixed `localhost` redirect URLs. When your browser is not on the gateway machine, the final redirect page fails to load; copy that complete `http://localhost:…` URL from the address bar and paste it into the login card. It must carry the state from this login. Do not expose a callback port.
 - **GitHub Copilot** uses a device code. pi-ai's login also **enables the policy for every GitHub Copilot model it knows** on your account, so the UI requires explicit consent first. Some models may still need enabling in Copilot itself.
