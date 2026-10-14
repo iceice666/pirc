@@ -1748,10 +1748,22 @@ mod tests {
         let args = args(&paths);
         assert_eq!(args[..3], ["--ro-bind", "/", "/"]);
         assert!(args.windows(2).any(|w| w == ["--tmpfs", "/etc"]));
-        assert!(!args.iter().any(|arg| arg == "/usr"
-            || arg.starts_with("/proc")
-            || arg.starts_with("/sys")
-            || arg.starts_with("/dev/")));
+        // A regular file at the root (`/.dockerenv`, a runner's swap file)
+        // is hidden by binding `/dev/null` onto it: that source is not a
+        // mount under `/dev`.
+        let paths: Vec<&String> = args
+            .iter()
+            .enumerate()
+            .filter(|(i, arg)| !(*arg == "/dev/null" && *i > 0 && args[i - 1] == "--ro-bind"))
+            .map(|(_, arg)| arg)
+            .collect();
+        assert!(
+            !paths.iter().any(|arg| *arg == "/usr"
+                || arg.starts_with("/proc")
+                || arg.starts_with("/sys")
+                || arg.starts_with("/dev/")),
+            "{args:?}"
+        );
         // No mount lands on a symlink: every target is its canonical path.
         for arg in args.iter().filter(|a| a.starts_with('/') && *a != "/") {
             assert!(
