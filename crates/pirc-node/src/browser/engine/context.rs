@@ -498,6 +498,24 @@ fn attached(shared: &Arc<Shared>, params: &Value) {
                 .unwrap()
                 .service_workers
                 .insert(target.clone(), None);
+            // Chromium restarts a stopped or crashed worker in the same
+            // target and session, paused again by `waitForDebuggerOnStart`
+            // until it is told to run (`CRServiceWorker`'s
+            // `Inspector.targetReloadedAfterCrash`). Without this a worker
+            // Chromium stopped when idle hangs in `starting` on its next
+            // event, and with it whatever waits for it. Listening from the
+            // attach on, so no restart is missed; it ends with the session.
+            let mut events = session.listen();
+            let resume = session.clone();
+            tokio::spawn(async move {
+                while let Some(event) = events.recv().await {
+                    if event.method == "Inspector.targetReloadedAfterCrash" {
+                        let _ = resume
+                            .call("Runtime.runIfWaitingForDebugger", json!({}))
+                            .await;
+                    }
+                }
+            });
             let shared = shared.clone();
             tokio::spawn(async move {
                 let _ = session.call("Runtime.enable", json!({})).await;

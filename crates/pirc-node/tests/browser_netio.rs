@@ -673,6 +673,131 @@ async fn guards_shared_workers_through_the_browser_session() {
     context.close().await;
 }
 
+/// SIGKILL the renderers of `context`'s browser (found by its process
+/// group): its pages, and the workers they run, crash.
+fn kill_renderers(context: &Context) {
+    let group = context.pid().unwrap().to_string();
+    let listing = std::process::Command::new("ps")
+        .args(["-A", "-o", "pid=,pgid=,command="])
+        .output()
+        .unwrap();
+    let mut killed = 0;
+    for line in String::from_utf8_lossy(&listing.stdout).lines() {
+        let mut fields = line.split_whitespace();
+        let (Some(pid), Some(pgid)) = (fields.next(), fields.next()) else {
+            continue;
+        };
+        if pgid == group && line.contains("--type=renderer") {
+            let _ = nix::sys::signal::kill(
+                nix::unistd::Pid::from_raw(pid.parse().unwrap()),
+                nix::sys::signal::Signal::SIGKILL,
+            );
+            killed += 1;
+        }
+    }
+    assert!(killed > 0, "no renderer found");
+}
+
+/// A real service worker restarting (M8 covered the restart with a fake
+/// CDP browser): stopped and woken again, then killed with its renderer and
+/// started again by a new page, it is still guarded. The worker reports a
+/// start id with each answer, so each step is a new worker instance.
+/// `localhost` stands for the private host: refused by the guard, yet
+/// reachable on every host, so its server sees any request that gets
+/// through.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_restarted_service_worker_is_still_guarded() {
+    let private = serve("127.0.0.1:0", Arc::new(|_| html("private")))
+        .await
+        .unwrap();
+    let private_port = private.port;
+    let public = serve(
+        "127.0.0.1:0",
+        Arc::new(move |path| match path {
+            "/sw.js" => (
+                200,
+                vec![("content-type".into(), "text/javascript".into())],
+                format!(
+                    "const started = Math.random().toString(36).slice(2); self.onmessage = async e => {{ let r; try {{ await fetch('http://localhost:{private_port}/sw-' + e.data); r = 'ok'; }} catch (x) {{ r = 'blocked'; }} e.source.postMessage(started + ' ' + r); }};"
+                ),
+            ),
+            _ => html("<title>public</title>"),
+        }),
+    )
+    .await
+    .unwrap();
+    let Some((context, _profile)) = guarded_context().await else {
+        return;
+    };
+    let url = format!("http://127.0.0.1:{}/", public.port);
+    let open = async |context: &Context| {
+        let page = context.new_page().await.unwrap();
+        page.goto(&url, LoadState::Load, Duration::from_secs(10))
+            .await
+            .unwrap();
+        page
+    };
+    // The prototype's `register`: the context blocks the page's own.
+    let ask = async |page: &pirc_node::browser::engine::page::Page,
+                     step: &str|
+           -> (String, String) {
+        // A worker left paused never answers: fail rather than hang.
+        let answer = tokio::time::timeout(Duration::from_secs(20), page
+            .evaluate(
+                "step => ServiceWorkerContainer.prototype.register.call(navigator.serviceWorker, '/sw.js')
+                    .then(() => navigator.serviceWorker.ready)
+                    .then(r => new Promise(resolve => {
+                        navigator.serviceWorker.onmessage = e => resolve(e.data);
+                        r.active.postMessage(step);
+                    }))",
+                json!(step),
+            ))
+            .await
+            .unwrap_or_else(|_| panic!("{step}: no answer"))
+            .unwrap();
+        let answer = answer.as_str().unwrap().to_owned();
+        let (started, result) = answer.split_once(' ').unwrap();
+        (started.to_owned(), result.to_owned())
+    };
+    let page = open(&context).await;
+    let (first, result) = ask(&page, "first").await;
+    assert_eq!(result, "blocked");
+
+    // Stopped, then started again by the next message.
+    page.session()
+        .call("ServiceWorker.enable", json!({}))
+        .await
+        .unwrap();
+    page.session()
+        .call("ServiceWorker.stopAllWorkers", json!({}))
+        .await
+        .unwrap();
+    let (stopped, result) = ask(&page, "stopped").await;
+    assert_ne!(stopped, first, "the worker was not restarted");
+    assert_eq!(result, "blocked");
+
+    // Killed with its renderer; a new page starts it again elsewhere.
+    kill_renderers(&context);
+    // Once the page has seen the crash (and Chromium has let the spare
+    // renderer it killed too go), a new page gets a new renderer.
+    let crashed = async {
+        while page.evaluate("() => 1", Value::Null).await.is_ok() {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(10), crashed)
+        .await
+        .expect("the page did not crash");
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let page = open(&context).await;
+    let (crashed, result) = ask(&page, "crashed").await;
+    assert_ne!(crashed, stopped, "the worker was not restarted");
+    assert_eq!(result, "blocked");
+
+    assert!(private.hits().is_empty(), "{:?}", private.hits());
+    context.close().await;
+}
+
 /// A navigation refused at a redirect hop fails with the error TS gave
 /// once Playwright had followed the hop (`assertAllowed` naming the URL
 /// the frame landed on, then `about:blank`), through `goto` and through
