@@ -697,6 +697,7 @@ async fn serves_lines_until_input_ends() {
             String::new(),
             "  \u{feff}".to_owned(),
             "{not json".to_owned(),
+            super::LINE_TOO_LONG.to_owned(),
             json!({ "type": "write_lease_response", "id": lease_id, "granted": true }).to_string(),
             json!({ "type": "extension_ui_response", "id": dialog_id, "value": "a" }).to_string(),
             json!({ "type": "team_result", "id": "x" }).to_string(),
@@ -718,6 +719,8 @@ async fn serves_lines_until_input_ends() {
             [
                 json!({ "type": "response", "command": "parse", "success": false,
                     "error": "Invalid JSON" }),
+                json!({ "type": "response", "command": "parse", "success": false,
+                    "error": "Line too long" }),
                 json!({ "type": "response", "id": "c1", "command": "get_state", "success": true,
                     "data": { "isRunning": false } }),
                 json!({ "type": "response", "success": false,

@@ -154,32 +154,73 @@ pub fn parse_configure(message: &Value) -> Result<Configure, String> {
     })
 }
 
+/// The longest stdin line the agent accepts (S5). The node forwards
+/// gateway frames of at most [`pirc_protocol::NODE_FRAME_MAX_BYTES`]
+/// (16 MiB) and answers browser requests with screenshots; four times the
+/// frame limit leaves room for re-encoding while bounding the buffer.
+pub const STDIN_LINE_MAX_BYTES: usize = 4 * pirc_protocol::NODE_FRAME_MAX_BYTES;
+
 /// Lines of stdin (`stdinLines`), read on their own thread so a blocked read
 /// never holds the runtime up; invalid UTF-8 becomes U+FFFD.
 fn stdin_lines() -> mpsc::UnboundedReceiver<String> {
     let (sender, receiver) = mpsc::unbounded_channel();
     std::thread::spawn(move || {
-        let mut stdin = std::io::stdin().lock();
-        let mut line = Vec::new();
-        loop {
-            line.clear();
-            match stdin.read_until(b'\n', &mut line) {
-                Ok(0) | Err(_) => return,
-                Ok(_) => {
-                    if line.last() == Some(&b'\n') {
-                        line.pop();
-                    }
-                    if sender
-                        .send(String::from_utf8_lossy(&line).into_owned())
-                        .is_err()
-                    {
-                        return;
-                    }
-                }
-            }
-        }
+        read_lines(std::io::stdin().lock(), STDIN_LINE_MAX_BYTES, |line| {
+            sender.send(line).is_ok()
+        });
     });
     receiver
+}
+
+/// Split `input` into lines for `deliver` until it ends, `deliver` returns
+/// false, or a read fails. A line longer than `limit` bytes is not
+/// buffered: the rest of it is read and dropped, and
+/// [`crate::rpc::LINE_TOO_LONG`] is delivered in its place, so the RPC
+/// answers it as a parse error and keeps serving.
+fn read_lines(mut input: impl BufRead, limit: usize, mut deliver: impl FnMut(String) -> bool) {
+    let mut line: Vec<u8> = Vec::new();
+    let mut oversized = false;
+    let finish = |line: &mut Vec<u8>, oversized: &mut bool| {
+        if std::mem::take(oversized) {
+            eprintln!("pirc agent: dropped a stdin line longer than {limit} bytes");
+            crate::rpc::LINE_TOO_LONG.to_owned()
+        } else {
+            let text = String::from_utf8_lossy(line).into_owned();
+            line.clear();
+            // A long line's buffer is not kept for the rest of the session.
+            line.shrink_to(64 * 1024);
+            text
+        }
+    };
+    loop {
+        let chunk = match input.fill_buf() {
+            Ok(chunk) => chunk,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return,
+        };
+        if chunk.is_empty() {
+            // A last line without a newline still counts.
+            if oversized || !line.is_empty() {
+                deliver(finish(&mut line, &mut oversized));
+            }
+            return;
+        }
+        let newline = chunk.iter().position(|byte| *byte == b'\n');
+        let part = &chunk[..newline.unwrap_or(chunk.len())];
+        if !oversized {
+            if line.len() + part.len() > limit {
+                oversized = true;
+                line = Vec::new();
+            } else {
+                line.extend_from_slice(part);
+            }
+        }
+        let used = part.len() + usize::from(newline.is_some());
+        input.consume(used);
+        if newline.is_some() && !deliver(finish(&mut line, &mut oversized)) {
+            return;
+        }
+    }
 }
 
 /// What ends the agent: success (stdin ended or a signal), or an error
@@ -448,6 +489,76 @@ mod tests {
         assert_eq!(
             parse_configure(&invalid).err().as_deref(),
             Some("providers.p.models: Array must contain at least 1 element(s)")
+        );
+    }
+
+    /// Lines of `input` as [`read_lines`] delivers them.
+    fn lines_of(input: impl BufRead, limit: usize) -> Vec<String> {
+        let mut out = Vec::new();
+        read_lines(input, limit, |line| {
+            out.push(line);
+            true
+        });
+        out
+    }
+
+    /// An endless line, produced a chunk at a time: only a reader that
+    /// drops what it cannot keep gets past it.
+    struct Flood {
+        left: usize,
+        chunk: Vec<u8>,
+        then: std::io::Cursor<Vec<u8>>,
+    }
+
+    impl std::io::Read for Flood {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.left == 0 {
+                return self.then.read(buf);
+            }
+            let n = buf.len().min(self.left).min(self.chunk.len());
+            buf[..n].copy_from_slice(&self.chunk[..n]);
+            self.left -= n;
+            Ok(n)
+        }
+    }
+
+    #[test]
+    fn splits_stdin_lines() {
+        let input: &[u8] = b"{\"a\":1}\n\nlast \xff";
+        assert_eq!(lines_of(input, 64), ["{\"a\":1}", "", "last \u{fffd}"]);
+        let exact = "x".repeat(16);
+        assert_eq!(lines_of(format!("{exact}\n").as_bytes(), 16), [exact]);
+        // The consumer is gone: reading stops.
+        let mut seen = 0;
+        read_lines(&b"a\nb\nc\n"[..], 64, |_| {
+            seen += 1;
+            false
+        });
+        assert_eq!(seen, 1);
+    }
+
+    #[test]
+    fn drops_oversized_stdin_lines_without_buffering_them() {
+        // 64 MiB without a newline against a 1 KiB limit, read through a
+        // small buffer: the reader keeps no more than the limit.
+        let flood = Flood {
+            left: 64 * 1024 * 1024,
+            chunk: vec![b'x'; 64 * 1024],
+            then: std::io::Cursor::new(b"tail of it\n{\"type\":\"ok\"}\nyyyyyyyyyy".to_vec()),
+        };
+        let reader = std::io::BufReader::with_capacity(8 * 1024, flood);
+        assert_eq!(
+            lines_of(reader, 1024),
+            [crate::rpc::LINE_TOO_LONG, "{\"type\":\"ok\"}", "yyyyyyyyyy"]
+        );
+        // Over the limit in its last chunk, and at the end of input.
+        assert_eq!(
+            lines_of(&b"12345\n123456\n1234567"[..], 5),
+            [
+                "12345",
+                crate::rpc::LINE_TOO_LONG,
+                crate::rpc::LINE_TOO_LONG
+            ]
         );
     }
 

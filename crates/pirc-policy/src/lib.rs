@@ -145,6 +145,71 @@ pub fn real_resolve(target: &str) -> String {
     normalize(&out).display().to_string()
 }
 
+/// Symlinks followed by [`physical_resolve`] before giving up, as the
+/// kernel's `MAXSYMLINKS` (Linux's limit; macOS allows 32).
+const MAX_SYMLINK_HOPS: usize = 40;
+
+/// `input` (relative to `base`) as the kernel walks it: component by
+/// component, each symlink followed before a later `..` is applied, so
+/// `link/../x` is `x` next to the link's target, not next to the link.
+/// [`resolve_path`] and [`real_resolve`] drop `link/..` as text first.
+///
+/// Once a component does not exist the rest is applied as text, as
+/// [`real_resolve`] does (the kernel refuses `missing/..` anyway). A
+/// dangling link is followed to where a write through it would create its
+/// target; a loop past [`MAX_SYMLINK_HOPS`] stops following.
+pub fn physical_resolve(base: &str, input: &str) -> String {
+    let joined = Path::new(base).join(input);
+    let mut pending: std::collections::VecDeque<std::ffi::OsString> = joined
+        .components()
+        .filter_map(|component| match component {
+            Component::ParentDir => Some("..".into()),
+            Component::Normal(part) => Some(part.to_owned()),
+            _ => None,
+        })
+        .collect();
+    let mut out = PathBuf::from("/");
+    let mut on_disk = true;
+    let mut hops = 0;
+    while let Some(part) = pending.pop_front() {
+        if part == ".." {
+            out.pop();
+            continue;
+        }
+        out.push(&part);
+        if !on_disk {
+            continue;
+        }
+        let Ok(meta) = std::fs::symlink_metadata(&out) else {
+            on_disk = false;
+            continue;
+        };
+        if !meta.file_type().is_symlink() {
+            continue;
+        }
+        hops += 1;
+        let target = match std::fs::read_link(&out) {
+            Ok(target) if hops <= MAX_SYMLINK_HOPS => target,
+            _ => {
+                on_disk = false;
+                continue;
+            }
+        };
+        out.pop();
+        if target.is_absolute() {
+            out = PathBuf::from("/");
+        }
+        for component in target.components().rev() {
+            match component {
+                Component::ParentDir => pending.push_front("..".into()),
+                Component::Normal(part) => pending.push_front(part.to_owned()),
+                _ => {}
+            }
+        }
+    }
+    normalize(&out).display().to_string()
+}
+
 /// `isInside(child, parent)`.
 pub fn is_inside(child: &str, parent: &str) -> bool {
     if child == parent {
@@ -472,6 +537,46 @@ mod tests {
             guard.resolve("etc-link/x", true).unwrap_err(),
             format!("Path etc-link/x (/etc/x) is outside the writable paths ({workspace})")
         );
+    }
+
+    #[test]
+    fn physical_resolve_follows_links_before_parent_components() {
+        let (_dir, root) = temp();
+        std::fs::create_dir_all(format!("{root}/home/.config")).unwrap();
+        std::fs::create_dir_all(format!("{root}/ws")).unwrap();
+        let ws = format!("{root}/ws");
+        std::os::unix::fs::symlink(format!("{root}/home/.config"), format!("{ws}/abs")).unwrap();
+        std::os::unix::fs::symlink("../home/.config", format!("{ws}/rel")).unwrap();
+        std::os::unix::fs::symlink("rel", format!("{ws}/chain")).unwrap();
+        // `resolve_path` drops `link/..` as text: the workspace.
+        assert_eq!(
+            real_resolve(&resolve_path(&ws, "abs/../.bashrc")),
+            format!("{ws}/.bashrc")
+        );
+        for link in ["abs", "rel", "chain"] {
+            assert_eq!(
+                physical_resolve(&ws, &format!("{link}/../.bashrc")),
+                format!("{root}/home/.bashrc"),
+                "{link}"
+            );
+            assert_eq!(
+                physical_resolve(&ws, &format!("{link}/../.config/../../ws/a")),
+                format!("{ws}/a"),
+                "{link}"
+            );
+        }
+        assert_eq!(physical_resolve(&ws, "a/./b/../c"), format!("{ws}/a/c"));
+        assert_eq!(physical_resolve("/", &format!("{ws}/x")), format!("{ws}/x"));
+        assert_eq!(physical_resolve(&ws, "missing/../y"), format!("{ws}/y"));
+        // A dangling link: a write creates its target.
+        std::os::unix::fs::symlink(format!("{root}/home/new"), format!("{ws}/dangling")).unwrap();
+        assert_eq!(
+            physical_resolve(&ws, "dangling"),
+            format!("{root}/home/new")
+        );
+        // A loop stops following without hanging.
+        std::os::unix::fs::symlink("loop", format!("{ws}/loop")).unwrap();
+        assert!(physical_resolve(&ws, "loop/x").ends_with("/x"));
     }
 
     #[test]

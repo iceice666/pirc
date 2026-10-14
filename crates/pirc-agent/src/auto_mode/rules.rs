@@ -11,8 +11,8 @@ use std::sync::OnceLock;
 
 use indexmap::IndexMap;
 use pirc_policy::{
-    BUILD_CREDENTIAL_HOME_PATHS, SENSITIVE_HOME_PATHS, is_inside as inside, real_resolve,
-    resolve_path,
+    BUILD_CREDENTIAL_HOME_PATHS, SENSITIVE_HOME_PATHS, is_inside as inside, physical_resolve,
+    real_resolve, resolve_path,
 };
 
 use crate::tools::js::{self, JsRegex, js_regex};
@@ -490,16 +490,34 @@ impl Paths {
         Some(text)
     }
 
-    /// Absolute path of a word, or `None` when it cannot be known statically.
+    /// Absolute path of a word as the kernel walks it (a symlink is followed
+    /// before a later `..`), or `None` when it cannot be known statically.
     fn resolve(&self, word: &Word, cwd: Option<&str>) -> Option<String> {
-        let mut text = self.expand(word, cwd)?;
+        let text = self.expand(word, cwd)?;
         if word.dynamic && text.contains(is_glob_char) {
             return None;
         }
-        if !text.starts_with('/') {
-            text = resolve_path(cwd?, &text);
+        let base = if text.starts_with('/') { "/" } else { cwd? };
+        Some(real_resolve(&physical_resolve(base, &text)))
+    }
+
+    /// The logical path `cd` (`-L`) makes of a word: `..` applied as text
+    /// to `pwd`, no link followed.
+    fn logical(&self, word: &Word, pwd: Option<&str>) -> Option<String> {
+        let text = self.expand(word, pwd)?;
+        if word.dynamic && text.contains(is_glob_char) {
+            return None;
         }
-        Some(real_resolve(&text))
+        let base = if text.starts_with('/') { "/" } else { pwd? };
+        Some(resolve_path(base, &text))
+    }
+
+    /// A credential store inside `dir` (searching it recursively reads it).
+    fn secret_within(&self, dir: &str) -> Option<&str> {
+        self.secrets
+            .iter()
+            .find(|secret| inside(secret, dir))
+            .map(String::as_str)
     }
 
     /// For an operand [`Paths::resolve`] cannot pin down: why its expansion
@@ -535,7 +553,7 @@ impl Paths {
         if !dir.starts_with('/') && cwd.is_none() {
             return Some(format!("{} is relative to an unknown directory", word.text));
         }
-        let base = real_resolve(&resolve_path(
+        let base = real_resolve(&physical_resolve(
             cwd.unwrap_or("/"),
             if dir.is_empty() { "." } else { dir },
         ));
@@ -1001,10 +1019,207 @@ fn in_place_targets(name: &str, args: &[Word]) -> Option<Vec<Word>> {
     }
 }
 
+/// Whether a sed script only edits the stream: parsed left to right as
+/// GNU and BSD sed do, `Err` names a command that runs a program or reads
+/// or writes another file (`e`, `r`, `R`, `w`, `W`, an `e`/`w` flag on
+/// `s`), or a construction the parser does not follow.
+fn sed_script_is_plain(script: &str) -> Result<(), &'static str> {
+    const OTHER: &str = "runs commands or reads or writes other files";
+    const UNCLEAR: &str = "cannot be parsed statically";
+    let chars: Vec<char> = script.chars().collect();
+    let mut i = 0;
+    let at = |i: usize| chars.get(i).copied();
+    // `/re/` or `\cREc` from `i` (at the delimiter); the index after it.
+    // A bracket expression holding the delimiter is read differently by
+    // GNU (delimiter ends the regex) and BSD (it does not): unclear.
+    let delimited = |mut i: usize, delimiter: char| -> Result<usize, &'static str> {
+        loop {
+            match at(i) {
+                // A backslash-newline (a newline in a replacement) is
+                // read differently by the seds.
+                None | Some('\n') => return Err(UNCLEAR),
+                Some('\\') if at(i + 1) == Some('\n') => return Err(UNCLEAR),
+                Some('\\') => i += 2,
+                Some('[') => {
+                    let mut j = i + 1;
+                    if at(j) == Some('^') {
+                        j += 1;
+                    }
+                    if at(j) == Some(']') {
+                        j += 1;
+                    }
+                    while let Some(c) = at(j) {
+                        if c == ']' || c == '\n' {
+                            break;
+                        }
+                        if c == delimiter {
+                            return Err(UNCLEAR);
+                        }
+                        j += 1;
+                    }
+                    i += 1;
+                }
+                Some(c) if c == delimiter => return Ok(i + 1),
+                Some(_) => i += 1,
+            }
+        }
+    };
+    let skip_blank = |mut i: usize| {
+        while at(i).is_some_and(|c| c == ' ' || c == '\t') {
+            i += 1;
+        }
+        i
+    };
+    let to_line_end = |mut i: usize| {
+        while at(i).is_some_and(|c| c != '\n') {
+            i += 1;
+        }
+        i
+    };
+    loop {
+        // Separators between commands.
+        while at(i).is_some_and(|c| c.is_whitespace() || c == ';') {
+            i += 1;
+        }
+        let Some(_) = at(i) else {
+            return Ok(());
+        };
+        // Up to two addresses, `!`.
+        for _ in 0..2 {
+            match at(i) {
+                Some('/') => i = delimited(i + 1, '/')?,
+                Some('\\') => {
+                    let delimiter = at(i + 1).ok_or(UNCLEAR)?;
+                    i = delimited(i + 2, delimiter)?;
+                }
+                Some(c) if c.is_ascii_digit() || c == '$' => {
+                    i += 1;
+                    while at(i).is_some_and(|c| c.is_ascii_digit() || c == '~') {
+                        i += 1;
+                    }
+                }
+                Some('+' | '~') => {
+                    i += 1;
+                    while at(i).is_some_and(|c| c.is_ascii_digit()) {
+                        i += 1;
+                    }
+                }
+                _ => {}
+            }
+            while matches!(at(i), Some('I' | 'M')) {
+                i += 1;
+            }
+            i = skip_blank(i);
+            if at(i) == Some(',') {
+                i = skip_blank(i + 1);
+            } else {
+                break;
+            }
+        }
+        while matches!(at(i), Some('!' | ' ' | '\t')) {
+            i += 1;
+        }
+        let Some(command) = at(i) else {
+            return Err(UNCLEAR);
+        };
+        i += 1;
+        match command {
+            'e' | 'E' | 'r' | 'R' | 'w' | 'W' => return Err(OTHER),
+            '{' | '}' => continue,
+            '#' => i = to_line_end(i),
+            // Text: to the end of the line, a backslash escaping the next
+            // character (a newline continues the text, `\\` does not).
+            'a' | 'i' | 'c' => loop {
+                match at(i) {
+                    None | Some('\n') => break,
+                    Some('\\') => i += 2,
+                    Some(_) => i += 1,
+                }
+            },
+            // Labels end at blanks, `;` or `}` as GNU reads them (BSD reads
+            // to the end of the line): the shorter reading sees more
+            // commands, and anything after a blank must end the command.
+            ':' | 'b' | 't' | 'T' => {
+                i = skip_blank(i);
+                while at(i).is_some_and(|c| !c.is_whitespace() && c != ';' && c != '}') {
+                    i += 1;
+                }
+            }
+            's' | 'y' => {
+                let delimiter = at(i).ok_or(UNCLEAR)?;
+                if delimiter == '\n' || delimiter == '\\' {
+                    return Err(UNCLEAR);
+                }
+                i = delimited(i + 1, delimiter)?;
+                i = delimited(i, delimiter)?;
+                if command == 's' {
+                    while let Some(flag) = at(i) {
+                        match flag {
+                            'g' | 'p' | 'i' | 'I' | 'm' | 'M' => i += 1,
+                            c if c.is_ascii_digit() => i += 1,
+                            'e' | 'w' => return Err(OTHER),
+                            _ => break,
+                        }
+                    }
+                }
+            }
+            '=' | 'd' | 'D' | 'g' | 'G' | 'h' | 'H' | 'n' | 'N' | 'p' | 'P' | 'x' | 'z' | 'F' => {}
+            // An optional number (`q 5`, `l 70`) or version (`v 4.2`).
+            'l' | 'L' | 'q' | 'Q' | 'v' => {
+                i = skip_blank(i);
+                while at(i).is_some_and(|c| c.is_ascii_digit() || c == '.') {
+                    i += 1;
+                }
+            }
+            _ => return Err(UNCLEAR),
+        }
+        // A command ends at `;`, a newline, `}`, `#` or the end.
+        i = skip_blank(i);
+        match at(i) {
+            None | Some(';' | '\n' | '}' | '#') => {}
+            Some(_) => return Err(UNCLEAR),
+        }
+    }
+}
+
 /// `sed`: files edited with `-i`, and scripts that run commands or read or
 /// write other files.
 fn classify_sed(args: &[Word], state: &State<'_>) -> Classification {
     let valued = ["-e", "--expression", "-f", "--file", "-l", "--line-length"];
+    // GNU takes long options abbreviated (`--expr=`, `--in`): only exact
+    // spellings are followed.
+    let known = [
+        "--quiet",
+        "--silent",
+        "--debug",
+        "--expression",
+        "--file",
+        "--follow-symlinks",
+        "--in-place",
+        "--line-length",
+        "--null-data",
+        "--zero-terminated",
+        "--posix",
+        "--regexp-extended",
+        "--separate",
+        "--sandbox",
+        "--unbuffered",
+        "--help",
+        "--version",
+    ];
+    if let Some(odd) = args
+        .iter()
+        .take_while(|word| word.text != "--")
+        .find(|word| {
+            word.text.starts_with("--")
+                && !known.contains(&word.text.split('=').next().unwrap_or(""))
+        })
+    {
+        return unknown(format!(
+            "sed {} is not an option the rules follow",
+            odd.text
+        ));
+    }
     let mut scripts = option_values(args, &["-e", "--expression"]);
     if !option_values(args, &["-f", "--file"]).is_empty() {
         return unknown("sed runs a script file that cannot be inspected");
@@ -1024,24 +1239,15 @@ fn classify_sed(args: &[Word], state: &State<'_>) -> Classification {
     if scripts.is_empty() && !files.is_empty() {
         scripts.push(files.remove(0));
     }
-    for script in &scripts {
+    // GNU `--sandbox` makes sed itself refuse `e`, `r` and `w` (after `--`
+    // it is a file name).
+    let sandboxed = has_long_prefix(args, &["--sandbox"]);
+    for script in scripts.iter().filter(|_| !sandboxed) {
         if script.dynamic {
             return unknown("sed script contains an expansion");
         }
-        let subst = js_regex!(
-            r"s([^\\\n])(?:\\.|(?!\1)[^\n])*\1(?:\\.|(?!\1)[^\n])*\1([^;\n}]*)",
-            "g"
-        );
-        let flags: Vec<&str> = subst
-            .find_iter(&script.text)
-            .map(|found| found.group(2).map_or("", |range| &script.text[range]))
-            .collect();
-        let rest = js_regex!(r"\/(?:\\.|[^/\n])*\/", "g")
-            .replace_all(&subst.replace_all(&script.text, ";"), "");
-        if flags.iter().any(|flag| flag.contains(['e', 'w']))
-            || js_regex!(r"(^|[;{}!$\s\d,])[eEwWrR](\s|$|;)").test(&rest)
-        {
-            return unknown("sed script runs commands or reads or writes other files");
+        if let Err(why) = sed_script_is_plain(&script.text) {
+            return unknown(format!("sed script {why}"));
         }
     }
     if !in_place {
@@ -1062,6 +1268,51 @@ fn has_flag(words: &[Word], names: &[&str]) -> bool {
                     .is_some_and(|rest| rest.starts_with('='))
             })
     })
+}
+
+/// Whether `text` is a long option abbreviating one of `names`: getopt_long
+/// takes any unambiguous prefix (`--post-f` for `--post-file`), and an
+/// ambiguous one only fails, so every prefix counts.
+fn abbreviates(text: &str, names: &[&str]) -> bool {
+    let Some(body) = text.strip_prefix("--") else {
+        return false;
+    };
+    let name = body.split('=').next().unwrap_or("");
+    !name.is_empty()
+        && names.iter().any(|full| {
+            full.strip_prefix("--")
+                .is_some_and(|full| full.starts_with(name))
+        })
+}
+
+/// A long option before `--` abbreviating one of `names`.
+fn has_long_prefix(words: &[Word], names: &[&str]) -> bool {
+    words
+        .iter()
+        .take_while(|word| word.text != "--")
+        .any(|word| abbreviates(&word.text, names))
+}
+
+/// Values of the long options abbreviating `names`: `--na=V` or `--na V`.
+fn long_prefix_values(words: &[Word], names: &[&str]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < words.len() && words[i].text != "--" {
+        let text = &words[i].text;
+        if abbreviates(text, names) {
+            match text.split_once('=') {
+                Some((_, value)) => out.push(value.to_owned()),
+                None => {
+                    if let Some(next) = words.get(i + 1) {
+                        out.push(next.text.clone());
+                    }
+                    i += 1;
+                }
+            }
+        }
+        i += 1;
+    }
+    out
 }
 
 /// A short-option cluster (`-rf`) containing any of `letters`.
@@ -1217,6 +1468,13 @@ const RISKY_VARIABLES: &[&str] = &[
     "LESSCLOSE",
     "SSH_ASKPASS",
     "SUDO_ASKPASS",
+    // Config files that make read-only tools run programs or send files.
+    "XDG_CONFIG_HOME",
+    "RIPGREP_CONFIG_PATH",
+    "BAT_PAGER",
+    "BAT_CONFIG_PATH",
+    "WGETRC",
+    "CURL_HOME",
 ];
 const RISKY_PREFIXES: &[&str] = &["LD_", "DYLD_", "GIT_", "BASH_FUNC_", "NPM_CONFIG_"];
 
@@ -1315,7 +1573,10 @@ fn safe_git_config(entry: &str) -> bool {
 
 #[derive(Clone)]
 struct State<'a> {
+    /// The working directory the kernel uses (symlinks resolved).
     cwd: Option<String>,
+    /// Bash's logical `$PWD`, which `cd` (`-L`) applies `..` to as text.
+    pwd: Option<String>,
     paths: &'a Paths,
     deny: &'a [JsRegex],
 }
@@ -1388,6 +1649,7 @@ fn classify_git(args: &[Word], state: &State<'_>) -> Classification {
     };
     let here = State {
         cwd: Some(cwd.clone()),
+        pwd: Some(cwd.clone()),
         ..state.clone()
     };
     let mut inner = classify_git_subcommand(sub, rest);
@@ -1883,15 +2145,14 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
     }
 
     if name == "cd" || name == "pushd" {
-        state.cwd = match args.first() {
-            None => Some(state.paths.home.clone()),
-            Some(target) if target.text == "-" => None,
-            Some(target) => state.paths.resolve(target, state.cwd.as_deref()),
-        };
+        let (cwd, pwd) = change_directory(name, args, state).unzip();
+        state.cwd = cwd;
+        state.pwd = pwd;
         return result;
     }
     if name == "popd" {
         state.cwd = None;
+        state.pwd = None;
         return result;
     }
     if name == "export" {
@@ -1970,7 +2231,10 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
     }
 
     if READ_ONLY.contains(&name) {
-        return result;
+        return match read_only_effects(name, args, state) {
+            Some(effects) => worst(result, effects),
+            None => result,
+        };
     }
 
     if let Some(writer) = path_writer(name) {
@@ -2015,6 +2279,12 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
         "git" => return worst(result, classify_git(args, state)),
         "sed" => return worst(result, classify_sed(args, state)),
         "sort" => {
+            if has_long_prefix(args, &["--compress-program"]) {
+                return worst(
+                    result,
+                    unknown("sort --compress-program runs another program"),
+                );
+            }
             let out = outputs(args, output_options("sort"));
             return if out.is_empty() {
                 result
@@ -2061,10 +2331,23 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
             );
         }
         "curl" => {
+            // Headers and query parts read from a file (`-H @.env`), and
+            // variables expanded into the URL, send local files too.
+            if option_values(args, &["-H", "--header", "--proxy-header", "--url-query"])
+                .iter()
+                .any(|value| value.text.starts_with('@'))
+                || args.iter().any(|word| {
+                    word.text.starts_with("--variable") || word.text.starts_with("--expand-")
+                })
+            {
+                return worst(result, unknown("curl sends a local file to a remote host"));
+            }
             if has_flag(args, &["-T", "--upload-file", "-F", "--form"])
                 || args
                     .iter()
-                    .any(|word| js_regex!("^(-d|--data.*)$").test(&word.text))
+                    .any(|word| js_regex!("^(-d|--data.*|--json|--form-string)$").test(&word.text))
+                // Clustered short options: `-sT FILE`, `-sd @FILE`.
+                || !option_values(args, &["-T", "-F", "-d"]).is_empty()
             {
                 return worst(result, unknown("curl sends data to a remote host"));
             }
@@ -2103,6 +2386,30 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
                 .any(|word| js_regex!("^file:", "i").test(&word.text))
             {
                 return worst(result, unknown("wget reads a local file"));
+            }
+            // `--post-file`/`--body-file` upload a local file; `-e` and
+            // `--config` run wgetrc commands that can do the same.
+            if has_long_prefix(
+                args,
+                &[
+                    "--post-file",
+                    "--body-file",
+                    "--post-data",
+                    "--body-data",
+                    "--method",
+                    "--execute",
+                    "--config",
+                    "--use-askpass",
+                    "--save-cookies",
+                ],
+            ) || !option_values(args, &["-e"]).is_empty()
+            {
+                return worst(
+                    result,
+                    unknown(
+                        "wget sends data, runs wgetrc commands or a program, or writes cookies",
+                    ),
+                );
             }
             let mut out = outputs(args, output_options("wget"));
             // Without -O / -P the download lands in the working directory.
@@ -2713,6 +3020,442 @@ fn package_script_bodies(dir: &str, names: &[String]) -> Vec<String> {
     out
 }
 
+/// `cd`/`pushd`: the new physical and logical working directories, or
+/// `None` when they cannot be known. With `-L` (bash's default) the target
+/// is applied to the logical `$PWD` as text (`deep/..` is the directory
+/// holding the link `deep`, wherever it points) and the kernel then walks
+/// that path; with `-P` the physical directory is walked and becomes
+/// `$PWD`.
+fn change_directory(name: &str, args: &[Word], state: &State<'_>) -> Option<(String, String)> {
+    let mut physical = false;
+    let mut rest = args;
+    while let Some(first) = rest.first() {
+        let text = first.text.as_str();
+        if text == "--" {
+            rest = &rest[1..];
+            break;
+        }
+        let cluster = text.len() > 1
+            && text.starts_with('-')
+            && text[1..]
+                .chars()
+                .all(|c| matches!(c, 'L' | 'P' | 'e' | '@'));
+        if name != "cd" || !cluster {
+            break;
+        }
+        for c in text[1..].chars() {
+            match c {
+                'P' => physical = true,
+                'L' => physical = false,
+                _ => {}
+            }
+        }
+        rest = &rest[1..];
+    }
+    let home = Word::plain(&state.paths.home);
+    let target = match rest.first() {
+        // `pushd` alone swaps the top two directories.
+        None if name == "cd" => &home,
+        None => return None,
+        // `cd -`, `pushd +1`, unknown options.
+        Some(target) if target.text.starts_with(['-', '+']) => return None,
+        Some(target) => target,
+    };
+    if physical {
+        let walked = state.paths.resolve(target, state.cwd.as_deref())?;
+        return Some((walked.clone(), walked));
+    }
+    let pwd = state.paths.logical(target, state.pwd.as_deref())?;
+    let walked = real_resolve(&physical_resolve("/", &pwd));
+    Some((walked, pwd))
+}
+
+/// Options taking a separate value, per recursive searcher.
+fn search_valued(name: &str) -> &'static [&'static str] {
+    match name {
+        "rg" => &[
+            "-e",
+            "--regexp",
+            "-f",
+            "--file",
+            "-g",
+            "--glob",
+            "--iglob",
+            "-t",
+            "--type",
+            "-T",
+            "--type-not",
+            "--type-add",
+            "--type-clear",
+            "-A",
+            "--after-context",
+            "-B",
+            "--before-context",
+            "-C",
+            "--context",
+            "-m",
+            "--max-count",
+            "-M",
+            "--max-columns",
+            "-d",
+            "--max-depth",
+            "--maxdepth",
+            "-j",
+            "--threads",
+            "-E",
+            "--encoding",
+            "--engine",
+            "--colors",
+            "--color",
+            "--sort",
+            "--sortr",
+            "-r",
+            "--replace",
+            "--path-separator",
+            "--pre-glob",
+            "--ignore-file",
+            "--max-filesize",
+            "--dfa-size-limit",
+            "--regex-size-limit",
+            "--context-separator",
+            "--field-context-separator",
+            "--field-match-separator",
+            "--hyperlink-format",
+        ],
+        "ag" => &[
+            "-A",
+            "--after",
+            "-B",
+            "--before",
+            "-C",
+            "--context",
+            "-G",
+            "--file-search-regex",
+            "-g",
+            "-m",
+            "--max-count",
+            "--depth",
+            "-p",
+            "--path-to-ignore",
+            "--ignore",
+            "--ignore-dir",
+            "-W",
+            "--width",
+        ],
+        _ => &[
+            "-e",
+            "--regexp",
+            "-f",
+            "--file",
+            "-m",
+            "--max-count",
+            "-A",
+            "--after-context",
+            "-B",
+            "--before-context",
+            "-C",
+            "--context",
+            "-d",
+            "--directories",
+            "-D",
+            "--devices",
+            "--include",
+            "--exclude",
+            "--exclude-dir",
+            "--exclude-from",
+            "--label",
+        ],
+    }
+}
+
+/// A recursive content search (`grep -r`, `rg`, `ag`) over a directory
+/// holding credential stores prints them into the model's context, like
+/// `cat` of the store itself: danger. Without a path it searches the
+/// working directory.
+fn recursive_search(name: &str, args: &[Word], state: &State<'_>) -> Option<Classification> {
+    let valued = search_valued(name);
+    let mut paths = operands_skipping(args, valued);
+    let patterns = option_values(args, &["-e", "--regexp", "-f", "--file"]);
+    // `rg --files`, `ag -g`: file names only, no contents.
+    if (name == "rg" && has_flag(args, &["--files"]))
+        || (name == "ag" && !option_values(args, &["-g"]).is_empty())
+    {
+        return None;
+    }
+    if patterns.is_empty() && !paths.is_empty() {
+        paths.remove(0);
+    }
+    if paths.is_empty() {
+        paths.push(cwd_word());
+    }
+    for path in &paths {
+        let Some(dir) = state.paths.resolve(path, state.cwd.as_deref()) else {
+            return Some(unknown(format!(
+                "{name} searches {}, which cannot be resolved statically",
+                path.text
+            )));
+        };
+        if let Some(secret) = state.paths.secret_within(&dir) {
+            return Some(danger(format!(
+                "searches {dir} recursively, including credentials at {secret}"
+            )));
+        }
+    }
+    None
+}
+
+/// What a command of the read-only table does besides reading: options
+/// and operands that run programs (S1), write files or change the system
+/// (S2), or search credential stores recursively (S4). `None` when this
+/// invocation only reads.
+fn read_only_effects(name: &str, args: &[Word], state: &State<'_>) -> Option<Classification> {
+    match name {
+        // `-x`/`-X` anywhere in a short cluster (`-j1x`) but in the value of
+        // an option before it (`-tx`: type executable), any `--exec*`.
+        "fd" => (has_long_prefix(args, &["--exec", "--exec-batch"])
+            || args
+                .iter()
+                .take_while(|word| word.text != "--")
+                .any(|word| {
+                    let Some(cluster) = word.text.strip_prefix('-') else {
+                        return false;
+                    };
+                    !cluster.starts_with('-')
+                        && cluster
+                            .chars()
+                            .take_while(|c| !"tedEScjo".contains(*c))
+                            .any(|c| c == 'x' || c == 'X')
+                }))
+        .then(|| unknown("fd --exec runs a command on the matches")),
+        "rg" => {
+            if has_flag(args, &["--pre", "--hostname-bin"]) {
+                return Some(unknown("rg --pre/--hostname-bin runs another program"));
+            }
+            // Following links, the search may leave the named directories.
+            if has_short(args, "L") || has_flag(args, &["--follow"]) {
+                return Some(unknown("rg --follow searches wherever links lead"));
+            }
+            recursive_search(name, args, state)
+        }
+        "ag" => {
+            if has_flag(args, &["--pager"]) {
+                return Some(unknown("ag --pager runs another program"));
+            }
+            if has_short(args, "f") || has_flag(args, &["--follow"]) {
+                return Some(unknown("ag --follow searches wherever links lead"));
+            }
+            recursive_search(name, args, state)
+        }
+        "grep" | "egrep" | "fgrep" => {
+            // `-R` follows every link, wherever it leads.
+            if has_short(args, "R") || has_long_prefix(args, &["--dereference-recursive"]) {
+                return Some(unknown("grep -R searches wherever links lead"));
+            }
+            let mut directories: Vec<String> = option_values(args, &["-d"])
+                .into_iter()
+                .map(|word| word.text)
+                .collect();
+            directories.extend(long_prefix_values(args, &["--directories"]));
+            // GNU grep takes `-d rec` for `-d recurse`.
+            let recursive = has_short(args, "r")
+                || has_long_prefix(args, &["--recursive"])
+                || directories
+                    .iter()
+                    .any(|value| !value.is_empty() && "recurse".starts_with(value.as_str()));
+            if recursive {
+                recursive_search(name, args, state)
+            } else {
+                None
+            }
+        }
+        "bat" => {
+            if has_flag(args, &["--pager"]) {
+                return Some(unknown("bat --pager runs another program"));
+            }
+            let ops = operands(args);
+            (has_flag(args, &["--generate-config-file"])
+                || (ops.first().is_some_and(|word| word.text == "cache")
+                    && has_flag(args, &["-b", "--build", "-c", "--clear"])))
+            .then(|| unknown("bat writes its configuration or cache"))
+        }
+        // `uniq [IN [OUT]]`, `xxd [IN [OUT]]`: the second operand is written
+        // (`xxd -r` patches it).
+        "uniq" | "xxd" => {
+            let valued: &[&str] = if name == "uniq" {
+                &[
+                    "-f",
+                    "--skip-fields",
+                    "-s",
+                    "--skip-chars",
+                    "-w",
+                    "--check-chars",
+                ]
+            } else {
+                &[
+                    "-c",
+                    "-cols",
+                    "-g",
+                    "-groupsize",
+                    "-l",
+                    "-len",
+                    "-n",
+                    "-name",
+                    "-o",
+                    "-offset",
+                    "-s",
+                    "-seek",
+                    "-R",
+                ]
+            };
+            let out: Vec<Word> = operands_skipping(args, valued)
+                .into_iter()
+                .skip(1)
+                .take(1)
+                .filter(|word| word.text != "-")
+                .collect();
+            (!out.is_empty()).then(|| check_writes(&out, state, false, &format!("{name} writes")))
+        }
+        "tree" => {
+            if has_short(args, "R") {
+                return Some(unknown("tree -R writes a listing into every directory"));
+            }
+            let out = outputs(args, &["-o"]);
+            (!out.is_empty()).then(|| check_writes(&out, state, false, "tree -o writes"))
+        }
+        "yq" => {
+            if has_short(args, "s") || has_flag(args, &["--split-exp"]) {
+                return Some(unknown("yq -s may write a file per document"));
+            }
+            // `load("~/.ssh/id_rsa")` and friends read the files the
+            // expression names; an expression file cannot be inspected.
+            if has_flag(args, &["--from-file"])
+                || args
+                    .iter()
+                    .any(|word| js_regex!(r"load\w*\s*\(").test(&word.text))
+            {
+                return Some(unknown("yq expression may load other files"));
+            }
+            let in_place =
+                has_flag(args, &["-i", "--inplace", "--in-place"]) || has_short(args, "i");
+            if !in_place {
+                return None;
+            }
+            let mut files = operands_skipping(
+                args,
+                &[
+                    "-I",
+                    "--indent",
+                    "-o",
+                    "--output-format",
+                    "-p",
+                    "--input-format",
+                    "--expression",
+                    "--front-matter",
+                    "--xml-attribute-prefix",
+                    "--xml-content-name",
+                    "--lua-prefix",
+                    "--properties-separator",
+                    "--csv-separator",
+                ],
+            );
+            // The first operand is the expression, unless it is the only one.
+            if files.len() > 1 && !has_flag(args, &["--expression"]) {
+                files.remove(0);
+            }
+            Some(worst(
+                write("yq -i edits files in place"),
+                check_writes(&files, state, false, "yq -i edits"),
+            ))
+        }
+        "date" => {
+            // GNU `date -s` (also `-us`, `--se=`), or a `[MMDDhhmm…]` operand
+            // (BSD `-j` only parses it). In `-Iseconds` the `s` is a value.
+            let short_set = args
+                .iter()
+                .take_while(|word| word.text != "--")
+                .any(|word| {
+                    let Some(cluster) = word.text.strip_prefix('-') else {
+                        return false;
+                    };
+                    !cluster.starts_with('-')
+                        && cluster.contains('s')
+                        && cluster
+                            .chars()
+                            .take_while(|c| *c != 's')
+                            .all(|c| "uRjn".contains(c))
+                });
+            let sets = short_set
+                || has_long_prefix(args, &["--set"])
+                || (!has_short(args, "j")
+                    && operands_skipping(
+                        args,
+                        &[
+                            "-d",
+                            "--date",
+                            "-f",
+                            "--file",
+                            "-r",
+                            "--reference",
+                            "-v",
+                            "-z",
+                            "--rfc-3339",
+                        ],
+                    )
+                    .iter()
+                    .any(|word| !word.text.starts_with('+')));
+            sets.then(|| danger("date sets the system clock"))
+        }
+        "hostname" => (!operands_skipping(args, &["-F", "--file"]).is_empty()
+            || !option_values(args, &["-F", "--file"]).is_empty())
+        .then(|| danger("hostname changes the system's host name")),
+        // cloc's options run programs (`--vcs`, `--extract-with`,
+        // `--files-from`), load config or write reports, and Getopt::Long
+        // takes them abbreviated and with one dash: only a known-safe set,
+        // spelled out, stays read-only.
+        "cloc" => args
+            .iter()
+            .take_while(|word| word.text != "--")
+            .filter(|word| word.text.starts_with('-') && word.text != "-")
+            .any(|word| {
+                let name = word.text.trim_start_matches('-');
+                let name = name.split('=').next().unwrap_or("");
+                ![
+                    "by-file",
+                    "by-file-by-lang",
+                    "quiet",
+                    "json",
+                    "yaml",
+                    "csv",
+                    "md",
+                    "xml",
+                    "hide-rate",
+                    "exclude-dir",
+                    "exclude-ext",
+                    "include-ext",
+                    "exclude-lang",
+                    "include-lang",
+                    "skip-uniqueness",
+                    "fullpath",
+                    "version",
+                    "help",
+                ]
+                .contains(&name)
+            })
+            .then(|| unknown("cloc option may run a program or write a file")),
+        "scc" => {
+            if has_flag(args, &["--format-multi"]) {
+                return Some(unknown("scc --format-multi may write files"));
+            }
+            let out = outputs(args, &["-o", "--output"]);
+            (!out.is_empty()).then(|| check_writes(&out, state, false, "scc writes"))
+        }
+        // `file -C` compiles a magic file into the working directory.
+        "file" => (has_flag(args, &["-C", "--compile"]) || has_short(args, "C"))
+            .then(|| check_writes(&[cwd_word()], state, false, "file -C writes into")),
+        _ => None,
+    }
+}
+
 /// What a command runs indirectly (package scripts, make/just recipes,
 /// shell script files), checked against the deny-list. Danger on a match;
 /// unknown when the scripts cannot be determined; `None` otherwise.
@@ -2928,8 +3671,12 @@ pub fn classify_shell(command: &str, context: &RuleContext<'_>) -> Classificatio
         Lexed::Pipelines(pipelines) => pipelines,
     };
     let paths = Paths::new(context);
+    // Nothing hands the shell a `PWD`, so bash starts from `getcwd`: the
+    // physical directory is also the logical one.
+    let start = real_resolve(context.cwd);
     let mut state = State {
-        cwd: Some(real_resolve(context.cwd)),
+        cwd: Some(start.clone()),
+        pwd: Some(start),
         paths: &paths,
         deny: context.deny,
     };

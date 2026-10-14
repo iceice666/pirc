@@ -727,6 +727,11 @@ pub(crate) fn blank(line: &str) -> bool {
     line.chars().all(|c| c.is_whitespace() || c == '\u{feff}')
 }
 
+/// Stands in for a stdin line dropped for its length
+/// ([`crate::run::STDIN_LINE_MAX_BYTES`]); not valid JSON, so nothing the
+/// node sends can mean it.
+pub const LINE_TOO_LONG: &str = "\u{0}line too long";
+
 /// `serveRpc`: serve JSONL RPC until the input ends. `Err` is what would
 /// have been thrown out of the loop (a `null` command line), which ends the
 /// process without its shutdown.
@@ -749,6 +754,13 @@ pub(crate) async fn serve<A: Commands>(
 ) -> Result<(), String> {
     while let Some(line) = lines.recv().await {
         if blank(&line) {
+            continue;
+        }
+        if line == LINE_TOO_LONG {
+            write(
+                json!({ "type": "response", "command": "parse", "success": false,
+                "error": "Line too long" }),
+            );
             continue;
         }
         let Ok(command) = serde_json::from_str::<Value>(&line) else {
