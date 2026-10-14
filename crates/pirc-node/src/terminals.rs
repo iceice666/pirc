@@ -35,7 +35,7 @@ use tokio::sync::{mpsc, watch};
 use crate::error::{ApiError, ApiResult};
 use crate::services::WeakNode;
 
-mod pty;
+pub(crate) mod pty;
 
 const SCROLLBACK_BYTES: usize = 256 * 1024;
 const PER_SESSION: usize = 4;

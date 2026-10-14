@@ -1,6 +1,13 @@
 //! `runOnHost`: an approved command outside the sandbox, `/bin/bash -c` in
-//! its own process group with the node's environment without its secrets,
+//! its own session with the node's environment without its secrets,
 //! output capped (head and tail kept, in UTF-16 units as TS counted them).
+//!
+//! The session (`setsid`, as TS's `detached` spawn made) leaves the command
+//! without a controlling terminal: when the node runs in one, the command
+//! cannot open `/dev/tty` to read the human's keystrokes, prompt there
+//! (a `sudo` password prompt would hang until the timeout) or inject input
+//! into it (`TIOCSTI`). Its leader also leads a process group of the same
+//! id, which a timeout or an abort signals as a whole.
 
 use std::path::Path;
 use std::process::Stdio;
@@ -11,6 +18,7 @@ use nix::unistd::Pid;
 use pirc_agent::messages::js::utf16_len;
 use pirc_config::Env;
 use pirc_config::env_allowlist::without_secrets;
+use process_wrap::tokio::{CommandWrap, ProcessSession};
 use serde_json::{Value, json};
 use tokio::io::AsyncReadExt;
 use tokio::sync::watch;
@@ -90,8 +98,9 @@ pub async fn run_on_host(
         .envs(without_secrets(env, &[]))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .process_group(0);
+        .stderr(Stdio::piped());
+    let mut spawned = CommandWrap::from(spawned);
+    spawned.wrap(ProcessSession);
     let (mut timed_out, mut aborted) = (false, false);
     // Withdrawn before it started (between the human's yes and here): never
     // spawned. TS could not get here aborted (one thread).
@@ -100,7 +109,9 @@ pub async fn run_on_host(
         aborted = true;
         None
     } else {
-        Some(spawned.spawn())
+        // `ProcessSession` would wait for the whole group: wait on bash
+        // itself, as the pipes' end already covers what it left running.
+        Some(spawned.spawn().map(|child| child.into_inner()))
     };
     let exit_code = match started {
         None => None,
@@ -110,8 +121,8 @@ pub async fn run_on_host(
         }
         Some(Ok(mut child)) => {
             let pid = child.id();
-            let mut stdout = child.stdout.take();
-            let mut stderr = child.stderr.take();
+            let mut stdout = child.stdout().take();
+            let mut stderr = child.stderr().take();
             let deadline = tokio::time::sleep(timeout);
             tokio::pin!(deadline);
             let mut stopping: Option<std::pin::Pin<Box<tokio::time::Sleep>>> = None;
@@ -301,6 +312,129 @@ mod tests {
         .await;
         assert_eq!(result["aborted"], true);
         assert!(!marker.exists());
+    }
+
+    /// Whether `pid` still exists (a zombie counts until it is reaped).
+    fn alive(pid: i32) -> bool {
+        nix::sys::signal::kill(Pid::from_raw(pid), None).is_ok()
+    }
+
+    /// Run on a PTY that is the node's controlling terminal (this test
+    /// binary playing the node, in a session of its own), a host command
+    /// cannot open that terminal: it runs in a session without one.
+    #[tokio::test]
+    async fn a_host_command_cannot_reach_the_nodes_terminal() {
+        if no_bash() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("node");
+        let exe = std::env::current_exe().unwrap();
+        crate::test_support::executable(
+            &script,
+            &format!(
+                "#!/bin/sh\nexec '{}' --exact runner::host::tests::probe_from_a_terminal \
+                 --ignored --nocapture --test-threads=1\n",
+                exe.display()
+            ),
+        );
+        let (master, slave) = crate::terminals::pty::open(24, 80).unwrap();
+        let mut env = std::collections::BTreeMap::new();
+        env.insert("PATH".to_owned(), "/usr/bin:/bin".to_owned());
+        let mut child =
+            crate::terminals::pty::spawn(slave, script.to_str().unwrap(), dir.path(), &env)
+                .unwrap();
+        // Read until it exits: a session leader closing its terminal waits
+        // for the output to be read (macOS).
+        let mut output = Vec::new();
+        let mut buffer = [0; 4096];
+        let run = async {
+            loop {
+                tokio::select! {
+                    _ = child.wait() => break,
+                    read = master.read(&mut buffer) => match read {
+                        Ok(n @ 1..) => output.extend_from_slice(&buffer[..n]),
+                        _ => {
+                            let _ = child.wait().await;
+                            break;
+                        }
+                    },
+                }
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(60), run)
+            .await
+            .expect("the probe did not finish");
+        let output = String::from_utf8_lossy(&output).replace('\r', "");
+        assert!(output.contains("PROBE node: tty"), "{output}");
+        assert!(output.contains("PROBE host: no-tty"), "{output}");
+        assert!(!output.contains("PROBE host: tty"), "{output}");
+    }
+
+    /// The node's half of [`a_host_command_cannot_reach_the_nodes_terminal`].
+    #[tokio::test]
+    #[ignore = "run on a PTY by a_host_command_cannot_reach_the_nodes_terminal"]
+    async fn probe_from_a_terminal() {
+        // The setup is real: the "node" itself has the terminal.
+        let node = std::fs::File::open("/dev/tty").is_ok();
+        println!("PROBE node: {}", if node { "tty" } else { "no-tty" });
+        let (_tx, abort) = watch::channel(false);
+        let result = run_on_host(
+            &env(),
+            "if (exec 3</dev/tty) 2>/dev/null; then echo tty; else echo no-tty; fi",
+            Path::new("/"),
+            Duration::from_secs(10),
+            abort,
+        )
+        .await;
+        println!("PROBE host: {}", result["output"].as_str().unwrap().trim());
+    }
+
+    /// An abort ends what the command started in the background too.
+    #[tokio::test]
+    async fn an_aborted_command_leaves_nothing_running() {
+        if no_bash() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let pid_file = dir.path().join("pid");
+        let command = format!("sleep 60 & echo $! > '{}'; sleep 60", pid_file.display());
+        let (tx, abort) = watch::channel(false);
+        let running = tokio::spawn(async move {
+            run_on_host(
+                &env(),
+                &command,
+                Path::new("/"),
+                Duration::from_secs(60),
+                abort,
+            )
+            .await
+        });
+        let pid = loop {
+            if let Some(pid) = std::fs::read_to_string(&pid_file)
+                .ok()
+                .and_then(|text| text.trim().parse::<i32>().ok())
+            {
+                break pid;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert!(alive(pid));
+        tx.send_replace(true);
+        let result = tokio::time::timeout(Duration::from_secs(10), running)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(result["aborted"], true);
+        // Reparented on its parent's death, it is reaped soon after.
+        let gone = async {
+            while alive(pid) {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(5), gone)
+            .await
+            .expect("the background process outlived the abort");
     }
 
     #[test]
