@@ -308,6 +308,8 @@ Validation 2026-10-14: `bun run size:check` passed (Linux table uses its workspa
 - [x] Remove the TS server sources and Bun build scripts from `apps/gateway` (web and Android stay; Bun remains a dev/build tool for the web and test harness).
 - [x] Record final binary sizes against the 0.3.0 baseline.
 
+Post-cutover cleanup (2026-10-14, at the user's request): the retained TS tests (`apps/gateway/test/`), `apps/gateway/RETIRED.md`, the PTC evaluation scripts (`scripts/ptc-*`), the TS-era fixture recorders (`scripts/browser-reference.ts`, `crates/pirc-providers/tests/parity/record.ts` with its groups, `crates/pirc-node/tests/fixtures/sbpl/record.ts`), `spikes/` and the unused srt patch were removed; the committed fixtures stay as frozen recordings. They run only from `2d480d3`, the last TS revision. The API and configuration reference moved to `docs/development/gateway-and-node.md` and `.env.example` to the repository root. The conformance harness lost its mixed-build overrides (`PIRC_CONFORMANCE_GATEWAY_BIN`, `_NODE_BIN`, `_AGENT_BIN`) and its `PIRC_PLAYWRIGHT_CORE` lookup.
+
 **Gate:** the user approves cutover after M5/M7 gates are satisfied.
 
 ## Open questions

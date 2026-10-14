@@ -24,10 +24,10 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
-const FORM: &str = include_str!("../../../spikes/browser-snapshot/pages/form.html");
+const FORM: &str = include_str!("fixtures/browser/pages/form.html");
 
 /// What Playwright's `page.ariaSnapshot({mode: 'ai'})` gives for the form
-/// (`spikes/browser-snapshot/reference.ts`).
+/// (recorded with Playwright 1.63.0 during the M1 browser spike).
 const FORM_SNAPSHOT: &str = r#"- generic [active] [ref=e1]:
   - heading "Sign up" [level=1] [ref=e2]
   - generic [ref=e3]:

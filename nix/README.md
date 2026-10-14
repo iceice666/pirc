@@ -22,7 +22,7 @@ nix build .#pirc-node -o result-node
 
 The gateway depends on the web build output, not its Bun build tool. Server
 sources are explicitly limited to `Cargo.toml`, `Cargo.lock` and `crates/`; local
-credentials/state and the retired TS tests never enter that build. The web source
+credentials/state never enter that build. The web source
 is separately allowlisted in `web.nix`.
 
 ## Module

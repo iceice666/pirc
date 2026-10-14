@@ -7,7 +7,7 @@
 //! (with what it uses from `sandbox/sandbox-manager.js`; Apache-2.0, see
 //! `crates/pirc-node/NOTICE`). Plain text, so it compiles and is tested
 //! everywhere: `tests/sandbox_macos_profiles.rs` compares [`generate`] with
-//! profiles recorded from srt (`tests/fixtures/sbpl/record.ts`).
+//! profiles recorded from srt (`tests/fixtures/sbpl/`).
 //!
 //! Not ported, as pirc never configures them: credential masking (the
 //! "library denies" are pirc's [`ProfileInput::extra_read_denies`]

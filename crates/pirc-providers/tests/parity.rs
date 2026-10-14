@@ -1,5 +1,5 @@
-//! Replays the scenarios recorded from the TS gateway
-//! (`tests/parity/record.ts`, one `fixtures/<group>.json` per group) against
+//! Replays the scenarios recorded from the TS gateway before the cutover
+//! (one `fixtures/<group>.json` per group) against
 //! the Rust port: same HTTP requests, same deltas, same final message.
 //!
 //! `PARITY_GROUP=<group>` and `PARITY_SCENARIO=<name>` narrow a run.

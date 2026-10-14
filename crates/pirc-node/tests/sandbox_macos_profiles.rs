@@ -3,8 +3,8 @@
 //!
 //! - [`profiles_match_srts`]: `profile::generate` with srt's settings
 //!   against the profiles srt 0.0.78 generated for the same settings and
-//!   files (`tests/fixtures/sbpl/<case>.sb`, recorded by `record.ts`
-//!   there from `cases.json`).
+//!   files (`tests/fixtures/sbpl/<case>.sb`, recorded from srt before the
+//!   cutover from `cases.json`).
 //! - [`production_profiles_match_their_recordings`]: the profiles the
 //!   backend builds from a session policy (`macos::policy_profile`, with
 //!   pirc's deviations: resolved and literal extra denies, literal allows,

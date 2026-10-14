@@ -4,11 +4,11 @@ What Playwright itself does on these pages, recorded before the node's browser
 was ported to Rust (`plans/rust-rewrite.md`, M8). The Rust browser's tests
 replay the same cases against their CDP driver and compare with `expected/`.
 
-- `pages/`: the fixture pages (the first four come from `spikes/browser-snapshot`).
+- `pages/`: the fixture pages (the first four come from the M1 browser spike).
 - `cases/<case>.json`: what to do with them, in the small step language below.
-- `expected/<case>.json`: what Playwright 1.63.0 returned, written by
-  [`scripts/browser-reference.ts`](../../../../../scripts/browser-reference.ts).
-  These goldens are **Linux** recordings.
+- `expected/<case>.json`: what Playwright 1.63.0 returned, written by the
+  TS-era recorder `scripts/browser-reference.ts` (removed after the cutover;
+  last runnable at `2d480d3`). These goldens are **Linux** recordings.
 - `expected/<case>.macos.json`: the steps that Playwright itself returns
   differently on macOS, keyed by step index (`"steps": { "<index>": step }`).
   On macOS the corpus replay uses them in place of the Linux steps (see
@@ -16,29 +16,21 @@ replay the same cases against their CDP driver and compare with `expected/`.
 
 ## Recording
 
-From the repository root, after `bun install --frozen-lockfile`:
+The corpus is frozen. It was recorded from the TS node's Playwright setup,
+which the cutover removed together with its recorder. To re-record, check out
+`2d480d3` (the last TS revision) and run its `bun run browser:reference` there.
 
-```sh
-nix develop -c bun run browser:reference            # every case
-nix develop -c bun run browser:reference form oopif # some cases
-nix develop -c bun run browser:reference --check    # compare only; exit 1 on a difference
-```
-
-The Chromium is the Linux dev shell's `chromium` (Chromium 153.0.8010.47 when
-the corpus was recorded), found on `PATH` the way `browser.ts` finds it, or
-`PIRC_BROWSER_EXECUTABLE`. Playwright is the pinned `playwright-core` of
-`apps/gateway/node_modules`. The context is started as `browser.ts` starts it
+It was recorded with the Linux dev shell's `chromium` (Chromium
+153.0.8010.47). The context was started as `browser.ts` started it
 (`launchPersistentContext` with a fresh profile, `headless`, viewport
 1280x800, `acceptDownloads: false`, `serviceWorkers: 'block'`, a secret-free
 environment), with `browser.ts`'s host-guard routes (`context.route('**/*')`,
 `routeWebSocket`; loopback allowed as with `PIRC_BROWSER_ALLOW_PRIVATE`) and
 its action overlay (`page.screencast.showActions({ duration: 600 })`, which
-also delays every input action by 600 ms). Each case runs in a new page of
-that one context, which is closed afterwards.
-
-Three consecutive recordings were byte-identical. Another Chromium version may
-change snapshots (Chromium's accessibility names, key codes); re-record and
-review the diff when the dev shell's Chromium moves.
+also delays every input action by 600 ms). Each case ran in a new page of
+that one context, which was closed afterwards. Three consecutive recordings
+were byte-identical. Another Chromium version may change snapshots
+(Chromium's accessibility names, key codes).
 
 ### macOS
 
@@ -50,16 +42,9 @@ holds those two steps as Playwright 1.63.0 returned them on macOS 26.5 (arm64,
 Chromium 154.0.8037.57, three identical runs). There, the rest of the corpus
 replays against the Linux goldens.
 
-To re-record them on a Mac: run
-`PIRC_BROWSER_EXECUTABLE=/Applications/Chromium.app/Contents/MacOS/Chromium bun run browser:reference keyboard`,
-copy the steps that differ from the Linux golden into `keyboard.macos.json`,
-then restore `keyboard.json` (`git checkout`). (They were recorded with a node
-port of this runner, where Playwright's error prefix is V8's
-`keyboard.press: …`; only the steps that differ beyond that prefix are kept.)
-
 ## Fixture server
 
-The recorder serves the pages itself; a Rust runner must serve them the same
+The recorder served the pages itself; the Rust runner serves them the same
 way. One HTTP server on `127.0.0.1:<port>` stands for two sites:
 
 - `{{HOST_A}}` is `127.0.0.1:<port>`, `{{HOST_B}}` is `localhost:<port>`.

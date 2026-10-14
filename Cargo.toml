@@ -2,8 +2,6 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
-# Throwaway M1 experiments; each is its own Cargo project.
-exclude = ["spikes"]
 
 [workspace.package]
 edition = "2024"

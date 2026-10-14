@@ -12,7 +12,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 - Node protocol **10** refuses mixed TS/Rust installations (WebSocket close 4426). Upgrade every role together.
 - **Fresh state is required.** Do not reuse TS databases, session JSONL, backend settings or VAPID state. Re-pair devices, re-login subscription providers and start new sessions. Preserve old state with the old binaries for rollback. See [migration checklist](docs/deploy/upgrades.md).
 - Native bubblewrap/Seatbelt sandbox and CDP browser drivers replace srt/Playwright runtime dependencies. Linux needs bubblewrap; git, Chromium/Chrome and optional ffmpeg remain external. Remove production `PIRC_SANDBOX_SRT` and `PIRC_PLAYWRIGHT_CORE` overrides.
-- TS server sources and Bun server builds are removed. Historical evaluation tools remain for reference but need a pre-cutover checkout to run; Bun remains a web/development tool.
+- TS server sources, Bun server builds, the TS test suite and the PTC evaluation tools are removed; run the latter from a checkout of `2d480d3`, the last TS revision. Bun remains a web/development tool.
 
 ### Validation limitations
 

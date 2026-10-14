@@ -1,5 +1,5 @@
 //! The golden browser corpus (`tests/fixtures/browser/`, recorded from
-//! Playwright 1.63.0 by `scripts/browser-reference.ts`) replayed against
+//! Playwright 1.63.0 before the Rust port) replayed against
 //! the Rust engine: every case of `cases/` runs in a new page of one
 //! context launched as `browser.ts` launches it (viewport 1280x800, the
 //! host guard with loopback allowed, the action overlay with 600 ms), the
