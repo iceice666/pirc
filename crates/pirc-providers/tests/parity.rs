@@ -253,7 +253,15 @@ async fn run_scenario(scenario: &Value) -> Result<(), String> {
             ));
         }
         let headers = comparable_headers(&actual["headers"]);
-        let expected_headers = comparable_headers(&expected["headers"]);
+        let mut expected_headers = comparable_headers(&expected["headers"]);
+        // Recordings pin TS 0.3.0. The product version intentionally changes
+        // at release; still require the actual header to name this build.
+        if expected_headers.get("user-agent") == Some(&json!("pirc/0.3.0")) {
+            expected_headers.insert(
+                "user-agent".into(),
+                json!(format!("pirc/{}", env!("CARGO_PKG_VERSION"))),
+            );
+        }
         if headers != expected_headers {
             problems.push(format!(
                 "headers:\n  actual   {headers:?}\n  expected {expected_headers:?}"

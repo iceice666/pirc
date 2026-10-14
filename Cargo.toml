@@ -8,7 +8,7 @@ exclude = ["spikes"]
 [workspace.package]
 edition = "2024"
 # The product version (scripts/version.ts keeps it in sync with package.json).
-version = "0.3.0"
+version = "0.4.0"
 # let-chains
 rust-version = "1.88"
 publish = false

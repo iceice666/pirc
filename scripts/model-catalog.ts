@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dir, '..');
-const piAi = path.join(root, 'apps/gateway/node_modules/@mariozechner/pi-ai');
+const piAi = path.join(root, 'node_modules/@mariozechner/pi-ai');
 const output = path.join(root, 'crates/pirc-providers/catalog.json');
 
 export const SUPPORTED_APIS: ReadonlySet<string> = new Set([

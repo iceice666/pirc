@@ -1,0 +1,40 @@
+.ssh
+.gnupg
+.aws
+.azure
+.config/gcloud
+.kube
+.docker/config.json
+.config/gh
+.config/op
+.netrc
+.git-credentials
+.password-store
+.pypirc
+.cargo/credentials
+.cargo/credentials.toml
+.gem/credentials
+.terraform.d/credentials.tfrc.json
+.claude/.credentials.json
+.codex/auth.json
+.config/sops
+.local/share/keyrings
+.local/pirc-node
+.bash_history
+.zsh_history
+.local/share/fish/fish_history
+.mozilla
+.config/google-chrome
+.config/chromium
+.config/BraveSoftware
+.config/microsoft-edge
+Library/Keychains
+Library/Cookies
+Library/Messages
+Library/Mail
+Library/Application Support/Google/Chrome
+Library/Application Support/Chromium
+Library/Application Support/Firefox
+Library/Application Support/BraveSoftware
+Library/Application Support/Arc
+Library/Application Support/Microsoft Edge

@@ -1,5 +1,5 @@
 //! Tool descriptions (`agent/prompts/tools.ts`): the markdown files in
-//! `apps/gateway/src/agent/prompts/tools/`, included verbatim.
+//! `crates/pirc-agent/prompts/tools/`, preserved verbatim from TS 0.3.0.
 //!
 //! Placeholders: `{{name}}` takes a value, and `{{#flag}}…{{/flag}}` keeps
 //! its text only when the flag is true. A missing value is an error, so a
@@ -11,7 +11,7 @@ macro_rules! prompts {
             $((
                 stringify!($name),
                 include_str!(concat!(
-                    "../../../../apps/gateway/src/agent/prompts/tools/",
+                    "../../prompts/tools/",
                     stringify!($name),
                     ".md"
                 )),
@@ -173,10 +173,7 @@ mod tests {
 
     #[test]
     fn registers_every_description_file_and_nothing_else() {
-        let dir = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../apps/gateway/src/agent/prompts/tools"
-        );
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/prompts/tools");
         let mut files: Vec<String> = std::fs::read_dir(dir)
             .unwrap()
             .filter_map(|entry| {

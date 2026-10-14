@@ -2,29 +2,29 @@
 
 Both are node-side concerns: the node starts every agent inside an OS sandbox, and refuses to start one when it cannot; it also hands its agents a Chromium it owns. Neither involves the gateway.
 
-## The agent sandbox (srt)
+## The native agent sandbox
 
-Each `pirc-node agent` or `pirc-chat agent` process runs under [srt](https://github.com/anthropic-experimental/sandbox-runtime) (Anthropic's sandbox-runtime): Seatbelt on macOS, bubblewrap plus a seccomp filter on Linux, with a filtering network proxy on both. Everything the agent starts (tools, `bash`, `ptc` scripts, hooks, teammates, subagents) is inside. A `ptc` script's interpreter process gets an empty environment and talks only to its agent. Side-panel terminals are **not**.
+Each `pirc-node agent` process (for either role) runs under the native sandbox: Seatbelt on macOS, bubblewrap on Linux, with a filtering HTTP/SOCKS5 network proxy on both. The filesystem algorithm was ported from srt 0.0.78 with additional protections. The Linux agent sandbox does not use seccomp (matching the previous allow-all-Unix-sockets configuration); the separate PTC guest does use a seccomp allowlist and resource limits. Everything the agent starts (tools, `bash`, `ptc` scripts, hooks, teammates, subagents) is inside. A `ptc` script's interpreter process gets an empty environment and talks only to its agent. Side-panel terminals are **not**.
 
-### srt
+### Host dependencies
 
-`pirc-node` and `pirc-chat` carry srt `0.0.78` themselves (`pirc-node srt …`), including the static seccomp helper Linux needs, which the node writes to `$PIRC_STATE_DIR/sandbox/bin/`. What the host must still provide:
+Neither role ships srt, Node or socat. What the host must provide:
 
-| Platform            | Needs                                                                                                                                                                |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Nix package / NixOS | Nothing: `nix/sandbox-runtime.nix` builds srt with its dependencies, and the `pirc-chat`/`pirc-node` wrappers point `PIRC_SANDBOX_SRT` at it.                        |
-| Other Linux         | `bubblewrap`, `socat` and `ripgrep` from the distribution, and unprivileged user namespaces (Ubuntu 24.04: `sysctl kernel.apparmor_restrict_unprivileged_userns=0`). |
-| macOS               | Nothing: Seatbelt (`sandbox-exec`) is part of macOS.                                                                                                                 |
+| Platform            | Needs                                                                                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nix package / NixOS | The node wrapper supplies bubblewrap on Linux; no JS runtime.                                                                                |
+| Other Linux         | `bubblewrap` from the distribution and unprivileged user namespaces (Ubuntu 24.04: `sysctl kernel.apparmor_restrict_unprivileged_userns=0`). |
+| macOS               | Nothing: Seatbelt (`sandbox-exec`) is part of macOS.                                                                                         |
 
-The sandbox is mandatory and cannot be turned off. The node probes srt at start-up (the log says `agent sandbox ready` or why not) and again before starting an agent while the last probe failed. When srt cannot sandbox on the host, **no agent starts**: sending a prompt fails with the reason. `PIRC_SANDBOX=off` makes the node refuse to start, and `"enabled"` in the `sandbox` settings is ignored with a warning.
+The sandbox is mandatory and cannot be turned off. The node probes the native backend at start-up (the log says `agent sandbox ready` or why not) and again before starting an agent while the last probe failed. When the native backend cannot sandbox on the host, **no agent starts**: sending a prompt fails with the reason. `PIRC_SANDBOX=off` makes the node refuse to start, and `"enabled"` in the `sandbox` settings is ignored with a warning.
 
-| Variable           | Default      | Meaning                                                               |
-| ------------------ | ------------ | --------------------------------------------------------------------- |
-| `PIRC_SANDBOX_SRT` | the built-in | Path to an external srt executable, used instead of the built-in one. |
+| Variable           | Default        | Meaning                                                                      |
+| ------------------ | -------------- | ---------------------------------------------------------------------------- |
+| `PIRC_SANDBOX_SRT` | unset (native) | Development-only external srt-compatible stand-in; do not set in production. |
 
 ### What the policy is
 
-- **Reads**: everywhere, except credential stores under the account's home (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`, `~/.netrc`, `~/.config/sops`, keychains, browser profiles, …; the full list is `SENSITIVE_HOME_PATHS` in `apps/gateway/src/sandbox-policy.ts`) and the node's own state (`PIRC_STATE_DIR`, minus the session's own directory and its workspace's memory ledger; the systemd credentials directory on NixOS).
+- **Reads**: everywhere, except credential stores under the account's home (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`, `~/.netrc`, `~/.config/sops`, keychains, browser profiles, …; the full list is `SENSITIVE_HOME_PATHS` in `crates/pirc-policy/src/lib.rs`) and the node's own state (`PIRC_STATE_DIR`, minus the session's own directory and its workspace's memory ledger; the systemd credentials directory on NixOS).
 - **Writes**: the workspace (or the chat's directory), the node config's `allowedPaths`, the session's temporary directory, `/tmp`, and common build caches (`~/.cache`, `~/.npm`, `~/.cargo/registry`, `~/go/pkg/mod`, `~/.gradle/caches`, …). `.pirc/` in the workspace, `.git/hooks`, `.git/config` and shell start-up files stay read-only.
 - **Network**: only through srt's proxy, to `DEFAULT_ALLOWED_DOMAINS` (GitHub, GitLab, Codeberg, npm, PyPI, crates.io, Go proxy, Nix caches, Maven, RubyGems, …) plus what you add. A host the task needs and the list lacks makes the agent call `sandbox_allow_domains`; the **node** asks you in the session, and an approved host stays allowed for that session.
 - **Escape hatch**: for a `nix build`, a system change, or git over SSH that is not [set up for the sandbox](#git-and-the-github-cli), the agent calls `unsandboxed_bash`. The node asks you first, then runs the command as the node account, without the node's own secrets.
@@ -58,7 +58,7 @@ In the node's `$PIRC_CONFIG_DIR/config.json` (never a project's `.pirc/config.js
 
 - Domains: a host, a `*.` wildcard, `localhost`, or an IPv4 address, each with an optional `:port`. `deniedDomains` wins.
 - `allowLocalBinding` lets dev servers listen on localhost.
-- `allowUnixSockets` (macOS): extra sockets, e.g. an `ssh-agent` or the Nix daemon. On Linux, Unix sockets are allowed wholesale because seccomp cannot filter them by path; instead the sockets that hand out the host (Docker, containerd, Podman, libvirt, LXD/Incus, the D-Bus system bus, systemd, the user's bus, gpg and keyring agents, `SSH_AUTH_SOCK`; `LINUX_HOST_SOCKETS` in `sandbox-policy.ts`) are hidden from the sandbox. Do not put the node account in the `docker` group: any socket it can reach and the list misses is a way out.
+- `allowUnixSockets` (macOS): extra sockets, e.g. an `ssh-agent` or the Nix daemon. On Linux, Unix sockets are allowed wholesale because seccomp cannot filter them by path; instead the sockets that hand out the host (Docker, containerd, Podman, libvirt, LXD/Incus, the D-Bus system bus, systemd, the user's bus, gpg and keyring agents, `SSH_AUTH_SOCK`; `LINUX_HOST_SOCKETS` in `crates/pirc-policy/src/session.rs`) are hidden from the sandbox. Do not put the node account in the `docker` group: any socket it can reach and the list misses is a way out.
 - `denyRead` **must** include the directory holding the node's environment file (the one with `PIRC_NODE_TOKEN`) whenever that file is outside `PIRC_STATE_DIR`. On NixOS the token arrives as a systemd credential and the module handles it.
 - `allowRead` re-opens a denied path; `denyWrite` closes a writable one. `allowGitConfig` lets `git remote add` write `.git/config` (and with it hooks paths), off by default.
 - An invalid `sandbox` object leaves the defaults in force and shows a warning in every session.
@@ -79,7 +79,7 @@ So the agent falls back to `unsandboxed_bash`, and you approve every push. Two s
 
 Either way the agent holds the credential: reads are open, so it can read it, and it can use it for everything the credential allows on an allowed host. Use the narrowest credential: a fine-grained personal access token, or deploy keys, limited to the repositories the agent works on.
 
-Tested on macOS with the built-in srt 0.0.78. Not tested on Linux.
+The examples below originated with srt 0.0.78. Native sandbox coverage includes Linux and macOS; Linux git-over-SSH uses the node's authenticated `sandbox-bridge connect` helper, not socat. macOS retains the `nc -X 5` authentication limitation.
 
 #### HTTPS with a token
 
@@ -137,7 +137,7 @@ Add `~/.local/pirc-ssh/id_ed25519.pub` to each repository as a deploy key with w
 - `UserKnownHostsFile` must be writable; `accept-new` records GitHub's host key on first use. To pin it beforehand, write GitHub's published keys there.
 - [`scripts/sandbox-ssh-proxy.py`](../../scripts/sandbox-ssh-proxy.py) does what srt's `nc -X 5` was meant to do, with the per-session credentials srt puts in `$ALL_PROXY`. The proxy still applies the domain allowlist: `github.com` without a port allows port 22, while hosts outside the list are refused. The script relies on those srt details, so check it again after a pirc upgrade changes srt.
 - An `ssh-agent` instead of a key file: add its socket to `sandbox.network.allowUnixSockets`, put `SSH_AUTH_SOCK` in `env`, and drop `-i` and `IdentitiesOnly`. Agents can then use every key loaded in it. Not tested.
-- Linux: srt's own `GIT_SSH_COMMAND` authenticates there (`socat … proxyauth`), but `~/.ssh` is still unreadable, so the same setup applies. Not tested.
+- Linux: the native `GIT_SSH_COMMAND` authenticates with `pirc-node sandbox-bridge connect`, but `~/.ssh` is still unreadable, so the same setup applies. Not tested.
 - `gh` still needs the token setup; to use SSH for git and `gh` for the API, keep `GH_TOKEN`, `GH_CONFIG_DIR` and `SSL_CERT_FILE` from it and leave out `GIT_CONFIG_*`.
 
 ### What it does not cover
@@ -146,19 +146,19 @@ Add `~/.local/pirc-ssh/id_ed25519.pub` to each repository as a deploy key with w
 
 ## The agents' browser
 
-A node gives its agents one Chromium per workspace through playwright-core, with a persistent profile under `$PIRC_STATE_DIR/browser/` (a login made once serves every session in that workspace). The web and Android side panels show a live screencast, let you take over, and record videos to `<workspace>/.pirc/recordings/`.
+A node gives its agents one Chromium per workspace through its native CDP pipe driver, with a persistent profile under `$PIRC_STATE_DIR/browser/` (a login made once serves every session in that workspace). The web and Android side panels show a live screencast, let you take over, and record videos to `<workspace>/.pirc/recordings/`.
 
-| Variable                     | Default                                                     | Meaning                                                                                                     |
-| ---------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `PIRC_BROWSER`               | `true`                                                      | Enable the browser (unavailable when none is found).                                                        |
-| `PIRC_BROWSER_EXECUTABLE`    | `chromium`/`google-chrome`… on `PATH`, else `/Applications` | Chromium or Chrome executable.                                                                              |
-| `PIRC_FFMPEG`                | `ffmpeg`                                                    | ffmpeg with libvpx, for recordings.                                                                         |
-| `PIRC_BROWSER_VIEWPORT`      | `1280x800`                                                  | Viewport.                                                                                                   |
-| `PIRC_BROWSER_IDLE_MS`       | 30 min                                                      | Idle time before a session's tabs close (the profile stays).                                                |
-| `PIRC_BROWSER_PROFILES_DIR`  | `$PIRC_STATE_DIR/browser`                                   | Profile location.                                                                                           |
-| `PIRC_PLAYWRIGHT_CORE`       | bundled                                                     | On-disk playwright-core directory; the Nix wrapper sets it.                                                 |
-| `PIRC_BROWSER_ALLOW_PRIVATE` | —                                                           | Private/local hosts the browser may reach anyway: host names, `*.suffix`, IPs, CIDR ranges, or `*` for all. |
-| `PIRC_BROWSER_BLOCK_HOSTS`   | —                                                           | The gateway's public host names (e.g. its `PIRC_ALLOWED_HOSTS`), refused like the `PIRC_DAEMON_URL` host.   |
+| Variable                    | Default                                                     | Meaning                                                      |
+| --------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------ |
+| `PIRC_BROWSER`              | `true`                                                      | Enable the browser (unavailable when none is found).         |
+| `PIRC_BROWSER_EXECUTABLE`   | `chromium`/`google-chrome`… on `PATH`, else `/Applications` | Chromium or Chrome executable.                               |
+| `PIRC_FFMPEG`               | `ffmpeg`                                                    | ffmpeg with libvpx, for recordings.                          |
+| `PIRC_BROWSER_VIEWPORT`     | `1280x800`                                                  | Viewport.                                                    |
+| `PIRC_BROWSER_IDLE_MS`      | 30 min                                                      | Idle time before a session's tabs close (the profile stays). |
+| `PIRC_BROWSER_PROFILES_DIR` | `$PIRC_STATE_DIR/browser`                                   | Profile location.                                            |
+
+| `PIRC_BROWSER_ALLOW_PRIVATE` | — | Private/local hosts the browser may reach anyway: host names, `*.suffix`, IPs, CIDR ranges, or `*` for all. |
+| `PIRC_BROWSER_BLOCK_HOSTS` | — | The gateway's public host names (e.g. its `PIRC_ALLOWED_HOSTS`), refused like the `PIRC_DAEMON_URL` host. |
 
 - Install Chromium (or Chrome) and ffmpeg on the node. The NixOS module does this through `services.pirc.browser.{enable,package,ffmpeg}` (defaults `pkgs.chromium`, `pkgs.ffmpeg-headless`).
 - Pages load with the node account's network access and the profile's logins, but only from public hosts. Before a navigation, and for every request and WebSocket a page makes, the host is resolved and refused when it is or resolves to loopback, RFC 1918, carrier-grade NAT (`100.64.0.0/10`), link-local (including `169.254.169.254` cloud metadata), IPv6 unique-local/link-local, multicast or reserved addresses, a `localhost`/`.local`/`.internal`/`.home.arpa` name, or the gateway host (from `PIRC_DAEMON_URL`, plus `PIRC_BROWSER_BLOCK_HOSTS`: set it to the gateway's public host names when the node connects through a different address). Allow exceptions with `PIRC_BROWSER_ALLOW_PRIVATE` (e.g. `localhost,192.168.1.0/24` for a dev server or NAS); the gateway host stays blocked even with `*` unless named explicitly. Redirect hops are checked after the fact: a page that lands on a blocked host is left before the agent reads it. Chromium resolves names itself, so DNS rebinding is narrowed, not closed; service workers are disabled so they cannot bypass the check.

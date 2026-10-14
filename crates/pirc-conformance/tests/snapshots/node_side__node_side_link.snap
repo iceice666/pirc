@@ -12,7 +12,7 @@ expression: t.into_value()
   },
   {
     "observed": {
-      "protocol": 9,
+      "protocol": 10,
       "role": "node",
       "type": "register",
       "workspaces": [

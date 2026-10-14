@@ -2,14 +2,14 @@
 
 [User guides](README.md) · [All documentation](../README.md)
 
-The built-in agent (`apps/gateway/src/agent/`) is configured in three layers. **Models (gateway)** and credentials are documented in [Model backends](./model-backends.md); node and project settings follow:
+The built-in agent (`crates/pirc-agent/`) is configured in three layers. **Models (gateway)** and credentials are documented in [Model backends](./model-backends.md); node and project settings follow:
 
 - **Node**: `~/.config/.pirc/config.json` on each node (override the directory with `PIRC_CONFIG_DIR`) holds limits, features, hooks, `env`, `allowedPaths` and `sandbox`. Coding rules go in `AGENTS.md` in the same directory. Chats instead use global `SOUL.md` (persona) and `CHAT.md` (general rules), editable in Settings → Assistant when the files are writable. Changes apply at the next agent start; move chat-relevant rules out of `AGENTS.md` when upgrading.
 - **Project**: `<workspace>/.pirc/config.json` can only add `allowedPaths`, `env`, `hooks`, and a `defaultModel` (which must name one of the gateway's models). Its `allowedPaths`, `env` and `hooks` are ignored until you trust them in the workspace's Settings (trust is tied to their content, so a later change needs trusting again), and its `allowedPaths` never widen the sandbox. `<workspace>/.pirc/AGENTS.md` is appended to the system prompt, and `<workspace>/.pirc/roles/<name>.md` adds or replaces roles. The agent cannot write to any `.pirc/` directory.
 
 ## Agent sandbox
 
-A node starts every agent inside [srt](https://github.com/anthropic-experimental/sandbox-runtime) (Seatbelt on macOS, bubblewrap with a seccomp filter on Linux). The agent's tools, shells, `ptc` scripts, hooks, teammates and subagents all run inside it. The file tools apply the same rules, so they refuse what the sandbox would:
+A node starts every agent inside its native sandbox (Seatbelt on macOS, bubblewrap on Linux, with a filtering HTTP/SOCKS5 proxy). The separate PTC guest is additionally hardened with seccomp on Linux; the outer agent sandbox allows Unix sockets and does not use seccomp. The agent's tools, shells, `ptc` scripts, hooks, teammates and subagents all run inside it. The file tools apply the same rules, so they refuse what the sandbox would:
 
 - **Reads** work anywhere except credential stores (`~/.ssh`, `~/.gnupg`, cloud and git credentials, keychains, browser profiles) and the node's own state (other sessions, uploads, its database, browser profiles, its credentials).
 - **Writes** go only to the workspace (or a chat's own directory), the node's `allowedPaths`, the session's temporary directory, `/tmp` and build caches. `.pirc/`, git hooks, `.git/config` and shell startup files stay read-only.
@@ -45,8 +45,8 @@ Notes on these settings:
 
 - If the `sandbox` settings are invalid, the defaults stay in force and the session shows a warning.
 - Put the directory holding the node's own env file (with `PIRC_NODE_TOKEN`) in `denyRead` when it sits outside `PIRC_STATE_DIR`.
-- The node runs the srt built into its executable (`pirc-node srt`); `PIRC_SANDBOX_SRT` names an external one instead, as the Nix package does. Linux hosts still need bubblewrap, socat and ripgrep.
-- The sandbox cannot be turned off. When srt cannot sandbox on the host, no agent starts and prompts fail with the reason; for example, Linux may refuse unprivileged user namespaces (Ubuntu 24.04 needs `kernel.apparmor_restrict_unprivileged_userns=0`). `PIRC_SANDBOX=off` makes the node refuse to start.
+- The node embeds its native sandbox driver. Linux hosts need bubblewrap (supplied by the Nix package); no srt, Node or socat is shipped. `PIRC_SANDBOX_SRT` is an external development-only stand-in, not the production default.
+- The sandbox cannot be turned off. When the native backend cannot sandbox on the host, no agent starts and prompts fail with the reason; for example, Linux may refuse unprivileged user namespaces (Ubuntu 24.04 needs `kernel.apparmor_restrict_unprivileged_userns=0`). `PIRC_SANDBOX=off` makes the node refuse to start.
 
 The sandbox does not cover `web_fetch`, the `browser_*` tools or `web_search`: the node's browser and the gateway run those, so they remain a way to send data out, like anything sent to the model.
 

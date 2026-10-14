@@ -304,7 +304,7 @@ async fn memory() {
     let mut t = Transcript::new(cluster.volatile());
     let ids = Arc::new(Mutex::new(Ids::new()));
     let chat_register = json!({
-        "type": "register", "role": "chat", "protocol": 9,
+        "type": "register", "role": "chat", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
         "workspaces": [{ "id": "chat", "displayName": "Assistant", "kind": "chat" }],
     });
     let (mut chat, registered) = FakeNode::connect(
@@ -910,7 +910,7 @@ async fn memory() {
 
     // ---- workspace memory: search and recall ----
     let dev_register = json!({
-        "type": "register", "role": "node", "protocol": 9,
+        "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
         "workspaces": [{ "id": "repo", "displayName": "Repo", "kind": "directory" }],
     });
     let (dev_node, registered) =

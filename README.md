@@ -1,11 +1,11 @@
 # pirc
 
-A private, forward-authenticated web client for persistent coding-agent sessions. It ships as three independently compiled executables: `pirc-gateway`, `pirc-chat`, and `pirc-node`.
+A private, forward-authenticated web client for persistent coding-agent sessions. It ships as two native Rust executables: `pirc-gateway` and `pirc-node` (including the `chat` role).
 
 It consists of:
 
 - a **gateway** that browsers talk to: authentication, the session index, and routing;
-- a **chat node** (`pirc-chat`) for assistant chats and projects;
+- a **chat node** (`pirc-node chat`) for assistant chats and projects;
 - one or more **coding nodes** (`pirc-node`), one per machine with workspaces, which connect out to the gateway and run one built-in agent subprocess per session (over a JSONL RPC on stdin/stdout), plus side-panel shells;
 - a responsive Svelte PWA;
 - a native Android client in progress ([`apps/android`](apps/android/README.md)), which pairs through device tokens.
@@ -32,15 +32,16 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 - There is no trust-all or unauthenticated production default.
 - Nodes authenticate to the gateway with per-node secrets and connect outbound only; they listen on no port.
 - Phones running the native app authenticate with device tokens paired from the web **Settings → Devices**. A device token still needs the trusted proxy and an allowed `Host`, cannot manage devices or model backends, and dies after 7 days without use, 30 days after pairing, or on revocation. Otherwise, it acts as you, including shells on your nodes; revoke a lost phone at once. The proxy must pass these requests past forward auth and strip the identity header (see [`apps/gateway/README.md`](apps/gateway/README.md#device-tokens)).
-- Workspaces are allowlisted. Each agent runs in an OS sandbox (srt, sandbox-runtime, built into the chat/node executables); see [Agent sandbox](docs/guides/agent.md#agent-sandbox). A node where the sandbox cannot work starts no agents.
+- Workspaces are allowlisted. Each agent runs in a native OS sandbox (bubblewrap on Linux, Seatbelt on macOS, with a filtering proxy); see [Agent sandbox](docs/guides/agent.md#agent-sandbox). A node where the sandbox cannot work starts no agents.
 - The web side panel can browse workspace files, show Git changes and history, and open interactive shells in the workspace. Shells run as the node's account, just like the agent's tools, and require holding session control; set `PIRC_TERMINALS=false` on the node to disable them.
 - The agent's browser (see [Browser](docs/guides/browser.md)) loads pages with the node account's network access and keeps each workspace's logins in a persistent profile. Taking it over from the side panel requires holding session control; set `PIRC_BROWSER=false` on the node to disable it.
 - Keep the gateway on loopback or a private interface reachable only by the trusted proxy. Do not expose it through Tailscale Funnel or the public Internet.
 
 ## Requirements
 
-- [Bun](https://bun.sh) 1.2 or newer (development/build only; the compiled executables embed their runtime)
-- A Rust toolchain with `clippy` and `rustfmt` for `bun run check` (development only; `nix develop` provides one). The Rust rewrite in `crates/` is in progress ([plan](plans/rust-rewrite.md)) and ships nothing yet.
+- No Bun, Node, Deno or V8 runtime is shipped or needed by the servers.
+- `git`, bubblewrap (`bwrap`) on Linux, and the system `sandbox-exec` on macOS; Chromium/Chrome and optional ffmpeg for browser features.
+- Development/build only: [Bun](https://bun.sh) for web/tooling, and Rust with `clippy`/`rustfmt` (`nix develop` provides them).
 - A model backend, configured on the gateway: a subscription login (Claude Pro/Max, GitHub Copilot, ChatGPT/Codex) or an API-key/custom endpoint from the web **Settings**, and/or `models.json` (see [Model backends](docs/guides/model-backends.md))
 - A trusted forward-auth reverse proxy
 
@@ -48,9 +49,9 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 
 ```sh
 bun install
-cp apps/gateway/.env.example apps/gateway/.env
-# Fill every security allowlist. Do not copy development values to production.
-# Gateway, chat and coding nodes take separate environments; see the example.
+# Export configuration from apps/gateway/.env.example (never source untrusted files).
+# Rust does not auto-load .env files. Fill every security allowlist.
+# Gateway, chat and coding nodes take separate environments.
 bun run dev        # gateway
 bun run dev:chat   # optional chat node, with its own node ID/token/state directory
 bun run dev:node   # coding node, with PIRC_DAEMON_URL=ws://127.0.0.1:8787
@@ -62,17 +63,17 @@ The node's first workspace can point to this repository. See [`apps/gateway/READ
 ## Role-specific executables
 
 ```sh
-bun run build            # web bundle plus all three independent executables
-./apps/gateway/dist/pirc-gateway  # browser API and routing
-./apps/gateway/dist/pirc-chat     # assistant chats and projects
-./apps/gateway/dist/pirc-node     # coding agents and shells for this machine
+bun run build                  # web bundle plus two native release executables
+./target/release/pirc-gateway   # browser API and routing
+./target/release/pirc-node chat # assistant chats and projects
+./target/release/pirc-node      # coding agents and shells for this machine
 ```
 
-To compile only one role, run `bun run build:gateway`, `bun run build:chat` or `bun run build:node` from `apps/gateway/` (from the repository root, prefix with `bun run --filter @pirc/gateway`). Build the Web UI separately with `bun run --filter @pirc/web build` when needed.
+Build one executable with `cargo build --locked --release -p pirc-gateway` or `-p pirc-node`; build the Web UI with `bun run --filter @pirc/web build`.
 
-Each executable embeds Bun and SQLite. Chat and coding nodes share the same node/agent implementation, but their executable fixes the role; no environment variable switches between them. Both support the internal `agent` and `ptc-guest` commands; only the gateway supports `oauth-worker`. These worker commands are started by the runtime, not separate services.
+SQLite is bundled; the node embeds native QuickJS for PTC, not a general-purpose JS runtime. `pirc-node chat` selects chat, with no environment/argv-name role switch. Internal `agent`, `ptc-guest` and `sandbox-bridge` commands are runtime helpers, not services. OAuth runs in the gateway process.
 
-The Nix gateway package includes the static Web UI but no sandbox/browser runtime. The chat/node packages include srt and on-disk playwright-core but no Web UI; browser execution still needs Chromium/Chrome and optional ffmpeg. The compiled executables need no separate Bun installation. Keep all three roles on the same release/protocol version. The executable split is a packaging boundary, **not privacy isolation**: host accounts, filesystem permissions and the agent sandbox remain the security boundaries. See [migration guidance](docs/deploy/upgrades.md#migrating-from-the-single-executable).
+The Nix gateway includes the static Web UI; the node includes native sandbox/browser drivers and supplies bubblewrap on Linux. Neither ships srt, Playwright's Node package or a JS sidecar. Keep all roles on protocol **10**. Version **0.4.0 requires fresh state**: re-pair devices, re-login providers and start new sessions; do not reuse 0.3.0 databases. See [migration guidance](docs/deploy/upgrades.md). Account separation, filesystem permissions and sandboxing remain the security boundaries.
 
 ## Documentation
 
@@ -91,7 +92,7 @@ bun run check
 
 `bun run check` ends with the conformance suite (`crates/pirc-conformance`), which starts the built `pirc-gateway` and `pirc-node` and compares their HTTP and WebSocket behavior with committed snapshots; after an intended change, `bun run conformance:record` re-records them; review the snapshot diff before committing it.
 
-Real-model smoke tests are deliberately separate because they require credentials and incur provider cost. The automated suite drives the real agent against a scripted fake OpenAI/Anthropic SSE server (end to end through gateway inference), and covers subscription logins, refresh and logout with fake OAuth providers, and the pi-ai adapter with an injected stream.
+Real-model smoke tests are deliberately separate because they require credentials and incur provider cost. The automated suite drives the real agent against a scripted fake OpenAI/Anthropic SSE server (end to end through gateway inference), and covers subscription logins, refresh and logout with fake OAuth providers, and native provider transports against recorded parity fixtures. Historical TS evaluation tools are retained but require a pre-cutover checkout ([details](apps/gateway/RETIRED.md)).
 
 ## Releases
 
@@ -104,7 +105,6 @@ A reusable flake, package, development shell, and NixOS module are available in 
 ```sh
 nix develop
 nix build .#pirc-gateway
-nix build .#pirc-chat
 nix build .#pirc-node
 ```
 
@@ -116,4 +116,4 @@ Step-by-step deployment guides (topology, gateway and node configuration, revers
 
 ## Acknowledgements
 
-pirc started as a web client for [Pi](https://github.com/earendil-works/pi) and now runs its own agent loop, tools, sessions, and protocol. It still uses Pi's [pi-ai](https://github.com/earendil-works/pi/tree/main/packages/ai) package on the gateway, only for subscription logins, the model catalog, and the model transports behind them. Several built-in features (todo, background tasks, agent teams, observational memory) are ports of Pi extensions, and session titles follow oh-my-pi's title generator.
+pirc started as a web client for [Pi](https://github.com/earendil-works/pi) and now runs its own agent loop, tools, sessions, and protocol. Its native provider implementations were ported from Pi's [pi-ai](https://github.com/earendil-works/pi/tree/main/packages/ai); the pinned package is used only at development time to generate the embedded model catalog. Several built-in features (todo, background tasks, agent teams, observational memory) are ports of Pi extensions, and session titles follow oh-my-pi's title generator.

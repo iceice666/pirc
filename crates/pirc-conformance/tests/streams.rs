@@ -37,7 +37,7 @@ async fn relayed_streams() {
     let mut node = api.connect("/node/connect", &node_headers()).await.open();
     send(
         &mut node,
-        json!({ "type": "register", "role": "node", "protocol": 9,
+        json!({ "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
             "workspaces": [{ "id": "ws", "displayName": "W", "kind": "directory" }] }),
     )
     .await;

@@ -134,7 +134,7 @@ pub fn canonical_json(value: &Value) -> String {
 
 /// The node executable and its arguments for a role, as the cluster picks
 /// them (`PIRC_CONFORMANCE_NODE_BIN [chat]`, else the bin dir's
-/// `pirc-node`/`pirc-chat`), or `None` (test skipped) without a bin dir.
+/// `pirc-node [chat]`), or `None` (test skipped) without a bin dir.
 pub fn node_command(chat: bool) -> Option<(PathBuf, Vec<&'static str>)> {
     let Some(dir) = std::env::var_os("PIRC_CONFORMANCE_BIN_DIR") else {
         assert!(
@@ -161,8 +161,8 @@ pub fn node_command(chat: bool) -> Option<(PathBuf, Vec<&'static str>)> {
     }
     let dir = resolve(PathBuf::from(dir));
     Some((
-        dir.join(if chat { "pirc-chat" } else { "pirc-node" }),
-        Vec::new(),
+        dir.join("pirc-node"),
+        if chat { vec!["chat"] } else { Vec::new() },
     ))
 }
 

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-const manifests = ['package.json', 'apps/gateway/package.json', 'apps/web/package.json'];
+const manifests = ['package.json', 'apps/web/package.json'];
 const android = 'apps/android/app/build.gradle.kts';
 /** The Rust workspace (plans/rust-rewrite.md): every member inherits `[workspace.package]`. */
 const cargo = 'Cargo.toml';
@@ -52,7 +52,7 @@ export function checkVersions(root: string): string {
     throw new Error('Invalid Android versionCode');
   // Bun's lockfile is JSONC; inspect only workspace headers, not dependency versions.
   const lock = read('bun.lock');
-  for (const workspace of ['apps/gateway', 'apps/web']) {
+  for (const workspace of ['apps/web']) {
     const escaped = workspace.replaceAll('/', '\\/');
     if (
       field(

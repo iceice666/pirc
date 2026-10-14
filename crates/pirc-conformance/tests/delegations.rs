@@ -177,12 +177,12 @@ fn work_answers(snapshot: Arc<Mutex<Value>>) -> Answerer {
 }
 
 fn home_registration() -> Value {
-    json!({ "type": "register", "role": "chat", "protocol": 9,
+    json!({ "type": "register", "role": "chat", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
         "workspaces": [{ "id": "chats", "displayName": "Chats", "kind": "chat" }] })
 }
 
 fn work_registration() -> Value {
-    json!({ "type": "register", "role": "node", "protocol": 9,
+    json!({ "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
         "workspaces": [
             { "id": "repo", "displayName": "Repo", "kind": "directory",
                 "roles": [{ "name": "general", "description": "General work" }] },

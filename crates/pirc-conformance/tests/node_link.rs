@@ -62,7 +62,7 @@ async fn node_link() {
     );
 
     for (step, frame) in [
-        ("older protocol", register(json!(8))),
+        ("older protocol", register(json!(9))),
         ("no protocol", {
             let mut frame = register(Value::Null);
             frame.as_object_mut().unwrap().remove("protocol");
@@ -70,7 +70,7 @@ async fn node_link() {
         }),
         (
             "invalid registration",
-            json!({ "type": "register", "role": "node", "protocol": 9 }),
+            json!({ "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION }),
         ),
     ] {
         let mut socket = api
@@ -86,7 +86,11 @@ async fn node_link() {
         .connect("/node/connect", &node_headers(NODE_TOKEN))
         .await
         .open();
-    send(&mut node, &register(json!(9))).await;
+    send(
+        &mut node,
+        &register(json!(pirc_protocol::NODE_PROTOCOL_VERSION)),
+    )
+    .await;
     let registered = receive(&mut node, "registered").await;
     t.note("register", registered);
 
@@ -153,7 +157,11 @@ async fn node_link() {
         .connect("/node/connect", &node_headers(NODE_TOKEN))
         .await
         .open();
-    send(&mut replacement, &register(json!(9))).await;
+    send(
+        &mut replacement,
+        &register(json!(pirc_protocol::NODE_PROTOCOL_VERSION)),
+    )
+    .await;
     let (code, reason) = node.closed().await;
     t.note(
         "a second connection replaces the first",

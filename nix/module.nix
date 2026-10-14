@@ -176,7 +176,7 @@ let
     set -eu
     PIRC_NODE_TOKEN=$(cat "$CREDENTIALS_DIRECTORY/node-token")
     export PIRC_NODE_TOKEN
-    exec ${lib.getExe (if cfg.chat then cfg.chatPackage else cfg.nodePackage)}
+    exec ${lib.getExe cfg.nodePackage}${lib.optionalString cfg.chat " chat"}
   '';
 
   hardening = {
@@ -190,7 +190,8 @@ let
     ProtectControlGroups = true;
     RestrictSUIDSGID = true;
     LockPersonality = true;
-    # Bun/JavaScriptCore needs executable JIT memory.
+    # Chromium and user tools may need executable JIT memory (the Rust
+    # executables and QuickJS interpreter themselves do not).
     MemoryDenyWriteExecute = false;
     UMask = "0077";
     Restart = "on-failure";
@@ -235,14 +236,16 @@ let
 in
 {
   imports = [
-    (mkRemovedOptionModule
-      [
-        "services"
-        "pirc"
-        "package"
-      ]
-      "pirc is now three independent packages; set services.pirc.gatewayPackage, chatPackage and nodePackage as needed."
-    )
+    (mkRemovedOptionModule [
+      "services"
+      "pirc"
+      "chatPackage"
+    ] "The chat role now runs nodePackage's pirc-node chat; set services.pirc.nodePackage instead.")
+    (mkRemovedOptionModule [
+      "services"
+      "pirc"
+      "package"
+    ] "pirc is now two native packages; set services.pirc.gatewayPackage and nodePackage as needed.")
     (mkRemovedOptionModule
       [
         "services"
@@ -294,7 +297,7 @@ in
         type = types.bool;
         default = true;
         description = ''
-          Run `pirc-node` (or `pirc-chat` when chat is enabled) on this host
+          Run `pirc-node` (or `pirc-node chat` when chat is enabled) on this host
           as service `pirc-node` so its
           workspaces can host sessions. The gateway itself never runs agents;
           disable this for a routing-only gateway that serves remote nodes.
@@ -323,13 +326,6 @@ in
       default = pkgs.pirc-gateway or (pkgs.callPackage ./package.nix { role = "gateway"; });
       defaultText = literalExpression "pkgs.pirc-gateway";
       description = "Independent pirc-gateway package, including the web UI.";
-    };
-
-    chatPackage = mkOption {
-      type = types.package;
-      default = pkgs.pirc-chat or (pkgs.callPackage ./package.nix { role = "chat"; });
-      defaultText = literalExpression "pkgs.pirc-chat";
-      description = "Independent pirc-chat package used when services.pirc.chat is enabled.";
     };
 
     nodePackage = mkOption {
@@ -527,7 +523,7 @@ in
         type = types.package;
         default = pkgs.chromium;
         defaultText = literalExpression "pkgs.chromium";
-        description = "Chromium (or Chrome) driven over CDP by playwright-core.";
+        description = "Chromium (or Chrome) driven over CDP by the native node.";
       };
       ffmpeg = mkOption {
         type = types.package;
@@ -549,7 +545,7 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Run pirc-chat instead of pirc-node for the local service: it hosts the
+        Run pirc-node chat instead of pirc-node for the local service: it hosts the
         assistant's chats, a top-level "Chats" plus projects created from
         the web, in directories it manages under its state directory. Keep a
         single chat node on an always-on machine.
@@ -604,7 +600,7 @@ in
         type = types.bool;
         default = false;
         description = ''
-          Proxy `/node/connect` so remote `pirc-chat` and `pirc-node` hosts can reach this gateway
+          Proxy `/node/connect` so remote chat and coding nodes can reach this gateway
           over TLS. It bypasses forward auth: nodes authenticate with their
           PIRC_NODE_TOKENS secret instead.
         '';
@@ -647,7 +643,7 @@ in
         }
         {
           assertion = !cfg.chat || cfg.workspaces == { };
-          message = "services.pirc.chat selects pirc-chat, which hosts chat workspaces only; move services.pirc.workspaces to another node";
+          message = "services.pirc.chat selects pirc-node chat, which hosts chat workspaces only; move services.pirc.workspaces to another node";
         }
         {
           assertion = cfg.localNode.enable || cfg.workspaces == { };

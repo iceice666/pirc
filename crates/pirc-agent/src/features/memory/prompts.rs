@@ -1,53 +1,17 @@
-//! The memory agents' system prompts (`features/memory/prompts.ts`, copied
-//! verbatim from the Pi observational-memory extension, and the workspace
-//! promoter's in `workspace.ts`). The TS files are embedded as they are and
-//! their template literals are read once, so the model-visible text cannot
-//! drift from TS.
+//! Memory prompts extracted verbatim from the TS 0.3.0 template values.
+//! No legacy server source is needed to build the agent.
 
 use std::sync::LazyLock;
 
-const PROMPTS: &str =
-    include_str!("../../../../../apps/gateway/src/agent/features/memory/prompts.ts");
-const WORKSPACE: &str =
-    include_str!("../../../../../apps/gateway/src/agent/features/memory/workspace.ts");
-
-/// The value of `export const <name> = \`…\`;` in `source`: a template
-/// literal without substitutions, its escapes undone.
-fn template(source: &str, name: &str) -> String {
-    let start = format!("export const {name} = `");
-    let at = source
-        .find(&start)
-        .unwrap_or_else(|| panic!("{name} in the memory sources"))
-        + start.len();
-    let mut out = String::new();
-    let mut chars = source[at..].chars();
-    while let Some(c) = chars.next() {
-        match c {
-            '`' => return out,
-            '\\' => match chars.next() {
-                Some(escaped @ ('\\' | '`' | '$')) => out.push(escaped),
-                Some('n') => out.push('\n'),
-                Some('t') => out.push('\t'),
-                other => panic!("{name}: unsupported escape \\{other:?}"),
-            },
-            '$' if chars.as_str().starts_with('{') => panic!("{name}: a substitution"),
-            c => out.push(c),
-        }
-    }
-    panic!("{name}: unterminated template")
-}
-
-/// `OBSERVER_SYSTEM`.
 pub static OBSERVER_SYSTEM: LazyLock<String> =
-    LazyLock::new(|| template(PROMPTS, "OBSERVER_SYSTEM"));
-/// `REFLECTOR_SYSTEM`.
+    LazyLock::new(|| include_str!("../../../prompts/memory/observer_system.txt").to_owned());
 pub static REFLECTOR_SYSTEM: LazyLock<String> =
-    LazyLock::new(|| template(PROMPTS, "REFLECTOR_SYSTEM"));
-/// `DROPPER_SYSTEM`.
-pub static DROPPER_SYSTEM: LazyLock<String> = LazyLock::new(|| template(PROMPTS, "DROPPER_SYSTEM"));
-/// `WORKSPACE_PROMOTER_SYSTEM`.
-pub static WORKSPACE_PROMOTER_SYSTEM: LazyLock<String> =
-    LazyLock::new(|| template(WORKSPACE, "WORKSPACE_PROMOTER_SYSTEM"));
+    LazyLock::new(|| include_str!("../../../prompts/memory/reflector_system.txt").to_owned());
+pub static DROPPER_SYSTEM: LazyLock<String> =
+    LazyLock::new(|| include_str!("../../../prompts/memory/dropper_system.txt").to_owned());
+pub static WORKSPACE_PROMOTER_SYSTEM: LazyLock<String> = LazyLock::new(|| {
+    include_str!("../../../prompts/memory/workspace_promoter_system.txt").to_owned()
+});
 
 #[cfg(test)]
 mod tests {

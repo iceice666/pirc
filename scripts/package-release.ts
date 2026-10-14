@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { checkVersions } from './version.js';
+import { copyNotices } from './release-notices.js';
 
 const repo = path.resolve(import.meta.dir, '..');
 let root = repo;
@@ -24,11 +25,10 @@ if (run(['git', 'status', '--porcelain'])) throw new Error('Commit changes befor
 const version = checkVersions(root);
 const out = path.join(repo, 'dist', 'releases', `v${version}`);
 if (existsSync(out)) throw new Error(`Refusing to overwrite ${out}`);
-const compiler = process.env.PIRC_RELEASE_BUN;
-if (!compiler || !path.isAbsolute(compiler))
-  throw new Error('Set PIRC_RELEASE_BUN to the official Bun executable (absolute path)');
-if (run(['otool', '-L', compiler]).includes('/nix/store'))
-  throw new Error('Use a portable official Bun compiler');
+const bun = process.execPath;
+const cargo = process.env.PIRC_RELEASE_CARGO;
+if (!cargo || !path.isAbsolute(cargo))
+  throw new Error('Set PIRC_RELEASE_CARGO to a native cargo executable (absolute path)');
 const commit = run(['git', 'rev-parse', 'HEAD']);
 const epoch = Number(run(['git', 'show', '-s', '--format=%ct', 'HEAD']));
 mkdirSync(out, { recursive: true });
@@ -38,33 +38,30 @@ mkdirSync(source);
 run(['git', 'archive', '--format=tar', '--output=' + path.join(out, 'source.tar'), commit]);
 run(['tar', '-xf', path.join(out, 'source.tar'), '-C', source]);
 root = source;
-run([compiler, 'install', '--frozen-lockfile']);
-run([compiler, 'run', '--filter', '@pirc/web', 'build']);
-const roles = ['gateway', 'chat', 'node'];
-for (const role of roles)
-  run(
-    [
-      compiler,
-      'build',
-      '--compile',
-      '--minify',
-      '--sourcemap',
-      '--external',
-      'chromium-bidi',
-      `src/entry/${role}.ts`,
-      '--outfile',
-      `dist/pirc-${role}`,
-    ],
-    path.join(root, 'apps/gateway'),
-  );
+run([bun, 'install', '--frozen-lockfile', '--ignore-scripts']);
+run([bun, 'run', '--filter', '@pirc/web', 'build']);
+const roles = ['gateway', 'node'];
+// Pin the artifact directory even if the operator has CARGO_TARGET_DIR set.
+run([
+  cargo,
+  'build',
+  '--locked',
+  '--release',
+  '--target-dir',
+  path.join(root, 'target'),
+  '-p',
+  'pirc-gateway',
+  '-p',
+  'pirc-node',
+]);
 for (const role of roles) {
-  const binary = path.join(root, 'apps/gateway/dist', `pirc-${role}`);
+  const binary = path.join(root, 'target/release', `pirc-${role}`);
   if (run([binary, '--version']) !== version)
     throw new Error(`Rebuild pirc-${role} for ${version}`);
   if (!run(['file', binary]).includes('arm64')) throw new Error('Expected ARM64 executable');
   if (run(['otool', '-L', binary]).includes('/nix/store'))
     throw new Error(
-      'Nonportable Nix-linked binary: rebuild with official Bun --compile-executable-path',
+      'Nonportable Nix-linked binary: rebuild with a native Rust toolchain and Apple SDK',
     );
 }
 if (!existsSync(path.join(root, 'apps/web/dist/index.html')))
@@ -72,30 +69,17 @@ if (!existsSync(path.join(root, 'apps/web/dist/index.html')))
 const name = `pirc-v${version}-darwin-arm64`;
 const stage = path.join(out, name);
 mkdirSync(path.join(stage, 'bin'), { recursive: true });
-mkdirSync(path.join(stage, 'libexec/pirc'), { recursive: true });
 for (const role of roles) {
   cpSync(
-    path.join(root, 'apps/gateway/dist', `pirc-${role}`),
-    path.join(stage, 'libexec/pirc', `pirc-${role}`),
+    path.join(root, 'target/release', `pirc-${role}`),
+    path.join(stage, 'bin', `pirc-${role}`),
   );
-  const wrapper =
-    '#!/bin/sh\nset -eu\nroot=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)\n' +
-    (role === 'gateway'
-      ? ''
-      : ': "${PIRC_PLAYWRIGHT_CORE:=$root/lib/pirc/playwright-core}"\nexport PIRC_PLAYWRIGHT_CORE\n') +
-    `exec "$root/libexec/pirc/pirc-${role}" "$@"\n`;
-  writeFileSync(path.join(stage, 'bin', `pirc-${role}`), wrapper, { mode: 0o755 });
 }
-cpSync(
-  realpathSync(path.join(root, 'apps/gateway/node_modules/playwright-core')),
-  path.join(stage, 'lib/pirc/playwright-core'),
-  { recursive: true, dereference: true },
-);
 cpSync(path.join(root, 'apps/web/dist'), path.join(stage, 'share/pirc/web'), { recursive: true });
 cpSync(path.join(root, 'docs'), path.join(stage, 'docs'), { recursive: true });
 for (const file of ['README.md', 'CHANGELOG.md'])
   cpSync(path.join(root, file), path.join(stage, file));
-// Preserve installed dependency notices (a superset of compiled runtime dependencies).
+// Preserve web/build dependency notices and the native crates' vendored licenses.
 const notices = path.join(stage, 'third-party-notices');
 mkdirSync(notices);
 for (const entry of readdirSync(path.join(root, 'node_modules/.bun'))) {
@@ -125,12 +109,15 @@ for (const entry of readdirSync(path.join(root, 'node_modules/.bun'))) {
 }
 writeFileSync(
   path.join(stage, 'RELEASE.txt'),
-  `pirc ${version}\nCommit: ${commit}\nmacOS ARM64; not Developer ID signed/notarized.\nAdd this archive's bin directory to PATH; do not symlink wrappers outside it.\nSee docs/development/releasing.md and docs/deploy/ before use.\nChromium/Chrome and optional ffmpeg are external dependencies.\nWeb assets: share/pirc/web (serve through your authenticated reverse proxy).\n`,
+  `pirc ${version}\nCommit: ${commit}\nmacOS ARM64; not Developer ID signed/notarized.\nAdd this archive's bin directory to PATH. Chat role: pirc-node chat.\nSee docs/development/releasing.md and docs/deploy/ before use.\nChromium/Chrome and optional ffmpeg are external dependencies.\nWeb assets: share/pirc/web (serve through your authenticated reverse proxy).\n`,
 );
-const bunLicense = process.env.PIRC_RELEASE_BUN_LICENSE;
-if (!bunLicense || !path.isAbsolute(bunLicense))
-  throw new Error('Set PIRC_RELEASE_BUN_LICENSE to the official Bun LICENSE file');
-cpSync(bunLicense, path.join(notices, 'Bun-LICENSE.md'));
+// Cargo vendor provides the exact locked dependency sources and licenses.
+const vendor = path.join(out, 'cargo-vendor');
+run([cargo, 'vendor', '--locked', vendor]);
+copyNotices(vendor, path.join(notices, 'rust'));
+cpSync(path.join(root, 'crates/pirc-node/NOTICE'), path.join(notices, 'pirc-node-NOTICE'));
+for (const file of ['PLAYWRIGHT-LICENSE', 'PLAYWRIGHT-NOTICE'])
+  cpSync(path.join(root, 'crates/pirc-node/src/browser/assets', file), path.join(notices, file));
 writeFileSync(
   path.join(stage, 'BUILD.json'),
   JSON.stringify(
@@ -138,8 +125,15 @@ writeFileSync(
       version,
       commit,
       epoch,
-      compiler: run([compiler, '--version']),
-      compilerSha256: createHash('sha256').update(readFileSync(compiler)).digest('hex'),
+      cargo: run([cargo, '--version']),
+      rustc: run(['rustc', '-vV']),
+      bun: run([bun, '--version']),
+      binaryBytes: Object.fromEntries(
+        roles.map((role) => [
+          `pirc-${role}`,
+          readFileSync(path.join(stage, 'bin', `pirc-${role}`)).length,
+        ]),
+      ),
       platform: process.platform,
       arch: process.arch,
     },

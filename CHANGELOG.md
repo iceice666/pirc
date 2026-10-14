@@ -4,6 +4,20 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-14
+
+### Breaking changes
+
+- The gateway and node/agent are native Rust executables with no embedded Bun, Node, Deno or V8 runtime. The two artifacts are `pirc-gateway` and `pirc-node`; replace `pirc-chat` with **`pirc-node chat`**, including service definitions and Nix package overrides.
+- Node protocol **10** refuses mixed TS/Rust installations (WebSocket close 4426). Upgrade every role together.
+- **Fresh state is required.** Do not reuse TS databases, session JSONL, backend settings or VAPID state. Re-pair devices, re-login subscription providers and start new sessions. Preserve old state with the old binaries for rollback. See [migration checklist](docs/deploy/upgrades.md).
+- Native bubblewrap/Seatbelt sandbox and CDP browser drivers replace srt/Playwright runtime dependencies. Linux needs bubblewrap; git, Chromium/Chrome and optional ffmpeg remain external. Remove production `PIRC_SANDBOX_SRT` and `PIRC_PLAYWRIGHT_CORE` overrides.
+- TS server sources and Bun server builds are removed. Historical evaluation tools remain for reference but need a pre-cutover checkout to run; Bun remains a web/development tool.
+
+### Validation limitations
+
+- The user explicitly waived the remaining full PTC/task-time and native provider/subscription smoke-test gate, including unresolved polyglot review/accounting results. These are not reported as passed. Previously accepted sandbox/browser security gaps remain documented in the [rewrite plan](plans/rust-rewrite.md) and [security audit](plans/security-audit.md).
+
 ### Security
 
 - Agents can no longer read more credential stores: `~/.local/pirc-node` (the macOS node's `agent.env`), `~/.config/op`, Cargo, RubyGems and Terraform credentials, Claude Code and Codex login files, shell histories and Microsoft Edge profiles. Auto mode and the sandbox now share one list, so a shell command that touches `~/.npmrc`, `~/.yarnrc.yml` or `~/.bundle/config` also needs approval (builds can still read them).

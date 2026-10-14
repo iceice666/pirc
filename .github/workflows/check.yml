@@ -17,8 +17,7 @@ jobs:
   check:
     name: bun run check
     runs-on: ubuntu-latest
-    # The browser tests (the corpus alone takes about 80 s) and scenarios,
-    # these against both nodes, made 60 minutes tight.
+    # Native unit/integration tests, web checks and Rust-only conformance.
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v7
@@ -28,7 +27,7 @@ jobs:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
 
-      # crates/ (Rust rewrite): fmt, clippy, unit tests and the conformance
+      # Native runtime: fmt, clippy, unit tests and the conformance
       # suite, which drives the built executables.
       # Pinned (currently the flake's toolchain): a new clippy lint must not
       # fail CI on unchanged code (clippy runs with -D warnings).

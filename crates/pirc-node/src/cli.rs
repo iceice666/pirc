@@ -31,6 +31,20 @@ pub enum Command {
 
 /// The command `args` (without the program name) ask for.
 pub fn parse(args: Vec<String>) -> Command {
+    // Only the agent and bridge accept an argument tail. Never silently
+    // ignore typos after public help/version commands or ptc-guest.
+    let public_len = if args.first().is_some_and(|arg| arg == "chat") {
+        2
+    } else {
+        1
+    };
+    if args.len() > public_len
+        && !args
+            .first()
+            .is_some_and(|arg| arg == "agent" || arg == BRIDGE_SUBCOMMAND)
+    {
+        return Command::Unknown(args[public_len].clone());
+    }
     let mut args = args.into_iter();
     let Some(command) = args.next() else {
         return Command::Run(NodeRole::Node);
@@ -72,7 +86,12 @@ mod tests {
         for help in ["help", "--help", "-h"] {
             assert_eq!(parse_str(&["chat", help]), Command::Help);
         }
-        assert_eq!(parse_str(&["version", "x"]), Command::Version);
+        assert_eq!(parse_str(&["version", "x"]), Command::Unknown("x".into()));
+        assert_eq!(
+            parse_str(&["chat", "--help", "x"]),
+            Command::Unknown("x".into())
+        );
+        assert_eq!(parse_str(&["ptc-guest", "x"]), Command::Unknown("x".into()));
         for help in ["help", "--help", "-h"] {
             assert_eq!(parse_str(&[help]), Command::Help);
         }

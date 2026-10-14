@@ -2,24 +2,24 @@
 
 ## Processes
 
-Three independently compiled executables start their fixed server role with no arguments:
+Two native executables implement three roles; chat uses an explicit subcommand:
 
-| Executable     | Runs on                              | Listens on                                                  | Does                                                                                                                                |
-| -------------- | ------------------------------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `pirc-gateway` | one always-on host                   | `PIRC_HOST:PIRC_PORT` (default `127.0.0.1:8787`), HTTP + WS | Authenticates browsers and phones, indexes sessions, routes requests, runs **all model requests**, keeps memory, schedules and push |
-| `pirc-chat`    | at most one always-on host           | nothing (connects out over one WebSocket)                   | Hosts assistant chats/projects, runs agents and their tools; owns chat transcripts                                                  |
-| `pirc-node`    | every machine with coding workspaces | nothing (connects out over one WebSocket)                   | Runs coding agents, side-panel shells, file/Git inspection, uploads and the agents' browser; owns session transcripts               |
+| Executable       | Runs on                              | Listens on                                                  | Does                                                                                                                                |
+| ---------------- | ------------------------------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `pirc-gateway`   | one always-on host                   | `PIRC_HOST:PIRC_PORT` (default `127.0.0.1:8787`), HTTP + WS | Authenticates browsers and phones, indexes sessions, routes requests, runs **all model requests**, keeps memory, schedules and push |
+| `pirc-node chat` | at most one always-on host           | nothing (connects out over one WebSocket)                   | Hosts assistant chats/projects, runs agents and their tools; owns chat transcripts                                                  |
+| `pirc-node`      | every machine with coding workspaces | nothing (connects out over one WebSocket)                   | Runs coding agents, side-panel shells, file/Git inspection, uploads and the agents' browser; owns session transcripts               |
 
-Chat and coding executables share the node/agent implementation. Their internal worker commands are not independently deployed services:
+Chat and coding roles share the node executable and agent implementation. Their internal worker commands are not independently deployed services:
 
-| Command                 | Available on             | Purpose                                                                       |
-| ----------------------- | ------------------------ | ----------------------------------------------------------------------------- |
-| `agent`                 | `pirc-chat`, `pirc-node` | Agent loop over JSONL RPC on stdin/stdout, always sandboxed by its node (srt) |
-| `ptc-guest`             | `pirc-chat`, `pirc-node` | Runs one `ptc` script in QuickJS for its agent (empty environment, IPC only)  |
-| `oauth-worker`          | `pirc-gateway`           | Runs one subscription login flow in a time-limited subprocess                 |
-| `version` / `--version` | all three                | Prints the version as an install check                                        |
+| Command                 | Available on     | Purpose                                                          |
+| ----------------------- | ---------------- | ---------------------------------------------------------------- |
+| `agent`                 | `pirc-node`      | Agent loop over JSONL RPC, always inside the native OS sandbox   |
+| `ptc-guest`             | `pirc-node`      | One PTC script in native QuickJS (empty environment, IPC only)   |
+| `sandbox-bridge`        | `pirc-node`      | Internal Linux sandbox socket/network helper                     |
+| `version` / `--version` | both executables | Prints the version; `help` / `--help` / `-h` prints public usage |
 
-The Nix gateway package includes the Web UI, but not sandbox/browser runtime. Chat/node packages include srt/playwright-core, but not the Web UI. Keep every role on the same release/protocol version. The executable split is **not privacy isolation**: OS accounts, filesystem permissions and sandboxing define the protection boundaries.
+The Nix gateway package includes the Web UI, but not sandbox/browser runtime. The node includes native sandbox/CDP drivers, but not the Web UI; OAuth runs in the gateway process. Keep every role on the same release/protocol version. The executable split is **not privacy isolation**: OS accounts, filesystem permissions and sandboxing define the protection boundaries.
 
 The gateway never runs agents, shells or tools, and never learns real workspace paths. A node never listens on a port; agents reach their node through a Unix socket in the node's state directory.
 
@@ -31,10 +31,10 @@ browser ──https──▶ reverse proxy ──forward auth──▶ static we
 phone app ──https──▶    │  Bearer pirc_dev_… ────▶ pirc-gateway  /api/…      (no forward auth, identity header stripped)
                         └─ /node/connect ◀──wss── pirc-node (machine A)      (no forward auth, PIRC_NODE_TOKEN)
                                           ◀──wss── pirc-node (machine B)
-                                          ◀──ws─── pirc-chat (always-on host, here loopback)
+                                          ◀──ws─── pirc-node chat (always-on host, here loopback)
 
 pirc-node ──stdio JSONL──▶ pirc-node agent ──unix socket──▶ pirc-node ──node link──▶ gateway ──▶ model provider
-pirc-chat ──stdio JSONL──▶ pirc-chat agent ──unix socket──▶ pirc-chat ──node link──▶ gateway
+pirc-node chat ──stdio JSONL──▶ pirc-node agent ──unix socket──▶ pirc-node chat ──node link──▶ gateway
 ```
 
 - Browsers and phones only ever reach the gateway, and only through the proxy.
@@ -58,7 +58,7 @@ The gateway host has no workspaces (`services.pirc.localNode.enable = false`, or
 
 ### The chat node
 
-Run at most one `pirc-chat` process (NixOS: `services.pirc.chat = true` selects it for the local runner). It hosts the assistant's chats (the top-level **Chats** workspace and the projects created from the web) in directories it manages under its state directory, and hosts **nothing else**: `PIRC_WORKSPACES` must be empty there and the web refuses to add directory workspaces to it. Pick an always-on machine, usually the gateway host's local node. Without a chat node, the assistant features (memory, delegation, schedules from chat) are simply absent.
+Run at most one `pirc-node chat` process (NixOS: `services.pirc.chat = true` selects it for the local runner). It hosts the assistant's chats (the top-level **Chats** workspace and the projects created from the web) in directories it manages under its state directory, and hosts **nothing else**: `PIRC_WORKSPACES` must be empty there and the web refuses to add directory workspaces to it. Pick an always-on machine, usually the gateway host's local node. Without a chat node, the assistant features (memory, delegation, schedules from chat) are simply absent.
 
 ## Where state lives
 

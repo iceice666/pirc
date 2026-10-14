@@ -8,20 +8,16 @@ Because the node runs as your own account, everything its agents can reach outsi
 
 Choose one:
 
-- **Nix (nix-darwin / Home Manager)**: use `pkgs.pirc-node` from the flake's overlay. The wrapper already points at srt and playwright-core; Chromium and ffmpeg come from `PIRC_BROWSER_EXECUTABLE`/`PIRC_FFMPEG` or `PATH`.
-- **Compiled binary without Nix**: build on any Mac with the **official** Bun (a Nix-built Bun links `/nix/store` libraries and the result does not run elsewhere):
+- **Nix (nix-darwin / Home Manager)**: use `pkgs.pirc-node` from the flake's overlay. The native binary includes its sandbox and CDP drivers; Chromium and ffmpeg come from `PIRC_BROWSER_EXECUTABLE`/`PIRC_FFMPEG` or `PATH`.
+- **Native binary without Nix**: build on a Mac with Rust and Apple's command-line tools:
 
   ```sh
-  # once: download bun-darwin-aarch64.zip from https://github.com/oven-sh/bun/releases, unzip to /tmp/bunoff/
-  cd apps/gateway
-  bun build --compile --minify --target=bun-darwin-arm64 \
-    --compile-executable-path=/tmp/bunoff/bun-darwin-aarch64/bun \
-    --external chromium-bidi src/entry/node.ts --outfile /tmp/bunoff/pirc-node
-  otool -L /tmp/bunoff/pirc-node | grep -c /nix/store   # must print 0
-  /tmp/bunoff/pirc-node version
+  cargo build --locked --release -p pirc-node
+  otool -L target/release/pirc-node # must not reference /nix/store for portable builds
+  target/release/pirc-node --version
   ```
 
-  Copy it to `~/.local/pirc-node/bin/pirc-node`. This build has no bundled playwright-core: set `PIRC_PLAYWRIGHT_CORE` to a `node_modules/playwright-core` of the same version as `apps/gateway/package.json`, or accept that the browser is unavailable. Install srt (`npm install -g @anthropic-ai/sandbox-runtime`) and `ripgrep` for the sandbox.
+  Copy it to `~/.local/pirc-node/bin/pirc-node`. No Bun, Node, srt or Playwright installation is needed. Install git and Chromium/Chrome (optional ffmpeg for recording); macOS provides `sandbox-exec`. For the chat role append `chat` to the launch command. Existing 0.3.0 installations must use [fresh state](upgrades.md).
 
 ## 2. Layout
 
@@ -81,7 +77,7 @@ PIRC_WORKSPACES=[]                     # add workspaces from the web; they must 
 </plist>
 ```
 
-- `PATH` must include where `git`, `srt`, `node` (srt's runtime), `chromium`/Chrome and `ffmpeg` live (Homebrew: `/opt/homebrew/bin`). With Nix, use the profile's `bin`.
+- `PATH` must include where `git`, `chromium`/Chrome and `ffmpeg` live (Homebrew: `/opt/homebrew/bin`). With Nix, use the profile's `bin`.
 - With Home Manager, `launchd.agents.<name>` generates this; put `agent.env` outside the store since it holds the token.
 
 ```sh
@@ -95,7 +91,7 @@ tail -f ~/.local/pirc-node/agent.log ~/.local/pirc-node/agent.err
 ## 4. Replacing the binary (compiled build)
 
 ```sh
-scp /tmp/bunoff/pirc-node mac:.local/pirc-node/bin/pirc-node.new
+scp target/release/pirc-node mac:.local/pirc-node/bin/pirc-node.new
 ssh mac 'chmod 755 ~/.local/pirc-node/bin/pirc-node.new \
   && mv ~/.local/pirc-node/bin/pirc-node.new ~/.local/pirc-node/bin/pirc-node \
   && launchctl kickstart -k gui/$(id -u)/dev.pirc.node-agent \
@@ -108,5 +104,5 @@ Replace with `mv` (atomic) rather than overwriting in place: a running process k
 
 - **App Management prompt**: macOS may block a Home Manager activation from rewriting the plist ("App Management" privacy setting). Allow your terminal under _System Settings → Privacy & Security → App Management_, or bootout, copy the plist by hand and bootstrap again.
 - **Sleep**: a sleeping laptop is an offline node. Its sessions answer `503` and its scheduled runs become _missed_ until it is back; nothing is retried on its own.
-- **Sandbox**: srt uses Seatbelt (`sandbox-exec`). macOS caps Unix socket paths at 104 bytes; the node keeps its own sockets short, but keep `PIRC_STATE_DIR` at a reasonable depth. `allowUnixSockets` lists extra sockets (an `ssh-agent`, the Nix daemon) the agent may reach.
+- **Sandbox**: the native node uses Seatbelt (`sandbox-exec`). macOS caps Unix socket paths at 104 bytes; the node keeps its own sockets short, but keep `PIRC_STATE_DIR` at a reasonable depth. `allowUnixSockets` lists extra sockets (an `ssh-agent`, the Nix daemon) the agent may reach.
 - **Git over SSH** does not work inside the sandbox (`~/.ssh` is unreadable, and `ssh` does not use the sandbox's proxies); the agent asks through `unsandboxed_bash`, which you approve per command. HTTPS remotes with a narrowly scoped token in the workspace's `.pirc/config.json` `env` work without leaving the sandbox.

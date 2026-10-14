@@ -1,5 +1,7 @@
 # Backup and recovery
 
+**0.4.0 cutover:** restore TS 0.3.0 backups only with the old release. Rust requires fresh state; do not import old databases, provider settings, VAPID keys or sessions. See [Upgrades](upgrades.md).
+
 ## What to back up
 
 Two kinds of state exist, and they are not interchangeable.
@@ -13,7 +15,7 @@ Two kinds of state exist, and they are not interchangeable.
 | `vapid.json`                        | Push signing key                                                                                                                                                                                                                                                | Every device must re-enable notifications.                                                                                               |
 | `local-node-token` (NixOS)          | The local node's secret                                                                                                                                                                                                                                         | Regenerated on next start; nothing else to do.                                                                                           |
 
-### Node (`$PIRC_STATE_DIR` of each `pirc-node` or `pirc-chat`)
+### Node (`$PIRC_STATE_DIR` of each `pirc-node` or `pirc-node chat`)
 
 | Path                          | Holds                                                                                     | Loss means                                                                                                |
 | ----------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -69,7 +71,7 @@ Copy the node's state directory and `PIRC_CONFIG_DIR`, keep the same `PIRC_NODE_
 
 Stop the process and take a backup first. The gateway and each node have their own database; a session exists in both and both must be fixed.
 
-- Gateway tables of interest: `workspaces`, `sessions`, `runs`, `commands`, `interactions`, `leases`, `uploads`, `device_tokens`, `memory_*`, `delegations`, `schedules`, `schedule_runs`, `push_subscriptions`, `workspace_capabilities` (`apps/gateway/src/database.ts` is authoritative).
+- Gateway tables of interest: `workspaces`, `sessions`, `runs`, `commands`, `interactions`, `leases`, `uploads`, `device_tokens`, `memory_*`, `delegations`, `schedules`, `schedule_runs`, `push_subscriptions`, `workspace_capabilities` (`crates/pirc-gateway/src/schema.sql` is authoritative).
 - Foreign keys are on. Delete a session's `leases`, `interactions`, `commands`, `runs` before the `sessions` row.
 - Gateway workspace IDs are `<nodeId>:<workspaceId>`; node ones are the bare `<workspaceId>`.
 - Deleting a `device_tokens` row revokes that phone.

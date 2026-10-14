@@ -39,15 +39,26 @@ use pirc_config::{Env, GatewayConfig};
 
 use crate::db::{Db, Store};
 
+const USAGE: &str = "Usage: pirc-gateway [--help | --version]\n\nStarts the gateway with no arguments. Configuration is read from the environment.\n";
+
 fn main() -> ExitCode {
-    match std::env::args().nth(1).as_deref() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.len() > 1 {
+        eprint!("Unknown argument: {}\n\n{USAGE}", args[1]);
+        return ExitCode::from(2);
+    }
+    match args.first().map(String::as_str) {
         Some("version" | "--version") => {
             println!("{}", env!("CARGO_PKG_VERSION"));
             return ExitCode::SUCCESS;
         }
+        Some("help" | "--help" | "-h") => {
+            print!("{USAGE}");
+            return ExitCode::SUCCESS;
+        }
         Some(other) => {
-            eprintln!("pirc-gateway: unknown command {other}");
-            return ExitCode::FAILURE;
+            eprint!("Unknown command: {other}\n\n{USAGE}");
+            return ExitCode::from(2);
         }
         None => {}
     }

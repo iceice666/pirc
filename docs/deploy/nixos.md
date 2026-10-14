@@ -17,7 +17,7 @@
 }
 ```
 
-A full starting point with nginx is [`nix/example.nix`](../../nix/example.nix). Alternatively apply `pirc.overlays.default` and use `pkgs.pirc-gateway`, `pkgs.pirc-chat` and `pkgs.pirc-node` in your own service definitions; the module is not required.
+A full starting point with nginx is [`nix/example.nix`](../../nix/example.nix). Alternatively apply `pirc.overlays.default` and use `pkgs.pirc-gateway` and `pkgs.pirc-node` in your own service definitions; the module is not required.
 
 ## A complete single-host configuration
 
@@ -48,7 +48,7 @@ A full starting point with nginx is [`nix/example.nix`](../../nix/example.nix). 
 
     # The local node.
     workspaces.pirc = { path = "/srv/src/pirc"; displayName = "pirc"; };
-    chat = false;                       # selects pirc-node; true selects pirc-chat (workspaces must be empty)
+    chat = false;                       # selects pirc-node; true selects pirc-node chat (workspaces must be empty)
     agentConfig = {
       limits.maxTurns = 300;
       features.sessionTitle.model = { provider = "anthropic"; id = "claude-haiku-4-5"; };
@@ -82,7 +82,7 @@ Evaluation fails with a message when: `allowedUsers`/`allowedOrigins`/`allowedHo
 
 ## What the module creates
 
-`gatewayPackage`, `chatPackage` and `nodePackage` select the corresponding role packages. The gateway runs `bin/pirc-gateway`; the local runner runs `bin/pirc-chat` when `chat = true`, otherwise `bin/pirc-node`, with no role argument. The service names stay `pirc` and `pirc-node` even when the local runner is the chat node. nginx serves `${gatewayPackage}/share/pirc/web`; only the chat/node packages include the sandbox/browser runtime.
+`gatewayPackage` and `nodePackage` select the two Rust packages. The gateway runs `bin/pirc-gateway`; the local runner runs `bin/pirc-node chat` when `chat = true`, otherwise `bin/pirc-node`. Remove the retired `chatPackage` option. Service names remain `pirc` and `pirc-node`. nginx serves `${gatewayPackage}/share/pirc/web`; the node supplies native sandbox/CDP drivers, with bubblewrap on Linux.
 
 | Item                    | Value                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -99,7 +99,7 @@ Environment derived from options: `PIRC_TIMEZONE` from `timeZone` (defaults to `
 
 ## Hardening and its consequences
 
-Both units run with `NoNewPrivileges`, `PrivateTmp`, `PrivateDevices`, `ProtectHome`, `ProtectSystem=strict`, `ProtectKernel*`, `RestrictSUIDSGID`, `LockPersonality`, `UMask=0077`, `Restart=on-failure`. `MemoryDenyWriteExecute` stays off (Bun's JIT).
+Both units run with `NoNewPrivileges`, `PrivateTmp`, `PrivateDevices`, `ProtectHome`, `ProtectSystem=strict`, `ProtectKernel*`, `RestrictSUIDSGID`, `LockPersonality`, `UMask=0077`, `Restart=on-failure`. `MemoryDenyWriteExecute` stays off for Chromium and user tools that may use JIT memory.
 
 - `ProtectHome=true`: workspaces under `/home` are invisible. Put repositories under `/srv` (or override the hardening in your host config knowingly). Only the node service gets `ReadWritePaths` for the configured workspace paths.
 - Web-added workspaces must be inside the node's home, which is `/var/lib/pirc`; use `services.pirc.workspaces` for anything else.
@@ -113,7 +113,7 @@ The gateway host can serve nodes elsewhere:
 
 1. In `environmentFile`: `PIRC_NODE_TOKENS={"laptop":"<secret>"}` (the local node's entry is merged in automatically).
 2. `nginx.exposeNodeEndpoint = true` (or the equivalent route on your own proxy).
-3. On the remote machine, run `pirc-node` (or `pirc-chat` for the chat node) with `PIRC_NODE_ID=laptop`, the same secret, and `PIRC_DAEMON_URL=wss://pirc.example.ts.net` ([Node](node.md), [macOS node](macos-node.md)).
+3. On the remote machine, run `pirc-node` (or `pirc-node chat` for the chat node) with `PIRC_NODE_ID=laptop`, the same secret, and `PIRC_DAEMON_URL=wss://pirc.example.ts.net` ([Node](node.md), [macOS node](macos-node.md)).
 
 `localNode.enable = false` turns the host into a routing-only gateway. `localNode.id` defaults to `networking.hostName`.
 
@@ -129,10 +129,12 @@ sudo -u pirc-gateway ls -la /var/lib/pirc/daemon
 ## Upgrading the module
 
 - Versions before the account split ran both services as `pirc`. On the first switch afterwards the daemon directory is chowned to `pirc-gateway` by tmpfiles and the old token at `/var/lib/pirc/local-node-token` is moved. Make `apiKeyFile` targets readable by `pirc-gateway` **before** switching, or the gateway fails to start.
-- Replace the removed `services.pirc.package` with role-specific `gatewayPackage`, `chatPackage` and/or `nodePackage` overrides. The overlay no longer provides `pkgs.pirc`; use the corresponding role package. Remove the old role environment variable from custom environment files and commands; `chat` now selects the executable. See [executable migration](upgrades.md#migrating-from-the-single-executable).
+- Replace the removed `services.pirc.package` with `gatewayPackage` and/or `nodePackage` overrides. The overlay no longer provides `pkgs.pirc`; use the corresponding role package. Remove the old role environment variable from custom environment files and commands; `chat` now adds the node subcommand. See [executable migration](upgrades.md).
 - `hostId` was renamed to `localNode.id`; `piPackage`, `piArgs` and `runnerLimit` were removed (evaluation tells you).
 - Bumping the flake input upgrades every co-located component together; remote nodes must be upgraded in the same window when the node protocol version changed ([Upgrades](upgrades.md)).
 
 ## Updating `nodeModulesHash`
 
-After `bun.lock` changes, the fixed-output derivation's hash in `nix/package.nix` must be refreshed: set `nodeModulesHash = lib.fakeHash`, run `nix build .#pirc-gateway.nodeModules`, and copy the reported hash. One hash covers every platform.
+After `bun.lock` changes, the fixed-output derivation's hash in `nix/web.nix` must be refreshed: set `nodeModulesHash = lib.fakeHash`, run `nix build .#pirc-gateway.web.nodeModules`, and copy the reported hash. One hash covers every platform.
+
+After `Cargo.lock` changes, refresh `cargoHash` in `nix/package.nix` by building both native packages. For 0.3.0 upgrades, choose a new `stateDirectory`; see [fresh-start migration](upgrades.md).

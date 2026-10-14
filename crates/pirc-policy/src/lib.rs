@@ -364,19 +364,8 @@ mod tests {
     /// entry.
     #[test]
     fn sensitive_paths_match_the_typescript_list() {
-        let source = include_str!("../../../apps/gateway/src/sandbox-policy.ts");
-        let start = source
-            .find("export const SENSITIVE_HOME_PATHS = [")
-            .expect("the TS list");
-        let list = &source[start..];
-        let list = &list[..list.find("];").unwrap()];
-        let entries: Vec<&str> = list
+        let entries: Vec<&str> = include_str!("../tests/fixtures/sensitive-home-paths.txt")
             .lines()
-            .filter_map(|line| {
-                let line = line.trim();
-                line.strip_prefix('\'')
-                    .and_then(|rest| rest.strip_suffix("',"))
-            })
             .collect();
         assert_eq!(entries, SENSITIVE_HOME_PATHS);
     }

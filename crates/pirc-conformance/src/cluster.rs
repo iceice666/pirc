@@ -36,8 +36,7 @@ const REQUIRED_VARIABLE: &str = "PIRC_CONFORMANCE_REQUIRED";
 /// Another gateway executable to test against the nodes of the bin dir (the
 /// Rust gateway against the TS node while the rewrite is in progress).
 const GATEWAY_VARIABLE: &str = "PIRC_CONFORMANCE_GATEWAY_BIN";
-/// Another node executable (the Rust `pirc-node`, M6). It runs the chat
-/// role as `<bin> chat`; the bin dir's TS build has `pirc-chat` for it.
+/// Another Rust node executable. The chat role is always `<bin> chat`.
 const NODE_VARIABLE: &str = "PIRC_CONFORMANCE_NODE_BIN";
 /// The top-level chats workspace of a chat node, as the gateway names it.
 pub const CHATS_WORKSPACE_ID: &str = "test:chats";
@@ -495,13 +494,12 @@ fn gateway_bin(bin_dir: &Path) -> PathBuf {
     override_bin(GATEWAY_VARIABLE).unwrap_or_else(|| bin_dir.join("pirc-gateway"))
 }
 
-/// The node under test and its arguments: `PIRC_CONFORMANCE_NODE_BIN` (with
-/// `chat` for the chat role), else the bin dir's `pirc-node` or `pirc-chat`.
+/// The node under test and its arguments; both paths use the Rust CLI.
 fn node_command(bin_dir: &Path, chat: bool) -> (PathBuf, Vec<&'static str>) {
     match override_bin(NODE_VARIABLE) {
         Some(bin) if chat => (bin, vec!["chat"]),
         Some(bin) => (bin, Vec::new()),
-        None if chat => (bin_dir.join("pirc-chat"), Vec::new()),
+        None if chat => (bin_dir.join("pirc-node"), vec!["chat"]),
         None => (bin_dir.join("pirc-node"), Vec::new()),
     }
 }

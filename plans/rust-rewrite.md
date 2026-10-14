@@ -1,6 +1,6 @@
 # Rust rewrite of the server executables
 
-Status: M0, M1 and M2 done 2026-10-10; M3, M4, M5 and M6 done 2026-10-11 (M3's real-provider smoke test moved to M5's gate, which stays open until cutover); M7 done 2026-10-12 (its gate's security review is recorded; its one open finding, S10, was accepted by the user); M8 done 2026-10-12 (the user accepted the browser's WebSocket and non-HTTP egress gaps, S18); M9 next. Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
+Status: M0, M1 and M2 done 2026-10-10; M3, M4, M5 and M6 done 2026-10-11 (M3's real-provider smoke test moved to M5's gate, which stays open until cutover); M7 done 2026-10-12 (its gate's security review is recorded; its one open finding, S10, was accepted by the user); M8 done 2026-10-12 (the user accepted the browser's WebSocket and non-HTTP egress gaps, S18); M9 cutover implemented and verified 2026-10-14 (remaining M5 gate explicitly waived by the user; macOS archive execution remains unverified). Each milestone needs the user's go-ahead before implementation, and the gates marked **Gate** need an explicit decision recorded here before work continues past them.
 
 Paths are relative to `apps/gateway/src/` unless noted.
 
@@ -286,12 +286,27 @@ Done 2026-10-12. `pirc-node` drives an external Chromium over the CDP pipe (`--r
 
 ### M9 Cutover
 
-- [ ] Nix: `rustPlatform.buildRustPackage` for `pirc-gateway` and `pirc-node`; NixOS module updates (the chat service runs `pirc-node`); macOS release archive (`scripts/package-release.ts`).
-- [ ] `NODE_PROTOCOL_VERSION` 10.
-- [ ] CLI contract for the two executables (version, help, subcommands, role selection) as conformance tests.
-- [ ] Docs: deploy guides, `docs/deploy/upgrades.md` fresh-start migration notes, README requirements (no Bun at runtime), CHANGELOG breaking-change entry, version bump.
-- [ ] Remove the TS server sources and Bun build scripts from `apps/gateway` (web and Android stay; Bun remains a dev/build tool for the web and test harness).
-- [ ] Record final binary sizes against the 0.3.0 baseline.
+Decision 2026-10-14: the user explicitly approved cutover now and waived the remaining M5 gate, accepting the uncompleted full PTC/task-time evaluations, native wire-API/subscription smoke tests, and the review-required/accounting-invalid polyglot results. This is a risk acceptance, not a claim that those evaluations passed. M7's security review remains satisfied with its previously accepted findings. Scope is repository code, packaging and documentation only: no live-service deployment, state deletion or additional paid runs. The user also chose full removal of the TS implementation rather than a test-only baseline; pre-existing evaluation files remain unchanged and require the historical TS source to run. The user subsequently authorized a source-only build in a new temporary directory on m3air, with CLI and size checks only (no deployment); Tailscale SSH authentication was completed by the user.
+
+Implementation: version 0.4.0, node protocol 10, two native executables; chat is `pirc-node chat`. Cargo builds and Rust-only conformance replace the TS/mixed default stack. Tool prompts moved byte-for-byte into `crates/pirc-agent/prompts/`; memory template values were extracted verbatim. The model catalog and browser generation retain pinned development-only dependencies. Nix uses `rustPlatform.buildRustPackage`, a separate web derivation and native bubblewrap, with no JS runtime in the server closure. Both distribution paths collect nested Cargo licenses, including QuickJS, and embedded Playwright/srt attribution.
+
+Measured release executables (bytes, not Nix closure/archive size):
+
+| Platform           |           pirc-gateway | pirc-node (coding + chat) |
+| ------------------ | ---------------------: | ------------------------: |
+| Linux x86_64       | 12,427,328 (11.85 MiB) |    19,981,912 (19.06 MiB) |
+| macOS ARM64, m3air |   9,880,432 (9.42 MiB) |    16,641,088 (15.87 MiB) |
+
+The 0.3.0 plan baseline was gateway 87 MB plus chat/node 101 MB each (rounded reported bytes, not an architecture-controlled benchmark). The new two-binary Linux total is 32,409,240 bytes instead of roughly 289 MB across three roles. Both platforms are below the 16/32 MiB budgets. macOS release builds and the CLI conformance test passed; `otool -L` lists only system libraries/frameworks, no Nix/JS runtime. The macOS archive script itself has not been executed end-to-end; its nested-notice collector is unit-tested. No signed/notarized archive or release was published.
+
+Validation 2026-10-14: `bun run size:check` passed (Linux table uses its workspace-wide binary build; package-selected release builds differ by a few KiB through feature unification). `nix develop --command bun run check` passed (Rust fmt/clippy/unit/integration/provider parity, web typecheck/tests/build, release build and Rust-only black-box conformance). `nix build .#pirc-gateway .#pirc-node` passed with CLI install checks; the gateway includes web assets, both outputs include notices (including nested QuickJS), and their runtime closure contains no Bun/Node/Deno/srt/Playwright package. NixOS module evaluation confirms `pirc-node chat`. Two independent reviewers found packaging issues (Vite shebang and read-only directories, nested license collection and shell escaping); all were fixed and rebuilt. Versioned OpenCode Go parity now adjusts only the expected 0.3.0 User-Agent to the current product version, leaving recordings unchanged. The two real-host-root tests stay explicitly ignored in the default suite (their earlier M7 results remain recorded). The CI workflow on GitHub, Android APK build, complete macOS runtime suite/archive execution and real-provider smoke tests were not run in this cutover.
+
+- [x] Nix: `rustPlatform.buildRustPackage` for `pirc-gateway` and `pirc-node`; NixOS module updates (the chat service runs `pirc-node`); macOS release archive (`scripts/package-release.ts`).
+- [x] `NODE_PROTOCOL_VERSION` 10.
+- [x] CLI contract for the two executables (version, help, subcommands, role selection) as conformance tests.
+- [x] Docs: deploy guides, `docs/deploy/upgrades.md` fresh-start migration notes, README requirements (no Bun at runtime), CHANGELOG breaking-change entry, version bump.
+- [x] Remove the TS server sources and Bun build scripts from `apps/gateway` (web and Android stay; Bun remains a dev/build tool for the web and test harness).
+- [x] Record final binary sizes against the 0.3.0 baseline.
 
 **Gate:** the user approves cutover after M5/M7 gates are satisfied.
 

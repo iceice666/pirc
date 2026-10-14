@@ -1,6 +1,6 @@
 # Gateway configuration
 
-`pirc-gateway` reads its configuration from environment variables only (`apps/gateway/src/config.ts`, `loadDaemonConfig`). There is no config file besides `models.json`. `.env` files are **not** loaded automatically; inject the environment through your service manager (systemd `EnvironmentFile`, launchd `EnvironmentVariables`, OpenRC `export`).
+`pirc-gateway` reads its configuration from environment variables only (`crates/pirc-config/src/`, `loadDaemonConfig`). There is no config file besides `models.json`. `.env` files are **not** loaded automatically; inject the environment through your service manager (systemd `EnvironmentFile`, launchd `EnvironmentVariables`, OpenRC `export`).
 
 The gateway refuses to start when a required value is missing or when it sees a node-only variable (`PIRC_WORKSPACES`, `PIRC_NODE_ID`).
 
@@ -110,7 +110,7 @@ The gateway runs every model request; nodes never see keys or endpoints. Backend
 
 - `SIGHUP`: reload `models.json`.
 - `SIGTERM`: graceful shutdown. On the next start, unfinished runs become `interrupted`, pending interactions `stale`, leases are dropped and commands whose acknowledgement was lost become `outcome_unknown` (never retried automatically).
-- Logs go to stdout as JSON lines (Fastify). They contain request metadata, never provider bodies or tokens.
+- Logs use the native gateway’s text format. They contain request metadata, never provider bodies or tokens.
 
 ## Health check
 

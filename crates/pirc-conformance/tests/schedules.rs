@@ -267,7 +267,7 @@ impl FakeNode {
     async fn connect(api: &Api, state: Arc<Mutex<NodeState>>) -> Self {
         let mut socket: WebSocket = api.connect("/node/connect", &node_headers()).await.open();
         let register = json!({
-            "type": "register", "role": "node", "protocol": 9,
+            "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
             "workspaces": [
                 { "id": "ws", "displayName": "Fake workspace", "kind": "directory" },
                 { "id": "other", "displayName": "Other", "kind": "directory" },

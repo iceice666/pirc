@@ -17,11 +17,11 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { pageMarkdown, passwordValues } from '../apps/gateway/src/node/browser-extract.js';
-import { sensitiveField } from '../apps/gateway/src/node/browser.js';
+import { pageMarkdown, passwordValues } from './browser/helpers.js';
+import { sensitiveField } from './browser/sensitive-field.js';
 
 const root = path.resolve(import.meta.dir, '..');
-const playwright = path.join(root, 'apps/gateway/node_modules/playwright-core');
+const playwright = path.join(root, 'node_modules/playwright-core');
 const output = path.join(root, 'crates/pirc-node/src/browser/assets');
 
 /**
