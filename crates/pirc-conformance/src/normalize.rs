@@ -132,6 +132,20 @@ impl Normalizer {
     }
 }
 
+/// A background task's log directory (`mkdtemp(<tmp>/pirc-background-XXXXXX)`)
+/// as the snapshots record it: `pirc-background-<dir>`, and under `/tmp`
+/// wherever the agent's temporary directory is (the snapshots were recorded
+/// on Linux; macOS's per-user one is `/var/folders/…/T`).
+pub fn mask_background_log_dir(text: &str) -> String {
+    static LOG_DIR: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"(?:/[^\s"'/]+)*/pirc-background-[A-Za-z0-9]{6}"#).unwrap());
+    static BARE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"pirc-background-[A-Za-z0-9]{6}").unwrap());
+    let text = LOG_DIR.replace_all(text, "/tmp/pirc-background-<dir>");
+    BARE.replace_all(&text, "pirc-background-<dir>")
+        .into_owned()
+}
+
 /// The ordered, normalized steps of one scenario: the value a snapshot records.
 pub struct Transcript {
     pub normalizer: Normalizer,

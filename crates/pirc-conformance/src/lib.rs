@@ -24,7 +24,7 @@ pub use cluster::{
 pub use fake_gateway::{FakeGateway, NodeLink, assert_gateway_frame, assert_node_frame};
 pub use fake_llm::{FakeLlm, ModelsReply, Reply};
 pub use fake_push::{FakePush, PushSubscription};
-pub use normalize::{Normalizer, Transcript};
+pub use normalize::{Normalizer, Transcript, mask_background_log_dir};
 
 /// Headers a trusted proxy adds to an authenticated browser request.
 pub fn browser_headers() -> Vec<(&'static str, String)> {

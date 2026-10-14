@@ -17,8 +17,6 @@ static SUMMARY_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b([0-9a-f]{8
 /// A task's log file (`<tmp>/pirc-background-XXXXXX/<id>.log`).
 static LOG_PATH: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"pirc-background-[A-Za-z0-9]{6}/([0-9a-f]{8})\.log").unwrap());
-static LOG_DIR: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"pirc-background-[A-Za-z0-9]{6}").unwrap());
 /// A pid inside JSON text a script returned.
 static PID_TEXT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"\\?"pid\\?":\d+"#).unwrap());
 
@@ -92,9 +90,7 @@ impl TaskMask {
     }
 
     fn text(&self, text: &str) -> String {
-        let mut text = LOG_DIR
-            .replace_all(text, "pirc-background-<dir>")
-            .into_owned();
+        let mut text = pirc_conformance::mask_background_log_dir(text);
         text = PID_TEXT
             .replace_all(&text, |found: &regex::Captures| {
                 let quote = if found[0].starts_with('\\') {

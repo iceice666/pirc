@@ -7,17 +7,11 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::LazyLock;
-
-use regex::Regex;
 
 use pirc_conformance::{
     Api, Cluster, Response, Transcript, WORKSPACE_ID, WebSocket, browser_headers,
 };
 use serde_json::{Value, json};
-
-static LOG_DIR: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"pirc-background-[A-Za-z0-9]{6}").unwrap());
 
 /// Strings longer than this are recorded as their length and head.
 const LONG: usize = 2_000;
@@ -142,9 +136,7 @@ impl Panel {
 
     fn mask_text(&self, text: &str) -> String {
         // A background task's log directory (`mkdtemp`).
-        let mut text = LOG_DIR
-            .replace_all(text, "pirc-background-<dir>")
-            .into_owned();
+        let mut text = pirc_conformance::mask_background_log_dir(text);
         for (value, placeholder) in &self.masks {
             text = text.replace(value.as_str(), placeholder);
         }
