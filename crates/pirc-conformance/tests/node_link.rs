@@ -60,6 +60,28 @@ async fn node_link() {
         "wrong node token",
         json!({ "closed": code, "reason": reason }),
     );
+    // The gateway says so, naming the node id and not the token, once a
+    // minute at most (`/node/connect` is outside the forward-auth).
+    let refusals = |log: &str| {
+        log.lines()
+            .filter(|line| line.contains("refused a node connection"))
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    let logged = refusals(&cluster.gateway_log());
+    assert_eq!(logged.len(), 1, "{}", cluster.gateway_log());
+    assert!(
+        logged[0].contains(&format!("node id \\\"{NODE_ID}\\\"")),
+        "{}",
+        logged[0]
+    );
+    assert!(!logged[0].contains("wrong-token"), "{}", logged[0]);
+    let mut again = api
+        .connect("/node/connect", &node_headers("wrong-token-2"))
+        .await
+        .open();
+    again.closed().await;
+    assert_eq!(refusals(&cluster.gateway_log()).len(), 1);
 
     for (step, frame) in [
         ("older protocol", register(json!(9))),

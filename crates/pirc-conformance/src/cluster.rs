@@ -311,6 +311,11 @@ impl Cluster {
         Api::new(self.base_url())
     }
 
+    /// What the gateway has logged so far (stdout and stderr).
+    pub fn gateway_log(&self) -> String {
+        self.gateway.read_log()
+    }
+
     /// Values that differ between runs, to be replaced in recorded transcripts.
     pub fn volatile(&self) -> Vec<(String, &'static str)> {
         vec![
@@ -412,6 +417,11 @@ impl LoneNode {
     /// The node's exit status, once it has exited.
     pub fn exited(&mut self) -> Option<std::process::ExitStatus> {
         self.process.exited()
+    }
+
+    /// What the node has logged so far (stdout and stderr).
+    pub fn log(&self) -> String {
+        self.process.read_log()
     }
 
     /// Values that differ between runs, to be replaced in recorded transcripts.
@@ -578,6 +588,11 @@ impl Process {
         }
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+
+    /// The whole log so far.
+    fn read_log(&self) -> String {
+        std::fs::read_to_string(&self.log).unwrap_or_default()
     }
 
     /// The last 8 KiB of the log, for a failing test.

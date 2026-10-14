@@ -38,6 +38,10 @@ use serde_json::Value;
 pub const NODE_PROTOCOL_VERSION: u32 = 10;
 /// Close code for a node that speaks another protocol version.
 pub const PROTOCOL_MISMATCH_CLOSE: u16 = 4426;
+
+/// WebSocket close code the gateway sends a node whose `x-pirc-node-id` and
+/// bearer token match no entry of its `PIRC_NODE_TOKENS`.
+pub const INVALID_NODE_CREDENTIALS_CLOSE: u16 = 4401;
 /// Largest WebSocket frame on the node link.
 pub const NODE_FRAME_MAX_BYTES: usize = 16_777_216;
 /// Browser recordings cross the node link in base64 chunks of this many bytes.

@@ -10,7 +10,7 @@ use axum::extract::ws::{WebSocket, WebSocketUpgrade, rejection::WebSocketUpgrade
 use axum::extract::{ConnectInfo, Path, State};
 use axum::http::{HeaderMap, Uri};
 use axum::response::Response;
-use pirc_protocol::NODE_FRAME_MAX_BYTES;
+use pirc_protocol::{INVALID_NODE_CREDENTIALS_CLOSE, NODE_FRAME_MAX_BYTES};
 use serde_json::{Value, json};
 
 use crate::app::{AppState, query_map};
@@ -435,6 +435,33 @@ async fn relay(
 
 // ---- /node/connect -----------------------------------------------------------
 
+/// Refused node connections are logged at most this often: `/node/connect`
+/// is outside the browser forward-auth, so anyone who reaches it could
+/// otherwise fill the log.
+const REFUSED_NODE_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Log a refused node connection, naming the node id it claimed (cut short,
+/// as it comes from the request) and never the token, unless one was logged
+/// within [`REFUSED_NODE_LOG_INTERVAL`].
+fn log_refused_node(node_id: Option<&str>) {
+    static LAST: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+    {
+        let mut last = LAST.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if last.is_some_and(|at| at.elapsed() < REFUSED_NODE_LOG_INTERVAL) {
+            return;
+        }
+        *last = Some(std::time::Instant::now());
+    }
+    let shown = match node_id {
+        Some(id) => format!("{:?}", id.chars().take(64).collect::<String>()),
+        None => "(none)".to_owned(),
+    };
+    crate::log::warn(&format!(
+        "refused a node connection: no PIRC_NODE_TOKENS entry matches node id {shown} and its token \
+         (closed {INVALID_NODE_CREDENTIALS_CLOSE}; further refusals within a minute are not logged)"
+    ));
+}
+
 pub async fn node_connect(
     State(app): State<AppState>,
     headers: HeaderMap,
@@ -455,6 +482,9 @@ pub async fn node_connect(
     let valid = node_id
         .as_deref()
         .is_some_and(|node_id| valid_node_token(&app.config.node_tokens, node_id, &token));
+    if !valid {
+        log_refused_node(node_id.as_deref());
+    }
     upgrade
         .max_message_size(NODE_FRAME_MAX_BYTES)
         .max_frame_size(NODE_FRAME_MAX_BYTES)
@@ -463,7 +493,7 @@ pub async fn node_connect(
                 Some(node_id) => nodes::serve(app, node_id, socket).await,
                 None => {
                     let (outbox, mut stream) = Outbox::start(socket);
-                    outbox.close(4401, "invalid node credentials");
+                    outbox.close(INVALID_NODE_CREDENTIALS_CLOSE, "invalid node credentials");
                     receive(&outbox, &mut stream, |_| {}).await;
                 }
             }

@@ -29,9 +29,10 @@ use std::time::Duration;
 
 use futures_util::{FutureExt, SinkExt, StreamExt};
 use pirc_protocol::{
-    GatewayMessage, INFERENCE_BUFFER_MAX_BYTES, NODE_FRAME_MAX_BYTES, NODE_PROTOCOL_VERSION,
-    NodeMessage, PROTOCOL_MISMATCH_CLOSE, RegisteredWorkspace, Registration, SessionActivity,
-    SessionRun, TerminalKind, WorkspaceKind, WorkspaceRole,
+    GatewayMessage, INFERENCE_BUFFER_MAX_BYTES, INVALID_NODE_CREDENTIALS_CLOSE,
+    NODE_FRAME_MAX_BYTES, NODE_PROTOCOL_VERSION, NodeMessage, PROTOCOL_MISMATCH_CLOSE,
+    RegisteredWorkspace, Registration, SessionActivity, SessionRun, TerminalKind, WorkspaceKind,
+    WorkspaceRole,
 };
 use serde_json::Value;
 use tokio::sync::{mpsc, watch};
@@ -263,11 +264,26 @@ pub async fn run(node: Node) {
     }));
     let activity = tokio::spawn(coalesce_activity(node.clone()));
     let mut terminated = node.terminated();
+    // A refusal of the node's credentials is reported once, not on every
+    // retry, until the node registers again.
+    let mut refusal_reported = false;
     loop {
         if node.closing() {
             break;
         }
-        connect(&node, &endpoint, &mut terminated).await;
+        let ended = connect(&node, &endpoint, &mut terminated).await;
+        if ended.registered {
+            refusal_reported = false;
+        }
+        if ended.close_code == Some(INVALID_NODE_CREDENTIALS_CLOSE) && !refusal_reported {
+            refusal_reported = true;
+            crate::log::error(&format!(
+                "the gateway refused this node's credentials (closed {INVALID_NODE_CREDENTIALS_CLOSE}): \
+                 PIRC_NODE_ID and PIRC_NODE_TOKEN must match an entry of the gateway's \
+                 PIRC_NODE_TOKENS; retrying every {} s without logging this again",
+                RECONNECT_MS / 1000
+            ));
+        }
         if node.closing() || *terminated.borrow() {
             break;
         }
@@ -309,14 +325,23 @@ fn tls() -> Result<Arc<rustls::ClientConfig>, String> {
     Ok(Arc::new(config))
 }
 
+/// How a [`connect`] ended.
+#[derive(Default)]
+struct Ended {
+    /// The gateway's close code, if it sent one.
+    close_code: Option<u16>,
+    /// The gateway accepted the registration on this connection.
+    registered: bool,
+}
+
 /// One connection, from the handshake until the socket closes or the node
 /// terminates it.
-async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<bool>) {
+async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<bool>) -> Ended {
     let mut request = match endpoint.as_str().into_client_request() {
         Ok(request) => request,
         Err(error) => {
             crate::log::error(&format!("node transport failure: {error}"));
-            return;
+            return Ended::default();
         }
     };
     let headers = request.headers_mut();
@@ -333,7 +358,7 @@ async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<b
             }
             Err(_) => {
                 crate::log::error("node transport failure: invalid node credentials header");
-                return;
+                return Ended::default();
             }
         }
     }
@@ -342,7 +367,7 @@ async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<b
             Ok(config) => Some(Connector::Rustls(config)),
             Err(error) => {
                 crate::log::error(&format!("node transport failure: TLS: {error}"));
-                return;
+                return Ended::default();
             }
         }
     } else {
@@ -353,13 +378,13 @@ async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<b
         .max_frame_size(Some(NODE_FRAME_MAX_BYTES));
     let opened = tokio::select! {
         opened = connect_async_tls_with_config(request, Some(config), true, connector) => opened,
-        () = stopped(terminated) => return,
+        () = stopped(terminated) => return Ended::default(),
     };
     let socket = match opened {
         Ok((socket, _)) => socket,
         Err(error) => {
             crate::log::warn(&format!("node transport failure: {error}"));
-            return;
+            return Ended::default();
         }
     };
     let (mut sink, mut stream) = socket.split();
@@ -444,8 +469,12 @@ async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<b
     }
     drop(sink);
     drop(stream);
+    let ended = Ended {
+        close_code,
+        registered,
+    };
     if !node.link.close(id) {
-        return;
+        return ended;
     }
     node.agent_gateway.disconnect();
     node.mirror.disconnect();
@@ -456,6 +485,7 @@ async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<b
             "daemon rejected this node protocol version; upgrade the daemon and node together: {close_reason}"
         ));
     }
+    ended
 }
 
 /// A frame the link schema accepts, else `None` (ignored).

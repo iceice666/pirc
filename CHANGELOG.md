@@ -4,6 +4,10 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+### Fixed
+
+- A node whose credentials the gateway refuses now logs why, once until it registers again, instead of retrying silently: `PIRC_NODE_ID` and `PIRC_NODE_TOKEN` must match an entry of the gateway's `PIRC_NODE_TOKENS`. The gateway also logs refused node connections with the node id they claimed (never the token), at most once a minute.
+
 ## [0.4.1] - 2026-10-14
 
 Compatible with 0.4.0: same node protocol (10) and state; upgrade the gateway and every node together as usual.

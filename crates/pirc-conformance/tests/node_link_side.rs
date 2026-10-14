@@ -1150,3 +1150,39 @@ async fn node_link_side_sandbox() {
     t.note("the declined command did not run", json!(!denied));
     insta::assert_json_snapshot!("node_link_side_sandbox", t.into_value());
 }
+
+/// A gateway refusing the node's credentials (close 4401) is reported once,
+/// not on every retry, and again only after the node has registered in
+/// between: a wrong token used to be retried silently forever.
+#[tokio::test(flavor = "multi_thread")]
+async fn node_link_side_reports_refused_credentials() {
+    let server = FakeGateway::bind().await;
+    let Some(node) = LoneNode::start(server.port()) else {
+        return;
+    };
+    let reports = |node: &LoneNode| {
+        node.log()
+            .matches("the gateway refused this node's credentials (closed 4401)")
+            .count()
+    };
+    let refuse = async |server: &FakeGateway| {
+        let mut link = server.accept().await;
+        link.recv().await;
+        link.close(4401, "invalid node credentials").await;
+    };
+    refuse(&server).await;
+    refuse(&server).await;
+    // Each retry follows the handling of the refusal before it.
+    let mut gw = Gateway::new(server.accept().await);
+    assert_eq!(reports(&node), 1, "{}", node.log());
+    gw.link.recv().await;
+    gw.link
+        .send(&registered(models("fake", "fake-model", "low"), json!({})))
+        .await;
+    // A relayed request is answered once the node has registered.
+    gw.ask("GET", "/api/workspaces", None).await;
+    gw.link.close(1000, "restart").await;
+    refuse(&server).await;
+    let _next = server.accept().await;
+    assert_eq!(reports(&node), 2, "{}", node.log());
+}
