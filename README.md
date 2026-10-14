@@ -90,7 +90,7 @@ Start with the [documentation index](docs/README.md). Current usage guides and a
 bun run check
 ```
 
-`bun run check` ends with the conformance suite (`crates/pirc-conformance`), which starts the built `pirc-gateway` and `pirc-node` and compares their HTTP and WebSocket behavior with committed snapshots; after an intended change, `bun run conformance:record` re-records them; review the snapshot diff before committing it.
+`bun run check` ends with the conformance suite (`crates/pirc-conformance`), which starts the built `pirc-gateway` and `pirc-node` and compares their HTTP and WebSocket behavior with committed snapshots; after an intended change, `bun run conformance:record` re-records them; review the snapshot diff before committing it. The snapshots are Linux's: on other platforms the suite is skipped and recording refused (`scripts/conformance.ts`).
 
 Real-model smoke tests are deliberately separate because they require credentials and incur provider cost. The automated suite drives the real agent against a scripted fake OpenAI/Anthropic SSE server (end to end through gateway inference), and covers subscription logins, refresh and logout with fake OAuth providers, and native provider transports against recorded parity fixtures. The TS-era tests and PTC evaluation tools were removed after the cutover; they run only from a checkout of `2d480d3`, the last TS revision.
 
