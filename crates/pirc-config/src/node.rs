@@ -42,10 +42,8 @@ pub struct Viewport {
     pub height: u32,
 }
 
-/// The agent browser's settings (`BrowserSettings` in `node/browser.ts`).
-/// Parsed in full, though the browser itself arrives with M8: until then the
-/// node reports it unavailable whatever these say (plans/rust-rewrite.md, M6
-/// decisions). `PIRC_PLAYWRIGHT_CORE` is not read: the Rust node has no
+/// The agent browser's settings (ported from `BrowserSettings` of the TS
+/// node). `PIRC_PLAYWRIGHT_CORE` is not read: the Rust node has no
 /// Playwright.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BrowserSettings {

@@ -221,8 +221,7 @@ pub struct Browsing {
 }
 
 /// The node's browser settings: everything explicit, because the node's
-/// environment is cleared. `PIRC_PLAYWRIGHT_CORE` is for the compiled TS
-/// node (it loads Playwright from disk); the Rust node ignores it.
+/// environment is cleared.
 fn browser_env(executable: &Path, extra: &[(&'static str, String)]) -> Vec<(&'static str, String)> {
     let mut env = vec![
         ("PIRC_BROWSER", "true".to_owned()),
@@ -244,11 +243,6 @@ fn browser_env(executable: &Path, extra: &[(&'static str, String)]) -> Vec<(&'st
             format!("{}x{}", VIEWPORT.0, VIEWPORT.1),
         ),
     ];
-    let playwright = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../apps/gateway/node_modules/playwright-core");
-    if let Ok(playwright) = playwright.canonicalize() {
-        env.push(("PIRC_PLAYWRIGHT_CORE", playwright.display().to_string()));
-    }
     if let Some(ffmpeg) = ffmpeg() {
         env.push(("PIRC_FFMPEG", ffmpeg.display().to_string()));
     }

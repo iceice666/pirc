@@ -7,8 +7,6 @@
 //! The agent runs with its built-in features off (`PIRC_AGENT_FEATURES=
 //! none`, the M4 target of the agent port, plans/rust-rewrite.md) unless a
 //! scenario turns some on ([`AgentOptions::features`], M5).
-//! `PIRC_CONFORMANCE_AGENT_BIN` runs another agent executable (the Rust
-//! one) with the same arguments.
 
 use std::collections::{HashMap, VecDeque};
 use std::convert::Infallible;
@@ -32,8 +30,6 @@ use crate::client::TIMEOUT;
 
 /// The inference socket's bearer token.
 const TOKEN: &str = "conformance-inference-token-0123456789";
-/// Another agent executable to test with the same arguments.
-const AGENT_VARIABLE: &str = "PIRC_CONFORMANCE_AGENT_BIN";
 
 /// One scripted model reply, as the gateway would stream it.
 #[derive(Clone, Debug)]
@@ -434,27 +430,8 @@ impl Drop for AgentRun {
     }
 }
 
-/// `PIRC_CONFORMANCE_AGENT_BIN`, resolved.
-pub(crate) fn agent_override() -> Option<PathBuf> {
-    let path = PathBuf::from(std::env::var_os(AGENT_VARIABLE)?);
-    let path = if path.is_absolute() {
-        path
-    } else {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join(path)
-    };
-    Some(
-        path.canonicalize()
-            .unwrap_or_else(|e| panic!("{AGENT_VARIABLE}: {e}")),
-    )
-}
-
 /// The agent executable and its leading arguments, or `None` (skipped).
 fn agent_command() -> Option<(PathBuf, Vec<String>)> {
-    if let Some(path) = agent_override() {
-        return Some((path, vec!["agent".to_owned()]));
-    }
     let bin_dir = crate::cluster::bin_dir()?;
     Some((bin_dir.join("pirc-node"), vec!["agent".to_owned()]))
 }

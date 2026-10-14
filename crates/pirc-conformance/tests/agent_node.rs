@@ -1,7 +1,6 @@
 //! The agent under a real node (features off): a session through the
 //! gateway's API with tool calls, so the node's inference socket, write
-//! broker and event relay meet the agent. With `PIRC_CONFORMANCE_AGENT_BIN`
-//! the node runs that agent (the Rust one; plans/rust-rewrite.md, M4).
+//! broker and event relay meet the agent.
 
 use pirc_conformance::{
     Cluster, GatewayOptions, Normalizer, Reply, Transcript, WORKSPACE_ID, browser_headers,

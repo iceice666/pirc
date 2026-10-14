@@ -33,11 +33,6 @@ pub const WORKSPACE_ID: &str = "test:test";
 const BIN_DIR_VARIABLE: &str = "PIRC_CONFORMANCE_BIN_DIR";
 /// Set by `bun run test:conformance` (and so CI): skipping is then a failure.
 const REQUIRED_VARIABLE: &str = "PIRC_CONFORMANCE_REQUIRED";
-/// Another gateway executable to test against the nodes of the bin dir (the
-/// Rust gateway against the TS node while the rewrite is in progress).
-const GATEWAY_VARIABLE: &str = "PIRC_CONFORMANCE_GATEWAY_BIN";
-/// Another Rust node executable. The chat role is always `<bin> chat`.
-const NODE_VARIABLE: &str = "PIRC_CONFORMANCE_NODE_BIN";
 /// The top-level chats workspace of a chat node, as the gateway names it.
 pub const CHATS_WORKSPACE_ID: &str = "test:chats";
 
@@ -273,12 +268,6 @@ impl Cluster {
         if options.agent_core_only {
             env.push(("PIRC_AGENT_FEATURES", "none".to_owned()));
         }
-        // The node's agents are the executable of `PIRC_CONFORMANCE_AGENT_BIN`
-        // when it is set: the Rust agent under the TS node (M4, M5).
-        if let Some(agent) = crate::agent::agent_override() {
-            env.push(("PIRC_AGENT_COMMAND", agent.display().to_string()));
-            env.push(("PIRC_AGENT_ARGS", r#"["agent"]"#.to_owned()));
-        }
         override_env(&mut env, options.env.clone());
         // `{run_dir}` in a value is the node's run directory, which only
         // exists now (the browser's profiles, `node_browser.rs`).
@@ -489,35 +478,15 @@ pub(crate) fn bin_dir() -> Option<PathBuf> {
     )
 }
 
-/// The gateway under test: `PIRC_CONFORMANCE_GATEWAY_BIN`, else the bin dir's.
+/// The gateway under test: the bin dir's.
 fn gateway_bin(bin_dir: &Path) -> PathBuf {
-    override_bin(GATEWAY_VARIABLE).unwrap_or_else(|| bin_dir.join("pirc-gateway"))
+    bin_dir.join("pirc-gateway")
 }
 
-/// The node under test and its arguments; both paths use the Rust CLI.
+/// The node under test and its arguments (`pirc-node [chat]`).
 fn node_command(bin_dir: &Path, chat: bool) -> (PathBuf, Vec<&'static str>) {
-    match override_bin(NODE_VARIABLE) {
-        Some(bin) if chat => (bin, vec!["chat"]),
-        Some(bin) => (bin, Vec::new()),
-        None if chat => (bin_dir.join("pirc-node"), vec!["chat"]),
-        None => (bin_dir.join("pirc-node"), Vec::new()),
-    }
-}
-
-/// The executable a variable names, relative to the repository root unless absolute.
-fn override_bin(variable: &str) -> Option<PathBuf> {
-    let path = PathBuf::from(std::env::var_os(variable)?);
-    let path = if path.is_absolute() {
-        path
-    } else {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join(path)
-    };
-    Some(
-        path.canonicalize()
-            .unwrap_or_else(|error| panic!("{variable} {}: {error}", path.display())),
-    )
+    let args = if chat { vec!["chat"] } else { Vec::new() };
+    (bin_dir.join("pirc-node"), args)
 }
 
 fn dir_in(root: &Path, name: &str) -> String {
