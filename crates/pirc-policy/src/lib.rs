@@ -511,9 +511,17 @@ mod tests {
             guard.resolve("~/.ssh/id", false).unwrap_err(),
             "Path ~/.ssh/id is private (credentials or pirc state) and cannot be read"
         );
+        // The refusal names the real path when a link leads there (`/etc` is
+        // `/private/etc` on macOS).
+        let etc = real_resolve("/etc/x");
+        let shown = if etc == "/etc/x" {
+            "/etc/x".to_owned()
+        } else {
+            format!("/etc/x ({etc})")
+        };
         assert_eq!(
             guard.resolve("/etc/x", true).unwrap_err(),
-            format!("Path /etc/x is outside the writable paths ({workspace})")
+            format!("Path {shown} is outside the writable paths ({workspace})")
         );
         assert_eq!(
             guard.resolve(".git/hooks/pre-commit", true).unwrap_err(),
@@ -535,7 +543,7 @@ mod tests {
         std::os::unix::fs::symlink("/etc", format!("{workspace}/etc-link")).unwrap();
         assert_eq!(
             guard.resolve("etc-link/x", true).unwrap_err(),
-            format!("Path etc-link/x (/etc/x) is outside the writable paths ({workspace})")
+            format!("Path etc-link/x ({etc}) is outside the writable paths ({workspace})")
         );
     }
 

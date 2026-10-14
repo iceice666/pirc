@@ -183,12 +183,29 @@ async fn reads_images_as_images() {
     );
 }
 
+/// The fixture's `zeta` next to its `Zeta`, unless the file system folds
+/// case (macOS's default APFS: the second write reused `Zeta`).
+fn lower_zeta(f: &Fixture) -> &'static str {
+    let names: Vec<_> = fs::read_dir(f.ws())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    if names.iter().any(|name| name == "zeta") {
+        "zeta\n"
+    } else {
+        ""
+    }
+}
+
 #[tokio::test]
 async fn lists_directories_in_locale_order() {
     let f = Fixture::new();
     assert_eq!(
         f.text("ls", json!({})).await,
-        "_u/\n.hidden\na.txt\nB/\nbad.txt\nbin.dat\nhello.txt\nlink\nnode_modules/\nsrc/\nzeta\nZeta"
+        format!(
+            "_u/\n.hidden\na.txt\nB/\nbad.txt\nbin.dat\nhello.txt\nlink\nnode_modules/\nsrc/\n{}Zeta",
+            lower_zeta(&f)
+        )
     );
     let data = f.data("ls", json!({ "path": "src" })).await;
     assert_eq!(
@@ -235,8 +252,11 @@ async fn finds_files_by_glob_skipping_dependency_dirs() {
         "lib.rs\nnotes.md"
     );
     assert_eq!(
-        f.text("find", json!({ "pattern": "*" })).await,
-        ".hidden\nZeta\na.txt\nbad.txt\nbin.dat\nhello.txt\nzeta"
+        format!("{}\n", f.text("find", json!({ "pattern": "*" })).await),
+        format!(
+            ".hidden\nZeta\na.txt\nbad.txt\nbin.dat\nhello.txt\n{}",
+            lower_zeta(&f)
+        )
     );
     assert_eq!(
         f.text("find", json!({ "pattern": "nothing" })).await,

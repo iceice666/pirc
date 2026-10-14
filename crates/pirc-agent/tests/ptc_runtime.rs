@@ -959,11 +959,13 @@ async fn a_stopped_script_process_is_gone_even_mid_regex() {
                 timeout_ms: Some(if by == "timeout" { 200.0 } else { 60_000.0 }),
                 on_process: Some(Box::new(move |pid| {
                     // The script's process gets no environment and `/` as its
-                    // directory.
-                    let environ = std::fs::read(format!("/proc/{pid}/environ")).unwrap();
-                    assert!(environ.is_empty(), "{environ:?}");
-                    let cwd = std::fs::read_link(format!("/proc/{pid}/cwd")).unwrap();
-                    assert_eq!(cwd, std::path::Path::new("/"));
+                    // directory (readable through `/proc` on Linux only).
+                    if cfg!(target_os = "linux") {
+                        let environ = std::fs::read(format!("/proc/{pid}/environ")).unwrap();
+                        assert!(environ.is_empty(), "{environ:?}");
+                        let cwd = std::fs::read_link(format!("/proc/{pid}/cwd")).unwrap();
+                        assert_eq!(cwd, std::path::Path::new("/"));
+                    }
                     seen.borrow_mut().push(pid);
                 })),
                 ..Options::default()

@@ -485,7 +485,15 @@ mod tests {
         assert_eq!(config.shutdown_grace_ms, 5_000);
         assert_eq!(config.sandbox, SandboxSettings::default());
         assert!(!config.browser.enabled);
-        assert_eq!(config.browser.executable, None);
+        // Nothing on the (empty) `PATH`: only an installed macOS bundle.
+        let bundle = [
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        ]
+        .into_iter()
+        .map(PathBuf::from)
+        .find(|candidate| candidate.is_file());
+        assert_eq!(config.browser.executable, bundle);
         assert_eq!(config.browser.gateway_host, "127.0.0.1");
         assert_eq!(config.browser.profiles_dir, state.join("browser"));
         assert_eq!(config.browser.ffmpeg, "ffmpeg");
