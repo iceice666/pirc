@@ -1118,6 +1118,89 @@ async fn drags_and_drops_as_playwright() {
     });
 }
 
+/// A real out-of-process iframe's renderer crash (`Page.crash` on the
+/// iframe's own session; M8 covered it with a fake CDP browser): the
+/// iframe's calls fail as Playwright's do, the page and its main frame keep
+/// working, and navigating again brings the iframe back.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_oopif_renderer_crash_fails_only_that_iframe() {
+    guard!(async {
+        let Some(browser) = launch().await else {
+            return;
+        };
+        let port = serve().await;
+        let page = browser.context.pages()[0].clone();
+        let url = format!("http://127.0.0.1:{port}/cross");
+        page.goto(&url, LoadState::Load, T).await.unwrap();
+        let iframe = page
+            .frames()
+            .into_iter()
+            .find(|frame| !frame.is_main())
+            .unwrap();
+        // Out of process: a session of its own.
+        assert_ne!(iframe.session().id(), page.session().id());
+        assert!(iframe.session().id().is_some());
+        assert_eq!(
+            iframe
+                .evaluate("() => location.host", Value::Null)
+                .await
+                .unwrap(),
+            json!(format!("localhost:{port}"))
+        );
+        // The renderer dies before it can answer.
+        let crash = iframe.session();
+        let _ =
+            tokio::time::timeout(Duration::from_secs(5), crash.call("Page.crash", json!({}))).await;
+        let failed = async {
+            loop {
+                match iframe.evaluate("() => 1", Value::Null).await {
+                    Err(error) => break error.message,
+                    Ok(_) => tokio::time::sleep(Duration::from_millis(50)).await,
+                }
+            }
+        };
+        let message = tokio::time::timeout(Duration::from_secs(10), failed)
+            .await
+            .expect("the crashed iframe still answers");
+        assert_eq!(message, "evaluate: Target crashed ");
+        // The page itself is not crashed.
+        let short = Duration::from_secs(10);
+        assert_eq!(
+            page.evaluate("() => document.title", Value::Null)
+                .await
+                .unwrap(),
+            json!("Cross")
+        );
+        assert_eq!(page.title().await.unwrap(), "Cross");
+        let snapshot = aria_snapshot(&page, short).await.unwrap();
+        // The iframe is still there, without content.
+        assert!(snapshot.contains("heading \"C\""), "{snapshot}");
+        assert!(snapshot.contains("- iframe [ref="), "{snapshot}");
+        page.screenshot(ScreenshotOptions {
+            quality: 50,
+            full_page: false,
+            timeout: short,
+        })
+        .await
+        .unwrap();
+        // Navigating again starts a new renderer for the iframe.
+        page.goto(&url, LoadState::Load, T).await.unwrap();
+        let iframe = page
+            .frames()
+            .into_iter()
+            .find(|frame| !frame.is_main())
+            .unwrap();
+        assert_eq!(
+            iframe
+                .evaluate("() => location.host", Value::Null)
+                .await
+                .unwrap(),
+            json!(format!("localhost:{port}"))
+        );
+        browser.context.close().await;
+    });
+}
+
 /// Kill the renderers of the context's browser (`SIGKILL`, found by their
 /// process group): its pages crash.
 fn kill_renderers(context: &Context) {
