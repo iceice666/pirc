@@ -1623,7 +1623,10 @@ fn committed_new_document(
             error: None,
         },
     );
-    if !initial && state.main == Some(key) && !previous.is_empty() && previous != "about:blank" {
+    // A popup's initial document is `about:blank`, or `:` as Chromium 150
+    // on macOS reports it: leaving it keeps the frame's number.
+    if !initial && state.main == Some(key) && !matches!(previous.as_str(), "" | "about:blank" | ":")
+    {
         let seq = state.next_seq;
         state.next_seq += 1;
         state.frames.get_mut(&key).unwrap().seq = seq;
