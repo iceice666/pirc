@@ -4,6 +4,28 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-14
+
+Compatible with 0.4.0: same node protocol (10) and state; upgrade the gateway and every node together as usual.
+
+### Security
+
+- Auto mode no longer lets commands it treats as read-only run programs or write files without approval: `fd -x`, `rg --pre`, `bat --pager`, `sort --compress-program`, `uniq`/`xxd` output files, `yq -i`, `tree -o`, `date -s`, `hostname NAME`, sed scripts that write or read files in any spelling, and abbreviated GNU long options.
+- Paths with `..` after a symlink are judged where the kernel resolves them, and `cd` follows bash's logical directory, so a write through a link is leased on the file actually written.
+- Uploading a local file (`wget --post-file`, `curl -T`/`-d`/`-H @file` and similar) now goes to the classifier, and a recursive search (`grep -r`, `rg`, `ag`) of a directory that contains credentials needs approval like reading them.
+- Approved host commands run in a session of their own, without the node's controlling terminal: they can no longer read keystrokes from, prompt on (`sudo` now fails at once) or inject input into the terminal the node runs in.
+- The agent drops stdin lines over 64 MiB without buffering them and answers them as a parse error.
+
+### Fixed
+
+- A `ptc` script's process no longer aborts after reporting its result, which left a crash report on macOS for every execution.
+- A service worker that Chromium stopped (for example after being idle) or that crashed no longer hangs when it is started again, nor do the pages waiting for it.
+- Popups opened by a page keep their frame numbering with Chromium on macOS.
+
+### Known limits
+
+- Because these checks are static, some harmless commands now ask the classifier or the user first, such as `grep -R`, `rg -L`, `wget -e robots=off` and sed scripts with unusual syntax.
+
 ## [0.4.0] - 2026-10-14
 
 ### Breaking changes
