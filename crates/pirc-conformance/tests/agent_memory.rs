@@ -203,10 +203,10 @@ async fn agent_memory_auto_compaction() {
         return;
     };
     let mut log = Log::new(&agent);
-    // The summarizer's request follows the run at once: no worker to wait for.
+    // No memory worker to wait for.
     log.worker_pause = std::time::Duration::ZERO;
     // Below the threshold after one turn, above it after two. No memory
-    // yet: the session's model summarizes.
+    // yet: the session's model summarizes, at once after the second run.
     agent.push([
         text("Done."),
         text("Done again."),
@@ -215,7 +215,8 @@ async fn agent_memory_auto_compaction() {
     log.turn(&mut agent, "first", "please do the thing").await;
     let lines = agent.drain(QUIET).await;
     log.note("below the threshold", json!(lines));
-    log.turn(&mut agent, "second", "and the other thing").await;
+    log.turn_then_compaction(&mut agent, "second", "and the other thing")
+        .await;
     let lines = agent.drain(QUIET).await;
     log.note("automatic compaction: lines", json!(lines));
     log.requests(&agent, "automatic compaction");

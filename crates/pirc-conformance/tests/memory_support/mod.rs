@@ -195,6 +195,17 @@ pub struct Log {
     /// How long a turn waits for a memory worker's request started in the
     /// run (held by a gate once it arrives) before taking the requests.
     pub worker_pause: Duration,
+    /// Requests taken early and recorded with the next [`Log::requests`].
+    held: Vec<Value>,
+}
+
+/// The summarizer's request of a compaction (its handoff prompt last).
+fn is_handoff(request: &Value) -> bool {
+    request["messages"]
+        .as_array()
+        .and_then(|messages| messages.last())
+        .and_then(|message| message["content"].as_str())
+        .is_some_and(|text| text.starts_with("Stop working and write a handoff summary"))
 }
 
 impl Log {
@@ -242,6 +253,7 @@ impl Log {
             prompts: Vec::new(),
             entries: Vec::new(),
             worker_pause: Duration::from_millis(200),
+            held: Vec::new(),
         }
     }
 
@@ -254,8 +266,13 @@ impl Log {
 
     /// The run's requests, then the memory workers' apart.
     pub fn requests(&mut self, agent: &AgentRun, step: &str) {
-        let (workers, main): (Vec<Value>, Vec<Value>) =
-            agent.take_requests().into_iter().partition(is_worker);
+        let mut taken = std::mem::take(&mut self.held);
+        taken.extend(agent.take_requests());
+        self.record_requests(taken, step);
+    }
+
+    fn record_requests(&mut self, taken: Vec<Value>, step: &str) {
+        let (workers, main): (Vec<Value>, Vec<Value>) = taken.into_iter().partition(is_worker);
         let mut main = json!(main);
         mask_local(&mut main);
         mask_times(&mut main);
@@ -293,6 +310,24 @@ impl Log {
         self.note(&format!("{step}: events"), json!(events));
         tokio::time::sleep(self.worker_pause).await;
         self.requests(agent, step);
+    }
+
+    /// A turn whose settling starts an automatic compaction at once: the
+    /// summarizer's request may already be in when the turn's requests are
+    /// taken, so it is held for the next [`Log::requests`] whichever comes
+    /// first.
+    pub async fn turn_then_compaction(&mut self, agent: &mut AgentRun, step: &str, message: &str) {
+        let response = agent
+            .call(json!({ "type": "prompt", "message": message }))
+            .await;
+        self.note(&format!("{step}: response"), response);
+        let events = agent.settle().await;
+        self.note(&format!("{step}: events"), json!(events));
+        let mut taken = std::mem::take(&mut self.held);
+        taken.extend(agent.take_requests());
+        let (handoff, run): (Vec<Value>, Vec<Value>) = taken.into_iter().partition(is_handoff);
+        self.held = handoff;
+        self.record_requests(run, step);
     }
 
     /// Background work until the session file has `marker`, then until the
