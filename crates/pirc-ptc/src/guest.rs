@@ -103,6 +103,23 @@ struct State {
     /// The script called `load()` (set from outside the realm).
     loaded: bool,
     finished: bool,
+    /// `String.prototype.toWellFormed` as it was before the script ran.
+    well_formed: Option<Persistent<Function<'static>>>,
+}
+
+/// Releases what the Rust side holds in the realm before it is torn down.
+/// The host functions live in the realm and hold the [`State`]; the state
+/// holds the realm's values (pending resolvers, `toWellFormed`). Left in
+/// place, that cycle keeps objects alive past `JS_FreeRuntime`, which then
+/// fails its `gc_obj_list` assertion and aborts the guest after `done`.
+struct Release(Shared);
+
+impl Drop for Release {
+    fn drop(&mut self) {
+        let mut state = self.0.borrow_mut();
+        state.pending.clear();
+        state.well_formed = None;
+    }
 }
 
 impl State {
@@ -127,19 +144,17 @@ type Shared = Rc<RefCell<State>>;
 /// `stringArg(handle)`: the text of a string argument, else ''. A string
 /// with a lone surrogate (no UTF-8 form) is made well-formed first, with
 /// the realm's own `toWellFormed` as it was before the script ran.
-fn string_arg<'js>(
-    ctx: &Ctx<'js>,
-    well_formed: &Persistent<Function<'static>>,
-    value: Option<&Value<'js>>,
-) -> String {
+fn string_arg<'js>(ctx: &Ctx<'js>, state: &Shared, value: Option<&Value<'js>>) -> String {
     let Some(text) = value.and_then(Value::as_string) else {
         return String::new();
     };
     if let Ok(text) = text.to_string() {
         return text;
     }
+    let Some(well_formed) = state.borrow().well_formed.clone() else {
+        return String::new();
+    };
     well_formed
-        .clone()
         .restore(ctx)
         .and_then(|f| f.call::<_, rquickjs::String>((This(text.clone()),)))
         .and_then(|text| text.to_string())
@@ -277,7 +292,10 @@ fn execute(start: &Json, input: &mut impl BufRead) -> Result<(), String> {
         scope_count: 0,
         loaded: false,
         finished: false,
+        well_formed: None,
     }));
+    // Dropped before `context` and `runtime`, on every way out.
+    let _release = Release(state.clone());
 
     let finish = {
         let state = state.clone();
@@ -308,8 +326,8 @@ fn execute(start: &Json, input: &mut impl BufRead) -> Result<(), String> {
                     .get::<_, Object>("String")?
                     .get::<_, Object>("prototype")?
                     .get("toWellFormed")?;
-                let well_formed = Persistent::save(ctx, to_well_formed);
-                define_host(ctx, &state, &well_formed, &manifest.to_string(), &store)
+                state.borrow_mut().well_formed = Some(Persistent::save(ctx, to_well_formed));
+                define_host(ctx, &state, &manifest.to_string(), &store)
             };
             setup(&ctx).map_err(|e| e.to_string())?;
             if ctx
@@ -455,7 +473,6 @@ fn checked(text: &str) -> Json {
 fn define_host<'js>(
     ctx: &Ctx<'js>,
     state: &Shared,
-    well_formed: &Persistent<Function<'static>>,
     manifest: &str,
     store: &str,
 ) -> rquickjs::Result<()> {
@@ -463,9 +480,9 @@ fn define_host<'js>(
     host.set("manifest", manifest)?;
     host.set("store", store)?;
     let arg = {
-        let well_formed = well_formed.clone();
+        let state = state.clone();
         move |ctx: &Ctx<'js>, args: &Rest<Value<'js>>, index: usize| {
-            string_arg(ctx, &well_formed, args.0.get(index))
+            string_arg(ctx, &state, args.0.get(index))
         }
     };
 

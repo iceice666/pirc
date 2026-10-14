@@ -783,6 +783,99 @@ async fn memory_exhaustion_and_stack_overflow_end_the_script_not_the_host() {
     );
 }
 
+/// One guest process driven by hand: the `start` line for `code`, then
+/// stdin closed after `close_after` lines of output (or at once). Its
+/// output lines, stderr and exit status.
+fn guest_alone(code: &str, close_after: usize) -> (Vec<Value>, String, std::process::ExitStatus) {
+    use std::io::{BufRead, Write};
+    let compiled = preflight(code).unwrap_or_else(|e| panic!("{code}: {}", e.message));
+    let command = guest();
+    let mut child = std::process::Command::new(&command[0])
+        .args(&command[1..])
+        .env_clear()
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let start = json!({ "type": "start", "code": compiled.js,
+        "manifest": compiled.manifest, "store": "{}" });
+    writeln!(stdin, "{start}").unwrap();
+    let mut stdin = Some(stdin);
+    if close_after == 0 {
+        stdin = None;
+    }
+    let mut lines = Vec::new();
+    for line in std::io::BufReader::new(child.stdout.take().unwrap()).lines() {
+        lines.push(serde_json::from_str::<Value>(&line.unwrap()).unwrap());
+        if lines.len() == close_after {
+            stdin = None;
+        }
+    }
+    drop(stdin);
+    let output = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    (lines, stderr, output.status)
+}
+
+/// quickjs-ng asserts in `JS_FreeRuntime` when objects outlive the realm:
+/// the guest used to abort (SIGABRT, a crash report on macOS) after every
+/// `done`, as its host functions and their state held each other through
+/// the realm. Whatever the script did, the guest now reports, tears down
+/// and exits cleanly, and the host sees the same result.
+async fn the_guest_tears_down_cleanly_after_any_outcome() {
+    for (code, expected) in [
+        ("return 1;", "\"ok\":true"),
+        ("throw new Error(\"x\");", "Error: x"),
+        (
+            "const a = []; for (;;) a.push(\"x\".repeat(1 << 20) + a.length);",
+            "out of memory",
+        ),
+        (
+            "const a = []; for (;;) a.push({ x: [1, 2, 3] });",
+            "\"ok\":false",
+        ),
+        (
+            "const f = (n: number): number => f(n + 1) + 1; return f(0);",
+            "\"ok\":false",
+        ),
+        // A call the script never awaited is still pending at the end.
+        ("void tools.never({}); return 1;", "\"ok\":true"),
+    ] {
+        let (lines, stderr, status) = guest_alone(code, 1);
+        let done = lines
+            .iter()
+            .find(|line| line["type"] == "done")
+            .unwrap_or_else(|| panic!("{code}: no done in {lines:?}"));
+        assert!(
+            done["outcome"].to_string().contains(expected),
+            "{code}: {done}"
+        );
+        assert!(status.success(), "{code}: {status:?}, stderr: {stderr}");
+        assert!(stderr.is_empty(), "{code}: {stderr}");
+    }
+    // The host goes away while a call is pending: no `done`, a clean exit.
+    let (lines, stderr, status) = guest_alone("return await tools.never({});", 1);
+    assert_eq!(lines[0]["type"], "call", "{lines:?}");
+    assert!(lines.iter().all(|line| line["type"] != "done"), "{lines:?}");
+    assert!(status.success(), "{status:?}, stderr: {stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    // Through the host, an out-of-memory script fails with that reason.
+    let memory = run(
+        "const a = []; for (;;) a.push(\"x\".repeat(1 << 20) + a.length);",
+        vec![],
+        Options::default(),
+    )
+    .await;
+    assert_eq!(memory.report.status, "failed");
+    assert!(
+        message_of(&memory.report).contains("out of memory"),
+        "{}",
+        message_of(&memory.report)
+    );
+}
+
 async fn a_crash_after_side_effects_still_reports_them() {
     let Run { report, .. } = run(
         "await tools.write({}); await tools.write({}); null.boom;",
@@ -1202,6 +1295,7 @@ fn main() -> std::process::ExitCode {
         oversized_results_are_refused_but_still_count_as_completed,
         a_runaway_loop_is_interrupted_by_the_budget,
         memory_exhaustion_and_stack_overflow_end_the_script_not_the_host,
+        the_guest_tears_down_cleanly_after_any_outcome,
         a_crash_after_side_effects_still_reports_them,
         cancellation_aborts_in_flight_operations_and_ignores_late_results,
         operations_that_never_settle_are_reported_with_unknown_outcome,
