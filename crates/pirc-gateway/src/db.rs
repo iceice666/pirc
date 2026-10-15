@@ -20,18 +20,29 @@ use crate::util::{new_id, now_ms, safe_json};
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1001;
+pub const SCHEMA_VERSION: i64 = 1002;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = include_str!("schema.sql");
 /// Each migration takes a database from the version before it to its own;
 /// `schema.sql` is always the newest whole.
-const MIGRATIONS: &[(i64, &str)] = &[(
-    // Repository identity by normalized `origin` (plans/assistant.md item 4).
-    1001,
-    "ALTER TABLE workspaces ADD COLUMN repo TEXT;
-     ALTER TABLE memory_records ADD COLUMN repo TEXT;",
-)];
+const MIGRATIONS: &[(i64, &str)] = &[
+    (
+        // Repository identity by normalized `origin` (plans/assistant.md item 4).
+        1001,
+        "ALTER TABLE workspaces ADD COLUMN repo TEXT;
+         ALTER TABLE memory_records ADD COLUMN repo TEXT;",
+    ),
+    (
+        // Projects linked to workspaces (plans/assistant.md item 6).
+        1002,
+        "CREATE TABLE project_links (
+           project_workspace_id TEXT NOT NULL REFERENCES workspaces(id), workspace_id TEXT NOT NULL,
+           repo TEXT, created_at INTEGER NOT NULL,
+           PRIMARY KEY (project_workspace_id, workspace_id)
+         );",
+    ),
+];
 
 /// Placeholder name of a new session until the agent's title replaces it.
 pub const PLACEHOLDER_SESSION_NAME: &str = "New session";
@@ -213,7 +224,7 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
+    pub(crate) fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         Ok(Self {
             id: row.get("id")?,
             host_id: row.get("host_id")?,
@@ -707,6 +718,11 @@ impl Store for Connection {
                 if let Some(repo) = repo {
                     tx.execute(
                         "UPDATE memory_records SET repo=? WHERE workspace_id=? AND repo IS NULL AND status!='forgotten'",
+                        params![repo, id],
+                    )?;
+                    // Links made before the repository was known cover its clones from now on.
+                    tx.execute(
+                        "UPDATE project_links SET repo=? WHERE workspace_id=? AND repo IS NULL",
                         params![repo, id],
                     )?;
                 }
@@ -1273,7 +1289,12 @@ mod tests {
 
     #[test]
     fn migrates_the_first_rust_schema() {
-        let first = SCHEMA
+        // Schema 1002's table, from its comment to its end.
+        let links = SCHEMA
+            .find("-- The directory workspaces a chat project is about")
+            .expect("schema.sql changed: update this test");
+        let end = links + SCHEMA[links..].find("\n);\n").unwrap() + "\n);\n".len();
+        let first = format!("{}{}", &SCHEMA[..links], &SCHEMA[end..])
             .replace(
                 ",\n  -- The repository's normalized origin (pirc_protocol::normalize_origin), as the node reports it.\n  repo TEXT\n",
                 "\n",
@@ -1283,7 +1304,7 @@ mod tests {
                 "",
             );
         assert!(
-            !first.contains("repo TEXT"),
+            !first.contains("repo TEXT") && !first.contains("project_links"),
             "schema.sql changed: update this test"
         );
         let dir = tempfile::tempdir().unwrap();

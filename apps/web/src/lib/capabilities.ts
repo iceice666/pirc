@@ -41,6 +41,35 @@ export const instructionsApi = {
     }),
 };
 
+/**
+ * A directory workspace a chat project is linked to (plans/assistant.md
+ * §6): a default and an ordering for its assistant, never a permission.
+ */
+export interface ProjectLink {
+  workspaceId: string;
+  /** Absent when the gateway no longer knows the workspace. */
+  name?: string;
+  node?: string;
+  /** Its repository's normalized `origin`; a link also covers its other clones. */
+  repo?: string | null;
+  online: boolean;
+  /** Its node is connected but no longer has it, or the gateway forgot it. */
+  removed: boolean;
+  createdAt: number;
+}
+type LinksResponse = { links: ProjectLink[] };
+const linksPath = (workspaceId: string) =>
+  `/api/workspaces/${encodeURIComponent(workspaceId)}/links`;
+
+export const linksApi = {
+  get: (workspaceId: string) => request<LinksResponse>(linksPath(workspaceId)),
+  update: (workspaceId: string, workspaceIds: string[]) =>
+    request<LinksResponse>(linksPath(workspaceId), {
+      method: 'PUT',
+      body: JSON.stringify({ workspaceIds }),
+    }),
+};
+
 /** One project hook: a shell command, optionally for matching tools only. */
 export interface ProjectHook {
   command: string;

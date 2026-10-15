@@ -26,6 +26,7 @@
   import { watch } from '../watch.svelte';
   import { foldRecent, isRunning, needsInput, pinnedFirst } from '../work';
   import ProjectInstructions from './ProjectInstructions.svelte';
+  import ProjectLinks from './ProjectLinks.svelte';
   import ProjectSettings from './ProjectSettings.svelte';
   import ProjectTrust from './ProjectTrust.svelte';
 
@@ -52,6 +53,8 @@
   const chat = $derived(isChatWorkspace(workspace));
   const topLevel = $derived(isTopLevelChats(workspace));
   const online = $derived(app.workspaceOnline(workspace));
+  /** What a project can be linked to. */
+  const directories = $derived(app.workspaces.filter((item) => !isChatWorkspace(item)));
   const noun = $derived(chat ? 'chat' : 'session');
   const subtitle = $derived(
     [
@@ -241,6 +244,14 @@
               </p>
             {:else}
               <ProjectInstructions workspaceId={workspace.id} />
+            {/if}
+            {#if !topLevel}
+              <ProjectLinks
+                workspaceId={workspace.id}
+                workspaces={directories}
+                online={(item) => app.workspaceOnline(item)}
+                disabled={app.usingDemo}
+              />
             {/if}
             <ProjectSettings workspaceId={workspace.id} disabled={app.usingDemo} />
           {:else}

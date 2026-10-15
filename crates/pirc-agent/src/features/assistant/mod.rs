@@ -203,7 +203,9 @@ fn role_brief(value: &Value) -> RoleBrief {
 }
 
 /// `renderWorkspaces`: the user's repositories the assistant can hand
-/// tasks to, as of the chat's start.
+/// tasks to, as of the chat's start. In a project, the gateway lists the
+/// workspaces it is linked to first (`linked`: `workspace`, or
+/// `repository` for another clone of a linked one's repository).
 pub fn render_workspaces(workspaces: &[Value]) -> String {
     if workspaces.is_empty() {
         return String::new();
@@ -211,21 +213,44 @@ pub fn render_workspaces(workspaces: &[Value]) -> String {
     let repos = workspaces
         .iter()
         .any(|workspace| workspace.get("repo").is_some_and(Value::is_string));
+    fn linked_to(workspace: &Value) -> Option<&str> {
+        workspace.get("linked").and_then(Value::as_str)
+    }
+    let linked: Vec<&Value> = workspaces
+        .iter()
+        .filter(|workspace| linked_to(workspace) == Some("workspace"))
+        .collect();
     let mut lines = vec![
         "## Workspaces".to_owned(),
         String::new(),
         format!(
-            "The user's repositories you can hand tasks to with {DELEGATE_TOOL}. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with {SEARCH_TOOL}, and open a note's sources with recall.{}",
+            "The user's repositories you can hand tasks to with {DELEGATE_TOOL}. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with {SEARCH_TOOL}, and open a note's sources with recall.{}{}",
             if repos {
                 " Workspaces showing the same repository are clones of it: a search in one also finds the others' notes."
             } else {
                 ""
+            },
+            if linked.is_empty() {
+                ""
+            } else {
+                " A search that names no workspace looks in the ones linked to this project (and their clones) first."
             }
         ),
     ];
+    if !linked.is_empty() {
+        lines.push(String::new());
+        lines.push(format!(
+            "The user linked this project to the workspaces marked “linked to this project”: it is about them. {} You can still hand tasks to any workspace, and the user approves every delegation.",
+            if linked.len() == 1 {
+                format!("{DELEGATE_TOOL} without a workspace goes to that one.")
+            } else {
+                format!("Name the one you mean when you use {DELEGATE_TOOL}.")
+            }
+        ));
+    }
     for workspace in workspaces {
         let line = format!(
-            "[{}] {} on {}{}{}",
+            "[{}] {} on {}{}{}{}",
             string(workspace.get("id")),
             string(workspace.get("name")),
             string(workspace.get("node")),
@@ -233,10 +258,17 @@ pub fn render_workspaces(workspaces: &[Value]) -> String {
                 Some(repo) => format!(", repository {repo}"),
                 None => String::new(),
             },
-            if workspace.get("online") == Some(&Value::Bool(false)) {
+            if workspace.get("removed") == Some(&Value::Bool(true)) {
+                " (removed from its node)"
+            } else if workspace.get("online") == Some(&Value::Bool(false)) {
                 " (offline)"
             } else {
                 ""
+            },
+            match linked_to(workspace) {
+                Some("workspace") => " · linked to this project",
+                Some("repository") => " · a clone of a repository linked to this project",
+                _ => "",
             }
         );
         let roles = array(workspace.get("roles"));
@@ -826,7 +858,7 @@ impl AssistantTool {
                 json!({
                     "type": "object",
                     "properties": {
-                        "workspace": param("The workspace id (like m5pro:workspace_…), or its name if no other workspace has it."),
+                        "workspace": param("The workspace id (like m5pro:workspace_…), or its name if no other workspace has it. Leave it out in a project linked to exactly one workspace to use that one."),
                         "task": param("The whole task, standing on its own."),
                         "title": param("A short title; it names the new session."),
                         "follows": param("An earlier delegation's id (like d1a2b3c4d): send the task to its session instead."),
@@ -879,6 +911,7 @@ impl AssistantTool {
                         "query": param("Words to look for, separated by spaces."),
                         "workspace": param("Only this workspace and other clones of its repository: its id, or its name if no other workspace has it."),
                         "limit": { "type": "number", "description": "At most this many results (1 to 20, default 8)." },
+                        "everywhere": { "type": "boolean", "description": "In a project linked to workspaces: search all workspaces at once instead of the linked ones first (default false)." },
                     },
                     "required": ["query"],
                     "additionalProperties": false,
@@ -1176,15 +1209,10 @@ impl AssistantTool {
         if task.is_empty() {
             return Ok(text("task is required", None, true));
         }
+        // Without a workspace or follows, the gateway uses the project's only
+        // linked workspace, or says to name one.
         let [workspace, title, follows, role] =
             ["workspace", "title", "follows", "role"].map(|key| trimmed(args, key));
-        if workspace.is_empty() && follows.is_empty() {
-            return Ok(text(
-                "Name a workspace, or pass follows with an earlier delegation id",
-                None,
-                true,
-            ));
-        }
         let mut request = Map::new();
         if !workspace.is_empty() {
             request.insert("workspace".to_owned(), json!(workspace));
@@ -1309,6 +1337,9 @@ impl AssistantTool {
         if let Some(limit) = limit {
             request.insert("limit".to_owned(), crate::messages::js::number_value(limit));
         }
+        if args.get("everywhere") == Some(&Value::Bool(true)) {
+            request.insert("everywhere".to_owned(), json!(true));
+        }
         let result = match self.request("memory.search", request, ctx).await {
             Ok(result) => result,
             Err(error) => return failure(error),
@@ -1328,9 +1359,19 @@ impl AssistantTool {
                 Value::Object(out)
             })
             .collect();
+        // In a project with links, the gateway says where it looked.
+        let searched = result.get("searched").and_then(Value::as_str);
         if listed.is_empty() {
             return Ok(typed(
-                format!("Nothing found for {}.", js::stringify(&json!(query))),
+                format!(
+                    "Nothing found for {}{}.",
+                    js::stringify(&json!(query)),
+                    if searched == Some("everywhere") {
+                        ", in the workspaces linked to this project or any other"
+                    } else {
+                        ""
+                    }
+                ),
                 json!({ "hits": hits }),
                 None,
                 false,
@@ -1370,9 +1411,22 @@ impl AssistantTool {
             .iter()
             .map(|hit| hit.get("id").cloned().unwrap_or(Value::Null))
             .collect();
+        let scope = match searched {
+            Some("linked") => {
+                "From the workspaces linked to this project and their clones; pass everywhere: true to search all workspaces.\n\n"
+            }
+            Some("everywhere") => {
+                "Nothing in the workspaces linked to this project; these are from all workspaces.\n\n"
+            }
+            _ => "",
+        };
         Ok(ToolResult {
             data: Some(object(json!({ "hits": hits }))),
-            ..text(shown.join("\n\n"), Some(json!({ "hits": ids })), false)
+            ..text(
+                format!("{scope}{}", shown.join("\n\n")),
+                Some(json!({ "hits": ids })),
+                false,
+            )
         })
     }
 }

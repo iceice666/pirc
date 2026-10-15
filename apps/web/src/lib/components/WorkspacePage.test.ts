@@ -50,32 +50,34 @@ beforeEach(() => {
     vi.fn(async (url: string) =>
       String(url).endsWith('/instructions')
         ? new Response(JSON.stringify({ instructions: { text: 'Be brief', maxChars: 8000 } }))
-        : String(url).endsWith('/project-config')
-          ? new Response(
-              JSON.stringify({
-                project: {
-                  hooks: { sessionStart: [{ command: 'make setup', timeoutMs: 10000 }] },
-                  env: {},
-                  allowedPaths: [],
-                  hash: 'a'.repeat(64),
-                  trustedHash: null,
-                  trusted: false,
-                  empty: false,
-                },
-              }),
-            )
-          : new Response(
-              JSON.stringify({
-                capabilities: {
-                  version: 1,
-                  delegation: true,
-                  memory_search: true,
-                  remote_recall: true,
-                  schedules: true,
-                  web_search: true,
-                },
-              }),
-            ),
+        : String(url).endsWith('/links')
+          ? new Response(JSON.stringify({ links: [] }))
+          : String(url).endsWith('/project-config')
+            ? new Response(
+                JSON.stringify({
+                  project: {
+                    hooks: { sessionStart: [{ command: 'make setup', timeoutMs: 10000 }] },
+                    env: {},
+                    allowedPaths: [],
+                    hash: 'a'.repeat(64),
+                    trustedHash: null,
+                    trusted: false,
+                    empty: false,
+                  },
+                }),
+              )
+            : new Response(
+                JSON.stringify({
+                  capabilities: {
+                    version: 1,
+                    delegation: true,
+                    memory_search: true,
+                    remote_recall: true,
+                    schedules: true,
+                    web_search: true,
+                  },
+                }),
+              ),
     ),
   );
 });
@@ -200,8 +202,13 @@ describe('WorkspacePage', () => {
       '/api/workspaces/home%3Atrip/capabilities',
       expect.anything(),
     );
+    expect(fetch).toHaveBeenCalledWith('/api/workspaces/home%3Atrip/links', expect.anything());
     expect(target.querySelector('textarea')!.value).toBe('Be brief');
     expect(target.querySelectorAll('[role="switch"]')).toHaveLength(5);
+    // The directory workspaces it can be linked to.
+    const choices = [...target.querySelectorAll('.link-choice')].map((item) => item.textContent);
+    expect(choices).toHaveLength(1);
+    expect(choices[0]).toContain(directory.displayName);
     // Another page starts on its list again.
     props.workspace = directory;
     flushSync();

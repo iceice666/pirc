@@ -22,6 +22,7 @@ mod memory;
 mod memory_records;
 mod node_events;
 mod nodes;
+mod project_links;
 mod push;
 mod routes;
 mod schedules;

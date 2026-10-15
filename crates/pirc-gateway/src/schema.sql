@@ -149,5 +149,15 @@ CREATE TABLE workspace_capabilities (
   workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id), policy_json TEXT NOT NULL
 );
 
+-- The directory workspaces a chat project is about (plans/assistant.md item 6): a
+-- default and an ordering, never a permission. No foreign key on workspace_id: a
+-- link to a workspace that went away stays, shown as such. repo is the workspace's
+-- normalized origin, so a link also covers the other clones of its repository.
+CREATE TABLE project_links (
+  project_workspace_id TEXT NOT NULL REFERENCES workspaces(id), workspace_id TEXT NOT NULL,
+  repo TEXT, created_at INTEGER NOT NULL,
+  PRIMARY KEY (project_workspace_id, workspace_id)
+);
+
 -- The one chat node this gateway is bound to.
 CREATE TABLE assistant_node (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), node_id TEXT NOT NULL);

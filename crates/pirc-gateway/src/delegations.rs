@@ -26,6 +26,7 @@ use crate::dispatch::{
 };
 use crate::error::{ApiError, ApiResult};
 use crate::events::GatewayEvent;
+use crate::project_links::{self, Linked};
 use crate::push::PushMessage;
 use crate::util::{hex, now_ms, random_bytes};
 
@@ -315,15 +316,27 @@ fn brief(conn: &Connection, delegation: &Delegation, full: bool, offset: u64) ->
 }
 
 /// The directory workspaces the assistant can delegate to
-/// (`Delegations.workspaces`), and whether their node is online now.
-pub fn workspaces(app: &App) -> ApiResult<Value> {
-    let all = app.db.lock().list_workspaces()?;
-    let listed: Vec<Value> = all
+/// (`Delegations.workspaces`), and whether their node is online now. In a
+/// project, those it is linked to come first (`linked`), then the other
+/// clones of their repositories; a linked one whose node no longer has it
+/// stays listed, marked `removed`.
+pub fn workspaces(app: &App, project: Option<&str>) -> ApiResult<Value> {
+    let (all, links, repos) = {
+        let conn = app.db.lock();
+        let links = match project {
+            Some(project) => project_links::links(&conn, project)?,
+            None => Vec::new(),
+        };
+        let repos = project_links::repos(&conn, &links)?;
+        (conn.list_workspaces()?, links, repos)
+    };
+    let mut listed: Vec<(Option<Linked>, Value)> = all
         .iter()
         .filter(|workspace| {
             workspace.kind == WorkspaceKind::Directory && workspace.id.contains(':')
         })
         .map(|workspace| {
+            let linked = project_links::linked(&links, &repos, workspace);
             let mut item = Map::new();
             item.insert("id".into(), json!(workspace.id));
             item.insert("name".into(), json!(workspace.display_name));
@@ -335,10 +348,34 @@ pub fn workspaces(app: &App) -> ApiResult<Value> {
             if let Some(roles) = roles(app, workspace) {
                 item.insert("roles".into(), json!(roles));
             }
-            Value::Object(item)
+            if let Some(linked) = linked {
+                item.insert("linked".into(), json!(linked.name()));
+                if linked == Linked::Workspace && project_links::removed(app, workspace) {
+                    item.insert("removed".into(), json!(true));
+                }
+            }
+            (linked, Value::Object(item))
         })
         .collect();
-    Ok(Value::Array(listed))
+    // A link whose workspace the gateway no longer knows is not dropped silently.
+    for link in &links {
+        if !all
+            .iter()
+            .any(|workspace| workspace.id == link.workspace_id)
+        {
+            let node = link.workspace_id.split(':').next().unwrap_or_default();
+            listed.push((
+                Some(Linked::Workspace),
+                json!({ "id": link.workspace_id, "name": link.workspace_id, "node": node,
+                    "online": false, "linked": "workspace", "removed": true }),
+            ));
+        }
+    }
+    // Stable: linked, then clones, then the rest, each by name as before.
+    listed.sort_by_key(|(linked, _)| linked.map_or(2, |linked| linked as u8));
+    Ok(Value::Array(
+        listed.into_iter().map(|(_, item)| item).collect(),
+    ))
 }
 
 /// The roles a workspace's node reported when it connected; `None` when unknown.
@@ -440,6 +477,52 @@ fn new_id(conn: &Connection) -> ApiResult<String> {
     }
 }
 
+/// The target of a `delegate` that names no workspace: the only workspace
+/// the assistant's project is linked to. The user still confirms it.
+fn linked_default(app: &App, project: &str) -> ApiResult<Workspace> {
+    let conn = app.db.lock();
+    let links = project_links::links(&conn, project)?;
+    match links.as_slice() {
+        [] => Err(ApiError::new(
+            400,
+            "invalid_input",
+            "Name a workspace, or an earlier delegation to follow up",
+        )),
+        [link] => conn
+            .get_workspace(&link.workspace_id)
+            .ok()
+            .filter(|workspace| workspace.kind == WorkspaceKind::Directory)
+            .ok_or_else(|| {
+                ApiError::new(
+                    404,
+                    "not_found",
+                    format!(
+                        "The workspace linked to this project ({}) no longer exists; name another",
+                        link.workspace_id
+                    ),
+                )
+            }),
+        several => Err(ApiError::new(
+            400,
+            "invalid_input",
+            format!(
+                "This project is linked to several workspaces; name one: {}",
+                several
+                    .iter()
+                    .map(|link| match conn.get_workspace(&link.workspace_id) {
+                        Ok(workspace) => format!(
+                            "{} on {} ({})",
+                            workspace.display_name, workspace.host_id, workspace.id
+                        ),
+                        Err(_) => link.workspace_id.clone(),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        )),
+    }
+}
+
 /// Record a delegation and ask the user in the chat; nothing runs before they approve.
 fn create(app: &App, user: &str, assistant: &Session, input: CreateArgs) -> ApiResult<Delegation> {
     app.db
@@ -489,13 +572,10 @@ fn create(app: &App, user: &str, assistant: &Session, input: CreateArgs) -> ApiR
     } else {
         let reference = input.workspace.as_deref().map(js_trim).unwrap_or_default();
         if reference.is_empty() {
-            return Err(ApiError::new(
-                400,
-                "invalid_input",
-                "Name a workspace, or an earlier delegation to follow up",
-            ));
+            (linked_default(app, &assistant.workspace_id)?, None)
+        } else {
+            (resolve_directory_workspace(app, reference)?, None)
         }
-        (resolve_directory_workspace(app, reference)?, None)
     };
     if !workspace_online(app, &workspace) {
         return Err(ApiError::new(

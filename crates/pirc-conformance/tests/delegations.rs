@@ -287,13 +287,18 @@ async fn wait_for_nodes(api: &Api, count: u64) {
 
 /// Create the chat session `chat-1` and take its control; returns its gateway id.
 async fn open_chat(api: &Api, home: &mut FakeNode, r: &mut Recorder) -> String {
+    open_chat_in(api, home, r, "home:chats").await
+}
+
+/// [`open_chat`] in the chat workspace `workspace`.
+async fn open_chat_in(api: &Api, home: &mut FakeNode, r: &mut Recorder, workspace: &str) -> String {
     let browser = browser_headers();
     let created = api
         .send(
             "POST",
             "/api/sessions",
             &browser,
-            Some(json!({ "workspaceId": "home:chats" })),
+            Some(json!({ "workspaceId": workspace })),
         )
         .await;
     assert_eq!(created.status, 201, "{}", created.body);
@@ -768,4 +773,157 @@ async fn delegation_expiry() {
 
     home.close();
     insta::assert_json_snapshot!("delegation_expiry", r.t.into_value());
+}
+
+/// `PUT /api/workspaces/:id/links`, recorded.
+async fn put_links(api: &Api, r: &mut Recorder, step: &str, workspace: &str, ids: Value) {
+    let response = api
+        .send(
+            "PUT",
+            &format!("/api/workspaces/{workspace}/links"),
+            &browser_headers(),
+            Some(json!({ "workspaceIds": ids })),
+        )
+        .await;
+    r.response(
+        step,
+        &format!("PUT /api/workspaces/{workspace}/links"),
+        &response,
+    );
+}
+
+/// A chat project linked to directory workspaces (plans/assistant.md item 6):
+/// the links its settings edit, the workspace list its assistant gets, and
+/// `delegate` and `memory_search` without a workspace.
+#[tokio::test(flavor = "multi_thread")]
+async fn project_links() {
+    let Some(cluster) = start(None).await else {
+        return;
+    };
+    let api = cluster.api();
+    let browser = browser_headers();
+    let mut r = Recorder {
+        t: Transcript::new(cluster.volatile()),
+        ids: Ids::default(),
+    };
+    let mut home = FakeNode::connect(
+        &api,
+        "home",
+        HOME_TOKEN,
+        json!({ "type": "register", "role": "chat",
+            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
+            "workspaces": [
+                { "id": "chats", "displayName": "Chats", "kind": "chat" },
+                { "id": "trip", "displayName": "Trip", "kind": "chat" },
+            ] }),
+        home_answers(),
+    )
+    .await;
+    let work = FakeNode::connect(
+        &api,
+        "work",
+        WORK_TOKEN,
+        json!({ "type": "register", "role": "node",
+            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
+            "workspaces": [
+                { "id": "repo", "displayName": "Repo", "kind": "directory",
+                    "repo": "github.com/me/repo" },
+                // Before Repo by name: the link puts Repo first.
+                { "id": "site", "displayName": "Atlas", "kind": "directory" },
+            ] }),
+        work_answers(Arc::new(Mutex::new(json!({})))),
+    )
+    .await;
+    wait_for_nodes(&api, 2).await;
+    open_chat_in(&api, &mut home, &mut r, "home:trip").await;
+
+    put_links(
+        &api,
+        &mut r,
+        "the top-level chats have no links",
+        "home:chats",
+        json!(["work:repo"]),
+    )
+    .await;
+    put_links(
+        &api,
+        &mut r,
+        "only directory workspaces",
+        "home:trip",
+        json!(["home:chats"]),
+    )
+    .await;
+    put_links(
+        &api,
+        &mut r,
+        "an unknown workspace",
+        "home:trip",
+        json!(["work:nope"]),
+    )
+    .await;
+    put_links(&api, &mut r, "link Repo", "home:trip", json!(["work:repo"])).await;
+    let listed = api
+        .send("GET", "/api/workspaces/home:trip/links", &browser, None)
+        .await;
+    r.response("the links", "GET /api/workspaces/home:trip/links", &listed);
+
+    for (step, op, args) in [
+        ("linked workspaces first", "assistant.context", json!({})),
+        (
+            "delegate without a workspace goes to the linked one",
+            "delegation.create",
+            json!({ "task": "Fix the flaky test." }),
+        ),
+        (
+            "search the linked workspaces first",
+            "memory.search",
+            json!({ "query": "flaky" }),
+        ),
+        (
+            "nothing in the linked workspaces: every workspace",
+            "memory.search",
+            json!({ "query": "postgres" }),
+        ),
+        (
+            "everywhere skips the links",
+            "memory.search",
+            json!({ "query": "flaky", "everywhere": true }),
+        ),
+    ] {
+        let mut answer = home.op("chat-1", op, args.clone()).await;
+        if op == "delegation.create" {
+            r.ids.learn(&answer["body"]["result"]["id"]);
+        }
+        // A delegation's date is when it was made.
+        if let Some(hits) = answer["body"]["result"]["hits"].as_array_mut() {
+            for hit in hits {
+                hit["date"] = json!("<date>");
+            }
+        }
+        r.note(step, json!({ "op": op, "args": args, "answer": answer }));
+    }
+
+    put_links(
+        &api,
+        &mut r,
+        "link Site too",
+        "home:trip",
+        json!(["work:repo", "work:site"]),
+    )
+    .await;
+    let several = home
+        .op("chat-1", "delegation.create", json!({ "task": "x" }))
+        .await;
+    r.note("with several linked, delegate names one", several);
+
+    // Linked workspaces stay listed while their node is away.
+    work.close();
+    wait_for_nodes(&api, 1).await;
+    r.note(
+        "linked workspaces offline",
+        home.op("chat-1", "assistant.context", json!({})).await,
+    );
+
+    home.close();
+    insta::assert_json_snapshot!("project_links", r.t.into_value());
 }

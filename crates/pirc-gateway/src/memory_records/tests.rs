@@ -486,3 +486,112 @@ fn notes_are_recalled_for_their_owner_only_never_forgotten() {
     assert!(find(&app, ME, &id).unwrap().is_empty());
     assert!(search(&app, ME, "staging", None, None).unwrap().is_empty());
 }
+
+#[test]
+fn a_project_searches_its_linked_workspaces_first() {
+    use crate::db::{Store as _, WorkspaceKind};
+    let (app, _dir) = setup();
+    {
+        let conn = app.db.lock();
+        conn.sync_remote_workspaces(
+            "home",
+            &[
+                ("chats".into(), "Chats".into(), Some(WorkspaceKind::Chat)),
+                ("trip".into(), "Trip".into(), Some(WorkspaceKind::Chat)),
+                ("blog".into(), "Blog".into(), Some(WorkspaceKind::Chat)),
+            ],
+        )
+        .unwrap();
+        conn.sync_remote_workspaces(
+            "n2",
+            &[
+                ("clone".into(), "pirc-clone".into(), None),
+                ("else".into(), "other".into(), None),
+            ],
+        )
+        .unwrap();
+        conn.create_session("n2:clone", "node://n2/c1", "n2", "c1", ME)
+            .unwrap();
+        conn.create_session("n2:else", "node://n2/e1", "n2", "e1", ME)
+            .unwrap();
+        conn.set_workspace_repos("n1", &[("repo".into(), Some("github.com/me/pirc".into()))])
+            .unwrap();
+        conn.set_workspace_repos("n2", &[("clone".into(), Some("github.com/me/pirc".into()))])
+            .unwrap();
+        crate::project_links::set_links(&conn, "home:trip", &["n1:repo".to_owned()]).unwrap();
+    }
+    let feed = |node: &str, key: &str, items: Vec<Value>| {
+        ingest(
+            &app,
+            node,
+            key,
+            0,
+            100,
+            false,
+            &[json!({ "type": "recorded", "items": items })],
+        )
+        .unwrap();
+    };
+    let linked = item("nginx on the linked repository", json!({}));
+    let worktree = item("nginx in its worktree", json!({ "sessionId": "s2" }));
+    let clone = item("nginx on a clone", json!({ "sessionId": "c1" }));
+    let elsewhere = item("nginx and postgres elsewhere", json!({ "sessionId": "e1" }));
+    feed("n1", KEY, vec![linked.clone(), worktree.clone()]);
+    feed("n2", KEY, vec![clone.clone()]);
+    feed("n2", OTHER_KEY, vec![elsewhere.clone()]);
+    let id = |value: &Value| value["id"].as_str().unwrap().to_owned();
+    let sorted = |hits: Vec<Value>| {
+        let mut found = ids(&hits);
+        found.sort();
+        found
+    };
+    let mut in_project = vec![id(&linked), id(&worktree), id(&clone)];
+    in_project.sort();
+    let mut everything = [in_project.clone(), vec![id(&elsewhere)]].concat();
+    everything.sort();
+    let run = |query: &str, workspace: Option<&str>, project: Option<&str>, everywhere: bool| {
+        let (hits, searched) =
+            search_in(&app, ME, query, workspace, Some(20), project, everywhere).unwrap();
+        (sorted(hits), searched)
+    };
+
+    // The linked workspace, its ledger and the clones of its repository.
+    assert_eq!(
+        run("nginx", None, Some("home:trip"), false),
+        (in_project.clone(), Some(Searched::Linked))
+    );
+    // Nothing there: every workspace, said so.
+    assert_eq!(
+        run("postgres", None, Some("home:trip"), false),
+        (vec![id(&elsewhere)], Some(Searched::Everywhere))
+    );
+    assert_eq!(
+        run("redis", None, Some("home:trip"), false),
+        (vec![], Some(Searched::Everywhere))
+    );
+    // Asked for everything, or for one workspace: links play no part.
+    assert_eq!(
+        run("nginx", None, Some("home:trip"), true),
+        (everything.clone(), None)
+    );
+    assert_eq!(
+        run("nginx", Some("n2:else"), Some("home:trip"), false),
+        (vec![id(&elsewhere)], None)
+    );
+    // A project without links, and the top-level chats, search everything.
+    assert_eq!(
+        run("nginx", None, Some("home:blog"), false),
+        (everything.clone(), None)
+    );
+    assert_eq!(
+        run("nginx", None, Some("home:chats"), false),
+        (everything, None)
+    );
+    // Never someone else's.
+    assert!(
+        search_in(&app, OTHER, "nginx", None, None, Some("home:trip"), false)
+            .unwrap()
+            .0
+            .is_empty()
+    );
+}

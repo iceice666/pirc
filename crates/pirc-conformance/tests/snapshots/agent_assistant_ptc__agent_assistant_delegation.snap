@@ -579,15 +579,26 @@ expression: log.into_value()
         "type": "tool_execution_start"
       },
       {
+        "args": {
+          "task": "Somewhere."
+        },
+        "id": "<uuid:5>",
+        "op": "delegation.create",
+        "type": "gateway_request"
+      },
+      {
         "isError": true,
         "parentToolCallId": "d2",
         "result": {
           "content": [
             {
-              "text": "Name a workspace, or pass follows with an earlier delegation id",
+              "text": "Name a workspace, or an earlier delegation to follow up",
               "type": "text"
             }
           ],
+          "details": {
+            "code": "invalid_input"
+          },
           "isError": true
         },
         "toolCallId": "<uuid:4>:op1",
@@ -599,7 +610,7 @@ expression: log.into_value()
         "result": {
           "content": [
             {
-              "text": "[error] OperationFailed: Name a workspace, or pass follows with an earlier delegation id\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
+              "text": "[error] OperationFailed: Name a workspace, or an earlier delegation to follow up\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
               "type": "text"
             }
           ],
@@ -689,7 +700,7 @@ expression: log.into_value()
         "message": {
           "content": [
             {
-              "text": "[error] OperationFailed: Name a workspace, or pass follows with an earlier delegation id\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
+              "text": "[error] OperationFailed: Name a workspace, or an earlier delegation to follow up\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
               "type": "text"
             }
           ],
@@ -781,7 +792,7 @@ expression: log.into_value()
         "message": {
           "content": [
             {
-              "text": "[error] OperationFailed: Name a workspace, or pass follows with an earlier delegation id\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
+              "text": "[error] OperationFailed: Name a workspace, or an earlier delegation to follow up\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
               "type": "text"
             }
           ],
@@ -989,7 +1000,7 @@ expression: log.into_value()
           "task": "Now review it."
         },
         "parentToolCallId": "d3",
-        "toolCallId": "<uuid:5>:op1",
+        "toolCallId": "<uuid:6>:op1",
         "toolName": "delegate",
         "type": "tool_execution_start"
       },
@@ -999,7 +1010,7 @@ expression: log.into_value()
           "role": "reviewer",
           "task": "Now review it."
         },
-        "id": "<uuid:6>",
+        "id": "<uuid:7>",
         "op": "delegation.create",
         "type": "gateway_request"
       },
@@ -1017,7 +1028,7 @@ expression: log.into_value()
             "delegationId": "d87654321"
           }
         },
-        "toolCallId": "<uuid:5>:op1",
+        "toolCallId": "<uuid:6>:op1",
         "toolName": "delegate",
         "type": "tool_execution_end"
       },
@@ -1033,7 +1044,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:5>",
+            "executionId": "<uuid:6>",
             "manifest": [
               "delegate"
             ],
@@ -1042,7 +1053,7 @@ expression: log.into_value()
                 "capability": "delegate",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:5>:op1",
+                "operationId": "<uuid:6>:op1",
                 "outcome": "completed"
               }
             ],
@@ -1059,8 +1070,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:5>",
-                "nodeId": "<uuid:5>:root",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "d3",
@@ -1069,9 +1080,9 @@ expression: log.into_value()
               {
                 "capability": "delegate",
                 "createdAt": "<time>",
-                "executionId": "<uuid:5>",
-                "nodeId": "<uuid:5>:op1",
-                "parentNodeId": "<uuid:5>:root",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
+                "parentNodeId": "<uuid:6>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "d3",
@@ -1081,10 +1092,10 @@ expression: log.into_value()
                 "capability": "delegate",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:5>",
-                "nodeId": "<uuid:5>:op1",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:5>:root",
+                "parentNodeId": "<uuid:6>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "d3",
@@ -1093,8 +1104,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:5>",
-                "nodeId": "<uuid:5>:root",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "d3",
@@ -1120,7 +1131,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:5>",
+            "executionId": "<uuid:6>",
             "manifest": [
               "delegate"
             ],
@@ -1129,7 +1140,7 @@ expression: log.into_value()
                 "capability": "delegate",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:5>:op1",
+                "operationId": "<uuid:6>:op1",
                 "outcome": "completed"
               }
             ],
@@ -1146,8 +1157,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:5>",
-                "nodeId": "<uuid:5>:root",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "d3",
@@ -1156,9 +1167,9 @@ expression: log.into_value()
               {
                 "capability": "delegate",
                 "createdAt": "<time>",
-                "executionId": "<uuid:5>",
-                "nodeId": "<uuid:5>:op1",
-                "parentNodeId": "<uuid:5>:root",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
+                "parentNodeId": "<uuid:6>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "d3",
@@ -1168,10 +1179,10 @@ expression: log.into_value()
                 "capability": "delegate",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:5>",
-                "nodeId": "<uuid:5>:op1",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:5>:root",
+                "parentNodeId": "<uuid:6>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "d3",
@@ -1180,8 +1191,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:5>",
-                "nodeId": "<uuid:5>:root",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "d3",
@@ -1210,7 +1221,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:5>",
+            "executionId": "<uuid:6>",
             "manifest": [
               "delegate"
             ],
@@ -1219,7 +1230,7 @@ expression: log.into_value()
                 "capability": "delegate",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:5>:op1",
+                "operationId": "<uuid:6>:op1",
                 "outcome": "completed"
               }
             ],
@@ -1236,8 +1247,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:5>",
-                "nodeId": "<uuid:5>:root",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "d3",
@@ -1246,9 +1257,9 @@ expression: log.into_value()
               {
                 "capability": "delegate",
                 "createdAt": "<time>",
-                "executionId": "<uuid:5>",
-                "nodeId": "<uuid:5>:op1",
-                "parentNodeId": "<uuid:5>:root",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
+                "parentNodeId": "<uuid:6>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "d3",
@@ -1258,10 +1269,10 @@ expression: log.into_value()
                 "capability": "delegate",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:5>",
-                "nodeId": "<uuid:5>:op1",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:5>:root",
+                "parentNodeId": "<uuid:6>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "d3",
@@ -1270,8 +1281,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:5>",
-                "nodeId": "<uuid:5>:root",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "d3",
@@ -1408,7 +1419,7 @@ expression: log.into_value()
           "workspace": "nowhere"
         },
         "parentToolCallId": "d4",
-        "toolCallId": "<uuid:7>:op1",
+        "toolCallId": "<uuid:8>:op1",
         "toolName": "delegate",
         "type": "tool_execution_start"
       },
@@ -1417,7 +1428,7 @@ expression: log.into_value()
           "task": "x",
           "workspace": "nowhere"
         },
-        "id": "<uuid:8>",
+        "id": "<uuid:9>",
         "op": "delegation.create",
         "type": "gateway_request"
       },
@@ -1436,7 +1447,7 @@ expression: log.into_value()
           },
           "isError": true
         },
-        "toolCallId": "<uuid:7>:op1",
+        "toolCallId": "<uuid:8>:op1",
         "toolName": "delegate",
         "type": "tool_execution_end"
       },
@@ -1452,7 +1463,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:7>",
+            "executionId": "<uuid:8>",
             "manifest": [
               "delegate"
             ],
@@ -1462,7 +1473,7 @@ expression: log.into_value()
                 "delivered": true,
                 "durationMs": "<ms>",
                 "errorCode": "OperationFailed",
-                "operationId": "<uuid:7>:op1",
+                "operationId": "<uuid:8>:op1",
                 "outcome": "failed"
               }
             ],
@@ -1479,8 +1490,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:root",
+                "executionId": "<uuid:8>",
+                "nodeId": "<uuid:8>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "d4",
@@ -1489,9 +1500,9 @@ expression: log.into_value()
               {
                 "capability": "delegate",
                 "createdAt": "<time>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:op1",
-                "parentNodeId": "<uuid:7>:root",
+                "executionId": "<uuid:8>",
+                "nodeId": "<uuid:8>:op1",
+                "parentNodeId": "<uuid:8>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "d4",
@@ -1502,10 +1513,10 @@ expression: log.into_value()
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
                 "errorCode": "OperationFailed",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:op1",
+                "executionId": "<uuid:8>",
+                "nodeId": "<uuid:8>:op1",
                 "outcome": "failed",
-                "parentNodeId": "<uuid:7>:root",
+                "parentNodeId": "<uuid:8>:root",
                 "sequence": 2,
                 "status": "failed",
                 "turnId": "d4",
@@ -1514,8 +1525,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:root",
+                "executionId": "<uuid:8>",
+                "nodeId": "<uuid:8>:root",
                 "sequence": 3,
                 "status": "failed",
                 "turnId": "d4",
@@ -1542,7 +1553,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:7>",
+            "executionId": "<uuid:8>",
             "manifest": [
               "delegate"
             ],
@@ -1552,7 +1563,7 @@ expression: log.into_value()
                 "delivered": true,
                 "durationMs": "<ms>",
                 "errorCode": "OperationFailed",
-                "operationId": "<uuid:7>:op1",
+                "operationId": "<uuid:8>:op1",
                 "outcome": "failed"
               }
             ],
@@ -1569,8 +1580,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:root",
+                "executionId": "<uuid:8>",
+                "nodeId": "<uuid:8>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "d4",
@@ -1579,9 +1590,9 @@ expression: log.into_value()
               {
                 "capability": "delegate",
                 "createdAt": "<time>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:op1",
-                "parentNodeId": "<uuid:7>:root",
+                "executionId": "<uuid:8>",
+                "nodeId": "<uuid:8>:op1",
+                "parentNodeId": "<uuid:8>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "d4",
@@ -1592,10 +1603,10 @@ expression: log.into_value()
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
                 "errorCode": "OperationFailed",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:op1",
+                "executionId": "<uuid:8>",
+                "nodeId": "<uuid:8>:op1",
                 "outcome": "failed",
-                "parentNodeId": "<uuid:7>:root",
+                "parentNodeId": "<uuid:8>:root",
                 "sequence": 2,
                 "status": "failed",
                 "turnId": "d4",
@@ -1604,8 +1615,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:root",
+                "executionId": "<uuid:8>",
+                "nodeId": "<uuid:8>:root",
                 "sequence": 3,
                 "status": "failed",
                 "turnId": "d4",
@@ -1634,7 +1645,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:7>",
+            "executionId": "<uuid:8>",
             "manifest": [
               "delegate"
             ],
@@ -1644,7 +1655,7 @@ expression: log.into_value()
                 "delivered": true,
                 "durationMs": "<ms>",
                 "errorCode": "OperationFailed",
-                "operationId": "<uuid:7>:op1",
+                "operationId": "<uuid:8>:op1",
                 "outcome": "failed"
               }
             ],
@@ -1661,8 +1672,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:root",
+                "executionId": "<uuid:8>",
+                "nodeId": "<uuid:8>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "d4",
@@ -1671,9 +1682,9 @@ expression: log.into_value()
               {
                 "capability": "delegate",
                 "createdAt": "<time>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:op1",
-                "parentNodeId": "<uuid:7>:root",
+                "executionId": "<uuid:8>",
+                "nodeId": "<uuid:8>:op1",
+                "parentNodeId": "<uuid:8>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "d4",
@@ -1684,10 +1695,10 @@ expression: log.into_value()
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
                 "errorCode": "OperationFailed",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:op1",
+                "executionId": "<uuid:8>",
+                "nodeId": "<uuid:8>:op1",
                 "outcome": "failed",
-                "parentNodeId": "<uuid:7>:root",
+                "parentNodeId": "<uuid:8>:root",
                 "sequence": 2,
                 "status": "failed",
                 "turnId": "d4",
@@ -1696,8 +1707,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:root",
+                "executionId": "<uuid:8>",
+                "nodeId": "<uuid:8>:root",
                 "sequence": 3,
                 "status": "failed",
                 "turnId": "d4",
@@ -1834,7 +1845,7 @@ expression: log.into_value()
           "workspace": "work:test"
         },
         "parentToolCallId": "d5",
-        "toolCallId": "<uuid:9>:op1",
+        "toolCallId": "<uuid:10>:op1",
         "toolName": "delegate",
         "type": "tool_execution_start"
       },
@@ -1850,7 +1861,7 @@ expression: log.into_value()
           ],
           "isError": true
         },
-        "toolCallId": "<uuid:9>:op1",
+        "toolCallId": "<uuid:10>:op1",
         "toolName": "delegate",
         "type": "tool_execution_end"
       },
@@ -1866,7 +1877,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:9>",
+            "executionId": "<uuid:10>",
             "manifest": [
               "delegate"
             ],
@@ -1876,7 +1887,7 @@ expression: log.into_value()
                 "delivered": true,
                 "durationMs": "<ms>",
                 "errorCode": "OperationFailed",
-                "operationId": "<uuid:9>:op1",
+                "operationId": "<uuid:10>:op1",
                 "outcome": "failed"
               }
             ],
@@ -1893,8 +1904,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:9>",
-                "nodeId": "<uuid:9>:root",
+                "executionId": "<uuid:10>",
+                "nodeId": "<uuid:10>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "d5",
@@ -1903,9 +1914,9 @@ expression: log.into_value()
               {
                 "capability": "delegate",
                 "createdAt": "<time>",
-                "executionId": "<uuid:9>",
-                "nodeId": "<uuid:9>:op1",
-                "parentNodeId": "<uuid:9>:root",
+                "executionId": "<uuid:10>",
+                "nodeId": "<uuid:10>:op1",
+                "parentNodeId": "<uuid:10>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "d5",
@@ -1916,10 +1927,10 @@ expression: log.into_value()
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
                 "errorCode": "OperationFailed",
-                "executionId": "<uuid:9>",
-                "nodeId": "<uuid:9>:op1",
+                "executionId": "<uuid:10>",
+                "nodeId": "<uuid:10>:op1",
                 "outcome": "failed",
-                "parentNodeId": "<uuid:9>:root",
+                "parentNodeId": "<uuid:10>:root",
                 "sequence": 2,
                 "status": "failed",
                 "turnId": "d5",
@@ -1928,8 +1939,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:9>",
-                "nodeId": "<uuid:9>:root",
+                "executionId": "<uuid:10>",
+                "nodeId": "<uuid:10>:root",
                 "sequence": 3,
                 "status": "failed",
                 "turnId": "d5",
@@ -1956,7 +1967,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:9>",
+            "executionId": "<uuid:10>",
             "manifest": [
               "delegate"
             ],
@@ -1966,7 +1977,7 @@ expression: log.into_value()
                 "delivered": true,
                 "durationMs": "<ms>",
                 "errorCode": "OperationFailed",
-                "operationId": "<uuid:9>:op1",
+                "operationId": "<uuid:10>:op1",
                 "outcome": "failed"
               }
             ],
@@ -1983,8 +1994,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:9>",
-                "nodeId": "<uuid:9>:root",
+                "executionId": "<uuid:10>",
+                "nodeId": "<uuid:10>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "d5",
@@ -1993,9 +2004,9 @@ expression: log.into_value()
               {
                 "capability": "delegate",
                 "createdAt": "<time>",
-                "executionId": "<uuid:9>",
-                "nodeId": "<uuid:9>:op1",
-                "parentNodeId": "<uuid:9>:root",
+                "executionId": "<uuid:10>",
+                "nodeId": "<uuid:10>:op1",
+                "parentNodeId": "<uuid:10>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "d5",
@@ -2006,10 +2017,10 @@ expression: log.into_value()
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
                 "errorCode": "OperationFailed",
-                "executionId": "<uuid:9>",
-                "nodeId": "<uuid:9>:op1",
+                "executionId": "<uuid:10>",
+                "nodeId": "<uuid:10>:op1",
                 "outcome": "failed",
-                "parentNodeId": "<uuid:9>:root",
+                "parentNodeId": "<uuid:10>:root",
                 "sequence": 2,
                 "status": "failed",
                 "turnId": "d5",
@@ -2018,8 +2029,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:9>",
-                "nodeId": "<uuid:9>:root",
+                "executionId": "<uuid:10>",
+                "nodeId": "<uuid:10>:root",
                 "sequence": 3,
                 "status": "failed",
                 "turnId": "d5",
@@ -2048,7 +2059,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:9>",
+            "executionId": "<uuid:10>",
             "manifest": [
               "delegate"
             ],
@@ -2058,7 +2069,7 @@ expression: log.into_value()
                 "delivered": true,
                 "durationMs": "<ms>",
                 "errorCode": "OperationFailed",
-                "operationId": "<uuid:9>:op1",
+                "operationId": "<uuid:10>:op1",
                 "outcome": "failed"
               }
             ],
@@ -2075,8 +2086,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:9>",
-                "nodeId": "<uuid:9>:root",
+                "executionId": "<uuid:10>",
+                "nodeId": "<uuid:10>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "d5",
@@ -2085,9 +2096,9 @@ expression: log.into_value()
               {
                 "capability": "delegate",
                 "createdAt": "<time>",
-                "executionId": "<uuid:9>",
-                "nodeId": "<uuid:9>:op1",
-                "parentNodeId": "<uuid:9>:root",
+                "executionId": "<uuid:10>",
+                "nodeId": "<uuid:10>:op1",
+                "parentNodeId": "<uuid:10>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "d5",
@@ -2098,10 +2109,10 @@ expression: log.into_value()
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
                 "errorCode": "OperationFailed",
-                "executionId": "<uuid:9>",
-                "nodeId": "<uuid:9>:op1",
+                "executionId": "<uuid:10>",
+                "nodeId": "<uuid:10>:op1",
                 "outcome": "failed",
-                "parentNodeId": "<uuid:9>:root",
+                "parentNodeId": "<uuid:10>:root",
                 "sequence": 2,
                 "status": "failed",
                 "turnId": "d5",
@@ -2110,8 +2121,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:9>",
-                "nodeId": "<uuid:9>:root",
+                "executionId": "<uuid:10>",
+                "nodeId": "<uuid:10>:root",
                 "sequence": 3,
                 "status": "failed",
                 "turnId": "d5",
@@ -2245,13 +2256,13 @@ expression: log.into_value()
       {
         "args": {},
         "parentToolCallId": "s1",
-        "toolCallId": "<uuid:10>:op1",
+        "toolCallId": "<uuid:11>:op1",
         "toolName": "delegation_status",
         "type": "tool_execution_start"
       },
       {
         "args": {},
-        "id": "<uuid:11>",
+        "id": "<uuid:12>",
         "op": "delegation.status",
         "type": "gateway_request"
       },
@@ -2271,7 +2282,7 @@ expression: log.into_value()
             ]
           }
         },
-        "toolCallId": "<uuid:10>:op1",
+        "toolCallId": "<uuid:11>:op1",
         "toolName": "delegation_status",
         "type": "tool_execution_end"
       },
@@ -2287,7 +2298,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:10>",
+            "executionId": "<uuid:11>",
             "manifest": [
               "delegation_status"
             ],
@@ -2296,7 +2307,7 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:10>:op1",
+                "operationId": "<uuid:11>:op1",
                 "outcome": "completed"
               }
             ],
@@ -2313,8 +2324,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:10>",
-                "nodeId": "<uuid:10>:root",
+                "executionId": "<uuid:11>",
+                "nodeId": "<uuid:11>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s1",
@@ -2323,9 +2334,9 @@ expression: log.into_value()
               {
                 "capability": "delegation_status",
                 "createdAt": "<time>",
-                "executionId": "<uuid:10>",
-                "nodeId": "<uuid:10>:op1",
-                "parentNodeId": "<uuid:10>:root",
+                "executionId": "<uuid:11>",
+                "nodeId": "<uuid:11>:op1",
+                "parentNodeId": "<uuid:11>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s1",
@@ -2335,10 +2346,10 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:10>",
-                "nodeId": "<uuid:10>:op1",
+                "executionId": "<uuid:11>",
+                "nodeId": "<uuid:11>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:10>:root",
+                "parentNodeId": "<uuid:11>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "s1",
@@ -2347,8 +2358,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:10>",
-                "nodeId": "<uuid:10>:root",
+                "executionId": "<uuid:11>",
+                "nodeId": "<uuid:11>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "s1",
@@ -2374,7 +2385,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:10>",
+            "executionId": "<uuid:11>",
             "manifest": [
               "delegation_status"
             ],
@@ -2383,7 +2394,7 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:10>:op1",
+                "operationId": "<uuid:11>:op1",
                 "outcome": "completed"
               }
             ],
@@ -2400,8 +2411,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:10>",
-                "nodeId": "<uuid:10>:root",
+                "executionId": "<uuid:11>",
+                "nodeId": "<uuid:11>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s1",
@@ -2410,9 +2421,9 @@ expression: log.into_value()
               {
                 "capability": "delegation_status",
                 "createdAt": "<time>",
-                "executionId": "<uuid:10>",
-                "nodeId": "<uuid:10>:op1",
-                "parentNodeId": "<uuid:10>:root",
+                "executionId": "<uuid:11>",
+                "nodeId": "<uuid:11>:op1",
+                "parentNodeId": "<uuid:11>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s1",
@@ -2422,10 +2433,10 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:10>",
-                "nodeId": "<uuid:10>:op1",
+                "executionId": "<uuid:11>",
+                "nodeId": "<uuid:11>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:10>:root",
+                "parentNodeId": "<uuid:11>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "s1",
@@ -2434,8 +2445,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:10>",
-                "nodeId": "<uuid:10>:root",
+                "executionId": "<uuid:11>",
+                "nodeId": "<uuid:11>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "s1",
@@ -2464,7 +2475,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:10>",
+            "executionId": "<uuid:11>",
             "manifest": [
               "delegation_status"
             ],
@@ -2473,7 +2484,7 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:10>:op1",
+                "operationId": "<uuid:11>:op1",
                 "outcome": "completed"
               }
             ],
@@ -2490,8 +2501,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:10>",
-                "nodeId": "<uuid:10>:root",
+                "executionId": "<uuid:11>",
+                "nodeId": "<uuid:11>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s1",
@@ -2500,9 +2511,9 @@ expression: log.into_value()
               {
                 "capability": "delegation_status",
                 "createdAt": "<time>",
-                "executionId": "<uuid:10>",
-                "nodeId": "<uuid:10>:op1",
-                "parentNodeId": "<uuid:10>:root",
+                "executionId": "<uuid:11>",
+                "nodeId": "<uuid:11>:op1",
+                "parentNodeId": "<uuid:11>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s1",
@@ -2512,10 +2523,10 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:10>",
-                "nodeId": "<uuid:10>:op1",
+                "executionId": "<uuid:11>",
+                "nodeId": "<uuid:11>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:10>:root",
+                "parentNodeId": "<uuid:11>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "s1",
@@ -2524,8 +2535,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:10>",
-                "nodeId": "<uuid:10>:root",
+                "executionId": "<uuid:11>",
+                "nodeId": "<uuid:11>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "s1",
@@ -2661,7 +2672,7 @@ expression: log.into_value()
           "id": "d12345678"
         },
         "parentToolCallId": "s2",
-        "toolCallId": "<uuid:12>:op1",
+        "toolCallId": "<uuid:13>:op1",
         "toolName": "delegation_status",
         "type": "tool_execution_start"
       },
@@ -2669,7 +2680,7 @@ expression: log.into_value()
         "args": {
           "id": "d12345678"
         },
-        "id": "<uuid:13>",
+        "id": "<uuid:14>",
         "op": "delegation.status",
         "type": "gateway_request"
       },
@@ -2689,7 +2700,7 @@ expression: log.into_value()
             ]
           }
         },
-        "toolCallId": "<uuid:12>:op1",
+        "toolCallId": "<uuid:13>:op1",
         "toolName": "delegation_status",
         "type": "tool_execution_end"
       },
@@ -2705,7 +2716,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:12>",
+            "executionId": "<uuid:13>",
             "manifest": [
               "delegation_status"
             ],
@@ -2714,7 +2725,7 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:12>:op1",
+                "operationId": "<uuid:13>:op1",
                 "outcome": "completed"
               }
             ],
@@ -2731,8 +2742,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:12>",
-                "nodeId": "<uuid:12>:root",
+                "executionId": "<uuid:13>",
+                "nodeId": "<uuid:13>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s2",
@@ -2741,9 +2752,9 @@ expression: log.into_value()
               {
                 "capability": "delegation_status",
                 "createdAt": "<time>",
-                "executionId": "<uuid:12>",
-                "nodeId": "<uuid:12>:op1",
-                "parentNodeId": "<uuid:12>:root",
+                "executionId": "<uuid:13>",
+                "nodeId": "<uuid:13>:op1",
+                "parentNodeId": "<uuid:13>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s2",
@@ -2753,10 +2764,10 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:12>",
-                "nodeId": "<uuid:12>:op1",
+                "executionId": "<uuid:13>",
+                "nodeId": "<uuid:13>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:12>:root",
+                "parentNodeId": "<uuid:13>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "s2",
@@ -2765,8 +2776,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:12>",
-                "nodeId": "<uuid:12>:root",
+                "executionId": "<uuid:13>",
+                "nodeId": "<uuid:13>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "s2",
@@ -2792,7 +2803,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:12>",
+            "executionId": "<uuid:13>",
             "manifest": [
               "delegation_status"
             ],
@@ -2801,7 +2812,7 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:12>:op1",
+                "operationId": "<uuid:13>:op1",
                 "outcome": "completed"
               }
             ],
@@ -2818,8 +2829,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:12>",
-                "nodeId": "<uuid:12>:root",
+                "executionId": "<uuid:13>",
+                "nodeId": "<uuid:13>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s2",
@@ -2828,9 +2839,9 @@ expression: log.into_value()
               {
                 "capability": "delegation_status",
                 "createdAt": "<time>",
-                "executionId": "<uuid:12>",
-                "nodeId": "<uuid:12>:op1",
-                "parentNodeId": "<uuid:12>:root",
+                "executionId": "<uuid:13>",
+                "nodeId": "<uuid:13>:op1",
+                "parentNodeId": "<uuid:13>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s2",
@@ -2840,10 +2851,10 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:12>",
-                "nodeId": "<uuid:12>:op1",
+                "executionId": "<uuid:13>",
+                "nodeId": "<uuid:13>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:12>:root",
+                "parentNodeId": "<uuid:13>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "s2",
@@ -2852,8 +2863,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:12>",
-                "nodeId": "<uuid:12>:root",
+                "executionId": "<uuid:13>",
+                "nodeId": "<uuid:13>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "s2",
@@ -2882,7 +2893,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:12>",
+            "executionId": "<uuid:13>",
             "manifest": [
               "delegation_status"
             ],
@@ -2891,7 +2902,7 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:12>:op1",
+                "operationId": "<uuid:13>:op1",
                 "outcome": "completed"
               }
             ],
@@ -2908,8 +2919,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:12>",
-                "nodeId": "<uuid:12>:root",
+                "executionId": "<uuid:13>",
+                "nodeId": "<uuid:13>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s2",
@@ -2918,9 +2929,9 @@ expression: log.into_value()
               {
                 "capability": "delegation_status",
                 "createdAt": "<time>",
-                "executionId": "<uuid:12>",
-                "nodeId": "<uuid:12>:op1",
-                "parentNodeId": "<uuid:12>:root",
+                "executionId": "<uuid:13>",
+                "nodeId": "<uuid:13>:op1",
+                "parentNodeId": "<uuid:13>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s2",
@@ -2930,10 +2941,10 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:12>",
-                "nodeId": "<uuid:12>:op1",
+                "executionId": "<uuid:13>",
+                "nodeId": "<uuid:13>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:12>:root",
+                "parentNodeId": "<uuid:13>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "s2",
@@ -2942,8 +2953,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:12>",
-                "nodeId": "<uuid:12>:root",
+                "executionId": "<uuid:13>",
+                "nodeId": "<uuid:13>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "s2",
@@ -3080,7 +3091,7 @@ expression: log.into_value()
           "offset": 5
         },
         "parentToolCallId": "s3",
-        "toolCallId": "<uuid:14>:op1",
+        "toolCallId": "<uuid:15>:op1",
         "toolName": "delegation_status",
         "type": "tool_execution_start"
       },
@@ -3089,7 +3100,7 @@ expression: log.into_value()
           "id": "d12345678",
           "offset": 5
         },
-        "id": "<uuid:15>",
+        "id": "<uuid:16>",
         "op": "delegation.status",
         "type": "gateway_request"
       },
@@ -3109,7 +3120,7 @@ expression: log.into_value()
             ]
           }
         },
-        "toolCallId": "<uuid:14>:op1",
+        "toolCallId": "<uuid:15>:op1",
         "toolName": "delegation_status",
         "type": "tool_execution_end"
       },
@@ -3125,7 +3136,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:14>",
+            "executionId": "<uuid:15>",
             "manifest": [
               "delegation_status"
             ],
@@ -3134,7 +3145,7 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:14>:op1",
+                "operationId": "<uuid:15>:op1",
                 "outcome": "completed"
               }
             ],
@@ -3151,8 +3162,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:14>",
-                "nodeId": "<uuid:14>:root",
+                "executionId": "<uuid:15>",
+                "nodeId": "<uuid:15>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s3",
@@ -3161,9 +3172,9 @@ expression: log.into_value()
               {
                 "capability": "delegation_status",
                 "createdAt": "<time>",
-                "executionId": "<uuid:14>",
-                "nodeId": "<uuid:14>:op1",
-                "parentNodeId": "<uuid:14>:root",
+                "executionId": "<uuid:15>",
+                "nodeId": "<uuid:15>:op1",
+                "parentNodeId": "<uuid:15>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s3",
@@ -3173,10 +3184,10 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:14>",
-                "nodeId": "<uuid:14>:op1",
+                "executionId": "<uuid:15>",
+                "nodeId": "<uuid:15>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:14>:root",
+                "parentNodeId": "<uuid:15>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "s3",
@@ -3185,8 +3196,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:14>",
-                "nodeId": "<uuid:14>:root",
+                "executionId": "<uuid:15>",
+                "nodeId": "<uuid:15>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "s3",
@@ -3212,7 +3223,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:14>",
+            "executionId": "<uuid:15>",
             "manifest": [
               "delegation_status"
             ],
@@ -3221,7 +3232,7 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:14>:op1",
+                "operationId": "<uuid:15>:op1",
                 "outcome": "completed"
               }
             ],
@@ -3238,8 +3249,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:14>",
-                "nodeId": "<uuid:14>:root",
+                "executionId": "<uuid:15>",
+                "nodeId": "<uuid:15>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s3",
@@ -3248,9 +3259,9 @@ expression: log.into_value()
               {
                 "capability": "delegation_status",
                 "createdAt": "<time>",
-                "executionId": "<uuid:14>",
-                "nodeId": "<uuid:14>:op1",
-                "parentNodeId": "<uuid:14>:root",
+                "executionId": "<uuid:15>",
+                "nodeId": "<uuid:15>:op1",
+                "parentNodeId": "<uuid:15>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s3",
@@ -3260,10 +3271,10 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:14>",
-                "nodeId": "<uuid:14>:op1",
+                "executionId": "<uuid:15>",
+                "nodeId": "<uuid:15>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:14>:root",
+                "parentNodeId": "<uuid:15>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "s3",
@@ -3272,8 +3283,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:14>",
-                "nodeId": "<uuid:14>:root",
+                "executionId": "<uuid:15>",
+                "nodeId": "<uuid:15>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "s3",
@@ -3302,7 +3313,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:14>",
+            "executionId": "<uuid:15>",
             "manifest": [
               "delegation_status"
             ],
@@ -3311,7 +3322,7 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:14>:op1",
+                "operationId": "<uuid:15>:op1",
                 "outcome": "completed"
               }
             ],
@@ -3328,8 +3339,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:14>",
-                "nodeId": "<uuid:14>:root",
+                "executionId": "<uuid:15>",
+                "nodeId": "<uuid:15>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s3",
@@ -3338,9 +3349,9 @@ expression: log.into_value()
               {
                 "capability": "delegation_status",
                 "createdAt": "<time>",
-                "executionId": "<uuid:14>",
-                "nodeId": "<uuid:14>:op1",
-                "parentNodeId": "<uuid:14>:root",
+                "executionId": "<uuid:15>",
+                "nodeId": "<uuid:15>:op1",
+                "parentNodeId": "<uuid:15>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s3",
@@ -3350,10 +3361,10 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:14>",
-                "nodeId": "<uuid:14>:op1",
+                "executionId": "<uuid:15>",
+                "nodeId": "<uuid:15>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:14>:root",
+                "parentNodeId": "<uuid:15>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "s3",
@@ -3362,8 +3373,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:14>",
-                "nodeId": "<uuid:14>:root",
+                "executionId": "<uuid:15>",
+                "nodeId": "<uuid:15>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "s3",
@@ -3497,13 +3508,13 @@ expression: log.into_value()
       {
         "args": {},
         "parentToolCallId": "s4",
-        "toolCallId": "<uuid:16>:op1",
+        "toolCallId": "<uuid:17>:op1",
         "toolName": "delegation_status",
         "type": "tool_execution_start"
       },
       {
         "args": {},
-        "id": "<uuid:17>",
+        "id": "<uuid:18>",
         "op": "delegation.status",
         "type": "gateway_request"
       },
@@ -3518,7 +3529,7 @@ expression: log.into_value()
             }
           ]
         },
-        "toolCallId": "<uuid:16>:op1",
+        "toolCallId": "<uuid:17>:op1",
         "toolName": "delegation_status",
         "type": "tool_execution_end"
       },
@@ -3534,7 +3545,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:16>",
+            "executionId": "<uuid:17>",
             "manifest": [
               "delegation_status"
             ],
@@ -3543,7 +3554,7 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:16>:op1",
+                "operationId": "<uuid:17>:op1",
                 "outcome": "completed"
               }
             ],
@@ -3560,8 +3571,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:16>",
-                "nodeId": "<uuid:16>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s4",
@@ -3570,9 +3581,9 @@ expression: log.into_value()
               {
                 "capability": "delegation_status",
                 "createdAt": "<time>",
-                "executionId": "<uuid:16>",
-                "nodeId": "<uuid:16>:op1",
-                "parentNodeId": "<uuid:16>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:op1",
+                "parentNodeId": "<uuid:17>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s4",
@@ -3582,10 +3593,10 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:16>",
-                "nodeId": "<uuid:16>:op1",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:16>:root",
+                "parentNodeId": "<uuid:17>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "s4",
@@ -3594,8 +3605,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:16>",
-                "nodeId": "<uuid:16>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "s4",
@@ -3621,7 +3632,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:16>",
+            "executionId": "<uuid:17>",
             "manifest": [
               "delegation_status"
             ],
@@ -3630,7 +3641,7 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:16>:op1",
+                "operationId": "<uuid:17>:op1",
                 "outcome": "completed"
               }
             ],
@@ -3647,8 +3658,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:16>",
-                "nodeId": "<uuid:16>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s4",
@@ -3657,9 +3668,9 @@ expression: log.into_value()
               {
                 "capability": "delegation_status",
                 "createdAt": "<time>",
-                "executionId": "<uuid:16>",
-                "nodeId": "<uuid:16>:op1",
-                "parentNodeId": "<uuid:16>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:op1",
+                "parentNodeId": "<uuid:17>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s4",
@@ -3669,10 +3680,10 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:16>",
-                "nodeId": "<uuid:16>:op1",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:16>:root",
+                "parentNodeId": "<uuid:17>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "s4",
@@ -3681,8 +3692,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:16>",
-                "nodeId": "<uuid:16>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "s4",
@@ -3711,7 +3722,7 @@ expression: log.into_value()
           "details": {
             "activeMs": "<ms>",
             "consoleTruncated": false,
-            "executionId": "<uuid:16>",
+            "executionId": "<uuid:17>",
             "manifest": [
               "delegation_status"
             ],
@@ -3720,7 +3731,7 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "delivered": true,
                 "durationMs": "<ms>",
-                "operationId": "<uuid:16>:op1",
+                "operationId": "<uuid:17>:op1",
                 "outcome": "completed"
               }
             ],
@@ -3737,8 +3748,8 @@ expression: log.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:16>",
-                "nodeId": "<uuid:16>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s4",
@@ -3747,9 +3758,9 @@ expression: log.into_value()
               {
                 "capability": "delegation_status",
                 "createdAt": "<time>",
-                "executionId": "<uuid:16>",
-                "nodeId": "<uuid:16>:op1",
-                "parentNodeId": "<uuid:16>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:op1",
+                "parentNodeId": "<uuid:17>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s4",
@@ -3759,10 +3770,10 @@ expression: log.into_value()
                 "capability": "delegation_status",
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:16>",
-                "nodeId": "<uuid:16>:op1",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:op1",
                 "outcome": "completed",
-                "parentNodeId": "<uuid:16>:root",
+                "parentNodeId": "<uuid:17>:root",
                 "sequence": 2,
                 "status": "completed",
                 "turnId": "s4",
@@ -3771,8 +3782,8 @@ expression: log.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<ms>",
-                "executionId": "<uuid:16>",
-                "nodeId": "<uuid:16>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:root",
                 "sequence": 3,
                 "status": "completed",
                 "turnId": "s4",
@@ -3900,7 +3911,7 @@ expression: log.into_value()
         "modelId": "fake-model",
         "providerName": "fake",
         "sessionId": "<hex16:1>",
-        "systemPrompt": "You are pirc, the user's personal assistant, chatting with them on one of their machines.\nAnswer directly; use tools when they help, and report what you did and any blockers honestly.\n\nThis chat has its own private working directory; file tools write only to it and explicitly allowed paths, and read anywhere except credential stores and pirc's private state.\n\n## Memory\n\nWhat you remember from earlier chats with this user. It was loaded when this chat started; changes reach new chats only.\n\n- USER is what the user told you about themselves, their preferences and standing rules. They approved every entry: follow it unless they say otherwise now. To change it, call memory_propose_user with their exact words; they approve it in this chat or Settings → Memory.\n- MEMORY holds your own notes from earlier chats. They may be stale: check what can change, and prefer what the user says now. Keep them current with memory_note.\n\n### USER (0/2,000 characters)\n(none yet)\n\n### MEMORY (0/8,000 characters)\n(none yet)\n\n## Workspaces\n\nThe user's repositories you can hand tasks to with delegate. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with memory_search, and open a note's sources with recall.\n[work:test] Test on work\n[lab:x] X on lab (offline)\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- delegation: delegate, delegation_status\n- files: edit, find, grep, ls, read, write\n- memory: memory_note, memory_propose_user, memory_search\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\n### Other capabilities\n\nCall these with the arguments shown. Each result has `text`; `ptc_docs({ names: [...] })` documents its typed fields if a script needs more.\n\n`tools.delegation_status(args?: { id?: string; offset?: number })` — Check on delegations: one with its full result, by id, or the recent ones with their status.\n`tools.memory_note(args: { action: \"add\" | \"replace\" | \"remove\"; id?: string; content?: string; quote?: string })` — Keep a note for your future chats with this user (MEMORY).\n`tools.delegate(args: { workspace?: string; task: string; title?: string; follows?: string; role?: string })` — Hand a task to an agent working in one of the user's workspaces (see ## Workspaces).\n`tools.memory_search(args: { query: string; workspace?: string; limit?: number })` — Search what the user's coding sessions noted in their repositories (workspace memory, from every machine) and what your…\n`tools.memory_propose_user(args: { action: \"add\" | \"replace\" | \"remove\"; id?: string; content?: string; quote: string })` — Propose a change to USER: who the user is, their preferences and their standing rules.\n\nCurrent working directory: <tmp>/workspace",
+        "systemPrompt": "You are pirc, the user's personal assistant, chatting with them on one of their machines.\nAnswer directly; use tools when they help, and report what you did and any blockers honestly.\n\nThis chat has its own private working directory; file tools write only to it and explicitly allowed paths, and read anywhere except credential stores and pirc's private state.\n\n## Memory\n\nWhat you remember from earlier chats with this user. It was loaded when this chat started; changes reach new chats only.\n\n- USER is what the user told you about themselves, their preferences and standing rules. They approved every entry: follow it unless they say otherwise now. To change it, call memory_propose_user with their exact words; they approve it in this chat or Settings → Memory.\n- MEMORY holds your own notes from earlier chats. They may be stale: check what can change, and prefer what the user says now. Keep them current with memory_note.\n\n### USER (0/2,000 characters)\n(none yet)\n\n### MEMORY (0/8,000 characters)\n(none yet)\n\n## Workspaces\n\nThe user's repositories you can hand tasks to with delegate. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with memory_search, and open a note's sources with recall.\n[work:test] Test on work\n[lab:x] X on lab (offline)\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- delegation: delegate, delegation_status\n- files: edit, find, grep, ls, read, write\n- memory: memory_note, memory_propose_user, memory_search\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\n### Other capabilities\n\nCall these with the arguments shown. Each result has `text`; `ptc_docs({ names: [...] })` documents its typed fields if a script needs more.\n\n`tools.delegation_status(args?: { id?: string; offset?: number })` — Check on delegations: one with its full result, by id, or the recent ones with their status.\n`tools.memory_note(args: { action: \"add\" | \"replace\" | \"remove\"; id?: string; content?: string; quote?: string })` — Keep a note for your future chats with this user (MEMORY).\n`tools.delegate(args: { workspace?: string; task: string; title?: string; follows?: string; role?: string })` — Hand a task to an agent working in one of the user's workspaces (see ## Workspaces).\n`tools.memory_propose_user(args: { action: \"add\" | \"replace\" | \"remove\"; id?: string; content?: string; quote: string })` — Propose a change to USER: who the user is, their preferences and their standing rules.\n`tools.memory_search(args: { query: string; workspace?: string; limit?: number; everywhere?: boolean })` — Search what the user's coding sessions noted in their repositories (workspace memory, from every machine) and what your…\n\nCurrent working directory: <tmp>/workspace",
         "thinking": "low",
         "tools": [
           {
@@ -4392,7 +4403,7 @@ expression: log.into_value()
           {
             "content": [
               {
-                "text": "[error] OperationFailed: Name a workspace, or pass follows with an earlier delegation id\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
+                "text": "[error] OperationFailed: Name a workspace, or an earlier delegation to follow up\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
                 "type": "text"
               }
             ],
@@ -4635,7 +4646,7 @@ expression: log.into_value()
           {
             "content": [
               {
-                "text": "[error] OperationFailed: Name a workspace, or pass follows with an earlier delegation id\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
+                "text": "[error] OperationFailed: Name a workspace, or an earlier delegation to follow up\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
                 "type": "text"
               }
             ],
@@ -4757,7 +4768,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:5>",
+              "executionId": "<uuid:6>",
               "manifest": [
                 "delegate"
               ],
@@ -4766,7 +4777,7 @@ expression: log.into_value()
                   "capability": "delegate",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:5>:op1",
+                  "operationId": "<uuid:6>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -4783,8 +4794,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d3",
@@ -4793,9 +4804,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
-                  "parentNodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d3",
@@ -4805,10 +4816,10 @@ expression: log.into_value()
                   "capability": "delegate",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:5>:root",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "d3",
@@ -4817,8 +4828,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "d3",
@@ -4991,7 +5002,7 @@ expression: log.into_value()
           {
             "content": [
               {
-                "text": "[error] OperationFailed: Name a workspace, or pass follows with an earlier delegation id\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
+                "text": "[error] OperationFailed: Name a workspace, or an earlier delegation to follow up\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
                 "type": "text"
               }
             ],
@@ -5113,7 +5124,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:5>",
+              "executionId": "<uuid:6>",
               "manifest": [
                 "delegate"
               ],
@@ -5122,7 +5133,7 @@ expression: log.into_value()
                   "capability": "delegate",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:5>:op1",
+                  "operationId": "<uuid:6>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -5139,8 +5150,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d3",
@@ -5149,9 +5160,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
-                  "parentNodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d3",
@@ -5161,10 +5172,10 @@ expression: log.into_value()
                   "capability": "delegate",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:5>:root",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "d3",
@@ -5173,8 +5184,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "d3",
@@ -5226,7 +5237,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:7>",
+              "executionId": "<uuid:8>",
               "manifest": [
                 "delegate"
               ],
@@ -5236,7 +5247,7 @@ expression: log.into_value()
                   "delivered": true,
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:7>:op1",
+                  "operationId": "<uuid:8>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -5253,8 +5264,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d4",
@@ -5263,9 +5274,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
-                  "parentNodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:op1",
+                  "parentNodeId": "<uuid:8>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d4",
@@ -5276,10 +5287,10 @@ expression: log.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:7>:root",
+                  "parentNodeId": "<uuid:8>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "d4",
@@ -5288,8 +5299,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "d4",
@@ -5462,7 +5473,7 @@ expression: log.into_value()
           {
             "content": [
               {
-                "text": "[error] OperationFailed: Name a workspace, or pass follows with an earlier delegation id\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
+                "text": "[error] OperationFailed: Name a workspace, or an earlier delegation to follow up\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
                 "type": "text"
               }
             ],
@@ -5584,7 +5595,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:5>",
+              "executionId": "<uuid:6>",
               "manifest": [
                 "delegate"
               ],
@@ -5593,7 +5604,7 @@ expression: log.into_value()
                   "capability": "delegate",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:5>:op1",
+                  "operationId": "<uuid:6>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -5610,8 +5621,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d3",
@@ -5620,9 +5631,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
-                  "parentNodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d3",
@@ -5632,10 +5643,10 @@ expression: log.into_value()
                   "capability": "delegate",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:5>:root",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "d3",
@@ -5644,8 +5655,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "d3",
@@ -5697,7 +5708,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:7>",
+              "executionId": "<uuid:8>",
               "manifest": [
                 "delegate"
               ],
@@ -5707,7 +5718,7 @@ expression: log.into_value()
                   "delivered": true,
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:7>:op1",
+                  "operationId": "<uuid:8>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -5724,8 +5735,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d4",
@@ -5734,9 +5745,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
-                  "parentNodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:op1",
+                  "parentNodeId": "<uuid:8>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d4",
@@ -5747,10 +5758,10 @@ expression: log.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:7>:root",
+                  "parentNodeId": "<uuid:8>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "d4",
@@ -5759,8 +5770,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "d4",
@@ -5812,7 +5823,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:9>",
+              "executionId": "<uuid:10>",
               "manifest": [
                 "delegate"
               ],
@@ -5822,7 +5833,7 @@ expression: log.into_value()
                   "delivered": true,
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:9>:op1",
+                  "operationId": "<uuid:10>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -5839,8 +5850,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d5",
@@ -5849,9 +5860,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:op1",
-                  "parentNodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:op1",
+                  "parentNodeId": "<uuid:10>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d5",
@@ -5862,10 +5873,10 @@ expression: log.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:op1",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:9>:root",
+                  "parentNodeId": "<uuid:10>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "d5",
@@ -5874,8 +5885,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "d5",
@@ -6048,7 +6059,7 @@ expression: log.into_value()
           {
             "content": [
               {
-                "text": "[error] OperationFailed: Name a workspace, or pass follows with an earlier delegation id\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
+                "text": "[error] OperationFailed: Name a workspace, or an earlier delegation to follow up\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
                 "type": "text"
               }
             ],
@@ -6170,7 +6181,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:5>",
+              "executionId": "<uuid:6>",
               "manifest": [
                 "delegate"
               ],
@@ -6179,7 +6190,7 @@ expression: log.into_value()
                   "capability": "delegate",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:5>:op1",
+                  "operationId": "<uuid:6>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -6196,8 +6207,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d3",
@@ -6206,9 +6217,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
-                  "parentNodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d3",
@@ -6218,10 +6229,10 @@ expression: log.into_value()
                   "capability": "delegate",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:5>:root",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "d3",
@@ -6230,8 +6241,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "d3",
@@ -6283,7 +6294,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:7>",
+              "executionId": "<uuid:8>",
               "manifest": [
                 "delegate"
               ],
@@ -6293,7 +6304,7 @@ expression: log.into_value()
                   "delivered": true,
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:7>:op1",
+                  "operationId": "<uuid:8>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -6310,8 +6321,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d4",
@@ -6320,9 +6331,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
-                  "parentNodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:op1",
+                  "parentNodeId": "<uuid:8>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d4",
@@ -6333,10 +6344,10 @@ expression: log.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:7>:root",
+                  "parentNodeId": "<uuid:8>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "d4",
@@ -6345,8 +6356,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "d4",
@@ -6398,7 +6409,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:9>",
+              "executionId": "<uuid:10>",
               "manifest": [
                 "delegate"
               ],
@@ -6408,7 +6419,7 @@ expression: log.into_value()
                   "delivered": true,
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:9>:op1",
+                  "operationId": "<uuid:10>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -6425,8 +6436,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d5",
@@ -6435,9 +6446,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:op1",
-                  "parentNodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:op1",
+                  "parentNodeId": "<uuid:10>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d5",
@@ -6448,10 +6459,10 @@ expression: log.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:op1",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:9>:root",
+                  "parentNodeId": "<uuid:10>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "d5",
@@ -6460,8 +6471,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "d5",
@@ -6513,7 +6524,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:10>",
+              "executionId": "<uuid:11>",
               "manifest": [
                 "delegation_status"
               ],
@@ -6522,7 +6533,7 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:10>:op1",
+                  "operationId": "<uuid:11>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -6539,8 +6550,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:root",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s1",
@@ -6549,9 +6560,9 @@ expression: log.into_value()
                 {
                   "capability": "delegation_status",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:op1",
-                  "parentNodeId": "<uuid:10>:root",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:op1",
+                  "parentNodeId": "<uuid:11>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s1",
@@ -6561,10 +6572,10 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:op1",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:10>:root",
+                  "parentNodeId": "<uuid:11>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "s1",
@@ -6573,8 +6584,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:root",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "s1",
@@ -6747,7 +6758,7 @@ expression: log.into_value()
           {
             "content": [
               {
-                "text": "[error] OperationFailed: Name a workspace, or pass follows with an earlier delegation id\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
+                "text": "[error] OperationFailed: Name a workspace, or an earlier delegation to follow up\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
                 "type": "text"
               }
             ],
@@ -6869,7 +6880,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:5>",
+              "executionId": "<uuid:6>",
               "manifest": [
                 "delegate"
               ],
@@ -6878,7 +6889,7 @@ expression: log.into_value()
                   "capability": "delegate",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:5>:op1",
+                  "operationId": "<uuid:6>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -6895,8 +6906,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d3",
@@ -6905,9 +6916,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
-                  "parentNodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d3",
@@ -6917,10 +6928,10 @@ expression: log.into_value()
                   "capability": "delegate",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:5>:root",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "d3",
@@ -6929,8 +6940,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "d3",
@@ -6982,7 +6993,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:7>",
+              "executionId": "<uuid:8>",
               "manifest": [
                 "delegate"
               ],
@@ -6992,7 +7003,7 @@ expression: log.into_value()
                   "delivered": true,
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:7>:op1",
+                  "operationId": "<uuid:8>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -7009,8 +7020,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d4",
@@ -7019,9 +7030,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
-                  "parentNodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:op1",
+                  "parentNodeId": "<uuid:8>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d4",
@@ -7032,10 +7043,10 @@ expression: log.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:7>:root",
+                  "parentNodeId": "<uuid:8>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "d4",
@@ -7044,8 +7055,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "d4",
@@ -7097,7 +7108,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:9>",
+              "executionId": "<uuid:10>",
               "manifest": [
                 "delegate"
               ],
@@ -7107,7 +7118,7 @@ expression: log.into_value()
                   "delivered": true,
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:9>:op1",
+                  "operationId": "<uuid:10>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -7124,8 +7135,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d5",
@@ -7134,9 +7145,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:op1",
-                  "parentNodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:op1",
+                  "parentNodeId": "<uuid:10>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d5",
@@ -7147,10 +7158,10 @@ expression: log.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:op1",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:9>:root",
+                  "parentNodeId": "<uuid:10>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "d5",
@@ -7159,8 +7170,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "d5",
@@ -7212,7 +7223,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:10>",
+              "executionId": "<uuid:11>",
               "manifest": [
                 "delegation_status"
               ],
@@ -7221,7 +7232,7 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:10>:op1",
+                  "operationId": "<uuid:11>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -7238,8 +7249,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:root",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s1",
@@ -7248,9 +7259,9 @@ expression: log.into_value()
                 {
                   "capability": "delegation_status",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:op1",
-                  "parentNodeId": "<uuid:10>:root",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:op1",
+                  "parentNodeId": "<uuid:11>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s1",
@@ -7260,10 +7271,10 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:op1",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:10>:root",
+                  "parentNodeId": "<uuid:11>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "s1",
@@ -7272,8 +7283,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:root",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "s1",
@@ -7325,7 +7336,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:12>",
+              "executionId": "<uuid:13>",
               "manifest": [
                 "delegation_status"
               ],
@@ -7334,7 +7345,7 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:12>:op1",
+                  "operationId": "<uuid:13>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -7351,8 +7362,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:12>",
-                  "nodeId": "<uuid:12>:root",
+                  "executionId": "<uuid:13>",
+                  "nodeId": "<uuid:13>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s2",
@@ -7361,9 +7372,9 @@ expression: log.into_value()
                 {
                   "capability": "delegation_status",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:12>",
-                  "nodeId": "<uuid:12>:op1",
-                  "parentNodeId": "<uuid:12>:root",
+                  "executionId": "<uuid:13>",
+                  "nodeId": "<uuid:13>:op1",
+                  "parentNodeId": "<uuid:13>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s2",
@@ -7373,10 +7384,10 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:12>",
-                  "nodeId": "<uuid:12>:op1",
+                  "executionId": "<uuid:13>",
+                  "nodeId": "<uuid:13>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:12>:root",
+                  "parentNodeId": "<uuid:13>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "s2",
@@ -7385,8 +7396,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:12>",
-                  "nodeId": "<uuid:12>:root",
+                  "executionId": "<uuid:13>",
+                  "nodeId": "<uuid:13>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "s2",
@@ -7559,7 +7570,7 @@ expression: log.into_value()
           {
             "content": [
               {
-                "text": "[error] OperationFailed: Name a workspace, or pass follows with an earlier delegation id\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
+                "text": "[error] OperationFailed: Name a workspace, or an earlier delegation to follow up\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
                 "type": "text"
               }
             ],
@@ -7681,7 +7692,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:5>",
+              "executionId": "<uuid:6>",
               "manifest": [
                 "delegate"
               ],
@@ -7690,7 +7701,7 @@ expression: log.into_value()
                   "capability": "delegate",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:5>:op1",
+                  "operationId": "<uuid:6>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -7707,8 +7718,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d3",
@@ -7717,9 +7728,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
-                  "parentNodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d3",
@@ -7729,10 +7740,10 @@ expression: log.into_value()
                   "capability": "delegate",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:5>:root",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "d3",
@@ -7741,8 +7752,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "d3",
@@ -7794,7 +7805,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:7>",
+              "executionId": "<uuid:8>",
               "manifest": [
                 "delegate"
               ],
@@ -7804,7 +7815,7 @@ expression: log.into_value()
                   "delivered": true,
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:7>:op1",
+                  "operationId": "<uuid:8>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -7821,8 +7832,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d4",
@@ -7831,9 +7842,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
-                  "parentNodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:op1",
+                  "parentNodeId": "<uuid:8>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d4",
@@ -7844,10 +7855,10 @@ expression: log.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:7>:root",
+                  "parentNodeId": "<uuid:8>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "d4",
@@ -7856,8 +7867,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "d4",
@@ -7909,7 +7920,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:9>",
+              "executionId": "<uuid:10>",
               "manifest": [
                 "delegate"
               ],
@@ -7919,7 +7930,7 @@ expression: log.into_value()
                   "delivered": true,
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:9>:op1",
+                  "operationId": "<uuid:10>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -7936,8 +7947,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d5",
@@ -7946,9 +7957,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:op1",
-                  "parentNodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:op1",
+                  "parentNodeId": "<uuid:10>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d5",
@@ -7959,10 +7970,10 @@ expression: log.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:op1",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:9>:root",
+                  "parentNodeId": "<uuid:10>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "d5",
@@ -7971,8 +7982,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "d5",
@@ -8024,7 +8035,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:10>",
+              "executionId": "<uuid:11>",
               "manifest": [
                 "delegation_status"
               ],
@@ -8033,7 +8044,7 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:10>:op1",
+                  "operationId": "<uuid:11>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -8050,8 +8061,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:root",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s1",
@@ -8060,9 +8071,9 @@ expression: log.into_value()
                 {
                   "capability": "delegation_status",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:op1",
-                  "parentNodeId": "<uuid:10>:root",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:op1",
+                  "parentNodeId": "<uuid:11>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s1",
@@ -8072,10 +8083,10 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:op1",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:10>:root",
+                  "parentNodeId": "<uuid:11>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "s1",
@@ -8084,8 +8095,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:root",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "s1",
@@ -8137,7 +8148,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:12>",
+              "executionId": "<uuid:13>",
               "manifest": [
                 "delegation_status"
               ],
@@ -8146,7 +8157,7 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:12>:op1",
+                  "operationId": "<uuid:13>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -8163,8 +8174,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:12>",
-                  "nodeId": "<uuid:12>:root",
+                  "executionId": "<uuid:13>",
+                  "nodeId": "<uuid:13>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s2",
@@ -8173,9 +8184,9 @@ expression: log.into_value()
                 {
                   "capability": "delegation_status",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:12>",
-                  "nodeId": "<uuid:12>:op1",
-                  "parentNodeId": "<uuid:12>:root",
+                  "executionId": "<uuid:13>",
+                  "nodeId": "<uuid:13>:op1",
+                  "parentNodeId": "<uuid:13>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s2",
@@ -8185,10 +8196,10 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:12>",
-                  "nodeId": "<uuid:12>:op1",
+                  "executionId": "<uuid:13>",
+                  "nodeId": "<uuid:13>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:12>:root",
+                  "parentNodeId": "<uuid:13>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "s2",
@@ -8197,8 +8208,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:12>",
-                  "nodeId": "<uuid:12>:root",
+                  "executionId": "<uuid:13>",
+                  "nodeId": "<uuid:13>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "s2",
@@ -8250,7 +8261,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:14>",
+              "executionId": "<uuid:15>",
               "manifest": [
                 "delegation_status"
               ],
@@ -8259,7 +8270,7 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:14>:op1",
+                  "operationId": "<uuid:15>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -8276,8 +8287,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:14>",
-                  "nodeId": "<uuid:14>:root",
+                  "executionId": "<uuid:15>",
+                  "nodeId": "<uuid:15>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s3",
@@ -8286,9 +8297,9 @@ expression: log.into_value()
                 {
                   "capability": "delegation_status",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:14>",
-                  "nodeId": "<uuid:14>:op1",
-                  "parentNodeId": "<uuid:14>:root",
+                  "executionId": "<uuid:15>",
+                  "nodeId": "<uuid:15>:op1",
+                  "parentNodeId": "<uuid:15>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s3",
@@ -8298,10 +8309,10 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:14>",
-                  "nodeId": "<uuid:14>:op1",
+                  "executionId": "<uuid:15>",
+                  "nodeId": "<uuid:15>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:14>:root",
+                  "parentNodeId": "<uuid:15>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "s3",
@@ -8310,8 +8321,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:14>",
-                  "nodeId": "<uuid:14>:root",
+                  "executionId": "<uuid:15>",
+                  "nodeId": "<uuid:15>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "s3",
@@ -8484,7 +8495,7 @@ expression: log.into_value()
           {
             "content": [
               {
-                "text": "[error] OperationFailed: Name a workspace, or pass follows with an earlier delegation id\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
+                "text": "[error] OperationFailed: Name a workspace, or an earlier delegation to follow up\n\n[operations] 0 completed, 1 failed\n\n- delegate: failed (OperationFailed)",
                 "type": "text"
               }
             ],
@@ -8606,7 +8617,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:5>",
+              "executionId": "<uuid:6>",
               "manifest": [
                 "delegate"
               ],
@@ -8615,7 +8626,7 @@ expression: log.into_value()
                   "capability": "delegate",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:5>:op1",
+                  "operationId": "<uuid:6>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -8632,8 +8643,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d3",
@@ -8642,9 +8653,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
-                  "parentNodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d3",
@@ -8654,10 +8665,10 @@ expression: log.into_value()
                   "capability": "delegate",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:op1",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:5>:root",
+                  "parentNodeId": "<uuid:6>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "d3",
@@ -8666,8 +8677,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:5>",
-                  "nodeId": "<uuid:5>:root",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "d3",
@@ -8719,7 +8730,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:7>",
+              "executionId": "<uuid:8>",
               "manifest": [
                 "delegate"
               ],
@@ -8729,7 +8740,7 @@ expression: log.into_value()
                   "delivered": true,
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:7>:op1",
+                  "operationId": "<uuid:8>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -8746,8 +8757,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d4",
@@ -8756,9 +8767,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
-                  "parentNodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:op1",
+                  "parentNodeId": "<uuid:8>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d4",
@@ -8769,10 +8780,10 @@ expression: log.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:7>:root",
+                  "parentNodeId": "<uuid:8>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "d4",
@@ -8781,8 +8792,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:8>",
+                  "nodeId": "<uuid:8>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "d4",
@@ -8834,7 +8845,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:9>",
+              "executionId": "<uuid:10>",
               "manifest": [
                 "delegate"
               ],
@@ -8844,7 +8855,7 @@ expression: log.into_value()
                   "delivered": true,
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:9>:op1",
+                  "operationId": "<uuid:10>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -8861,8 +8872,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "d5",
@@ -8871,9 +8882,9 @@ expression: log.into_value()
                 {
                   "capability": "delegate",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:op1",
-                  "parentNodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:op1",
+                  "parentNodeId": "<uuid:10>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "d5",
@@ -8884,10 +8895,10 @@ expression: log.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:op1",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:9>:root",
+                  "parentNodeId": "<uuid:10>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "d5",
@@ -8896,8 +8907,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:9>",
-                  "nodeId": "<uuid:9>:root",
+                  "executionId": "<uuid:10>",
+                  "nodeId": "<uuid:10>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "d5",
@@ -8949,7 +8960,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:10>",
+              "executionId": "<uuid:11>",
               "manifest": [
                 "delegation_status"
               ],
@@ -8958,7 +8969,7 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:10>:op1",
+                  "operationId": "<uuid:11>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -8975,8 +8986,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:root",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s1",
@@ -8985,9 +8996,9 @@ expression: log.into_value()
                 {
                   "capability": "delegation_status",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:op1",
-                  "parentNodeId": "<uuid:10>:root",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:op1",
+                  "parentNodeId": "<uuid:11>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s1",
@@ -8997,10 +9008,10 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:op1",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:10>:root",
+                  "parentNodeId": "<uuid:11>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "s1",
@@ -9009,8 +9020,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:10>",
-                  "nodeId": "<uuid:10>:root",
+                  "executionId": "<uuid:11>",
+                  "nodeId": "<uuid:11>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "s1",
@@ -9062,7 +9073,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:12>",
+              "executionId": "<uuid:13>",
               "manifest": [
                 "delegation_status"
               ],
@@ -9071,7 +9082,7 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:12>:op1",
+                  "operationId": "<uuid:13>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -9088,8 +9099,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:12>",
-                  "nodeId": "<uuid:12>:root",
+                  "executionId": "<uuid:13>",
+                  "nodeId": "<uuid:13>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s2",
@@ -9098,9 +9109,9 @@ expression: log.into_value()
                 {
                   "capability": "delegation_status",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:12>",
-                  "nodeId": "<uuid:12>:op1",
-                  "parentNodeId": "<uuid:12>:root",
+                  "executionId": "<uuid:13>",
+                  "nodeId": "<uuid:13>:op1",
+                  "parentNodeId": "<uuid:13>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s2",
@@ -9110,10 +9121,10 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:12>",
-                  "nodeId": "<uuid:12>:op1",
+                  "executionId": "<uuid:13>",
+                  "nodeId": "<uuid:13>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:12>:root",
+                  "parentNodeId": "<uuid:13>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "s2",
@@ -9122,8 +9133,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:12>",
-                  "nodeId": "<uuid:12>:root",
+                  "executionId": "<uuid:13>",
+                  "nodeId": "<uuid:13>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "s2",
@@ -9175,7 +9186,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:14>",
+              "executionId": "<uuid:15>",
               "manifest": [
                 "delegation_status"
               ],
@@ -9184,7 +9195,7 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:14>:op1",
+                  "operationId": "<uuid:15>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -9201,8 +9212,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:14>",
-                  "nodeId": "<uuid:14>:root",
+                  "executionId": "<uuid:15>",
+                  "nodeId": "<uuid:15>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s3",
@@ -9211,9 +9222,9 @@ expression: log.into_value()
                 {
                   "capability": "delegation_status",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:14>",
-                  "nodeId": "<uuid:14>:op1",
-                  "parentNodeId": "<uuid:14>:root",
+                  "executionId": "<uuid:15>",
+                  "nodeId": "<uuid:15>:op1",
+                  "parentNodeId": "<uuid:15>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s3",
@@ -9223,10 +9234,10 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:14>",
-                  "nodeId": "<uuid:14>:op1",
+                  "executionId": "<uuid:15>",
+                  "nodeId": "<uuid:15>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:14>:root",
+                  "parentNodeId": "<uuid:15>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "s3",
@@ -9235,8 +9246,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:14>",
-                  "nodeId": "<uuid:14>:root",
+                  "executionId": "<uuid:15>",
+                  "nodeId": "<uuid:15>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "s3",
@@ -9288,7 +9299,7 @@ expression: log.into_value()
             "details": {
               "activeMs": "<ms>",
               "consoleTruncated": false,
-              "executionId": "<uuid:16>",
+              "executionId": "<uuid:17>",
               "manifest": [
                 "delegation_status"
               ],
@@ -9297,7 +9308,7 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "delivered": true,
                   "durationMs": "<ms>",
-                  "operationId": "<uuid:16>:op1",
+                  "operationId": "<uuid:17>:op1",
                   "outcome": "completed"
                 }
               ],
@@ -9314,8 +9325,8 @@ expression: log.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:16>",
-                  "nodeId": "<uuid:16>:root",
+                  "executionId": "<uuid:17>",
+                  "nodeId": "<uuid:17>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s4",
@@ -9324,9 +9335,9 @@ expression: log.into_value()
                 {
                   "capability": "delegation_status",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:16>",
-                  "nodeId": "<uuid:16>:op1",
-                  "parentNodeId": "<uuid:16>:root",
+                  "executionId": "<uuid:17>",
+                  "nodeId": "<uuid:17>:op1",
+                  "parentNodeId": "<uuid:17>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s4",
@@ -9336,10 +9347,10 @@ expression: log.into_value()
                   "capability": "delegation_status",
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:16>",
-                  "nodeId": "<uuid:16>:op1",
+                  "executionId": "<uuid:17>",
+                  "nodeId": "<uuid:17>:op1",
                   "outcome": "completed",
-                  "parentNodeId": "<uuid:16>:root",
+                  "parentNodeId": "<uuid:17>:root",
                   "sequence": 2,
                   "status": "completed",
                   "turnId": "s4",
@@ -9348,8 +9359,8 @@ expression: log.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<ms>",
-                  "executionId": "<uuid:16>",
-                  "nodeId": "<uuid:16>:root",
+                  "executionId": "<uuid:17>",
+                  "nodeId": "<uuid:17>:root",
                   "sequence": 3,
                   "status": "completed",
                   "turnId": "s4",

@@ -22,6 +22,7 @@ pub enum Op {
         query: String,
         workspace: Option<String>,
         limit: Option<i64>,
+        everywhere: bool,
     },
     Recall {
         id: String,
@@ -146,7 +147,7 @@ fn parse_propose(args: &Value) -> Result<ProposeArgs, ()> {
 }
 
 fn parse_search(args: &Value) -> Result<Op, ()> {
-    let object = strict(args, &["query", "workspace", "limit"]).ok_or(())?;
+    let object = strict(args, &["query", "workspace", "limit", "everywhere"]).ok_or(())?;
     Ok(Op::Search {
         query: required(object, "query", |value| {
             string(value, 1, 500).map(str::to_owned)
@@ -157,6 +158,7 @@ fn parse_search(args: &Value) -> Result<Op, ()> {
         limit: optional(object, "limit", |value| {
             int(value).filter(|n| (1..=20).contains(n))
         })?,
+        everywhere: optional(object, "everywhere", Value::as_bool)?.unwrap_or(false),
     })
 }
 
@@ -216,7 +218,10 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             result.insert("enabled".into(), json!(true));
             result.insert("capabilities".into(), json!(capabilities));
             result.extend(memory);
-            result.insert("workspaces".into(), crate::delegations::workspaces(app)?);
+            result.insert(
+                "workspaces".into(),
+                crate::delegations::workspaces(app, Some(&context.workspace.id))?,
+            );
             Ok(Value::Object(result))
         }
         Op::Note(args) => {
@@ -269,10 +274,24 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             query,
             workspace,
             limit,
+            everywhere,
         } => {
             require_chat(context)?;
-            let hits = memory_records::search(app, user, &query, workspace.as_deref(), limit)?;
-            Ok(json!({ "hits": hits }))
+            // In a project linked to workspaces, those (and their clones) first.
+            let (hits, searched) = memory_records::search_in(
+                app,
+                user,
+                &query,
+                workspace.as_deref(),
+                limit,
+                Some(&context.workspace.id),
+                everywhere,
+            )?;
+            let mut result = json!({ "hits": hits });
+            if let Some(searched) = searched {
+                result["searched"] = json!(searched.name());
+            }
+            Ok(result)
         }
         Op::Recall { id } => {
             require_chat(context)?;

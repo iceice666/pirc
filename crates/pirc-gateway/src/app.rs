@@ -265,6 +265,10 @@ pub fn router(app: AppState) -> Router {
             get(routes::get_capabilities).patch(routes::patch_capabilities),
         )
         .route(
+            "/api/workspaces/{workspace_id}/links",
+            get(routes::get_links).put(routes::put_links),
+        )
+        .route(
             "/api/workspaces/{workspace_id}/instructions",
             get(routes::get_instructions).patch(routes::patch_instructions),
         )
@@ -340,6 +344,8 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("PUT", "/api/assistant/prompts/{name}"),
     ("GET", "/api/workspaces/{workspace_id}/capabilities"),
     ("PATCH", "/api/workspaces/{workspace_id}/capabilities"),
+    ("GET", "/api/workspaces/{workspace_id}/links"),
+    ("PUT", "/api/workspaces/{workspace_id}/links"),
     ("GET", "/api/workspaces/{workspace_id}/instructions"),
     ("PATCH", "/api/workspaces/{workspace_id}/instructions"),
     ("GET", "/api/workspaces/{workspace_id}/project-config"),

@@ -170,6 +170,44 @@ fn renders_clones_by_their_repository() {
 }
 
 #[test]
+fn renders_the_workspaces_linked_to_a_project() {
+    let workspaces = render_workspaces(&[
+        json!({ "id": "work:pirc", "name": "pirc", "node": "work", "online": true,
+            "repo": "github.com/me/pirc", "linked": "workspace" }),
+        json!({ "id": "work:gone", "name": "gone", "node": "work", "online": false,
+            "linked": "workspace", "removed": true }),
+        json!({ "id": "lab:pirc", "name": "pirc", "node": "lab", "online": false,
+            "repo": "github.com/me/pirc", "linked": "repository" }),
+        json!({ "id": "lab:notes", "name": "notes", "node": "lab", "online": true }),
+    ]);
+    assert_eq!(
+        workspaces,
+        "## Workspaces\n\nThe user's repositories you can hand tasks to with delegate. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with memory_search, and open a note's sources with recall. Workspaces showing the same repository are clones of it: a search in one also finds the others' notes. A search that names no workspace looks in the ones linked to this project (and their clones) first.\n\nThe user linked this project to the workspaces marked “linked to this project”: it is about them. Name the one you mean when you use delegate. You can still hand tasks to any workspace, and the user approves every delegation.\n[work:pirc] pirc on work, repository github.com/me/pirc · linked to this project\n[work:gone] gone on work (removed from its node) · linked to this project\n[lab:pirc] pirc on lab, repository github.com/me/pirc (offline) · a clone of a repository linked to this project\n[lab:notes] notes on lab"
+    );
+    let one = render_workspaces(&[
+        json!({ "id": "work:pirc", "name": "pirc", "node": "work", "linked": "workspace" }),
+        json!({ "id": "lab:notes", "name": "notes", "node": "lab" }),
+    ]);
+    assert!(
+        one.contains("delegate without a workspace goes to that one."),
+        "{one}"
+    );
+    // Without memory_search, nothing about searching; the links stay.
+    let shown = present_section(
+        &workspaces,
+        &Capabilities::from_value(&json!({ "memory_search": false })),
+    );
+    assert!(!shown.contains("search"), "{shown}");
+    assert!(shown.contains("· linked to this project"), "{shown}");
+    // Without delegation, the whole section goes.
+    let shown = present_section(
+        &format!("## MEMORY\n\n{workspaces}"),
+        &Capabilities::from_value(&json!({ "delegation": false })),
+    );
+    assert_eq!(shown, "## MEMORY");
+}
+
+#[test]
 fn renders_user_for_coding_sessions() {
     assert_eq!(render_user(&[]), "");
     let text = render_user(&[

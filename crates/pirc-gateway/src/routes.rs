@@ -279,6 +279,36 @@ pub async fn patch_capabilities(
     Ok(ok(json!({ "capabilities": capabilities })))
 }
 
+/// The workspaces a chat project is linked to (plans/assistant.md item 6).
+pub async fn get_links(State(app): State<AppState>, Path(workspace_id): Path<String>) -> Handled {
+    let links = crate::project_links::project_links(&app.db.lock(), &workspace_id)?;
+    Ok(ok(crate::project_links::view(&app, &links)?))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct LinksBody {
+    workspace_ids: Vec<String>,
+}
+
+/// Replace a project's links: `delegate` and `memory_search` follow at once,
+/// the workspace list of chats started from now on.
+pub async fn put_links(
+    State(app): State<AppState>,
+    Path(workspace_id): Path<String>,
+    ReqBody(body): ReqBody,
+) -> Handled {
+    let LinksBody { workspace_ids } = body.parse()?;
+    if workspace_ids.len() > 4 * crate::project_links::MAX_LINKS {
+        return Err(ApiError::new(400, "invalid_input", "Too many workspaces").into());
+    }
+    for id in &workspace_ids {
+        length_within(id, 1, 300)?;
+    }
+    let links = crate::project_links::set_links(&app.db.lock(), &workspace_id, &workspace_ids)?;
+    Ok(ok(crate::project_links::view(&app, &links)?))
+}
+
 /// The node and node-local URL of a workspace's `rest`, if it is `kind`.
 fn workspace_on_node(
     app: &AppState,

@@ -274,6 +274,13 @@ async fn agent_assistant_delegation() {
                 json!({ "id": "d12345678", "title": "Fix build", "workspace": "Test on work",
                 "status": "pending_approval" }),
             ),
+            // No workspace and no links: the gateway asks for one.
+            fail(
+                400,
+                "invalid_input",
+                "Name a workspace, or an earlier delegation to follow up",
+                None,
+            ),
             ok(
                 json!({ "id": "d87654321", "title": "Review", "workspace": "Test on work",
                 "status": "pending_approval", "role": "reviewer" }),
@@ -399,4 +406,62 @@ async fn agent_assistant_search_and_recall() {
     log.turn(&mut agent, "prompt", "what did we decide about deploys?")
         .await;
     insta::assert_json_snapshot!("agent_assistant_search_and_recall", log.into_value());
+}
+
+/// In a project linked to workspaces: the list marks them, `delegate` may
+/// leave the workspace out, and `memory_search` says where it looked.
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_assistant_project_links() {
+    let Some(mut agent) = AgentRun::start(chat("assistant")).await else {
+        return;
+    };
+    let mut log = Log::new(&agent);
+    answer(
+        &agent,
+        "assistant.context",
+        [ok(memory(json!({ "workspaces": [
+            { "id": "work:test", "name": "Test", "node": "work", "online": true,
+                "repo": "github.com/me/test", "linked": "workspace" },
+            { "id": "lab:test", "name": "Test", "node": "lab", "online": false,
+                "repo": "github.com/me/test", "linked": "repository" },
+            { "id": "lab:x", "name": "X", "node": "lab", "online": true }] })))],
+    );
+    answer(
+        &agent,
+        "delegation.create",
+        [ok(
+            json!({ "id": "d12345678", "title": "Fix build", "workspace": "Test on work",
+            "status": "pending_approval" }),
+        )],
+    );
+    answer(
+        &agent,
+        "memory.search",
+        [
+            ok(json!({ "searched": "linked", "hits": [
+                { "id": "abcdefabcdef", "kind": "workspace", "workspace": "Test on lab",
+                  "date": "2026-09-27 10:05", "status": "active",
+                  "content": "The build needs Node 22." }] })),
+            ok(json!({ "searched": "everywhere", "hits": [
+                { "id": "bbbbbbbbbbbb", "kind": "workspace", "workspace": "X on lab",
+                  "date": "2026-09-01 09:00", "status": "active", "content": "Postgres 17." }] })),
+            ok(json!({ "searched": "everywhere", "hits": [] })),
+            ok(json!({ "hits": [] })),
+        ],
+    );
+    agent.push([
+        call("d1", "delegate", json!({ "task": "Fix the build." })),
+        call("q1", "memory_search", json!({ "query": "build" })),
+        call("q2", "memory_search", json!({ "query": "postgres" })),
+        call("q3", "memory_search", json!({ "query": "redis" })),
+        call(
+            "q4",
+            "memory_search",
+            json!({ "query": "redis", "everywhere": true }),
+        ),
+        text("Asked."),
+    ]);
+    log.turn(&mut agent, "prompt", "fix the build of this project")
+        .await;
+    insta::assert_json_snapshot!("agent_assistant_project_links", log.into_value());
 }
