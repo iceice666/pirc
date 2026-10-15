@@ -17,10 +17,21 @@ use crate::error::{ApiError, ApiResult};
 use crate::util::{new_id, now_ms, safe_json};
 
 /// `PRAGMA user_version` of the Rust schema. The TS gateway's migrations
-/// numbered 1 to 19; the Rust line starts far above them, so a TS-era
-/// database is recognized and refused rather than misread.
-pub const SCHEMA_VERSION: i64 = 1000;
+/// numbered 1 to 19; the Rust line starts far above them, at
+/// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
+/// rather than misread.
+pub const SCHEMA_VERSION: i64 = 1001;
+/// The first Rust schema; later ones are reached through [`MIGRATIONS`].
+const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = include_str!("schema.sql");
+/// Each migration takes a database from the version before it to its own;
+/// `schema.sql` is always the newest whole.
+const MIGRATIONS: &[(i64, &str)] = &[(
+    // Repository identity by normalized `origin` (plans/assistant.md item 4).
+    1001,
+    "ALTER TABLE workspaces ADD COLUMN repo TEXT;
+     ALTER TABLE memory_records ADD COLUMN repo TEXT;",
+)];
 
 /// Placeholder name of a new session until the agent's title replaces it.
 pub const PLACEHOLDER_SESSION_NAME: &str = "New session";
@@ -80,7 +91,7 @@ pub fn refuse_typescript_database(path: &Path) -> Result<(), String> {
     let version: i64 = connection
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .map_err(|error| format!("{}: {error}", path.display()))?;
-    if (1..SCHEMA_VERSION).contains(&version) {
+    if (1..FIRST_SCHEMA_VERSION).contains(&version) {
         return Err(typescript_era(path));
     }
     Ok(())
@@ -115,8 +126,11 @@ fn create_schema(connection: &Connection, path: &Path) -> Result<(), String> {
     if version == SCHEMA_VERSION {
         return Ok(());
     }
-    if (1..SCHEMA_VERSION).contains(&version) {
+    if (1..FIRST_SCHEMA_VERSION).contains(&version) {
         return Err(typescript_era(path));
+    }
+    if (FIRST_SCHEMA_VERSION..SCHEMA_VERSION).contains(&version) {
+        return migrate(connection, version).map_err(describe);
     }
     if version > SCHEMA_VERSION {
         return Err(format!(
@@ -138,6 +152,16 @@ fn create_schema(connection: &Connection, path: &Path) -> Result<(), String> {
             "BEGIN; {SCHEMA}\nPRAGMA user_version = {SCHEMA_VERSION}; COMMIT;"
         ))
         .map_err(describe)
+}
+
+/// Bring an older Rust schema up to date, one migration per transaction.
+fn migrate(connection: &Connection, from: i64) -> rusqlite::Result<()> {
+    for (version, sql) in MIGRATIONS.iter().filter(|(version, _)| *version > from) {
+        connection.execute_batch(&format!(
+            "BEGIN; {sql}\nPRAGMA user_version = {version}; COMMIT;"
+        ))?;
+    }
+    Ok(())
 }
 
 /// Storage failures are logged and become a plain 500.
@@ -183,6 +207,9 @@ pub struct Workspace {
     pub display_name: String,
     pub defaults: Value,
     pub kind: WorkspaceKind,
+    /// Its repository's normalized `origin`, as its node last reported it.
+    #[serde(skip)]
+    pub repo: Option<String>,
 }
 
 impl Workspace {
@@ -193,6 +220,7 @@ impl Workspace {
             display_name: row.get("display_name")?,
             defaults: safe_json(&row.get::<_, String>("defaults_json")?, json!({})),
             kind: WorkspaceKind::from_column(&row.get::<_, String>("kind")?),
+            repo: row.get("repo")?,
         })
     }
 
@@ -461,6 +489,13 @@ pub trait Store {
         node_id: &str,
         workspaces: &[(String, String, Option<WorkspaceKind>)],
     ) -> ApiResult<()>;
+    /// Record the repositories a node reported for its workspaces (local
+    /// ids), and give their mirrored notes that had none the same.
+    fn set_workspace_repos(
+        &self,
+        node_id: &str,
+        repos: &[(String, Option<String>)],
+    ) -> ApiResult<()>;
     fn list_workspaces(&self) -> ApiResult<Vec<Workspace>>;
     fn get_workspace(&self, workspace_id: &str) -> ApiResult<Workspace>;
     fn get_workspace_capabilities(&self, workspace_id: &str) -> ApiResult<Capabilities>;
@@ -649,6 +684,32 @@ impl Store for Connection {
                     now_ms(),
                     kind.unwrap_or(WorkspaceKind::Directory).as_str(),
                 ])?;
+            }
+            Ok(())
+        })
+    }
+
+    fn set_workspace_repos(
+        &self,
+        node_id: &str,
+        repos: &[(String, Option<String>)],
+    ) -> ApiResult<()> {
+        atomic(self, |tx| {
+            for (id, repo) in repos {
+                let id = format!("{node_id}:{id}");
+                let repo = repo
+                    .as_deref()
+                    .filter(|repo| pirc_protocol::valid_repo(repo));
+                tx.execute(
+                    "UPDATE workspaces SET repo=? WHERE id=? AND kind='directory'",
+                    params![repo, id],
+                )?;
+                if let Some(repo) = repo {
+                    tx.execute(
+                        "UPDATE memory_records SET repo=? WHERE workspace_id=? AND repo IS NULL AND status!='forgotten'",
+                        params![repo, id],
+                    )?;
+                }
             }
             Ok(())
         })
@@ -1178,6 +1239,84 @@ mod tests {
         let error = Db::open(&path).err().unwrap();
         assert!(error.contains("TypeScript gateway"), "{error}");
         assert!(error.contains("upgrades.md"), "{error}");
+    }
+
+    /// Column names and types of every table, as `PRAGMA table_info` lists them.
+    fn columns(conn: &Connection) -> Vec<String> {
+        let tables: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let mut out = Vec::new();
+        for table in tables {
+            let mut statement = conn
+                .prepare(&format!(
+                    "SELECT name, type FROM pragma_table_info('{table}')"
+                ))
+                .unwrap();
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(format!(
+                        "{table}.{}:{}",
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?
+                    ))
+                })
+                .unwrap();
+            out.extend(rows.map(Result::unwrap));
+        }
+        out
+    }
+
+    #[test]
+    fn migrates_the_first_rust_schema() {
+        let first = SCHEMA
+            .replace(
+                ",\n  -- The repository's normalized origin (pirc_protocol::normalize_origin), as the node reports it.\n  repo TEXT\n",
+                "\n",
+            )
+            .replace(
+                "  -- Its workspace's repo when recorded, so clones find each other's notes.\n  repo TEXT,\n",
+                "",
+            );
+        assert!(
+            !first.contains("repo TEXT"),
+            "schema.sql changed: update this test"
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("gateway.sqlite");
+        let old = Connection::open(&path).unwrap();
+        old.execute_batch(&format!(
+            "BEGIN; {first}\nPRAGMA user_version = {FIRST_SCHEMA_VERSION}; COMMIT;"
+        ))
+        .unwrap();
+        old.execute(
+            "INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at) VALUES ('n1:w','n1','W','node://n1/w','{}',0)",
+            [],
+        )
+        .unwrap();
+        drop(old);
+
+        let db = Db::open(&path).unwrap();
+        let conn = db.lock();
+        let version: i64 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        let workspace = conn.get_workspace("n1:w").unwrap();
+        assert_eq!(
+            (workspace.display_name.as_str(), workspace.repo),
+            ("W", None)
+        );
+        // The same tables and columns as a new database.
+        assert_eq!(columns(&conn), columns(&Db::memory().lock()));
+        drop(conn);
+        drop(db);
+        // And it stays at the new version when opened again.
+        drop(Db::open(&path).unwrap());
     }
 
     #[test]

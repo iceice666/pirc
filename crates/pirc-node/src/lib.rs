@@ -59,6 +59,7 @@ pub mod models;
 pub mod node;
 pub mod panels;
 pub mod recap;
+pub mod repo;
 pub mod router;
 pub mod runner;
 pub mod sandbox;

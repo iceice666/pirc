@@ -645,14 +645,21 @@ fn registration(node: &Node) -> Registration {
             .into_iter()
             .filter(|workspace| workspace.host_id == node.config.node_id)
             .map(|workspace| {
-                let roles = (workspace.kind == WorkspaceKind::Directory)
+                let directory = workspace.kind == WorkspaceKind::Directory;
+                let roles = directory
                     .then(|| workspace_roles(&node.config, &workspace.canonical_path))
+                    .flatten();
+                let repo = directory
+                    .then(|| {
+                        crate::repo::workspace_repo(std::path::Path::new(&workspace.canonical_path))
+                    })
                     .flatten();
                 RegisteredWorkspace {
                     id: workspace.id,
                     display_name: workspace.display_name,
                     kind: Some(workspace.kind),
                     roles,
+                    repo,
                 }
             })
             .collect(),

@@ -208,19 +208,31 @@ pub fn render_workspaces(workspaces: &[Value]) -> String {
     if workspaces.is_empty() {
         return String::new();
     }
+    let repos = workspaces
+        .iter()
+        .any(|workspace| workspace.get("repo").is_some_and(Value::is_string));
     let mut lines = vec![
         "## Workspaces".to_owned(),
         String::new(),
         format!(
-            "The user's repositories you can hand tasks to with {DELEGATE_TOOL}. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with {SEARCH_TOOL}, and open a note's sources with recall."
+            "The user's repositories you can hand tasks to with {DELEGATE_TOOL}. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with {SEARCH_TOOL}, and open a note's sources with recall.{}",
+            if repos {
+                " Workspaces showing the same repository are clones of it: a search in one also finds the others' notes."
+            } else {
+                ""
+            }
         ),
     ];
     for workspace in workspaces {
         let line = format!(
-            "[{}] {} on {}{}",
+            "[{}] {} on {}{}{}",
             string(workspace.get("id")),
             string(workspace.get("name")),
             string(workspace.get("node")),
+            match workspace.get("repo").and_then(Value::as_str) {
+                Some(repo) => format!(", repository {repo}"),
+                None => String::new(),
+            },
             if workspace.get("online") == Some(&Value::Bool(false)) {
                 " (offline)"
             } else {
@@ -865,7 +877,7 @@ impl AssistantTool {
                     "type": "object",
                     "properties": {
                         "query": param("Words to look for, separated by spaces."),
-                        "workspace": param("Only this workspace: its id, or its name if no other workspace has it."),
+                        "workspace": param("Only this workspace and other clones of its repository: its id, or its name if no other workspace has it."),
                         "limit": { "type": "number", "description": "At most this many results (1 to 20, default 8)." },
                     },
                     "required": ["query"],

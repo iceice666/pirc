@@ -2781,6 +2781,107 @@ expression: t.into_value()
   },
   {
     "observed": {
+      "answer": {
+        "body": {
+          "result": {
+            "capabilities": {
+              "delegation": true,
+              "memory_search": true,
+              "remote_recall": true,
+              "schedules": true,
+              "version": 1,
+              "web_search": false
+            },
+            "enabled": true,
+            "notes": [
+              {
+                "content": "The pirc repo lives on m5pro",
+                "id": "<n1>",
+                "revision": 5,
+                "updatedAt": "<epoch-ms>"
+              },
+              {
+                "content": "token ghp_[REDACTED]",
+                "id": "<n2>",
+                "revision": 1,
+                "updatedAt": "<epoch-ms>"
+              },
+              {
+                "content": "Drafted in the other chat",
+                "id": "<n4>",
+                "revision": 1,
+                "updatedAt": "<epoch-ms>"
+              }
+            ],
+            "pendingProposals": 0,
+            "proposalDecisions": [
+              {
+                "action": "add",
+                "decidedAt": "<epoch-ms>",
+                "id": "<p5>",
+                "status": "approved",
+                "targetId": "<u8>"
+              },
+              {
+                "action": "add",
+                "decidedAt": "<epoch-ms>",
+                "id": "<p7>",
+                "status": "rejected",
+                "targetId": null
+              },
+              {
+                "action": "replace",
+                "decidedAt": "<epoch-ms>",
+                "id": "<p9>",
+                "status": "approved",
+                "targetId": "<u8>"
+              },
+              {
+                "action": "add",
+                "decidedAt": "<epoch-ms>",
+                "id": "<p11>",
+                "status": "approved",
+                "targetId": "<u12>"
+              }
+            ],
+            "usage": {
+              "note": {
+                "max": 120,
+                "used": 73
+              },
+              "user": {
+                "max": 80,
+                "used": 19
+              }
+            },
+            "user": [
+              {
+                "content": "Answers in English.",
+                "id": "<u12>",
+                "revision": 1,
+                "updatedAt": "<epoch-ms>"
+              }
+            ],
+            "workspaces": [
+              {
+                "id": "dev:repo",
+                "name": "Repo",
+                "node": "dev",
+                "online": true,
+                "repo": "github.com/me/repo"
+              }
+            ]
+          }
+        },
+        "status": 200
+      },
+      "op": "assistant.context",
+      "session": "remote-a"
+    },
+    "step": "the assistant sees the workspace's repository"
+  },
+  {
+    "observed": {
       "ledgerKey": "<hex16:1>",
       "type": "memory_mirror_ack",
       "watermark": 120

@@ -148,6 +148,28 @@ fn renders_memory_and_workspaces() {
 }
 
 #[test]
+fn renders_clones_by_their_repository() {
+    let workspaces = render_workspaces(&[
+        json!({ "id": "work:pirc", "name": "pirc", "node": "work", "online": true,
+            "repo": "github.com/me/pirc" }),
+        json!({ "id": "lab:pirc", "name": "pirc", "node": "lab", "online": false,
+            "repo": "github.com/me/pirc" }),
+        json!({ "id": "lab:notes", "name": "notes", "node": "lab", "online": true }),
+    ]);
+    assert_eq!(
+        workspaces,
+        "## Workspaces\n\nThe user's repositories you can hand tasks to with delegate. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with memory_search, and open a note's sources with recall. Workspaces showing the same repository are clones of it: a search in one also finds the others' notes.\n[work:pirc] pirc on work, repository github.com/me/pirc\n[lab:pirc] pirc on lab, repository github.com/me/pirc (offline)\n[lab:notes] notes on lab"
+    );
+    // Without memory_search, nothing about searching clones either.
+    let shown = present_section(
+        &workspaces,
+        &Capabilities::from_value(&json!({ "memory_search": false })),
+    );
+    assert!(!shown.contains("clones"), "{shown}");
+    assert!(shown.contains("[lab:pirc] pirc on lab, repository github.com/me/pirc (offline)"));
+}
+
+#[test]
 fn renders_user_for_coding_sessions() {
     assert_eq!(render_user(&[]), "");
     let text = render_user(&[

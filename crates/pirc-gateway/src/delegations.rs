@@ -329,6 +329,9 @@ pub fn workspaces(app: &App) -> ApiResult<Value> {
             item.insert("name".into(), json!(workspace.display_name));
             item.insert("node".into(), json!(workspace.host_id));
             item.insert("online".into(), json!(workspace_online(app, workspace)));
+            if let Some(repo) = &workspace.repo {
+                item.insert("repo".into(), json!(repo));
+            }
             if let Some(roles) = roles(app, workspace) {
                 item.insert("roles".into(), json!(roles));
             }

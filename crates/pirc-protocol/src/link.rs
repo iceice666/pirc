@@ -106,6 +106,10 @@ pub struct RegisteredWorkspace {
     /// The roles its agents can start in; absent when unknown.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub roles: Option<Vec<WorkspaceRole>>,
+    /// Its repository's normalized `origin` ([`crate::normalize_origin`]);
+    /// absent without one and from older nodes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

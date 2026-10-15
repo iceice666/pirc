@@ -13,6 +13,7 @@
 mod inference;
 mod link;
 mod models;
+mod repo;
 mod socket_path;
 
 pub use inference::{
@@ -27,6 +28,7 @@ pub use link::{
     WorkspaceRole,
 };
 pub use models::{InferenceConfig, Model, ModelApi, ModelRef, Models, Provider, ThinkingLevel};
+pub use repo::{REPO_MAX_CHARS, normalize_origin, valid_repo};
 pub use socket_path::SocketPath;
 
 use serde::Serialize;

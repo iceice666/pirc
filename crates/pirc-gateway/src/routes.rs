@@ -462,10 +462,14 @@ pub async fn create_workspace(
         pirc_protocol::WorkspaceKind::Chat => WorkspaceKind::Chat,
         pirc_protocol::WorkspaceKind::Directory => WorkspaceKind::Directory,
     });
-    app.db.lock().sync_remote_workspaces(
-        &node_id,
-        &[(workspace.id.clone(), workspace.display_name.clone(), kind)],
-    )?;
+    {
+        let conn = app.db.lock();
+        conn.sync_remote_workspaces(
+            &node_id,
+            &[(workspace.id.clone(), workspace.display_name.clone(), kind)],
+        )?;
+        conn.set_workspace_repos(&node_id, &[(workspace.id.clone(), workspace.repo.clone())])?;
+    }
     let local_id = workspace.id.clone();
     app.nodes
         .add_workspace(&node_id, workspace, remote["workspace"].clone())?;

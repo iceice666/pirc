@@ -6,7 +6,9 @@
 CREATE TABLE workspaces (
   id TEXT PRIMARY KEY, host_id TEXT NOT NULL, display_name TEXT NOT NULL,
   canonical_path TEXT NOT NULL UNIQUE, defaults_json TEXT NOT NULL, created_at INTEGER NOT NULL,
-  kind TEXT NOT NULL DEFAULT 'directory'
+  kind TEXT NOT NULL DEFAULT 'directory',
+  -- The repository's normalized origin (pirc_protocol::normalize_origin), as the node reports it.
+  repo TEXT
 );
 
 CREATE TABLE sessions (
@@ -100,6 +102,8 @@ CREATE TABLE memory_records (
   git_json TEXT, source_ids_json TEXT NOT NULL, origins_json TEXT,
   node_session_id TEXT, session_id TEXT, workspace_id TEXT, owner_user TEXT,
   status TEXT NOT NULL,
+  -- Its workspace's repo when recorded, so clones find each other's notes.
+  repo TEXT,
   PRIMARY KEY (node_id, ledger_key, id)
 );
 CREATE INDEX memory_records_owner ON memory_records(owner_user, status);

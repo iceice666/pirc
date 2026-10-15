@@ -932,7 +932,8 @@ async fn memory() {
     // ---- workspace memory: search and recall ----
     let dev_register = json!({
         "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
-        "workspaces": [{ "id": "repo", "displayName": "Repo", "kind": "directory" }],
+        "workspaces": [{ "id": "repo", "displayName": "Repo", "kind": "directory",
+            "repo": "github.com/me/repo" }],
     });
     let (dev_node, registered) =
         FakeNode::connect(&api, DEV_ID, DEV_TOKEN, dev_register.clone(), dev_answer()).await;
@@ -974,6 +975,13 @@ async fn memory() {
             json!({})
         );
     }
+    op!(
+        "the assistant sees the workspace's repository",
+        chat,
+        "remote-a",
+        "assistant.context",
+        json!({})
+    );
     let staged = item(
         STAGED,
         "Deploys go through staging first",

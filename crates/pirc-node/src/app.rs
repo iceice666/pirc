@@ -353,6 +353,9 @@ async fn create_workspace(node: Node, request: Request) -> ApiResult<Response> {
     if let Some(roles) = crate::link::workspace_roles(config, &canonical) {
         body["roles"] = serde_json::to_value(roles).unwrap_or_default();
     }
+    if let Some(repo) = crate::repo::workspace_repo(Path::new(&canonical)) {
+        body["repo"] = json!(repo);
+    }
     created(json!({ "workspace": body }))
 }
 

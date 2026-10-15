@@ -310,6 +310,155 @@ fn notes_and_delegations_are_found_by_any_word_in_any_script() {
     assert_eq!(search(&app, ME, "nginx", None, Some(1)).unwrap().len(), 1);
 }
 
+/// Clones of one repository on other nodes find each other's notes and
+/// delegations; a workspace without a repository keeps to its own ledgers.
+#[test]
+fn clones_of_a_repository_find_each_others_notes() {
+    use crate::db::Store as _;
+    let (app, _dir) = setup();
+    {
+        let conn = app.db.lock();
+        conn.sync_remote_workspaces(
+            "n2",
+            &[
+                ("clone".into(), "pirc-clone".into(), None),
+                ("else".into(), "other".into(), None),
+            ],
+        )
+        .unwrap();
+        conn.create_session("n2:clone", "node://n2/c1", "n2", "c1", ME)
+            .unwrap();
+        conn.create_session("n2:else", "node://n2/e1", "n2", "e1", ME)
+            .unwrap();
+    }
+    let feed = |node: &str, key: &str, items: Vec<Value>| {
+        ingest(
+            &app,
+            node,
+            key,
+            0,
+            100,
+            false,
+            &[json!({ "type": "recorded", "items": items })],
+        )
+        .unwrap();
+    };
+    let worktree = item("nginx in the worktree", json!({ "sessionId": "s2" }));
+    feed(
+        "n1",
+        KEY,
+        vec![
+            item("nginx on the first clone", json!({})),
+            worktree.clone(),
+        ],
+    );
+    // Recorded before the gateway knew the repository: tagged when it learns it.
+    let early = item("nginx on the second clone", json!({ "sessionId": "c1" }));
+    feed("n2", KEY, vec![early.clone()]);
+    let repos = |conn: &rusqlite::Connection| -> Vec<(String, Option<String>)> {
+        let mut statement = conn
+            .prepare("SELECT id, repo FROM workspaces ORDER BY id")
+            .unwrap();
+        statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    };
+    {
+        let conn = app.db.lock();
+        conn.set_workspace_repos("n1", &[("repo".into(), Some("github.com/me/pirc".into()))])
+            .unwrap();
+        conn.set_workspace_repos(
+            "n2",
+            &[
+                ("clone".into(), Some("github.com/me/pirc".into())),
+                ("else".into(), Some("github.com/me/other".into())),
+            ],
+        )
+        .unwrap();
+        // Only keys a node could have normalized are kept.
+        conn.set_workspace_repos(
+            "n1",
+            &[("wt".into(), Some("user:tok@github.com/x/y".into()))],
+        )
+        .unwrap();
+        assert_eq!(
+            repos(&conn),
+            [
+                ("n1:repo".to_owned(), Some("github.com/me/pirc".to_owned())),
+                ("n1:wt".to_owned(), None),
+                ("n2:clone".to_owned(), Some("github.com/me/pirc".to_owned())),
+                ("n2:else".to_owned(), Some("github.com/me/other".to_owned())),
+            ]
+        );
+    }
+    let late = item(
+        "nginx on the second clone, later",
+        json!({ "sessionId": "c1" }),
+    );
+    let elsewhere = item("nginx in another repository", json!({ "sessionId": "e1" }));
+    ingest(
+        &app,
+        "n2",
+        KEY,
+        100,
+        200,
+        false,
+        &[json!({ "type": "recorded", "items": [late.clone()] })],
+    )
+    .unwrap();
+    feed("n2", OTHER_KEY, vec![elsewhere.clone()]);
+    app.db
+        .lock()
+        .execute(
+            "INSERT INTO delegations (id,owner_user,assistant_session_id,workspace_id,title,task,status,result,expires_at,created_at,updated_at) VALUES ('d87654321',?,'chat','n2:clone','Fix nginx','Reload it.','completed','nginx reloaded',0,0,?)",
+            rusqlite::params![ME, crate::util::now_ms()],
+        )
+        .unwrap();
+
+    let hits = search(&app, ME, "nginx", Some("n1:repo"), Some(20)).unwrap();
+    let mut found = ids(&hits);
+    found.sort();
+    let mut expected = vec![
+        hash_id("nginx on the first clone"),
+        worktree["id"].as_str().unwrap().to_owned(),
+        early["id"].as_str().unwrap().to_owned(),
+        late["id"].as_str().unwrap().to_owned(),
+        "d87654321".to_owned(),
+    ];
+    expected.sort();
+    assert_eq!(found, expected);
+    // Labelled with the workspace that wrote them.
+    let from_clone = hits.iter().find(|hit| hit["id"] == late["id"]).unwrap();
+    assert_eq!(from_clone["workspace"], "pirc-clone on n2");
+    // The same from the other side, but for the worktree's note: its
+    // workspace reported no repository, so only its ledger links it.
+    let mut from_other_side = ids(&search(&app, ME, "nginx", Some("n2:clone"), Some(20)).unwrap());
+    from_other_side.sort();
+    expected.retain(|id| *id != worktree["id"]);
+    assert_eq!(from_other_side, expected);
+    assert_eq!(
+        ids(&search(&app, ME, "nginx", Some("n2:else"), None).unwrap()),
+        [elsewhere["id"].as_str().unwrap()]
+    );
+    // Without a repository: its own ledger only (shared with n1:repo, a worktree).
+    let mut own = ids(&search(&app, ME, "nginx", Some("n1:wt"), None).unwrap());
+    own.sort();
+    let mut ledger = vec![
+        hash_id("nginx on the first clone"),
+        worktree["id"].as_str().unwrap().to_owned(),
+    ];
+    ledger.sort();
+    assert_eq!(own, ledger);
+    // Never someone else's.
+    assert!(
+        search(&app, OTHER, "nginx", Some("n1:repo"), None)
+            .unwrap()
+            .is_empty()
+    );
+}
+
 #[test]
 fn notes_are_recalled_for_their_owner_only_never_forgotten() {
     let (app, _dir) = setup();

@@ -78,7 +78,17 @@ impl App {
                 )
             })
             .collect();
-        if let Err(error) = self.db.lock().sync_remote_workspaces(&node.id, &workspaces) {
+        let repos: Vec<_> = node
+            .workspaces
+            .iter()
+            .map(|workspace| (workspace.id.clone(), workspace.repo.clone()))
+            .collect();
+        let synced = {
+            let conn = self.db.lock();
+            conn.sync_remote_workspaces(&node.id, &workspaces)
+                .and_then(|()| conn.set_workspace_repos(&node.id, &repos))
+        };
+        if let Err(error) = synced {
             crate::log::error(&format!("workspace sync of {}: {error}", node.id));
         }
         self.directory_changed();

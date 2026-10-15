@@ -5,6 +5,10 @@
 //! the session that wrote it. Items whose session the gateway does not know
 //! have no owner and are never found.
 //!
+//! Each item also keeps its workspace's repository (normalized `origin`)
+//! as of its recording, so a search in one clone of a repository finds the
+//! notes of its other clones, on any node.
+//!
 //! Search matches every word anywhere (`LIKE`), in any script, and ranks by
 //! how many words a note holds: the corpus is small (a few thousand notes),
 //! and a trigram index would miss two-character Chinese words anyway.
@@ -236,8 +240,19 @@ fn apply(conn: &Connection, node_id: &str, key: &str, line: Line<'_>) -> ApiResu
                 }
                 let (session_id, workspace_id, owner_user) =
                     source(conn, node_id, item.session_id.as_deref())?;
+                let repo: Option<String> = match &workspace_id {
+                    Some(workspace_id) => conn
+                        .query_row(
+                            "SELECT repo FROM workspaces WHERE id=?",
+                            [workspace_id],
+                            |row| row.get(0),
+                        )
+                        .optional()?
+                        .flatten(),
+                    None => None,
+                };
                 conn.execute(
-                    "INSERT INTO memory_records (node_id,ledger_key,id,content,relevance,recorded_at,git_json,source_ids_json,origins_json,node_session_id,session_id,workspace_id,owner_user,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'active')",
+                    "INSERT INTO memory_records (node_id,ledger_key,id,content,relevance,recorded_at,git_json,source_ids_json,origins_json,node_session_id,session_id,workspace_id,owner_user,status,repo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'active',?)",
                     params![
                         node_id,
                         key,
@@ -252,6 +267,7 @@ fn apply(conn: &Connection, node_id: &str, key: &str, line: Line<'_>) -> ApiResu
                         session_id,
                         workspace_id,
                         owner_user,
+                        repo,
                     ],
                 )?;
             }
@@ -349,7 +365,8 @@ fn all_rows(conn: &Connection, sql: &str, values: Vec<Sql>) -> ApiResult<Vec<Map
 }
 
 /// Notes and delegations of `user` holding any of the words in `query`,
-/// most words first, then current before superseded, then newest.
+/// most words first, then current before superseded, then newest. With
+/// `workspace`, those of its ledger and of every clone of its repository.
 pub fn search(
     app: &App,
     user: &str,
@@ -390,6 +407,8 @@ pub fn search(
     values.extend(patterns.clone());
     if let Some(workspace) = &workspace {
         values.push(Sql::Text(workspace.id.clone()));
+        // `repo = NULL` matches nothing: a workspace without one keeps to itself.
+        values.push(workspace.repo.clone().map_or(Sql::Null, Sql::Text));
     }
     let conn = app.db.lock();
     let records = all_rows(
@@ -398,7 +417,7 @@ pub fn search(
             "SELECT * FROM memory_records WHERE owner_user=? AND status IN ('active','superseded') AND {}{}",
             any_term("content"),
             if workspace.is_some() {
-                " AND (node_id || '/' || ledger_key) IN (SELECT node_id || '/' || ledger_key FROM memory_records WHERE workspace_id=?)"
+                " AND ((node_id || '/' || ledger_key) IN (SELECT node_id || '/' || ledger_key FROM memory_records WHERE workspace_id=?) OR repo=?)"
             } else {
                 ""
             }
@@ -411,7 +430,7 @@ pub fn search(
             "SELECT * FROM delegations WHERE owner_user=? AND {}{}",
             any_term("(title || ' ' || task || ' ' || COALESCE(result, ''))"),
             if workspace.is_some() {
-                " AND workspace_id=?"
+                " AND (workspace_id=? OR workspace_id IN (SELECT id FROM workspaces WHERE repo=?))"
             } else {
                 ""
             }
