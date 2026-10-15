@@ -246,22 +246,16 @@ in
       "pirc"
       "package"
     ] "pirc is now two native packages; set services.pirc.gatewayPackage and nodePackage as needed.")
-    (mkRemovedOptionModule
-      [
-        "services"
-        "pirc"
-        "piPackage"
-      ]
-      "pirc now runs its built-in agent on pirc-node; configure it with services.pirc.agentConfig."
-    )
-    (mkRemovedOptionModule
-      [
-        "services"
-        "pirc"
-        "piArgs"
-      ]
-      "pirc now runs its built-in agent on pirc-node; configure it with services.pirc.agentConfig."
-    )
+    (mkRemovedOptionModule [
+      "services"
+      "pirc"
+      "piPackage"
+    ] "pirc now runs its built-in agent on pirc-node; configure it with services.pirc.agentConfig.")
+    (mkRemovedOptionModule [
+      "services"
+      "pirc"
+      "piArgs"
+    ] "pirc now runs its built-in agent on pirc-node; configure it with services.pirc.agentConfig.")
     (mkRenamedOptionModule [ "services" "pirc" "hostId" ] [ "services" "pirc" "localNode" "id" ])
     (mkRemovedOptionModule [
       "services"
