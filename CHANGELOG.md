@@ -4,6 +4,10 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+### Fixed
+
+- Input in the browser's live view (mouse, keys, typed text, navigation) is applied in the order it was sent; quick input could run out of order, such as a key landing after a navigation sent later.
+
 ## [0.4.1] - 2026-10-15
 
 Compatible with 0.4.0: same node protocol (10) and state; upgrade the gateway and every node together as usual.
