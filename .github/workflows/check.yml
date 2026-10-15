@@ -56,6 +56,27 @@ jobs:
           PIRC_BROWSER_EXECUTABLE: ${{ steps.chrome.outputs.chrome-path }}
           PIRC_BROWSER_REQUIRED: '1'
 
+  nix:
+    # The Nix packages' fixed-output hashes: cargoHash (nix/package.nix)
+    # must follow every Cargo.lock change, version bumps included, and
+    # nodeModulesHash (nix/web.nix) every bun.lock change. Building only the
+    # dependency derivations checks both without compiling the packages
+    # (a stale cargoHash once broke `nix build` of v0.4.1 unnoticed). Also
+    # evaluates both packages and checks the Nix formatting.
+    name: Nix hashes and evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - run: nix fmt -- --check flake.nix nix/*.nix
+      - run: |
+          nix eval --raw .#pirc-gateway.drvPath
+          nix eval --raw .#pirc-node.drvPath
+      - run: >-
+          nix build --no-link --print-build-logs
+          .#pirc-gateway.cargoDeps .#pirc-node.cargoDeps .#pirc-gateway.web.nodeModules
+
   size:
     name: Rust executable sizes
     runs-on: ubuntu-latest
