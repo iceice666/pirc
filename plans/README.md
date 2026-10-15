@@ -16,7 +16,7 @@ This file is the work queue, not authorization. Every phase still needs the user
 | 2     | Android approval check (assistant 3a)            | Near-free; completes in-chat approval on the phone                                     |
 | 3     | Network taint (assistant 5)                      | Small; improves memory trust; pairs with browser click/type classification             |
 | 4     | Decision session                                 | Cheap; unblocks phases 5, 6 and 8                                                      |
-| 5     | Security hygiene                                 | Re-verify against Rust, then fix what still applies                                    |
+| 5     | Security hygiene                                 | Re-audited 2026-10-15; starts with the I5 regression                                   |
 | 6     | Android parity batch                             | Largest user-visible gap; group to share settings/memory screens                       |
 | 7     | OM model policy (E3), then `secure_delete` (E1)  | Small and independent; E1 must precede hard delete                                     |
 | 8     | Project-only memory (B), then hard delete (D)    | Large designs; need phase 4 decisions                                                  |
@@ -54,15 +54,20 @@ Android:
 - [ ] Sideload-only distribution versus F-Droid/Play; release signing.
 - [ ] Native Android Context inspector: later or never.
 
-Security findings that each need a decision (originally written against TS; re-check in Rust first):
+Security findings that each need a decision. All were re-checked against the Rust code on 2026-10-15 and are still open; evidence is in the [re-audit](../docs/history/security-audit.md#re-audit-against-the-rust-code-2026-10-15).
 
-- [ ] **L3** build caches (`~/.cargo/registry`, `~/.cache`, `~/.npm`, …) are writable from the sandbox: document or make opt-in.
-- [ ] **L5** workspaces have no owner: capabilities/instructions edits and schedule creation in chat projects only check the kind. Record and enforce an owner, or document the shared model.
-- [ ] **L6** push endpoints: per-user subscription cap, block private ranges after resolution, throttle `/api/push/test` (re-registering an endpoint moving it to the new user is intentional).
-- [ ] **L10** `schedule pause/resume/delete` without approval (by design; prompt injection can delete schedules).
-- [ ] **L11** hook stdout and gateway `deliver` are plain `user`-role text, unlike team events.
-- [ ] **L12** project config may silently change the default model. **L13** skills inject unlabelled repository text into the system prompt. **L14** `useModel:false`/`enabled:false` downgrade all unknowns to `write` without a UI warning.
-- [ ] **I1** panel terminals are unsandboxed login shells (operators should know `PIRC_TERMINALS=0`). **I2** node writes into agent-writable `.pirc/uploads`/`.pirc/recordings` from outside the sandbox. **I3** a trusted node can inflate gateway state without caps. **I4** delegation errors enumerate all directory workspaces. **I8** confirm example node IDs (`homolab`, `m5pro`, `mac`) are placeholders. **I9** provider `baseUrl` accepts `http://`.
+- [ ] **L5** workspaces have no owner (`schema.sql` has no owner column): capabilities, instructions and the new project links routes, and schedule creation, check only the workspace kind. Any allowed user can change another user's chat project. Record and enforce an owner, or document the single-tenant/shared model. _Most material for multi-user deployments._
+- [ ] **L12** an untrusted project `.pirc/config.json` still sets `defaultModel` (`pirc-agent/src/config.rs`): the H3 trust gate covers hooks/env/allowedPaths only, and its warning does not mention the model. Bring the model under the trust gate or warn.
+- [ ] **L14** with auto mode `enabled:false`, every non-read verdict including **danger** becomes `write` and runs without approval (deny-list still holds); `useModel:false` makes unknowns `write`. Decide: keep danger approvals when disabled, or show a persistent UI warning.
+- [ ] **L11** before-prompt hook stdout and gateway `deliver` content become `Custom` messages sent as plain user text (`pirc-providers/src/pi.rs`); team events are labelled, these are not. New: session-start hook stdout goes into the **system prompt**.
+- [ ] **L13** skill descriptions from the repository enter the system prompt, escaped but introduced as "installed by the user"; label repository skills as untrusted.
+- [ ] **L10** `schedule pause/resume/delete` run without approval (by design; prompt injection can pause or delete schedules). Keep, or gate delete.
+- [ ] **L6** push: HTTPS-only, no userinfo and no redirects hold, but there is no private-address filtering after resolution, no per-user subscription cap and no throttle on `/api/push/test`.
+- [ ] **L3** build caches (`~/.cache`, `~/.npm`, `~/.cargo/registry`, `~/.cargo/git`, `go/pkg/mod`, `~/.gradle/caches`) are writable by default and get no write lease; documented in `docs/deploy/sandbox-and-browser.md`. Keep documented, or make opt-in.
+- [ ] **I4** every chat agent's `assistant.context` lists all directory workspaces of all users (no owner filter); same root cause as L5.
+- [ ] **I9** provider backend URLs accept `http://` (`pirc-providers/src/backends/schema.rs`). Require HTTPS except loopback, or keep.
+- [ ] **I1** panel terminals are unsandboxed login shells, on by default (`PIRC_TERMINALS`, documented in `docs/deploy/node.md`). Keep the default or flip it.
+- [ ] **I8** tracked examples use `homolab`, `m5pro`, `mac` (`.env.example`, `nix/example.nix`, `docs/deploy/nixos.md`, `docs/deploy/macos-node.md`, `apps/web/src/lib/mock.ts`). Confirm they are not real host names, or replace them with neutral placeholders.
 
 Project isolation (needed before phase 8):
 
@@ -71,11 +76,21 @@ Project isolation (needed before phase 8):
 
 ## Phase 5 — Security hygiene
 
-- [ ] **L7** global rather than per-node/per-user limits: `MAX_PENDING_REQUESTS = 100`, `MAX_TERMINAL_STREAMS = 64` in `crates/pirc-gateway/src/nodes.rs` _(confirmed in Rust)_.
-- [ ] **L8** no rate limiting; check JSON body limits and whether command payloads are stored whole.
-- [ ] **L15** web ships `sourcemap: true` (`apps/web/vite.config.ts`) _(confirmed)_; workflows pin actions by tag, not SHA _(confirmed)_; NixOS unit lacks `CapabilityBoundingSet=`, `RestrictAddressFamilies=`, `SystemCallFilter=@system-service`, `ProtectProc=invisible`, `RestrictRealtime=`; web dev server binds `0.0.0.0`.
+Re-audited against Rust on 2026-10-15; see the [re-audit](../docs/history/security-audit.md#re-audit-against-the-rust-code-2026-10-15). Ordered by value.
+
+- [ ] **I5 (regression)** the gateway runs a provider `apiKeyCommand` (`pirc-providers/src/models_file.rs`) and a `/usr/bin/uname` fallback (`codex.rs`) with its full environment, including `PIRC_NODE_TOKENS`, `EXA_API_KEY` and `PIRC_VAPID_PRIVATE_KEY`. TS gave the OAuth worker an allowlisted environment (M7); apply the same allowlist to every gateway child.
+- [ ] **M13 gap (new)** node→browser stream messages are not size-checked per message (`pirc-gateway/src/sockets.rs` `Relay::on_frame`): a node can send up to the 16 MiB frame cap on a stream advertised at 64 KiB/1 MiB and overshoot the outbound backlog by one frame.
+- [ ] **Recording read follows symlinks (new, low)** `read_recording_chunk` (`pirc-node/src/panels/inspect.rs`) has no realpath containment; a tracked `.pirc/recordings/x.webm` symlink in a cloned repository makes the panel return any file the node account can read. The agent cannot create it (`.pirc` is write-denied) and the reader is the authenticated user. Add containment like other panel reads.
+- [ ] **I2** node-side writes into `.pirc/uploads` and `.pirc/recordings` (`runner/mod.rs`, `browser/manager/ops.rs`) follow pre-existing symlinks; the sandbox is now mandatory, so only a hostile checkout matters. Use no-follow, directory-relative opens.
+- [ ] **L7** `MAX_PENDING_REQUESTS = 100` and `MAX_TERMINAL_STREAMS = 64` are global across all nodes and users (`pirc-gateway/src/nodes.rs`). Partition per node (and per user).
+- [ ] **L8** no rate limiting; JSON bodies accept up to `upload_max_bytes` (10 MiB); command payloads are an arbitrary map stored and forwarded whole (`routes.rs`). Lower the JSON limit and bound the command payload.
+- [ ] **I3** activity frames are capped and limited to known sessions, but mirrored memory records have no total quota (`memory_records.rs`) and event replay is bounded by count (1,000 per session), not bytes.
+- [ ] **L15** web `sourcemap: true` (`apps/web/vite.config.ts`); dev and preview bind `0.0.0.0` (`apps/web/package.json`); `check.yml` and `android.yml` pin actions by tag or branch (`dtolnay/rust-toolchain@master`), not SHA; the NixOS units lack `CapabilityBoundingSet=`, `RestrictAddressFamilies=`, `SystemCallFilter=@system-service`, `ProtectProc=invisible`, `RestrictRealtime=` (keep user namespaces for bubblewrap).
 - [ ] Apply phase 4 security decisions.
-- [ ] Sandbox limitations to revisit: other account-accessible Unix sockets stay reachable on Linux (move inference off Unix sockets or bind-mount narrowly); workspace-memory directory writability permits appends to other repositories' ledgers; approvals are session-only.
+- [ ] Sandbox limitations to revisit (all confirmed): Linux allows every Unix socket not on the known-host-socket list (`sandbox/linux.rs`; move inference off Unix sockets or bind-mount narrowly); the whole workspace-memory directory is a writable root, so an agent can append to other repositories' ledgers (`pirc-policy/src/session.rs`); domain approvals are session-only.
+- [ ] Accepted PTC limitation, still true: `bash`, `memory_search`, `delegation_status` and `agent_inbox` results are not marked untrusted (`ptc/registry.rs`). Revisit with the phase 3 network taint.
+
+Verified fixed in Rust (no action): L1 shared sensitive-path list, L2 `.git/hooks`/`.git/config` protection, L4 workspace registration refusal, L9 database mode 0600, I6 mermaid through DOMPurify, I7 `result` ignored, M14 optional proxy secret.
 
 Accepted, not to be reopened without a new decision: S10 (host atomic replacement detaches a protected Linux mount) and S18 (browser WebSocket/non-HTTP egress, DNS rebinding); see the [archived audit](../docs/history/security-audit.md).
 
