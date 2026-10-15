@@ -81,14 +81,53 @@ pub struct WorkerModel {
     pub thinking: ThinkingLevel,
 }
 
+/// Why no memory model was picked.
+#[derive(Debug, PartialEq, Eq)]
+pub enum PickError {
+    /// Nothing resolves (not even the session model).
+    NoModel,
+    /// `missingModelPolicy: 'error'` and a configured model does not
+    /// resolve: a configuration error, not rate limiting.
+    Missing(String),
+}
+
+impl std::fmt::Display for PickError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoModel => f.write_str("no model available"),
+            Self::Missing(key) => write!(
+                f,
+                "model {key} is not configured on the gateway (missingModelPolicy is \"error\", so the session model is not used); fix features.observationalMemory or the gateway's models"
+            ),
+        }
+    }
+}
+
 /// `pickModel`: the preferred model, then the fallbacks; cooling ones are
-/// skipped unless all are. `Err` when none resolves.
+/// skipped unless all are. `Err` when none resolves, or, with `strict`
+/// (`missingModelPolicy: 'error'`), as soon as any configured model does
+/// not: checked before the session model is considered, so no inference
+/// runs on a model the user did not choose.
 pub fn pick_model(
     agent: &Agent,
     preferred: Option<&ModelChoice>,
     fallbacks: &[ModelChoice],
+    strict: bool,
     tracker: &mut RateLimitTracker,
-) -> Result<WorkerModel, String> {
+) -> Result<WorkerModel, PickError> {
+    if strict {
+        for choice in preferred.into_iter().chain(fallbacks) {
+            if agent
+                .resolve_model(Some((choice.provider.clone(), choice.id.clone())))
+                .is_err()
+            {
+                return Err(PickError::Missing(format!(
+                    "{}/{}",
+                    choice.provider, choice.id
+                )));
+            }
+        }
+    }
     let mut candidates: Vec<WorkerModel> = Vec::new();
     let add = |candidates: &mut Vec<WorkerModel>,
                choice: Option<&ModelChoice>,
@@ -135,7 +174,7 @@ pub fn pick_model(
         add(&mut candidates, Some(fallback), thinking);
     }
     if candidates.is_empty() {
-        return Err("no model available".to_owned());
+        return Err(PickError::NoModel);
     }
     // Keys were resolved by the gateway; a provider without one is still tried (keyless endpoints).
     let ready = candidates

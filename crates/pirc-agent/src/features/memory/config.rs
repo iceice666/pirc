@@ -44,6 +44,10 @@ pub struct MemoryConfig {
     pub agent_max_tokens: u64,
     pub model: Option<ModelChoice>,
     pub fallback_models: Vec<ModelChoice>,
+    /// `missingModelPolicy: 'error'`: a configured model (preferred or
+    /// fallback) that does not resolve stops memory work with a visible
+    /// error, instead of falling back to the session model.
+    pub strict_models: bool,
     pub rate_limit_cooldown_ms: u64,
     pub show_worker_notifications: bool,
     /// Cross-session memory shared by every main session (and worktree) of
@@ -68,6 +72,7 @@ impl Default for MemoryConfig {
             agent_max_tokens: 32_000,
             model: None,
             fallback_models: Vec::new(),
+            strict_models: false,
             rate_limit_cooldown_ms: 900_000,
             show_worker_notifications: true,
             workspace: WorkspaceSettings {
@@ -146,6 +151,7 @@ pub fn parse_memory_config(features: &Map<String, Value>) -> MemoryConfig {
     if let Some(models) = raw.get("fallbackModels").and_then(Value::as_array) {
         config.fallback_models = models.iter().map(model_choice).collect();
     }
+    config.strict_models = raw["missingModelPolicy"] == "error";
     positive(
         raw,
         "rateLimitCooldownMs",
@@ -227,5 +233,15 @@ mod tests {
         assert_eq!(ratio.compact_after_tokens_ratio, 0.5);
         assert_eq!(ratio.observations_pool_target_tokens, Some(7));
         assert_eq!(ratio.observer_chunk_max_tokens, Some(300));
+    }
+
+    #[test]
+    fn reads_the_missing_model_policy() {
+        assert!(!MemoryConfig::default().strict_models);
+        assert!(!parse(json!({ "missingModelPolicy": "fallback" })).strict_models);
+        assert!(parse(json!({ "missingModelPolicy": "error", "enabled": false })).strict_models);
+        // Anything else is invalid: the whole object is the defaults.
+        let invalid = parse(json!({ "missingModelPolicy": "strict", "enabled": false }));
+        assert_eq!(invalid, MemoryConfig::default());
     }
 }

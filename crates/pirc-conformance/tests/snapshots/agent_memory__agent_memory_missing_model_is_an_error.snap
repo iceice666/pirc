@@ -1,0 +1,183 @@
+---
+source: crates/pirc-conformance/tests/agent_memory.rs
+expression: log.into_value()
+---
+[
+  {
+    "observed": {
+      "command": "prompt",
+      "id": "c1",
+      "success": true,
+      "type": "response"
+    },
+    "step": "first: response"
+  },
+  {
+    "observed": [
+      {
+        "type": "agent_start"
+      },
+      {
+        "message": {
+          "content": "first message with content",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "first message with content",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "type": "text_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "Fir",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "st.",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "content": "First.",
+          "contentIndex": 0,
+          "type": "text_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "First.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "id": "<uuid:1>",
+        "message": "Observational memory: observer not run — model fake/not-on-the-gateway is not configured on the gateway (missingModelPolicy is \"error\", so the session model is not used); fix features.observationalMemory or the gateway's models",
+        "method": "notify",
+        "notifyType": "error",
+        "type": "extension_ui_request"
+      },
+      {
+        "sections": [
+          "memory"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "sections": [],
+        "type": "panel_changed"
+      },
+      {
+        "sections": [],
+        "type": "panel_changed"
+      },
+      {
+        "type": "agent_end",
+        "willRetry": false
+      },
+      {
+        "sections": [
+          "memory"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "type": "agent_settled"
+      }
+    ],
+    "step": "first: events"
+  },
+  {
+    "observed": [],
+    "step": "background: lines"
+  },
+  {
+    "observed": [
+      {
+        "id": "<uuid:2>",
+        "message": "Memory: 0 observations recorded, 0 dropped, 0 active, 0 visible; 0 reflections (0 visible)\nNext observation: 150/5 (100%)\nNext reflection: 150/20,000 (1%)\nNext compaction: 9/81,000 (0%)\nVisible pool: 0/20,000 (0%)\nActive pool: 0/10,000 (0%)\nLast model error: model fake/not-on-the-gateway is not configured on the gateway (missingModelPolicy is \"error\", so the session model is not used); fix features.observationalMemory or the gateway's models",
+        "method": "notify",
+        "notifyType": "info",
+        "type": "extension_ui_request"
+      },
+      {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
+      }
+    ],
+    "step": "/om:status"
+  },
+  {
+    "observed": [],
+    "step": "/om:status: model requests"
+  }
+]

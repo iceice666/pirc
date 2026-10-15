@@ -41,7 +41,9 @@ use self::ledger::{
 };
 use self::prompts::{DROPPER_SYSTEM, OBSERVER_SYSTEM, REFLECTOR_SYSTEM, WORKSPACE_PROMOTER_SYSTEM};
 use self::serialize::{Style, render_message, serialize_chunk};
-use self::worker::{RateLimitTracker, WorkerModel, WorkerRun, WorkerTool, pick_model, run_worker};
+use self::worker::{
+    PickError, RateLimitTracker, WorkerModel, WorkerRun, WorkerTool, pick_model, run_worker,
+};
 use self::workspace::{
     PromoterTool, PromotionContext, Recalled, WS_PROMOTED, WS_SNAPSHOT, WorkspaceLedger, git_label,
     git_state, items_tokens, promoter_prompt, promotion_candidates, recall_from_workspace,
@@ -280,6 +282,8 @@ struct State {
     last_error: RefCell<IndexMap<String, String>>,
     lifetime: RefCell<AbortController>,
     fallback_notice_for: RefCell<Option<String>>,
+    /// The configuration error last shown (`missingModelPolicy: 'error'`).
+    config_notice_for: RefCell<Option<String>>,
     ledger: RefCell<Option<WorkspaceLedger>>,
     promoting: RefCell<Option<Rc<Job>>>,
     snapshot_text: RefCell<Option<String>>,
@@ -330,15 +334,26 @@ fn choose(state: &State, agent: &Agent, config: &MemoryConfig, stage: &str) -> O
         agent,
         config.model.as_ref(),
         &config.fallback_models,
+        config.strict_models,
         &mut state.tracker.borrow_mut(),
     );
     match picked {
         Ok(model) => {
+            state.last_error.borrow_mut().shift_remove("model");
+            *state.config_notice_for.borrow_mut() = None;
             let preferred = config
                 .model
                 .as_ref()
                 .map(|model| format!("{}/{}", model.provider, model.id));
-            if preferred.is_some_and(|preferred| preferred != model.key)
+            // A preferred model that does not resolve was reported by
+            // pick_model; only a cooling one is "rate limited".
+            let preferred_resolves = config.model.as_ref().is_some_and(|model| {
+                agent
+                    .resolve_model(Some((model.provider.clone(), model.id.clone())))
+                    .is_ok()
+            });
+            if preferred_resolves
+                && preferred.is_some_and(|preferred| preferred != model.key)
                 && state.fallback_notice_for.borrow().as_deref() != Some(&model.key)
             {
                 *state.fallback_notice_for.borrow_mut() = Some(model.key.clone());
@@ -351,6 +366,21 @@ fn choose(state: &State, agent: &Agent, config: &MemoryConfig, stage: &str) -> O
                 );
             }
             Some(model)
+        }
+        Err(error @ PickError::Missing(_)) => {
+            // A configuration error: kept in the status and panel until a
+            // model resolves, and shown as an error once per message.
+            let message = error.to_string();
+            set_error(state, "model", message.clone());
+            agent.panel_changed("memory");
+            if state.config_notice_for.borrow().as_deref() != Some(&message) {
+                *state.config_notice_for.borrow_mut() = Some(message.clone());
+                agent.ui().notify(
+                    &format!("Observational memory: {stage} not run — {message}"),
+                    NotifyLevel::Error,
+                );
+            }
+            None
         }
         Err(error) => {
             agent.ui().notify(

@@ -193,6 +193,61 @@ async fn agent_memory_rate_limit_fallback() {
     insta::assert_json_snapshot!("agent_memory_rate_limit_fallback", log.into_value());
 }
 
+/// A preferred memory model the gateway does not have: by default the
+/// observer runs on the session model, as before; with
+/// `missingModelPolicy: "error"` no memory inference runs at all, and the
+/// failure is an error in the status, not a rate limit.
+async fn missing_model(policy: Option<&str>) -> Option<(Log, Vec<Value>)> {
+    let mut memory = json!({
+        "observeAfterTokens": 5, "showWorkerNotifications": false,
+        "model": { "provider": "fake", "id": "not-on-the-gateway" },
+        "workspace": { "enabled": false },
+    });
+    if let Some(policy) = policy {
+        memory["missingModelPolicy"] = json!(policy);
+    }
+    let mut agent = AgentRun::start(options(memory)).await?;
+    let mut log = Log::new(&agent);
+    let gate = Gate::new();
+    agent.route(OBSERVER, [ModelReply::gated(&gate, text("Nothing new."))]);
+    agent.push([text("First.")]);
+    let response = agent
+        .call(json!({ "type": "prompt", "message": "first message with content" }))
+        .await;
+    log.note("first: response", response);
+    let events = agent.settle().await;
+    log.note("first: events", json!(events));
+    gate.open();
+    let lines = agent.drain(QUIET).await;
+    log.note("background: lines", json!(lines));
+    let requests = agent.take_requests();
+    log.slash(&mut agent, "/om:status").await;
+    Some((log, requests))
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_memory_missing_model_falls_back() {
+    let Some((log, requests)) = missing_model(None).await else {
+        return;
+    };
+    let workers: Vec<&Value> = requests.iter().filter(|r| is_worker(r)).collect();
+    assert_eq!(workers.len(), 1, "{requests:#?}");
+    assert_eq!(workers[0]["modelId"], "fake-model");
+    insta::assert_json_snapshot!("agent_memory_missing_model_falls_back", log.into_value());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_memory_missing_model_is_an_error() {
+    let Some((log, requests)) = missing_model(Some("error")).await else {
+        return;
+    };
+    assert!(
+        !requests.iter().any(is_worker),
+        "no memory inference: {requests:#?}"
+    );
+    insta::assert_json_snapshot!("agent_memory_missing_model_is_an_error", log.into_value());
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn agent_memory_auto_compaction() {
     let Some(mut agent) = AgentRun::start(options(json!({

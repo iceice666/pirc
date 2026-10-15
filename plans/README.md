@@ -131,7 +131,7 @@ Full tables with web/Android file references and fix hints: `git show 7677d24:pl
 
 ## Phase 7 — Small storage and config items
 
-- [ ] **E3 missing OM model policy.** Add `missingModelPolicy: 'fallback' | 'error'` (default `fallback`). In `error` mode fail with a clear configuration error before choosing a session/fallback model or sending inference; report it as a persistent visible failure, not rate limiting. Recommended: validate every explicitly configured choice on startup. Keep rate-limit fallback for valid models. Tests must prove no inference on an unresolved preferred model in strict mode.
+- [x] **E3** done 2026-10-15: `missingModelPolicy: 'fallback' | 'error'` (default `fallback`) in `features.observationalMemory`. In `error` mode every configured choice is checked before each memory run (`pirc-agent/src/features/memory/worker.rs` `pick_model`, `PickError::Missing`), before the session model is considered; the run is skipped with an error notification and a persistent `Last model error` in `/om:status` and the panel. A missing preferred model is no longer reported as rate limited. Checked per run rather than at agent start, since the gateway's catalog is what decides. Conformance tests `agent_memory_missing_model_falls_back` (unchanged behavior) and `agent_memory_missing_model_is_an_error` (no memory inference).
 - [ ] **E1 `secure_delete`.** `PRAGMA secure_delete = ON` on every gateway SQLite connection (and node databases sharing the constructor). Measure representative writes first; test the pragma; document write amplification. Does not sanitize old WAL frames, backups or files.
 
 ## Phase 8 — Project-only memory and hard delete

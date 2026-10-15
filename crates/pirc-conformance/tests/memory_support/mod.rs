@@ -170,7 +170,7 @@ pub fn mask_times(value: &mut Value) {
     }
 }
 
-fn is_worker(request: &Value) -> bool {
+pub fn is_worker(request: &Value) -> bool {
     request["tools"][0]["name"]
         .as_str()
         .is_some_and(|name| WORKER_TOOLS.contains(&name))

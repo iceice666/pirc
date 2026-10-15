@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 use super::schema::{Checker, Issue, IssueKind, PathPart};
 
 const THINKING_CHOICES: [&str; 7] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-const MEMORY_KEYS: [&str; 17] = [
+const MEMORY_KEYS: [&str; 18] = [
     "enabled",
     "passive",
     "observeAfterTokens",
@@ -22,6 +22,7 @@ const MEMORY_KEYS: [&str; 17] = [
     "agentMaxTokens",
     "model",
     "fallbackModels",
+    "missingModelPolicy",
     "rateLimitCooldownMs",
     "showWorkerNotifications",
     "workspace",
@@ -66,6 +67,9 @@ fn memory_issues(raw: Option<&Value>) -> Vec<Issue> {
             "enabled" | "passive" | "showWorkerNotifications" => optional(c, v, &boolean),
             "compactAfterTokensMode" => optional(c, v, &|c, v| {
                 c.enumeration(v, &["calibrated", "ratio"]);
+            }),
+            "missingModelPolicy" => optional(c, v, &|c, v| {
+                c.enumeration(v, &["fallback", "error"]);
             }),
             "compactAfterTokensRatio" => optional(c, v, &|c, v| {
                 c.number(v, false, Some((0.0, false)), Some((1.0, false)));
