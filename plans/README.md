@@ -8,7 +8,7 @@ This directory is the work queue, not a description of everything already shippe
 
 | Plan                                      | Recorded status and scope                                                                                                                              |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Assistant roadmap](assistant.md)         | v1 and in-chat USER approval/source-chat deletion shipped; remaining roadmap, decisions and watch items retain their own gates                         |
+| [Assistant roadmap](assistant.md)         | v1 and in-chat USER approval/source-chat deletion shipped; items 2 and 4 locally verified pending review/release; the rest retain their own gates      |
 | [Project isolation](project-isolation.md) | Capability policy/instructions implemented; B, D, E1 and E3 are proposals, not privacy guarantees; E2 locally verified pending recorded review/release |
 | [Cross-feature backlog](backlog.md)       | Unresolved browser, schedules, Android, sandbox, Rust post-cutover and accepted PTC follow-ups/manual checks extracted from completed designs          |
 

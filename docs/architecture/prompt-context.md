@@ -4,7 +4,7 @@ This reference preserves the implemented contracts from the completed 2026-10-02
 
 ## Prompt files and authority
 
-Chat sessions load global `$PIRC_CONFIG_DIR/SOUL.md` (persona), then the fixed private-directory environment description, then `$PIRC_CONFIG_DIR/CHAT.md` (chat rules), followed by feature sections and cwd. Absent Soul uses the built-in identity/style. Coding sessions use AGENTS.md instead and do not load Soul/Chat. There is no project Soul override or configurable section ordering. Edits apply at the next agent start, not immediately to running agents; frozen project instructions have their own lifecycle.
+Chat sessions load global `$PIRC_CONFIG_DIR/SOUL.md` (persona), then the fixed private-directory environment description, then `$PIRC_CONFIG_DIR/CHAT.md` (chat rules), followed by feature sections and cwd. Absent Soul uses the built-in identity/style. Coding sessions use AGENTS.md instead and do not load Soul/Chat; they get the approved USER entries from the gateway as a frozen `## User` feature section (read-only, no MEMORY or workspaces). There is no project Soul override or configurable section ordering. Edits apply at the next agent start, not immediately to running agents; frozen project instructions have their own lifecycle.
 
 Settings → Assistant manages the same node-local files users edit by hand, not another state-directory or gateway copy. Each is limited to 8,000 characters; input is CRLF-normalized and trimmed, and empty content deletes the file. Writes use an exclusive mode-0600 temporary file and rename. The files are explicitly protected configuration paths.
 

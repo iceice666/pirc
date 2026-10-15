@@ -71,7 +71,7 @@ A chat's teammates and subagents get the project's policy as it stands when they
 Project instructions are standing instructions you write for one project, for example "Answer in French" or "This project is about planning a kitchen renovation; keep a running budget table". They differ from the other places the assistant gets context:
 
 - **`SOUL.md` / `CHAT.md`** in the chat node's config directory define the global persona and chat rules. Coding sessions use `AGENTS.md` instead and never read these two files. Project instructions apply only to that project's chats.
-- **USER and MEMORY** (Settings → Memory) are the assistant's memory of you. They are shared by all chats, the assistant proposes or writes them, and you review them. The assistant never writes project instructions. They change only when you edit them, and they do not change what is in memory.
+- **USER and MEMORY** (Settings → Memory) are the assistant's memory of you. They are shared by all chats, the assistant proposes or writes them, and you review them. USER also reaches every coding session on every node (read-only there). The assistant never writes project instructions. They change only when you edit them, and they do not change what is in memory.
 
 ### Editing
 

@@ -14,7 +14,7 @@ Design sources: Hermes (frozen USER/MEMORY snapshot, write approval, search with
 
 ## Roadmap
 
-Ordered by value against cost. Item 1 is implemented and user-accepted (2026-10-03, Asia/Taipei); items 2–6 retain planned work (per-project instructions in item 5 are implemented); 7 is a decision to take; 8 waits for evidence from use. Each item needs the user's go-ahead before implementation.
+Ordered by value against cost. Item 1 is implemented and user-accepted (2026-10-03, Asia/Taipei); items 2 and 4 are implemented and locally verified (2026-10-15, user go-ahead the same day), pending review and release; items 3, 5 and 6 retain planned work (per-project instructions in item 5 are implemented); 7 is a decision to take; 8 waits for evidence from use. Each item needs the user's go-ahead before implementation.
 
 ## 1. Approve USER proposals in the chat
 
@@ -37,6 +37,8 @@ The web chat list and project page offer **Delete chat**. The same confirmation 
 
 ## 2. USER in coding sessions
 
+**Implemented and locally verified 2026-10-15; pending review and release.** Record: [assistant history](../docs/history/assistant.md#assistant-context-and-snapshot). Deviations: the migration note is in the [agent configuration guide](../docs/guides/agent.md) rather than the README, which has no configuration section; the coding session waits at most 3 s and warns the user once per agent process, not on every unreachable run; the in-chat approval card also says where USER applies.
+
 Open question answered: approved USER entries should reach coding sessions and replace the preferences duplicated in each node's `~/.config/.pirc/AGENTS.md`.
 
 - `assistant.context` for a directory-workspace session returns `{enabled: true, user, memory: null, workspaces: null}`; the agent renders `## User` only, frozen in the snapshot like a chat's. No memory tools are added: coding sessions read USER and never write it, and `memory.note`/`memory.proposeUser` keep rejecting them.
@@ -54,6 +56,8 @@ The routes are open to device tokens; Android lacks the screens.
 - **Chats in the sidebar.** The Android workspace list should show `chats` and projects first and offer New chat, mirroring the web; chat sessions hide Git and Terminal.
 
 ## 4. Repository identity by normalized `origin`
+
+**Implemented and locally verified 2026-10-15; pending review and release.** Record: [assistant history](../docs/history/assistant.md#cross-workspace-records-and-search). Deviation: the node reports `repo` once per directory workspace (registration and creation), not with each mirrored item; the gateway copies it onto each record as it is mirrored and backfills records without one, so `memory_records.repo` still keeps the repository a note was written in. The URL is read from the workspace's own `.git` config, never by running git (security audit S8) and never from a `.git` above the workspace; `insteadOf` and includes are not followed. Gateway schema 1001 (automatic migration, see [Upgrades](../docs/deploy/upgrades.md)).
 
 Records identify a workspace by gateway workspace id, so two clones of one repository (two nodes, or a clone next to a worktree) are different workspaces and `memory_search({workspace})` misses across them.
 

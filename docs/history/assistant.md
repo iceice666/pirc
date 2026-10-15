@@ -16,7 +16,7 @@ Design sources: Hermes (frozen USER/MEMORY snapshot, write approval, search with
 | ---------------- | ---------------------------------------------------- | --------------------------------- | ------------------------------ | ---------------------------------- |
 | Session OM       | observations, reflections                            | observer, reflector, dropper      | the session                    | session file on the node           |
 | Workspace memory | repo handoff notes                                   | promoter                          | new main sessions in that repo | node `<stateDir>/workspace-memory` |
-| USER             | who the user is, preferences, standing rules         | assistant proposes, user approves | chat sessions                  | gateway SQLite                     |
+| USER             | who the user is, preferences, standing rules         | assistant proposes, user approves | chat and coding sessions       | gateway SQLite                     |
 | MEMORY           | assistant notes: nodes, repos, ongoing work, lessons | assistant, directly               | chat sessions                  | gateway SQLite                     |
 | Records          | mirrored workspace items, delegations                | nodes, daemon                     | chat sessions, by search only  | gateway SQLite                     |
 
@@ -58,7 +58,9 @@ Agent Skills (`SKILL.md` directories) load from three sources, lowest precedence
 
 ## Assistant context and snapshot
 
-Before a chat's first run the agent calls `assistant.context` (10 s timeout). Chat sessions get USER, MEMORY, usage against the budgets, the number of proposals waiting and the directory workspaces with their node and online state. The rendered `## Memory` and `## Workspaces` sections are frozen into the session entry `assistant.snapshot` with the revision of every entry shown, for prompt-cache stability; later changes reach new chats only. An unreachable gateway yields a notice ("do not assume you know nothing"), never an empty memory, and the next run tries again. Other sessions get `{enabled: false}` and no memory tools.
+Before a chat's first run the agent calls `assistant.context` (10 s timeout). Chat sessions get USER, MEMORY, usage against the budgets, the number of proposals waiting and the directory workspaces with their node and online state. The rendered `## Memory` and `## Workspaces` sections are frozen into the session entry `assistant.snapshot` with the revision of every entry shown, for prompt-cache stability; later changes reach new chats only. An unreachable gateway yields a notice ("do not assume you know nothing"), never an empty memory, and the next run tries again.
+
+Coding sessions (directory workspaces, delegated ones included; roadmap item 2, 2026-10-15) get `{enabled: true, user, notes: null, workspaces: null}` and render only a frozen `## User` section (no ids; follow it unless the user says otherwise, repository instructions decide how to work in the repository) in the same `assistant.snapshot` entry. They have no memory tools, and `memory.note`/`memory.proposeUser` still refuse them. They wait at most 3 s; an unreachable gateway costs them USER for that run only, with one warning to the user per agent process. Teammates and subagents have no gateway channel and get none.
 
 Budgets are in characters, because profile text may be Chinese: `PIRC_MEMORY_USER_CHARS` (default 2,000) and `PIRC_MEMORY_NOTE_CHARS` (default 8,000) on the gateway; one entry holds at most 1,000. A write over budget fails with `memory_full` and asks the assistant to make room.
 
@@ -138,6 +140,7 @@ delegations(id TEXT PRIMARY KEY,                -- d + 8 hex
 - **No paths leave the node.** Items name the node session that wrote them, and git state drops the worktree.
 - **Storage** applies lines like `foldWorkspace` (first record wins; `superseded`, `forgotten` erases and keeps the id, `cleared`). Owner and workspace come from `resolveRemoteSession`; items whose session the gateway does not know have no owner and are never found. Forgetting a note on the node removes it from search.
 - **Search.** `memory_search({query, workspace?, limit?})` finds notes (current and superseded) and delegations holding any of up to 8 query words (`LIKE`), ranked by matched words, then current before superseded, then newest. No FTS5: the corpus is small and a trigram index misses two-character Chinese words such as 部署.
+- **Repository identity** (roadmap item 4, 2026-10-15). At registration and on creation a node reports each directory workspace's `origin` normalized to `host/path` (`pirc_protocol::normalize_origin`: scheme, user info, port, query, `.git` dropped; local paths and `file://` give none; anything still holding `@` is refused). It reads `[remote "origin"] url` from the config of the workspace's own `.git` (worktrees through `commondir`; a `.git` above the workspace does not count) and never runs git on the host (security audit S8); includes and `insteadOf` are not followed. The gateway keeps a key only if it is one the function could have produced, in `workspaces.repo`, copies it to each record as it is mirrored (`memory_records.repo`, backfilled for records without one), and lists it in `assistant.context`. With `workspace`, search also matches records and delegations of any workspace with the same repository; hits stay labelled with the workspace that wrote them. A workspace without a remote keeps the earlier behaviour (its own ledgers). A remote changed later is seen when the node registers again.
 - **Remote recall.** `recall(id)` in a chat for an unknown id goes `recall.remote` → the holding node's `POST /api/workspace-memory/recall` (gateway-only), which runs the read-only recall if the user owns the writing session. With the node offline the gateway's copy is returned, marked as such.
 
 ```sql
@@ -145,5 +148,6 @@ memory_mirrors(node_id, ledger_key, watermark, updated_at, PRIMARY KEY (node_id,
 memory_records(node_id, ledger_key, id, content, relevance, recorded_at, git_json, source_ids_json,
   origins_json, node_session_id, session_id, workspace_id, owner_user,
   status,                                      -- 'active' | 'superseded' | 'forgotten'
+  repo,                                        -- the workspace's normalized origin when recorded (schema 1001)
   PRIMARY KEY (node_id, ledger_key, id))
 ```
