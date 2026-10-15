@@ -1,6 +1,6 @@
 # PTC evaluation and migration archive
 
-[All documentation](../../README.md) · [Current tool guide](../../guides/tools.md) · [Accepted follow-ups](../../../plans/backlog.md#accepted-ptc-follow-ups-and-release-checks)
+[All documentation](../../README.md) · [Current tool guide](../../guides/tools.md) · [Accepted follow-ups](../../../plans/README.md)
 
 ## Outcome and reading order
 

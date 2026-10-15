@@ -1,5 +1,7 @@
 # Security audit (2026-10-01)
 
+> Historical audit record, archived from `plans/security-audit.md` on 2026-10-15. Findings, resolutions and evidence are kept as written; TypeScript paths predate the Rust cutover. The findings still open (Low/Info needing a decision or a fix) are tracked in the [plan](../../plans/README.md), phases 4 and 5. Do not treat a finding here as current without re-checking the Rust code.
+
 Status (2026-10-07): **High and Medium fixed** (see "Resolution"); Low and Info partly fixed (see "Low and Info resolution"), the rest open. Original findings below are kept as written. Static reading of `main@95f5920` by four read-only reviewers (daemon, node, agent runtime, web/android/infra) plus spot checks. No dynamic testing. Paths are relative to `apps/gateway/src/` unless noted.
 
 ## Summary

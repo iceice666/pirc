@@ -28,13 +28,13 @@ const SCHEMA: &str = include_str!("schema.sql");
 /// `schema.sql` is always the newest whole.
 const MIGRATIONS: &[(i64, &str)] = &[
     (
-        // Repository identity by normalized `origin` (plans/assistant.md item 4).
+        // Repository identity by normalized `origin` (docs/history/assistant.md).
         1001,
         "ALTER TABLE workspaces ADD COLUMN repo TEXT;
          ALTER TABLE memory_records ADD COLUMN repo TEXT;",
     ),
     (
-        // Projects linked to workspaces (plans/assistant.md item 6).
+        // Projects linked to workspaces (docs/history/assistant.md).
         1002,
         "CREATE TABLE project_links (
            project_workspace_id TEXT NOT NULL REFERENCES workspaces(id), workspace_id TEXT NOT NULL,

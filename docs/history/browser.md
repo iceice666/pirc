@@ -1,6 +1,6 @@
 # Browser tools (Playwright): web_fetch, interaction, live view, takeover, recording
 
-> Historical design and implementation record. Use the [current guide](../guides/browser.md) for operation and the [backlog](../../plans/backlog.md#browser) for unresolved follow-ups. Original proposals and dated validation limits below are preserved, not new authorization.
+> Historical design and implementation record. Use the [current guide](../guides/browser.md) for operation and the [backlog](../../plans/README.md) for unresolved follow-ups. Original proposals and dated validation limits below are preserved, not new authorization.
 
 Status (2026-09-29): phases 1–6 implemented and tested (committed in 22699b8). The design below is as built, apart from the corrections in "As built". Open follow-ups are at the end.
 
@@ -29,7 +29,7 @@ Status (2026-09-29): phases 1–6 implemented and tested (committed in 22699b8).
 
 - Verify on a real Linux node with nixpkgs `chromium`. The Playwright 1.63 CDP protocol is expected to work with a newer Chromium, but this is unverified. Also run the full `nix build`: the flake only sees git-tracked files, so it can run only after the new files are committed.
 - Verify on a real device: Android takeover (tap mapping, IME typing, drag scrolling) and WebM playback.
-- Auto mode does not judge browser actions (it covers shell actions only). Consider a classifier pass for `browser_click`/`browser_type` on non-localhost origins, together with the network taint tagging item in `plans/assistant.md`.
+- Auto mode does not judge browser actions (it covers shell actions only). Consider a classifier pass for `browser_click`/`browser_type` on non-localhost origins, together with the network taint tagging item in the plan (`plans/README.md`, phase 3).
 - Teammates and subagents have no browser. Sharing the parent's tabs would need a lock or a separate tab group per child.
 - The action log (with screenshots) lives in the node's memory only, and is lost on a node restart. Recordings persist.
 - Page content is marked "untrusted" in tool results and the system prompt, but it is not yet tagged for observational memory's provenance.
@@ -89,7 +89,7 @@ web side panel ◀── WS ── daemon relay ◀── node link ── scree
 ## Security / trust
 
 - Not a sandbox: the browser has the node account's network access and the workspace profile's logins.
-- Content from pages is **untrusted** and must be tagged like network output (ties into roadmap item "coarse network taint tagging" in `plans/assistant.md`). Auto mode should classify `browser_click`/`browser_type` on non-localhost origins as consequential.
+- Content from pages is **untrusted** and must be tagged like network output (ties into roadmap item "coarse network taint tagging" in the plan (`plans/README.md`, phase 3)). Auto mode should classify `browser_click`/`browser_type` on non-localhost origins as consequential.
 - Password fields: `browser_type` refuses `type=password` inputs and tells the agent to use `browser_handoff`. Screenshots and snapshots mask password values.
 - Profile dirs are protected paths (the agent's file tools must not read cookies).
 

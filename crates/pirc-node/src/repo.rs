@@ -1,7 +1,7 @@
 //! A directory workspace's repository identity for the gateway: its
 //! `origin` remote, normalized ([`pirc_protocol::normalize_origin`]), so
-//! the assistant finds workspace memory across clones (plans/assistant.md
-//! item 4).
+//! the assistant finds workspace memory across clones
+//! (docs/history/assistant.md).
 //!
 //! The URL is read from the repository's config file, never by running
 //! git: a workspace is agent-writable, and git on the host runs whatever

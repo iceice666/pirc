@@ -650,7 +650,7 @@ fn keeps_invalid_patterns_as_literal_text() {
     );
 }
 
-// Security review of the Rust agent port (plans/security-audit.md, S1–S4).
+// Security review of the Rust agent port (docs/history/security-audit.md, S1–S4).
 
 #[test]
 fn s1_read_only_commands_that_run_programs_are_not_read() {

@@ -28,7 +28,7 @@ The agent retains `lastContext` and atomically replaces `<sessionDir>/context.js
 
 Agent RPC `get_context` returns the live snapshot only below its bounded size allowance (at most 512 KiB). Node `GET /api/sessions/:id/panel/context` tries the live runner with an allowance below the RPC line limit, then falls back to the disk snapshot for large, stopped or older agents. Missing context returns `404 no_context` with a send-a-message-first explanation. The gateway relays under the existing session authorization and does not store the snapshot. Context updates use `panel_changed`.
 
-The web Context panel shows sections, sources, frozen badges, tool definitions and usage. Workspace-readable sources can link to Files; global configuration sources are plain text. Copy all returns the joined prompt. Disk snapshots are labeled with their timestamp, not presented as freshly loaded configuration. Editing/reordering prompts from the inspector is not supported. Native Android inspector scope remains a [backlog decision](../../plans/backlog.md#android).
+The web Context panel shows sections, sources, frozen badges, tool definitions and usage. Workspace-readable sources can link to Files; global configuration sources are plain text. Copy all returns the joined prompt. Disk snapshots are labeled with their timestamp, not presented as freshly loaded configuration. Editing/reordering prompts from the inspector is not supported. Native Android inspector scope remains a [backlog decision](../../plans/README.md).
 
 ## Regression expectations and provenance
 

@@ -1,5 +1,5 @@
 //! `project-instructions` (`agent/features/project-instructions.ts`):
-//! per-project instructions (plans/assistant.md §5), the text the user
+//! per-project instructions (docs/guides/chat-projects.md), the text the user
 //! wrote for every chat of a project, kept by the node and handed to the
 //! agent on its configure line. Like USER/MEMORY it is frozen when the
 //! chat starts: an edit reaches new chats only. It is shown after the chat

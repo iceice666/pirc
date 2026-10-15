@@ -1,30 +1,152 @@
-# Active plans and follow-ups
+# Plan: open work in recommended order
 
 [Project](../README.md) · [Documentation](../docs/README.md) · [Completed design history](../docs/history/README.md)
 
-This directory is the work queue, not a description of everything already shipped. A document's acceptance, an old unchecked item, or its position in this index does not authorize implementation, deployment or paid evaluation. Follow the scope and decision gates in each plan; do not infer completion from an archive move.
+Rewritten 2026-10-15 from the former `assistant.md`, `project-isolation.md`, `backlog.md`, `mobile-audit.md` and `security-audit.md`, which are removed. Their last full text is at commit `7677d24` (`git show 7677d24:plans/<file>.md`); the security audit, with its resolution evidence, is archived at [docs/history/security-audit.md](../docs/history/security-audit.md). Decisions already taken live in the [assistant history](../docs/history/assistant.md) and the [chat projects guide](../docs/guides/chat-projects.md).
 
-## Proposed work and unresolved decisions
+This file is the work queue, not authorization. Every phase still needs the user's go-ahead before implementation, and nothing here authorizes deployment, paid evaluation, deleting state or rerunning the `#[ignore]`d real-host-root tests. When an item is done, record its evidence in docs, check it off here, and move on; do not erase open items silently.
 
-| Plan                                      | Recorded status and scope                                                                                                                              |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Assistant roadmap](assistant.md)         | v1 and in-chat USER approval/source-chat deletion shipped; items 2, 4 and 6 locally verified pending review/release; the rest retain their own gates   |
-| [Project isolation](project-isolation.md) | Capability policy/instructions implemented; B, D, E1 and E3 are proposals, not privacy guarantees; E2 locally verified pending recorded review/release |
-| [Cross-feature backlog](backlog.md)       | Unresolved browser, schedules, Android, sandbox, Rust post-cutover and accepted PTC follow-ups/manual checks extracted from completed designs          |
+**Stale references.** Many original findings cite TypeScript paths (`apps/gateway/src/…`) that no longer exist after the Rust cutover (0.4.0). Before implementing such an item, find the Rust equivalent in `crates/` and confirm the problem still exists. Items already confirmed in Rust are marked _(confirmed in Rust)_.
 
-## Audits with open findings
+## Recommended order
 
-| Audit                                   | Recorded scope                                                                                  |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| [Mobile UI and parity](mobile-audit.md) | Remaining web/Android issues, deferred work and real-device checks from the dated audit         |
-| [Security](security-audit.md)           | High/Medium fixed; Low/Info partly fixed, with open findings and historical resolution evidence |
+| Phase | Theme                                            | Why here                                                                               |
+| ----- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| 1     | Review and release the unreleased assistant work | Schema 1002 and three features sit in Unreleased; the release gets riskier as it grows |
+| 2     | Android approval check (assistant 3a)            | Near-free; completes in-chat approval on the phone                                     |
+| 3     | Network taint (assistant 5)                      | Small; improves memory trust; pairs with browser click/type classification             |
+| 4     | Decision session                                 | Cheap; unblocks phases 5, 6 and 8                                                      |
+| 5     | Security hygiene                                 | Re-verify against Rust, then fix what still applies                                    |
+| 6     | Android parity batch                             | Largest user-visible gap; group to share settings/memory screens                       |
+| 7     | OM model policy (E3), then `secure_delete` (E1)  | Small and independent; E1 must precede hard delete                                     |
+| 8     | Project-only memory (B), then hard delete (D)    | Large designs; need phase 4 decisions                                                  |
+| —     | Manual validation                                | Needs real hardware or hosts; attach to the release that needs it                      |
+| —     | Watch, do not build                              | Waits for evidence from use                                                            |
 
-These status descriptions summarize existing records, not a new code or device audit. In particular, old audit findings and limitations are not automatically current guarantees or proof of an unfixed regression.
+## Phase 1 — Review and release
 
-## Completed work is elsewhere
+- [ ] Review assistant item 2 (USER in coding sessions), item 4 (repository identity by normalized `origin`, schema 1001) and item 6 (projects linked to workspaces, schema 1002). All implemented and locally verified 2026-10-15; records in the [assistant history](../docs/history/assistant.md).
+- [ ] Run the PTC manual real-runtime checks (below) and any NixOS/Linux validation the release depends on.
+- [ ] Release following the [release policy](../docs/development/releasing.md) and [Upgrades](../docs/deploy/upgrades.md) (gateway schema 1002 is refused by 0.4.x; node protocol unchanged at 10).
 
-- [Implementation history](../docs/history/README.md): assistant v1, browser, schedules, Android and sandbox designs.
-- [Prompt/Context contracts](../docs/architecture/prompt-context.md) and [session UI](../docs/guides/session-ui.md): consolidated completed plans.
-- [PTC evaluations](../docs/evaluations/ptc/README.md): accepted hybrid migration, protocols, stopped/superseded runs and unchanged aggregate artifacts. This is not an unfinished PTC-only roadmap.
+Project-isolation E2 (OM config diagnostics) needs no action: it was ported to Rust (`crates/pirc-agent/src/config/memory.rs`) and shipped in 0.4.x.
 
-When closing a plan, retain decisions and evidence in docs, move remaining work into an explicit backlog, and update this index. Do not silently erase open items or turn historical acceptance into a new execution authorization.
+## Phase 2 — Android approvals (assistant 3a)
+
+- [ ] A USER proposal is a `confirm` interaction, which Android already shows in a session. Verify the multi-line body renders and the labels are used. Give delegation confirmations the same check.
+
+## Phase 3 — Network taint (assistant 5)
+
+- [ ] Origins stop at `tool:bash`, which cannot tell `ls` from `curl`. Mark a bash result whose command contains a network fetch (`curl`, `wget`, `fetch`, `http(s)://`, `gh api`, …) as `tool:bash:network`, and the same for `code` calls that run such commands. Notes whose only origins are network-tainted are still stored but rendered in the snapshot with a "from fetched content" label, and the snapshot prompt tells the assistant to treat them as claims, not facts. Full data-flow tracking is out of scope.
+- [ ] Optional, same area: classify `browser_click`/`browser_type` on non-localhost origins (browser follow-up proposal); complete observational-memory provenance tagging of page results.
+
+## Phase 4 — Decisions to take with the user
+
+Assistant (leanings recorded 2026-09-29):
+
+- [ ] **Auto mode in delegated sessions.** Today a dangerous command waits for the user in the delegated session. Leaning: keep the default and offer a checkbox on the delegation confirmation, "treat this task as my request for auto mode", counting the task as a `recentUserRequest` for that run only.
+- [ ] **Settling delegated sessions** after the result is delivered. Leaning: leave them, but show delegation status in the session list.
+- [ ] **Retention.** `memory_log`, `delegations` and `memory_records` grow without bound. Proposal: keep forgotten entries only as tombstones (already), prune `delegations` older than 90 days that are not the target of a `follows`, keep records as long as the ledger has them.
+
+Android:
+
+- [ ] Token rotation before the 30-day limit versus monthly re-pairing (related: A7, warn near the limit).
+- [ ] Sideload-only distribution versus F-Droid/Play; release signing.
+- [ ] Native Android Context inspector: later or never.
+
+Security findings that each need a decision (originally written against TS; re-check in Rust first):
+
+- [ ] **L3** build caches (`~/.cargo/registry`, `~/.cache`, `~/.npm`, …) are writable from the sandbox: document or make opt-in.
+- [ ] **L5** workspaces have no owner: capabilities/instructions edits and schedule creation in chat projects only check the kind. Record and enforce an owner, or document the shared model.
+- [ ] **L6** push endpoints: per-user subscription cap, block private ranges after resolution, throttle `/api/push/test` (re-registering an endpoint moving it to the new user is intentional).
+- [ ] **L10** `schedule pause/resume/delete` without approval (by design; prompt injection can delete schedules).
+- [ ] **L11** hook stdout and gateway `deliver` are plain `user`-role text, unlike team events.
+- [ ] **L12** project config may silently change the default model. **L13** skills inject unlabelled repository text into the system prompt. **L14** `useModel:false`/`enabled:false` downgrade all unknowns to `write` without a UI warning.
+- [ ] **I1** panel terminals are unsandboxed login shells (operators should know `PIRC_TERMINALS=0`). **I2** node writes into agent-writable `.pirc/uploads`/`.pirc/recordings` from outside the sandbox. **I3** a trusted node can inflate gateway state without caps. **I4** delegation errors enumerate all directory workspaces. **I8** confirm example node IDs (`homolab`, `m5pro`, `mac`) are placeholders. **I9** provider `baseUrl` accepts `http://`.
+
+Project isolation (needed before phase 8):
+
+- [ ] B: require fresh sessions on every scope-generation change (recommended) or allow a weaker continuation; explicit copy between scopes and its review; on disable, keep a dormant scope or require deletion/export.
+- [ ] D: shared artifact ownership; old-node upgrade requirements; lost-node policy; whether metadata tombstones may persist; retention/backup/provider guarantee wording; restricted-profile sandbox strength.
+
+## Phase 5 — Security hygiene
+
+- [ ] **L7** global rather than per-node/per-user limits: `MAX_PENDING_REQUESTS = 100`, `MAX_TERMINAL_STREAMS = 64` in `crates/pirc-gateway/src/nodes.rs` _(confirmed in Rust)_.
+- [ ] **L8** no rate limiting; check JSON body limits and whether command payloads are stored whole.
+- [ ] **L15** web ships `sourcemap: true` (`apps/web/vite.config.ts`) _(confirmed)_; workflows pin actions by tag, not SHA _(confirmed)_; NixOS unit lacks `CapabilityBoundingSet=`, `RestrictAddressFamilies=`, `SystemCallFilter=@system-service`, `ProtectProc=invisible`, `RestrictRealtime=`; web dev server binds `0.0.0.0`.
+- [ ] Apply phase 4 security decisions.
+- [ ] Sandbox limitations to revisit: other account-accessible Unix sockets stay reachable on Linux (move inference off Unix sockets or bind-mount narrowly); workspace-memory directory writability permits appends to other repositories' ledgers; approvals are session-only.
+
+Accepted, not to be reopened without a new decision: S10 (host atomic replacement detaches a protected Linux mount) and S18 (browser WebSocket/non-HTTP egress, DNS rebinding); see the [archived audit](../docs/history/security-audit.md).
+
+## Phase 6 — Android parity
+
+Full tables with web/Android file references and fix hints: `git show 7677d24:plans/mobile-audit.md`. Effort: S under an hour, M half a day, L a day or more.
+
+**6a. Settings and memory (assistant 3 + S10)**
+
+- [ ] **S10** settings screen: gateway host, client id, nodes online and workspace counts, settled toggle (fixes **S7** persistence), Unpair, "Backends: set on the web" hint (covers deferred **D1**). M
+- [ ] **Memory screen** in settings: `GET /api/memory` with approve/reject/forget/restore, the web's forget disclosure, `memory=1` subscription for `memory_changed`, pending count on the settings entry.
+- [ ] **Chats in the sidebar:** `chats` and projects first, New chat; chat sessions hide Git and Terminal.
+
+**6b. High-value gaps**
+
+- [ ] **D2** notifications for run finished / `waiting_input` (minimum: local notification while the stream is alive; full: push channel). L
+- [ ] **S2** session list search and node filter. S–M
+- [ ] **O-S2** share-sheet entry (`ACTION_SEND` text/images → session picker). M
+- [ ] **C9** tool card detail (failed auto-expand, duration, `bash`/`write`/`edit` rendering, Error label). M
+
+**6c. Small chat fixes (S each)**
+
+- [ ] C7 editor `language` label · C10 live thinking as Markdown · C11 notice `Source: detail` split and collapse · C12 `custom` entries open · C13 message timestamps
+- [ ] O-C1 dock queue above the composer · O-C2 separate model/level targets · O-C4 single-select submits on tap · O-C5 scrollable long `select` · O-C6 reset "Copied", copy via long-press · O-C8 icon top-bar actions
+
+**6d. Small shell and panel fixes (S each)**
+
+- [ ] S6 add-workspace node preselect and zero-node state · S13 short relative time · O-S3 collapsible groups · O-S4 remember last workspace · O-S5 actionable empty state · O-S6 validate pasted pairing link live · O-S7 pin glyph
+- [ ] F2 symlink icon (both clients) · F4 open file from diff · F7 "No commits yet" and status chip · F8 Tasks details (agentRunning, newest-first, duration, watch count, event time) · F9 scroll task output to tail · F10 memory phase labels and unavailable/disabled split · F12 reflection sources/ids and 3-line clamp
+- [ ] AF3 confirm before stopping a task · AF6 stop terminal polling when empty · O-F1 reveal file in folder · O-F3 Paste/`^C`/copy in terminal key row (S–M) · O-F6 git status colours · O-F7 breadcrumb scrolls to current · O-F8 lazy task output
+
+**6e. Larger items**
+
+- [ ] C14 Markdown math and mermaid (L) · O-F2 keep terminals alive while switching (L) · O-F4 file navigation in multi-file diffs (M) · D3 cached offline session list (M)
+- [ ] Polish: motion, copy menus, large-font and small-screen passes; release signing.
+- [ ] Optional: A7 warn near the 30-day token limit · A14 `setUnlockedDeviceRequired(true)` · L7 Android lint strictness, baseline profile, `androidTest` (skipped on purpose) · web i18n (skipped on purpose).
+- [ ] Port Android-only ideas to web where useful: AC2 attachment limits, AS3 workspace name from path, AS4 online-first sort, AF1 wrap toggle.
+
+## Phase 7 — Small storage and config items
+
+- [ ] **E3 missing OM model policy.** Add `missingModelPolicy: 'fallback' | 'error'` (default `fallback`). In `error` mode fail with a clear configuration error before choosing a session/fallback model or sending inference; report it as a persistent visible failure, not rate limiting. Recommended: validate every explicitly configured choice on startup. Keep rate-limit fallback for valid models. Tests must prove no inference on an unresolved preferred model in strict mode.
+- [ ] **E1 `secure_delete`.** `PRAGMA secure_delete = ON` on every gateway SQLite connection (and node databases sharing the constructor). Measure representative writes first; test the pragma; document write amplification. Does not sanitize old WAL frames, backups or files.
+
+## Phase 8 — Project-only memory and hard delete
+
+Full designs (change points, invariants, migration and protocol): `git show 7677d24:plans/project-isolation.md`, sections B and D. Paths there are TS and must be remapped to `crates/pirc-gateway`/`crates/pirc-agent`.
+
+- [ ] **B. Project-only USER/MEMORY, opt-in.** Off by default and for existing projects; global memory stays the preferred mode. Add `scope_id` (default `global`) to entries/log/proposals and a composite tombstone key; scope every store entry point by a trusted `{owner, scope}` derived from the session, never from agent arguments; scope search, recall and mirrored records; version snapshots by scope generation; proposals bind scope and generation. Not retroactive: old sessions keep their frozen snapshots. Isolates projects from each other, not data from the gateway/node operators, providers or backups.
+- [ ] **D. Hard-delete project.** Durable deletion jobs with per-node fences and idempotent, generation-bound node cleanup; refuse all reads/writes for the identity during deletion; offline nodes stay pending, lost nodes end as "cannot verify"; upload provenance table before promising upload deletion; minimal identity tombstone against resurrection. Reuse the shipped source-chat deletion machinery. Depends on E1; the restricted-project profile also needs B plus upload/browser capability gates.
+
+## Manual validation (needs real hardware or hosts)
+
+Attach each to the release that depends on it; none is a feature task.
+
+- **Browser:** real Linux node with nixpkgs Chromium/CDP and full Nix build; real Android takeover (tap mapping, IME, drag scrolling) and WebM playback.
+- **Schedules:** installed-PWA push on a real iPhone (Add to Home Screen). Deploy gateway and nodes together for the changed deliver body.
+- **Sandbox (NixOS/Linux):** bubblewrap under unit hardening (`NoNewPrivileges`, `ProtectSystem=strict`, `PrivateDevices`); tmpfiles handover of an existing `/var/lib/pirc/daemon`; `apiKeyFile` ownership after the move to `pirc-gateway`; bundled srt finding `apply-seccomp`; CI job `sandbox-podman`.
+- **Mobile:** iOS/Android soft keyboard and safe areas, CJK IME in the Android composer, terminal https asset origin, release build on a real phone.
+- **PTC before release:** node/agent crash during a spinning script (orphaned guest exits; also a team child crashing mid-script); decline node sandbox approvals in web and Android and see the host-written `[declined]` section; relay script screenshots through a real node; direct calls with optional `null` and extra arguments on real Anthropic and OpenAI-compatible providers; web/Android rendering of `[declined]`, `[hooks]` and bounded arguments.
+- **Rust post-cutover:** the `node_link_side_runs` CI timeout (once, not reproduced); TLS, a real identity provider, phone pairing, push and terminals are not covered by the macOS end-to-end checks; v0.4.1 is unsigned and not notarized.
+
+## Accepted limitations (record only)
+
+- **Browser:** teammates/subagents have no browser; the screenshot action log is memory-only and lost on node restart.
+- **PTC (accepted P3):** bash writes via a symlink created in the same command can skip the write lease; `bash curl`, `agent_inbox`, `delegation_status`, `memory_search` output lacks untrusted tagging; guests inherit agent sandbox rights; the approval convention does not enumerate host-gated operations; operations ignoring abort may outlive the five-second grace; after an agent crash mid-script the model sees "interrupted"; queued operations count toward progress and eight long waits can fill all slots. Reviewed fixes changed behavior after the evaluated builds and were not re-measured.
+- **Rust post-cutover, waived not passed:** full PTC/task-time comparison with the TS baseline, real-provider smoke tests, polyglot evaluation. Reopening needs an agreed protocol, budget and credentials (historical tooling at `2d480d3`). Protocol 10 is incompatible with TS nodes/gateways; never delete old state without approval.
+
+## Watch, do not build yet
+
+- **Consolidation ("dreaming"):** only if `memory_full` becomes frequent at 8,000 characters; must keep origins (consolidated text may not gain `user` origin). Revisit budgets first.
+- **Moving chats between projects, shared project files:** not painful with a handful of chats.
+- **Vector search:** `LIKE` over a few thousand notes is fine; revisit only when searches miss.
+- **A second chat node:** would need its own `chats` workspace and a rule for New chat.
+- **`workspace.read`** (reading a linked repository from a project without delegating): only if chats keep delegating just to look at a file.

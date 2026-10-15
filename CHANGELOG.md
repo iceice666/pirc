@@ -51,7 +51,7 @@ Compatible with 0.4.0: same node protocol (10) and state; upgrade the gateway an
 
 ### Validation limitations
 
-- The user explicitly waived the remaining full PTC/task-time and native provider/subscription smoke-test gate, including unresolved polyglot review/accounting results. These are not reported as passed. Previously accepted sandbox/browser security gaps remain documented in the [rewrite plan](docs/history/rust-rewrite.md) and [security audit](plans/security-audit.md).
+- The user explicitly waived the remaining full PTC/task-time and native provider/subscription smoke-test gate, including unresolved polyglot review/accounting results. These are not reported as passed. Previously accepted sandbox/browser security gaps remain documented in the [rewrite plan](docs/history/rust-rewrite.md) and [security audit](docs/history/security-audit.md).
 
 ### Security
 

@@ -1,6 +1,6 @@
 # Scheduled agent runs (cron)
 
-> Historical design and implementation record. Use the [current guide](../guides/schedules.md) for operation and the [backlog](../../plans/backlog.md#schedules) for unresolved follow-ups. Original proposals and dated validation limits below are preserved, not new authorization.
+> Historical design and implementation record. Use the [current guide](../guides/schedules.md) for operation and the [backlog](../../plans/README.md) for unresolved follow-ups. Original proposals and dated validation limits below are preserved, not new authorization.
 
 Status (2026-09-29): phases 1–5 implemented and tested.
 

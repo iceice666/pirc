@@ -1,5 +1,5 @@
 //! A repository's identity across clones: its `origin` remote URL,
-//! normalized (plans/assistant.md item 4). Two clones of one repository,
+//! normalized (docs/history/assistant.md). Two clones of one repository,
 //! on two nodes or next to each other, share it, so workspace memory found
 //! for one is found for the other.
 //!

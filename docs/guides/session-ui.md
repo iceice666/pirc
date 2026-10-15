@@ -39,4 +39,4 @@ The events WebSocket opt-in `sessions=1` emits `sessions_changed` outside a sess
 
 ## Scope and remaining work
 
-The mock's overlapping file pane and competing composer designs were historical design questions, not outstanding product tasks. Current mobile gaps belong to the [mobile audit](../../plans/mobile-audit.md); platform validation and Android distribution/polish decisions belong to the [backlog](../../plans/backlog.md#android). This reference preserves built behavior and known design deviations without authorizing new UI work.
+The mock's overlapping file pane and competing composer designs were historical design questions, not outstanding product tasks. Current mobile gaps belong to the [mobile audit](../../plans/README.md#phase-6--android-parity); platform validation and Android distribution/polish decisions belong to the [backlog](../../plans/README.md). This reference preserves built behavior and known design deviations without authorizing new UI work.

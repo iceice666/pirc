@@ -1,6 +1,6 @@
 # Assistant memory and delegation: implementation history
 
-Historical implementation record from the assistant v1 plan (2026-09-29, with later role updates). Version numbers, startup flags and UI descriptions below are snapshots, not current deployment instructions. See [current guides](../README.md), [active assistant roadmap](../../plans/assistant.md), and [observational-memory architecture](../architecture/observational-memory.md).
+Historical implementation record from the assistant v1 plan (2026-09-29, with later role updates). Version numbers, startup flags and UI descriptions below are snapshots, not current deployment instructions. See [current guides](../README.md), [active assistant roadmap](../../plans/README.md), and [observational-memory architecture](../architecture/observational-memory.md).
 
 - Global memory lives on the gateway, not on any node.
 - Only USER (profile) changes need the user's approval. The assistant writes MEMORY notes directly; the user can review, revert and forget them.

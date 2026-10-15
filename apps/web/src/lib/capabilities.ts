@@ -23,7 +23,7 @@ export const capabilitiesApi = {
     }),
 };
 
-/** A chat project's instructions, kept by its node (plans/assistant.md §5). */
+/** A chat project's instructions, kept by its node (docs/guides/chat-projects.md). */
 export interface ProjectInstructions {
   text: string;
   maxChars: number;
@@ -42,8 +42,8 @@ export const instructionsApi = {
 };
 
 /**
- * A directory workspace a chat project is linked to (plans/assistant.md
- * §6): a default and an ordering for its assistant, never a permission.
+ * A directory workspace a chat project is linked to
+ * (docs/history/assistant.md): a default and an ordering for its assistant, never a permission.
  */
 export interface ProjectLink {
   workspaceId: string;

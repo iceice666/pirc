@@ -149,7 +149,7 @@ CREATE TABLE workspace_capabilities (
   workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id), policy_json TEXT NOT NULL
 );
 
--- The directory workspaces a chat project is about (plans/assistant.md item 6): a
+-- The directory workspaces a chat project is about (docs/history/assistant.md): a
 -- default and an ordering, never a permission. No foreign key on workspace_id: a
 -- link to a workspace that went away stays, shown as such. repo is the workspace's
 -- normalized origin, so a link also covers the other clones of its repository.

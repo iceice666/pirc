@@ -1,6 +1,6 @@
 # OS sandbox for agent processes
 
-> Historical design and implementation record. Use the [current guide](../deploy/sandbox-and-browser.md) for operation and the [backlog](../../plans/backlog.md#sandbox) for unresolved follow-ups. Original proposals and dated validation limits below are preserved, not new authorization.
+> Historical design and implementation record. Use the [current guide](../deploy/sandbox-and-browser.md) for operation and the [backlog](../../plans/README.md) for unresolved follow-ups. Original proposals and dated validation limits below are preserved, not new authorization.
 
 Status (2026-10-02): option C built and tested on macOS; mandatory and fail-closed, with srt built into the node executables; not yet run on a real NixOS node. The investigation below is kept as written; "Decisions" and "As built" come first. Paths are relative to `apps/gateway/src/` unless noted.
 
@@ -226,7 +226,7 @@ This covers `nix build`, `just switch` (still subject to the existing rule that 
 
 Documented so nobody treats the sandbox as the whole answer:
 
-- `web_fetch` and `browser_*` run in the node's Chromium; `web_search` runs on the daemon. They sit outside the sandbox's network filter and remain exfiltration channels. Tracked with the taint work in `plans/assistant.md`.
+- `web_fetch` and `browser_*` run in the node's Chromium; `web_search` runs on the daemon. They sit outside the sandbox's network filter and remain exfiltration channels. Tracked with the taint work in the plan (`plans/README.md`, phase 3).
 - Anything sent to the model provider.
 - Allowlisted domains: an allowed `github.com` lets the agent push anywhere.
 - Hooks come from config the user writes. Sandboxing them (A does) may break hooks that expect full access.
