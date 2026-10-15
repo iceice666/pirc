@@ -21,6 +21,7 @@ use pirc_protocol::{Message, UserBlock};
 use serde_json::{Map, Value, json};
 
 use crate::agent::{Agent, OperationOptions, OperationStage, ScriptCapabilities};
+use crate::features::memory::serialize::{BASH_NETWORK, fetches_network};
 use crate::host::AgentHost;
 use crate::session_store::{EntryData, PTC_STORE_ENTRY};
 use crate::tools::{Tool, ToolContext, ToolResult, ToolSpec, js, spec_tool};
@@ -356,6 +357,17 @@ async fn invoke(script: Rc<Script>, call: BrokerCall) -> Result<Value, PtcError>
     if capability.meta.untrusted {
         push_unique(&mut script.untrusted.borrow_mut(), &name);
     }
+    // A shell command that fetches from the network brings back web content
+    // too: fenced like it, and an origin of its own.
+    if name == "bash"
+        && args
+            .get("command")
+            .and_then(Value::as_str)
+            .is_some_and(fetches_network)
+    {
+        push_unique(&mut script.started.borrow_mut(), BASH_NETWORK);
+        push_unique(&mut script.untrusted.borrow_mut(), BASH_NETWORK);
+    }
     let declined = script.declined.clone();
     let options = OperationOptions {
         before_execute: Some(Rc::new(move |final_name: String, final_args| {
@@ -669,6 +681,7 @@ impl PtcTool {
         .await;
         agent.remove_running_script(&started);
         let untrusted = script.untrusted.borrow().clone();
+        let untrusted_names = untrusted.clone();
         // Writes are kept only when the script completed, so each branch sees
         // its own values.
         if let Some(store) = &report.store
@@ -736,6 +749,9 @@ impl PtcTool {
         if !store_taint.is_empty() {
             details.insert("storeTaint".to_owned(), json!(store_taint));
         }
+        if untrusted_names.iter().any(|name| name == BASH_NETWORK) {
+            details.insert("networkFetch".to_owned(), json!(true));
+        }
         let mut content = vec![UserBlock::Text {
             text: body,
             text_signature: None,
@@ -775,6 +791,15 @@ pub fn started_capabilities(message: &Message) -> Option<Vec<String>> {
         {
             push_unique(&mut names, capability);
         }
+    }
+    // A shell command in it fetched from the network.
+    if details
+        .as_ref()
+        .and_then(|d| d.get("networkFetch"))
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        push_unique(&mut names, BASH_NETWORK);
     }
     // What the script may have loaded from a store written after reading web
     // content.

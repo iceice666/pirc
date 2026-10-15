@@ -37,7 +37,7 @@ Project-isolation E2 (OM config diagnostics) needs no action: it was ported to R
 
 ## Phase 3 — Network taint (assistant 5)
 
-- [ ] Origins stop at `tool:bash`, which cannot tell `ls` from `curl`. Mark a bash result whose command contains a network fetch (`curl`, `wget`, `fetch`, `http(s)://`, `gh api`, …) as `tool:bash:network`, and the same for `code` calls that run such commands. Notes whose only origins are network-tainted are still stored but rendered in the snapshot with a "from fetched content" label, and the snapshot prompt tells the assistant to treat them as claims, not facts. Full data-flow tracking is out of scope.
+- [x] Done 2026-10-15: `bash` results (direct and inside `ptc`) whose command names a network fetcher or URL have origin `tool:bash:network`; MEMORY notes with a network origin and no `user` origin are rendered "(from fetched content)" in the snapshot with a claims-not-facts line; `ptc` results with such a `bash` are fenced as untrusted. Record: [assistant history](../docs/history/assistant.md#assistant-context-and-snapshot).
 - [ ] Optional, same area: classify `browser_click`/`browser_type` on non-localhost origins (browser follow-up proposal); complete observational-memory provenance tagging of page results.
 
 ## Phase 4 — Decisions to take with the user
@@ -88,7 +88,7 @@ Re-audited against Rust on 2026-10-15; see the [re-audit](../docs/history/securi
 - [x] **L15** done 2026-10-15: no source maps in the web build; dev/preview bind localhost; `check.yml`/`android.yml` actions pinned by commit SHA (tag in a comment); NixOS units gain `CapabilityBoundingSet=`, `RestrictRealtime=`, `RestrictAddressFamilies=` (both), and `SystemCallFilter=@system-service`, `SystemCallArchitectures=native`, `ProtectProc=invisible`, `RestrictNamespaces=` (gateway only; the node keeps namespaces and mount calls for bubblewrap). Checked: the gateway under those filters in a user `systemd-run`, bubblewrap under the node's address-family and realtime limits, module evaluation. Not checked: a real NixOS host (see manual validation).
 - [ ] Apply phase 4 security decisions.
 - [ ] Sandbox limitations to revisit (all confirmed): Linux allows every Unix socket not on the known-host-socket list (`sandbox/linux.rs`; move inference off Unix sockets or bind-mount narrowly); the whole workspace-memory directory is a writable root, so an agent can append to other repositories' ledgers (`pirc-policy/src/session.rs`); domain approvals are session-only.
-- [ ] Accepted PTC limitation, still true: `bash`, `memory_search`, `delegation_status` and `agent_inbox` results are not marked untrusted (`ptc/registry.rs`). Revisit with the phase 3 network taint.
+- [ ] Accepted PTC limitation, partly addressed by phase 3: a `bash` operation that names a network fetcher or URL now fences the `ptc` result as untrusted; other `bash` output, `memory_search`, `delegation_status` and `agent_inbox` results are still not marked untrusted (`ptc/registry.rs`).
 
 Verified fixed in Rust (no action): L1 shared sensitive-path list, L2 `.git/hooks`/`.git/config` protection, L4 workspace registration refusal, L9 database mode 0600, I6 mermaid through DOMPurify, I7 `result` ignored, M14 optional proxy secret.
 

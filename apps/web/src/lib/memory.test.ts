@@ -11,6 +11,9 @@ describe('memory labels', () => {
     expect(describeOrigins(['assistant', 'custom:agent-team', 'tool:bash', 'tool:read'])).toBe(
       'From the assistant, tool output (bash, read), agent-team messages',
     );
+    expect(describeOrigins(['assistant', 'tool:bash:network'])).toBe(
+      'From the assistant, tool output (bash fetching from the network)',
+    );
     expect(describeOrigins([])).toBe('');
   });
 

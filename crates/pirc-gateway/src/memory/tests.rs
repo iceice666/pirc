@@ -188,6 +188,55 @@ fn notes_are_added_replaced_and_removed_with_every_revision_logged() {
 }
 
 #[test]
+fn notes_from_fetched_content_are_marked_in_the_context() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let store = store(&conn);
+    let write = |content: &str, origins: Value| {
+        store
+            .write_note(
+                ME,
+                &add(content),
+                &Change {
+                    origins,
+                    ..from_chat()
+                },
+            )
+            .unwrap()
+            .0
+    };
+    write("fetched", json!(["assistant", "tool:bash:network"]));
+    write(
+        "browsed",
+        json!(["assistant", "tool:browser_snapshot", "tool:read"]),
+    );
+    write("local", json!(["assistant", "tool:bash"]));
+    // The user's own words count more than a page they asked about.
+    write("quoted", json!(["assistant", "tool:web_fetch", "user"]));
+    let context = store.context(ME, None).unwrap();
+    let fetched: Vec<(&str, bool)> = context["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|note| {
+            (
+                note["content"].as_str().unwrap(),
+                note.get("fetched") == Some(&json!(true)),
+            )
+        })
+        .collect();
+    assert_eq!(
+        fetched,
+        [
+            ("fetched", true),
+            ("browsed", true),
+            ("local", false),
+            ("quoted", false),
+        ]
+    );
+}
+
+#[test]
 fn notes_stay_within_the_budget_one_entry_per_fact() {
     let db = Db::memory();
     let conn = db.lock();

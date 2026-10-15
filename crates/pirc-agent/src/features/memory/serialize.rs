@@ -42,6 +42,72 @@ pub fn message_origin(message: &Message) -> String {
     }
 }
 
+/// The capability name a `bash` call that fetched from the network counts
+/// as (origin `tool:bash:network`): `bash` cannot tell `ls` from `curl`.
+pub const BASH_NETWORK: &str = "bash:network";
+
+/// Programs that fetch from the network, by name.
+const NETWORK_PROGRAMS: [&str; 10] = [
+    "curl", "wget", "fetch", "aria2c", "xh", "lynx", "w3m", "links", "elinks", "gh",
+];
+
+/// Whether a shell command fetches from the network, judged coarsely by the
+/// programs and URLs it names (`curl`, `wget`, `gh api`, `git fetch`, any
+/// `http(s)://` or `ftp://` URL), not by what actually runs. Full data-flow
+/// tracking is out of scope: this only labels what came back.
+pub fn fetches_network(command: &str) -> bool {
+    let lower = command.to_ascii_lowercase();
+    if ["http://", "https://", "ftp://"]
+        .iter()
+        .any(|scheme| lower.contains(scheme))
+    {
+        return true;
+    }
+    lower
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.'))
+        .map(|word| word.rsplit('/').next().unwrap_or(word))
+        .any(|word| NETWORK_PROGRAMS.contains(&word))
+}
+
+/// The arguments of tool call `id`, from the assistant messages in `entries`.
+fn tool_call_arguments<'a>(
+    entries: &'a [SessionEntry],
+    id: &str,
+) -> Option<&'a serde_json::Map<String, Value>> {
+    entries.iter().rev().find_map(|entry| match &entry.data {
+        crate::session_store::EntryData::Message(Message::Assistant(message)) => {
+            message.content.iter().find_map(|content| match content {
+                AssistantContent::ToolCall {
+                    id: call,
+                    arguments,
+                    ..
+                } if call == id => Some(arguments),
+                _ => None,
+            })
+        }
+        _ => None,
+    })
+}
+
+/// [`message_origin`], except that a `bash` result whose call (looked up in
+/// `entries`) fetched from the network is `tool:bash:network`.
+pub fn entry_origin(entries: &[SessionEntry], message: &Message) -> String {
+    if let Message::ToolResult {
+        tool_name,
+        tool_call_id,
+        ..
+    } = message
+        && tool_name == "bash"
+        && tool_call_arguments(entries, tool_call_id)
+            .and_then(|arguments| arguments.get("command"))
+            .and_then(Value::as_str)
+            .is_some_and(fetches_network)
+    {
+        return format!("tool:{BASH_NETWORK}");
+    }
+    message_origin(message)
+}
+
 /// `RECALL_OMITTED`: what the observer sees instead of recall output:
 /// recalled memory replays older evidence, and learning it again would let
 /// memory reinforce itself.
@@ -235,16 +301,48 @@ pub fn serialize_chunk(entries: &[SessionEntry], max_tokens: u64) -> Chunk {
             chunk.source_entry_ids.push(entry.id.clone());
             chunk
                 .origins
-                .insert(entry.id.clone(), message_origin(message));
+                .insert(entry.id.clone(), entry_origin(entries, message));
             break;
         }
         blocks.push(block);
         chunk.source_entry_ids.push(entry.id.clone());
         chunk
             .origins
-            .insert(entry.id.clone(), message_origin(message));
+            .insert(entry.id.clone(), entry_origin(entries, message));
         chunk.estimated_tokens += cost;
     }
     chunk.text = blocks.join("\n\n");
     chunk
+}
+
+#[cfg(test)]
+mod network_tests {
+    use super::fetches_network;
+
+    #[test]
+    fn finds_network_fetches_by_program_or_url() {
+        for command in [
+            "curl -s https://example.com",
+            "wget -qO- example.com",
+            "/usr/bin/curl example.com",
+            "gh api repos/o/r/issues",
+            "gh issue view 12",
+            "git fetch origin",
+            "cat urls.txt | xargs -n1 CURL",
+            "python3 fetch_page.py http://localhost:8080",
+            "npm view left-pad --registry=https://registry.npmjs.org",
+            "aria2c ftp://mirror/x.iso",
+        ] {
+            assert!(fetches_network(command), "{command}");
+        }
+        for command in [
+            "ls -la",
+            "cargo test --locked",
+            "grep -rn curlew src",
+            "echo fetched > out.txt",
+            "rg 'https' -l",
+        ] {
+            assert!(!fetches_network(command), "{command}");
+        }
+    }
 }

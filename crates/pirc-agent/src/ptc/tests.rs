@@ -490,6 +490,15 @@ fn started_capabilities_come_from_the_recorded_details() {
         started_capabilities(&result("ptc", json!({}))),
         Some(Vec::new())
     );
+    // A bash operation that fetched from the network.
+    assert_eq!(
+        started_capabilities(&result(
+            "ptc",
+            json!({ "operations": [{ "capability": "bash", "outcome": "completed" }],
+                "networkFetch": true })
+        )),
+        Some(vec!["bash".to_owned(), "bash:network".to_owned()])
+    );
 }
 
 #[test]

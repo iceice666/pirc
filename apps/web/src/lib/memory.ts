@@ -96,7 +96,9 @@ export const memoryApi = {
 
 /** Where an entry's text came from, for people. */
 export function describeOrigins(origins: string[]): string {
-  const tools = origins.filter((origin) => origin.startsWith('tool:')).map((o) => o.slice(5));
+  const tools = origins
+    .filter((origin) => origin.startsWith('tool:'))
+    .map((o) => (o === 'tool:bash:network' ? 'bash fetching from the network' : o.slice(5)));
   const others = origins
     .filter((origin) => origin.startsWith('custom:'))
     .map((origin) => origin.slice(7));

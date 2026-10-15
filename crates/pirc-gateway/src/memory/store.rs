@@ -110,10 +110,30 @@ impl Entry {
         self.kind == kind.as_str()
     }
 
+    /// Written from content fetched from the network and from nothing the
+    /// user said: a `bash` command that fetched (`tool:bash:network`), web
+    /// search or fetch, or the browser. The snapshot labels such notes.
+    pub fn fetched(&self) -> bool {
+        let origins: Vec<&str> = self
+            .origins
+            .as_array()
+            .map(|origins| origins.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        !origins.contains(&"user") && origins.iter().copied().any(network_origin)
+    }
+
     /// The session the current text came from.
     pub fn source_session(&self) -> Option<&str> {
         self.sources.get("sessionId").and_then(Value::as_str)
     }
+}
+
+/// An origin that is content fetched from the network.
+pub fn network_origin(origin: &str) -> bool {
+    matches!(
+        origin,
+        "tool:bash:network" | "tool:web_fetch" | "tool:web_search"
+    ) || origin.starts_with("tool:browser_")
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -338,8 +358,12 @@ impl<'a> Store<'a> {
             .iter()
             .filter(|entry| entry.is(kind))
             .map(|entry| {
-                json!({ "id": entry.id, "content": entry.content,
-                    "revision": entry.revision, "updatedAt": entry.updated_at })
+                let mut brief = json!({ "id": entry.id, "content": entry.content,
+                    "revision": entry.revision, "updatedAt": entry.updated_at });
+                if kind == Kind::Note && entry.fetched() {
+                    brief["fetched"] = json!(true);
+                }
+                brief
             })
             .collect()
     }
