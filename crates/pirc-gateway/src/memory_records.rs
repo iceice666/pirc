@@ -28,6 +28,57 @@ use crate::util::{now_ms, safe_json};
 const HIT_CHARS: usize = 600;
 const MAX_TERMS: usize = 8;
 
+/// What one node may keep mirrored here (security audit I3): rows,
+/// forgotten tombstones included, and note bytes. Far above a real ledger
+/// (notes are folded and capped on the node); a node past it gets no new
+/// rows until some are cleared, and the gateway logs it. The node's ledger
+/// stays the record; this is only the search copy.
+const NODE_MAX_ROWS: u64 = 200_000;
+const NODE_MAX_BYTES: u64 = 64 * 1024 * 1024;
+
+/// A node's mirrored rows and note bytes, and its limits.
+struct Quota {
+    rows: u64,
+    bytes: u64,
+    max_rows: u64,
+    max_bytes: u64,
+    refused: u64,
+}
+
+impl Quota {
+    fn of(conn: &Connection, node_id: &str, max_rows: u64, max_bytes: u64) -> ApiResult<Self> {
+        let (rows, bytes) = conn.query_row(
+            "SELECT COUNT(*), COALESCE(SUM(length(CAST(content AS BLOB))),0) FROM memory_records WHERE node_id=?",
+            [node_id],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+        )?;
+        Ok(Self {
+            rows: rows.max(0) as u64,
+            bytes: bytes.max(0) as u64,
+            max_rows,
+            max_bytes,
+            refused: 0,
+        })
+    }
+
+    fn with(mut self, refused: u64) -> Self {
+        self.refused = refused;
+        self
+    }
+
+    /// Take room for one row of `bytes` content, or count it refused.
+    fn admit(&mut self, bytes: usize) -> bool {
+        let bytes = bytes as u64;
+        if self.rows >= self.max_rows || self.bytes + bytes > self.max_bytes {
+            self.refused += 1;
+            return false;
+        }
+        self.rows += 1;
+        self.bytes += bytes;
+        true
+    }
+}
+
 /// Byte offsets of a node's mirrored ledgers, by ledger key (sent in `registered`).
 pub fn watermarks(app: &App, node_id: &str) -> Value {
     let conn = app.db.lock();
@@ -66,8 +117,28 @@ pub fn ingest(
     reset: bool,
     lines: &[Value],
 ) -> ApiResult<u64> {
+    ingest_within(
+        app,
+        node_id,
+        ledger_key,
+        (offset, end, reset),
+        lines,
+        (NODE_MAX_ROWS, NODE_MAX_BYTES),
+    )
+}
+
+/// [`ingest`] with the node's row and byte limits.
+fn ingest_within(
+    app: &App,
+    node_id: &str,
+    ledger_key: &str,
+    (offset, end, reset): (u64, u64, bool),
+    lines: &[Value],
+    (max_rows, max_bytes): (u64, u64),
+) -> ApiResult<u64> {
     let conn = app.db.lock();
-    atomic(&conn, |conn| {
+    let refused = std::cell::Cell::new(0);
+    let stored = atomic(&conn, |conn| {
         let current: u64 = conn
             .query_row(
                 "SELECT watermark FROM memory_mirrors WHERE node_id=? AND ledger_key=?",
@@ -90,17 +161,26 @@ pub fn ingest(
         if end < offset {
             return Ok(if reset { 0 } else { current });
         }
+        let mut quota = Quota::of(conn, node_id, max_rows, max_bytes)?;
         for line in lines {
             if let Some(line) = Line::parse(line) {
-                apply(conn, node_id, ledger_key, line)?;
+                apply(conn, node_id, ledger_key, line, &mut quota)?;
             }
         }
+        refused.set(quota.refused);
         conn.execute(
             "INSERT INTO memory_mirrors (node_id,ledger_key,watermark,updated_at) VALUES (?,?,?,?) ON CONFLICT(node_id,ledger_key) DO UPDATE SET watermark=excluded.watermark, updated_at=excluded.updated_at",
             params![node_id, ledger_key, end as i64, now_ms()],
         )?;
         Ok(end)
-    })
+    })?;
+    if refused.get() > 0 {
+        crate::log::warn(&format!(
+            "memory mirror: node {node_id} is over its quota ({max_rows} rows, {max_bytes} bytes); {} new records not kept for search",
+            refused.get()
+        ));
+    }
+    Ok(stored)
 }
 
 /// One ledger line (`lineSchema`); its items are checked one by one, so one
@@ -192,13 +272,20 @@ impl Item {
 }
 
 /// One ledger line, applied like `foldWorkspace`.
-fn apply(conn: &Connection, node_id: &str, key: &str, line: Line<'_>) -> ApiResult<()> {
+fn apply(
+    conn: &Connection,
+    node_id: &str,
+    key: &str,
+    line: Line<'_>,
+    quota: &mut Quota,
+) -> ApiResult<()> {
     match line {
         Line::Cleared => {
             conn.execute(
                 "DELETE FROM memory_records WHERE node_id=? AND ledger_key=? AND status!='forgotten'",
                 [node_id, key],
             )?;
+            *quota = Quota::of(conn, node_id, quota.max_rows, quota.max_bytes)?.with(quota.refused);
         }
         Line::Retired { ids, forgotten } => {
             for id in ids {
@@ -210,11 +297,21 @@ fn apply(conn: &Connection, node_id: &str, key: &str, line: Line<'_>) -> ApiResu
                     continue;
                 }
                 // Forgotten: nothing of it stays here, and it is never recorded again.
+                let freed: Option<i64> = conn
+                    .query_row(
+                        "SELECT length(CAST(content AS BLOB)) FROM memory_records WHERE node_id=? AND ledger_key=? AND id=?",
+                        [node_id, key, id],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
                 let erased = conn.execute(
                     "UPDATE memory_records SET content='', git_json=NULL, source_ids_json='[]', origins_json=NULL, status='forgotten' WHERE node_id=? AND ledger_key=? AND id=?",
                     [node_id, key, id],
                 )?;
-                if erased == 0 {
+                if let Some(freed) = freed {
+                    quota.bytes = quota.bytes.saturating_sub(freed.max(0) as u64);
+                }
+                if erased == 0 && quota.admit(0) {
                     conn.execute(
                         "INSERT INTO memory_records (node_id,ledger_key,id,content,relevance,recorded_at,source_ids_json,status) VALUES (?,?,?,'','low','','[]','forgotten')",
                         [node_id, key, id],
@@ -235,7 +332,7 @@ fn apply(conn: &Connection, node_id: &str, key: &str, line: Line<'_>) -> ApiResu
                         |_| Ok(()),
                     )
                     .optional()?;
-                if exists.is_some() {
+                if exists.is_some() || !quota.admit(item.content.len()) {
                     continue;
                 }
                 let (session_id, workspace_id, owner_user) =

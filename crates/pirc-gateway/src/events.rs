@@ -1,7 +1,8 @@
 //! Each session's event stream (`apps/gateway/src/events.ts`): events get a
 //! sequence number within the session's runner epoch, the newest
-//! `capacity` are kept for replay, and a cursor that cannot be continued is
-//! answered with a reset.
+//! `capacity` are kept for replay, at most [`REPLAY_MAX_BYTES`] of them
+//! (security audit I3), and a cursor that cannot be continued is answered
+//! with a reset.
 //!
 //! Listeners run while the hub is locked, in sequence order, and must not
 //! call back into the hub: they hand the event to a socket's queue or a
@@ -39,10 +40,34 @@ pub struct Cursor {
 
 pub type Listener = Arc<dyn Fn(&GatewayEvent) + Send + Sync>;
 
+/// Serialized bytes of events kept for replay per session. A client whose
+/// cursor is older resets and loads a snapshot, as after `capacity` events.
+pub const REPLAY_MAX_BYTES: usize = 8 * 1024 * 1024;
+
+/// An event's size as JSON, without building the text.
+fn json_size(event: &GatewayEvent) -> usize {
+    struct Count(usize);
+    impl std::io::Write for Count {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0 += bytes.len();
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut count = Count(0);
+    let _ = serde_json::to_writer(&mut count, event);
+    count.0
+}
+
 struct Stream {
     epoch: i64,
     sequence: u64,
     events: VecDeque<Arc<GatewayEvent>>,
+    /// The size of each of `events`, and their sum.
+    sizes: VecDeque<usize>,
+    bytes: usize,
     listeners: HashMap<u64, Listener>,
 }
 
@@ -54,6 +79,7 @@ struct State {
 
 pub struct EventHub {
     capacity: usize,
+    max_bytes: usize,
     state: Mutex<State>,
     next_listener: AtomicU64,
 }
@@ -74,20 +100,29 @@ fn stream<'a>(state: &'a mut State, session_id: &str, epoch: i64) -> &'a mut Str
             epoch,
             sequence: 0,
             events: VecDeque::new(),
+            sizes: VecDeque::new(),
+            bytes: 0,
             listeners: HashMap::new(),
         });
     if epoch > stream.epoch {
         stream.epoch = epoch;
         stream.sequence = 0;
         stream.events.clear();
+        stream.sizes.clear();
+        stream.bytes = 0;
     }
     stream
 }
 
 impl EventHub {
     pub fn new(capacity: usize) -> Arc<Self> {
+        Self::with_limits(capacity, REPLAY_MAX_BYTES)
+    }
+
+    pub fn with_limits(capacity: usize, max_bytes: usize) -> Arc<Self> {
         Arc::new(Self {
             capacity,
+            max_bytes,
             state: Mutex::new(State::default()),
             next_listener: AtomicU64::new(0),
         })
@@ -126,7 +161,7 @@ impl EventHub {
         data: Option<Value>,
     ) -> GatewayEvent {
         let mut state = self.lock();
-        let capacity = self.capacity;
+        let (capacity, max_bytes) = (self.capacity, self.max_bytes);
         let stream = stream(&mut state, session_id, epoch);
         stream.sequence += 1;
         let event = Arc::new(GatewayEvent {
@@ -137,9 +172,16 @@ impl EventHub {
             data,
             timestamp: now_ms(),
         });
+        let size = json_size(&event);
         stream.events.push_back(event.clone());
-        while stream.events.len() > capacity {
+        stream.sizes.push_back(size);
+        stream.bytes += size;
+        // The newest event is always kept, however large.
+        while stream.events.len() > capacity
+            || (stream.bytes > max_bytes && stream.events.len() > 1)
+        {
             stream.events.pop_front();
+            stream.bytes -= stream.sizes.pop_front().unwrap_or(0);
         }
         let listeners: Vec<Listener> = stream.listeners.values().cloned().collect();
         // One failing listener must not stop the others or fail the publisher.
@@ -300,6 +342,35 @@ mod tests {
         assert_eq!(hub.replay("s", None, 0).events.len(), 1);
         // An older epoch's events join the current one.
         assert_eq!(hub.publish("s", 0, "e", json!(6)).epoch, 1);
+    }
+
+    #[test]
+    fn replay_is_bounded_by_bytes() {
+        let event = |n: u64| GatewayEvent {
+            session_id: "s".into(),
+            epoch: 0,
+            sequence: n,
+            kind: "e".into(),
+            data: Some(json!("x".repeat(100))),
+            timestamp: 0,
+        };
+        let size = json_size(&event(1));
+        assert_eq!(size, serde_json::to_string(&event(1)).unwrap().len());
+        // Room for two and a half events: the oldest go first.
+        let hub = EventHub::with_limits(100, size * 5 / 2);
+        for _ in 1..=4 {
+            hub.publish("s", 0, "e", json!("x".repeat(100)));
+        }
+        let all = hub.replay("s", None, 0);
+        assert_eq!(
+            all.events.iter().map(|e| e.sequence).collect::<Vec<_>>(),
+            [3, 4]
+        );
+        assert!(hub.replay("s", cursor(0, 1), 0).reset);
+        assert!(!hub.replay("s", cursor(0, 2), 0).reset);
+        // One event larger than the limit is still kept.
+        hub.publish("s", 0, "e", json!("y".repeat(size * 3)));
+        assert_eq!(hub.replay("s", None, 0).events.len(), 1);
     }
 
     #[test]

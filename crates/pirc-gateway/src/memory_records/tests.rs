@@ -595,3 +595,48 @@ fn a_project_searches_its_linked_workspaces_first() {
             .is_empty()
     );
 }
+
+#[test]
+fn a_node_keeps_at_most_its_quota() {
+    let (app, _dir) = setup();
+    let feed = |offset: u64, lines: Value, limits| {
+        ingest_within(
+            &app,
+            "n1",
+            KEY,
+            (offset, offset + 10, false),
+            lines.as_array().unwrap(),
+            limits,
+        )
+        .unwrap()
+    };
+    // Three rows at most: the third and fourth notes are not kept, but the
+    // ledger still advances.
+    let notes = json!([{ "type": "recorded", "items": [
+        item("one", json!({})), item("two", json!({})),
+        item("three", json!({})), item("four", json!({})),
+    ] }]);
+    assert_eq!(feed(0, notes, (3, 1000)), 10);
+    assert_eq!(all(&app).len(), 3);
+    // A tombstone takes a row too; with no room it is refused.
+    let forget = json!([{ "type": "retired", "ids": [hash_id("unseen")], "reason": "forgotten" }]);
+    feed(10, forget, (3, 1000));
+    assert_eq!(all(&app).len(), 3);
+    // Bytes: "one", "two", "three" hold 11; "eleven" (6) fits in 14 only
+    // because forgetting "one" freed 3 bytes first.
+    let lines = json!([
+        { "type": "retired", "ids": [hash_id("one")], "reason": "forgotten" },
+        { "type": "recorded", "items": [item("eleven", json!({}))] },
+    ]);
+    feed(20, lines, (4, 14));
+    let kept = all(&app);
+    assert!(kept.contains(&format!("eleven:active:{ME}")), "{kept:?}");
+    // Clearing frees the rows it deletes.
+    let lines = json!([
+        { "type": "cleared" },
+        { "type": "recorded", "items": [item("after", json!({}))] },
+    ]);
+    feed(30, lines, (3, 1000));
+    let kept = all(&app);
+    assert!(kept.contains(&format!("after:active:{ME}")), "{kept:?}");
+}
