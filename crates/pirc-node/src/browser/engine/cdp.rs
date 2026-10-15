@@ -406,6 +406,15 @@ impl Session {
         &self.connection
     }
 
+    /// Whether this session's renderer crashed (its commands fail with
+    /// [`CdpError::crashed`]), as the connection saw it: as soon as the
+    /// event is read, before the session's listeners handle it.
+    pub fn is_crashed(&self) -> bool {
+        self.id
+            .as_ref()
+            .is_some_and(|id| self.connection.state.lock().unwrap().crashed.contains(id))
+    }
+
     /// Send a command and wait for its result.
     pub async fn call(&self, method: &str, params: Value) -> Result<Value, CdpError> {
         self.connection

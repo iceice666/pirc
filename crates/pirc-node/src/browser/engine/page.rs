@@ -2372,11 +2372,25 @@ impl Frame {
             .shared
             .wait(|state| state.crashed.then(|| Error::api(api, "Page crashed")));
         let raced = async {
-            tokio::select! {
+            let result = tokio::select! {
                 biased;
                 error = crashed => Err(error),
                 result = work => result,
                 error = self.gone(api) => Err(error),
+            };
+            // The connection marks the page's session crashed as it reads
+            // `Inspector.targetCrashed`, the page only once its event loop
+            // gets there: a command failing in between is the page's crash
+            // too, which Playwright (one event dispatch) reports as such.
+            // An out-of-process iframe's crash leaves the page's session.
+            match result {
+                Err(error)
+                    if error.message == Error::api(api, CdpError::crashed().message).message
+                        && self.shared.session.is_crashed() =>
+                {
+                    Err(Error::api(api, "Page crashed"))
+                }
+                other => other,
             }
         };
         within(deadline, raced)
