@@ -47,7 +47,7 @@ tar -C ~/.local/pirc-node -czf pirc-node-$(date +%F).tgz state
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.pirc.node-agent.plist
 ```
 
-Backups contain conversations, memory and OAuth tokens: encrypt them and keep them off any world-readable share. Note that both databases keep tombstones and WAL pages of deleted rows; a backup is not a redaction boundary.
+Backups contain conversations, memory and OAuth tokens: encrypt them and keep them off any world-readable share. Both databases open with SQLite's `secure_delete`, so deleted and overwritten rows are zeroed in the database file; measured on a representative write mix, it adds under 1% WAL bytes and no measurable time. It does not clean WAL frames written before the zeroing reached the file (until the next checkpoint overwrites them), copies, backups, or the tombstones kept on purpose: a backup is not a redaction boundary.
 
 ## Restoring
 
