@@ -4,12 +4,13 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
-The gateway's database moves to schema 1001 on first start (automatic, adds two columns); a 0.4.x gateway refuses it afterwards, so keep a backup to downgrade. Same node protocol (10); upgrade the gateway and every node together as usual.
+The gateway's database moves to schema 1002 on first start (automatic: two columns and one table); a 0.4.x gateway refuses it afterwards, so keep a backup to downgrade. Same node protocol (10); upgrade the gateway and every node together as usual.
 
 ### Added
 
 - Coding sessions, delegated ones included, start with your approved USER entries in their system prompt (a frozen `## User` section, like a chat's). They only read them: the memory tools stay chat-only. Personal preferences repeated in each node's `AGENTS.md` can move into USER; keep repository rules in `AGENTS.md`. If the gateway cannot be reached the session starts without them, says so once, and tries again on its next run.
 - Clones of one repository find each other's workspace memory: nodes report each directory workspace's `origin` remote, normalized (`github.com/owner/repo`; no path or credential leaves the node), and `memory_search` with a workspace also searches the notes and delegations of its other clones, on any node. The assistant's workspace list shows each repository. The URL is read from the workspace's own `.git` config at registration, without running git; a workspace inside a repository (rather than at its root) has none, and `insteadOf` rewrites and config includes are not followed.
+- Chat projects can be linked to the directory workspaces they are about (project page → Settings → Linked workspaces, or `GET`/`PUT /api/workspaces/:id/links`). New chats in the project list those workspaces first, and the other clones of their repositories after them; `delegate` without a workspace goes to the only linked one (you still approve it), and `memory_search` without a workspace looks in the linked workspaces and their clones first, then everywhere if nothing is found there, or everywhere at once with `everywhere: true`. A link is not a permission: unlinked workspaces stay reachable. The top-level Chats workspace has no links.
 
 ### Fixed
 

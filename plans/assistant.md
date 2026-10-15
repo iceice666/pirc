@@ -14,7 +14,7 @@ Design sources: Hermes (frozen USER/MEMORY snapshot, write approval, search with
 
 ## Roadmap
 
-Ordered by value against cost. Item 1 is implemented and user-accepted (2026-10-03, Asia/Taipei); items 2 and 4 are implemented and locally verified (2026-10-15, user go-ahead the same day), pending review and release; items 3, 5 and 6 retain planned work (per-project instructions in item 5 are implemented); 7 is a decision to take; 8 waits for evidence from use. Each item needs the user's go-ahead before implementation.
+Ordered by value against cost. Item 1 is implemented and user-accepted (2026-10-03, Asia/Taipei); items 2, 4 and 6 are implemented and locally verified (2026-10-15, user go-ahead the same day), pending review and release; items 3 and 5 retain planned work (per-project instructions in item 5 are implemented); 7 is a decision to take; 8 waits for evidence from use. Each item needs the user's go-ahead before implementation.
 
 ## 1. Approve USER proposals in the chat
 
@@ -73,6 +73,8 @@ Two smaller items that can ship together or apart.
 - **Per-project instructions.** A project (chat workspace) gets an instructions text, edited from the web on the project, stored by the node in `<stateDir>/chat/<workspaceId>/instructions.md` and rendered into the chat's system prompt. No memory scope changes. Implemented; see `plans/project-isolation.md` (“Per-project instructions”).
 
 ## 6. Link projects to workspaces
+
+**Implemented and locally verified 2026-10-15; pending review and release.** Record: [assistant history](../docs/history/assistant.md#projects-linked-to-workspaces). Deviations: links are edited on the project page's Settings tab (where its instructions are), through `GET`/`PUT /api/workspaces/:id/links`; only projects have links, not the top-level Chats; clones of a linked repository are listed right after the linked workspaces and marked as such; search falls back to every workspace when the linked ones have nothing and says which it did, and "when asked" is a `memory_search` `everywhere` flag. `delegate` and `memory_search` use the live links, while the workspace list is frozen with the snapshot. `workspace.read` is not built. Gateway schema 1002.
 
 A project is usually about one or a few repositories. Today its assistant sees every directory workspace and must name one on each `delegate`. A link records which workspaces a project is about. It is a default and an ordering, never a permission: every delegation still needs the user's confirmation, and an unlinked workspace stays reachable.
 

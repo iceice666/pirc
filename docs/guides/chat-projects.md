@@ -1,4 +1,4 @@
-# Chat projects: capabilities and instructions
+# Chat projects: capabilities, instructions and linked workspaces
 
 [User guides](README.md) · [All documentation](../README.md)
 
@@ -6,8 +6,9 @@ A chat project is a chat workspace on the chat node (`pirc-node chat`): the top-
 
 - **Capabilities** turn off assistant features for every chat in the project. The gateway enforces them.
 - **Instructions** are text that every new chat in the project gets in its system prompt. The node stores them.
+- **Linked workspaces** (projects only, not the top-level Chats) name the repositories the project is about. The gateway stores them.
 
-Directory workspaces (repositories) have neither setting.
+Directory workspaces (repositories) have none of these settings.
 
 Both are also available through the gateway API, with the same authentication as the rest of the browser API (forward auth through your proxy, or a device token). Workspace IDs are `<nodeId>:<workspaceId>`, as listed by `GET /api/workspaces`. Encode the `:` as `%3A` in URLs.
 
@@ -112,6 +113,38 @@ They come after `SOUL.md` (or the built-in identity), the fixed environment desc
 - **File tools** (`write`, `edit`, also when called from a `ptc` script) cannot write the file. It is outside every chat's working directory, and it is on the agent's protected paths, so writes are refused even if you add its directory to `allowedPaths`.
 - **In the [agent sandbox](agent.md#agent-sandbox)**, which every agent runs in, the node's state directory can be neither read nor written. The instructions file is also on the sandbox's write-deny list, so bash, `ptc` scripts and hooks cannot change it either, even if your `sandbox.filesystem.allowWrite` includes the state directory.
 - **Agent processes** never run without the sandbox: a chat node where the native sandbox cannot work starts no agents. See [Agent sandbox](agent.md#agent-sandbox) for requirements, such as bubblewrap and user namespaces on Linux.
+
+## Linked workspaces
+
+A project is usually about one or a few repositories. Linking them tells the project's assistant so, without you naming the workspace every time:
+
+- **Workspace list.** New chats list the linked workspaces first in their `## Workspaces` section, marked "linked to this project", then the other clones of their repositories (workspaces whose node reports the same `origin`), then everything else. A linked workspace that is offline, or that its node no longer has, stays listed and is marked so.
+- **Delegation.** `delegate` without a workspace goes to the linked workspace when exactly one is linked. With several linked, the assistant is asked to name one; with none, it must name one as before. The confirmation card shows the target as always, and you approve every delegation.
+- **Search.** `memory_search` without a workspace looks in the linked workspaces and the other clones of their repositories first. If nothing is found there it searches every workspace and says so. The assistant can pass `everywhere: true` to search every workspace at once, or name a workspace as before.
+
+A link is **a default and an ordering, never a permission**. The assistant can still delegate to and search workspaces that are not linked, and the `delegation` and `memory_search` capabilities still decide whether it can do either at all.
+
+### Editing links
+
+In the web app, open the project, then its **Settings** tab. **Linked workspaces** lists your directory workspaces with their device; check the ones the project is about and press **Save**. A link to a workspace that is no longer listed stays (marked "no longer available") until you uncheck it.
+
+Through the API:
+
+```sh
+curl 'https://pirc.example.org/api/workspaces/chat%3Aworkspace_1234/links' \
+  -H 'Authorization: Bearer pirc_dev_…'
+
+curl -X PUT 'https://pirc.example.org/api/workspaces/chat%3Aworkspace_1234/links' \
+  -H 'Authorization: Bearer pirc_dev_…' \
+  -H 'Content-Type: application/json' \
+  -d '{"workspaceIds": ["laptop:workspace_5678"]}'
+```
+
+`PUT` replaces the whole set; links kept keep their creation time, and `{"workspaceIds": []}` removes them all. Both return `{"links": [{"workspaceId", "name", "node", "repo", "online", "removed", "createdAt"}]}`, oldest link first. Only directory workspaces can be linked (anything else is `400`), at most 20 per project, and only chat projects have links: the top-level Chats workspace and directory workspaces answer `400`. The project's node need not be online.
+
+### When a change takes effect
+
+The workspace list is part of the chat's frozen memory snapshot, so a chat keeps the list (and its "linked" marks) it started with; changed links reach **new chats**. `delegate` and `memory_search` read the links when they run, so they follow a change at once, also in chats already open. The confirmation card always shows where a delegation goes.
 
 ## Limits
 

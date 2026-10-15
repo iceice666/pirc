@@ -151,3 +151,21 @@ memory_records(node_id, ledger_key, id, content, relevance, recorded_at, git_jso
   repo,                                        -- the workspace's normalized origin when recorded (schema 1001)
   PRIMARY KEY (node_id, ledger_key, id))
 ```
+
+## Projects linked to workspaces
+
+Roadmap item 6 (2026-10-15). `crates/pirc-gateway/src/project_links.rs`, the `assistant.context` workspace list in `delegations.rs`, `memory_records::search_in`; `render_workspaces`, `delegate` and `memory_search` in `crates/pirc-agent/src/features/assistant/`; `ProjectLinks.svelte` on the web.
+
+- **Storage.** `project_links(project_workspace_id, workspace_id, repo, created_at)` on the gateway (schema 1002, automatic migration). Only chat projects have links (not a node's top-level `chats`), only directory workspaces can be linked, at most 20. `repo` is the workspace's normalized `origin` when linked, backfilled when its node reports one later (`set_workspace_repos`), so a link also covers the repository's other clones. No foreign key on `workspace_id`: a link outlives its workspace and is shown as gone.
+- **Editing.** `GET`/`PUT /api/workspaces/:id/links` (`{workspaceIds}`; `PUT` replaces the set, keeping the creation time of links that stay), behind the browser API's normal authentication, like capabilities. There is no agent operation: only the user links.
+- **Context.** In a project, `assistant.context` lists linked workspaces first (`linked: "workspace"`), then the other clones of their repositories (`linked: "repository"`), then the rest, each by name. A linked workspace whose node is connected but no longer has it is `removed`; a link the gateway no longer knows is listed by id as `removed`. The agent marks them "linked to this project" / "a clone of a repository linked to this project" and adds one line on what links mean (and that `delegate` without a workspace goes to the only one). The list is in the frozen snapshot, so changed links reach new chats only; the guidance about search sits on the search line, so it goes with `memory_search` when that capability is off.
+- **Delegation.** `delegation.create` without `workspace` or `follows` takes the project's only link; with several it fails with their names and ids, with none it fails as before. The agent no longer refuses a missing workspace itself; the gateway answers. The confirmation shows the target as always.
+- **Search.** `memory.search` without `workspace` in a project with links searches the linked workspaces' ledgers and the records and delegations of their repositories first and returns `searched: "linked"`; if that finds nothing it searches everything and returns `searched: "everywhere"`. `everywhere: true` skips the links. The agent's result text says which happened. Results are the live links, not the snapshot's.
+- **Not built.** `workspace.read` (reading a linked repository's files without delegating) stays as described in the roadmap: only if chats keep delegating just to look at a file. Android has no links screen; the gateway behaviour applies to Android chats too.
+
+```sql
+project_links(project_workspace_id TEXT NOT NULL REFERENCES workspaces(id), workspace_id TEXT NOT NULL,
+  repo TEXT,                                   -- normalized origin when linked or learnt later
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (project_workspace_id, workspace_id))
+```

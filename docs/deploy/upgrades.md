@@ -1,17 +1,20 @@
 # Upgrades
 
-## Unreleased: gateway schema 1001 (node protocol 10)
+## Unreleased: gateway schema 1002 (node protocol 10)
 
 An in-place upgrade. On its first start the gateway migrates its database from
-schema 1000 to 1001 by itself (one transaction; it adds the `repo` columns of
-workspaces and mirrored workspace memory). Node state is unchanged and the node
-protocol stays 10, so nodes and gateway still interoperate across the upgrade,
-but deploy them together as usual: an older node reports no repositories, and an
-older gateway gives coding sessions no USER entries.
+schema 1000 or 1001 to 1002 by itself, one transaction per step: 1001 adds the
+`repo` columns of workspaces and mirrored workspace memory, 1002 the
+`project_links` table (chat projects linked to workspaces). Node state is
+unchanged and the node protocol stays 10, so nodes and gateway still
+interoperate across the upgrade, but deploy them together as usual: an older
+node reports no repositories, an older gateway gives coding sessions no USER
+entries, and an older node's agent refuses `delegate` without a workspace before
+asking the gateway.
 
-A 0.4.x gateway refuses a database at schema 1001 ("newer than this gateway").
-Back up the gateway's state directory before upgrading if you may need to roll
-back; restoring that backup loses what changed since.
+A 0.4.x gateway refuses a database at schema 1001 or 1002 ("newer than this
+gateway"). Back up the gateway's state directory before upgrading if you may
+need to roll back; restoring that backup loses what changed since.
 
 ## 0.4.0: fresh-start Rust cutover (node protocol 10)
 
