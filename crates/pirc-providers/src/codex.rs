@@ -148,6 +148,7 @@ fn os_release() -> &'static str {
         let release = release.or_else(|| {
             let output = std::process::Command::new("/usr/bin/uname")
                 .arg("-r")
+                .env_clear()
                 .output()
                 .ok()?;
             String::from_utf8(output.stdout).ok()

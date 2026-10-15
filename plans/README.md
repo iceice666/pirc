@@ -16,7 +16,7 @@ This file is the work queue, not authorization. Every phase still needs the user
 | 2     | Android approval check (assistant 3a)            | Near-free; completes in-chat approval on the phone                                     |
 | 3     | Network taint (assistant 5)                      | Small; improves memory trust; pairs with browser click/type classification             |
 | 4     | Decision session                                 | Cheap; unblocks phases 5, 6 and 8                                                      |
-| 5     | Security hygiene                                 | Re-audited 2026-10-15; starts with the I5 regression                                   |
+| 5     | Security hygiene                                 | Re-audited 2026-10-15; I5 done, M13 gap next                                           |
 | 6     | Android parity batch                             | Largest user-visible gap; group to share settings/memory screens                       |
 | 7     | OM model policy (E3), then `secure_delete` (E1)  | Small and independent; E1 must precede hard delete                                     |
 | 8     | Project-only memory (B), then hard delete (D)    | Large designs; need phase 4 decisions                                                  |
@@ -78,7 +78,7 @@ Project isolation (needed before phase 8):
 
 Re-audited against Rust on 2026-10-15; see the [re-audit](../docs/history/security-audit.md#re-audit-against-the-rust-code-2026-10-15). Ordered by value.
 
-- [ ] **I5 (regression)** the gateway runs a provider `apiKeyCommand` (`pirc-providers/src/models_file.rs`) and a `/usr/bin/uname` fallback (`codex.rs`) with its full environment, including `PIRC_NODE_TOKENS`, `EXA_API_KEY` and `PIRC_VAPID_PRIVATE_KEY`. TS gave the OAuth worker an allowlisted environment (M7); apply the same allowlist to every gateway child.
+- [x] **I5** done 2026-10-15: `apiKeyCommand` runs without pirc's own secrets (node tokens, VAPID private key, proxy secret, Exa key; other variables stay for the key tool), and the `uname` fallback with an empty environment. TS had the same gap (`Bun.spawnSync` inherited everything), so it was not a port regression.
 - [ ] **M13 gap (new)** node→browser stream messages are not size-checked per message (`pirc-gateway/src/sockets.rs` `Relay::on_frame`): a node can send up to the 16 MiB frame cap on a stream advertised at 64 KiB/1 MiB and overshoot the outbound backlog by one frame.
 - [ ] **Recording read follows symlinks (new, low)** `read_recording_chunk` (`pirc-node/src/panels/inspect.rs`) has no realpath containment; a tracked `.pirc/recordings/x.webm` symlink in a cloned repository makes the panel return any file the node account can read. The agent cannot create it (`.pirc` is write-denied) and the reader is the authenticated user. Add containment like other panel reads.
 - [ ] **I2** node-side writes into `.pirc/uploads` and `.pirc/recordings` (`runner/mod.rs`, `browser/manager/ops.rs`) follow pre-existing symlinks; the sandbox is now mandatory, so only a hostile checkout matters. Use no-follow, directory-relative opens.

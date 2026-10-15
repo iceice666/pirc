@@ -12,6 +12,10 @@ The gateway's database moves to schema 1002 on first start (automatic: two colum
 - Clones of one repository find each other's workspace memory: nodes report each directory workspace's `origin` remote, normalized (`github.com/owner/repo`; no path or credential leaves the node), and `memory_search` with a workspace also searches the notes and delegations of its other clones, on any node. The assistant's workspace list shows each repository. The URL is read from the workspace's own `.git` config at registration, without running git; a workspace inside a repository (rather than at its root) has none, and `insteadOf` rewrites and config includes are not followed.
 - Chat projects can be linked to the directory workspaces they are about (project page → Settings → Linked workspaces, or `GET`/`PUT /api/workspaces/:id/links`). New chats in the project list those workspaces first, and the other clones of their repositories after them; `delegate` without a workspace goes to the only linked one (you still approve it), and `memory_search` without a workspace looks in the linked workspaces and their clones first, then everywhere if nothing is found there, or everywhere at once with `everywhere: true`. A link is not a permission: unlinked workspaces stay reachable. The top-level Chats workspace has no links.
 
+### Security
+
+- A provider's `apiKeyCommand` no longer receives the gateway's own secrets (node tokens, the VAPID private key, the proxy secret, the web search key) in its environment. Other variables are still passed, so password-manager and GnuPG setups keep working.
+
 ### Fixed
 
 - Input in the browser's live view (mouse, keys, typed text, navigation) is applied in the order it was sent; quick input could run out of order, such as a key landing after a navigation sent later.

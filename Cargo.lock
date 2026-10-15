@@ -2112,6 +2112,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.4",
  "indexmap",
+ "pirc-config",
  "pirc-protocol",
  "regex-lite",
  "reqwest",

@@ -78,7 +78,7 @@ The gateway runs every model request; nodes never see keys or endpoints. Backend
 ```
 
 - `api` is one of `openai-completions`, `openai-responses`, `anthropic-messages`, `openai-codex-responses`, or the legacy alias `openai-chat`.
-- Reference keys with `apiKeyEnv` (a variable in the gateway's environment), `apiKeyFile` (readable by the gateway's account) or `apiKeyCommand` (an argv array run on the gateway). A literal `apiKey` works but puts the secret in the file.
+- Reference keys with `apiKeyEnv` (a variable in the gateway's environment), `apiKeyFile` (readable by the gateway's account) or `apiKeyCommand` (an argv array run on the gateway, with the gateway's environment minus pirc's own secrets: `PIRC_*` tokens, keys and secrets and `EXA_API_KEY` are removed). A literal `apiKey` works but puts the secret in the file.
 - Optional per provider: `headers`, `compat`, `piProvider`; per model: `name`, `maxTokens` (default 32000), `reasoning`, `input`, `thinkingLevelMap`, `compat`. Unknown top-level keys are rejected.
 - A file provider wins over a web backend with the same ID; a web-set default model wins over the file's.
 - The file is validated at startup (invalid → the gateway does not start) and reloaded on `SIGHUP` (invalid → logged and ignored, the previous file stays in force). Running sessions use the new settings on their next request.

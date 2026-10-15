@@ -1,6 +1,7 @@
 //! The gateway's `models.json` (`apps/gateway/src/models.ts`): loading with
 //! key resolution, and the secret-free projections for nodes and browsers.
 
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -136,6 +137,28 @@ fn read_error(error: &std::io::Error, path: &Path) -> String {
     }
 }
 
+/// The `apiKeyCommand` process: the gateway's environment without pirc's
+/// own secrets (node tokens, the VAPID private key, the proxy secret, the
+/// web search key). Everything else stays, since a key command may
+/// legitimately need its own credentials (a password manager's token, a
+/// GnuPG home).
+fn key_command(
+    program: &Path,
+    args: &[String],
+    vars: impl IntoIterator<Item = (OsString, OsString)>,
+) -> Command {
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .env_clear()
+        .envs(vars.into_iter().filter(|(name, _)| {
+            !name
+                .to_str()
+                .is_some_and(pirc_config::env_allowlist::is_secret_env)
+        }));
+    command
+}
+
 fn resolve_api_key(
     name: &str,
     source: &ProviderSource,
@@ -152,8 +175,7 @@ fn resolve_api_key(
         Some(String::from_utf8_lossy(&bytes).into_owned())
     } else if let Some([command, args @ ..]) = source.api_key_command.as_deref() {
         let program = expand_home(command, home);
-        let output = Command::new(&program)
-            .args(args)
+        let output = key_command(&program, args, std::env::vars_os())
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -401,6 +423,36 @@ mod tests {
         assert_eq!(key("file").as_deref(), Some("file-key"));
         assert_eq!(key("cmd").as_deref(), Some("cmd-key"));
         assert_eq!(key("blank"), None);
+    }
+
+    #[test]
+    fn key_command_drops_pirc_secrets_only() {
+        let vars = [
+            ("PATH", std::env::var("PATH").unwrap_or_default()),
+            ("PIRC_NODE_TOKENS", "tokens".to_owned()),
+            ("PIRC_VAPID_PRIVATE_KEY", "vapid".to_owned()),
+            ("PIRC_PROXY_SECRET", "proxy".to_owned()),
+            ("EXA_API_KEY", "exa".to_owned()),
+            ("OP_SERVICE_ACCOUNT_TOKEN", "op".to_owned()),
+            ("GNUPGHOME", "/gpg".to_owned()),
+        ]
+        .map(|(name, value)| (OsString::from(name), OsString::from(value)));
+        let script = [
+            "PIRC_NODE_TOKENS",
+            "PIRC_VAPID_PRIVATE_KEY",
+            "PIRC_PROXY_SECRET",
+            "EXA_API_KEY",
+            "OP_SERVICE_ACCOUNT_TOKEN",
+            "GNUPGHOME",
+        ]
+        .map(|name| format!("${{{name}-unset}}"))
+        .join(" ");
+        let args = ["-c".to_owned(), format!("printf %s \"{script}\"")];
+        let output = key_command(Path::new("sh"), &args, vars).output().unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            "unset unset unset unset op /gpg"
+        );
     }
 
     #[test]
