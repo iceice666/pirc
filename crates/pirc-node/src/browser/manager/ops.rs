@@ -12,8 +12,7 @@ use futures_util::StreamExt as _;
 use super::seam::{PageEvent, PageRef, Selector};
 use super::view::base64;
 use super::{
-    ActiveRecording, Inner, LastFrame, Mode, OpError, OpResult, Signal, Tab, closing_error,
-    create_private_dir, spawn,
+    ActiveRecording, Inner, LastFrame, Mode, OpError, OpResult, Signal, Tab, closing_error, spawn,
 };
 use crate::browser::BrowserTarget;
 use crate::browser::assets::{PAGE_MARKDOWN, PASSWORD_VALUES, SENSITIVE_FIELD};
@@ -698,13 +697,23 @@ impl Inner {
         if tab.active().is_none() {
             self.new_page(tab).await.map_err(OpError::into_api)?;
         }
-        let dir = tab.target.root.join(".pirc").join("recordings");
-        create_private_dir(&dir)?;
         let file_name = format!(
             "{}-{}.webm",
             recording_name(name),
             file_stamp(crate::util::now_ms())
         );
+        // Written from outside the sandbox: no symlink below the session
+        // root is followed, and an existing file is never replaced.
+        let browser_error = |error: std::io::Error| {
+            ApiError::new(
+                500,
+                "browser_error",
+                format!(".pirc/recordings/{file_name}: {error}"),
+            )
+        };
+        let dir = crate::private_dir::open_dir(&tab.target.root, &[".pirc", "recordings"])
+            .map_err(browser_error)?;
+        let output = crate::private_dir::create_new(&dir, &file_name).map_err(browser_error)?;
         let relative = format!(".pirc/recordings/{file_name}");
         // Current from now on, also before it is installed: a fast ffmpeg
         // failure is the recording's (`tab.recording === recording`).
@@ -733,7 +742,7 @@ impl Inner {
         let recording = Recording::start(
             &self.settings.ffmpeg,
             &self.env,
-            dir.join(&file_name),
+            output,
             relative.clone(),
             frames,
             still_current,

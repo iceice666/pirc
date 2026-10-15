@@ -1309,7 +1309,7 @@ async fn reaps_idle_sessions_unless_recording_in_user_mode_or_watched() {
         let recording = Recording::start(
             "/nonexistent/ffmpeg",
             &BTreeMap::new(),
-            PathBuf::from("/nonexistent/a.webm"),
+            tempfile::tempfile().unwrap(),
             "r".into(),
             Arc::new(|| None),
             Arc::new(|| true),

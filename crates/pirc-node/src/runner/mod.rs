@@ -80,7 +80,6 @@ pub mod reducer;
 mod side;
 
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -750,17 +749,12 @@ fn file_attachments(
         let session = db.get_session(session_id)?;
         db.get_workspace(&session.workspace_id)?
     };
-    let dest_dir = crate::chat::session_root(&workspace, session_id)?
-        .join(".pirc")
-        .join("uploads");
-    {
-        use std::os::unix::fs::DirBuilderExt;
-        std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(&dest_dir)
-            .map_err(|error| Failure::Other(format!("{}: {error}", dest_dir.display())))?;
-    }
+    // Written from outside the sandbox: no symlink below the session root
+    // is followed (a cloned repository may track one).
+    let root = crate::chat::session_root(&workspace, session_id)?;
+    let dest_dir = crate::private_dir::open_dir(&root, &[".pirc", "uploads"]).map_err(|error| {
+        Failure::Other(format!("{}: {error}", root.join(".pirc/uploads").display()))
+    })?;
     let mut notes = Vec::new();
     for upload in files {
         if upload.owner_user != user {
@@ -772,11 +766,23 @@ fn file_attachments(
             .filter(|name| !name.is_empty())
             .unwrap_or(&upload.id);
         let dest_name = format!("{}-{}", upload.id, basename(name));
-        let dest = dest_dir.join(&dest_name);
-        if !Path::new(&dest).exists() {
-            let source = node.config.uploads_dir.join(&upload.storage_name);
-            std::fs::copy(&source, &dest)
-                .map_err(|error| Failure::Other(format!("{}: {error}", source.display())))?;
+        // An existing entry (copied for an earlier prompt) is kept.
+        match crate::private_dir::create_new(&dest_dir, &dest_name) {
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => {
+                return Err(Failure::Other(format!(
+                    ".pirc/uploads/{dest_name}: {error}"
+                )));
+            }
+            Ok(mut dest) => {
+                let source = node.config.uploads_dir.join(&upload.storage_name);
+                let copied = std::fs::File::open(&source)
+                    .and_then(|mut source| std::io::copy(&mut source, &mut dest));
+                if let Err(error) = copied {
+                    crate::private_dir::remove(&dest_dir, &dest_name);
+                    return Err(Failure::Other(format!("{}: {error}", source.display())));
+                }
+            }
         }
         notes.push(format!(".pirc/uploads/{dest_name}"));
     }

@@ -4,13 +4,20 @@
 //! `node/browser.ts` does (`startRecording`/`stopRecording`). The manager
 //! owns the parts that touch the tab (the seed frame, the screencast, the
 //! 30-minute cap, the log); this is the ffmpeg process.
+//!
+//! The node creates the file itself without following symlinks
+//! ([`crate::private_dir`]) and ffmpeg writes it as its fd 3
+//! (`/dev/fd/3`), so a symlink in a cloned repository cannot redirect the
+//! write (security audit I2).
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::fs::File;
+use std::os::fd::OwnedFd;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use command_fds::{CommandFdExt as _, FdMapping};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use tokio::process::Command;
@@ -28,9 +35,13 @@ const STOP_TIMEOUT: Duration = Duration::from_secs(30);
 /// stderr kept for the failure message (UTF-16 code units).
 const STDERR_KEEP: usize = 2000;
 
-/// ffmpeg's arguments for `file` (`browser.ts`, in its order).
-pub fn ffmpeg_args(file: &std::path::Path) -> Vec<String> {
-    let mut args: Vec<String> = [
+/// The output file's descriptor in ffmpeg.
+const OUTPUT_FD: i32 = 3;
+
+/// ffmpeg's arguments (`browser.ts`, in its order), writing WebM to its
+/// fd 3; the format is named, as the path has no extension.
+pub fn ffmpeg_args() -> Vec<String> {
+    [
         "-hide_banner",
         "-loglevel",
         "error",
@@ -56,13 +67,14 @@ pub fn ffmpeg_args(file: &std::path::Path) -> Vec<String> {
         "38",
         "-pix_fmt",
         "yuv420p",
+        "-f",
+        "webm",
         "-y",
+        "/dev/fd/3",
     ]
     .into_iter()
     .map(str::to_owned)
-    .collect();
-    args.push(file.to_string_lossy().into_owned());
-    args
+    .collect()
 }
 
 /// The latest screencast JPEG of the tab, if any (read every tick).
@@ -72,7 +84,8 @@ pub type StillCurrent = Arc<dyn Fn() -> bool + Send + Sync>;
 
 /// A running ffmpeg fed with the tab's frames.
 pub struct Recording {
-    pub file: PathBuf,
+    /// The file ffmpeg writes (its size is read from here, not the path).
+    output: Arc<File>,
     /// `.pirc/recordings/<name>.webm`, relative to the session root.
     pub relative: String,
     /// `Date.now()` at the start.
@@ -104,7 +117,7 @@ pub enum Exit {
 
 /// A stopped recording, before its result is read.
 pub struct Stopped {
-    pub file: PathBuf,
+    output: Arc<File>,
     pub relative: String,
     pub started_at: i64,
     pub exit: Exit,
@@ -112,7 +125,7 @@ pub struct Stopped {
 }
 
 impl Recording {
-    /// Spawn `ffmpeg` (environment `env`, `withoutSecrets`) writing `file`,
+    /// Spawn `ffmpeg` (environment `env`, `withoutSecrets`) writing `output`,
     /// and write `frames()` into it every 100 ms. A write still in progress
     /// (ffmpeg not keeping up) skips the ticks until it is done, as
     /// `stdin.write` returning false did until `drain`. A spawn failure is
@@ -121,7 +134,7 @@ impl Recording {
     pub fn start(
         ffmpeg: &str,
         env: &BTreeMap<String, String>,
-        file: PathBuf,
+        output: File,
         relative: String,
         frames: FrameSource,
         still_current: StillCurrent,
@@ -130,9 +143,20 @@ impl Recording {
         let (exited_tx, exited) = watch::channel(None);
         let (end, end_rx) = oneshot::channel::<()>();
         let (kill, kill_rx) = oneshot::channel::<()>();
+        let output = Arc::new(output);
         let mut command = Command::new(ffmpeg);
+        let mapped = match output.try_clone() {
+            Ok(file) => command
+                .fd_mappings(vec![FdMapping {
+                    parent_fd: OwnedFd::from(file),
+                    child_fd: OUTPUT_FD,
+                }])
+                .map(|_| ())
+                .map_err(std::io::Error::other),
+            Err(error) => Err(error),
+        };
         command
-            .args(ffmpeg_args(&file))
+            .args(ffmpeg_args())
             .env_clear()
             .envs(env)
             .stdin(Stdio::piped())
@@ -140,7 +164,7 @@ impl Recording {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         let recording = Self {
-            file,
+            output,
             relative,
             started_at: crate::util::now_ms(),
             failed: failed.clone(),
@@ -148,6 +172,11 @@ impl Recording {
             end: Some(end),
             kill: Some(kill),
         };
+        if let Err(error) = mapped {
+            *lock(&failed) = Some(error.to_string());
+            exited_tx.send_replace(Some(None));
+            return recording;
+        }
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error) => {
@@ -264,7 +293,7 @@ impl Recording {
                 };
             Stopped {
                 failed: self.failed(),
-                file: self.file.clone(),
+                output: self.output.clone(),
                 relative: self.relative.clone(),
                 started_at: self.started_at,
                 exit,
@@ -307,7 +336,9 @@ impl Stopped {
                 format!("Recording failed: {reason}"),
             ));
         }
-        let bytes = std::fs::metadata(&self.file)
+        let bytes = self
+            .output
+            .metadata()
             .map_err(|error| ApiError::new(500, "browser_error", error.to_string()))?
             .len();
         Ok(json!({
@@ -371,11 +402,15 @@ mod tests {
     #[test]
     fn passes_ffmpeg_its_arguments() {
         assert_eq!(
-            ffmpeg_args(std::path::Path::new("/r/a.webm")).join(" "),
+            ffmpeg_args().join(" "),
             "-hide_banner -loglevel error -f image2pipe -framerate 10 -c:v mjpeg -i - \
              -vf scale=trunc(iw/2)*2:trunc(ih/2)*2 -c:v libvpx-vp9 -deadline realtime \
-             -cpu-used 8 -b:v 0 -crf 38 -pix_fmt yuv420p -y /r/a.webm"
+             -cpu-used 8 -b:v 0 -crf 38 -pix_fmt yuv420p -f webm -y /dev/fd/3"
         );
+    }
+
+    fn create(path: &std::path::Path) -> File {
+        File::create(path).unwrap()
     }
 
     fn no_frames() -> FrameSource {
@@ -388,7 +423,7 @@ mod tests {
         let recording = Recording::start(
             "/nonexistent/ffmpeg",
             &BTreeMap::new(),
-            dir.path().join("a.webm"),
+            create(&dir.path().join("a.webm")),
             ".pirc/recordings/a.webm".into(),
             no_frames(),
             Arc::new(|| true),
@@ -419,7 +454,7 @@ mod tests {
         let recording = Recording::start(
             &ffmpeg,
             &sh_env(),
-            file.clone(),
+            create(&file),
             ".pirc/recordings/a.webm".into(),
             Arc::new(move || Some(frame.clone())),
             Arc::new(|| true),
@@ -447,7 +482,7 @@ mod tests {
         let recording = Recording::start(
             &ffmpeg,
             &sh_env(),
-            file.clone(),
+            create(&file),
             "r".into(),
             Arc::new(move || Some(frame.clone())),
             Arc::new(|| true),
@@ -476,7 +511,7 @@ mod tests {
         let recording = Recording::start(
             &ffmpeg,
             &sh_env(),
-            dir.path().join("a.webm"),
+            create(&dir.path().join("a.webm")),
             "r".into(),
             no_frames(),
             Arc::new(|| true),
@@ -497,7 +532,7 @@ mod tests {
         let recording = Recording::start(
             &ffmpeg,
             &sh_env(),
-            dir.path().join("b.webm"),
+            create(&dir.path().join("b.webm")),
             "r".into(),
             no_frames(),
             Arc::new(|| false),
