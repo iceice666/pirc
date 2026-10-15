@@ -92,7 +92,7 @@ fn card(store: &Store<'_>, user: &str, proposal: &Proposal) -> ApiResult<Value> 
     }
     parts.push(format!("Your words:\n“{}”", proposal.quote));
     parts.push(
-        "Your decision is saved immediately. The assistant will see it on its next turn.".into(),
+        "Your decision is saved immediately. The assistant will see it on its next turn. USER applies to new chats and coding sessions on every node.".into(),
     );
     Ok(json!({
         "id": id,

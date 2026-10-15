@@ -125,7 +125,8 @@
   <p>
     What your assistant remembers across chats. <strong>USER</strong> is what you told it about
     yourself and changes only when you approve. <strong>MEMORY</strong> holds the assistant's own notes.
-    New chats start with both; open chats keep what they started with.
+    New chats start with both; open chats keep what they started with. USER also reaches every coding
+    session on every node, so approve only what should apply everywhere.
   </p>
 
   {#if disabled}

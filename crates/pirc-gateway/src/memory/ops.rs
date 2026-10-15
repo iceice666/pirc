@@ -192,10 +192,18 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
     let session_id = context.session.id.as_str();
     match op {
         // Every session in a chat workspace is an assistant; directory
-        // workspaces have no policy: every capability stays allowed.
+        // workspaces have no policy: every capability stays allowed. A
+        // coding session reads the approved USER entries and nothing else:
+        // no notes, no workspaces, and its memory operations stay refused.
         Op::Context => {
             if context.workspace.kind != WorkspaceKind::Chat {
-                return Ok(json!({ "enabled": false }));
+                let user = {
+                    let conn = app.db.lock();
+                    super::store(app, &conn).user_context(user)?
+                };
+                return Ok(json!({
+                    "enabled": true, "user": user, "notes": null, "workspaces": null,
+                }));
             }
             let (capabilities, memory) = {
                 let conn = app.db.lock();

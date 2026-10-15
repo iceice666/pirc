@@ -327,6 +327,8 @@ expression: t.into_value()
       "notification",
       "pi_event extension_ui_request",
       "pi_event agent_start",
+      "notification",
+      "pi_event extension_ui_request",
       "pi_event message_start",
       "pi_event message_end",
       "pi_event turn_start",

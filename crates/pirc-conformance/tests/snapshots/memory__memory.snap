@@ -741,7 +741,7 @@ expression: t.into_value()
           "request": {
             "cancelLabel": "Reject",
             "confirmLabel": "Approve",
-            "message": "Proposed memory:\nPrefers short answers.\n\nYour words:\n“keep it short”\n\nYour decision is saved immediately. The assistant will see it on its next turn.",
+            "message": "Proposed memory:\nPrefers short answers.\n\nYour words:\n“keep it short”\n\nYour decision is saved immediately. The assistant will see it on its next turn. USER applies to new chats and coding sessions on every node.",
             "method": "confirm",
             "title": "Add USER memory?"
           },
@@ -883,7 +883,7 @@ expression: t.into_value()
           "request": {
             "cancelLabel": "Reject",
             "confirmLabel": "Approve",
-            "message": "Proposed memory:\nLives in Taipei.\n\nYour words:\n“I live in Taipei”\n\nYour decision is saved immediately. The assistant will see it on its next turn.",
+            "message": "Proposed memory:\nLives in Taipei.\n\nYour words:\n“I live in Taipei”\n\nYour decision is saved immediately. The assistant will see it on its next turn. USER applies to new chats and coding sessions on every node.",
             "method": "confirm",
             "title": "Add USER memory?"
           },
@@ -927,7 +927,7 @@ expression: t.into_value()
           "request": {
             "cancelLabel": "Reject",
             "confirmLabel": "Approve",
-            "message": "Proposed memory:\nPrefers short answers.\n\nYour words:\n“keep it short”\n\nYour decision is saved immediately. The assistant will see it on its next turn.",
+            "message": "Proposed memory:\nPrefers short answers.\n\nYour words:\n“keep it short”\n\nYour decision is saved immediately. The assistant will see it on its next turn. USER applies to new chats and coding sessions on every node.",
             "method": "confirm",
             "title": "Add USER memory?"
           },
@@ -944,7 +944,7 @@ expression: t.into_value()
           "request": {
             "cancelLabel": "Reject",
             "confirmLabel": "Approve",
-            "message": "Proposed memory:\nLives in Taipei.\n\nYour words:\n“I live in Taipei”\n\nYour decision is saved immediately. The assistant will see it on its next turn.",
+            "message": "Proposed memory:\nLives in Taipei.\n\nYour words:\n“I live in Taipei”\n\nYour decision is saved immediately. The assistant will see it on its next turn. USER applies to new chats and coding sessions on every node.",
             "method": "confirm",
             "title": "Add USER memory?"
           },
@@ -1490,7 +1490,7 @@ expression: t.into_value()
           "request": {
             "cancelLabel": "Reject",
             "confirmLabel": "Approve",
-            "message": "Current memory (<u8>):\nPrefers short answers.\n\nProposed memory:\nPrefers very short answers.\n\nYour words:\n“even shorter”\n\nYour decision is saved immediately. The assistant will see it on its next turn.",
+            "message": "Current memory (<u8>):\nPrefers short answers.\n\nProposed memory:\nPrefers very short answers.\n\nYour words:\n“even shorter”\n\nYour decision is saved immediately. The assistant will see it on its next turn. USER applies to new chats and coding sessions on every node.",
             "method": "confirm",
             "title": "Replace USER memory?"
           },
@@ -2466,6 +2466,175 @@ expression: t.into_value()
   },
   {
     "observed": {
+      "answer": {
+        "body": {
+          "result": {
+            "duplicate": false,
+            "proposalId": "<p11>"
+          }
+        },
+        "status": 200
+      },
+      "op": "memory.proposeUser",
+      "session": "remote-a"
+    },
+    "step": "a USER entry for every session"
+  },
+  {
+    "body": {
+      "notes": [
+        {
+          "content": "The pirc repo lives on m5pro",
+          "createdAt": "<epoch-ms>",
+          "id": "<n1>",
+          "kind": "note",
+          "origins": [
+            "assistant"
+          ],
+          "revision": 5,
+          "sources": {
+            "entryIds": [
+              "e1"
+            ],
+            "quote": "it is on m5pro",
+            "sessionId": "session_<uuid:1>"
+          },
+          "status": "active",
+          "updatedAt": "<epoch-ms>"
+        },
+        {
+          "content": "token ghp_[REDACTED]",
+          "createdAt": "<epoch-ms>",
+          "id": "<n2>",
+          "kind": "note",
+          "origins": [
+            "user"
+          ],
+          "revision": 1,
+          "sources": {
+            "sessionId": "session_<uuid:1>"
+          },
+          "status": "active",
+          "updatedAt": "<epoch-ms>"
+        },
+        {
+          "content": "Drafted in the other chat",
+          "createdAt": "<epoch-ms>",
+          "id": "<n4>",
+          "kind": "note",
+          "origins": [
+            "assistant"
+          ],
+          "revision": 1,
+          "sources": {
+            "sessionId": "session_<uuid:2>"
+          },
+          "status": "active",
+          "updatedAt": "<epoch-ms>"
+        }
+      ],
+      "proposals": [],
+      "removed": [],
+      "sessions": {
+        "session_<uuid:1>": "New session",
+        "session_<uuid:2>": "New session"
+      },
+      "usage": {
+        "note": {
+          "max": 120,
+          "used": 73
+        },
+        "user": {
+          "max": 80,
+          "used": 19
+        }
+      },
+      "user": [
+        {
+          "content": "Answers in English.",
+          "createdAt": "<epoch-ms>",
+          "id": "<u12>",
+          "kind": "user",
+          "origins": [
+            "user"
+          ],
+          "revision": 1,
+          "sources": {
+            "entryIds": [
+              "e9"
+            ],
+            "proposalId": "<p11>",
+            "quote": "answer in English",
+            "sessionId": "session_<uuid:1>"
+          },
+          "status": "active",
+          "updatedAt": "<epoch-ms>"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/memory/proposals/<p11>/approve",
+    "status": 200,
+    "step": "approve it"
+  },
+  {
+    "observed": [
+      {
+        "data": {
+          "createdAt": "<epoch-ms>",
+          "expiresAt": null,
+          "id": "memory:<p11>:0",
+          "kind": "confirm",
+          "request": {
+            "cancelLabel": "Reject",
+            "confirmLabel": "Approve",
+            "message": "Proposed memory:\nAnswers in English.\n\nYour words:\n“answer in English”\n\nYour decision is saved immediately. The assistant will see it on its next turn. USER applies to new chats and coding sessions on every node.",
+            "method": "confirm",
+            "title": "Add USER memory?"
+          },
+          "rpcId": "memory:<p11>:0",
+          "runnerEpoch": 0,
+          "sessionId": "session_<uuid:1>",
+          "status": "pending"
+        },
+        "epoch": 0,
+        "sequence": 17,
+        "sessionId": "session_<uuid:1>",
+        "timestamp": "<epoch-ms>",
+        "type": "interaction_created"
+      },
+      {
+        "type": "memory_changed"
+      },
+      {
+        "data": {
+          "interactionId": "memory:<p11>:0"
+        },
+        "epoch": 0,
+        "sequence": 18,
+        "sessionId": "session_<uuid:1>",
+        "timestamp": "<epoch-ms>",
+        "type": "interaction_answered"
+      },
+      {
+        "type": "memory_changed"
+      },
+      {
+        "data": "m11",
+        "epoch": 0,
+        "sequence": 19,
+        "sessionId": "session_<uuid:1>",
+        "timestamp": "<epoch-ms>",
+        "type": "marker"
+      }
+    ],
+    "step": "approved: memory changed"
+  },
+  {
+    "observed": {
       "mirrors": {},
       "models": {
         "defaultModel": {
@@ -2542,7 +2711,17 @@ expression: t.into_value()
       "answer": {
         "body": {
           "result": {
-            "enabled": false
+            "enabled": true,
+            "notes": null,
+            "user": [
+              {
+                "content": "Answers in English.",
+                "id": "<u12>",
+                "revision": 1,
+                "updatedAt": "<epoch-ms>"
+              }
+            ],
+            "workspaces": null
           }
         },
         "status": 200
@@ -2550,7 +2729,7 @@ expression: t.into_value()
       "op": "assistant.context",
       "session": "dev-1"
     },
-    "step": "a directory session has no assistant"
+    "step": "a directory session reads USER only"
   },
   {
     "observed": {
@@ -2917,9 +3096,9 @@ expression: t.into_value()
         "type": "memory_changed"
       },
       {
-        "data": "m11",
+        "data": "m12",
         "epoch": 0,
-        "sequence": 17,
+        "sequence": 20,
         "sessionId": "session_<uuid:1>",
         "timestamp": "<epoch-ms>",
         "type": "marker"
@@ -2983,10 +3162,31 @@ expression: t.into_value()
         },
         "user": {
           "max": 80,
-          "used": 0
+          "used": 19
         }
       },
-      "user": []
+      "user": [
+        {
+          "content": "Answers in English.",
+          "createdAt": "<epoch-ms>",
+          "id": "<u12>",
+          "kind": "user",
+          "origins": [
+            "user"
+          ],
+          "revision": 1,
+          "sources": {
+            "entryIds": [
+              "e9"
+            ],
+            "proposalId": "<p11>",
+            "quote": "answer in English",
+            "sessionId": "session_<uuid:1>"
+          },
+          "status": "active",
+          "updatedAt": "<epoch-ms>"
+        }
+      ]
     },
     "headers": {
       "cache-control": "no-store",

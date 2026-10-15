@@ -332,19 +332,28 @@ impl<'a> Store<'a> {
             .ok_or_else(|| ApiError::not_found(format!("No memory proposal {id}")))
     }
 
+    /// The active entries of `kind`, as a session's context shows them.
+    fn briefs(active: &[Entry], kind: Kind) -> Vec<Value> {
+        active
+            .iter()
+            .filter(|entry| entry.is(kind))
+            .map(|entry| {
+                json!({ "id": entry.id, "content": entry.content,
+                    "revision": entry.revision, "updatedAt": entry.updated_at })
+            })
+            .collect()
+    }
+
+    /// What a coding session starts with: the approved USER entries only.
+    pub fn user_context(&self, user: &str) -> ApiResult<Vec<Value>> {
+        let active = self.entries(user, None, Some("active"))?;
+        Ok(Self::briefs(&active, Kind::User))
+    }
+
     /// What an assistant session starts with.
     pub fn context(&self, user: &str, session_id: Option<&str>) -> ApiResult<Map<String, Value>> {
         let active = self.entries(user, None, Some("active"))?;
-        let brief = |kind: Kind| -> Vec<Value> {
-            active
-                .iter()
-                .filter(|entry| entry.is(kind))
-                .map(|entry| {
-                    json!({ "id": entry.id, "content": entry.content,
-                        "revision": entry.revision, "updatedAt": entry.updated_at })
-                })
-                .collect()
-        };
+        let brief = |kind: Kind| Self::briefs(&active, kind);
         let decisions: Vec<Value> = match session_id {
             Some(session_id) => {
                 let mut decided: Vec<Proposal> = self

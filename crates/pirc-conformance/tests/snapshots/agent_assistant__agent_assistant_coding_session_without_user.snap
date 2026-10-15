@@ -18,6 +18,12 @@ expression: log.into_value()
         "type": "agent_start"
       },
       {
+        "args": {},
+        "id": "<uuid:1>",
+        "op": "assistant.context",
+        "type": "gateway_request"
+      },
+      {
         "message": {
           "content": "hello",
           "role": "user",
@@ -359,6 +365,177 @@ expression: log.into_value()
     "step": "prompt: model requests"
   },
   {
+    "observed": {
+      "command": "prompt",
+      "id": "c2",
+      "success": true,
+      "type": "response"
+    },
+    "step": "again: response"
+  },
+  {
+    "observed": [
+      {
+        "type": "agent_start"
+      },
+      {
+        "message": {
+          "content": "more",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "more",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "type": "text_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "Aga",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "in.",
+          "type": "text_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "content": "Again.",
+          "contentIndex": 0,
+          "type": "text_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "Again.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "agent_end",
+        "willRetry": false
+      },
+      {
+        "type": "agent_settled"
+      }
+    ],
+    "step": "again: events"
+  },
+  {
+    "observed": [
+      {
+        "messages": [
+          {
+            "content": "hello",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "text": "Hi.",
+                "type": "text"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "stop",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": "more",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "<unchanged>",
+        "thinking": "low",
+        "tools": "<unchanged>"
+      }
+    ],
+    "step": "again: model requests"
+  },
+  {
     "observed": [
       {
         "cwd": "<tmp>/workspace",
@@ -370,18 +547,29 @@ expression: log.into_value()
         "version": 1
       },
       {
+        "customType": "assistant.snapshot",
+        "data": {
+          "revisions": {},
+          "text": ""
+        },
         "id": "<entry:2>",
+        "parentId": "<entry:1>",
+        "timestamp": "<epoch-ms>",
+        "type": "custom"
+      },
+      {
+        "id": "<entry:3>",
         "message": {
           "content": "hello",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
-        "parentId": "<entry:1>",
+        "parentId": "<entry:2>",
         "timestamp": "<epoch-ms>",
         "type": "message"
       },
       {
-        "id": "<entry:3>",
+        "id": "<entry:4>",
         "message": {
           "api": "openai-completions",
           "completedAt": "<epoch-ms>",
@@ -404,7 +592,46 @@ expression: log.into_value()
             "totalTokens": 150
           }
         },
-        "parentId": "<entry:2>",
+        "parentId": "<entry:3>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:5>",
+        "message": {
+          "content": "more",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "parentId": "<entry:4>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:6>",
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "text": "Again.",
+              "type": "text"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "stop",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "parentId": "<entry:5>",
         "timestamp": "<epoch-ms>",
         "type": "message"
       }

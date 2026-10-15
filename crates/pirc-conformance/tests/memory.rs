@@ -908,6 +908,27 @@ async fn memory() {
         json!({ "action": "add", "content": "x", "origins": ["assistant"] })
     );
 
+    // A USER entry, which coding sessions read too.
+    let proposed = op!(
+        "a USER entry for every session",
+        chat,
+        "remote-a",
+        "memory.proposeUser",
+        json!({ "action": "add", "content": "Answers in English.", "quote": "answer in English",
+            "entryIds": ["e9"] })
+    );
+    let english = proposed["body"]["result"]["proposalId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    call!(
+        "approve it",
+        "POST",
+        format!("/api/memory/proposals/{english}/approve"),
+        None
+    );
+    seen!("approved: memory changed", live);
+
     // ---- workspace memory: search and recall ----
     let dev_register = json!({
         "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
@@ -925,7 +946,7 @@ async fn memory() {
     );
     {
         op!(
-            "a directory session has no assistant",
+            "a directory session reads USER only",
             dev.as_mut().unwrap(),
             "dev-1",
             "assistant.context",

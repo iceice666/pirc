@@ -2,7 +2,7 @@
 //! feature `assistant`), with the test playing the agent's node and its
 //! gateway: USER entries and MEMORY notes frozen into the system prompt,
 //! proposal decisions, the chat's capability policy, an unreachable
-//! gateway, messages the gateway pushes, and sessions outside chats. The
+//! gateway, messages the gateway pushes, and coding sessions (USER only). The
 //! M5 target of the agent port (docs/history/rust-rewrite.md). The tools,
 //! reachable only from `ptc` scripts, are in `agent_assistant_ptc.rs`.
 
@@ -191,20 +191,104 @@ async fn agent_assistant_delivered_messages() {
     insta::assert_json_snapshot!("agent_assistant_delivered_messages", log.into_value());
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn agent_assistant_outside_chat() {
+/// What the node sets for an agent in a directory workspace.
+fn coding() -> AgentOptions {
     let mut options = AgentOptions::default().features("assistant");
     options
         .env
         .push(("PIRC_GATEWAY".to_owned(), "1".to_owned()));
-    let Some(mut agent) = AgentRun::start(options).await else {
+    options
+}
+
+/// The gateway's answer to a coding session: USER only.
+fn user_only(user: Value) -> Value {
+    ok(json!({ "enabled": true, "user": user, "notes": null, "workspaces": null }))
+}
+
+/// A coding session starts with the approved USER entries, frozen, and
+/// none of the assistant's tools.
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_assistant_coding_session() {
+    let Some(mut agent) = AgentRun::start(coding()).await else {
         return;
     };
     let mut log = Log::new(&agent);
-    agent.push([text("Hi.")]);
+    answer(
+        &agent,
+        "assistant.context",
+        [
+            user_only(json!([
+                { "id": "u11111111", "content": "Prefers short answers.", "revision": 2 },
+                { "id": "u22222222", "content": "Writes commit messages in English.", "revision": 1 },
+            ])),
+            user_only(json!([{ "id": "u33333333", "content": "Changed later.", "revision": 1 }])),
+        ],
+    );
+    agent.push([text("Hi."), text("Again.")]);
     log.turn(&mut agent, "prompt", "hello").await;
+    // Frozen: the second run neither asks nor shows the change.
+    log.turn(&mut agent, "again", "more").await;
     log.session(&agent);
-    insta::assert_json_snapshot!("agent_assistant_outside_chat", log.into_value());
+    insta::assert_json_snapshot!("agent_assistant_coding_session", log.into_value());
+}
+
+/// An unreachable gateway never holds a coding session up: it runs without
+/// USER, the user is told once, and a later run loads it.
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_assistant_coding_session_unreachable() {
+    let Some(mut agent) = AgentRun::start(coding()).await else {
+        return;
+    };
+    let mut log = Log::new(&agent);
+    let offline = json!({ "ok": false, "error": { "status": 503, "code": "gateway_offline",
+        "message": "offline" } });
+    answer(
+        &agent,
+        "assistant.context",
+        [
+            offline.clone(),
+            offline,
+            user_only(
+                json!([{ "id": "u11111111", "content": "Prefers short answers.",
+                "revision": 2 }]),
+            ),
+        ],
+    );
+    agent.push([text("a"), text("b"), text("c")]);
+    log.turn(&mut agent, "unreachable", "hello").await;
+    log.turn(&mut agent, "still unreachable: not told again", "again")
+        .await;
+    log.turn(&mut agent, "back", "and now?").await;
+    log.session(&agent);
+    insta::assert_json_snapshot!(
+        "agent_assistant_coding_session_unreachable",
+        log.into_value()
+    );
+}
+
+/// A coding session with no USER entries freezes that too.
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_assistant_coding_session_without_user() {
+    let Some(mut agent) = AgentRun::start(coding()).await else {
+        return;
+    };
+    let mut log = Log::new(&agent);
+    answer(
+        &agent,
+        "assistant.context",
+        [
+            user_only(json!([])),
+            user_only(json!([{ "id": "u1", "content": "Late.", "revision": 1 }])),
+        ],
+    );
+    agent.push([text("Hi."), text("Again.")]);
+    log.turn(&mut agent, "prompt", "hello").await;
+    log.turn(&mut agent, "again", "more").await;
+    log.session(&agent);
+    insta::assert_json_snapshot!(
+        "agent_assistant_coding_session_without_user",
+        log.into_value()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

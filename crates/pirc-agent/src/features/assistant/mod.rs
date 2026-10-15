@@ -6,8 +6,12 @@
 //! `memory_propose_user` asks the user to approve a USER change that rests
 //! on their exact words, which code finds in their own messages: the model
 //! never decides where a memory came from.
+//!
+//! A coding session (a directory workspace's main agent, delegated ones
+//! included) starts with the approved USER entries only, frozen the same
+//! way: it reads them, never writes them, and has none of the tools.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 use std::time::Duration;
@@ -33,6 +37,7 @@ use crate::tools::js::{self, js_regex, locale_string_en_us};
 use crate::tools::prompts::{PromptVar, tool_prompt};
 use crate::tools::result_schema::{arr, bool_, fields, int, nullable, obj, str_};
 use crate::tools::{Tool, ToolContext, ToolResult, typed};
+use crate::ui::NotifyLevel;
 
 /// Session entry: the memory frozen into this chat's system prompt, with
 /// the revisions it showed.
@@ -48,6 +53,9 @@ const NOTE_REVISION: &str = "assistant.note_revision";
 /// A chat waits this long for its memory before starting without it (and
 /// trying again next run).
 const CONTEXT_TIMEOUT_MS: u64 = 10_000;
+/// A coding session waits at most this long for USER: it must never be
+/// held up by the gateway.
+const USER_TIMEOUT_MS: u64 = 3_000;
 
 /// `number(value)`: `toLocaleString('en-US')`.
 fn number(value: Option<&Value>) -> String {
@@ -235,6 +243,24 @@ pub fn render_workspaces(workspaces: &[Value]) -> String {
     lines.join("\n")
 }
 
+/// The `## User` section of a coding session: the approved USER entries,
+/// or nothing when there are none.
+pub fn render_user(entries: &[Value]) -> String {
+    if entries.is_empty() {
+        return String::new();
+    }
+    let mut lines = vec![
+        "## User".to_owned(),
+        String::new(),
+        "What the user told their assistant about themselves, their preferences and standing rules. They approved every entry, and it applies to all their sessions: follow it unless they say otherwise now. This repository's own instructions decide how to work in it. It was loaded when this session started; you cannot change it here, the user does that from an assistant chat or Settings → Memory.".to_owned(),
+        String::new(),
+    ];
+    for entry in entries {
+        lines.push(format!("- {}", string(entry.get("content"))));
+    }
+    lines.join("\n")
+}
+
 /// `UNAVAILABLE`.
 fn unavailable() -> String {
     format!(
@@ -343,6 +369,8 @@ struct State {
     /// Revision of each entry as this chat last saw it, sent with replace
     /// and remove.
     revisions: RefCell<HashMap<String, Value>>,
+    /// A coding session already told the user that USER could not be loaded.
+    warned: Cell<bool>,
 }
 
 type Shared = Rc<State>;
@@ -353,6 +381,90 @@ fn gateway_of(agent: &Agent) -> Option<Rc<NodeChannels>> {
     } else {
         None
     }
+}
+
+/// The gateway of a coding session, which reads USER only.
+fn user_gateway_of(agent: &Agent) -> Option<Rc<NodeChannels>> {
+    if agent.config().workspace_kind == WorkspaceKind::Directory {
+        process_gateway()
+    } else {
+        None
+    }
+}
+
+/// `assistant.context`, given up after `timeout_ms`.
+async fn request_context(gateway: &NodeChannels, timeout_ms: u64) -> Result<Value, ChannelError> {
+    let timeout = AbortController::new();
+    let timer = {
+        let timeout = timeout.clone();
+        tokio::task::spawn_local(async move {
+            tokio::time::sleep(Duration::from_millis(timeout_ms)).await;
+            timeout.abort();
+        })
+    };
+    let answer = gateway
+        .gateway
+        .request("assistant.context", Map::new(), Some(&timeout.signal()))
+        .await;
+    timer.abort();
+    answer
+}
+
+/// The frozen snapshot's text in this branch, if one was written.
+fn frozen_snapshot(agent: &Agent) -> Option<String> {
+    agent
+        .branch()
+        .iter()
+        .rev()
+        .find_map(|entry| match &entry.data {
+            EntryData::Custom { custom_type, data } if custom_type == ASSISTANT_SNAPSHOT => {
+                Some(match data.get("text") {
+                    None | Some(Value::Null) => String::new(),
+                    Some(text) => js::string_of(text),
+                })
+            }
+            _ => None,
+        })
+}
+
+/// The `## User` section of a coding session, frozen once loaded. An
+/// unreachable gateway costs the session its USER for this run only: the
+/// user is told once, and the next run tries again.
+async fn user_section(state: &State, agent: &Agent, gateway: &NodeChannels) -> String {
+    if let Some(frozen) = state.frozen.borrow().clone() {
+        return frozen;
+    }
+    if let Some(text) = frozen_snapshot(agent) {
+        *state.frozen.borrow_mut() = Some(text.clone());
+        return text;
+    }
+    let context = match request_context(gateway, USER_TIMEOUT_MS).await {
+        Ok(context) => context,
+        Err(_) => {
+            if !state.warned.replace(true) {
+                agent.ui().notify(
+                    "Your USER preferences could not be loaded (the gateway is unreachable); this session runs without them for now.",
+                    NotifyLevel::Warning,
+                );
+            }
+            return String::new();
+        }
+    };
+    // An older gateway gives coding sessions nothing: ask again next run.
+    if !js::truthy(context.get("enabled")) {
+        return String::new();
+    }
+    let section = render_user(array(context.get("user")));
+    if append_custom(
+        agent,
+        ASSISTANT_SNAPSHOT,
+        json!({ "text": section, "revisions": {} }),
+    )
+    .is_ok()
+    {
+        *state.frozen.borrow_mut() = Some(section.clone());
+    }
+    section
 }
 
 /// `learn`: after a restart, the snapshot's revisions, then every write
@@ -412,20 +524,7 @@ async fn memory_section(
     agent: &Agent,
     gateway: &NodeChannels,
 ) -> Result<String, String> {
-    let timeout = AbortController::new();
-    let timer = {
-        let timeout = timeout.clone();
-        tokio::task::spawn_local(async move {
-            tokio::time::sleep(Duration::from_millis(CONTEXT_TIMEOUT_MS)).await;
-            timeout.abort();
-        })
-    };
-    let answer = gateway
-        .gateway
-        .request("assistant.context", Map::new(), Some(&timeout.signal()))
-        .await;
-    timer.abort();
-    let context = match answer {
+    let context = match request_context(gateway, CONTEXT_TIMEOUT_MS).await {
         Ok(Value::Null) => json!({}),
         Ok(context) => context,
         // Preserve the last known policy when offline; the gateway still enforces every operation.
@@ -450,16 +549,7 @@ async fn memory_section(
     if let Some(frozen) = state.frozen.borrow().clone() {
         return Ok(with_decisions(frozen));
     }
-    let branch = agent.branch();
-    let existing = branch.iter().rev().find_map(|entry| match &entry.data {
-        EntryData::Custom { custom_type, data } if custom_type == ASSISTANT_SNAPSHOT => Some(data),
-        _ => None,
-    });
-    if let Some(data) = existing {
-        let text = match data.get("text") {
-            None | Some(Value::Null) => String::new(),
-            Some(text) => js::string_of(text),
-        };
+    if let Some(text) = frozen_snapshot(agent) {
         *state.frozen.borrow_mut() = Some(text.clone());
         return Ok(with_decisions(text));
     }
@@ -1367,7 +1457,20 @@ impl Feature for AssistantFeature {
     ) -> LocalBoxFuture<'a, Result<Option<BeforeStart>, String>> {
         Box::pin(async move {
             let Some(gateway) = gateway_of(agent) else {
-                return Ok(None);
+                let Some(gateway) = user_gateway_of(agent) else {
+                    return Ok(None);
+                };
+                let section = user_section(&self.state, agent, &gateway).await;
+                if section.is_empty() {
+                    return Ok(None);
+                }
+                return Ok(Some(BeforeStart {
+                    system_prompt: Some(PromptAddition::Sections(vec![PromptSection {
+                        frozen: Some(true),
+                        ..PromptSection::new("assistant", "User", "gateway", section)
+                    }])),
+                    messages: Vec::new(),
+                }));
             };
             let section = memory_section(&self.state, agent, &gateway).await?;
             let section = present_section(&section, &agent.capabilities());

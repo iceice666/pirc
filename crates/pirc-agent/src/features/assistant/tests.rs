@@ -146,3 +146,17 @@ fn renders_memory_and_workspaces() {
             .contains("search them with memory_search.\n")
     );
 }
+
+#[test]
+fn renders_user_for_coding_sessions() {
+    assert_eq!(render_user(&[]), "");
+    let text = render_user(&[
+        json!({ "id": "u11111111", "content": "Prefers short answers.", "revision": 2 }),
+        json!({ "id": "u22222222", "content": "Writes commit messages in English.", "revision": 1 }),
+    ]);
+    assert!(text.starts_with("## User\n\n"), "{text}");
+    assert!(text.ends_with("\n\n- Prefers short answers.\n- Writes commit messages in English."));
+    // No ids: nothing here can change an entry.
+    assert!(!text.contains("u11111111"));
+    assert!(text.contains("you cannot change it here"));
+}
