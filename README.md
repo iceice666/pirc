@@ -55,7 +55,7 @@ bun install
 bun run dev        # gateway
 bun run dev:chat   # optional chat node, with its own node ID/token/state directory
 bun run dev:node   # coding node, with PIRC_DAEMON_URL=ws://127.0.0.1:8787
-bun run dev:web
+bun run dev:web    # localhost only; add `-- --host 0.0.0.0` to try it from a phone on the LAN
 ```
 
 The node's first workspace can point to this repository. See the [gateway and node reference](docs/development/gateway-and-node.md) for configuration and API details, and [`apps/web/README.md`](apps/web/README.md) for the client.

@@ -7,7 +7,9 @@ export default defineConfig({
   resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
   build: {
     manifest: true,
-    sourcemap: true,
+    // No source maps in the shipped bundle: the gateway would serve them to
+    // anyone who can load the app (security audit L15).
+    sourcemap: false,
     // Only lazily loaded renderers (mermaid diagrams, KaTeX) exceed the default
     // 500 kB; the entry chunk stays well below this.
     chunkSizeWarningLimit: 750,

@@ -21,6 +21,7 @@ The gateway's database moves to schema 1002 on first start (automatic: two colum
 - The gateway's limits of 100 pending requests and 64 open terminal/browser streams apply to each node instead of to all nodes together, so one busy node no longer makes the others answer "Too many pending node requests".
 - JSON request bodies are limited to 4 MiB (uploads keep `PIRC_UPLOAD_MAX_BYTES`), and a session command keeps only the fields the node uses, each bounded (a message at most 1,000,000 UTF-16 units, at most 16 attachments), before it is stored and forwarded; other fields were stored and relayed whole.
 - The gateway keeps at most 8 MiB of events per session for replay (besides the `PIRC_EVENT_BUFFER_SIZE` count), and at most 200,000 mirrored memory rows and 64 MiB of note text per node; a node over that gets no new rows kept for search, and the gateway logs it.
+- The web bundle no longer ships source maps, and `bun run dev:web`/`preview` listen on localhost only (add `-- --host 0.0.0.0` for the LAN). The NixOS units drop every capability and restrict address families and realtime scheduling; the gateway's also gets a system-call filter, `ProtectProc=invisible` and no namespaces. CI actions are pinned by commit.
 
 ### Fixed
 

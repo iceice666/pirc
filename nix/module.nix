@@ -193,9 +193,31 @@ let
     # Chromium and user tools may need executable JIT memory (the Rust
     # executables and QuickJS interpreter themselves do not).
     MemoryDenyWriteExecute = false;
+    # Both run as ordinary accounts and need no capabilities. bubblewrap's
+    # user namespaces get a full set of their own whatever the bounding set.
+    CapabilityBoundingSet = "";
+    RestrictRealtime = true;
+    # Netlink for getaddrinfo and bubblewrap's loopback setup.
+    RestrictAddressFamilies = [
+      "AF_UNIX"
+      "AF_INET"
+      "AF_INET6"
+      "AF_NETLINK"
+    ];
     UMask = "0077";
     Restart = "on-failure";
     RestartSec = 3;
+  };
+
+  # The gateway only serves HTTP and runs apiKeyCommand. The node is left
+  # without these: bubblewrap mounts and creates namespaces (not in
+  # @system-service) and mounts its own /proc, and agents and terminals run
+  # the user's tools.
+  gatewayHardening = hardening // {
+    SystemCallFilter = [ "@system-service" ];
+    SystemCallArchitectures = "native";
+    ProtectProc = "invisible";
+    RestrictNamespaces = true;
   };
 
   # File-managed providers live on the gateway, which resolves their keys and
@@ -704,7 +726,7 @@ in
         # apiKeyCommand runs on the gateway.
         path = cfg.extraPackages;
         reloadTriggers = [ modelsFile ];
-        serviceConfig = hardening // {
+        serviceConfig = gatewayHardening // {
           Type = "simple";
           User = gatewayUser;
           Group = gatewayUser;

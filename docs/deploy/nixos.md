@@ -99,7 +99,7 @@ Environment derived from options: `PIRC_TIMEZONE` from `timeZone` (defaults to `
 
 ## Hardening and its consequences
 
-Both units run with `NoNewPrivileges`, `PrivateTmp`, `PrivateDevices`, `ProtectHome`, `ProtectSystem=strict`, `ProtectKernel*`, `RestrictSUIDSGID`, `LockPersonality`, `UMask=0077`, `Restart=on-failure`. `MemoryDenyWriteExecute` stays off for Chromium and user tools that may use JIT memory.
+Both units run with `NoNewPrivileges`, `PrivateTmp`, `PrivateDevices`, `ProtectHome`, `ProtectSystem=strict`, `ProtectKernel*`, `RestrictSUIDSGID`, `LockPersonality`, an empty `CapabilityBoundingSet`, `RestrictRealtime`, `RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK`, `UMask=0077`, `Restart=on-failure`. The gateway also gets `SystemCallFilter=@system-service`, `SystemCallArchitectures=native`, `ProtectProc=invisible` and `RestrictNamespaces`; the node does not, because bubblewrap mounts, creates namespaces and mounts its own `/proc`, and agents and terminals run your tools. `MemoryDenyWriteExecute` stays off for Chromium and user tools that may use JIT memory (an `apiKeyCommand` on Node.js too).
 
 - `ProtectHome=true`: workspaces under `/home` are invisible. Put repositories under `/srv` (or override the hardening in your host config knowingly). Only the node service gets `ReadWritePaths` for the configured workspace paths.
 - Web-added workspaces must be inside the node's home, which is `/var/lib/pirc`; use `services.pirc.workspaces` for anything else.
