@@ -1,4 +1,4 @@
-//! The `sandbox` feature without `ptc` scripts (plans/rust-rewrite.md,
+//! The `sandbox` feature without `ptc` scripts (docs/history/rust-rewrite.md,
 //! M5): its system prompt section in coding sessions and chats inside the
 //! node's sandbox (`PIRC_SANDBOX=srt`), its tools' definitions through
 //! `ptc_docs`, and its absence outside the sandbox. The tools run only from

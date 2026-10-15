@@ -1,7 +1,7 @@
 //! The agent's RPC edges (features off), with the test playing its node:
 //! startup flags, configuration warnings, lines that are not commands, and
 //! how the process ends on a broken handshake or a `null` line. Complements
-//! `agent_core.rs` (plans/rust-rewrite.md, M4).
+//! `agent_core.rs` (docs/history/rust-rewrite.md, M4).
 
 use pirc_conformance::{AgentOptions, AgentRun, Recorder};
 use serde_json::{Value, json};

@@ -1,5 +1,5 @@
 //! The `browser` feature's agent side without `ptc` scripts
-//! (plans/rust-rewrite.md, M5; the node's browser is M8): its system
+//! (docs/history/rust-rewrite.md, M5; the node's browser is M8): its system
 //! prompt section, `web_fetch` (a direct tool) over the browser channel
 //! with its results, failures and cancellation, the `browser_*` tools'
 //! definitions through `ptc_docs`, and the feature's absence. The test

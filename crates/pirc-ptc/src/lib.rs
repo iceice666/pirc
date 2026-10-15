@@ -1,4 +1,4 @@
-//! PTC scripts (`agent/ptc/**`, plans/rust-rewrite.md M5): what runs on the
+//! PTC scripts (`agent/ptc/**`, docs/history/rust-rewrite.md M5): what runs on the
 //! script's side of the boundary. The preflight strips TypeScript and
 //! derives the capabilities a script may call; the guest (feature `guest`)
 //! runs one script in QuickJS inside the killable `ptc-guest` process. The

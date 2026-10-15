@@ -5,7 +5,7 @@
 //! process (and skipping damaged history), headless agents, and chats,
 //! which leave the tool out unless the config brings it back. The tool
 //! itself is in `agent_todo_ptc.rs`. The M5 target of the agent port
-//! (plans/rust-rewrite.md).
+//! (docs/history/rust-rewrite.md).
 
 use std::collections::VecDeque;
 

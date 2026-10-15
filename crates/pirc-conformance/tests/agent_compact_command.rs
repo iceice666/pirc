@@ -2,7 +2,7 @@
 //! compact.ts`, feature `compact`), with the test playing the agent's
 //! node: a compaction with and without focus instructions, a new session,
 //! a failing summarizer and a busy agent. The M5 target of the agent port
-//! (plans/rust-rewrite.md).
+//! (docs/history/rust-rewrite.md).
 
 use pirc_conformance::{AgentOptions, AgentRun, Gate, ModelReply, Recorder};
 use serde_json::json;

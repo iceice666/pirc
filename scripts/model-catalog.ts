@@ -1,6 +1,6 @@
 /**
  * The model catalog the Rust gateway embeds (crates/pirc-providers/catalog.json),
- * generated from the pinned pi-ai package's catalog (plans/rust-rewrite.md, M3).
+ * generated from the pinned pi-ai package's catalog (docs/history/rust-rewrite.md, M3).
  *
  * Only providers whose every model uses a wire API the gateway implements are
  * kept (the others could be neither presets nor OAuth catalogs), and `cost`

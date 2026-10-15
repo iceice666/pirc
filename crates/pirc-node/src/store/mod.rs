@@ -1,6 +1,6 @@
 //! The node's SQLite store: the node half of `apps/gateway/src/database.ts`
 //! with a fresh schema (`schema.sql`, only the tables a node uses). No
-//! TS-era database is read (plans/rust-rewrite.md, decisions): one is
+//! TS-era database is read (docs/history/rust-rewrite.md, decisions): one is
 //! refused at start-up with a pointer to the upgrade notes, as the gateway
 //! does.
 //!

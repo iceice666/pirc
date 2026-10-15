@@ -1,6 +1,6 @@
 /**
  * The in-page JavaScript the Rust node's browser embeds
- * (crates/pirc-node/src/browser/assets/, plans/rust-rewrite.md, M8):
+ * (crates/pirc-node/src/browser/assets/, docs/history/rust-rewrite.md, M8):
  *
  * - `injected.js`: Playwright's injected script (aria snapshots, `aria-ref`
  *   and text selectors, actionability), copied out of the pinned

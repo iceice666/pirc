@@ -4,7 +4,7 @@
 //! compaction summary, automatic compaction, the rate-limit fallback, the
 //! settings, the `om:*` commands, the panel, and workspace memory handed
 //! from one session to the next. The M5 target of the agent port
-//! (plans/rust-rewrite.md). `recall`, reachable only from `ptc` scripts,
+//! (docs/history/rust-rewrite.md). `recall`, reachable only from `ptc` scripts,
 //! is in `agent_memory_ptc.rs`.
 //!
 //! Memory workers run next to the session's own run. Their first reply is

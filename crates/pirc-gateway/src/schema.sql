@@ -1,4 +1,4 @@
--- The gateway's SQLite schema (plans/rust-rewrite.md, M2): the TS
+-- The gateway's SQLite schema (docs/history/rust-rewrite.md, M2): the TS
 -- migrations of apps/gateway/src/database.ts consolidated into one fresh
 -- schema. Tables the TS gateway created but never wrote (runs, interactions,
 -- uploads, workspace_trust: those live on the nodes) are left out.

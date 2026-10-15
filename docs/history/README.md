@@ -11,7 +11,7 @@ These are dated design and implementation records, not current deployment instru
 | [Scheduled runs](cron.md)                       | Gateway scheduling, web/Android UI and push                        | [Schedule follow-ups](../../plans/backlog.md#schedules)                                                  |
 | [Android client](android-client.md)             | Pairing, chat, files and additional panels                         | [Android follow-ups](../../plans/backlog.md#android) and [mobile audit](../../plans/mobile-audit.md)     |
 | [Sandbox](sandbox.md)                           | Mandatory fail-closed agent sandbox and host execution approvals   | [Sandbox follow-ups](../../plans/backlog.md#sandbox) and [security audit](../../plans/security-audit.md) |
-| [Rust server rewrite](rust-rewrite.md)          | M0–M9: native gateway/node/chat, sandbox/browser and 0.4.0 cutover | [Post-cutover checklist](../../plans/rust-rewrite.md)                                                    |
+| [Rust server rewrite](rust-rewrite.md)          | M0–M9: native gateway/node/chat, sandbox/browser and 0.4.0 cutover | [Rust post-cutover](../../plans/backlog.md#rust-post-cutover)                                            |
 
 ## Consolidated completed plans
 

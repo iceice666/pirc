@@ -92,7 +92,7 @@ pub struct GatewayOptions {
     /// Start no node.
     pub without_node: bool,
     /// The node's agents run without their built-in features
-    /// (`PIRC_AGENT_FEATURES=none`; plans/rust-rewrite.md, M4).
+    /// (`PIRC_AGENT_FEATURES=none`; docs/history/rust-rewrite.md, M4).
     pub agent_core_only: bool,
     /// The node runs the chat role (`pirc-chat`, or `pirc-node chat`): no
     /// configured workspaces, the top-level chats workspace

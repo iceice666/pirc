@@ -1,4 +1,4 @@
-//! The `recap` feature (plans/rust-rewrite.md, M5): `/recap` collects
+//! The `recap` feature (docs/history/rust-rewrite.md, M5): `/recap` collects
 //! evidence through the gateway (`recap.collect`), asks the model once
 //! without tools and records a redacted report; bad arguments, an empty
 //! history, failures, a second recap while one runs, cancellation, and

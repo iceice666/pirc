@@ -5,7 +5,7 @@
 //! `/bin/sh` (`PIRC_TERMINAL_SHELL`); its prompt and echo are not part of
 //! the contract, so output is matched only on markers the typed commands
 //! compute (`printf 'MARK-%s\n' $((6*7))` prints `MARK-42`, its echo does
-//! not). Recorded from the TS node (plans/rust-rewrite.md, M6).
+//! not). Recorded from the TS node (docs/history/rust-rewrite.md, M6).
 
 mod node_sessions_support;
 

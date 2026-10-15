@@ -7,7 +7,7 @@
 //! whose write leases go to its parent as `team_call`s answered by
 //! `team_result` lines. Spawning, messaging and waiting run inside `ptc`
 //! scripts and are in `agent_team_ptc.rs`. The M5 target of the agent
-//! port (plans/rust-rewrite.md).
+//! port (docs/history/rust-rewrite.md).
 
 use std::collections::VecDeque;
 

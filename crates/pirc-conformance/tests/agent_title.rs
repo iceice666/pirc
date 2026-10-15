@@ -3,7 +3,7 @@
 //! request that names a session from its first real message, greetings
 //! skipped, failed and declined attempts retried, the settings, and the
 //! sessions it leaves alone (named by the user, headless, disabled). The
-//! M5 target of the agent port (plans/rust-rewrite.md).
+//! M5 target of the agent port (docs/history/rust-rewrite.md).
 //!
 //! The title request runs next to the run's own model call. Its reply is
 //! routed by the `<user-message>` marker and held by a gate until the run

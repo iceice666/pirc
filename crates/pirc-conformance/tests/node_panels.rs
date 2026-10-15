@@ -6,7 +6,7 @@
 //! prompt that references them gives the model; and who may use these
 //! routes. `node_panels_link` plays the gateway instead, for the checks
 //! the real gateway makes before relaying anything. The M6 target of the
-//! node port (plans/rust-rewrite.md).
+//! node port (docs/history/rust-rewrite.md).
 
 mod node_panels_support;
 

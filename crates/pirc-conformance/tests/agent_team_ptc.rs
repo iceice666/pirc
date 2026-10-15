@@ -9,7 +9,7 @@
 //! (`agent-team.test.ts`, `agent-team-completion.test.ts`). The team tools
 //! are not direct tools: the model reaches them only from `ptc` scripts,
 //! so these transcripts replay only on an agent with the PTC runtime
-//! (plans/rust-rewrite.md, M5).
+//! (docs/history/rust-rewrite.md, M5).
 //!
 //! The children's model replies are routed by what only their requests
 //! contain (`Team message (agent data` for a teammate, `You are a one-shot

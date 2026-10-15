@@ -5,7 +5,7 @@
 //! operations, dialogs) answered by the test.
 //!
 //! The agent runs with its built-in features off (`PIRC_AGENT_FEATURES=
-//! none`, the M4 target of the agent port, plans/rust-rewrite.md) unless a
+//! none`, the M4 target of the agent port, docs/history/rust-rewrite.md) unless a
 //! scenario turns some on ([`AgentOptions::features`], M5).
 
 use std::collections::{HashMap, VecDeque};

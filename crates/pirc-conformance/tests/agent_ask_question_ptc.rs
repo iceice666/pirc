@@ -4,7 +4,7 @@
 //! cancellation and aborts, invalid questionnaires, headless agents. The
 //! tool is not a direct tool: the model reaches it only from a `ptc`
 //! script, so these transcripts replay only on an agent with the PTC
-//! runtime (plans/rust-rewrite.md, M5).
+//! runtime (docs/history/rust-rewrite.md, M5).
 
 use std::collections::VecDeque;
 

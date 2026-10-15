@@ -1,6 +1,6 @@
 //! The browser engine: what `node/browser.ts` got from Playwright 1.63.0,
 //! over raw CDP. It is a port of the parts of Playwright's server the TS
-//! node uses (see the M8 scout reports and `plans/rust-rewrite.md`, M8), not
+//! node uses (see the M8 scout reports and `docs/history/rust-rewrite.md`, M8), not
 //! a general automation library: one persistent context per Chromium,
 //! pages with their frame trees (out-of-process iframes included), the
 //! injected script in a utility world per frame, `aria-ref` and text

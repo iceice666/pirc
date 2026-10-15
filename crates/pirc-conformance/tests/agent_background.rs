@@ -7,7 +7,7 @@
 //! headless agents and chats. The `background_task` tool itself is in
 //! `agent_background_ptc.rs`. Tasks wait for a trigger file the test
 //! creates, so they finish at known points. The M5 target of the agent
-//! port (plans/rust-rewrite.md).
+//! port (docs/history/rust-rewrite.md).
 
 mod background_support;
 

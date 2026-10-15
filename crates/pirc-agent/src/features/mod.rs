@@ -55,7 +55,7 @@ pub fn builtin_features() -> Vec<Rc<dyn Feature>> {
 }
 
 /// `processFeatures`: the features an agent process runs. Development only,
-/// for the agent-level conformance transcripts (plans/rust-rewrite.md M4,
+/// for the agent-level conformance transcripts (docs/history/rust-rewrite.md M4,
 /// M5): `PIRC_AGENT_FEATURES=none` runs the core alone, and a
 /// comma-separated list of feature names (`todo,goal`) runs only those, in
 /// their usual order. Unset or `all` runs every feature; production never

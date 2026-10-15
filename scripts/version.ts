@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const manifests = ['package.json', 'apps/web/package.json'];
 const android = 'apps/android/app/build.gradle.kts';
-/** The Rust workspace (plans/rust-rewrite.md): every member inherits `[workspace.package]`. */
+/** The Rust workspace (docs/history/rust-rewrite.md): every member inherits `[workspace.package]`. */
 const cargo = 'Cargo.toml';
 const cargoLock = 'Cargo.lock';
 /** The line of `version = "…"` in `[workspace.package]`, and its value. */

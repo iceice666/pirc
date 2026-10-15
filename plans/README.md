@@ -6,12 +6,11 @@ This directory is the work queue, not a description of everything already shippe
 
 ## Proposed work and unresolved decisions
 
-| Plan                                      | Recorded status and scope                                                                                                                                   |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Assistant roadmap](assistant.md)         | v1 and in-chat USER approval/source-chat deletion shipped; remaining roadmap, decisions and watch items retain their own gates                              |
-| [Project isolation](project-isolation.md) | Capability policy/instructions implemented; B, D, E1 and E3 are proposals, not privacy guarantees; E2 locally verified pending recorded review/release      |
-| [Rust post-cutover](rust-rewrite.md)      | M0–M9 complete; deferred security fixes, implementation follow-ups and verification gaps; waived evaluations and accepted risks retain their decision gates |
-| [Cross-feature backlog](backlog.md)       | Unresolved browser, schedules, Android, sandbox and accepted PTC follow-ups/manual checks extracted from completed designs                                  |
+| Plan                                      | Recorded status and scope                                                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [Assistant roadmap](assistant.md)         | v1 and in-chat USER approval/source-chat deletion shipped; remaining roadmap, decisions and watch items retain their own gates                         |
+| [Project isolation](project-isolation.md) | Capability policy/instructions implemented; B, D, E1 and E3 are proposals, not privacy guarantees; E2 locally verified pending recorded review/release |
+| [Cross-feature backlog](backlog.md)       | Unresolved browser, schedules, Android, sandbox, Rust post-cutover and accepted PTC follow-ups/manual checks extracted from completed designs          |
 
 ## Audits with open findings
 

@@ -60,3 +60,14 @@ Source: [accepted hybrid migration and Milestone 4 review](../docs/evaluations/p
 - Verify web/Android rendering of `[declined]`, `[hooks]`, and bounded operation arguments.
 
 The reviewed fixes changed behavior and two prompts after the evaluated builds; no paid re-measurement was recorded. Preserve that limitation, the existing aggregate evidence, historical failed/incomplete verdicts, budgets and attempt markers. This backlog does not authorize another run.
+
+## Rust post-cutover
+
+Source: [post-cutover follow-ups](../docs/history/rust-rewrite.md#post-cutover-follow-ups-closed-2026-10-15). Its checklist (S1–S5, implementation follow-ups, verification, release) is closed; live deployment scope was closed as a decision on 2026-10-15 without a recorded deployment. Nothing below is authorization for paid runs, deployment or state deletion.
+
+- **Waived, not passed:** full PTC/task-time comparison against the TS baseline; real-provider smoke tests (four wire APIs, subscription logins); polyglot evaluation (review/accounting invalid). Reopening needs an agreed protocol, budget and credentials; historical tooling is at `2d480d3`.
+- **Accepted risks:** S10 (host atomic replacement detaching a protected Linux mount) and S18 (browser WebSocket/non-HTTP egress, DNS rebinding); other sandbox limitations stay in the M2–M8 records. See the [security audit](security-audit.md).
+- **Unexplained flake:** `node_link_side_runs` timed out once on CI waiting for a node frame; not reproduced locally.
+- **Not covered by macOS end-to-end checks:** TLS, a real identity provider, phone pairing, push, terminals.
+- **Release:** v0.4.1 is unsigned and not notarized. The two real-host-root sandbox tests stay `#[ignore]`d and need separate authorization to rerun.
+- **Upgrade:** protocol 10 is incompatible with TS nodes/gateways; follow [Upgrades](../docs/deploy/upgrades.md). Never delete old state without approval.

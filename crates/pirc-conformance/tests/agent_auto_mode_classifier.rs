@@ -1,6 +1,6 @@
 //! Auto mode's model classifier (`features.autoMode.useModel: true`), with
 //! the test playing the node and the classifier model (M5,
-//! plans/rust-rewrite.md): `agent-auto-mode.test.ts` and the model path of
+//! docs/history/rust-rewrite.md): `agent-auto-mode.test.ts` and the model path of
 //! `auto-mode-gate.test.ts` as agent transcripts. Statically unclear shell
 //! commands (`sh -c …`) go to the classifier in a side request; its
 //! verdicts, the cache, candidate models and their failures, the warning,

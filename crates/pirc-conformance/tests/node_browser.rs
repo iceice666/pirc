@@ -5,7 +5,7 @@
 //! and the side panel's browser stream relayed over the node link. The
 //! pages are the browser golden corpus's (`crates/pirc-node/tests/fixtures/browser`),
 //! served on loopback (allowed with `PIRC_BROWSER_ALLOW_PRIVATE`). Recorded
-//! from the TS node (plans/rust-rewrite.md, M8).
+//! from the TS node (docs/history/rust-rewrite.md, M8).
 //!
 //! Normalized beyond the transcript's usual values: the fixture site's port
 //! (`:<site-port>`), images (`<jpeg WxH>`, `<webm>`: what they are, not

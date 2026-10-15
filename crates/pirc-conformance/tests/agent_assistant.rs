@@ -3,7 +3,7 @@
 //! gateway: USER entries and MEMORY notes frozen into the system prompt,
 //! proposal decisions, the chat's capability policy, an unreachable
 //! gateway, messages the gateway pushes, and sessions outside chats. The
-//! M5 target of the agent port (plans/rust-rewrite.md). The tools,
+//! M5 target of the agent port (docs/history/rust-rewrite.md). The tools,
 //! reachable only from `ptc` scripts, are in `agent_assistant_ptc.rs`.
 
 mod memory_support;

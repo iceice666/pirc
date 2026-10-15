@@ -1,4 +1,4 @@
-# Rust rewrite of the server executables; see plans/rust-rewrite.md.
+# Rust rewrite of the server executables; see docs/history/rust-rewrite.md.
 [workspace]
 resolver = "3"
 members = ["crates/*"]
@@ -25,7 +25,7 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 
-# Shipped bytes are the goal of the rewrite: see plans/rust-rewrite.md.
+# Shipped bytes are the goal of the rewrite: see docs/history/rust-rewrite.md.
 [profile.release]
 lto = "fat"
 codegen-units = 1
