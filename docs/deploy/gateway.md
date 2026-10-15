@@ -100,11 +100,11 @@ The gateway runs every model request; nodes never see keys or endpoints. Backend
 
 ## Limits
 
-| Variable                     | Default    | Meaning                                                                         |
-| ---------------------------- | ---------- | ------------------------------------------------------------------------------- |
-| `PIRC_EVENT_BUFFER_SIZE`     | `1000`     | Events kept in memory per session for cursor replay; older cursors get `reset`. |
-| `PIRC_WS_MAX_BUFFERED_BYTES` | `1048576`  | Per-WebSocket backpressure limit before a slow client is dropped.               |
-| `PIRC_UPLOAD_MAX_BYTES`      | `10485760` | Upload limit; cannot exceed 11 MiB (the node link's frame limit).               |
+| Variable                     | Default    | Meaning                                                                                                                      |
+| ---------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `PIRC_EVENT_BUFFER_SIZE`     | `1000`     | Events kept in memory per session for cursor replay; older cursors get `reset`.                                              |
+| `PIRC_WS_MAX_BUFFERED_BYTES` | `1048576`  | Per-WebSocket backpressure limit before a slow client is dropped.                                                            |
+| `PIRC_UPLOAD_MAX_BYTES`      | `10485760` | Upload limit; cannot exceed 11 MiB (the node link's frame limit). JSON request bodies are limited to 4 MiB whatever this is. |
 
 ## Signals and lifecycle
 

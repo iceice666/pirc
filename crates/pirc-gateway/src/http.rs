@@ -12,6 +12,11 @@ use serde_json::{Value, json};
 
 use crate::error::{ApiError, ApiResult, json_response};
 
+/// The largest JSON body. Uploads are raw bytes and keep the configured
+/// upload limit; JSON carries prompts (at most 1,000,000 UTF-16 units, so
+/// about 3 MB of CJK text), answers and settings (security audit L8).
+pub const JSON_BODY_MAX_BYTES: usize = 4 * 1024 * 1024;
+
 /// A request body as the route sees it.
 #[derive(Clone, Debug, Default)]
 pub enum Body {
@@ -107,7 +112,8 @@ fn parse_json(bytes: &[u8]) -> ApiResult<Value> {
 /// are ignored; without a content type, a body only counts when a length or
 /// transfer encoding announces one; an invalid content type, or JSON that
 /// does not parse (or is empty), is an internal error, as it was; more than
-/// `limit` bytes is `payload_too_large`.
+/// `limit` bytes (for JSON, [`JSON_BODY_MAX_BYTES`] if lower) is
+/// `payload_too_large`.
 pub async fn read_body(request: Request, limit: usize) -> ApiResult<Body> {
     let (parts, body) = request.into_parts();
     let headers = &parts.headers;
@@ -133,6 +139,14 @@ pub async fn read_body(request: Request, limit: usize) -> ApiResult<Body> {
     {
         return Err(ApiError::internal());
     }
+    let json = content_type
+        .as_deref()
+        .is_some_and(|value| media_type(value) == "application/json");
+    let limit = if json {
+        limit.min(JSON_BODY_MAX_BYTES)
+    } else {
+        limit
+    };
     if declared
         .and_then(|length| length.parse::<u64>().ok())
         .is_some_and(|length| length > limit as u64)
@@ -150,10 +164,7 @@ pub async fn read_body(request: Request, limit: usize) -> ApiResult<Body> {
             }
         })?
         .to_bytes();
-    if content_type
-        .as_deref()
-        .is_some_and(|value| media_type(value) == "application/json")
-    {
+    if json {
         return parse_json(&bytes).map(Body::Json);
     }
     Ok(Body::Raw {
@@ -217,6 +228,26 @@ mod tests {
 
     fn code(result: ApiResult<Body>) -> &'static str {
         result.err().map_or("ok", |error| error.code)
+    }
+
+    #[tokio::test]
+    async fn json_bodies_have_a_lower_limit() {
+        let big = |content_type: &str| {
+            let mut body = b"\"".to_vec();
+            body.resize(JSON_BODY_MAX_BYTES + 1, b'a');
+            body.push(b'"');
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/x")
+                .header("content-type", content_type)
+                .body(AxumBody::from(body))
+                .unwrap()
+        };
+        let limit = 10 * 1024 * 1024;
+        let result = read_body(big("application/json"), limit).await;
+        assert_eq!(code(result), "payload_too_large");
+        let result = read_body(big("application/octet-stream"), limit).await;
+        assert!(matches!(result.unwrap(), Body::Raw { .. }));
     }
 
     #[tokio::test]

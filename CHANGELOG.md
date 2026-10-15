@@ -19,6 +19,7 @@ The gateway's database moves to schema 1002 on first start (automatic: two colum
 - The browser recording player only reads files inside the workspace: a `.pirc/recordings/*.webm` symlink tracked in a cloned repository could make it return any file the node account can read.
 - Files the node itself writes into a session's `.pirc/uploads` (attachments) and `.pirc/recordings` (browser recordings) no longer follow symlinks a cloned repository may track there: the directories are opened without following links, files are created only when absent, and ffmpeg writes to a file the node opened.
 - The gateway's limits of 100 pending requests and 64 open terminal/browser streams apply to each node instead of to all nodes together, so one busy node no longer makes the others answer "Too many pending node requests".
+- JSON request bodies are limited to 4 MiB (uploads keep `PIRC_UPLOAD_MAX_BYTES`), and a session command keeps only the fields the node uses, each bounded (a message at most 1,000,000 UTF-16 units, at most 16 attachments), before it is stored and forwarded; other fields were stored and relayed whole.
 
 ### Fixed
 

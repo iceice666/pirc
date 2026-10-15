@@ -498,7 +498,6 @@ expression: t.into_value()
         "payload": {
           "clientId": "browser",
           "commandId": "c1",
-          "extra": true,
           "generation": 2,
           "payload": {
             "message": "hi",

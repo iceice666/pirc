@@ -800,6 +800,52 @@ struct CommandBody {
     payload: Map<String, Value>,
 }
 
+/// Keys a command payload may have (the node's `commandPayload` union).
+const COMMAND_KEYS: [&str; 8] = [
+    "type",
+    "message",
+    "uploadIds",
+    "queue",
+    "index",
+    "provider",
+    "modelId",
+    "level",
+];
+/// `message` limit, in UTF-16 units, as the node's.
+const COMMAND_MESSAGE_MAX: usize = 1_000_000;
+/// Uploads per message, as the node's.
+const COMMAND_UPLOADS_MAX: usize = 16;
+/// Any other string in a payload (type, IDs, model names).
+const COMMAND_STRING_MAX: usize = 1_000;
+
+/// The payload as stored and forwarded: unknown keys dropped (the node's
+/// schema drops them too) and every value bounded, so a command row is
+/// never larger than a prompt (security audit L8). The node still checks
+/// the payload's shape.
+fn command_payload(mut payload: Map<String, Value>) -> Result<Map<String, Value>, ApiError> {
+    payload.retain(|key, _| COMMAND_KEYS.contains(&key.as_str()));
+    for (key, value) in &payload {
+        match (key.as_str(), value) {
+            ("message", Value::String(text)) => length_within(text, 0, COMMAND_MESSAGE_MAX)?,
+            ("uploadIds", Value::Array(ids)) => {
+                if ids.len() > COMMAND_UPLOADS_MAX {
+                    return Err(ApiError::invalid_input());
+                }
+                for id in ids {
+                    let Value::String(id) = id else {
+                        return Err(ApiError::invalid_input());
+                    };
+                    length_within(id, 0, COMMAND_STRING_MAX)?;
+                }
+            }
+            (_, Value::String(text)) => length_within(text, 0, COMMAND_STRING_MAX)?,
+            (_, Value::Number(_) | Value::Bool(_) | Value::Null) => {}
+            _ => return Err(ApiError::invalid_input()),
+        }
+    }
+    Ok(payload)
+}
+
 pub async fn command(
     State(app): State<AppState>,
     Extension(identity): Extension<Identity>,
@@ -814,7 +860,7 @@ pub async fn command(
         return Err(ApiError::invalid_input().into());
     }
     let session_id = claimed.session.id.as_str();
-    let payload = Value::Object(input.payload);
+    let payload = Value::Object(command_payload(input.payload)?);
     let (command, duplicate) = {
         let conn = app.db.lock();
         conn.validate_lease(session_id, &input.client_id, input.generation as i64)?;
@@ -841,8 +887,13 @@ pub async fn command(
     app.db
         .lock()
         .update_command(&input.command_id, "dispatched", None, None)?;
-    // The whole body goes to the node (the TS schema passed it through).
-    let forwarded = body.json().cloned();
+    // What the node reads, with the bounded payload; other keys are dropped.
+    let forwarded = Some(json!({
+        "commandId": input.command_id,
+        "clientId": input.client_id,
+        "generation": input.generation,
+        "payload": payload,
+    }));
     match app
         .relay(
             &claimed.node_id,
@@ -1431,4 +1482,39 @@ pub async fn recording(
 /// Routes of the gateway's features (devices, memory, schedules, push).
 pub fn feature_routes() -> axum::Router<AppState> {
     crate::features::routes()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn payload(value: Value) -> Result<Value, ApiError> {
+        let Value::Object(map) = value else {
+            unreachable!()
+        };
+        command_payload(map).map(Value::Object)
+    }
+
+    #[test]
+    fn command_payloads_are_bounded() {
+        assert_eq!(
+            payload(json!({ "type": "prompt", "message": "hi", "uploadIds": ["u"], "extra": [1] }))
+                .unwrap(),
+            json!({ "type": "prompt", "message": "hi", "uploadIds": ["u"] })
+        );
+        assert_eq!(
+            payload(json!({ "type": "send_now", "queue": "steering", "index": 2, "message": "x" }))
+                .unwrap(),
+            json!({ "type": "send_now", "queue": "steering", "index": 2, "message": "x" })
+        );
+        let long = "a".repeat(COMMAND_MESSAGE_MAX + 1);
+        assert!(payload(json!({ "type": "prompt", "message": long })).is_err());
+        let many: Vec<String> = (0..=COMMAND_UPLOADS_MAX).map(|i| i.to_string()).collect();
+        assert!(payload(json!({ "type": "prompt", "message": "x", "uploadIds": many })).is_err());
+        let model = "m".repeat(COMMAND_STRING_MAX + 1);
+        assert!(
+            payload(json!({ "type": "set_model", "provider": "p", "modelId": model })).is_err()
+        );
+        assert!(payload(json!({ "type": "prompt", "message": { "nested": true } })).is_err());
+    }
 }
