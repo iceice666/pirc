@@ -18,6 +18,7 @@ The gateway's database moves to schema 1002 on first start (automatic: two colum
 - A node can no longer push a browser's terminal or live-view socket far past its backlog limit with one huge message: node→browser stream messages over 4 MiB close a terminal socket (`1009`) and are dropped from the live view.
 - The browser recording player only reads files inside the workspace: a `.pirc/recordings/*.webm` symlink tracked in a cloned repository could make it return any file the node account can read.
 - Files the node itself writes into a session's `.pirc/uploads` (attachments) and `.pirc/recordings` (browser recordings) no longer follow symlinks a cloned repository may track there: the directories are opened without following links, files are created only when absent, and ffmpeg writes to a file the node opened.
+- The gateway's limits of 100 pending requests and 64 open terminal/browser streams apply to each node instead of to all nodes together, so one busy node no longer makes the others answer "Too many pending node requests".
 
 ### Fixed
 

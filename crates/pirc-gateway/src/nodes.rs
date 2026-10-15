@@ -29,8 +29,11 @@ use crate::error::{ApiError, ApiResult};
 use crate::util::{now_ms, uuid};
 use crate::ws::{Outbox, Received, receive};
 
+/// Requests waiting on one node; each node has its own allowance, so a
+/// busy or stalled node cannot starve the others (security audit L7).
 const MAX_PENDING_REQUESTS: usize = 100;
 const MAX_PENDING_REGISTRATIONS: usize = 100;
+/// Terminal and browser-view streams open on one node.
 const MAX_TERMINAL_STREAMS: usize = 64;
 /// Agent requests the gateway works on at once for one node.
 const MAX_AGENT_REQUESTS: usize = 32;
@@ -194,6 +197,24 @@ pub fn node_offline() -> ApiError {
     ApiError::new(503, "node_offline", "Node is offline")
 }
 
+impl State {
+    /// Requests pending on `node_id`.
+    fn requests_on(&self, node_id: &str) -> usize {
+        self.requests
+            .values()
+            .filter(|pending| pending.node_id == node_id)
+            .count()
+    }
+
+    /// Streams open on `node_id`.
+    fn streams_on(&self, node_id: &str) -> usize {
+        self.streams
+            .values()
+            .filter(|stream| stream.node_id == node_id)
+            .count()
+    }
+}
+
 impl NodeRegistry {
     fn lock(&self) -> MutexGuard<'_, State> {
         self.state
@@ -265,7 +286,7 @@ impl NodeRegistry {
         let (reply, answer) = oneshot::channel();
         {
             let mut state = self.lock();
-            if state.requests.len() >= MAX_PENDING_REQUESTS {
+            if state.requests_on(node_id) >= MAX_PENDING_REQUESTS {
                 return Err(ApiError::new(
                     503,
                     "node_error",
@@ -333,7 +354,7 @@ impl NodeRegistry {
         let link = {
             let mut state = self.lock();
             let link = Self::link_of(&state, node_id)?;
-            if state.streams.len() >= MAX_TERMINAL_STREAMS {
+            if state.streams_on(node_id) >= MAX_TERMINAL_STREAMS {
                 return Err(too_many_streams());
             }
             state.streams.insert(
@@ -1142,4 +1163,28 @@ fn start_inference(
             task: task.abort_handle(),
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pending_requests_are_counted_per_node() {
+        let mut state = State::default();
+        for (index, node_id) in ["a", "a", "b"].into_iter().enumerate() {
+            let (reply, _) = oneshot::channel();
+            state.requests.insert(
+                index.to_string(),
+                Pending {
+                    node_id: node_id.to_owned(),
+                    reply,
+                },
+            );
+        }
+        assert_eq!(state.requests_on("a"), 2);
+        assert_eq!(state.requests_on("b"), 1);
+        assert_eq!(state.requests_on("c"), 0);
+        assert_eq!(state.streams_on("a"), 0);
+    }
 }
