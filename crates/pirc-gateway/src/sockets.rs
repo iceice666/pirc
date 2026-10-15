@@ -30,6 +30,11 @@ use crate::ws::{Outbox, Received, receive};
 const EVENTS_MESSAGE_MAX_BYTES: usize = 4 * 1024;
 /// Only live browser frames may be skipped while this much is queued.
 const BROWSER_SOCKET_BACKLOG_BYTES: usize = 2 * 1024 * 1024;
+/// Largest node→browser message on a relayed stream. Nodes send terminal
+/// output and replay (scrollback is 256 KiB before JSON escaping) and live-view
+/// frames (JPEG, at most 1280x800); this bounds how far one message can push
+/// the socket past its backlog limit, which the 16 MiB node frame cap does not.
+const RELAYED_MESSAGE_MAX_BYTES: usize = 4 * 1024 * 1024;
 
 /// The close code for a refused socket (`wsCloseCode`).
 pub fn close_code(error: &ApiError) -> u16 {
@@ -340,20 +345,47 @@ impl StreamHandlers for Relay {
         if self.finished.load(Ordering::Acquire) || !self.outbox.is_open() {
             return;
         }
-        let live = frame.get("type").and_then(Value::as_str) == Some("frame");
-        if self.browser && live && self.outbox.buffered() > BROWSER_SOCKET_BACKLOG_BYTES {
-            return;
+        let live = self.browser && frame.get("type").and_then(Value::as_str) == Some("frame");
+        let text = frame.to_string();
+        match relay_verdict(live, self.outbox.buffered(), text.len(), self.max_buffered) {
+            Verdict::Send => {
+                self.outbox.send(text);
+            }
+            Verdict::Skip => {}
+            Verdict::Close(code, reason) => self.close(code, reason),
         }
-        if self.outbox.buffered() > self.max_buffered {
-            self.close(1013, "resync required");
-            return;
-        }
-        self.outbox.send(frame.to_string());
     }
 
     fn on_close(&self, code: u16, reason: &str) {
         self.close(code, reason);
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Verdict {
+    Send,
+    /// A disposable live-view frame while the socket is backed up.
+    Skip,
+    Close(u16, &'static str),
+}
+
+/// What to do with one node→browser message of `len` bytes while `buffered`
+/// bytes are queued.
+fn relay_verdict(live: bool, buffered: usize, len: usize, max_buffered: usize) -> Verdict {
+    if len > RELAYED_MESSAGE_MAX_BYTES {
+        return if live {
+            Verdict::Skip
+        } else {
+            Verdict::Close(1009, "message too large")
+        };
+    }
+    if live && buffered > BROWSER_SOCKET_BACKLOG_BYTES {
+        return Verdict::Skip;
+    }
+    if buffered > max_buffered {
+        return Verdict::Close(1013, "resync required");
+    }
+    Verdict::Send
 }
 
 async fn relay(
@@ -518,5 +550,31 @@ mod tests {
         for bad in ["abc", "1:", ":1", "1:2:3", "-1:2", "1.0:2"] {
             assert!(cursor_from(Some(bad)).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn relayed_messages_are_size_checked() {
+        let max = 1024 * 1024;
+        let big = RELAYED_MESSAGE_MAX_BYTES + 1;
+        assert_eq!(relay_verdict(false, 0, 1000, max), Verdict::Send);
+        assert_eq!(
+            relay_verdict(false, 0, RELAYED_MESSAGE_MAX_BYTES, max),
+            Verdict::Send
+        );
+        // One oversized message closes a terminal, and is dropped from the live view.
+        assert_eq!(
+            relay_verdict(false, 0, big, max),
+            Verdict::Close(1009, "message too large")
+        );
+        assert_eq!(relay_verdict(true, 0, big, max), Verdict::Skip);
+        // The backlog limits are unchanged.
+        assert_eq!(
+            relay_verdict(false, max + 1, 10, max),
+            Verdict::Close(1013, "resync required")
+        );
+        assert_eq!(
+            relay_verdict(true, BROWSER_SOCKET_BACKLOG_BYTES + 1, 10, max),
+            Verdict::Skip
+        );
     }
 }
