@@ -395,7 +395,18 @@ fn reads_recording_chunks() {
     let past = read_recording_chunk(&f.ws, ".pirc/recordings/r.webm", 50, 4).unwrap();
     assert_eq!(past["offset"], 10);
     assert_eq!(past["dataBase64"], "");
-    for path in [".pirc/recordings/dir.webm", ".pirc/recordings/missing.webm"] {
+    // A tracked symlink out of the workspace is refused; one inside is a file.
+    let outside = f.ws.parent().unwrap().join("secret.txt");
+    std::fs::write(&outside, b"secret").unwrap();
+    std::os::unix::fs::symlink(&outside, f.ws.join(".pirc/recordings/out.webm")).unwrap();
+    std::os::unix::fs::symlink("r.webm", f.ws.join(".pirc/recordings/in.webm")).unwrap();
+    let inside = read_recording_chunk(&f.ws, ".pirc/recordings/in.webm", 0, 4).unwrap();
+    assert_eq!(inside["dataBase64"], "MDEyMw==");
+    for path in [
+        ".pirc/recordings/dir.webm",
+        ".pirc/recordings/missing.webm",
+        ".pirc/recordings/out.webm",
+    ] {
         assert_eq!(
             status(read_recording_chunk(&f.ws, path, 0, 4).unwrap_err()),
             (

@@ -784,8 +784,15 @@ pub(crate) fn mtime_ms(metadata: &std::fs::Metadata) -> Value {
 /// Read up to `length` bytes from `offset`, as `readSync` in a loop: a file
 /// that shrank leaves the rest zero (TS allocated the buffer first).
 fn read_at(file: &Path, offset: u64, length: usize) -> std::io::Result<Vec<u8>> {
+    read_handle_at(&mut std::fs::File::open(file)?, offset, length)
+}
+
+fn read_handle_at(
+    handle: &mut std::fs::File,
+    offset: u64,
+    length: usize,
+) -> std::io::Result<Vec<u8>> {
     let mut buffer = vec![0; length];
-    let mut handle = std::fs::File::open(file)?;
     handle.seek(SeekFrom::Start(offset))?;
     let mut read = 0;
     while read < length {
@@ -849,27 +856,30 @@ pub fn read_workspace_file(root: &Path, relative_path: &str) -> ApiResult<Value>
 }
 
 /// `readRecordingChunk` (`panel-routes.ts`): a chunk of a browser
-/// recording, base64. No realpath containment, as TS: the route's pattern
-/// (`.pirc/recordings/<name>.webm`) is the only check.
+/// recording, base64. The route's pattern (`.pirc/recordings/<name>.webm`)
+/// is checked by the caller; the file must also resolve inside the
+/// workspace, like other panel reads, so a symlink tracked in a cloned
+/// repository cannot point the panel at any file the node can read. Escapes
+/// are 404s, as for a missing recording.
 pub fn read_recording_chunk(
     root: &Path,
     relative_path: &str,
     offset: u64,
     length: u64,
 ) -> ApiResult<Value> {
-    let file = PathBuf::from(pirc_agent::messages::js::path_join(&[
-        &display(root),
-        relative_path,
-    ]));
     let not_found = || ApiError::not_found("Recording not found");
-    let metadata = std::fs::metadata(&file).map_err(|_| not_found())?;
+    let file = resolve_inside(root, relative_path).map_err(|_| not_found())?;
+    // Size and bytes come from one open file, not a second path lookup.
+    let mut handle = std::fs::File::open(&file).map_err(|_| not_found())?;
+    let metadata = handle.metadata().map_err(|_| not_found())?;
     if !metadata.is_file() {
         return Err(not_found());
     }
     let size = metadata.len();
     let start = offset.min(size);
     let length = length.min(size - start) as usize;
-    let buffer = read_at(&file, start, length).map_err(|error| internal("read", error))?;
+    let buffer =
+        read_handle_at(&mut handle, start, length).map_err(|error| internal("read", error))?;
     Ok(json!({
         "size": size,
         "offset": start,

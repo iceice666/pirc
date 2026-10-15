@@ -16,6 +16,7 @@ The gateway's database moves to schema 1002 on first start (automatic: two colum
 
 - A provider's `apiKeyCommand` no longer receives the gateway's own secrets (node tokens, the VAPID private key, the proxy secret, the web search key) in its environment. Other variables are still passed, so password-manager and GnuPG setups keep working.
 - A node can no longer push a browser's terminal or live-view socket far past its backlog limit with one huge message: node→browser stream messages over 4 MiB close a terminal socket (`1009`) and are dropped from the live view.
+- The browser recording player only reads files inside the workspace: a `.pirc/recordings/*.webm` symlink tracked in a cloned repository could make it return any file the node account can read.
 
 ### Fixed
 
