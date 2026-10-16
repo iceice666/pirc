@@ -83,7 +83,7 @@ it('shows the default model a project config would choose', async () => {
   );
   await setup();
   const blocks = Array.from(target.querySelectorAll('pre')).map((pre) => pre.textContent);
-  expect(blocks.at(-1)).toBe('openai/gpt-5 (thinking high)');
+  expect(blocks[blocks.length - 1]).toBe('openai/gpt-5 (thinking high)');
   expect(target.textContent).toContain('Default model');
 });
 
