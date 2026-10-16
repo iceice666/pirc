@@ -13,25 +13,27 @@ This file is the work queue, not authorization. Every phase still needs the user
 | Phase | Theme                                            | Why here                                                                               |
 | ----- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
 | 1     | Review and release the unreleased assistant work | Schema 1002 and three features sit in Unreleased; the release gets riskier as it grows |
-| 2     | Android approval check (assistant 3a)            | Near-free; completes in-chat approval on the phone                                     |
+| 2     | ~~Android approval check (assistant 3a)~~        | Deferred: Android rewrite in progress (see below)                                      |
 | 3     | Network taint (assistant 5)                      | Small; improves memory trust; pairs with browser click/type classification             |
 | 4     | Decision session                                 | Cheap; unblocks phases 5, 6 and 8                                                      |
 | 5     | Security hygiene                                 | Re-audited 2026-10-15; I5 done, M13 gap next                                           |
-| 6     | Android parity batch                             | Largest user-visible gap; group to share settings/memory screens                       |
+| 6     | ~~Android parity batch~~                         | Deferred: Android rewrite in progress (see below)                                      |
 | 7     | OM model policy (E3), then `secure_delete` (E1)  | Small and independent; E1 must precede hard delete                                     |
 | 8     | Project-only memory (B), then hard delete (D)    | Large designs; need phase 4 decisions                                                  |
 | —     | Manual validation                                | Needs real hardware or hosts; attach to the release that needs it                      |
 | —     | Watch, do not build                              | Waits for evidence from use                                                            |
 
+**Android deferred (2026-10-16).** An Android rewrite is in progress, so phases 2 and 6 and the Android decisions in phase 4 are on hold. Do not implement them against the current client; when the rewrite lands, re-check each item against it and carry over what still applies.
+
 ## Phase 1 — Review and release
 
-- [ ] Review assistant item 2 (USER in coding sessions), item 4 (repository identity by normalized `origin`, schema 1001) and item 6 (projects linked to workspaces, schema 1002). All implemented and locally verified 2026-10-15; records in the [assistant history](../docs/history/assistant.md).
+- [x] Review assistant item 2 (USER in coding sessions), item 4 (repository identity by normalized `origin`, schema 1001) and item 6 (projects linked to workspaces, schema 1002). Reviewed 2026-10-16 by three independent reviewers: no high or medium findings. Low findings fixed: remotes on the node itself (`localhost`, `127.*`, `0.0.0.0`, `file:`) get no repository key; git files are opened with `O_NOCTTY` after a regular-file check; repository keys tag notes and links only for directory workspaces; invalid keys are dropped before being relayed to browsers; a `delegate` to a linked workspace its connected node no longer has answers 404 "removed" instead of 503 "offline"; the USER warning says "unreachable" only when the gateway did not answer; the Forget text says started sessions keep their USER. Accepted and documented: `.git` symlinks and absolute `gitdir:`/`commondir` are followed (only a normalized key leaves the node). Not done (nits): case-insensitive host paths, `BEGIN IMMEDIATE` for concurrent migrations, the registration file reads on the async task, per-link `created_at`, a conformance case for the 3 s `assistant.context` timeout.
 - [ ] Run the PTC manual real-runtime checks (below) and any NixOS/Linux validation the release depends on.
 - [ ] Release following the [release policy](../docs/development/releasing.md) and [Upgrades](../docs/deploy/upgrades.md) (gateway schema 1002 is refused by 0.4.x; node protocol unchanged at 10).
 
 Project-isolation E2 (OM config diagnostics) needs no action: it was ported to Rust (`crates/pirc-agent/src/config/memory.rs`) and shipped in 0.4.x.
 
-## Phase 2 — Android approvals (assistant 3a)
+## Phase 2 — Android approvals (assistant 3a) — deferred (Android rewrite)
 
 - [ ] A USER proposal is a `confirm` interaction, which Android already shows in a session. Verify the multi-line body renders and the labels are used. Give delegation confirmations the same check.
 
@@ -48,7 +50,7 @@ Assistant (leanings recorded 2026-09-29):
 - [ ] **Settling delegated sessions** after the result is delivered. Leaning: leave them, but show delegation status in the session list.
 - [ ] **Retention.** `memory_log`, `delegations` and `memory_records` grow without bound. Proposal: keep forgotten entries only as tombstones (already), prune `delegations` older than 90 days that are not the target of a `follows`, keep records as long as the ledger has them.
 
-Android:
+Android (deferred with the rewrite):
 
 - [ ] Token rotation before the 30-day limit versus monthly re-pairing (related: A7, warn near the limit).
 - [ ] Sideload-only distribution versus F-Droid/Play; release signing.
@@ -94,7 +96,7 @@ Verified fixed in Rust (no action): L1 shared sensitive-path list, L2 `.git/hook
 
 Accepted, not to be reopened without a new decision: S10 (host atomic replacement detaches a protected Linux mount) and S18 (browser WebSocket/non-HTTP egress, DNS rebinding); see the [archived audit](../docs/history/security-audit.md).
 
-## Phase 6 — Android parity
+## Phase 6 — Android parity — deferred (Android rewrite)
 
 Full tables with web/Android file references and fix hints: `git show 7677d24:plans/mobile-audit.md`. Effort: S under an hour, M half a day, L a day or more.
 
