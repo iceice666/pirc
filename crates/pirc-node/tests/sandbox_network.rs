@@ -16,7 +16,7 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use pirc_config::{Env, NodeConfig};
-use pirc_node::sandbox::linux::plan::RESOLVER_SOCKETS;
+use pirc_node::sandbox::linux::plan::{RESOLVER_SOCKETS, WSL_INTEROP_DIR};
 use pirc_node::sandbox::linux::{NativeSandbox, find_bwrap};
 use pirc_node::sandbox::{PrepareInput, Prepared, ReadonlyInput, Sandbox, SandboxStatus};
 use pirc_protocol::NodeRole;
@@ -333,6 +333,41 @@ async fn the_hosts_resolver_sockets_are_hidden() {
         String::from_utf8_lossy(&output.stderr)
     );
     readonly.cleanup();
+}
+
+/// WSL's interop sockets start Windows programs outside the sandbox (past
+/// the proxy too), and each new WSL session binds a new one in
+/// `/run/WSL`: the directory is hidden whole, so a socket bound after the
+/// plan is out of reach as well. Skipped off WSL; the later socket only
+/// where this uid may write the directory.
+#[tokio::test]
+async fn wsl_interop_sockets_are_hidden_including_later_ones() {
+    let dir = Path::new(WSL_INTEROP_DIR);
+    if !dir.is_dir() {
+        eprintln!("skipped: {WSL_INTEROP_DIR} does not exist (not WSL)");
+        return;
+    }
+    let Some(f) = fixture("wsl", &["localhost"], &[]) else {
+        return;
+    };
+    let prepared = f.prepare("pi_wsl").await;
+    // After the plan, as a new terminal's interop server would.
+    let later = dir.join(format!("{}_pirc_test_interop", std::process::id()));
+    let _ = fs::remove_file(&later);
+    let listener = std::os::unix::net::UnixListener::bind(&later);
+    if listener.is_err() {
+        eprintln!("cannot bind in {WSL_INTEROP_DIR}: only the plan-time sockets are checked");
+    }
+    let script = format!(
+        "ls -A '{WSL_INTEROP_DIR}'; [ -S '{0}' ] && echo 'visible {0}'; exit 0",
+        later.display()
+    );
+    let run = f.run(&prepared, &script).await;
+    if listener.is_ok() {
+        let _ = fs::remove_file(&later);
+    }
+    assert_eq!((run.code, run.stdout.as_str()), (0, ""), "{}", run.stderr);
+    prepared.cleanup();
 }
 
 /// A descriptor bubblewrap is handed without close-on-exec (one the node

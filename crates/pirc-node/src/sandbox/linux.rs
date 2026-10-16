@@ -44,7 +44,9 @@
 //!   hide the policy's `LINUX_HOST_SOCKETS` and, beyond srt, the host's
 //!   name-service sockets (`plan::RESOLVER_SOCKETS`: nscd,
 //!   systemd-resolved, sssd, avahi), which would resolve any name for the
-//!   agent and so leak data over DNS past the allowlist, the node's uid's
+//!   agent and so leak data over DNS past the allowlist, WSL's interop
+//!   directory whole (`plan::WSL_INTEROP_DIR`: its sockets, later ones
+//!   included, start Windows programs outside the sandbox), the node's uid's
 //!   `/tmp/ssh-*` directories (sshd's forwarded agents,
 //!   `plan::SSH_AGENT_TMP`) that exist at plan time, and every other
 //!   socket bound on the host at plan time (`plan::host_unix_sockets`, from

@@ -21,6 +21,8 @@
 //!   policy, which pirc always has);
 //! - the host's name-service sockets hidden ([`RESOLVER_SOCKETS`], not
 //!   srt's: they resolve names past the proxy);
+//! - WSL's interop directory hidden whole ([`WSL_INTEROP_DIR`], not srt's:
+//!   its sockets start Windows programs outside the sandbox);
 //! - the node's uid's `/tmp/ssh-*` directories hidden, where sshd puts
 //!   forwarded agents' sockets ([`SSH_AGENT_TMP`], not srt's);
 //! - every other Unix socket bound on the host when the plan is made
@@ -152,7 +154,8 @@
 //!   ([`host_unix_sockets`]); connects are not filtered otherwise (no
 //!   seccomp, see `linux.rs`). A socket a host daemon binds later (a
 //!   daemon restarting under a new name, a new login's) is reachable in
-//!   running sandboxes, and so is a socket file bound in another network
+//!   running sandboxes (but in WSL's interop directory, hidden whole:
+//!   [`WSL_INTEROP_DIR`]), and so is a socket file bound in another network
 //!   namespace (not in the node's `/proc/net/unix`), or bound by a
 //!   relative path (listed without its directory). A socket removed
 //!   between the plan and bubblewrap's mounts goes as above: the start
@@ -213,6 +216,18 @@ pub const RESOLVER_SOCKETS: [&str; 6] = [
     "/var/lib/sss/pipes",
     "/run/avahi-daemon/socket",
 ];
+
+/// WSL's interop servers' directory (`WSL_TEMP_FOLDER`, each server's
+/// socket `<pid>_interop` in it), hidden whole whenever there is a read
+/// policy. Not srt's. Through one, executing a Windows program (the
+/// kernel hands it to `/init`, WSL's `binfmt_misc` interpreter) starts it
+/// on Windows, outside the sandbox: past the proxy, and past the read and
+/// write rules. Each new WSL session (a terminal, `wsl.exe`) binds a new
+/// socket there, so hiding the sockets bound at plan time
+/// ([`host_unix_sockets`]) left a later one reachable; a tmpfs over the
+/// directory hides those too. Nothing else lives there. A host without the
+/// directory at plan time gets no rule (WSL makes it at boot).
+pub const WSL_INTEROP_DIR: &str = "/run/WSL";
 
 /// Where sshd puts forwarded agents' sockets (`ssh-XXXXXXXXXX/agent.<pid>`,
 /// OpenSSH's fixed layout), and `ssh-agent` its own (in `$TMPDIR`, this by
@@ -517,8 +532,8 @@ pub struct Options {
     /// srt's `allowGitConfig`, for the mandatory deny paths.
     pub allow_git_config: bool,
     /// Hide [`SSH_CONFIG_D`] (srt's host-wide rule), the
-    /// [`RESOLVER_SOCKETS`] and the node's uid's `/tmp/ssh-*` directories
-    /// ([`SSH_AGENT_TMP`]) (off for golden tests).
+    /// [`RESOLVER_SOCKETS`], [`WSL_INTEROP_DIR`] and the node's uid's
+    /// `/tmp/ssh-*` directories ([`SSH_AGENT_TMP`]) (off for golden tests).
     pub host_rules: bool,
     /// The file recording the placeholders this node made (see
     /// [`MountPoints`]); `None` records nothing, so no leftover is removed.
@@ -685,7 +700,10 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
         }
     }
     if options.host_rules {
-        for host_path in std::iter::once(SSH_CONFIG_D).chain(RESOLVER_SOCKETS) {
+        for host_path in [SSH_CONFIG_D, WSL_INTEROP_DIR]
+            .into_iter()
+            .chain(RESOLVER_SOCKETS)
+        {
             if let Ok(real) = std::fs::canonicalize(host_path)
                 && !effective.deny_read.contains(&text(&real))
             {
