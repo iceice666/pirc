@@ -388,7 +388,8 @@ async fn an_inherited_descriptor_does_not_reach_the_agent() {
     fcntl(&writer, FcntlArg::F_SETFD(FdFlag::empty())).unwrap();
     let prepared = f.prepare("pi_inherited_fd").await;
     let script = format!(
-        "[ -e /dev/fd/{fd} ] && echo 'open {fd}'; echo escaped >&{fd} 2>/dev/null; ls /proc/self/fd >&2; exit 0"
+        // `/dev/fd/N`, not `>&N`: dash (Ubuntu's `/bin/sh`) takes one digit.
+        "[ -e /dev/fd/{fd} ] && echo 'open {fd}'; echo escaped 2>/dev/null >/dev/fd/{fd}; ls /proc/self/fd >&2; exit 0"
     );
     let run = f.run(&prepared, &script).await;
     drop(writer);
