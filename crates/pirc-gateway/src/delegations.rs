@@ -577,6 +577,18 @@ fn create(app: &App, user: &str, assistant: &Session, input: CreateArgs) -> ApiR
             (resolve_directory_workspace(app, reference)?, None)
         }
     };
+    // The node is connected but no longer has the workspace (a link outlives
+    // it on purpose): not a reason to wait for the node.
+    if project_links::removed(app, &workspace) {
+        return Err(ApiError::new(
+            404,
+            "not_found",
+            format!(
+                "{} ({}) was removed from {}; name another workspace",
+                workspace.display_name, workspace.id, workspace.host_id
+            ),
+        ));
+    }
     if !workspace_online(app, &workspace) {
         return Err(ApiError::new(
             503,

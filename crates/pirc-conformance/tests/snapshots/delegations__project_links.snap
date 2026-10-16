@@ -341,5 +341,38 @@ expression: r.t.into_value()
       "status": 200
     },
     "step": "linked workspaces offline"
+  },
+  {
+    "body": {
+      "links": [
+        {
+          "createdAt": "<epoch-ms>",
+          "name": "Repo",
+          "node": "work",
+          "online": false,
+          "removed": true,
+          "repo": "github.com/me/repo",
+          "workspaceId": "work:repo"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/workspaces/home:trip/links",
+    "status": 200,
+    "step": "link only Repo again"
+  },
+  {
+    "observed": {
+      "body": {
+        "error": {
+          "code": "not_found",
+          "message": "Repo (work:repo) was removed from work; name another workspace"
+        }
+      },
+      "status": 404
+    },
+    "step": "the one linked workspace was removed from its node"
   }
 ]

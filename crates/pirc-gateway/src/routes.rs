@@ -485,8 +485,17 @@ pub async fn create_workspace(
         Some(payload),
     )
     .await?;
-    let workspace: RegisteredWorkspace = serde_json::from_value(remote["workspace"].clone())
+    let mut workspace: RegisteredWorkspace = serde_json::from_value(remote["workspace"].clone())
         .map_err(|_| ApiError::new(502, "node_error", "Node answered an invalid workspace"))?;
+    let mut raw = remote["workspace"].clone();
+    if workspace.repo.is_some() {
+        crate::nodes::sanitize_repo(&mut workspace);
+        if workspace.repo.is_none()
+            && let Some(object) = raw.as_object_mut()
+        {
+            object.remove("repo");
+        }
+    }
     // A lost acknowledgement is reconciled when the node registers again.
     let kind = workspace.kind.map(|kind| match kind {
         pirc_protocol::WorkspaceKind::Chat => WorkspaceKind::Chat,
@@ -501,8 +510,7 @@ pub async fn create_workspace(
         conn.set_workspace_repos(&node_id, &[(workspace.id.clone(), workspace.repo.clone())])?;
     }
     let local_id = workspace.id.clone();
-    app.nodes
-        .add_workspace(&node_id, workspace, remote["workspace"].clone())?;
+    app.nodes.add_workspace(&node_id, workspace, raw)?;
     app.directory_changed();
     let stored = app
         .db

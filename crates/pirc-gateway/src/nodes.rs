@@ -655,6 +655,18 @@ fn valid_inference_request(request: &InferenceRequest) -> bool {
 }
 
 /// A workspace ID and the names of roles (`protocol-schema.ts`).
+/// Drop a repository key that is not one a node could have made
+/// ([`pirc_protocol::valid_repo`]).
+pub fn sanitize_repo(workspace: &mut RegisteredWorkspace) {
+    if workspace
+        .repo
+        .as_deref()
+        .is_some_and(|repo| !pirc_protocol::valid_repo(repo))
+    {
+        workspace.repo = None;
+    }
+}
+
 fn valid_registration(registration: &Registration) -> bool {
     let chars = |text: &str| text.chars().count();
     let role_name = |name: &str| {
@@ -761,7 +773,7 @@ impl LinkSession {
                 return self.close(PROTOCOL_MISMATCH_CLOSE, &mismatch(integer));
             }
         }
-        let parsed = match serde_json::from_value::<NodeMessage>(message) {
+        let mut parsed = match serde_json::from_value::<NodeMessage>(message) {
             Ok(NodeMessage::Register(registration)) if valid_registration(&registration) => {
                 registration
             }
@@ -769,6 +781,11 @@ impl LinkSession {
         };
         if parsed.protocol != Some(i64::from(NODE_PROTOCOL_VERSION)) {
             return self.close(PROTOCOL_MISMATCH_CLOSE, &mismatch(parsed.protocol));
+        }
+        // A repository key the gateway would not store is not relayed to
+        // browsers either; the workspace itself is still registered.
+        for workspace in &mut parsed.workspaces {
+            sanitize_repo(workspace);
         }
         let chat = parsed.role == NodeRole::Chat;
         if parsed

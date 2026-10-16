@@ -481,6 +481,26 @@ fn frozen_snapshot(agent: &Agent) -> Option<String> {
         })
 }
 
+/// Why USER could not be loaded, as the user is told: only a request that
+/// got no answer (aborted, timed out, gateway offline) is "unreachable"; an
+/// answer refusing the session (403, 404, a database error) says so.
+fn user_load_warning(error: &ChannelError) -> String {
+    let unreachable = match error {
+        ChannelError::Plain(_) => true,
+        ChannelError::Coded { status, .. } => {
+            status.is_none_or(|status| matches!(status as u16, 502..=504))
+        }
+    };
+    if unreachable {
+        "Your USER preferences could not be loaded (the gateway is unreachable); this session runs without them for now.".to_owned()
+    } else {
+        format!(
+            "Your USER preferences could not be loaded (the gateway answered: {}); this session runs without them for now.",
+            error.message()
+        )
+    }
+}
+
 /// The `## User` section of a coding session, frozen once loaded. An
 /// unreachable gateway costs the session its USER for this run only: the
 /// user is told once, and the next run tries again.
@@ -494,12 +514,11 @@ async fn user_section(state: &State, agent: &Agent, gateway: &NodeChannels) -> S
     }
     let context = match request_context(gateway, USER_TIMEOUT_MS).await {
         Ok(context) => context,
-        Err(_) => {
+        Err(error) => {
             if !state.warned.replace(true) {
-                agent.ui().notify(
-                    "Your USER preferences could not be loaded (the gateway is unreachable); this session runs without them for now.",
-                    NotifyLevel::Warning,
-                );
+                agent
+                    .ui()
+                    .notify(&user_load_warning(&error), NotifyLevel::Warning);
             }
             return String::new();
         }

@@ -305,3 +305,27 @@ fn renders_user_for_coding_sessions() {
     assert!(!text.contains("u11111111"));
     assert!(text.contains("you cannot change it here"));
 }
+
+#[test]
+fn says_unreachable_only_when_the_gateway_did_not_answer() {
+    let coded = |status: Option<f64>, message: &str| ChannelError::Coded {
+        code: "x".into(),
+        message: message.into(),
+        status,
+        details: None,
+    };
+    for error in [
+        ChannelError::Plain("aborted".into()),
+        coded(None, "closed"),
+        coded(Some(503.0), "offline"),
+        coded(Some(504.0), "timed out"),
+    ] {
+        assert!(
+            user_load_warning(&error).contains("unreachable"),
+            "{error:?}"
+        );
+    }
+    let refused = user_load_warning(&coded(Some(403.0), "This session may not use the gateway"));
+    assert!(!refused.contains("unreachable"));
+    assert!(refused.contains("the gateway answered: This session may not use the gateway"));
+}

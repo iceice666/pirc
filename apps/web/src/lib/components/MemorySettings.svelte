@@ -125,7 +125,7 @@
   <p>
     What your assistant remembers across chats. <strong>USER</strong> is what you told it about
     yourself and changes only when you approve. <strong>MEMORY</strong> holds the assistant's own notes.
-    New chats start with both; open chats keep what they started with. USER also reaches every coding
+    New chats start with both; open chats keep what they started with. USER also reaches every new coding
     session on every node, so approve only what should apply everywhere.
   </p>
 
@@ -209,8 +209,9 @@
 
       <p class="memory-fine-print">
         Forget erases an entry with all its versions and keeps the same text from being saved again;
-        rewordings are not caught. The chats it came from stay on the chat node, and repositories
-        keep their own workspace memory.
+        rewordings are not caught. The chats it came from stay on the chat node, chats and coding
+        sessions already started keep the USER they started with, and repositories keep their own
+        workspace memory.
       </p>
     {/if}
   {/if}

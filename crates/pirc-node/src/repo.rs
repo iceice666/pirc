@@ -12,6 +12,12 @@
 //! home directory kept in git is not that repository. Read at registration
 //! and on creation: a remote changed later is seen when the node registers
 //! again.
+//!
+//! Accepted limit: a `.git` symlink, an absolute `gitdir:` or `commondir`
+//! may point at another repository the node account can read, and its key
+//! is then reported for this workspace. Only a normalized `host/path`
+//! leaves the node, and a key only joins notes of the same user, which a
+//! search without a workspace already returns.
 
 use std::fs::File;
 use std::io::Read as _;
@@ -27,11 +33,18 @@ pub fn workspace_repo(root: &Path) -> Option<String> {
     pirc_protocol::normalize_origin(&origin_url(&config)?)
 }
 
-/// A regular file's text, at most [`MAX_BYTES`]; never blocks on a FIFO.
+/// A regular file's text, at most [`MAX_BYTES`]; never blocks on a FIFO
+/// and never takes a terminal as the node's controlling one.
 fn read_small(path: &Path) -> Option<String> {
+    // Checked again on the open file; this only avoids opening most
+    // devices at all.
+    if !std::fs::metadata(path).ok()?.is_file() {
+        return None;
+    }
+    let flags = nix::fcntl::OFlag::O_NONBLOCK | nix::fcntl::OFlag::O_NOCTTY;
     let file = File::options()
         .read(true)
-        .custom_flags(nix::fcntl::OFlag::O_NONBLOCK.bits())
+        .custom_flags(flags.bits())
         .open(path)
         .ok()?;
     let meta = file.metadata().ok()?;

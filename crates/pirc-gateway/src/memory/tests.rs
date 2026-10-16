@@ -768,3 +768,56 @@ fn proposals_are_interactions_of_their_chat() {
         Some(&json!({ "type": "interaction_answered", "data": { "interactionId": id } }))
     );
 }
+
+/// What a coding session gets (`assistant.context` outside a chat): the
+/// approved, active USER entries of its own user, never another user's,
+/// and none that were removed or forgotten.
+#[test]
+fn coding_sessions_get_only_their_users_active_user_entries() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let store = store(&conn);
+    let approve_for = |user: &str, content: &str| {
+        let (proposal, _) = store
+            .propose(
+                user,
+                "s1",
+                &ProposeInput {
+                    action: Action::Add,
+                    id: None,
+                    content: Some(content.into()),
+                    base_revision: None,
+                    quote: "I said so".into(),
+                },
+                &json!({ "sessionId": "s1" }),
+            )
+            .unwrap();
+        store.approve(user, &proposal.id, None).unwrap().1
+    };
+    approve_for(ME, "Kept.");
+    let removed = approve_for(ME, "Removed.");
+    let forgotten = approve_for(ME, "Forgotten.");
+    approve_for(OTHER, "Someone else.");
+    let (drop, _) = propose_in(
+        &store,
+        Action::Remove,
+        Some(&removed.id),
+        None,
+        None,
+        "drop it",
+    )
+    .unwrap();
+    store.approve(ME, &drop.id, None).unwrap();
+    store.forget(ME, &forgotten.id).unwrap();
+    let contents = |user: &str| -> Vec<Value> {
+        store
+            .user_context(user)
+            .unwrap()
+            .into_iter()
+            .map(|brief| brief["content"].clone())
+            .collect()
+    };
+    assert_eq!(contents(ME), vec![json!("Kept.")]);
+    assert_eq!(contents(OTHER), vec![json!("Someone else.")]);
+    assert_eq!(contents("nobody@example.com"), Vec::<Value>::new());
+}

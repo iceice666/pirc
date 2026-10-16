@@ -345,4 +345,25 @@ mod tests {
         assert_eq!(of("lab:clone"), Some(Linked::Repository));
         assert_eq!(of("work:site"), None);
     }
+
+    /// A chat workspace has no repository: a key a node reports for one
+    /// tags neither the workspace nor links or notes stored under its id.
+    #[test]
+    fn a_repository_reported_for_a_chat_workspace_is_ignored() {
+        let db = db();
+        let conn = db.lock();
+        // A link stored under a workspace id the node now reports as a chat.
+        conn.execute(
+            "INSERT INTO project_links (project_workspace_id,workspace_id,repo,created_at) VALUES ('home:chats','home:trip',NULL,1)",
+            [],
+        )
+        .unwrap();
+        conn.set_workspace_repos(
+            "home",
+            &[("trip".into(), Some("github.com/me/pirc".into()))],
+        )
+        .unwrap();
+        assert_eq!(conn.get_workspace("home:trip").unwrap().repo, None);
+        assert_eq!(links(&conn, "home:chats").unwrap()[0].repo, None);
+    }
 }

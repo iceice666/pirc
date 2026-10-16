@@ -719,10 +719,15 @@ impl Store for Connection {
                 let repo = repo
                     .as_deref()
                     .filter(|repo| pirc_protocol::valid_repo(repo));
-                tx.execute(
+                let changed = tx.execute(
                     "UPDATE workspaces SET repo=? WHERE id=? AND kind='directory'",
                     params![repo, id],
                 )?;
+                // Only a directory workspace has a repository: a key reported for a chat
+                // workspace must not tag its notes or links either.
+                if changed == 0 {
+                    continue;
+                }
                 if let Some(repo) = repo {
                     tx.execute(
                         "UPDATE memory_records SET repo=? WHERE workspace_id=? AND repo IS NULL AND status!='forgotten'",

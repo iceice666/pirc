@@ -924,6 +924,35 @@ async fn project_links() {
         home.op("chat-1", "assistant.context", json!({})).await,
     );
 
+    // The node is back without the one linked workspace: removed, not offline.
+    let work = FakeNode::connect(
+        &api,
+        "work",
+        WORK_TOKEN,
+        json!({ "type": "register", "role": "node",
+            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
+            "workspaces": [
+                { "id": "site", "displayName": "Atlas", "kind": "directory" },
+            ] }),
+        work_answers(Arc::new(Mutex::new(json!({})))),
+    )
+    .await;
+    wait_for_nodes(&api, 2).await;
+    put_links(
+        &api,
+        &mut r,
+        "link only Repo again",
+        "home:trip",
+        json!(["work:repo"]),
+    )
+    .await;
+    r.note(
+        "the one linked workspace was removed from its node",
+        home.op("chat-1", "delegation.create", json!({ "task": "x" }))
+            .await,
+    );
+    work.close();
+
     home.close();
     insta::assert_json_snapshot!("project_links", r.t.into_value());
 }

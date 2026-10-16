@@ -6,8 +6,9 @@
 //! The key is `host/path`: scheme, user info, port, query and fragment are
 //! dropped, the host is lowercased, and a trailing `.git` and slashes go.
 //! `ssh://git@host/a/b`, `git@host:a/b.git` and `https://host/a/b/` are all
-//! `host/a/b`. Local paths and `file://` URLs have no key: no path leaves
-//! the node. Neither does a credential: anything with `@` left in it after
+//! `host/a/b`. Local paths, `file:` URLs and remotes on this machine
+//! (`localhost`, `127.*`, `0.0.0.0`) have no key: no path leaves the node,
+//! and two unrelated `localhost:repo` remotes on two nodes are not merged. Neither does a credential: anything with `@` left in it after
 //! the user info is dropped is refused rather than guessed at.
 
 /// The longest key a gateway accepts.
@@ -22,6 +23,19 @@ fn path_char(c: char) -> bool {
 
 fn host_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')
+}
+
+/// A host that names this machine (or `file:` taken for a host), whose
+/// paths are local ones.
+fn local_host(host: &str) -> bool {
+    let host = host.trim_end_matches('.');
+    host == "file"
+        || host == "localhost"
+        || host.ends_with(".localhost")
+        || host == "0.0.0.0"
+        || host
+            .strip_prefix("127.")
+            .is_some_and(|rest| rest.split('.').all(|part| part.parse::<u8>().is_ok()))
 }
 
 /// The repository key of an `origin` URL, or `None` when it has none.
@@ -62,12 +76,19 @@ pub fn normalize_origin(url: &str) -> Option<String> {
         .next()
         .unwrap_or_default()
         .to_ascii_lowercase();
-    if host.is_empty() || !host.chars().all(host_char) || host.starts_with(['.', '-']) {
+    if host.is_empty()
+        || !host.chars().all(host_char)
+        || host.starts_with(['.', '-'])
+        || local_host(&host)
+    {
         return None;
     }
     let mut segments: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
     if let Some(last) = segments.last_mut() {
-        *last = last.strip_suffix(".git").unwrap_or(last);
+        // Repeatedly, so a key normalizes to itself (`valid_repo`).
+        while let Some(stripped) = last.strip_suffix(".git") {
+            *last = stripped;
+        }
         if last.is_empty() {
             segments.pop();
         }
@@ -165,6 +186,16 @@ mod tests {
             "ext::sh -c touch% /tmp/x",
             "https://github.com/o/r with space",
             "https://github.com/o/r%20x",
+            "file:/home/me/repo",
+            "FILE:/home/me/repo",
+            "ssh://localhost/home/alice/secret",
+            "localhost:repo",
+            "git@LocalHost.:repo.git",
+            "ssh://dev.localhost/srv/repo",
+            "alice@127.0.0.1:/Users/alice/code/x.git",
+            "https://127.1.2.3:8080/o/r",
+            "ssh://0.0.0.0/srv/repo",
+            "ssh://[::1]/srv/repo",
         ] {
             assert_eq!(normalize_origin(url), None, "{url}");
         }
@@ -178,5 +209,12 @@ mod tests {
         assert!(!valid_repo("GitHub.com/o/r"));
         assert!(!valid_repo("github.com/o/r.git"));
         assert!(!valid_repo("user@github.com/o/r"));
+        assert!(!valid_repo("localhost/o/r"));
+        // Every key normalizes to itself, so the gateway accepts it.
+        assert_eq!(
+            normalize_origin("https://github.com/o/r.git.git").as_deref(),
+            Some("github.com/o/r")
+        );
+        assert!(valid_repo("127.example.com/o/r"));
     }
 }
