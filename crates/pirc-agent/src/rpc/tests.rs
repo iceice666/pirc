@@ -394,6 +394,10 @@ impl Commands for Fake {
     fn set_thinking(&self, level: &str) -> Result<(), String> {
         Err(format!("Unknown thinking level: {level}"))
     }
+    fn set_approval_mode(self: &Rc<Self>, mode: &str) -> Result<(), String> {
+        self.call(format!("set_approval_mode {mode}"));
+        Ok(())
+    }
     fn set_role(&self, name: &str) -> Result<(), String> {
         self.call(format!("set_role {name}"));
         Ok(())
@@ -538,13 +542,14 @@ async fn validates_send_now_and_deliver() {
         [
             Delivery {
                 custom_type: "delegation".to_owned(),
-                content: "Done.".to_owned(),
+                // Labelled: never the user's words (L11).
+                content: format!("{GATEWAY_MESSAGE_LABEL}\nDone."),
                 display: true,
                 details: Some(json!({ "taskId": "t1" })),
             },
             Delivery {
                 custom_type: "n".to_owned(),
-                content: String::new(),
+                content: format!("{GATEWAY_MESSAGE_LABEL}\n"),
                 display: true,
                 details: None,
             },

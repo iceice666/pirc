@@ -18,7 +18,9 @@ use pirc_protocol::{
 use serde_json::{Map, Value, json};
 use tokio::sync::Notify;
 
-use crate::auto_mode::AutoMode;
+use crate::auto_mode::{
+    APPROVAL_MODE_ENTRY, ApprovalMode, AutoMode, default_approval_mode, recorded_approval_mode,
+};
 use crate::capabilities::{Capabilities, capability_for_tool};
 use crate::compaction::{self, CompactionReason, CompactionSettings};
 use crate::config::{AgentConfig, session_settings};
@@ -152,6 +154,14 @@ pub struct Agent {
     guard: Rc<PathGuard>,
     hooks: HookRunner,
     auto_mode: AutoMode,
+    /// The approval mode the user chose for this session (or a team child
+    /// got from its parent); `None` follows the node's default.
+    approval_mode: Cell<Option<ApprovalMode>>,
+    /// Custom entries admitted during the current run that the user
+    /// approved as their own requests (a delegated task with
+    /// `details.asUserRequest`): auto mode's classifier reads them as user
+    /// requests until the run ends.
+    run_user_requests: RefCell<Vec<String>>,
     /// The UI with dialogs linked to the operation that opens them.
     ui: Rc<dyn Ui>,
     has_ui: bool,
@@ -690,6 +700,8 @@ impl Agent {
                 guard,
                 hooks,
                 auto_mode: AutoMode::new(),
+                approval_mode: Cell::new(None),
+                run_user_requests: RefCell::new(Vec::new()),
                 ui,
                 has_ui: options.has_ui,
                 emit_raw: options.emit,
@@ -803,6 +815,7 @@ impl Agent {
             *self.model_ref.borrow_mut() = model;
         }
         self.thinking.set(thinking);
+        self.approval_mode.set(recorded_approval_mode(&branch));
         if let Some(entry) = branch
             .iter()
             .rev()
@@ -1198,6 +1211,8 @@ impl Agent {
             "sessionNameSource": self.name_source.get().map(NameSource::as_str),
             "model": model,
             "thinkingLevel": thinking_name(self.thinking.get()),
+            "approvalMode": self.approval_mode().as_str(),
+            "defaultApprovalMode": default_approval_mode(&self.config.features).as_str(),
             "isStreaming": self.running.get(),
             "completionWaiting": *self.completion_waiting.borrow(),
             "isCompacting": self.compacting.borrow().is_some(),
@@ -1412,6 +1427,31 @@ impl Agent {
         });
         if let Some(tools) = &preset.tools {
             self.restrict_tools(tools);
+        }
+        Ok(())
+    }
+
+    /// The session's approval mode: its own, else the node's default.
+    pub fn approval_mode(&self) -> ApprovalMode {
+        self.approval_mode
+            .get()
+            .unwrap_or_else(|| default_approval_mode(&self.config.features))
+    }
+
+    /// The user switches this session's approval mode (`set_approval_mode`);
+    /// recorded, so it survives a restart, and passed on to the team.
+    pub fn set_approval_mode(self: &Rc<Self>, mode: &str) -> Result<(), String> {
+        let parsed = ApprovalMode::parse(mode).ok_or_else(|| {
+            format!("Unknown approval mode {mode}: one of read-only, auto, full-access")
+        })?;
+        self.append(EntryData::Custom {
+            custom_type: APPROVAL_MODE_ENTRY.to_owned(),
+            data: json!({ "mode": parsed.as_str() }),
+        })?;
+        self.approval_mode.set(Some(parsed));
+        self.emit(json!({ "type": "approval_mode_changed", "mode": parsed.as_str() }));
+        for feature in &self.features {
+            feature.approval_mode_changed(self, parsed);
         }
         Ok(())
     }
@@ -1807,6 +1847,8 @@ impl Agent {
                 agent.ui.notify(&message, NotifyLevel::Error);
             }
             agent.running.set(false);
+            // The user's approval of a delegated task covered this run only.
+            agent.run_user_requests.borrow_mut().clear();
             *agent.controller.borrow_mut() = None;
             agent.run_active.set(false);
             agent.run_done.notify_waiters();
@@ -1909,7 +1951,17 @@ impl Agent {
     fn admit_item(&self, item: QueueItem) -> Result<(), String> {
         match item {
             QueueItem::Custom(message) => {
-                self.append_message((*message).clone())?;
+                let id = self.append_message((*message).clone())?;
+                if let Message::Custom {
+                    custom_type,
+                    details: Some(details),
+                    ..
+                } = &*message
+                    && custom_type == "assistant-delegation"
+                    && details.get("asUserRequest") == Some(&Value::Bool(true))
+                {
+                    self.run_user_requests.borrow_mut().push(id);
+                }
                 self.admitted(&message);
             }
             QueueItem::User { text, images } => {
@@ -1946,7 +1998,7 @@ impl Agent {
                 if !extra.is_empty() {
                     self.append_message(Message::Custom {
                         custom_type: "hook-context".to_owned(),
-                        content: extra,
+                        content: crate::hooks::fence_output(HookName::BeforePrompt, &extra),
                         display: false,
                         details: None,
                         timestamp: now_ms(),
@@ -1972,7 +2024,7 @@ impl Agent {
                 "hook:sessionStart",
                 "Session start hook",
                 "hook",
-                extra.clone(),
+                crate::hooks::fence_output(HookName::SessionStart, &extra),
             ));
         }
         sections.extend(self.run_prompt.borrow().iter().cloned());
@@ -3223,6 +3275,12 @@ impl AgentHost for Agent {
     }
     fn branch(&self) -> Vec<SessionEntry> {
         Agent::branch(self)
+    }
+    fn approval_mode(&self) -> ApprovalMode {
+        Agent::approval_mode(self)
+    }
+    fn run_user_requests(&self) -> Vec<String> {
+        self.run_user_requests.borrow().clone()
     }
 }
 

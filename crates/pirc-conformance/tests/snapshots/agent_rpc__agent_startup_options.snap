@@ -12,7 +12,7 @@ expression: r.into_value()
       },
       {
         "id": "<uuid:1>",
-        "message": "This workspace's .pirc/config.json sets hooks, env or allowedPaths; they were ignored because the workspace is not trusted (or they changed since it was trusted). Review and trust them in the workspace's Settings.",
+        "message": "This workspace's .pirc/config.json sets hooks, env, allowedPaths or defaultModel; they were ignored because the workspace is not trusted (or they changed since it was trusted). Review and trust them in the workspace's Settings.",
         "method": "notify",
         "notifyType": "warning",
         "type": "extension_ui_request"
@@ -20,7 +20,9 @@ expression: r.into_value()
       {
         "command": "get_state",
         "data": {
+          "approvalMode": "auto",
           "completionWaiting": [],
+          "defaultApprovalMode": "auto",
           "isCompacting": false,
           "isStreaming": false,
           "messageCount": 0,

@@ -93,6 +93,8 @@ pub struct Configure {
     pub capabilities: Capabilities,
     pub instructions: Option<String>,
     pub role: Option<AgentRole>,
+    /// A team child follows its parent session's approval mode.
+    pub approval_mode: Option<crate::auto_mode::ApprovalMode>,
 }
 
 /// `readConfigure`: the first non-blank line must be the configure message.
@@ -146,11 +148,20 @@ pub fn parse_configure(message: &Value) -> Result<Configure, String> {
             }),
         })
     });
+    let approval_mode = match message.get("approvalMode") {
+        None | Some(Value::Null) => None,
+        Some(mode) => Some(
+            mode.as_str()
+                .and_then(crate::auto_mode::ApprovalMode::parse)
+                .ok_or("configure.approvalMode is one of read-only, auto, full-access")?,
+        ),
+    };
     Ok(Configure {
         models,
         capabilities,
         instructions,
         role,
+        approval_mode,
     })
 }
 
@@ -288,6 +299,9 @@ async fn main(args: Vec<String>) -> Result<(), String> {
     }
     if let Some(level) = string(&args.thinking) {
         agent.set_thinking(level)?;
+    }
+    if let Some(mode) = configured.approval_mode {
+        agent.set_approval_mode(mode.as_str())?;
     }
     // `!agent.sessionName`: a recorded empty name counts as none.
     if let Some(name) = string(&args.name)
@@ -478,6 +492,13 @@ mod tests {
             parse_configure(&json!({ "type": "configure", "models": null, "role": { "name": 1 } }))
                 .unwrap();
         assert!(configure.role.is_none());
+        assert_eq!(configure.approval_mode, None);
+        let child = parse_configure(&json!({ "type": "configure", "approvalMode": "full-access" }));
+        assert_eq!(
+            child.unwrap().approval_mode,
+            Some(crate::auto_mode::ApprovalMode::FullAccess)
+        );
+        assert!(parse_configure(&json!({ "type": "configure", "approvalMode": "yolo" })).is_err());
         for message in [json!(null), json!({ "type": "prompt" }), json!([1])] {
             assert_eq!(
                 parse_configure(&message).err().as_deref(),

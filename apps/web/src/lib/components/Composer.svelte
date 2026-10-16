@@ -17,6 +17,7 @@
   import { app } from '../app.svelte';
   import type { ThinkingLevel } from '../types';
   import { modelKey } from '../types';
+  import ApprovalModeControl from './ApprovalModeControl.svelte';
   import ComposerSelect from './ComposerSelect.svelte';
   import GoalDock from './GoalDock.svelte';
   import DockSection from './DockSection.svelte';
@@ -178,6 +179,13 @@
   {/if}
 
   <div class:offline={connection === 'offline'} class="composer">
+    {#if app.approvalMode === 'full-access'}
+      <!-- Persistent while it lasts (security audit L14). -->
+      <div class="full-access-note" role="status">
+        Full access: the agent runs commands and changes files without asking. Only your deny-list
+        still asks.
+      </div>
+    {/if}
     {#if connection === 'offline'}
       <div class="offline-note">
         You’re offline. This draft is saved locally and will never be sent automatically.
@@ -258,6 +266,7 @@
           onselect={(level) => app.changeThinking(level as ThinkingLevel)}
         />
       </div>
+      <ApprovalModeControl />
       <span class="spacer"></span>
       {#if active && !showStopPrimary}
         <!-- While typing mid-run, stopping stays one click away beside send. -->
@@ -413,6 +422,13 @@
     box-shadow:
       0 0 0 1px var(--danger),
       0 4px 20px rgb(15 17 21 / 6%);
+  }
+  .full-access-note {
+    padding: 8px 20px;
+    color: var(--warning);
+    background: var(--warning-soft);
+    font-size: 12px;
+    font-weight: 600;
   }
   .offline-note {
     padding: 8px 20px;

@@ -11,6 +11,7 @@ import { request } from './http';
 import { uuid } from './id';
 import { getClientId } from './storage';
 import type {
+  ApprovalMode,
   Attachment,
   BackendModel,
   BackendPreset,
@@ -92,6 +93,9 @@ function sessionOrigin(raw: any): SessionOrigin | undefined {
       delegationId: String(raw.delegationId ?? ''),
       title: String(raw.title ?? ''),
       fromSessionId: raw.fromSessionId,
+      ...(['running', 'waiting_input', 'completed', 'failed'].includes(raw.status)
+        ? { status: raw.status }
+        : {}),
     };
   return undefined;
 }
@@ -141,6 +145,14 @@ function interaction(raw: any): PendingInteraction {
                 typeof request.modelChoice.thinking === 'string'
                   ? request.modelChoice.thinking
                   : null,
+            },
+          }
+        : {}),
+      ...(request.userRequestChoice && typeof request.userRequestChoice.label === 'string'
+        ? {
+            userRequestChoice: {
+              label: request.userRequestChoice.label,
+              checked: request.userRequestChoice.checked === true,
             },
           }
         : {}),
@@ -212,6 +224,12 @@ export function snapshotFromRaw(raw: any, lease: unknown): SessionSnapshot {
     ...(thinkingLevels.includes(raw.agent?.thinkingLevel)
       ? { thinkingLevel: raw.agent.thinkingLevel as ThinkingLevel }
       : {}),
+    ...(approvalModes.includes(raw.agent?.approvalMode)
+      ? { approvalMode: raw.agent.approvalMode as ApprovalMode }
+      : {}),
+    ...(approvalModes.includes(raw.agent?.defaultApprovalMode)
+      ? { defaultApprovalMode: raw.agent.defaultApprovalMode as ApprovalMode }
+      : {}),
   };
 }
 
@@ -239,6 +257,7 @@ function queueItems(
 }
 
 const thinkingLevels: unknown[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+const approvalModes: unknown[] = ['read-only', 'auto', 'full-access'];
 
 /** Settings never use browser caches or expose upstream error bodies. */
 function backendRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -382,7 +401,9 @@ export const api = {
             ? { type: input.kind, provider: input.provider ?? '', modelId: input.modelId ?? '' }
             : input.kind === 'set_thinking'
               ? { type: input.kind, level: input.thinkingLevel ?? 'off' }
-              : { type: input.kind };
+              : input.kind === 'set_approval_mode'
+                ? { type: input.kind, mode: input.approvalMode ?? 'auto' }
+                : { type: input.kind };
     const response = await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/commands`, {
       method: 'POST',
       body: JSON.stringify({
@@ -444,6 +465,7 @@ export const api = {
               ...(answer.value && answer.thinking !== undefined
                 ? { thinking: answer.thinking }
                 : {}),
+              ...(answer.value && answer.asUserRequest ? { asUserRequest: true } : {}),
             }
           : Array.isArray(answer.value)
             ? { value: answer.value.join(', '), values: answer.value }
@@ -607,6 +629,10 @@ function piEvent(pi: any, timestamp: unknown): GatewayEvent {
       };
     case 'queue_update':
       return { type: 'queue_updated', queue: queueItems(pi, iso(timestamp)) };
+    case 'approval_mode_changed':
+      return approvalModes.includes(pi.mode)
+        ? { type: 'approval_mode_changed', mode: pi.mode as ApprovalMode }
+        : { type: 'noop' };
     case 'panel_changed':
       return {
         type: 'panel_changed',

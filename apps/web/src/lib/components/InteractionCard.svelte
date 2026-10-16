@@ -33,6 +33,14 @@
   );
   let model = $state('');
   let thinking: ThinkingLevel | '' = $state('');
+  /** A delegation's "treat this task as my request for auto mode". */
+  const userRequestChoice = $derived(
+    interaction.kind === 'confirm' ? interaction.userRequestChoice : undefined,
+  );
+  let asUserRequest = $state(false);
+  $effect(() => {
+    asUserRequest = userRequestChoice?.checked ?? false;
+  });
   let models: ModelOption[] = $state([]);
   $effect(() => {
     const choice = modelChoice;
@@ -80,16 +88,17 @@
 
   function submit() {
     if (interaction.kind === 'confirm')
-      onanswer(
-        modelChoice
+      onanswer({
+        action: 'answer',
+        value: true,
+        ...(modelChoice
           ? {
-              action: 'answer',
-              value: true,
               model: model ? (([provider, id]) => ({ provider, id }))(JSON.parse(model)) : null,
               thinking: thinking || null,
             }
-          : { action: 'answer', value: true },
-      );
+          : {}),
+        ...(userRequestChoice && asUserRequest ? { asUserRequest: true } : {}),
+      });
     else if (interaction.kind === 'select')
       onanswer({ action: 'answer', value: interaction.multiple ? selected : (selected[0] ?? '') });
     else onanswer({ action: 'answer', value });
@@ -159,6 +168,17 @@
     </label>
   {:else if !modelChoice && !interaction.id.startsWith('memory:')}
     <p class="confirm-copy">Choose whether the agent should continue with this action.</p>
+  {/if}
+  {#if userRequestChoice}
+    <label class="user-request-choice">
+      <input type="checkbox" bind:checked={asUserRequest} disabled={locked} />
+      <span
+        >{userRequestChoice.label}<small
+          >Auto mode then reads the task as if you had typed it in that session, so an operation the
+          task names exactly is not stopped as dangerous. Only for the run the task starts.</small
+        ></span
+      >
+    </label>
   {/if}
 
   <footer>
@@ -346,6 +366,22 @@
     resize: vertical;
   }
   /* A delegation's model and thinking level, in the footer row. */
+  .user-request-choice {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin-top: 12px;
+    font-size: 13px;
+  }
+  .user-request-choice input {
+    margin-top: 3px;
+  }
+  .user-request-choice small {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 12px;
+  }
   .model-choice {
     flex: 0 1 auto;
     min-width: 0;

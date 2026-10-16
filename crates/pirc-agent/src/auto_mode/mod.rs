@@ -16,6 +16,18 @@
 //!    known targets when the rules know every path a command writes, else
 //!    the working directory.
 //!
+//! That is the `auto` approval mode, the default. The node config
+//! (`features.autoMode.mode`) and each session ([`AgentHost::approval_mode`])
+//! may pick another (security audit L14):
+//!
+//! - `read-only`: only actions the rules judge read-only run; anything else,
+//!   and every `write`/`edit`, waits for the user (headless agents are
+//!   refused). No classifier model is asked.
+//! - `full-access`: no classification gate at all.
+//!
+//! In every mode the deny-list still asks the user and writes still take the
+//! lease; the OS sandbox does not depend on the mode.
+//!
 //! Keystrokes for a tty task are judged together with the rest of the line
 //! they belong to, so a command cannot be smuggled in one harmless-looking
 //! fragment at a time.
@@ -39,14 +51,43 @@ use crate::ui::{DialogOptions, NotifyLevel};
 use classifier::{ClassifyResult, ModelChoice, classify_with_model};
 use rules::{Classification, RuleContext, Verdict, classify_shell, compile_deny, deny_match};
 
+/// How much an agent may do without asking (`features.autoMode.mode`, or
+/// a session's own choice).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ApprovalMode {
+    /// Only read-only actions run without the user.
+    ReadOnly,
+    /// Rules, then the classifier; only danger asks.
+    #[default]
+    Auto,
+    /// No classification gate (the deny-list and the lease remain).
+    FullAccess,
+}
+
+impl ApprovalMode {
+    pub const ALL: [Self; 3] = [Self::ReadOnly, Self::Auto, Self::FullAccess];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ReadOnly => "read-only",
+            Self::Auto => "auto",
+            Self::FullAccess => "full-access",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|mode| mode.as_str() == text)
+    }
+}
+
 /// `AutoModeSettings`: `features.autoMode` without the deny-list.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AutoModeSettings {
-    /// false: no danger checks or model calls; shell actions only decide
-    /// the write lease (unclear ⇒ write). The deny-list still applies.
-    pub enabled: bool,
+    /// The node's default approval mode (`mode`; the retired `enabled`
+    /// maps `false` to full access and `true` to auto, and `mode` wins).
+    pub mode: ApprovalMode,
     /// Send statically unclear actions to a model; false treats them as
-    /// writes.
+    /// writes. Auto mode only.
     pub use_model: bool,
     /// Show the classifier critical observational-memory notes (the
     /// human's earlier constraints and decisions).
@@ -61,7 +102,7 @@ pub struct AutoModeSettings {
 impl Default for AutoModeSettings {
     fn default() -> Self {
         Self {
-            enabled: true,
+            mode: ApprovalMode::Auto,
             use_model: true,
             use_memory: true,
             model: None,
@@ -108,9 +149,22 @@ pub fn auto_mode_settings(features: &Map<String, Value>) -> AutoModeSettings {
         _ => return defaults,
     };
     let mut parsed = defaults.clone();
+    let mut legacy = None;
+    let mut mode = None;
     for (key, value) in settings {
         let valid = match key.as_str() {
-            "enabled" => value.as_bool().map(|flag| parsed.enabled = flag),
+            "mode" => value
+                .as_str()
+                .and_then(ApprovalMode::parse)
+                .map(|chosen| mode = Some(chosen)),
+            // Before the modes: `enabled: false` turned every check off.
+            "enabled" => value.as_bool().map(|flag| {
+                legacy = Some(if flag {
+                    ApprovalMode::Auto
+                } else {
+                    ApprovalMode::FullAccess
+                })
+            }),
             "useModel" => value.as_bool().map(|flag| parsed.use_model = flag),
             "useMemory" => value.as_bool().map(|flag| parsed.use_memory = flag),
             "model" => model_choice(value).map(|choice| parsed.model = Some(choice)),
@@ -127,12 +181,41 @@ pub fn auto_mode_settings(features: &Map<String, Value>) -> AutoModeSettings {
             return defaults;
         }
     }
+    parsed.mode = mode.or(legacy).unwrap_or_default();
     parsed
 }
 
-/// Whether auto mode is enabled (`autoModeSettings(features).enabled`).
-pub fn auto_mode_enabled(features: &Map<String, Value>) -> bool {
-    auto_mode_settings(features).enabled
+/// Session entry recording the approval mode the user chose for a session.
+pub const APPROVAL_MODE_ENTRY: &str = "agent.approvalMode";
+
+/// The approval mode a session's branch records, if the user chose one.
+pub fn recorded_approval_mode(
+    branch: &[crate::session_store::SessionEntry],
+) -> Option<ApprovalMode> {
+    branch.iter().rev().find_map(|entry| match &entry.data {
+        crate::session_store::EntryData::Custom { custom_type, data }
+            if custom_type == APPROVAL_MODE_ENTRY =>
+        {
+            data.get("mode")
+                .and_then(Value::as_str)
+                .and_then(ApprovalMode::parse)
+        }
+        _ => None,
+    })
+}
+
+/// The node's default approval mode for new sessions.
+pub fn default_approval_mode(features: &Map<String, Value>) -> ApprovalMode {
+    auto_mode_settings(features).mode
+}
+
+/// `features.autoMode.enabled` is set: the node config uses the retired
+/// switch (a warning says to use `mode`).
+pub fn uses_retired_enabled(features: &Map<String, Value>) -> bool {
+    features
+        .get("autoMode")
+        .and_then(|mode| mode.get("enabled"))
+        .is_some()
 }
 
 /// `autoModeSettings(features).useModel` (default true).
@@ -446,24 +529,28 @@ impl AutoMode {
             classification,
             source: Source::Rules,
         };
-        // The deny-list is the user's own rule: it holds even with auto mode off.
+        // The deny-list is the user's own rule: it holds in every mode.
         if rules.denied {
             return Ok(decided(rules));
         }
-        if !settings.enabled {
-            // Lease decision only: anything that is not clearly read-only writes.
-            return Ok(if matches!(rules.verdict, Verdict::Read | Verdict::Write) {
-                decided(rules)
-            } else {
-                decided(Classification {
-                    verdict: Verdict::Write,
-                    reason: rules.reason,
-                    denied: false,
-                    writes: None,
-                })
-            });
+        // No classifier outside auto mode. Full access: a lease decision
+        // only, so anything not clearly read-only writes. Read-only: an
+        // unclear action is a write, which asks the user there.
+        let mode = host.approval_mode();
+        let lease_only = match mode {
+            ApprovalMode::Auto => false,
+            ApprovalMode::ReadOnly => rules.verdict == Verdict::Unknown,
+            ApprovalMode::FullAccess => !matches!(rules.verdict, Verdict::Read | Verdict::Write),
+        };
+        if lease_only {
+            return Ok(decided(Classification {
+                verdict: Verdict::Write,
+                reason: rules.reason,
+                denied: false,
+                writes: None,
+            }));
         }
-        if rules.verdict != Verdict::Unknown {
+        if mode != ApprovalMode::Auto || rules.verdict != Verdict::Unknown {
             return Ok(decided(rules));
         }
         let fallback = |reason| Decision {
@@ -580,16 +667,45 @@ impl AutoMode {
         args: &Map<String, Value>,
         signal: &AbortSignal,
     ) -> Result<Option<String>, String> {
+        let mode = host.approval_mode();
+        if mode == ApprovalMode::ReadOnly && matches!(tool, "write" | "edit") {
+            // The file tools take their own lease; read-only asks first.
+            let path = args.get("path").map(js::string_of).unwrap_or_default();
+            let request = Approval {
+                label: "File change",
+                tool,
+                place: &host.config().workspace,
+                text: &path,
+                reason: &format!("{tool} changes {path}"),
+                read_only: true,
+            };
+            return Ok(self.approve(host, &request, signal).await);
+        }
         let Some(action) = self.action_for(host, tool, args) else {
             return Ok(None);
         };
         let decision = self.classify(host, &action, signal).await?;
-        if decision.classification.verdict == Verdict::Danger
-            && let Some(refusal) = self
-                .approve(host, &action, &decision.classification.reason, signal)
-                .await
-        {
-            return Ok(Some(refusal));
+        let verdict = decision.classification.verdict;
+        let ask = match mode {
+            ApprovalMode::ReadOnly => verdict != Verdict::Read,
+            ApprovalMode::Auto | ApprovalMode::FullAccess => verdict == Verdict::Danger,
+        };
+        if ask {
+            let request = Approval {
+                label: match action.kind {
+                    ActionKind::Input => "Input",
+                    ActionKind::Script => "Script",
+                    ActionKind::Command => "Command",
+                },
+                tool: &action.tool,
+                place: &action.cwd,
+                text: &action.text,
+                reason: &decision.classification.reason,
+                read_only: verdict != Verdict::Danger,
+            };
+            if let Some(refusal) = self.approve(host, &request, signal).await {
+                return Ok(Some(refusal));
+            }
         }
         if decision.classification.verdict != Verdict::Read {
             for target in lease_targets(&action, &decision) {
@@ -605,31 +721,37 @@ impl AutoMode {
     async fn approve(
         &self,
         host: &dyn AgentHost,
-        action: &ShellAction,
-        reason: &str,
+        request: &Approval<'_>,
         signal: &AbortSignal,
     ) -> Option<String> {
         let advice = "Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.";
+        let reason = request.reason;
         if !host.has_ui() {
-            return Some(format!(
-                "{reason}. Dangerous actions need a human and this agent has no UI. {advice}"
-            ));
+            return Some(if request.read_only {
+                format!(
+                    "{reason}. This session is in read-only mode: anything that may change files needs a human, and this agent has no UI. {advice}"
+                )
+            } else {
+                format!(
+                    "{reason}. Dangerous actions need a human and this agent has no UI. {advice}"
+                )
+            });
         }
-        let label = match action.kind {
-            ActionKind::Input => "Input",
-            ActionKind::Script => "Script",
-            ActionKind::Command => "Command",
-        };
         let message = format!(
-            "{label} ({}, in {}):\n\n{}\n\nReason: {reason}",
-            action.tool,
-            action.cwd,
-            js::head16(&action.text, 4_000)
+            "{} ({}, in {}):\n\n{}\n\nReason: {reason}",
+            request.label,
+            request.tool,
+            request.place,
+            js::head16(request.text, 4_000)
         );
         let answer = host
             .ui()
             .confirm(
-                "Auto mode: allow a potentially dangerous action?",
+                if request.read_only {
+                    "Read-only mode: allow this action?"
+                } else {
+                    "Auto mode: allow a potentially dangerous action?"
+                },
                 &message,
                 DialogOptions {
                     signal: Some(signal.clone()),
@@ -649,6 +771,18 @@ impl AutoMode {
             }
         ))
     }
+}
+
+/// What the user is asked to allow.
+struct Approval<'a> {
+    label: &'a str,
+    tool: &'a str,
+    /// The working directory (or workspace) it acts in.
+    place: &'a str,
+    text: &'a str,
+    reason: &'a str,
+    /// Asked because of read-only mode, not because it is dangerous.
+    read_only: bool,
 }
 
 /// What a writing action's lease must cover: the exact targets when the

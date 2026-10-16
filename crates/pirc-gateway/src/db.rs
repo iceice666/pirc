@@ -20,7 +20,7 @@ use crate::util::{new_id, now_ms, safe_json};
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1002;
+pub const SCHEMA_VERSION: i64 = 1003;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = include_str!("schema.sql");
@@ -41,6 +41,14 @@ const MIGRATIONS: &[(i64, &str)] = &[
            repo TEXT, created_at INTEGER NOT NULL,
            PRIMARY KEY (project_workspace_id, workspace_id)
          );",
+    ),
+    (
+        // Agents' schedule deletions wait for the user (security audit L10);
+        1003,
+        "ALTER TABLE schedule_proposals ADD COLUMN operation TEXT NOT NULL DEFAULT 'save';
+         -- The delegation checkbox for auto mode, and retention (docs/history/assistant.md).
+         ALTER TABLE delegations ADD COLUMN as_user_request INTEGER NOT NULL DEFAULT 0;
+         CREATE INDEX delegations_follows ON delegations(follows);",
     ),
 ];
 
@@ -450,6 +458,10 @@ pub enum SessionOrigin {
         delegation_id: String,
         title: String,
         from_session_id: String,
+        /// The delegation's status (`running`, `waiting_input`,
+        /// `completed`, `failed`): delegated sessions are left as they are
+        /// once their result is delivered, so the list says how they ended.
+        status: String,
     },
 }
 
@@ -974,7 +986,7 @@ impl Store for Connection {
             origins.push(row?);
         }
         let mut delegated = self.prepare(
-            "SELECT id, target_session_id, assistant_session_id, title FROM delegations WHERE owner_user=? AND target_session_id IS NOT NULL ORDER BY created_at",
+            "SELECT id, target_session_id, assistant_session_id, title, status FROM delegations WHERE owner_user=? AND target_session_id IS NOT NULL ORDER BY created_at",
         )?;
         for row in delegated.query_map([owner_user], |row| {
             Ok((
@@ -983,6 +995,7 @@ impl Store for Connection {
                     delegation_id: row.get(0)?,
                     from_session_id: row.get(2)?,
                     title: row.get(3)?,
+                    status: row.get(4)?,
                 },
             ))
         })? {
@@ -1297,12 +1310,23 @@ mod tests {
                 .unwrap();
             out.extend(rows.map(Result::unwrap));
         }
+        // And the indexes, which migrations add too.
+        let mut indexes = conn
+            .prepare("SELECT 'index.' || name FROM sqlite_master WHERE type='index' AND sql IS NOT NULL ORDER BY name")
+            .unwrap();
+        out.extend(
+            indexes
+                .query_map([], |row| row.get::<_, String>(0))
+                .unwrap()
+                .map(Result::unwrap),
+        );
         out
     }
 
     #[test]
     fn migrates_the_first_rust_schema() {
-        // Schema 1002's table, from its comment to its end.
+        // Schema 1000: without 1002's table (from its comment to its end)
+        // and 1001's columns.
         let links = SCHEMA
             .find("-- The directory workspaces a chat project is about")
             .expect("schema.sql changed: update this test");
@@ -1316,8 +1340,26 @@ mod tests {
                 "  -- Its workspace's repo when recorded, so clones find each other's notes.\n  repo TEXT,\n",
                 "",
             );
+        // And schema 1003's columns and index.
+        let first = first
+            .replace(
+                ",\n  -- What approving does: 'save' creates or changes (schedule_id), 'delete' deletes schedule_id.\n  operation TEXT NOT NULL DEFAULT 'save'\n",
+                "\n",
+            )
+            .replace(
+                ",\n  -- 1: the user approved it as their own request for auto mode, for the run it starts.\n  as_user_request INTEGER NOT NULL DEFAULT 0\n",
+                "\n",
+            )
+            .replace(
+                "CREATE INDEX delegations_follows ON delegations(follows);\n",
+                "",
+            );
         assert!(
-            !first.contains("repo TEXT") && !first.contains("project_links"),
+            !first.contains("repo TEXT")
+                && !first.contains("project_links")
+                && !first.contains("operation TEXT")
+                && !first.contains("as_user_request")
+                && !first.contains("delegations_follows"),
             "schema.sql changed: update this test"
         );
         let dir = tempfile::tempdir().unwrap();

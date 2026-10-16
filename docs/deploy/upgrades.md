@@ -1,18 +1,27 @@
 # Upgrades
 
-## Unreleased: gateway schema 1002 (node protocol 10)
+## Unreleased: gateway schema 1003 (node protocol 10)
 
 An in-place upgrade. On its first start the gateway migrates its database from
-schema 1000 or 1001 to 1002 by itself, one transaction per step: 1001 adds the
+schema 1000, 1001 or 1002 to 1003 by itself, one transaction per step: 1001 adds the
 `repo` columns of workspaces and mirrored workspace memory, 1002 the
-`project_links` table (chat projects linked to workspaces). Node state is
+`project_links` table (chat projects linked to workspaces), 1003 the
+`operation` of schedule proposals (agents' deletions wait for you), the
+`as_user_request` of delegations and an index on `delegations(follows)`. Node state is
 unchanged and the node protocol stays 10, so nodes and gateway still
 interoperate across the upgrade, but deploy them together as usual: an older
 node reports no repositories, an older gateway gives coding sessions no USER
 entries, and an older node's agent refuses `delegate` without a workspace before
-asking the gateway.
+asking the gateway. Upgrade every node with the gateway: an older node does not
+offer the approval-mode switch (the web hides it) and refuses the command.
 
-A 0.4.x gateway refuses a database at schema 1001 or 1002 ("newer than this
+Node configs using `features.autoMode.enabled` keep working with a warning;
+replace it with `features.autoMode.mode` (`enabled: false` now means
+`"full-access"`, `true` means `"auto"`). A repository's `.pirc/config.json`
+that sets `defaultModel` is ignored until you trust it again in the workspace's
+Settings.
+
+A 0.4.x gateway refuses a database at schema 1001, 1002 or 1003 ("newer than this
 gateway"). Back up the gateway's state directory before upgrading if you may
 need to roll back; restoring that backup loses what changed since.
 

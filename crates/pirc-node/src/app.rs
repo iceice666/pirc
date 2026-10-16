@@ -433,6 +433,13 @@ fn project_summary(node: &Node, workspace: &Workspace) -> ApiResult<Map<String, 
                 "allowedPaths".into(),
                 Value::from(fields.allowed_paths.clone()),
             );
+            summary.insert(
+                "defaultModel".into(),
+                fields
+                    .default_model
+                    .as_ref()
+                    .map_or(Value::Null, |model| json!(model)),
+            );
             summary.insert("hash".into(), Value::from(hash.as_str()));
             summary.insert("trustedHash".into(), json!(trusted_hash));
             summary.insert(
@@ -730,7 +737,13 @@ async fn live_agent(runner: &crate::runner::Runner) -> Option<Value> {
         |model| json!({ "provider": model.get("provider"), "id": model.get("id") }),
     );
     let thinking = data.get("thinkingLevel").cloned().unwrap_or(Value::Null);
-    Some(json!({ "model": model, "thinkingLevel": thinking }))
+    let mut agent = json!({ "model": model, "thinkingLevel": thinking });
+    for key in ["approvalMode", "defaultApprovalMode"] {
+        if let Some(mode) = data.get(key).filter(|mode| mode.is_string()) {
+            agent[key] = mode.clone();
+        }
+    }
+    Some(agent)
 }
 
 /// JS truthiness of a JSON value.
@@ -824,9 +837,13 @@ fn next_agent_settings(
             .ok()?;
     let (model, thinking) =
         pirc_agent::config::session_settings(branch, config.default_model.as_ref(), &config.models);
+    let default_mode = pirc_agent::auto_mode::default_approval_mode(&config.features);
+    let mode = pirc_agent::auto_mode::recorded_approval_mode(branch).unwrap_or(default_mode);
     Some(json!({
         "model": model.map(|(provider, id)| json!({ "provider": provider, "id": id })),
         "thinkingLevel": thinking,
+        "approvalMode": mode.as_str(),
+        "defaultApprovalMode": default_mode.as_str(),
     }))
 }
 
@@ -990,6 +1007,9 @@ fn command_payload(value: &Value) -> ApiResult<CommandPayload> {
         },
         "set_thinking" => CommandPayload::SetThinking {
             level: enumerated(map, "level", &THINKING_LEVELS)?,
+        },
+        "set_approval_mode" => CommandPayload::SetApprovalMode {
+            mode: enumerated(map, "mode", &["read-only", "auto", "full-access"])?,
         },
         _ => return Err(ApiError::invalid_input()),
     })
@@ -1389,6 +1409,7 @@ mod tests {
             json!({ "type": "send_now", "queue": "x", "index": 0, "message": "m" }),
             json!({ "type": "send_now", "queue": "steering", "index": -1, "message": "m" }),
             json!({ "type": "set_thinking", "level": "huge" }),
+            json!({ "type": "set_approval_mode", "mode": "yolo" }),
             json!({ "type": "nope" }),
         ] {
             assert!(command_payload(&bad).is_err(), "{bad}");

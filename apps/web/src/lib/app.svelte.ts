@@ -26,6 +26,7 @@ import {
 import { needsInput } from './work';
 import { parseTodoWidget, TODO_WIDGET } from './todo';
 import type {
+  ApprovalMode,
   Attachment,
   ClientSessionState,
   CommandKind,
@@ -182,6 +183,9 @@ class AppState {
   );
   selectedModel = $derived(this.selectedModelOption ? modelKey(this.selectedModelOption) : '');
   thinking = $derived<ThinkingLevel>(this.#sessionState?.thinkingLevel ?? 'medium');
+  /** The session's approval mode as its node last reported it (undefined: unknown). */
+  approvalMode = $derived<ApprovalMode | undefined>(this.#sessionState?.approvalMode);
+  defaultApprovalMode = $derived<ApprovalMode | undefined>(this.#sessionState?.defaultApprovalMode);
   todo = $derived(parseTodoWidget(this.#sessionState?.widgets?.[TODO_WIDGET]));
   goal = $derived(parseGoalWidget(this.#sessionState?.widgets?.[GOAL_WIDGET]));
   statusLine = $derived([
@@ -983,6 +987,40 @@ class AppState {
       } catch (error) {
         this.pageError = errorMessage(error, 'Thinking level could not be changed.');
       }
+    }
+  }
+
+  /**
+   * Switch this session's approval mode. Unlike the model it is not kept for
+   * the next prompt: the mode shown is always the one in effect, so it needs
+   * this browser's control. The caller confirms `full-access` first.
+   */
+  async changeApprovalMode(mode: ApprovalMode) {
+    const state = this.sessionState;
+    if (!state || state.approvalMode === mode) return;
+    if (this.demo) {
+      this.sessionState = { ...state, approvalMode: mode };
+      return;
+    }
+    if (!this.activeSessionId || !this.hasControl || !state.control.generation) {
+      this.pageError = 'Take control of this session to change its approval mode.';
+      return;
+    }
+    const sessionId = this.activeSessionId;
+    try {
+      const receipt = await api.command(sessionId, {
+        commandId: uuid(),
+        kind: 'set_approval_mode',
+        controlGeneration: state.control.generation,
+        approvalMode: mode,
+      });
+      if (receipt.status !== 'accepted')
+        throw new Error(receipt.message ?? 'The agent did not accept the approval mode.');
+      const current = this.sessionState;
+      if (current && this.activeSessionId === sessionId)
+        this.sessionState = { ...current, approvalMode: mode };
+    } catch (error) {
+      this.pageError = errorMessage(error, 'Approval mode could not be changed.');
     }
   }
 

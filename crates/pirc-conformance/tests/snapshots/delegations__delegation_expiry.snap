@@ -49,7 +49,11 @@ expression: r.t.into_value()
             "model": null,
             "thinking": null
           },
-          "title": "Delegate to Repo on work?"
+          "title": "Delegate to Repo on work?",
+          "userRequestChoice": {
+            "checked": false,
+            "label": "Treat this task as my request for auto mode"
+          }
         },
         "rpcId": "<delegation:1>",
         "runnerEpoch": 0,

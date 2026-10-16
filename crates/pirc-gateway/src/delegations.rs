@@ -51,6 +51,11 @@ const NOTIFIED: &[&str] = &[
 const THINKING_LEVELS: &[&str] = &["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 /// How long after a watched event the delegated session is read.
 const CHECK_DELAY: Duration = Duration::from_millis(150);
+/// Finished delegations are kept this long after their last change,
+/// unless a later delegation follows them (decided 2026-10-16).
+pub const RETENTION_MS: i64 = 90 * 24 * 60 * 60 * 1000;
+/// How often old delegations are pruned.
+const PRUNE_EVERY: Duration = Duration::from_secs(60 * 60);
 
 fn next_step(status: &str) -> Option<&'static str> {
     Some(match status {
@@ -98,6 +103,10 @@ pub struct Delegation {
     /// Run it on this model; only the user picks it.
     pub model: Option<ModelRef>,
     pub thinking: Option<String>,
+    /// The user ticked "treat this task as my request for auto mode" when
+    /// approving: the delegated run's classifier counts the task as one of
+    /// their requests, for that run only.
+    pub as_user_request: bool,
     pub status: String,
     /// The delegated session (gateway session id), once dispatched.
     pub target_session_id: Option<String>,
@@ -133,6 +142,7 @@ fn row_of(row: &rusqlite::Row<'_>) -> rusqlite::Result<Delegation> {
         role: row.get("role")?,
         model,
         thinking: row.get("thinking")?,
+        as_user_request: row.get::<_, i64>("as_user_request")? != 0,
         status: row.get("status")?,
         target_session_id: row.get("target_session_id")?,
         result: row.get("result")?,
@@ -450,6 +460,11 @@ fn interaction_of(conn: &Connection, delegation: &Delegation) -> Value {
             "modelChoice": {
                 "model": delegation.model.as_ref().map(ModelRef::json),
                 "thinking": delegation.thinking,
+            },
+            // Clients that know it offer a checkbox, answered as `asUserRequest`.
+            "userRequestChoice": {
+                "label": "Treat this task as my request for auto mode",
+                "checked": delegation.as_user_request,
             },
         },
         "expiresAt": delegation.expires_at,
@@ -775,6 +790,8 @@ pub fn answer(
     let approved = field("confirmed") == Some(&Value::Bool(true));
     let mut model = delegation.model.clone();
     let mut thinking = delegation.thinking.clone();
+    // Only from the user's answer, never from the assistant's arguments.
+    let as_user_request = approved && field("asUserRequest") == Some(&Value::Bool(true));
     if approved {
         app.db
             .lock()
@@ -793,11 +810,12 @@ pub fn answer(
     let changed = {
         let at = now_ms();
         app.db.lock().execute(
-            "UPDATE delegations SET status=?, model_json=?, thinking=?, updated_at=? WHERE id=? AND status='pending_approval' AND expires_at>?",
+            "UPDATE delegations SET status=?, model_json=?, thinking=?, as_user_request=?, updated_at=? WHERE id=? AND status='pending_approval' AND expires_at>?",
             params![
                 if approved { "running" } else { "rejected" },
                 model.as_ref().map(|model| model.json().to_string()),
                 thinking,
+                as_user_request,
                 at,
                 delegation.id,
                 at
@@ -923,10 +941,13 @@ async fn start_task(app: &AppState, delegation: &Delegation) -> Result<(), Strin
     let mut task = Map::new();
     task.insert("customType".into(), json!("assistant-delegation"));
     task.insert("content".into(), json!(task_message(delegation)));
-    task.insert(
-        "details".into(),
-        json!({ "delegationId": delegation.id, "title": delegation.title }),
-    );
+    let mut details = json!({ "delegationId": delegation.id, "title": delegation.title });
+    if delegation.as_user_request {
+        // The delegated agent's auto mode counts the task as the user's
+        // request for the run it starts.
+        details["asUserRequest"] = json!(true);
+    }
+    task.insert("details".into(), details);
     if let Some(role) = delegation.role.as_deref().filter(|role| !role.is_empty())
         && previous.is_none()
     {
@@ -1101,6 +1122,18 @@ fn update(app: &App, id: &str, status: &str, forget_report: bool) {
     if let Err(error) = app.db.lock().execute(&sql, params![status, now_ms(), id]) {
         crate::log::warn(&format!("delegation {id}: {error}"));
     }
+    status_shown(app, id);
+}
+
+/// The session list shows a delegated session's status: clients reload it.
+fn status_shown(app: &App, id: &str) {
+    let owner = row(&app.db.lock(), id)
+        .ok()
+        .flatten()
+        .map(|delegation| delegation.owner_user);
+    if let Some(owner) = owner {
+        app.sessions_changed(Some(&owner));
+    }
 }
 
 fn finish(app: &AppState, id: &str, status: &str, result: &str) {
@@ -1111,6 +1144,7 @@ fn finish(app: &AppState, id: &str, status: &str, result: &str) {
     if !matches!(changed, Ok(1..)) {
         return;
     }
+    status_shown(app, id);
     announce(app, id);
     let background = app.clone();
     let id = id.to_owned();
@@ -1278,7 +1312,26 @@ fn publish_answered(app: &App, delegation: &Delegation) {
     );
 }
 
-/// Start following sessions (event subscription) and the expiry sweep.
+/// Delete finished delegations last changed before `before` that no other
+/// delegation follows; the number deleted. One that is followed goes once
+/// the delegation following it has gone.
+pub fn prune(conn: &Connection, before: i64) -> ApiResult<usize> {
+    Ok(conn.execute(
+        "DELETE FROM delegations WHERE status IN ('rejected','expired','completed','failed') AND updated_at<? AND NOT EXISTS (SELECT 1 FROM delegations later WHERE later.follows=delegations.id)",
+        [before],
+    )?)
+}
+
+fn prune_old(app: &App) {
+    match prune(&app.db.lock(), now_ms() - RETENTION_MS) {
+        Ok(0) => {}
+        Ok(count) => crate::log::info(&format!("pruned {count} delegations older than 90 days")),
+        Err(error) => crate::log::warn(&format!("pruning delegations: {}", error.message)),
+    }
+}
+
+/// Start following sessions (event subscription), the expiry sweep and
+/// the hourly pruning of old delegations.
 pub fn start(app: &AppState) {
     let (sender, mut receiver) = mpsc::unbounded_channel::<GatewayEvent>();
     // Listeners run under the hub's lock: hand the event on and return.
@@ -1305,12 +1358,17 @@ pub fn start(app: &AppState) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(period);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut pruned: Option<tokio::time::Instant> = None;
         loop {
             interval.tick().await;
             let Some(app) = weak.upgrade() else {
                 return;
             };
             sweep(&app);
+            if pruned.is_none_or(|at| at.elapsed() >= PRUNE_EVERY) {
+                prune_old(&app);
+                pruned = Some(tokio::time::Instant::now());
+            }
         }
     });
 }
@@ -1456,6 +1514,7 @@ mod tests {
             role: None,
             model: None,
             thinking: None,
+            as_user_request: false,
             status: "completed".into(),
             target_session_id: None,
             result: None,
@@ -1464,6 +1523,39 @@ mod tests {
             dispatched_at: None,
             created_at: 5,
         }
+    }
+
+    #[test]
+    fn prunes_old_finished_delegations_nobody_follows() {
+        let db = Db::memory();
+        let conn = db.lock();
+        let day = 24 * 60 * 60 * 1000;
+        let now = 1_000 * day;
+        for (id, status, age, follows) in [
+            ("old-done", "completed", 91, None),
+            ("old-failed", "failed", 91, None),
+            ("old-rejected", "rejected", 91, None),
+            ("old-running", "running", 91, None),
+            ("old-followed", "completed", 120, None),
+            ("follower", "completed", 10, Some("old-followed")),
+            ("recent", "completed", 89, None),
+        ] {
+            conn.execute(
+                "INSERT INTO delegations (id,owner_user,assistant_session_id,workspace_id,title,task,follows,status,expires_at,created_at,updated_at) VALUES (?,'u','chat','w','t','x',?,?,0,0,?)",
+                params![id, follows, status, now - age * day],
+            )
+            .unwrap();
+        }
+        assert_eq!(prune(&conn, now - RETENTION_MS).unwrap(), 3);
+        let mut left: Vec<String> = conn
+            .prepare("SELECT id FROM delegations ORDER BY id")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        left.sort();
+        assert_eq!(left, ["follower", "old-followed", "old-running", "recent"]);
     }
 
     #[test]
@@ -1529,7 +1621,9 @@ mod tests {
                 "kind": "confirm", "status": "pending",
                 "request": { "method": "confirm", "title": "Delegate to work:repo as general?",
                     "message": "Fix it\n\nFix the test.", "confirmLabel": "Delegate",
-                    "cancelLabel": "Don't", "modelChoice": { "model": null, "thinking": null } },
+                    "cancelLabel": "Don't", "modelChoice": { "model": null, "thinking": null },
+                    "userRequestChoice": {
+                        "label": "Treat this task as my request for auto mode", "checked": false } },
                 "expiresAt": 10, "createdAt": 5,
             })
             .to_string()

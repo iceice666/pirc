@@ -619,13 +619,64 @@ async fn agents_propose_within_their_scope() {
             .await
             .is_ok()
     );
-    let deleted = op(app, &chat, "schedule.delete", json!({ "id": id }))
+    // Nobody approves in a run's session, so it may not ask to delete.
+    assert_eq!(
+        message(op(app, &coding, "schedule.delete", json!({ "id": id })).await).0,
+        403
+    );
+
+    // Deleting is a proposal the user approves (L10).
+    let proposed = op(app, &chat, "schedule.delete", json!({ "id": id }))
         .await
         .unwrap();
+    let proposal = proposed["proposalId"].as_str().unwrap().to_owned();
     assert_eq!(
-        deleted,
-        json!({ "id": id, "title": "CI check", "deleted": true })
+        proposed,
+        json!({ "id": id, "title": "CI check", "proposalId": proposal,
+            "status": "pending_approval" })
     );
+    assert!(with(app, |ctx| ctx.get(USER, &id)).is_ok());
+    let dialog = super::pending_interactions(app, &chat.session.id);
+    let request = &dialog.last().unwrap()["request"];
+    assert_eq!(request["title"], "Delete the schedule “CI check”?");
+    assert_eq!(request["confirmLabel"], "Delete");
+    // Declined: it stays.
+    super::answer(
+        app,
+        &chat.session.id,
+        &proposal,
+        USER,
+        Some(&json!({ "confirmed": false })),
+    )
+    .unwrap();
+    assert!(with(app, |ctx| ctx.get(USER, &id)).is_ok());
+    // Approved: it is gone, with its runs.
+    let proposal = op(app, &chat, "schedule.delete", json!({ "id": id }))
+        .await
+        .unwrap()["proposalId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let answered = super::answer(
+        app,
+        &chat.session.id,
+        &proposal,
+        USER,
+        Some(&json!({ "confirmed": true })),
+    )
+    .unwrap();
+    assert_eq!(answered.unwrap()["deleted"], true);
+    assert_eq!(message(with(app, |ctx| ctx.get(USER, &id))).0, 404);
+    let runs: i64 = app
+        .db
+        .lock()
+        .query_row(
+            "SELECT count(*) FROM schedule_runs WHERE schedule_id=?",
+            [&id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(runs, 0);
 }
 
 #[tokio::test]

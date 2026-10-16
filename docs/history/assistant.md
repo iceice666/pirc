@@ -27,7 +27,7 @@ Scopes are kept apart: the daemon checks `owner_user` on every call; chat sessio
 1. **Origin is computed by code, never by the model.** Origins are the roles of the messages behind a memory (`user`, `assistant`, `tool:<name>`, `custom:<type>`); sources are their ids. The model only supplies the user's words (`quote`), which code must find in the human's own `role: 'user'` messages, not in custom, delegated or teammate messages. Mutation tests showed `findQuote` and the `workspace.kind !== 'chat'` check in `daemon/agent-ops.ts` are load-bearing.
 2. **USER changes need a human source** and wait for approval with the exact quote.
 3. **Replayed content is data.** Recalled memory, snapshots, delegation results and team events never count as sources for USER; the observer renders `recall` results as `[recalled memory omitted: not new evidence]`.
-4. **Delegated tasks enter the target session as custom messages** (`role: 'custom'`), so auto mode's `recentUserRequests` (only `role: 'user'`) never takes the assistant's words for the human's request.
+4. **Delegated tasks enter the target session as custom messages** (`role: 'custom'`), so auto mode's `recentUserRequests` (only `role: 'user'`) never takes the assistant's words for the human's request. The one exception is the user's own choice: a delegation approved with "treat this task as my request for auto mode" ticked (2026-10-16) is read as a request during the run it starts, and only then.
 5. **Approvals are decided on the daemon**, for USER proposals and delegations alike. A node, or anyone holding a node token, cannot approve.
 6. **Node secrets leave the agent environment.** `node/secrets.ts` strips `SECRET_ENV` (`PIRC_NODE_TOKEN(S)`, `PIRC_*SECRET*`) before spawning agents.
 7. **Memory text is redacted before storage** (`pirc_dev_…`, `sk-…`, `ghp_…`/`github_pat_…`, `AKIA…`, PEM keys, `Bearer …`), on both node workspace memory and gateway memory.
@@ -121,6 +121,12 @@ Roles replace agent-supplied model/thinking choices for subagents, teammates and
 
 Delegated sessions are normal main sessions with workspace memory; they produce no global memory. Auto mode treats a dangerous command there as needing the user's confirmation, and the chat is told the session is waiting (see roadmap item 7).
 
+Decided 2026-10-16 and shipped the same day:
+
+- **Auto mode in delegated sessions.** The default stays: a dangerous command waits for the user in the delegated session. The approval card adds a checkbox, "treat this task as my request for auto mode" (`request.userRequestChoice`, answered as `asUserRequest: true`, accepted only from the user's answer and stored as `as_user_request`). The task is then delivered with `details.asUserRequest`, and the delegated agent's classifier reads that message (without the gateway's label) among the user's recent requests until the run it starts ends; later runs in the session do not, unless a follow-up is approved with the box ticked too. Delegated sessions start in the node's default approval mode, never in a chat's `full-access`.
+- **Settling.** Delegated sessions are left as they are once their result is delivered. The session list shows how each ended: the session origin carries the delegation's `status`, the sidebar marks finished ones "Done" or "Failed", and the gateway refreshes the list when a delegation's status changes.
+- **Retention.** Finished delegations (`rejected`, `expired`, `completed`, `failed`) whose last change is more than 90 days old are deleted hourly, unless a later delegation `follows` them (`delegations::prune`, index `delegations_follows`); a followed one goes once its follower has. Forgotten memory stays as tombstones, and mirrored records last as long as the node's ledger keeps them.
+
 ```sql
 delegations(id TEXT PRIMARY KEY,                -- d + 8 hex
   owner_user TEXT NOT NULL, assistant_session_id TEXT NOT NULL,
@@ -128,6 +134,7 @@ delegations(id TEXT PRIMARY KEY,                -- d + 8 hex
   follows TEXT,
   role TEXT,                                    -- role the new session starts in (migration)
   model_json TEXT, thinking TEXT,               -- the user's choice on the approval card
+  as_user_request INTEGER NOT NULL DEFAULT 0,   -- the auto-mode checkbox (schema 1003)
   status TEXT NOT NULL,  -- 'pending_approval' | 'rejected' | 'expired' | 'running' | 'waiting_input' | 'completed' | 'failed'
   target_session_id TEXT, result TEXT, notified_status TEXT,
   expires_at INTEGER NOT NULL, dispatched_at INTEGER,

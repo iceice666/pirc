@@ -68,11 +68,15 @@ fn engine_neutral(body: &mut Value) {
 }
 
 fn trust_hash(project: &Value) -> String {
-    let canonical = canonical_json(&json!({
+    let mut fields = json!({
         "allowedPaths": project["allowedPaths"],
         "env": project["env"],
         "hooks": project["hooks"],
-    }));
+    });
+    if !project["defaultModel"].is_null() {
+        fields["defaultModel"] = project["defaultModel"].clone();
+    }
+    let canonical = canonical_json(&fields);
     let digest = Sha256::digest(format!("pirc-project-trust-v1\n{canonical}"));
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
@@ -304,7 +308,7 @@ async fn node_workspaces() {
         .await;
     let hash = first["project"]["hash"].as_str().unwrap().to_owned();
     r.t.note(
-        "the hash is sha256 of \"pirc-project-trust-v1\\n\" and the canonical JSON of allowedPaths, env and hooks",
+        "the hash is sha256 of \"pirc-project-trust-v1\\n\" and the canonical JSON of allowedPaths, env, hooks and (when set) defaultModel",
         json!(trust_hash(&first["project"]) == hash),
     );
     r.send(

@@ -181,17 +181,26 @@ fn reply_text(content: &[AssistantContent]) -> String {
 }
 
 /// `recentUserRequests`: the human's most recent requests (never tool
-/// output, which may be attacker-controlled).
-fn recent_user_requests(entries: &[(String, Message)]) -> Vec<String> {
+/// output, which may be attacker-controlled), and the custom messages in
+/// `also` (a delegated task the user approved as their request, during
+/// its run), without the gateway's label.
+fn recent_user_requests(entries: &[(String, Message)], also: &[String]) -> Vec<String> {
     let mut out = Vec::new();
-    for (_, message) in entries.iter().rev() {
+    for (id, message) in entries.iter().rev() {
         if out.len() >= USER_MESSAGES {
             break;
         }
-        let Message::User { content, .. } = message else {
-            continue;
+        let content = match message {
+            Message::User { content, .. } => content.clone(),
+            Message::Custom { content, .. } if also.contains(id) => {
+                let content = content
+                    .strip_prefix(crate::rpc::GATEWAY_MESSAGE_LABEL)
+                    .map_or(content.as_str(), |rest| rest.trim_start_matches('\n'));
+                UserContent::Text(content.to_owned())
+            }
+            _ => continue,
         };
-        let text = match content {
+        let text = match &content {
             UserContent::Text(text) => text.clone(),
             UserContent::Blocks(blocks) => blocks
                 .iter()
@@ -294,7 +303,7 @@ pub fn classifier_prompt(
     hint: &str,
     use_memory: bool,
 ) -> String {
-    let requests = recent_user_requests(&host.context_entries());
+    let requests = recent_user_requests(&host.context_entries(), &host.run_user_requests());
     let notes = if use_memory {
         memory_notes(&host.branch())
     } else {

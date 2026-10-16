@@ -219,6 +219,9 @@ struct Proposal {
     session_id: String,
     schedule_id: Option<String>,
     spec: Spec,
+    /// Approving deletes `schedule_id` (and `spec` is what it was) instead
+    /// of saving `spec`.
+    delete: bool,
     status: String,
     expires_at: i64,
     created_at: i64,
@@ -972,6 +975,29 @@ impl Ctx<'_> {
             resolve_workspace,
             true,
         )?;
+        let id = self.insert_proposal(user, session, schedule_id, &spec, "save")?;
+        Ok((id, spec))
+    }
+
+    /// An agent proposes deleting `schedule` (L10); the user approves it in
+    /// `session`'s chat, and nothing is deleted before.
+    fn propose_delete(
+        &mut self,
+        user: &str,
+        session: &Session,
+        schedule: &Schedule,
+    ) -> ApiResult<String> {
+        self.insert_proposal(user, session, Some(&schedule.id), &schedule.spec, "delete")
+    }
+
+    fn insert_proposal(
+        &mut self,
+        user: &str,
+        session: &Session,
+        schedule_id: Option<&str>,
+        spec: &Spec,
+        operation: &str,
+    ) -> ApiResult<String> {
         let waiting = self
             .proposal_rows("owner_user=? AND status='pending'", &[&user])?
             .len();
@@ -985,15 +1011,16 @@ impl Ctx<'_> {
         let id = self.new_id("schedule_proposals", "p")?;
         let at = now_ms();
         self.conn.execute(
-            "INSERT INTO schedule_proposals (id,owner_user,session_id,schedule_id,spec_json,status,expires_at,created_at) VALUES (?,?,?,?,?,'pending',?,?)",
+            "INSERT INTO schedule_proposals (id,owner_user,session_id,schedule_id,spec_json,status,expires_at,created_at,operation) VALUES (?,?,?,?,?,'pending',?,?,?)",
             params![
                 id,
                 user,
                 session.id,
                 schedule_id,
-                serde_json::to_string(&spec).unwrap_or_default(),
+                serde_json::to_string(spec).unwrap_or_default(),
                 at + self.app.config.delegation_ttl_ms as i64,
                 at,
+                operation,
             ],
         )?;
         let proposal = self
@@ -1008,7 +1035,7 @@ impl Ctx<'_> {
             kind: "interaction_created",
             data,
         });
-        Ok((id, spec))
+        Ok(id)
     }
 
     /// Confirmations waiting in a chat, shaped like a node's interactions.
@@ -1065,6 +1092,28 @@ impl Ctx<'_> {
         }
         self.conn
             .require_session_capability(session_id, Capability::Schedules)?;
+        if proposal.delete {
+            let id = proposal.schedule_id.clone().unwrap_or_default();
+            // Closed first: deleting expires the schedule's pending proposals.
+            self.close_proposal(&proposal, "approved")?;
+            self.delete(user, &id).map_err(|error| {
+                if error.status == 500 {
+                    error
+                } else {
+                    ApiError::new(
+                        409,
+                        "conflict",
+                        format!("Could not delete the schedule: {}", error.message),
+                    )
+                }
+            })?;
+            return Ok(Some(json!({
+                "interactionId": interaction_id,
+                "status": "answered",
+                "scheduleId": id,
+                "deleted": true,
+            })));
+        }
         let saved = match &proposal.schedule_id {
             Some(schedule_id) => self.get(user, schedule_id).and_then(|current| {
                 let spec = self.recheck(user, &proposal.spec)?;
@@ -1162,6 +1211,7 @@ impl Ctx<'_> {
                         thinking: None,
                         notify: String::new(),
                     },
+                    delete: row.get::<_, String>("operation")? == "delete",
                     status: row.get("status")?,
                     expires_at: row.get("expires_at")?,
                     created_at: row.get("created_at")?,
@@ -1187,6 +1237,37 @@ impl Ctx<'_> {
             Some(id) => self.row(id)?,
             None => None,
         };
+        if proposal.delete {
+            let title = current
+                .as_ref()
+                .map_or(&spec.title, |current| &current.spec.title);
+            let message = [
+                title.clone(),
+                String::new(),
+                format!("Where: {}", self.label(&spec.workspace_id)),
+                format!("When: {}", describe_when(spec)),
+                String::new(),
+                "The schedule and its run history are deleted; run sessions stay.".to_owned(),
+            ]
+            .join("\n");
+            return Ok(json!({
+                "id": proposal.id,
+                "rpcId": proposal.id,
+                "sessionId": proposal.session_id,
+                "runnerEpoch": 0,
+                "kind": "confirm",
+                "status": "pending",
+                "request": {
+                    "method": "confirm",
+                    "title": format!("Delete the schedule “{title}”?"),
+                    "message": message,
+                    "confirmLabel": "Delete",
+                    "cancelLabel": "Keep it",
+                },
+                "expiresAt": proposal.expires_at,
+                "createdAt": proposal.created_at,
+            }));
+        }
         let next = fire(spec, now_ms())?;
         let mut lines = vec![
             spec.title.clone(),

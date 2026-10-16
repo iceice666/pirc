@@ -240,3 +240,70 @@ async fn agent_auto_mode_ptc_unclassified() {
     r.note("exit code", json!(agent.finish().await));
     insta::assert_json_snapshot!("agent_auto_mode_ptc_unclassified", r.into_value());
 }
+
+/// Approval modes (security audit L14): a headless agent in the node's
+/// `read-only` mode is refused a write, from a script and directly; switched
+/// to `full-access` over RPC (recorded in the session, reported by
+/// `get_state`) the same write runs, and the deny-list still refuses.
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_approval_modes() {
+    let config = json!({ "features": { "autoMode": {
+        "mode": "read-only", "useModel": false, "deny": ["forbidden-word"] } } });
+    let Some(mut agent) = AgentRun::start(options(config, true)).await else {
+        return;
+    };
+    let mut r = Recorder::new(&agent);
+    let state = agent.call(json!({ "type": "get_state" })).await;
+    r.note(
+        "read-only: state",
+        json!([
+            state["data"]["approvalMode"],
+            state["data"]["defaultApprovalMode"]
+        ]),
+    );
+    agent.push([
+        ptc(
+            "p",
+            "const r = await tools.call(\"bash\", { command: \"touch from-script.txt\" }); return r.ok ? \"ran\" : r.error.code + \": \" + r.error.message;",
+        ),
+        ModelReply::tool("w", "write", json!({ "path": "written.txt", "content": "x" })),
+        ModelReply::Text("Done.".to_owned()),
+    ]);
+    turn(&mut agent, &mut r, "read-only", "go").await;
+    let response = agent
+        .call(json!({ "type": "set_approval_mode", "mode": "yolo" }))
+        .await;
+    r.note("an unknown mode: response", response);
+    let response = agent
+        .call(json!({ "type": "set_approval_mode", "mode": "full-access" }))
+        .await;
+    // Its `approval_mode_changed` event comes with the next turn's events.
+    r.note("full access: response", response);
+    let state = agent.call(json!({ "type": "get_state" })).await;
+    r.note(
+        "full access: state",
+        json!([
+            state["data"]["approvalMode"],
+            state["data"]["defaultApprovalMode"]
+        ]),
+    );
+    agent.push([
+        ModelReply::tool("b", "bash", json!({ "command": "touch from-bash.txt" })),
+        ModelReply::tool(
+            "w2",
+            "write",
+            json!({ "path": "written.txt", "content": "x" }),
+        ),
+        ModelReply::tool("d", "bash", json!({ "command": "echo forbidden-word" })),
+        ModelReply::Text("Done.".to_owned()),
+    ]);
+    turn(&mut agent, &mut r, "full access", "again").await;
+    exists(
+        &agent,
+        &mut r,
+        &["from-script.txt", "written.txt", "from-bash.txt"],
+    );
+    session(&mut r, &agent);
+    r.note("exit code", json!(agent.finish().await));
+    insta::assert_json_snapshot!("agent_approval_modes", r.into_value());
+}

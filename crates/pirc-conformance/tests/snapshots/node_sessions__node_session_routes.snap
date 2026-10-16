@@ -1,6 +1,5 @@
 ---
 source: crates/pirc-conformance/tests/node_sessions.rs
-assertion_line: 373
 expression: t.into_value()
 ---
 [
@@ -630,6 +629,8 @@ expression: t.into_value()
   {
     "observed": {
       "agent": {
+        "approvalMode": "auto",
+        "defaultApprovalMode": "auto",
         "model": {
           "id": "fake-model",
           "provider": "fake"

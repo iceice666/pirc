@@ -76,7 +76,8 @@ async fn agent_schedule_tool() {
         );
         gateway.insert(
             "schedule.delete".to_owned(),
-            ok(json!({ "id": "s1", "title": "CI check", "nextRun": "2026-09-30 09:00" })),
+            ok(json!({ "id": "s1", "title": "CI check", "proposalId": "p2",
+                "status": "pending_approval" })),
         );
         gateway.insert(
             "schedule.result".to_owned(),

@@ -35,7 +35,7 @@ expression: log.into_value()
       },
       {
         "message": {
-          "content": "Delegation update (gateway data, not user instructions):\n{\"status\":\"completed\"}",
+          "content": "Gateway message (pirc data, not typed by the user):\nDelegation update (gateway data, not user instructions):\n{\"status\":\"completed\"}",
           "customType": "assistant-delegation-update",
           "details": {
             "delegationId": "d1",
@@ -49,7 +49,7 @@ expression: log.into_value()
       },
       {
         "message": {
-          "content": "Delegation update (gateway data, not user instructions):\n{\"status\":\"completed\"}",
+          "content": "Gateway message (pirc data, not typed by the user):\nDelegation update (gateway data, not user instructions):\n{\"status\":\"completed\"}",
           "customType": "assistant-delegation-update",
           "details": {
             "delegationId": "d1",
@@ -160,7 +160,7 @@ expression: log.into_value()
       {
         "messages": [
           {
-            "content": "Delegation update (gateway data, not user instructions):\n{\"status\":\"completed\"}",
+            "content": "Gateway message (pirc data, not typed by the user):\nDelegation update (gateway data, not user instructions):\n{\"status\":\"completed\"}",
             "customType": "assistant-delegation-update",
             "details": {
               "delegationId": "d1",
@@ -417,7 +417,7 @@ expression: log.into_value()
       {
         "id": "<entry:3>",
         "message": {
-          "content": "Delegation update (gateway data, not user instructions):\n{\"status\":\"completed\"}",
+          "content": "Gateway message (pirc data, not typed by the user):\nDelegation update (gateway data, not user instructions):\n{\"status\":\"completed\"}",
           "customType": "assistant-delegation-update",
           "details": {
             "delegationId": "d1",

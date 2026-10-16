@@ -279,7 +279,16 @@ fn schedule_result() -> Value {
         ),
         action(
             "delete",
-            vec![("id", str_(None)), ("title", str_(None))],
+            vec![
+                ("id", str_(None)),
+                ("title", str_(None)),
+                (
+                    "proposalId",
+                    str_(Some(
+                        "The user approves the deletion in the chat; the schedule stays until then",
+                    )),
+                ),
+            ],
             &[],
         ),
         action(
@@ -493,7 +502,33 @@ impl ScheduleTool {
                     false,
                 ))
             }
-            "pause" | "resume" | "delete" => {
+            "delete" => {
+                if id.is_empty() {
+                    return id_required();
+                }
+                let result = match request("schedule.delete", id_args()).await {
+                    Ok(result) => result,
+                    Err(error) => return failure(error),
+                };
+                let mut data = Map::new();
+                data.insert("action".to_owned(), json!(action));
+                data.insert("id".to_owned(), json!(id));
+                put(&mut data, "title", result.get("title"));
+                put(&mut data, "proposalId", result.get("proposalId"));
+                let mut details = Map::new();
+                details.insert("id".to_owned(), json!(id));
+                put(&mut details, "proposalId", result.get("proposalId"));
+                Ok(typed(
+                    format!(
+                        "Asked the user to approve deleting “{}”. It stays, and keeps running, until they do; check with list afterwards.",
+                        shown(result.get("title"))
+                    ),
+                    Value::Object(data),
+                    Some(Value::Object(details)),
+                    false,
+                ))
+            }
+            "pause" | "resume" => {
                 if id.is_empty() {
                     return id_required();
                 }
@@ -501,10 +536,10 @@ impl ScheduleTool {
                     Ok(result) => result,
                     Err(error) => return failure(error),
                 };
-                let done = match action {
-                    "pause" => "Paused",
-                    "resume" => "Resumed",
-                    _ => "Deleted",
+                let done = if action == "pause" {
+                    "Paused"
+                } else {
+                    "Resumed"
                 };
                 let next_run = result
                     .get("nextRun")
@@ -513,9 +548,7 @@ impl ScheduleTool {
                 data.insert("action".to_owned(), json!(action));
                 data.insert("id".to_owned(), json!(id));
                 put(&mut data, "title", result.get("title"));
-                if action != "delete" {
-                    put(&mut data, "nextRun", next_run);
-                }
+                put(&mut data, "nextRun", next_run);
                 Ok(typed(
                     format!(
                         "{done} “{}”{}.",
@@ -641,12 +674,14 @@ async fn cron_command(agent: &Rc<Agent>, args: &str) -> Result<(), String> {
                 shown(result.get("runId")),
                 shown(result.get("status"))
             )
+        } else if verb == "delete" {
+            // The gateway cannot tell this command from the model (L10).
+            format!(
+                "Confirm deleting “{}” in this chat.",
+                shown(result.get("title"))
+            )
         } else {
-            let done = match verb {
-                "pause" => "Paused",
-                "resume" => "Resumed",
-                _ => "Deleted",
-            };
+            let done = if verb == "pause" { "Paused" } else { "Resumed" };
             format!("{done} “{}”.", shown(result.get("title")))
         };
         ui.notify(&message, NotifyLevel::Info);

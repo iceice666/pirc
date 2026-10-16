@@ -2,7 +2,7 @@
 
 [User guides](README.md) · [All documentation](../README.md)
 
-The gateway keeps each user's schedules and starts every run in a new session of the schedule's workspace, delivered as a scheduled-task message (never as your words). Manage them in the web app (Settings → Schedules), on Android (More → Schedules), with `/cron`, or by asking an agent. In the web and Android schedule forms, you may choose a model and thinking level per schedule; otherwise the normal default applies. An agent can propose a schedule or change, but cannot choose its model or thinking level.
+The gateway keeps each user's schedules and starts every run in a new session of the schedule's workspace, delivered as a scheduled-task message (never as your words). Manage them in the web app (Settings → Schedules), on Android (More → Schedules), with `/cron`, or by asking an agent. In the web and Android schedule forms, you may choose a model and thinking level per schedule; otherwise the normal default applies. An agent can propose a schedule, a change or a deletion, which you approve in the chat (`/cron delete` asks too); it can pause and resume on its own, but cannot choose a model or thinking level.
 
 - **Nothing runs unasked.** A fire time the gateway slept through, or whose node was offline, becomes one _missed_ run that starts only when you allow it; a fire time while the previous run is still going is _skipped_. A run that waits for an answer (a dangerous command, a question) stays waiting until you open its session.
 - **Time zones**: the web and Android apps default to the device's zone; an agent defaults to the gateway's (`PIRC_TIMEZONE`, else the system's; `services.pirc.timeZone` in the Nix module).

@@ -10,18 +10,18 @@ This file is the work queue, not authorization. Every phase still needs the user
 
 ## Recommended order
 
-| Phase | Theme                                            | Why here                                                                               |
-| ----- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| 1     | Review and release the unreleased assistant work | Schema 1002 and three features sit in Unreleased; the release gets riskier as it grows |
-| 2     | ~~Android approval check (assistant 3a)~~        | Deferred: Android rewrite in progress (see below)                                      |
-| 3     | Network taint (assistant 5)                      | Small; improves memory trust; pairs with browser click/type classification             |
-| 4     | Decision session                                 | Cheap; unblocks phases 5, 6 and 8                                                      |
-| 5     | Security hygiene                                 | Re-audited 2026-10-15; I5 done, M13 gap next                                           |
-| 6     | ~~Android parity batch~~                         | Deferred: Android rewrite in progress (see below)                                      |
-| 7     | OM model policy (E3), then `secure_delete` (E1)  | Small and independent; E1 must precede hard delete                                     |
-| 8     | Project-only memory (B), then hard delete (D)    | Large designs; need phase 4 decisions                                                  |
-| —     | Manual validation                                | Needs real hardware or hosts; attach to the release that needs it                      |
-| —     | Watch, do not build                              | Waits for evidence from use                                                            |
+| Phase | Theme                                            | Why here                                                                                 |
+| ----- | ------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| 1     | Review and release the unreleased assistant work | Schema 1003 and several features sit in Unreleased; the release gets riskier as it grows |
+| 2     | ~~Android approval check (assistant 3a)~~        | Deferred: Android rewrite in progress (see below)                                        |
+| 3     | Network taint (assistant 5)                      | Small; improves memory trust; pairs with browser click/type classification               |
+| 4     | Decision session                                 | Cheap; unblocks phases 5, 6 and 8                                                        |
+| 5     | Security hygiene                                 | Re-audited 2026-10-15; I5 done, M13 gap next                                             |
+| 6     | ~~Android parity batch~~                         | Deferred: Android rewrite in progress (see below)                                        |
+| 7     | OM model policy (E3), then `secure_delete` (E1)  | Small and independent; E1 must precede hard delete                                       |
+| 8     | Project-only memory (B), then hard delete (D)    | Large designs; need phase 4 decisions                                                    |
+| —     | Manual validation                                | Needs real hardware or hosts; attach to the release that needs it                        |
+| —     | Watch, do not build                              | Waits for evidence from use                                                              |
 
 **Android deferred (2026-10-16).** An Android rewrite is in progress, so phases 2 and 6 and the Android decisions in phase 4 are on hold. Do not implement them against the current client; when the rewrite lands, re-check each item against it and carry over what still applies.
 
@@ -29,7 +29,7 @@ This file is the work queue, not authorization. Every phase still needs the user
 
 - [x] Review assistant item 2 (USER in coding sessions), item 4 (repository identity by normalized `origin`, schema 1001) and item 6 (projects linked to workspaces, schema 1002). Reviewed 2026-10-16 by three independent reviewers: no high or medium findings. Low findings fixed: remotes on the node itself (`localhost`, `127.*`, `0.0.0.0`, `file:`) get no repository key; git files are opened with `O_NOCTTY` after a regular-file check; repository keys tag notes and links only for directory workspaces; invalid keys are dropped before being relayed to browsers; a `delegate` to a linked workspace its connected node no longer has answers 404 "removed" instead of 503 "offline"; the USER warning says "unreachable" only when the gateway did not answer; the Forget text says started sessions keep their USER. Accepted and documented: `.git` symlinks and absolute `gitdir:`/`commondir` are followed (only a normalized key leaves the node). Not done (nits): case-insensitive host paths, `BEGIN IMMEDIATE` for concurrent migrations, the registration file reads on the async task, per-link `created_at`, a conformance case for the 3 s `assistant.context` timeout.
 - [ ] Run the PTC manual real-runtime checks (below) and any NixOS/Linux validation the release depends on.
-- [ ] Release following the [release policy](../docs/development/releasing.md) and [Upgrades](../docs/deploy/upgrades.md) (gateway schema 1002 is refused by 0.4.x; node protocol unchanged at 10).
+- [ ] Release following the [release policy](../docs/development/releasing.md) and [Upgrades](../docs/deploy/upgrades.md) (gateway schema 1003 is refused by 0.4.x; node protocol unchanged at 10).
 
 Project-isolation E2 (OM config diagnostics) needs no action: it was ported to Rust (`crates/pirc-agent/src/config/memory.rs`) and shipped in 0.4.x.
 
@@ -101,14 +101,15 @@ Re-audited against Rust on 2026-10-15; see the [re-audit](../docs/history/securi
 - [x] **L8** done 2026-10-15 (limits; no rate limiter): JSON bodies are capped at 4 MiB (`pirc-gateway/src/http.rs` `JSON_BODY_MAX_BYTES`; uploads keep `upload_max_bytes`), and command payloads keep only the node's keys with bounded values before they are stored and forwarded (`routes.rs` `command_payload`). A request rate limiter is not needed under the single-user model (decided 2026-10-16).
 - [x] **I3** done 2026-10-15: mirrored memory records have a per-node quota of 200,000 rows (tombstones included) and 64 MiB of note text (`memory_records.rs` `Quota`; rows past it are not kept, and a warning is logged), and event replay is bounded by 8 MiB per session as well as by count (`events.rs` `REPLAY_MAX_BYTES`).
 - [x] **L15** done 2026-10-15: no source maps in the web build; dev/preview bind localhost; `check.yml`/`android.yml` actions pinned by commit SHA (tag in a comment); NixOS units gain `CapabilityBoundingSet=`, `RestrictRealtime=`, `RestrictAddressFamilies=` (both), and `SystemCallFilter=@system-service`, `SystemCallArchitectures=native`, `ProtectProc=invisible`, `RestrictNamespaces=` (gateway only; the node keeps namespaces and mount calls for bubblewrap). Checked: the gateway under those filters in a user `systemd-run`, bubblewrap under the node's address-family and realtime limits, module evaluation. Not checked: a real NixOS host (see manual validation).
-- [ ] Apply phase 4 decisions (2026-10-16):
-  - [ ] Approval modes `read-only`/`auto`/`full-access` (L14), with config migration, per-session switch and web warning.
-  - [ ] L12 `defaultModel` under the trust gate.
-  - [ ] L11 label hook/`deliver` content; session-start hook output out of the system prompt or fenced.
-  - [ ] L13 label repository skills as untrusted.
-  - [ ] L10 schedule delete through a proposal.
-  - [ ] Document the single-user model (L5, I4) in the deploy docs; record the accepted items (L3, L6, L8 rate limiter, I1, I8, I9) in the [re-audit](../docs/history/security-audit.md#re-audit-against-the-rust-code-2026-10-15).
-  - [ ] Assistant: auto-mode checkbox on the delegation confirmation; delegation status in the session list; prune `delegations` after 90 days unless followed.
+- [x] Apply phase 4 decisions, done 2026-10-16 (gateway schema 1003). Evidence in the [re-audit](../docs/history/security-audit.md#re-audit-against-the-rust-code-2026-10-15) and the [assistant history](../docs/history/assistant.md#delegation):
+  - [x] Approval modes (L14): `features.autoMode.mode` `read-only`/`auto`/`full-access` (`auto_mode/mod.rs` `ApprovalMode`); `enabled:false` maps to `full-access`, `true` to `auto`, with a config warning. Read-only asks for every non-read verdict and for `write`/`edit` and asks no classifier; full access skips the gate; deny-list and lease hold in every mode. Per-session `set_approval_mode` (recorded as `agent.approvalMode`, passed to teammates/subagents at spawn and on change), web picker with a full-access confirmation and a persistent note above the composer.
+  - [x] L12: `defaultModel` is trust-gated; the warning names the model; Settings shows it. Hashes of configs without a model unchanged.
+  - [x] L11: hook stdout fenced in `<hook_output>` and labelled (session-start output stays in the system prompt, fenced); gateway deliveries start with a "Gateway message (pirc data, not typed by the user)" line.
+  - [x] L13: repository skills listed apart as untrusted (`<repository_skills>`); `/skill` marks them.
+  - [x] L10: agent and `/cron` schedule deletes are proposals the user approves; a scheduled run cannot ask.
+  - [x] Single-user model documented (`docs/deploy/README.md` "One user", `gateway.md`); L3, L5, L6, L8 rate limiter, I1, I4, I8, I9 recorded as accepted in the re-audit.
+  - [x] Assistant: "treat this task as my request for auto mode" checkbox (`asUserRequest`, counted by the classifier for the run the task starts only); delegation status in the session list ("Done"/"Failed"); finished delegations older than 90 days pruned hourly unless followed.
+  - Checked: unit tests, the web's typecheck/tests/build, and the conformance suite on a NixOS (aarch64) VM with the snapshots re-recorded there (new scenario `agent_approval_modes`); `node_panels_access`/`node_panels_git` differ there only by the VM's newer git usage text and were not re-recorded. Not checked: the web changes in a browser, and the approval-mode switch through a real gateway and node.
 - [ ] Sandbox limitations to revisit (all confirmed): Linux allows every Unix socket not on the known-host-socket list (`sandbox/linux.rs`; move inference off Unix sockets or bind-mount narrowly); the whole workspace-memory directory is a writable root, so an agent can append to other repositories' ledgers (`pirc-policy/src/session.rs`); domain approvals are session-only.
 - [ ] Accepted PTC limitation, partly addressed by phase 3: a `bash` operation that names a network fetcher or URL now fences the `ptc` result as untrusted; other `bash` output, `memory_search`, `delegation_status` and `agent_inbox` results are still not marked untrusted (`ptc/registry.rs`).
 

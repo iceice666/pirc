@@ -4707,6 +4707,8 @@ expression: t.into_value()
   },
   {
     "observed": {
+      "approvalMode": "auto",
+      "defaultApprovalMode": "auto",
       "model": {
         "id": "ui-model",
         "provider": "ui"

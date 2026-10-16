@@ -136,3 +136,42 @@ it('applies chat memory decisions without requiring a node snapshot', () => {
     type: 'session_deleted',
   });
 });
+
+it('sends the delegation checkbox only when an approval ticks it', async () => {
+  const bodies: any[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(init.body as string));
+      return new Response(null, { status: 204 });
+    }),
+  );
+  await api.answerInteraction('s', 'd1', { action: 'answer', value: true, asUserRequest: true }, 1);
+  await api.answerInteraction(
+    's',
+    'd1',
+    { action: 'answer', value: false, asUserRequest: true },
+    1,
+  );
+  await api.answerInteraction('s', 'd1', { action: 'answer', value: true }, 1);
+  expect(bodies.map((body) => body.answer)).toEqual([
+    { confirmed: true, asUserRequest: true },
+    { confirmed: false },
+    { confirmed: true },
+  ]);
+});
+
+it('sends an approval mode and reads it from events', async () => {
+  const { bodies } = mockCommands();
+  await api.command('s', {
+    commandId: 'c',
+    kind: 'set_approval_mode',
+    controlGeneration: 1,
+    approvalMode: 'full-access',
+  });
+  expect(bodies[0].payload).toEqual({ type: 'set_approval_mode', mode: 'full-access' });
+  const event = (mode: unknown) =>
+    normalizeEvent({ type: 'pi_event', data: { type: 'approval_mode_changed', mode } }).event;
+  expect(event('read-only')).toEqual({ type: 'approval_mode_changed', mode: 'read-only' });
+  expect(event('yolo')).toEqual({ type: 'noop' });
+});

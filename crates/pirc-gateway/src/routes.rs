@@ -809,7 +809,7 @@ struct CommandBody {
 }
 
 /// Keys a command payload may have (the node's `commandPayload` union).
-const COMMAND_KEYS: [&str; 8] = [
+const COMMAND_KEYS: [&str; 9] = [
     "type",
     "message",
     "uploadIds",
@@ -818,6 +818,7 @@ const COMMAND_KEYS: [&str; 8] = [
     "provider",
     "modelId",
     "level",
+    "mode",
 ];
 /// `message` limit, in UTF-16 units, as the node's.
 const COMMAND_MESSAGE_MAX: usize = 1_000_000;
@@ -1524,5 +1525,9 @@ mod tests {
             payload(json!({ "type": "set_model", "provider": "p", "modelId": model })).is_err()
         );
         assert!(payload(json!({ "type": "prompt", "message": { "nested": true } })).is_err());
+        assert_eq!(
+            payload(json!({ "type": "set_approval_mode", "mode": "read-only" })).unwrap(),
+            json!({ "type": "set_approval_mode", "mode": "read-only" })
+        );
     }
 }

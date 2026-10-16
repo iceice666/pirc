@@ -290,6 +290,7 @@ fn fixture(mode: &str) -> Fixture {
         ],
         models: serde_json::from_value(json!({})).unwrap(),
         capabilities: Some(Rc::new(|| json!({ "version": 1 }))),
+        approval_mode: Some(Rc::new(|| "read-only".to_owned())),
         instructions: None,
         acquire_write: None,
         relay_sandbox: None,
@@ -414,7 +415,8 @@ fn spawns_a_teammate_that_reports_to_the_parent() {
         assert_eq!(
             configure,
             json!({ "type": "configure", "models": { "providers": {} },
-                "capabilities": { "version": 1 }, "role": { "name": "general" } })
+                "capabilities": { "version": 1 }, "approvalMode": "read-only",
+                "role": { "name": "general" } })
         );
         let prompt = std::fs::read_to_string(dir.join("prompts")).unwrap();
         assert!(

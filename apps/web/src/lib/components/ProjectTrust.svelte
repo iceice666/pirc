@@ -74,7 +74,7 @@
       if (current !== generation) return;
       project = response.project;
       status = trust
-        ? 'Trusted. New sessions in this workspace use these hooks, environment and paths.'
+        ? 'Trusted. New sessions in this workspace use these settings.'
         : 'Trust revoked. New sessions ignore them.';
     } catch (cause) {
       if (current !== generation) return;
@@ -97,8 +97,9 @@
   <h3>Project config</h3>
   <p>
     A repository's <code>.pirc/config.json</code> can run hook commands, set environment variables for
-    every command the agent runs, and add writable paths. Agents here ignore them until you trust them.
-    If the repository changes them later, they are ignored again until you trust the new values.
+    every command the agent runs, add writable paths, and choose the model your sessions are sent to.
+    Agents here ignore them until you trust them. If the repository changes them later, they are ignored
+    again until you trust the new values.
   </p>
   {#if loading}
     <p role="status">Loading project config…</p>
@@ -106,7 +107,7 @@
     {#if project.error !== undefined}
       <p class="problem">The project config is invalid and is not used: {project.error}</p>
     {:else if project.empty}
-      <p>This workspace's project config sets no hooks, environment or allowed paths.</p>
+      <p>This workspace's project config sets no hooks, environment, allowed paths or model.</p>
     {:else}
       <p class="state" class:trusted={project.trusted} class:changed>
         {#if project.trusted}Trusted{:else if changed}Changed since trusted: ignored until you trust
@@ -132,6 +133,12 @@
       {#if project.allowedPaths.length}
         <h4>Allowed paths</h4>
         <pre>{project.allowedPaths.join('\n')}</pre>
+      {/if}
+      {#if project.defaultModel}
+        <h4>Default model</h4>
+        <pre>{project.defaultModel.provider}/{project.defaultModel.id}{project.defaultModel.thinking
+            ? ` (thinking ${project.defaultModel.thinking})`
+            : ''}</pre>
       {/if}
     {/if}
     <div class="actions">

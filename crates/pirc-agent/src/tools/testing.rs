@@ -47,6 +47,7 @@ pub fn config(workspace: &str, features: Value) -> AgentConfig {
 pub struct TestUi {
     pub notes: RefCell<Vec<String>>,
     pub confirms: RefCell<Vec<String>>,
+    pub confirm_titles: RefCell<Vec<String>>,
     pub answer: Cell<Option<bool>>,
 }
 
@@ -70,11 +71,12 @@ impl Ui for TestUi {
     }
     fn confirm<'a>(
         &'a self,
-        _title: &'a str,
+        title: &'a str,
         message: &'a str,
         _opts: DialogOptions,
     ) -> LocalBoxFuture<'a, Option<bool>> {
         self.confirms.borrow_mut().push(message.to_owned());
+        self.confirm_titles.borrow_mut().push(title.to_owned());
         let answer = self.answer.get();
         Box::pin(async move { answer })
     }

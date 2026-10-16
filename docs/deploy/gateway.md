@@ -22,7 +22,7 @@ The gateway trusts an identity header only when the TCP peer is a listed proxy. 
 | ---------------------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `PIRC_TRUSTED_PROXIES` | yes      | —             | Comma-separated peer addresses allowed to set the identity header, e.g. `127.0.0.1,::1`.                           |
 | `PIRC_IDENTITY_HEADER` | no       | `x-pirc-user` | Header the proxy fills with the authenticated user (compared case-insensitively).                                  |
-| `PIRC_ALLOWED_USERS`   | yes      | —             | Comma-separated identities allowed in. Nodes carry their own copy and check it again.                              |
+| `PIRC_ALLOWED_USERS`   | yes      | —             | Comma-separated identities allowed in, all of them [one person](README.md#one-user). Nodes check it again.         |
 | `PIRC_ALLOWED_ORIGINS` | yes      | —             | Exact `Origin` values, e.g. `https://pirc.example.ts.net`. Required on mutating requests and WebSocket upgrades.   |
 | `PIRC_ALLOWED_HOSTS`   | yes      | —             | Exact `Host` values (include the port if browsers send one).                                                       |
 | `PIRC_PROXY_SECRET`    | no       | —             | Shared secret (≥ 32 characters) the proxy must send as `x-pirc-proxy-secret`; see below. Keep it in a secret file. |

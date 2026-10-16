@@ -85,9 +85,12 @@ CREATE TABLE delegations (
   expires_at INTEGER NOT NULL, dispatched_at INTEGER,
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
   -- The model (and thinking level) it runs on, and the role its new session starts in.
-  model_json TEXT, thinking TEXT, role TEXT
+  model_json TEXT, thinking TEXT, role TEXT,
+  -- 1: the user approved it as their own request for auto mode, for the run it starts.
+  as_user_request INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX delegations_owner ON delegations(owner_user, status);
+CREATE INDEX delegations_follows ON delegations(follows);
 CREATE INDEX delegations_assistant ON delegations(assistant_session_id, status);
 CREATE INDEX delegations_target ON delegations(target_session_id, status);
 
@@ -131,7 +134,9 @@ CREATE INDEX schedule_runs_session ON schedule_runs(session_id, status);
 CREATE TABLE schedule_proposals (
   id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, session_id TEXT NOT NULL,
   schedule_id TEXT, spec_json TEXT NOT NULL, status TEXT NOT NULL,
-  expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+  expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL,
+  -- What approving does: 'save' creates or changes (schedule_id), 'delete' deletes schedule_id.
+  operation TEXT NOT NULL DEFAULT 'save'
 );
 CREATE INDEX schedule_proposals_session ON schedule_proposals(session_id, status);
 

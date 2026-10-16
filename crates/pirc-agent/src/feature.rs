@@ -15,6 +15,7 @@ use serde_json::{Map, Value};
 
 use crate::LocalBoxFuture;
 use crate::agent::Agent;
+use crate::auto_mode::ApprovalMode;
 use crate::config::WorkspaceKind;
 use crate::context::PromptSection;
 use crate::signal::AbortSignal;
@@ -192,6 +193,9 @@ pub trait Feature {
     fn will_continue(&self, _agent: &Rc<Agent>) -> bool {
         false
     }
+
+    /// The session's approval mode changed (the user switched it).
+    fn approval_mode_changed(&self, _agent: &Rc<Agent>, _mode: ApprovalMode) {}
 
     /// Fully idle (after `agent_settled`); may queue steer messages to wake
     /// the agent. `Err` becomes a warning `<name>: <error>`.

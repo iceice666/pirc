@@ -378,6 +378,7 @@ expression: t.into_value()
         "allowedPaths": [
           "../shared"
         ],
+        "defaultModel": null,
         "empty": false,
         "env": {
           "GIT_SSH_COMMAND": "ssh -i key"
@@ -408,12 +409,13 @@ expression: t.into_value()
   },
   {
     "observed": true,
-    "step": "the hash is sha256 of \"pirc-project-trust-v1\\n\" and the canonical JSON of allowedPaths, env and hooks"
+    "step": "the hash is sha256 of \"pirc-project-trust-v1\\n\" and the canonical JSON of allowedPaths, env, hooks and (when set) defaultModel"
   },
   {
     "body": {
       "project": {
         "allowedPaths": [],
+        "defaultModel": null,
         "empty": true,
         "env": {},
         "hash": "<sha256:2>",
@@ -438,7 +440,7 @@ expression: t.into_value()
   {
     "observed": [
       {
-        "message": "This workspace's .pirc/config.json sets hooks, env or allowedPaths; they were ignored because the workspace is not trusted (or they changed since it was trusted). Review and trust them in the workspace's Settings.",
+        "message": "This workspace's .pirc/config.json sets hooks, env, allowedPaths or defaultModel; they were ignored because the workspace is not trusted (or they changed since it was trusted). Review and trust them in the workspace's Settings.",
         "notifyType": "warning"
       }
     ],
@@ -492,6 +494,7 @@ expression: t.into_value()
         "allowedPaths": [
           "../shared"
         ],
+        "defaultModel": null,
         "empty": false,
         "env": {
           "GIT_SSH_COMMAND": "ssh -i key"
@@ -533,6 +536,7 @@ expression: t.into_value()
     "body": {
       "project": {
         "allowedPaths": [],
+        "defaultModel": null,
         "empty": false,
         "env": {
           "GIT_SSH_COMMAND": "ssh -o ProxyCommand=evil"
@@ -560,6 +564,7 @@ expression: t.into_value()
     "body": {
       "project": {
         "allowedPaths": [],
+        "defaultModel": null,
         "empty": false,
         "env": {
           "GIT_SSH_COMMAND": "ssh -o ProxyCommand=evil"
@@ -635,9 +640,13 @@ expression: t.into_value()
     "body": {
       "project": {
         "allowedPaths": [],
-        "empty": true,
+        "defaultModel": {
+          "id": "fake-model",
+          "provider": "fake"
+        },
+        "empty": false,
         "env": {},
-        "hash": "<sha256:2>",
+        "hash": "<sha256:4>",
         "hooks": {
           "afterTool": [],
           "agentSettled": [],

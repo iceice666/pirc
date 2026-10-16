@@ -1526,7 +1526,9 @@ expression: r.into_value()
     "observed": {
       "command": "get_state",
       "data": {
+        "approvalMode": "auto",
         "completionWaiting": [],
+        "defaultApprovalMode": "auto",
         "isCompacting": false,
         "isStreaming": false,
         "messageCount": 9,

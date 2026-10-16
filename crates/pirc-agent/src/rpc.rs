@@ -94,6 +94,16 @@ fn cancelled() -> Value {
 }
 
 /// JavaScript truthiness.
+/// `GATEWAY_MESSAGE_LABEL`: the first line of every gateway `deliver`, so
+/// a delegated task, a scheduled run or a delegation's result cannot pass
+/// for the user typing in this session (L11). What the content says about
+/// who approved it is the gateway's framing below the label.
+pub const GATEWAY_MESSAGE_LABEL: &str = "Gateway message (pirc data, not typed by the user):";
+
+fn gateway_message(content: &str) -> String {
+    format!("{GATEWAY_MESSAGE_LABEL}\n{content}")
+}
+
 fn truthy(value: Option<&Value>) -> bool {
     match value {
         None | Some(Value::Null) => false,
@@ -467,6 +477,7 @@ pub(crate) trait Commands: 'static {
     fn available_models(&self) -> Vec<Value>;
     fn set_model(&self, provider: &str, id: &str) -> Result<(), String>;
     fn set_thinking(&self, level: &str) -> Result<(), String>;
+    fn set_approval_mode(self: &Rc<Self>, mode: &str) -> Result<(), String>;
     fn set_role(&self, name: &str) -> Result<(), String>;
     fn set_name(&self, name: &str, source: NameSource) -> Result<(), String>;
     fn last_context(&self) -> Option<Value>;
@@ -538,6 +549,9 @@ impl Commands for Agent {
     }
     fn set_thinking(&self, level: &str) -> Result<(), String> {
         Agent::set_thinking(self, level)
+    }
+    fn set_approval_mode(self: &Rc<Self>, mode: &str) -> Result<(), String> {
+        Agent::set_approval_mode(self, mode)
     }
     fn set_role(&self, name: &str) -> Result<(), String> {
         Agent::set_role(self, name)
@@ -661,6 +675,10 @@ pub(crate) async fn dispatch<A: Commands>(
             agent.set_thinking(&js_string(command.get("level")))?;
             Ok(None)
         }
+        Some("set_approval_mode") => {
+            agent.set_approval_mode(&js_string(command.get("mode")))?;
+            Ok(None)
+        }
         Some("set_role") => {
             // A delegated session's role, before its task arrives (node/runner.ts deliver).
             agent.set_role(&js_string(command.get("role")))?;
@@ -703,7 +721,7 @@ pub(crate) async fn dispatch<A: Commands>(
             agent.deliver(
                 Delivery {
                     custom_type: custom_type.to_owned(),
-                    content: content.to_owned(),
+                    content: gateway_message(content),
                     display: true,
                     details,
                 },

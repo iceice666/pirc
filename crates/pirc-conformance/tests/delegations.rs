@@ -483,9 +483,10 @@ async fn delegations() {
             json!({ "confirmed": true, "model": "fake/fake-model", "thinking": "loud" }),
         ),
         (
-            "approve with a model and thinking level",
+            "approve with a model and thinking level, as the user's request for auto mode",
             1,
-            json!({ "confirmed": true, "model": "fake/fake-model", "thinking": "high" }),
+            json!({ "confirmed": true, "model": "fake/fake-model", "thinking": "high",
+                "asUserRequest": true }),
         ),
         ("answer again", 1, json!({ "confirmed": true })),
     ] {
@@ -505,7 +506,7 @@ async fn delegations() {
     for step in [
         "work: a session is created",
         "work: it is named",
-        "work: the task is delivered",
+        "work: the task is delivered (details.asUserRequest: the user ticked it)",
     ] {
         let request = work.request().await;
         r.note(step, request);

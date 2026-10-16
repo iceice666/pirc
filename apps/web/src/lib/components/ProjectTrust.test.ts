@@ -77,6 +77,16 @@ it('shows the hooks, environment and paths a project config would add, untrusted
   expect(buttons()).toEqual(['Trust']);
 });
 
+it('shows the default model a project config would choose', async () => {
+  vi.mocked(fetch).mockResolvedValue(
+    response(summary({ defaultModel: { provider: 'openai', id: 'gpt-5', thinking: 'high' } })),
+  );
+  await setup();
+  const blocks = Array.from(target.querySelectorAll('pre')).map((pre) => pre.textContent);
+  expect(blocks.at(-1)).toBe('openai/gpt-5 (thinking high)');
+  expect(target.textContent).toContain('Default model');
+});
+
 it('trusts the reviewed hash and revokes trust', async () => {
   await setup();
   vi.mocked(fetch).mockResolvedValueOnce(response(summary({ trusted: true, trustedHash: HASH })));
@@ -127,7 +137,7 @@ it('has nothing to trust for an empty or invalid config', async () => {
     response(summary({ hooks: {}, env: {}, allowedPaths: [], empty: true })),
   );
   await setup();
-  expect(target.textContent).toContain('sets no hooks, environment or allowed paths');
+  expect(target.textContent).toContain('sets no hooks, environment, allowed paths or model');
   expect(buttons()).toEqual([]);
   await unmount(component!);
   target.remove();

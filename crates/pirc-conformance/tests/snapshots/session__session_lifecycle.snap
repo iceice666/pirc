@@ -92,6 +92,8 @@ expression: t.into_value()
   {
     "body": {
       "agent": {
+        "approvalMode": "auto",
+        "defaultApprovalMode": "auto",
         "model": {
           "id": "fake-model",
           "provider": "fake"
@@ -223,6 +225,8 @@ expression: t.into_value()
   {
     "body": {
       "agent": {
+        "approvalMode": "auto",
+        "defaultApprovalMode": "auto",
         "model": {
           "id": "fake-model",
           "provider": "fake"

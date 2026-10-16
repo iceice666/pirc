@@ -135,6 +135,11 @@ pub enum CommandPayload {
         /// `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`.
         level: String,
     },
+    /// This session's approval mode (security audit L14).
+    SetApprovalMode {
+        /// `read-only`, `auto` or `full-access`.
+        mode: String,
+    },
 }
 
 /// What the gateway pushes into a session (`deliverBody`): a delegated
@@ -679,6 +684,10 @@ fn build_rpc(
         CommandPayload::SetThinking { level } => {
             rpc.insert("type".into(), json!("set_thinking_level"));
             rpc.insert("level".into(), json!(level));
+        }
+        CommandPayload::SetApprovalMode { mode } => {
+            rpc.insert("type".into(), json!("set_approval_mode"));
+            rpc.insert("mode".into(), json!(mode));
         }
         CommandPayload::SendNow {
             queue,

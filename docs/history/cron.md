@@ -25,7 +25,7 @@ Status (2026-09-29): phases 1–5 implemented and tested.
   - The events WS takes `schedules=1` and sends `schedules_changed`.
 - AgentOps: `schedule.list|create|update|pause|resume|delete|run`.
   - Chats may target their own chat or any directory workspace; other sessions may target only their own.
-  - A session started by a scheduled run cannot create, update, resume or run schedules. It may still pause or delete them.
+  - A session started by a scheduled run cannot create, update, resume or run schedules. It may still pause them. Deleting needs the user's approval in the chat (2026-10-16, security audit L10; `schedule_proposals.operation = 'delete'`), so a run, which nobody watches, cannot delete.
 - Agent: the `schedule` tool plus `/cron [list | pause|resume|delete|run <id>]` (`agent/features/schedules.ts`). Both exist only with a gateway, and `features.schedules.enabled: false` turns them off.
 - `PIRC_TIMEZONE`: the gateway's default time zone for schedules. It defaults to the system's, and an invalid value fails at startup.
 - New dependency: `croner` (`nodeModulesHash` updated).

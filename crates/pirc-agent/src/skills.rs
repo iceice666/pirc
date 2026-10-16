@@ -23,7 +23,14 @@ pub struct Skill {
     pub dir: String,
     /// Real path of its `SKILL.md`.
     pub file: String,
+    /// Index, in the roots given to [`discover_skills`], of the root the
+    /// skill was found in ([`PROJECT_SKILL_ROOT`] for the repository's).
+    pub root: usize,
 }
+
+/// The index of `<workspace>/.pirc/skills` in [`skill_roots`]: skills a
+/// repository ships, not ones the user installed (L13).
+pub const PROJECT_SKILL_ROOT: usize = 2;
 
 /// `MAX_DESCRIPTION`.
 pub const MAX_DESCRIPTION: usize = 1024;
@@ -110,7 +117,7 @@ fn collapse_space(text: &str) -> String {
 pub fn discover_skills(roots: &[String]) -> (Vec<Skill>, Vec<String>) {
     let mut by_name: IndexMap<String, Skill> = IndexMap::new();
     let mut problems = Vec::new();
-    for root in roots {
+    for (index, root) in roots.iter().enumerate() {
         let Ok(entries) = js::sorted_dir_names(Path::new(root)) else {
             continue;
         };
@@ -170,6 +177,7 @@ pub fn discover_skills(roots: &[String]) -> (Vec<Skill>, Vec<String>) {
                     description,
                     file: js::path_join(&[&dir, "SKILL.md"]),
                     dir,
+                    root: index,
                 },
             );
         }
@@ -270,6 +278,10 @@ mod tests {
                 "/workspace/.pirc/skills".to_owned(),
             ]
         );
+        assert_eq!(
+            skill_roots("/config", "/workspace")[PROJECT_SKILL_ROOT],
+            "/workspace/.pirc/skills"
+        );
     }
 
     #[test]
@@ -328,6 +340,7 @@ mod tests {
                 .to_string()
         );
         assert_eq!(pdf.file, format!("{}/SKILL.md", pdf.dir));
+        assert_eq!((skills[0].root, pdf.root), (0, 1));
         let first = first.display();
         assert_eq!(
             problems,

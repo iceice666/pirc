@@ -102,7 +102,9 @@ expression: r.into_value()
     "observed": {
       "command": "get_state",
       "data": {
+        "approvalMode": "auto",
         "completionWaiting": [],
+        "defaultApprovalMode": "auto",
         "isCompacting": false,
         "isStreaming": false,
         "messageCount": 0,
@@ -255,7 +257,7 @@ expression: r.into_value()
       },
       {
         "message": {
-          "content": "Your delegated task finished.",
+          "content": "Gateway message (pirc data, not typed by the user):\nYour delegated task finished.",
           "customType": "delegation",
           "details": {
             "taskId": "t1"
@@ -268,7 +270,7 @@ expression: r.into_value()
       },
       {
         "message": {
-          "content": "Your delegated task finished.",
+          "content": "Gateway message (pirc data, not typed by the user):\nYour delegated task finished.",
           "customType": "delegation",
           "details": {
             "taskId": "t1"
@@ -385,7 +387,7 @@ expression: r.into_value()
       {
         "messages": [
           {
-            "content": "Your delegated task finished.",
+            "content": "Gateway message (pirc data, not typed by the user):\nYour delegated task finished.",
             "customType": "delegation",
             "details": {
               "taskId": "t1"
@@ -940,14 +942,14 @@ expression: r.into_value()
         "usage": {
           "buckets": {
             "memory": 0,
-            "messages": 8,
+            "messages": 21,
             "system": 901,
             "tools": 1637
           },
-          "estimatedInput": 2546,
+          "estimatedInput": 2559,
           "remaining": 1860,
           "reportedInput": 140,
-          "scale": 0.05498821681068342
+          "scale": 0.05470887065259867
         },
         "version": 1
       },
@@ -1111,7 +1113,7 @@ expression: r.into_value()
       {
         "messages": [
           {
-            "content": "Your delegated task finished.",
+            "content": "Gateway message (pirc data, not typed by the user):\nYour delegated task finished.",
             "customType": "delegation",
             "details": {
               "taskId": "t1"
@@ -1217,7 +1219,7 @@ expression: r.into_value()
       {
         "id": "<entry:6>",
         "message": {
-          "content": "Your delegated task finished.",
+          "content": "Gateway message (pirc data, not typed by the user):\nYour delegated task finished.",
           "customType": "delegation",
           "details": {
             "taskId": "t1"

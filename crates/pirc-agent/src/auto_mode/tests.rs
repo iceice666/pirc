@@ -320,23 +320,59 @@ async fn warns_once_about_invalid_deny_patterns() {
 
 #[test]
 fn reads_the_settings_like_zod() {
-    let enabled = |value: Value| auto_mode_enabled(value.as_object().unwrap());
-    assert!(enabled(json!({})));
-    assert!(!enabled(json!({ "autoMode": { "enabled": false } })));
-    // Any invalid setting restores every default.
-    assert!(enabled(
-        json!({ "autoMode": { "enabled": false, "timeoutMs": "soon" } })
+    let mode = |value: Value| default_approval_mode(value.as_object().unwrap());
+    assert_eq!(mode(json!({})), ApprovalMode::Auto);
+    // The retired switch: false is full access, true is auto.
+    assert_eq!(
+        mode(json!({ "autoMode": { "enabled": false } })),
+        ApprovalMode::FullAccess
+    );
+    assert_eq!(
+        mode(json!({ "autoMode": { "enabled": true } })),
+        ApprovalMode::Auto
+    );
+    // `mode` wins over `enabled`, in either order.
+    assert_eq!(
+        mode(json!({ "autoMode": { "mode": "read-only", "enabled": false } })),
+        ApprovalMode::ReadOnly
+    );
+    assert_eq!(
+        mode(json!({ "autoMode": { "enabled": false, "mode": "auto" } })),
+        ApprovalMode::Auto
+    );
+    // Any invalid setting restores every default, a misspelt mode included.
+    assert_eq!(
+        mode(json!({ "autoMode": { "mode": "full-acess" } })),
+        ApprovalMode::Auto
+    );
+    assert_eq!(
+        mode(json!({ "autoMode": { "enabled": false, "timeoutMs": "soon" } })),
+        ApprovalMode::Auto
+    );
+    assert_eq!(
+        mode(json!({ "autoMode": { "enabled": false, "model": { "provider": "p" } } })),
+        ApprovalMode::Auto
+    );
+    assert_eq!(
+        mode(json!({ "autoMode": {
+            "mode": "full-access",
+            "model": { "provider": "p", "id": "m", "thinking": "low" },
+            "fallbackModels": [],
+            "timeoutMs": 1000,
+            "deny": ["x"],
+        } })),
+        ApprovalMode::FullAccess
+    );
+    assert!(uses_retired_enabled(
+        json!({ "autoMode": { "enabled": true } })
+            .as_object()
+            .unwrap()
     ));
-    assert!(enabled(
-        json!({ "autoMode": { "enabled": false, "model": { "provider": "p" } } })
+    assert!(!uses_retired_enabled(
+        json!({ "autoMode": { "mode": "auto" } })
+            .as_object()
+            .unwrap()
     ));
-    assert!(!enabled(json!({ "autoMode": {
-        "enabled": false,
-        "model": { "provider": "p", "id": "m", "thinking": "low" },
-        "fallbackModels": [],
-        "timeoutMs": 1000,
-        "deny": ["x"],
-    } })));
     assert_eq!(
         auto_mode_deny(
             json!({ "autoMode": { "deny": ["a", 1, "b"] } })
@@ -415,6 +451,7 @@ pub(crate) struct ModelHost {
     pub session_model: Option<(String, String)>,
     pub entries: Vec<(String, pirc_protocol::Message)>,
     pub branch: Vec<crate::session_store::SessionEntry>,
+    pub run_requests: Vec<String>,
 }
 
 impl ModelHost {
@@ -432,6 +469,7 @@ impl ModelHost {
             session_model: Some(("p".to_owned(), "m".to_owned())),
             entries: Vec::new(),
             branch: Vec::new(),
+            run_requests: Vec::new(),
         }
     }
 
@@ -574,6 +612,9 @@ impl AgentHost for ModelHost {
     }
     fn branch(&self) -> Vec<crate::session_store::SessionEntry> {
         self.branch.clone()
+    }
+    fn run_user_requests(&self) -> Vec<String> {
+        self.run_requests.clone()
     }
 }
 
@@ -856,4 +897,115 @@ fn reads_classifier_settings_and_choices() {
         ),
         ["z"]
     );
+}
+
+fn moded(mode: &str, has_ui: bool) -> TestHost {
+    host(
+        json!({ "autoMode": { "mode": mode, "useModel": false, "deny": ["deploy-prod"] } }),
+        has_ui,
+    )
+}
+
+#[tokio::test]
+async fn read_only_mode_asks_for_anything_that_may_write() {
+    let host = moded("read-only", false);
+    let auto = AutoMode::new();
+    // Reads run, without a lease.
+    assert_eq!(
+        gate(&auto, &host, "bash", args(json!({ "command": "ls -la" }))).await,
+        None
+    );
+    assert!(host.leases.borrow().is_empty());
+    // A known write, an unclear command and the file tools need a human.
+    for (tool, call) in [
+        ("bash", json!({ "command": "touch notes.txt" })),
+        ("bash", json!({ "command": "some-tool --frob" })),
+        ("write", json!({ "path": "a.txt", "content": "x" })),
+        ("edit", json!({ "path": "a.txt", "edits": [] })),
+    ] {
+        let refused = gate(&auto, &host, tool, args(call)).await.unwrap();
+        assert!(refused.contains("read-only mode"), "{refused}");
+        assert!(refused.contains("no UI"), "{refused}");
+    }
+    assert!(host.leases.borrow().is_empty());
+    // Danger is still called dangerous.
+    let refused = gate(&auto, &host, "bash", args(json!({ "command": "rm -rf ~" })))
+        .await
+        .unwrap();
+    assert!(
+        refused.contains("Dangerous actions need a human"),
+        "{refused}"
+    );
+}
+
+#[tokio::test]
+async fn read_only_mode_runs_what_the_user_allows() {
+    let host = moded("read-only", true);
+    host.ui.answer.set(Some(true));
+    let auto = AutoMode::new();
+    assert_eq!(
+        gate(
+            &auto,
+            &host,
+            "bash",
+            args(json!({ "command": "touch notes.txt" }))
+        )
+        .await,
+        None
+    );
+    assert_eq!(
+        gate(
+            &auto,
+            &host,
+            "write",
+            args(json!({ "path": "a.txt", "content": "x" }))
+        )
+        .await,
+        None
+    );
+    assert_eq!(
+        *host.ui.confirm_titles.borrow(),
+        [
+            "Read-only mode: allow this action?",
+            "Read-only mode: allow this action?"
+        ]
+    );
+    // The command still takes the lease; the file tool takes its own.
+    assert_eq!(host.leases.borrow().len(), 1);
+}
+
+#[tokio::test]
+async fn full_access_mode_skips_the_gate_but_keeps_the_deny_list_and_the_lease() {
+    let host = moded("full-access", false);
+    let auto = AutoMode::new();
+    assert_eq!(
+        gate(
+            &auto,
+            &host,
+            "bash",
+            args(json!({ "command": "rm -rf build" }))
+        )
+        .await,
+        None
+    );
+    assert_eq!(
+        gate(
+            &auto,
+            &host,
+            "write",
+            args(json!({ "path": "a.txt", "content": "x" }))
+        )
+        .await,
+        None
+    );
+    assert_eq!(host.leases.borrow().len(), 1);
+    let refused = gate(
+        &auto,
+        &host,
+        "bash",
+        args(json!({ "command": "sh -c 'echo deploy-prod'" })),
+    )
+    .await
+    .unwrap();
+    assert!(refused.contains("deny-list"), "{refused}");
 }

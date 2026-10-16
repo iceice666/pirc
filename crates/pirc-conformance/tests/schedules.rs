@@ -1051,20 +1051,41 @@ async fn schedules() {
         ),
         ("a run resumes", "schedule.resume", json!({ "id": lint })),
         ("a run runs", "schedule.run", json!({ "id": lint })),
+        (
+            "a run asks to delete",
+            "schedule.delete",
+            json!({ "id": lint }),
+        ),
     ] {
         s.op(&node, step, &remote, op, args).await;
     }
     node.settled(&remote);
     s.run_reaches(&lint, "completed").await;
     s.forget_relayed();
-    s.op(
-        &node,
-        "the agent deletes it",
-        "remote-1",
-        "schedule.delete",
-        json!({ "id": lint }),
+    // Deleting is a proposal the user approves (security audit L10).
+    let deletion = s
+        .op(
+            &node,
+            "the agent proposes deleting it",
+            "remote-1",
+            "schedule.delete",
+            json!({ "id": lint }),
+        )
+        .await;
+    let deletion = deletion["result"]["proposalId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    s.call(
+        "it waits for the user",
+        "GET",
+        &format!("/api/schedules/{lint}"),
+        None,
     )
     .await;
+    let (target, body) = answer(&deletion, true);
+    s.call("approve the deletion", "POST", &target, Some(body))
+        .await;
     s.call("delete the rest", "DELETE", &path, None).await;
     s.call("what is left", "GET", "/api/schedules", None).await;
 

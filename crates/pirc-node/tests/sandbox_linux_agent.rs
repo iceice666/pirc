@@ -185,7 +185,7 @@ fn bin_bash_args() -> Vec<OsString> {
 
 #[tokio::test]
 async fn a_real_agent_is_confined() {
-    let config_json = r#"{"features":{"autoMode":{"enabled":false,"useModel":false}},"sandbox":{"network":{"defaultDomains":false}}}"#;
+    let config_json = r#"{"features":{"autoMode":{"mode":"full-access","useModel":false}},"sandbox":{"network":{"defaultDomains":false}}}"#;
     let Some(f) = fixture_in(None, "agent", config_json) else {
         return;
     };

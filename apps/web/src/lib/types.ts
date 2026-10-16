@@ -17,7 +17,14 @@ export type CommandKind =
   | 'clear_queue'
   | 'send_now'
   | 'set_model'
-  | 'set_thinking';
+  | 'set_thinking'
+  | 'set_approval_mode';
+/**
+ * How much the agent may do without asking: only reads (`read-only`), what
+ * auto mode's rules and classifier allow (`auto`), or everything
+ * (`full-access`). The deny-list asks in every mode.
+ */
+export type ApprovalMode = 'read-only' | 'auto' | 'full-access';
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export interface WorkspaceDefaults {
@@ -67,7 +74,17 @@ export interface SessionSummary {
 
 export type SessionOrigin =
   | { kind: 'schedule'; scheduleId: string; title: string; dueAt: number }
-  | { kind: 'delegation'; delegationId: string; title: string; fromSessionId: string };
+  | {
+      kind: 'delegation';
+      delegationId: string;
+      title: string;
+      fromSessionId: string;
+      /** The delegation's status; absent from older gateways. */
+      status?: DelegationStatus;
+    };
+
+/** A delegation's status once its session exists. */
+export type DelegationStatus = 'running' | 'waiting_input' | 'completed' | 'failed';
 
 export interface RunState {
   id?: string;
@@ -186,6 +203,11 @@ export interface ConfirmInteraction extends InteractionBase {
     model: { provider: string; id: string } | null;
     thinking: ThinkingLevel | null;
   };
+  /**
+   * A delegation: a checkbox that counts the task as the user's own request
+   * for the delegated run's auto mode (that run only).
+   */
+  userRequestChoice?: { label: string; checked: boolean };
 }
 
 export interface InputInteraction extends InteractionBase {
@@ -240,6 +262,10 @@ export interface SessionSnapshot {
   /** Several backends can expose the same model ID; the provider disambiguates. */
   selectedModelProvider?: string;
   thinkingLevel?: ThinkingLevel;
+  /** The session's approval mode as the node reports it; absent from older nodes. */
+  approvalMode?: ApprovalMode;
+  /** What the node starts sessions in. */
+  defaultApprovalMode?: ApprovalMode;
   /** Extension panels (e.g. the todo list), keyed by extension. */
   widgets?: Record<string, string[]>;
   statuses?: Record<string, string>;
@@ -386,6 +412,7 @@ export interface SessionCommandInput {
   modelId?: string;
   provider?: string;
   thinkingLevel?: ThinkingLevel;
+  approvalMode?: ApprovalMode;
   attachmentIds?: string[];
   /** `send_now`: the queued message to deliver immediately (`content` must match it). */
   queued?: Pick<QueueItem, 'kind' | 'index'>;
@@ -404,6 +431,8 @@ export type InteractionAnswer =
       /** With a confirm that offers `modelChoice`: what the user picked (null = default). */
       model?: { provider: string; id: string } | null;
       thinking?: ThinkingLevel | null;
+      /** With a confirm that offers `userRequestChoice`: whether it was ticked. */
+      asUserRequest?: boolean;
     }
   | { action: 'cancel' };
 
@@ -438,6 +467,7 @@ export type GatewayEvent =
   | { type: 'interaction_updated'; interaction: PendingInteraction }
   | { type: 'interaction_removed'; interactionId: string }
   | { type: 'queue_updated'; queue: QueueItem[] }
+  | { type: 'approval_mode_changed'; mode: ApprovalMode }
   | { type: 'widget_updated'; key: string; lines?: string[] }
   | { type: 'status_updated'; key: string; text?: string }
   | { type: 'control_updated'; control: ControlLease }

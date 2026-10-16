@@ -29,7 +29,7 @@
   import { chatNodeIds, isChatWorkspace, topLevelChats } from '../chats';
   import { formatWall, until } from '../schedules';
   import { shortAgo } from '../time';
-  import type { SessionSummary, Workspace } from '../types';
+  import type { DelegationStatus, SessionSummary, Workspace } from '../types';
   import { watch } from '../watch.svelte';
   import { isRunning, pinnedFirst, sidebarSessions } from '../work';
 
@@ -68,6 +68,12 @@
     onmemory,
   }: Props = $props();
 
+  const DELEGATION_STATUS: Record<DelegationStatus, string> = {
+    running: 'is running',
+    waiting_input: 'waits for you',
+    completed: 'finished',
+    failed: 'failed',
+  };
   const nodes = $derived(app.nodes);
   /** Nodes that can host directory workspaces (not the chat node). */
   const deviceNodes = $derived.by(() => {
@@ -567,7 +573,9 @@
             title="Scheduled: {session.origin.title}"><Clock size={13} /></span
           >{:else if session.origin?.kind === 'delegation'}<span
             class="origin-icon"
-            title="Delegated: {session.origin.title}"><Forward size={13} /></span
+            title="Delegated: {session.origin.title}{session.origin.status
+              ? ` (${DELEGATION_STATUS[session.origin.status]})`
+              : ''}"><Forward size={13} /></span
           >{/if}
         <span class="session-name">{session.name}</span>
         <span class="session-meta">
@@ -577,6 +585,12 @@
               aria-label="Holds the write lease"
               title="Holds the {workspace?.displayName ?? 'workspace'} write lease"
               ><Lock size={12} /></span
+            >{/if}
+          {#if session.origin?.kind === 'delegation' && (session.origin.status === 'completed' || session.origin.status === 'failed')}<span
+              class="delegation-status"
+              class:failed={session.origin.status === 'failed'}
+              title="The delegated task {DELEGATION_STATUS[session.origin.status]}"
+              >{session.origin.status === 'completed' ? 'Done' : 'Failed'}</span
             >{/if}
           {#if session.pinned}<span class="pin-mark" title="Pinned"><Pin size={12} /></span>{/if}
           {#if showWorkspace && workspace}<span class="workspace-chip">{workspace.displayName}</span
@@ -949,6 +963,18 @@
     color: var(--ink);
     background: transparent;
     text-align: left;
+  }
+  .delegation-status {
+    flex: none;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--bg-layer);
+    color: var(--success);
+    font-size: 11px;
+    line-height: 16px;
+  }
+  .delegation-status.failed {
+    color: var(--danger);
   }
   .origin-icon {
     flex: none;

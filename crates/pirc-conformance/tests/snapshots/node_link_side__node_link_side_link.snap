@@ -15,6 +15,7 @@ expression: t.into_value()
       "body": {
         "project": {
           "allowedPaths": [],
+          "defaultModel": null,
           "empty": true,
           "env": {},
           "hash": "<sha256:1>",
@@ -38,6 +39,7 @@ expression: t.into_value()
       "body": {
         "project": {
           "allowedPaths": [],
+          "defaultModel": null,
           "empty": true,
           "env": {},
           "hash": "<sha256:1>",

@@ -662,6 +662,14 @@ impl State {
                         .unwrap_or(Value::Null)
                 })
             }),
+            approval_mode: Some({
+                let weak = weak.clone();
+                Rc::new(move || {
+                    weak.upgrade()
+                        .map(|agent| agent.approval_mode().as_str().to_owned())
+                        .unwrap_or_default()
+                })
+            }),
             instructions: Some({
                 let weak = weak.clone();
                 Rc::new(move || match weak.upgrade() {
@@ -1146,6 +1154,12 @@ impl TeamFeature {
 impl Feature for TeamFeature {
     fn name(&self) -> &'static str {
         "agent-team"
+    }
+
+    fn approval_mode_changed(&self, _agent: &Rc<Agent>, mode: crate::auto_mode::ApprovalMode) {
+        if let Some(team) = self.0.team.borrow().clone() {
+            team.set_approval_mode(mode.as_str());
+        }
     }
 
     fn tools(&self, agent: &Rc<Agent>) -> Vec<Rc<dyn Tool>> {

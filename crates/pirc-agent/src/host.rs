@@ -10,6 +10,7 @@ use pirc_protocol::Message;
 
 use crate::LocalBoxFuture;
 use crate::agent::ResolvedModel;
+use crate::auto_mode::{ApprovalMode, default_approval_mode};
 use crate::config::AgentConfig;
 use crate::session_store::SessionEntry;
 use crate::signal::AbortSignal;
@@ -49,6 +50,17 @@ pub trait AgentHost {
     }
     /// `store.branch()`.
     fn branch(&self) -> Vec<SessionEntry> {
+        Vec::new()
+    }
+    /// The session's approval mode: its own choice, else the node's default.
+    fn approval_mode(&self) -> ApprovalMode {
+        default_approval_mode(&self.config().features)
+    }
+    /// Entries (ids from [`AgentHost::context_entries`]) the classifier may
+    /// read as the user's requests although they are not user messages: a
+    /// delegated task the user approved as their own request, during the
+    /// run it started.
+    fn run_user_requests(&self) -> Vec<String> {
         Vec::new()
     }
 }

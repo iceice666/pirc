@@ -26,6 +26,10 @@ These pages describe how to run pirc outside a development checkout. Each page c
 - A model backend reachable **from the gateway**: a subscription login made in the web UI, or an API-key endpoint from the web UI or `models.json`.
 - A private network (VPN, tailnet, LAN). pirc is a single-user tool; see the threat model in the [top-level README](../../README.md#security-model).
 
+### One user
+
+Every identity in `PIRC_ALLOWED_USERS` is treated as **the same person**, for example your phone's and your laptop's logins. pirc keeps sessions, memory and schedules per identity, but it does not isolate them from one another: there are no workspace owners, quotas or per-user limits. Any allowed identity can trust a workspace's project config, link, configure and schedule in any workspace, and every chat's assistant lists every directory workspace. Do not list people you would not give your shell to; give a second person their own gateway and nodes. (Decided 2026-10-16; security audit L5 and I4.)
+
 ## Minimum checklist
 
 Before treating a deployment as done:

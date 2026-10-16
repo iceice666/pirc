@@ -406,13 +406,15 @@ pub fn read_project_config(root: &str) -> Result<ProjectConfig, String> {
     parse_project_config(&read_json(&js::path_join(&[root, ".pirc", "config.json"]))?)
 }
 
-/// `ProjectTrustFields`: the project config fields that run code or widen
-/// access, honoured only when the user trusted exactly these values.
+/// `ProjectTrustFields`: the project config fields that run code, widen
+/// access or choose where the session's data goes (`defaultModel`, L12),
+/// honoured only when the user trusted exactly these values.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ProjectTrustFields {
     pub hooks: HooksConfig,
     pub env: Vec<(String, String)>,
     pub allowed_paths: Vec<String>,
+    pub default_model: Option<ModelRef>,
 }
 
 /// `projectTrustFields(project)`.
@@ -421,7 +423,13 @@ pub fn project_trust_fields(project: &ProjectConfig) -> ProjectTrustFields {
         hooks: project.hooks.clone(),
         env: project.env.clone(),
         allowed_paths: project.allowed_paths.clone(),
+        default_model: project.default_model.clone(),
     }
+}
+
+/// `provider/id`.
+pub fn model_label(model: &ModelRef) -> String {
+    format!("{}/{}", model.provider, model.id)
 }
 
 /// `canonicalJson(value)`: keys sorted (UTF-16 order), no blanks.
@@ -472,14 +480,25 @@ pub fn project_trust_hash(fields: &ProjectTrustFields) -> String {
     );
     map.insert("env".into(), env_value(&fields.env));
     map.insert("hooks".into(), fields.hooks.to_value());
+    // Only when set, so configs without a model keep the hash they were
+    // trusted under before defaultModel was gated.
+    if let Some(model) = &fields.default_model {
+        map.insert(
+            "defaultModel".into(),
+            serde_json::to_value(model).unwrap_or(Value::Null),
+        );
+    }
     let canonical = canonical_json(&Value::Object(map));
     let digest = Sha256::digest(format!("pirc-project-trust-v1\n{canonical}").as_bytes());
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-/// `projectTrustEmpty(fields)`: no hooks, env or allowed paths.
+/// `projectTrustEmpty(fields)`: no hooks, env, allowed paths or model.
 pub fn project_trust_empty(fields: &ProjectTrustFields) -> bool {
-    fields.allowed_paths.is_empty() && fields.env.is_empty() && fields.hooks.is_empty()
+    fields.allowed_paths.is_empty()
+        && fields.env.is_empty()
+        && fields.hooks.is_empty()
+        && fields.default_model.is_none()
 }
 
 /// `parseTrustHash(value)`: 64 lowercase hex digits, else nothing.
@@ -495,7 +514,22 @@ pub fn parse_trust_hash(value: Option<&str>) -> Option<String> {
 }
 
 /// `UNTRUSTED_PROJECT_WARNING`.
-pub const UNTRUSTED_PROJECT_WARNING: &str = "This workspace's .pirc/config.json sets hooks, env or allowedPaths; they were ignored because the workspace is not trusted (or they changed since it was trusted). Review and trust them in the workspace's Settings.";
+pub const UNTRUSTED_PROJECT_WARNING: &str = "This workspace's .pirc/config.json sets hooks, env, allowedPaths or defaultModel; they were ignored because the workspace is not trusted (or they changed since it was trusted). Review and trust them in the workspace's Settings.";
+
+/// `features.autoMode.enabled` is still read, but the modes replaced it.
+pub const RETIRED_AUTO_MODE_SWITCH: &str = "features.autoMode.enabled is retired: set features.autoMode.mode to \"read-only\", \"auto\" or \"full-access\" instead. Until then enabled: false means full-access (no approval checks) and enabled: true means auto.";
+
+/// The warning for an untrusted project config, naming the model it would
+/// have chosen (L12) so the user sees which one was not used.
+pub fn untrusted_project_warning(fields: &ProjectTrustFields) -> String {
+    match &fields.default_model {
+        Some(model) => format!(
+            "{UNTRUSTED_PROJECT_WARNING} The ignored defaultModel is {}.",
+            model_label(model)
+        ),
+        None => UNTRUSTED_PROJECT_WARNING.to_owned(),
+    }
+}
 
 const BASE_PROMPT: &str = "You are pirc, a coding agent operating inside a user's workspace through tools.
 Work carefully: read before editing, keep changes minimal and verified, and report blockers honestly.
@@ -560,25 +594,26 @@ pub fn load_agent_config(
     };
     let project_dir = js::path_join(&[&project_root, ".pirc"]);
     let parsed = read_project_config(&project_root)?;
-    // hooks / env / allowedPaths only when the user trusted exactly these values (H3).
+    // hooks / env / allowedPaths / defaultModel only when the user trusted
+    // exactly these values (H3, L12).
     let fields = project_trust_fields(&parsed);
     let trusted_hash = parse_trust_hash(env("PIRC_PROJECT_TRUST").as_deref());
     let untrusted = !project_trust_empty(&fields)
         && trusted_hash.as_deref() != Some(project_trust_hash(&fields).as_str());
     let project = if untrusted {
-        ProjectConfig {
-            default_model: parsed.default_model.clone(),
-            ..ProjectConfig::default()
-        }
+        ProjectConfig::default()
     } else {
         parsed
     };
     let mut warnings = Vec::new();
     if untrusted && !child {
-        warnings.push(UNTRUSTED_PROJECT_WARNING.to_owned());
+        warnings.push(untrusted_project_warning(&fields));
     }
     if let Some(warning) = memory_config_warning(&global.features) {
         warnings.push(warning);
+    }
+    if !child && crate::auto_mode::uses_retired_enabled(&global.features) {
+        warnings.push(RETIRED_AUTO_MODE_SWITCH.to_owned());
     }
     let resolve_paths = |items: &[String], base: &str| -> Vec<String> {
         items

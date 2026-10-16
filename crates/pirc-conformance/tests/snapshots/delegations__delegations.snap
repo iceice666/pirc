@@ -289,7 +289,11 @@ expression: r.t.into_value()
             "model": null,
             "thinking": null
           },
-          "title": "Delegate to Repo on work as general?"
+          "title": "Delegate to Repo on work as general?",
+          "userRequestChoice": {
+            "checked": false,
+            "label": "Treat this task as my request for auto mode"
+          }
         },
         "rpcId": "<delegation:1>",
         "runnerEpoch": 0,
@@ -316,7 +320,11 @@ expression: r.t.into_value()
             "model": null,
             "thinking": null
           },
-          "title": "Delegate to Repo on work as general?"
+          "title": "Delegate to Repo on work as general?",
+          "userRequestChoice": {
+            "checked": false,
+            "label": "Treat this task as my request for auto mode"
+          }
         },
         "rpcId": "<delegation:1>",
         "runnerEpoch": 0,
@@ -392,7 +400,7 @@ expression: r.t.into_value()
     },
     "request": "POST /api/sessions/<chat>/interactions/<delegation:1>/answer",
     "status": 200,
-    "step": "approve with a model and thinking level"
+    "step": "approve with a model and thinking level, as the user's request for auto mode"
   },
   {
     "body": {
@@ -446,6 +454,7 @@ expression: r.t.into_value()
         "content": "Task from the user's assistant, approved by the user (delegation <delegation:1>):\n\nFix the flaky test.\nThen report.\n\nWork on it here. When you are done, end with a short summary of what you did and anything left over: the assistant receives your final message.",
         "customType": "assistant-delegation",
         "details": {
+          "asUserRequest": true,
           "delegationId": "<delegation:1>",
           "title": "Fix flaky test"
         },
@@ -459,7 +468,7 @@ expression: r.t.into_value()
       "url": "/api/sessions/task-1/deliver",
       "user": "test@example.com"
     },
-    "step": "work: the task is delivered"
+    "step": "work: the task is delivered (details.asUserRequest: the user ticked it)"
   },
   {
     "observed": {
@@ -650,7 +659,11 @@ expression: r.t.into_value()
             "model": null,
             "thinking": null
           },
-          "title": "Send more instructions to “Fix flaky test” (Repo on work)?"
+          "title": "Send more instructions to “Fix flaky test” (Repo on work)?",
+          "userRequestChoice": {
+            "checked": false,
+            "label": "Treat this task as my request for auto mode"
+          }
         },
         "rpcId": "<delegation:2>",
         "runnerEpoch": 0,

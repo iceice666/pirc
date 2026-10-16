@@ -2456,16 +2456,108 @@ expression: s.t.into_value()
   {
     "observed": {
       "body": {
+        "error": {
+          "code": "forbidden",
+          "message": "A scheduled run cannot delete schedules (nobody is there to approve it); pause it instead"
+        }
+      },
+      "op": "schedule.delete",
+      "status": 403
+    },
+    "step": "a run asks to delete"
+  },
+  {
+    "observed": {
+      "body": {
         "result": {
-          "deleted": true,
           "id": "<schedule:7>",
+          "proposalId": "<proposal:3>",
+          "status": "pending_approval",
           "title": "Lint"
         }
       },
       "op": "schedule.delete",
       "status": 200
     },
-    "step": "the agent deletes it"
+    "step": "the agent proposes deleting it"
+  },
+  {
+    "body": {
+      "runs": [
+        {
+          "createdAt": "<epoch-ms>",
+          "dueAt": "<epoch-ms>",
+          "finishedAt": "<epoch-ms>",
+          "id": "<run:7>",
+          "ownerUser": "test@example.com",
+          "result": "Linted.",
+          "scheduleId": "<schedule:7>",
+          "session": "Lint",
+          "sessionId": "session_<uuid:6>",
+          "startedAt": "<epoch-ms>",
+          "status": "completed"
+        }
+      ],
+      "schedule": {
+        "attention": 0,
+        "createdAt": "<epoch-ms>",
+        "createdBySession": "session_<uuid:1>",
+        "cron": "0 9 * * *",
+        "id": "<schedule:7>",
+        "lastRun": {
+          "createdAt": "<epoch-ms>",
+          "dueAt": "<epoch-ms>",
+          "finishedAt": "<epoch-ms>",
+          "id": "<run:7>",
+          "ownerUser": "test@example.com",
+          "result": "Linted.",
+          "scheduleId": "<schedule:7>",
+          "session": "Lint",
+          "sessionId": "session_<uuid:6>",
+          "startedAt": "<epoch-ms>",
+          "status": "completed"
+        },
+        "model": null,
+        "nextRunAt": "<epoch-ms>",
+        "notify": "problems",
+        "ownerUser": "test@example.com",
+        "prompt": "Lint the repo.",
+        "runAt": null,
+        "status": "active",
+        "thinking": null,
+        "timezone": "UTC",
+        "title": "Lint",
+        "updatedAt": "<epoch-ms>",
+        "workspace": {
+          "id": "test:ws",
+          "kind": "directory",
+          "name": "Fake workspace",
+          "node": "test",
+          "online": true
+        },
+        "workspaceId": "test:ws"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/schedules/<schedule:7>",
+    "status": 200,
+    "step": "it waits for the user"
+  },
+  {
+    "body": {
+      "deleted": true,
+      "interactionId": "<proposal:3>",
+      "scheduleId": "<schedule:7>",
+      "status": "answered"
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/sessions/session_<uuid:1>/interactions/<proposal:3>/answer",
+    "status": 200,
+    "step": "approve the deletion"
   },
   {
     "body": null,

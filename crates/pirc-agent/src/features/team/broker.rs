@@ -498,6 +498,9 @@ pub struct TeamOptions {
     /// Providers handed to each child on its first stdin line.
     pub models: Models,
     pub capabilities: Option<Rc<dyn Fn() -> Value>>,
+    /// The parent session's approval mode (`read-only`, `auto`,
+    /// `full-access`), which children follow.
+    pub approval_mode: Option<Rc<dyn Fn() -> String>>,
     /// The parent chat's frozen project instructions, so children follow
     /// them too.
     pub instructions: Option<Rc<dyn Fn() -> Result<String, String>>>,
@@ -1111,6 +1114,9 @@ impl Team {
         if let Some(capabilities) = &self.options.capabilities {
             line.insert("capabilities".to_owned(), capabilities());
         }
+        if let Some(mode) = &self.options.approval_mode {
+            line.insert("approvalMode".to_owned(), json!(mode()));
+        }
         if let Some(instructions) = &self.options.instructions {
             let instructions = instructions()?;
             if !instructions.is_empty() {
@@ -1127,6 +1133,30 @@ impl Team {
         }
         line.insert("role".to_owned(), Value::Object(role));
         Ok(Value::Object(line))
+    }
+
+    /// The parent's approval mode changed: live children switch too.
+    pub fn set_approval_mode(&self, mode: &str) {
+        let children: Vec<Rc<ChildProcess>> = self
+            .agents
+            .borrow()
+            .values()
+            .filter_map(|member| {
+                let member = member.borrow();
+                live_status(&member.status)
+                    .then(|| member.rpc.clone())
+                    .flatten()
+            })
+            .collect();
+        for child in children {
+            let mut data = Json::new();
+            data.insert("mode".to_owned(), json!(mode));
+            tokio::task::spawn_local(async move {
+                if let Err(error) = child.call("set_approval_mode", data).await {
+                    eprintln!("team: a child did not switch its approval mode: {error}");
+                }
+            });
+        }
     }
 
     /// `launch`: start the child process and hand it its task.

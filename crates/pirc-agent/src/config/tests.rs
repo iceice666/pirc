@@ -104,16 +104,14 @@ fn ignores_hooks_env_and_allowed_paths_until_their_hash_is_trusted() {
     assert_eq!(env_lookup(&untrusted, "PROJECT_VAR"), None);
     assert!(untrusted.hooks.session_start.is_empty());
     assert!(!untrusted.allowed_paths.contains(&extra));
-    assert_eq!(untrusted.warnings, [UNTRUSTED_PROJECT_WARNING]);
-    // defaultModel is not trust-gated.
     assert_eq!(
-        untrusted.default_model,
-        Some(ModelRef {
-            provider: "fake".into(),
-            id: "fake-model".into(),
-            thinking: None
-        })
+        untrusted.warnings,
+        [format!(
+            "{UNTRUSTED_PROJECT_WARNING} The ignored defaultModel is fake/fake-model."
+        )]
     );
+    // defaultModel is trust-gated too (L12).
+    assert_eq!(untrusted.default_model, None);
     // A malformed hash is no trust at all.
     let bogus = load(&setup, &setup.workspace, &[("PIRC_PROJECT_TRUST", "yes")]);
     assert_eq!(env_lookup(&bogus, "PROJECT_VAR"), None);
@@ -133,6 +131,14 @@ fn ignores_hooks_env_and_allowed_paths_until_their_hash_is_trusted() {
     assert_eq!(trusted.hooks.session_start[0].timeout_ms, 10_000);
     assert!(trusted.allowed_paths.contains(&extra));
     assert!(trusted.warnings.is_empty());
+    assert_eq!(
+        trusted.default_model,
+        Some(ModelRef {
+            provider: "fake".into(),
+            id: "fake-model".into(),
+            thinking: None
+        })
+    );
 }
 
 #[test]
@@ -146,7 +152,8 @@ fn ignores_the_config_again_once_it_changes_after_being_trusted() {
         serde_json::to_string_pretty(&json!({
             "hooks": {"sessionStart": [{"command": "echo started"}]},
             "allowedPaths": [extra],
-            "env": {"PROJECT_VAR": "from-project"}
+            "env": {"PROJECT_VAR": "from-project"},
+            "defaultModel": {"id": "fake-model", "provider": "fake"}
         }))
         .unwrap(),
     )
@@ -168,13 +175,48 @@ fn ignores_the_config_again_once_it_changes_after_being_trusted() {
     assert!(config.env.is_empty());
     assert!(config.hooks.session_start.is_empty());
     assert!(!config.allowed_paths.contains(&extra.to_owned()));
-    assert_eq!(config.warnings, [UNTRUSTED_PROJECT_WARNING]);
+    assert_eq!(config.warnings.len(), 1);
+    assert!(config.warnings[0].starts_with(UNTRUSTED_PROJECT_WARNING));
 }
 
 #[test]
 fn needs_no_trust_when_the_project_sets_none_of_the_gated_fields() {
-    let setup = workspace_with(json!({"defaultModel": {"provider": "fake", "id": "fake-model"}}));
+    let setup = workspace_with(json!({}));
     assert!(load(&setup, &setup.workspace, &[]).warnings.is_empty());
+}
+
+#[test]
+fn a_project_default_model_alone_needs_trust() {
+    let setup = workspace_with(json!({"defaultModel": {"provider": "fake", "id": "fake-model"}}));
+    let untrusted = load(&setup, &setup.workspace, &[]);
+    assert_eq!(untrusted.default_model, None);
+    assert_eq!(
+        untrusted.warnings,
+        [format!(
+            "{UNTRUSTED_PROJECT_WARNING} The ignored defaultModel is fake/fake-model."
+        )]
+    );
+    let hash = hash_of(&setup.workspace);
+    let trusted = load(&setup, &setup.workspace, &[("PIRC_PROJECT_TRUST", &hash)]);
+    assert_eq!(
+        trusted.default_model.map(|model| model.id),
+        Some("fake-model".to_owned())
+    );
+    assert!(trusted.warnings.is_empty());
+}
+
+/// A changed model needs trust again. (A config without one keeps its old
+/// hash: `hashes_like_the_ts_agent` still holds.)
+#[test]
+fn the_model_is_part_of_the_hash() {
+    let setup = workspace_with(json!({"env": {"A": "a"}}));
+    let before = hash_of(&setup.workspace);
+    fs::write(
+        setup.workspace.join(".pirc/config.json"),
+        json!({"env": {"A": "a"}, "defaultModel": {"provider": "p", "id": "m"}}).to_string(),
+    )
+    .unwrap();
+    assert_ne!(hash_of(&setup.workspace), before);
 }
 
 /// Recorded from the TS `projectTrustHash` (Bun 1.4.2): keys in UTF-16

@@ -33,6 +33,7 @@ pub enum Op {
     },
     Pause(String),
     Resume(String),
+    /// Propose deleting one; it is deleted once the user approves.
     Delete(String),
     /// Run a schedule now (the user's `/cron run`).
     Run(String),
@@ -192,10 +193,23 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             let schedule = ctx.resume(user, &id)?;
             ctx.brief(&schedule)
         }),
+        // Deleting loses the schedule and its history: the user approves it (L10).
         Op::Delete(id) => with(app, |ctx| {
+            if ctx.is_run_session(&context.session.id)? {
+                return Err(ApiError::new(
+                    403,
+                    "forbidden",
+                    "A scheduled run cannot delete schedules (nobody is there to approve it); pause it instead",
+                ));
+            }
             let schedule = scoped(ctx, context, &id)?;
-            ctx.delete(user, &id)?;
-            Ok(json!({ "id": id, "title": schedule.spec.title, "deleted": true }))
+            let proposal_id = ctx.propose_delete(user, &context.session, &schedule)?;
+            Ok(json!({
+                "id": id,
+                "title": schedule.spec.title,
+                "proposalId": proposal_id,
+                "status": "pending_approval",
+            }))
         }),
         Op::Run(id) => with(app, |ctx| {
             refuse_from_scheduled_run(ctx, context)?;

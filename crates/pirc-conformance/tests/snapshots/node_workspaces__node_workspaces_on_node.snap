@@ -110,6 +110,7 @@ expression: t.into_value()
         "body": {
           "project": {
             "allowedPaths": [],
+            "defaultModel": null,
             "empty": false,
             "env": {
               "A": "1"
@@ -168,6 +169,7 @@ expression: t.into_value()
         "body": {
           "project": {
             "allowedPaths": [],
+            "defaultModel": null,
             "empty": false,
             "env": {
               "A": "1"
@@ -196,6 +198,7 @@ expression: t.into_value()
         "body": {
           "project": {
             "allowedPaths": [],
+            "defaultModel": null,
             "empty": false,
             "env": {
               "A": "1"
