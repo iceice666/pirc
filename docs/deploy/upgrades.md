@@ -1,6 +1,6 @@
 # Upgrades
 
-## Unreleased: gateway schema 1003 (node protocol 10)
+## 0.5.0: gateway schema 1003 (node protocol 10)
 
 An in-place upgrade. On its first start the gateway migrates its database from
 schema 1000, 1001 or 1002 to 1003 by itself, one transaction per step: 1001 adds the
@@ -20,6 +20,12 @@ replace it with `features.autoMode.mode` (`enabled: false` now means
 `"full-access"`, `true` means `"auto"`). A repository's `.pirc/config.json`
 that sets `defaultModel` is ignored until you trust it again in the workspace's
 Settings.
+
+On Linux nodes, sessions no longer reach Unix sockets on the host other than
+the node's inference socket and the Nix daemon's: add any a session needs (an
+`ssh-agent`, a database, a container engine) to
+`sandbox.network.allowUnixSockets`. Leftover `<key>.lock` files beside
+workspace-memory ledgers can be deleted.
 
 A 0.4.x gateway refuses a database at schema 1001, 1002 or 1003 ("newer than this
 gateway"). Back up the gateway's state directory before upgrading if you may

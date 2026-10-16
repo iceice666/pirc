@@ -4,6 +4,8 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-16
+
 The gateway's database moves to schema 1003 on first start (automatic: four columns, one table and one index); a 0.4.x gateway refuses it afterwards, so keep a backup to downgrade. Same node protocol (10); upgrade the gateway and every node together as usual.
 
 ### Added
@@ -44,6 +46,12 @@ The gateway's database moves to schema 1003 on first start (automatic: four colu
 - The `bash` tool and approved host commands run `bash` from `PATH` where `/bin/bash` does not exist, as on NixOS; every call failed with `posix_spawn '/bin/bash'` there.
 - A `nixos-rebuild switch` no longer locks the gateway out of its state: NixOS reset the node account's home (`/var/lib/pirc`) to mode 700 on every activation, and the gateway failed to restart (`CHDIR`) until the next boot. The module now sets it to 711.
 - Unread sessions in the web sidebar are ordinary rows again: they took the style of the workspace's unread-count badge (a blue, 18-pixel-high pill), so several unread sessions overlapped.
+
+### Known limits
+
+- Assets: macOS ARM64 executables (not Developer ID signed or notarized) and the web build; no Linux binaries (use the Nix packages) and no Android APK (the Android client is being rewritten).
+- Checked by hand for this release: `ptc` crash, decline, hook, screenshot and argument handling against OpenAI (Responses and Chat Completions) on macOS; the NixOS module on an aarch64 NixOS VM and an LXC container (sandbox, gateway system-call filter with a real `apiKeyCommand`, state handover, Chromium, Unix sockets). Not checked: Anthropic and subscription backends, Android, push on a real phone, TLS with a real identity provider.
+- On Linux, a Unix socket bound after a session started, or in another network namespace, is not hidden from that session.
 
 ## [0.4.1] - 2026-10-15
 
@@ -171,6 +179,8 @@ This is the first tagged release. Earlier development used 0.1.0 without a publi
 - Linux/x86_64 binaries are not published or newly runtime-validated as part of this release. Nix packaging is retained.
 - Token allocations are estimates scaled to matching provider input usage, not exact per-section tokenizer counts.
 
-[Unreleased]: https://github.com/iceice666/pirc/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/iceice666/pirc/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/iceice666/pirc/releases/tag/v0.5.0
+[0.4.1]: https://github.com/iceice666/pirc/releases/tag/v0.4.1
 [0.3.0]: https://github.com/iceice666/pirc/releases/tag/v0.3.0
 [0.2.0]: https://github.com/iceice666/pirc/releases/tag/v0.2.0
