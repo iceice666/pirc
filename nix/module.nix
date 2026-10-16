@@ -185,7 +185,9 @@ let
     PrivateDevices = true;
     ProtectHome = true;
     ProtectSystem = "strict";
-    ProtectKernelTunables = true;
+    # No ProtectKernelTunables here: its read-only mounts inside /proc make
+    # the kernel refuse bubblewrap's fresh /proc in the agent's PID
+    # namespace, so no agent could start. The gateway sets it.
     ProtectKernelModules = true;
     ProtectControlGroups = true;
     RestrictSUIDSGID = true;
@@ -214,6 +216,7 @@ let
   # @system-service) and mounts its own /proc, and agents and terminals run
   # the user's tools.
   gatewayHardening = hardening // {
+    ProtectKernelTunables = true;
     SystemCallFilter = [ "@system-service" ];
     SystemCallArchitectures = "native";
     ProtectProc = "invisible";
@@ -682,6 +685,9 @@ in
         extraGroups = cfg.supplementaryGroups;
         home = cfg.stateDirectory;
         createHome = true;
+        # The gateway's directory is inside it: activation resets a home to
+        # this mode on every switch (the default 700 would lock it out).
+        homeMode = "711";
       };
       users.groups.${gatewayUser} = { };
       users.users.${gatewayUser} = {

@@ -294,6 +294,17 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
         .unwrap_or_else(|| 128 + status.signal().unwrap_or(0))
 }
 
+/// The shell of `bash` and approved host commands: `/bin/bash`, or `bash`
+/// from `PATH` on hosts without it (NixOS, where the node's unit puts bash
+/// on its `PATH`).
+pub fn default_shell() -> &'static str {
+    shell_for(std::path::Path::new("/bin/bash").exists())
+}
+
+fn shell_for(has_bin_bash: bool) -> &'static str {
+    if has_bin_bash { "/bin/bash" } else { "bash" }
+}
+
 pub struct BashTool {
     spec: ToolSpec,
     shell: String,
@@ -307,7 +318,7 @@ impl Default for BashTool {
 
 impl BashTool {
     pub fn new() -> Self {
-        Self::with_shell("/bin/bash")
+        Self::with_shell(default_shell())
     }
 
     /// The tool running another bash (tests on systems without `/bin/bash`).
@@ -388,3 +399,14 @@ impl BashTool {
 }
 
 spec_tool!(BashTool, ptc: true);
+
+#[cfg(test)]
+mod shell_tests {
+    use super::*;
+
+    #[test]
+    fn falls_back_to_bash_on_path_without_bin_bash() {
+        assert_eq!(shell_for(true), "/bin/bash");
+        assert_eq!(shell_for(false), "bash");
+    }
+}

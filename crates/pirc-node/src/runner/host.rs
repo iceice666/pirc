@@ -89,7 +89,7 @@ pub async fn run_on_host(
     mut abort: watch::Receiver<bool>,
 ) -> Value {
     let mut collector = Collector::default();
-    let mut spawned = tokio::process::Command::new("/bin/bash");
+    let mut spawned = tokio::process::Command::new(pirc_agent::tools::bash::default_shell());
     spawned
         .arg("-c")
         .arg(command)

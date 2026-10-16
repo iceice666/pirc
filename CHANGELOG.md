@@ -40,6 +40,9 @@ The gateway's database moves to schema 1003 on first start (automatic: four colu
 
 - Observational memory no longer says the preferred model is "rate limited" when it is simply not among the gateway's models.
 - Input in the browser's live view (mouse, keys, typed text, navigation) is applied in the order it was sent; quick input could run out of order, such as a key landing after a navigation sent later.
+- NixOS nodes start agents again: the module's `ProtectKernelTunables` made the kernel refuse bubblewrap's `/proc`, so the node logged "agent sandbox unavailable" and no session could run. The gateway keeps the setting.
+- The `bash` tool and approved host commands run `bash` from `PATH` where `/bin/bash` does not exist, as on NixOS; every call failed with `posix_spawn '/bin/bash'` there.
+- A `nixos-rebuild switch` no longer locks the gateway out of its state: NixOS reset the node account's home (`/var/lib/pirc`) to mode 700 on every activation, and the gateway failed to restart (`CHDIR`) until the next boot. The module now sets it to 711.
 - Unread sessions in the web sidebar are ordinary rows again: they took the style of the workspace's unread-count badge (a blue, 18-pixel-high pill), so several unread sessions overlapped.
 
 ## [0.4.1] - 2026-10-15
