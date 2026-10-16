@@ -95,7 +95,7 @@ describe('Sidebar', () => {
     const row = target.querySelector('[aria-label="node"] .workspace-heading')!;
     expect(row.textContent).toContain('Project');
     expect(row.querySelector('.running-count')?.textContent).toContain('1');
-    expect(row.querySelector('.unread')?.textContent).toBe('2');
+    expect(row.querySelector('.unread-count')?.textContent).toBe('2');
     expect(row.querySelector('[aria-label="A session holds the write lease"]')).not.toBeNull();
     row.querySelector<HTMLButtonElement>('button')!.click();
     expect(handlers.onopenworkspace).toHaveBeenCalledWith('node:ws');

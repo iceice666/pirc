@@ -40,6 +40,7 @@ The gateway's database moves to schema 1003 on first start (automatic: four colu
 
 - Observational memory no longer says the preferred model is "rate limited" when it is simply not among the gateway's models.
 - Input in the browser's live view (mouse, keys, typed text, navigation) is applied in the order it was sent; quick input could run out of order, such as a key landing after a navigation sent later.
+- Unread sessions in the web sidebar are ordinary rows again: they took the style of the workspace's unread-count badge (a blue, 18-pixel-high pill), so several unread sessions overlapped.
 
 ## [0.4.1] - 2026-10-15
 

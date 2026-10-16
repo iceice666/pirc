@@ -422,7 +422,7 @@
           {#if running}<small class="running-count" title="{running} running"
               ><span class="status-dot running"></span>{running}</small
             >{/if}
-          {#if unread}<span class="unread" aria-label="{unread} unread">{unread}</span>{/if}
+          {#if unread}<span class="unread-count" aria-label="{unread} unread">{unread}</span>{/if}
         </span>
       </button>
       <button
@@ -1168,7 +1168,7 @@
     border-radius: 50%;
     background: var(--accent);
   }
-  .unread {
+  .unread-count {
     flex: none;
     min-width: 18px;
     height: 18px;
