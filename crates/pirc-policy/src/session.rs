@@ -43,7 +43,12 @@ pub struct NetworkConfig {
     /// Let dev servers listen on localhost (default true).
     #[serde(default = "yes")]
     pub allow_local_binding: bool,
-    /// macOS: extra Unix sockets (an ssh-agent, the nix daemon).
+    /// Extra Unix sockets the agent may reach (an ssh-agent, a container
+    /// engine). macOS allows connecting to them; Linux leaves them visible,
+    /// read back even inside a hidden directory (the native backend hides
+    /// every other socket bound on the host but the inference socket and
+    /// the nix daemon's; srt allows all), and one named here is no longer
+    /// hidden as a `LINUX_HOST_SOCKETS` entry.
     #[serde(default)]
     pub allow_unix_sockets: Vec<String>,
 }
@@ -117,7 +122,11 @@ pub struct SessionPolicyInput {
     pub allowed_paths: Vec<String>,
     /// The session's own state (JSONL, team dir), inside `private_dirs`.
     pub session_dir: String,
-    pub workspace_memory_dir: String,
+    /// The one workspace-memory ledger the session may read and append to
+    /// (its repository's; the node creates it), or none (chat sessions,
+    /// read-only commands). Not the directory: every repository's ledger
+    /// is there.
+    pub workspace_memory_file: Option<String>,
     pub inference_socket: Option<String>,
     /// Shared write roots; one inside `private_dirs` (the session's own
     /// temp dir in the node's private parent) is read back as well.
@@ -913,7 +922,11 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
         |items: &[String]| -> Vec<String> { items.iter().map(|item| real_resolve(item)).collect() };
     let workspace = real_resolve(&input.workspace_root);
     let session_dir = real_resolve(&input.session_dir);
-    let memory_dir = real_resolve(&input.workspace_memory_dir);
+    let memory_file: Vec<String> = input
+        .workspace_memory_file
+        .iter()
+        .map(|file| real_resolve(file))
+        .collect();
     let inference_socket = input
         .inference_socket
         .as_deref()
@@ -937,9 +950,11 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
         .map(|item| real_resolve(item))
         .collect();
     let host_sockets: Vec<String> = if input.platform == Platform::Linux {
+        let allowed = configured(&input.config.network.allow_unix_sockets);
         linux_host_sockets(input.uid, input.ssh_auth_sock.as_deref())
             .into_iter()
             .filter(|item| exists(item))
+            .filter(|item| !allowed.contains(&real_resolve(item)))
             .collect()
     } else {
         Vec::new()
@@ -960,7 +975,8 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
         [workspace.clone()]
             .into_iter()
             .chain(resolve_all(&input.allowed_paths))
-            .chain([session_dir.clone(), memory_dir.clone()])
+            .chain([session_dir.clone()])
+            .chain(memory_file.iter().cloned())
             .chain(shared_write.iter().cloned())
             .chain(configured(&filesystem.allow_write)),
     );
@@ -973,8 +989,9 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
         .filter(|tmp| private_dirs.iter().any(|dir| is_inside(tmp, dir)))
         .cloned()
         .collect();
-    let own_state: Vec<String> = [workspace.clone(), session_dir.clone(), memory_dir.clone()]
+    let own_state: Vec<String> = [workspace.clone(), session_dir.clone()]
         .into_iter()
+        .chain(memory_file.iter().cloned())
         .chain(private_tmp_dirs.iter().cloned())
         .collect();
     let mut prompt_paths = Vec::new();
@@ -996,9 +1013,18 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
         // What the session needs back from inside the private dirs. A chat
         // session's directory lives in the node's state.
         allow_read: unique(
-            [workspace.clone(), session_dir.clone(), memory_dir.clone()]
+            [workspace.clone(), session_dir.clone()]
                 .into_iter()
+                .chain(memory_file.iter().cloned())
                 .chain(socket_dir)
+                // Linux hides sockets by read rules only: one the config
+                // allows is read back even inside a hidden directory (an
+                // ssh-agent's in `/tmp/ssh-*`).
+                .chain(
+                    configured(&network.allow_unix_sockets)
+                        .into_iter()
+                        .filter(|_| input.platform == Platform::Linux),
+                )
                 .chain(private_tmp_dirs)
                 .chain(read_only_dirs.iter().cloned())
                 .chain(configured(&filesystem.allow_read)),
@@ -1160,7 +1186,7 @@ mod tests {
             workspace_root: workspace_root.to_owned(),
             allowed_paths: Vec::new(),
             session_dir: d.session.clone(),
-            workspace_memory_dir: d.memory.clone(),
+            workspace_memory_file: Some(p(&d.memory, "k.jsonl")),
             inference_socket: Some(d.socket.clone()),
             tmp_dirs: vec![d.tmp.clone()],
             protected_paths: Vec::new(),
@@ -1187,6 +1213,11 @@ mod tests {
         assert!(!read_allowed(&paths, &p(&d.state, "sessions/pi_2/x.jsonl")));
         assert!(read_allowed(&paths, &p(&d.session, "session.jsonl")));
         assert!(read_allowed(&paths, &p(&d.memory, "k.jsonl")));
+        // Not another repository's ledger, nor a file beside the session's.
+        assert!(!read_allowed(&paths, &p(&d.memory, "other.jsonl")));
+        assert!(write_allowed(&paths, &p(&d.memory, "k.jsonl")));
+        assert!(!write_allowed(&paths, &p(&d.memory, "other.jsonl")));
+        assert!(!write_allowed(&paths, &p(&d.memory, "k.lock")));
         assert!(read_allowed(&paths, &d.socket));
         assert!(!read_allowed(&paths, &p(&d.home, ".ssh/id_ed25519")));
         assert!(read_allowed(&paths, &p(&d.home, "notes.md")));
@@ -1503,6 +1534,9 @@ mod tests {
         fs::create_dir_all(p(&d.state, "sandbox/bin")).unwrap();
         // Only what exists now: the node warns that later entries are open.
         fs::create_dir_all(p(&d.state, "sessions/pi_2")).unwrap();
+        // The session's ledger (the node makes it) and another repository's.
+        fs::write(p(&d.memory, "k.jsonl"), "").unwrap();
+        fs::write(p(&d.memory, "other.jsonl"), "").unwrap();
         let mut input = input(&d, &workspace, json!({}));
         input.allowed_paths = vec![d.home.clone()];
         input.inference_socket = None;
@@ -1516,6 +1550,7 @@ mod tests {
         ));
         assert!(write_allowed(&paths, &p(&d.session, "session.jsonl")));
         assert!(write_allowed(&paths, &p(&d.memory, "k.jsonl")));
+        assert!(!write_allowed(&paths, &p(&d.memory, "other.jsonl")));
         assert!(!write_allowed(
             &paths,
             &p(&d.state, "sandbox/bin/apply-seccomp")
@@ -1570,6 +1605,31 @@ mod tests {
         ));
         assert!(read_allowed(
             &session_policy(&mac).unwrap().paths,
+            &agent_socket
+        ));
+        // `allowUnixSockets` leaves a host socket visible, even inside a
+        // hidden directory.
+        let in_private = p(&d.state, "agent.sock");
+        fs::write(&in_private, "").unwrap();
+        let mut inside = input(
+            &d,
+            &d.workspace,
+            json!({ "network": { "allowUnixSockets": [in_private] } }),
+        );
+        inside.platform = Platform::Linux;
+        let inside_paths = session_policy(&inside).unwrap().paths;
+        assert!(read_allowed(&inside_paths, &in_private));
+        assert!(!read_allowed(&inside_paths, &p(&d.state, "node.sqlite")));
+        let mut allowed = input(
+            &d,
+            &d.workspace,
+            json!({ "network": { "allowUnixSockets": [agent_socket] } }),
+        );
+        allowed.inference_socket = None;
+        allowed.ssh_auth_sock = Some(agent_socket.clone());
+        allowed.platform = Platform::Linux;
+        assert!(read_allowed(
+            &session_policy(&allowed).unwrap().paths,
             &agent_socket
         ));
     }

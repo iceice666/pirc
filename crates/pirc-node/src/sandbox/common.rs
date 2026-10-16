@@ -3,7 +3,7 @@
 //! directory. Owner: **sandbox** (M6); M7: `readonly_session` is **hardening**'s.
 
 use std::future::Future;
-use std::os::unix::fs::DirBuilderExt;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
@@ -360,6 +360,39 @@ pub async fn spawn_readonly_session(
         .map_err(|_| ApiError::internal())?
 }
 
+/// Make a session's workspace-memory ledger when it is missing: the
+/// sandbox opens that one file (bubblewrap binds only what exists), not
+/// the directory. Never through a symlink, and only a regular file of this
+/// account with no other name: an agent of an older node could write the
+/// whole directory, and a hard link it left there would open another file
+/// to the session.
+fn ensure_ledger(file: &Path) -> std::io::Result<()> {
+    use nix::fcntl::OFlag;
+    use std::os::unix::fs::MetadataExt;
+    if let Some(dir) = file.parent() {
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)?;
+    }
+    let opened = std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .mode(0o600)
+        .custom_flags((OFlag::O_NOFOLLOW | OFlag::O_NONBLOCK | OFlag::O_NOCTTY).bits())
+        .open(file)?;
+    let meta = opened.metadata()?;
+    if !meta.is_file() {
+        return Err(std::io::Error::other("not a regular file"));
+    }
+    if meta.nlink() != 1 || meta.uid() != nix::unistd::getuid().as_raw() {
+        return Err(std::io::Error::other(
+            "not a file of this account with one name",
+        ));
+    }
+    Ok(())
+}
+
 /// The first half of `NodeSandbox.prepare`: read the agent config, make
 /// the session's temporary directory, build the policy and the warnings.
 pub fn session(
@@ -385,6 +418,20 @@ pub fn session(
         warnings.push(format!("Sandbox settings ignored: {problem}"));
     }
     let private_dirs = private_dirs(config, env, &parent);
+    let workspace_memory_file =
+        input
+            .workspace_memory_file
+            .as_deref()
+            .and_then(|file| match ensure_ledger(file) {
+                Ok(()) => Some(text(file)),
+                Err(error) => {
+                    warnings.push(format!(
+                        "Workspace memory is unavailable: cannot open {}: {error}",
+                        file.display()
+                    ));
+                    None
+                }
+            });
     let policy_input = SessionPolicyInput {
         config: agent_config.sandbox,
         config_dir: agent_config.config_dir,
@@ -393,7 +440,7 @@ pub fn session(
         workspace_root: text(&input.workspace_root),
         allowed_paths: agent_config.allowed_paths,
         session_dir: text(&input.session_dir),
-        workspace_memory_dir: text(&config.workspace_memory_dir),
+        workspace_memory_file,
         inference_socket: input.inference_socket.as_deref().map(text),
         tmp_dirs: vec![text(&tmp), "/tmp".to_owned()],
         protected_paths: input.protected_paths.iter().map(|p| text(p)).collect(),
@@ -472,6 +519,10 @@ fn private_dirs(config: &NodeConfig, env: &Env, node_tmp: &Path) -> Vec<String> 
         config.uploads_dir.clone(),
         database_dir,
         config.browser.profiles_dir.clone(),
+        // Every repository's ledger: a session gets its own back
+        // (`workspace_memory_file`). Inside the state dir by default, but
+        // `PIRC_WORKSPACE_MEMORY_DIR` may put it anywhere.
+        config.workspace_memory_dir.clone(),
     ]
     .into_iter()
     // systemd credentials (the NixOS module hands the node its token there).
@@ -526,7 +577,7 @@ pub fn readonly_session(
         workspace_root: workspace.clone(),
         allowed_paths: agent_config.allowed_paths,
         session_dir: workspace,
-        workspace_memory_dir: text(&config.workspace_memory_dir),
+        workspace_memory_file: None,
         inference_socket: None,
         tmp_dirs: vec![text(&tmp)],
         protected_paths: Vec::new(),
@@ -664,6 +715,7 @@ mod tests {
             session_dir: config.sessions_dir.join(name),
             inference_socket: None,
             protected_paths: Vec::new(),
+            workspace_memory_file: None,
         };
         let a = session(&config, &env, &node_tmp, &input("pi_a")).unwrap();
         let b = session(&config, &env, &node_tmp, &input("pi_b")).unwrap();
@@ -723,6 +775,7 @@ mod tests {
             session_dir: config.sessions_dir.join("pi_a"),
             inference_socket: None,
             protected_paths: Vec::new(),
+            workspace_memory_file: None,
         };
         let temp_warning = |node_tmp: &NodeTmp| {
             let session = session(&config, &env, node_tmp, &input).unwrap();
@@ -736,6 +789,69 @@ mod tests {
         };
         assert!(!temp_warning(&NodeTmp::new(&env)));
         assert!(temp_warning(&NodeTmp::with_writable_siblings(&env)));
+    }
+
+    /// A session gets its own ledger back from the workspace-memory
+    /// directory, wherever `PIRC_WORKSPACE_MEMORY_DIR` puts it, and nothing
+    /// else there; a ledger planted as a symlink or a hard link is refused
+    /// with a warning.
+    #[test]
+    fn a_session_opens_only_its_own_ledger() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let memory = root.join("elsewhere/memory");
+        let memory_text = text(&memory);
+        let (config, env) =
+            test_support::node(&root, &[("PIRC_WORKSPACE_MEMORY_DIR", &memory_text)]);
+        assert_eq!(config.workspace_memory_dir, memory);
+        let node_tmp = NodeTmp::new(&env);
+        let input = |file: &str| PrepareInput {
+            session_id: "pi_a".to_owned(),
+            workspace_root: root.join("workspace"),
+            session_dir: config.sessions_dir.join("pi_a"),
+            inference_socket: None,
+            protected_paths: Vec::new(),
+            workspace_memory_file: Some(memory.join(file)),
+        };
+        // Another repository's ledger (one not yet made would be writable
+        // where the directory lies in a write root, such as `/tmp` here
+        // on Linux: an accepted gap of private state there).
+        std::fs::create_dir_all(&memory).unwrap();
+        std::fs::write(memory.join("other.jsonl"), "").unwrap();
+        let opened = session(&config, &env, &node_tmp, &input("k.jsonl")).unwrap();
+        Session::remove_tmp(&opened.tmp);
+        let paths = &opened.policy.paths;
+        let own = text(&memory.join("k.jsonl"));
+        let other = text(&memory.join("other.jsonl"));
+        assert!(memory.join("k.jsonl").is_file(), "made by the node");
+        assert!(pirc_policy::read_allowed(paths, &own));
+        assert!(pirc_policy::write_allowed(paths, &own));
+        assert!(!pirc_policy::read_allowed(paths, &other));
+        assert!(!pirc_policy::write_allowed(paths, &other));
+
+        std::fs::write(root.join("secret"), "x").unwrap();
+        std::os::unix::fs::symlink(root.join("secret"), memory.join("link.jsonl")).unwrap();
+        std::fs::hard_link(root.join("secret"), memory.join("hard.jsonl")).unwrap();
+        for planted in ["link.jsonl", "hard.jsonl"] {
+            let refused = session(&config, &env, &node_tmp, &input(planted)).unwrap();
+            Session::remove_tmp(&refused.tmp);
+            assert!(
+                refused
+                    .warnings
+                    .iter()
+                    .any(|warning| warning.starts_with("Workspace memory is unavailable")),
+                "{planted}: {:?}",
+                refused.warnings
+            );
+            let refused_paths = &refused.policy.paths;
+            let planted_path = text(&memory.join(planted));
+            assert!(!refused_paths.allow_write.contains(&planted_path));
+            assert!(!refused_paths.allow_read.contains(&planted_path));
+            assert!(
+                !pirc_policy::read_allowed(refused_paths, &text(&memory.join(planted))),
+                "{planted}"
+            );
+        }
     }
 
     #[test]

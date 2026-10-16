@@ -3,8 +3,8 @@
 //! bubblewrap with srt's argument order and the session policy's paths, a
 //! network namespace whose only network route out is the filtering HTTP
 //! and SOCKS5 proxy ([`super::proxy`]) on a Unix socket served by the node
-//! itself (host daemons behind visible Unix sockets are another way out:
-//! see below), and the in-sandbox bridge (`pirc-node sandbox-bridge`,
+//! itself (host daemons behind Unix sockets bound after the plan are
+//! another way out: see below), and the in-sandbox bridge (`pirc-node sandbox-bridge`,
 //! [`super::bridge`]) that exposes it as `127.0.0.1:3128` and `:1080` and
 //! then runs the agent. The proxy's allowlist is shared with the session's
 //! [`super::NetworkControl`], so an approval widens it in place (no
@@ -35,25 +35,31 @@
 //! # What the native backend does not enforce
 //!
 //! - `network`: see [`super::proxy`].
-//!   `allowLocalBinding` and `allowUnixSockets` have no effect: the agent
-//!   has its own network namespace (its localhost is its own) and Unix
-//!   sockets are filtered only by the read rules, as with srt on Linux
-//!   (`allowAllUnixSockets`, no seccomp).
-//! - Unix sockets of host daemons. The read rules hide the policy's
-//!   `LINUX_HOST_SOCKETS` and, beyond srt, the host's name-service sockets
-//!   (`plan::RESOLVER_SOCKETS`: nscd, systemd-resolved, sssd, avahi), which
-//!   would resolve any name for the agent and so leak data over DNS past
-//!   the allowlist, and the node's uid's `/tmp/ssh-*` directories (sshd's
-//!   forwarded agents, `plan::SSH_AGENT_TMP`) that exist at plan time;
-//!   this holds for [`Sandbox::prepare_readonly`] too. `SSH_AUTH_SOCK`
-//!   spelled through a link is hidden where the link leads at plan time:
-//!   a socket it leads to later, or a `/tmp/ssh-*` directory made during
-//!   the session, is reachable (see [`plan`]'s accepted gaps).
-//!   Residual risk: any other host daemon whose socket stays visible (and
-//!   connectable: `connect` works on a read-only bind) and that resolves
-//!   names or connects on a client's behalf is a way out past the proxy.
-//!   An allowlist of Unix sockets (the inference socket and the configured
-//!   ones) would close it; not done (srt has none on Linux either).
+//!   `allowLocalBinding` has no effect: the agent has its own network
+//!   namespace (its localhost is its own). Unix sockets are filtered by
+//!   the read rules only (no seccomp, as with srt's `allowAllUnixSockets`):
+//!   `allowUnixSockets` names the ones left visible (below).
+//! - Unix sockets of host daemons bound after the plan. The read rules
+//!   hide the policy's `LINUX_HOST_SOCKETS` and, beyond srt, the host's
+//!   name-service sockets (`plan::RESOLVER_SOCKETS`: nscd,
+//!   systemd-resolved, sssd, avahi), which would resolve any name for the
+//!   agent and so leak data over DNS past the allowlist, the node's uid's
+//!   `/tmp/ssh-*` directories (sshd's forwarded agents,
+//!   `plan::SSH_AGENT_TMP`) that exist at plan time, and every other
+//!   socket bound on the host at plan time (`plan::host_unix_sockets`, from
+//!   `/proc/net/unix`; nodes' per-session proxy sockets excepted) but an
+//!   allowlist: for a session, the inference
+//!   socket, `allowUnixSockets` and the nix daemon's
+//!   (`plan::NIX_DAEMON_SOCKET`, open by default so builds work; the
+//!   daemon fetches past the proxy, and auto mode is the guard); for
+//!   [`Sandbox::prepare_readonly`], none. `SSH_AUTH_SOCK` spelled through
+//!   a link is hidden where the link leads at plan time: a socket it leads
+//!   to later, or a `/tmp/ssh-*` directory made during the session, is
+//!   reachable (see [`plan`]'s accepted gaps). Residual risk: a host
+//!   daemon whose socket is bound after the plan, or in another network
+//!   namespace, stays visible (and connectable: `connect` works on a
+//!   read-only bind); one that resolves names or connects on a client's
+//!   behalf is a way out past the proxy.
 //! - A protected path the host replaces during a session (git's
 //!   `config.lock` rename over `.git/config`, a checkout of tracked
 //!   `.vscode/`, an editor's atomic save): the kernel detaches the
@@ -206,6 +212,7 @@ async fn plan_for(
     env: &Env,
     policy: &SessionPolicy,
     cwd: &Path,
+    allowed_sockets: Vec<String>,
 ) -> Result<(Vec<String>, MountPoints), String> {
     let paths = policy.paths.clone();
     let config = config.clone();
@@ -239,6 +246,8 @@ async fn plan_for(
             nix::unistd::getuid().as_raw(),
             env.get("SSH_AUTH_SOCK"),
         ),
+        bound_sockets: None,
+        allowed_sockets,
         record: None,
     };
     tokio::task::spawn_blocking(move || {
@@ -252,8 +261,17 @@ async fn plan_for(
         if let Some(file) = &record {
             plan::sweep_record(file);
         }
+        // Unreadable (a restricted `/proc`), no host socket would be
+        // hidden: refuse instead.
+        let bound_sockets = std::fs::read_to_string(plan::PROC_NET_UNIX).map_err(|error| {
+            format!(
+                "cannot list the host's Unix sockets to hide them ({}): {error}",
+                plan::PROC_NET_UNIX
+            )
+        })?;
         let options = Options {
             record: record.clone(),
+            bound_sockets: Some(bound_sockets),
             ..options
         };
         let Plan { args, mount_points } =
@@ -262,6 +280,14 @@ async fn plan_for(
     })
     .await
     .map_err(|error| format!("the filesystem plan failed: {error}"))?
+}
+
+/// The Unix sockets a session's agent may reach: the inference socket and
+/// `allowUnixSockets` (the policy's), and the nix daemon's.
+fn session_sockets(policy: &SessionPolicy) -> Vec<String> {
+    let mut sockets = policy.network.allow_unix_sockets.clone();
+    sockets.push(plan::NIX_DAEMON_SOCKET.to_owned());
+    sockets
 }
 
 /// The native backend.
@@ -422,7 +448,7 @@ impl NativeSandbox {
             Err(error) => return fail(&tmp, error),
         };
         let (filesystem, mounts) =
-            match plan_for(&self.config, &self.env, &policy, workspace_root).await {
+            match plan_for(&self.config, &self.env, &policy, workspace_root, Vec::new()).await {
                 Ok(plan) => plan,
                 Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
             };
@@ -505,11 +531,18 @@ impl Sandbox for NativeSandbox {
                 Ok(bwrap) => bwrap,
                 Err(error) => return fail(&tmp, error),
             };
-            let (filesystem, mounts) =
-                match plan_for(&self.config, &self.env, &policy, &input.workspace_root).await {
-                    Ok(plan) => plan,
-                    Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
-                };
+            let (filesystem, mounts) = match plan_for(
+                &self.config,
+                &self.env,
+                &policy,
+                &input.workspace_root,
+                session_sockets(&policy),
+            )
+            .await
+            {
+                Ok(plan) => plan,
+                Err(reason) => return fail(&tmp, super::unavailable_error(&reason)),
+            };
             let socket = tmp.join(PROXY_SOCKET);
             let listener = match tokio::net::UnixListener::bind(&socket) {
                 Ok(listener) => listener,

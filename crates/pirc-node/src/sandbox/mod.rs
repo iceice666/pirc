@@ -106,6 +106,9 @@ pub struct PrepareInput {
     pub inference_socket: Option<PathBuf>,
     /// Never writable from the session (a chat project's instructions).
     pub protected_paths: Vec<PathBuf>,
+    /// The workspace-memory ledger the session may read and append to
+    /// (made here when missing); the rest of the directory stays closed.
+    pub workspace_memory_file: Option<PathBuf>,
 }
 
 /// A host command to run read-only ([`Sandbox::prepare_readonly`]).

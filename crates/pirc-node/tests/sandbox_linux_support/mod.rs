@@ -23,6 +23,21 @@ pub struct Fixture {
     vars: Vec<(String, String)>,
     /// `TMPDIR`.
     pub tmp: tempfile::TempDir,
+    /// Released after the fixture's directory is removed ([`serial`]).
+    _serial: std::sync::MutexGuard<'static, ()>,
+}
+
+/// One fixture at a time in this binary: a plan hides every Unix socket
+/// bound on the host, the other tests' included, and a fixture removed
+/// (its sockets with it) while another test's sandbox starts would fail
+/// that start (an accepted gap of `plan`, which a node meets only with
+/// sockets that vanish within the moment between a plan and its mounts).
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 impl Drop for Fixture {
@@ -66,6 +81,7 @@ pub fn fixture_env(
         || PathBuf::from(env!("CARGO_TARGET_TMPDIR")),
         Path::to_path_buf,
     );
+    let guard = serial();
     let root = base.join(format!("sandbox-linux-{name}"));
     let _ = fs::remove_dir_all(&root);
     for dir in [
@@ -132,6 +148,7 @@ pub fn fixture_env(
         sandbox,
         vars,
         tmp: tmp_dir,
+        _serial: guard,
     })
 }
 
@@ -168,6 +185,7 @@ impl Fixture {
             session_dir,
             inference_socket,
             protected_paths: Vec::new(),
+            workspace_memory_file: None,
         }
     }
 

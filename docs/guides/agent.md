@@ -9,10 +9,10 @@ The built-in agent (`crates/pirc-agent/`) is configured in three layers. **Model
 
 ## Agent sandbox
 
-A node starts every agent inside its native sandbox (Seatbelt on macOS, bubblewrap on Linux, with a filtering HTTP/SOCKS5 proxy). The separate PTC guest is additionally hardened with seccomp on Linux; the outer agent sandbox allows Unix sockets and does not use seccomp. The agent's tools, shells, `ptc` scripts, hooks, teammates and subagents all run inside it. The file tools apply the same rules, so they refuse what the sandbox would:
+A node starts every agent inside its native sandbox (Seatbelt on macOS, bubblewrap on Linux, with a filtering HTTP/SOCKS5 proxy). The separate PTC guest is additionally hardened with seccomp on Linux; the outer agent sandbox does not use seccomp, and on Linux hides the host's Unix sockets except the node's, the Nix daemon's and those in `allowUnixSockets`. The agent's tools, shells, `ptc` scripts, hooks, teammates and subagents all run inside it. The file tools apply the same rules, so they refuse what the sandbox would:
 
 - **Reads** work anywhere except credential stores (`~/.ssh`, `~/.gnupg`, cloud and git credentials, keychains, browser profiles) and the node's own state (other sessions, uploads, its database, browser profiles, its credentials).
-- **Writes** go only to the workspace (or a chat's own directory), the node's `allowedPaths`, the session's temporary directory, `/tmp` and build caches. `.pirc/`, git hooks, `.git/config` and shell startup files stay read-only.
+- **Writes** go only to the workspace (or a chat's own directory), the node's `allowedPaths`, the session's temporary directory, `/tmp`, build caches and the repository's workspace-memory ledger (no other repository's). `.pirc/`, git hooks, `.git/config` and shell startup files stay read-only.
 - **Network** goes through a filtering proxy. Only common code hosts and package registries are allowed, plus hosts you add. When a task needs another host, the agent calls `sandbox_allow_domains` and the node asks you. An approved host stays allowed for the rest of the session.
 - **Outside the sandbox**: for what the sandbox blocks (a nix build, changing the system), the agent calls `unsandboxed_bash`. The node asks you first, then runs the command with the node account's permissions, but without the node's own secrets. `gh` and pushing with git (HTTPS or SSH) can work inside the sandbox once the node is set up for them: see [Git and the GitHub CLI](../deploy/sandbox-and-browser.md#git-and-the-github-cli).
 

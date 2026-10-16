@@ -23,6 +23,10 @@
 //!   srt's: they resolve names past the proxy);
 //! - the node's uid's `/tmp/ssh-*` directories hidden, where sshd puts
 //!   forwarded agents' sockets ([`SSH_AGENT_TMP`], not srt's);
+//! - every other Unix socket bound on the host when the plan is made
+//!   hidden, but those the agent may reach ([`Options::allowed_sockets`]:
+//!   the inference socket, `allowUnixSockets`, the nix daemon's)
+//!   ([`host_unix_sockets`], not srt's);
 //! - for a denied path that does not exist, its first missing component
 //!   (srt's stub, below);
 //! - for a denied path below a *file* (a worktree's `.git` file), that file
@@ -139,12 +143,25 @@
 //!   existed at plan time ([`SSH_AGENT_TMP`]). A `/tmp/ssh-*` directory
 //!   made after the plan (a reattach, another login during the session)
 //!   is visible in running sandboxes, which bind the host's `/tmp`: its
-//!   agent socket is reachable through the link or by name. Unix-socket
-//!   connects are not filtered otherwise (see `linux.rs`). One removed
+//!   agent socket is reachable through the link or by name. One removed
 //!   between the plan and bubblewrap's mounts (its login ending as a
 //!   session starts) fails that start (bubblewrap cannot create or
 //!   remount it), or bubblewrap makes it again, empty, on the host: fail
 //!   closed, and an empty leftover.
+//! - Unix sockets are hidden by path, as bound when the plan is made
+//!   ([`host_unix_sockets`]); connects are not filtered otherwise (no
+//!   seccomp, see `linux.rs`). A socket a host daemon binds later (a
+//!   daemon restarting under a new name, a new login's) is reachable in
+//!   running sandboxes, and so is a socket file bound in another network
+//!   namespace (not in the node's `/proc/net/unix`), or bound by a
+//!   relative path (listed without its directory). A socket removed
+//!   between the plan and bubblewrap's mounts goes as above: the start
+//!   fails, or, where the agent may write (`/tmp`), bubblewrap leaves an
+//!   empty file on the host in its place, which a daemon binding that
+//!   path again without removing it first finds in its way. The window is
+//!   the moment between a plan and its mounts; nodes' own per-session
+//!   proxy sockets, which come and go with sessions, are not hidden
+//!   ([`in_node_tmp`]).
 //! - A hard link to a protected file that already existed (in a writable
 //!   root, say) is another name for it that no deny covers: writing through
 //!   it writes the file. The agent cannot make one during its session: a
@@ -225,6 +242,89 @@ pub fn ssh_agent_dirs(tmp: &str, uid: u32) -> Vec<String> {
         .collect();
     dirs.sort();
     dirs
+}
+
+/// The nix daemon's socket: reachable from a session by default (decided
+/// with the user, 2026-10-16), so builds work in the sandbox. The daemon
+/// fetches for its clients past the proxy; auto mode's classification
+/// of the commands that ask it to is the guard.
+pub const NIX_DAEMON_SOCKET: &str = "/nix/var/nix/daemon-socket/socket";
+
+/// The kernel's list of this network namespace's Unix sockets.
+pub const PROC_NET_UNIX: &str = "/proc/net/unix";
+
+/// The paths bound in `/proc/net/unix`'s text (each once, in order):
+/// `Num RefCount Protocol Flags Type St Inode Path`, the path last and
+/// possibly holding spaces; abstract names (`@...`) and unbound sockets
+/// have none worth hiding (abstract names belong to a network namespace,
+/// and the sandbox has its own).
+pub fn parse_proc_net_unix(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for line in text.lines().skip(1) {
+        let mut rest = line.trim_start();
+        for _ in 0..7 {
+            match rest.find(char::is_whitespace) {
+                Some(end) => rest = rest[end..].trim_start(),
+                None => {
+                    rest = "";
+                    break;
+                }
+            }
+        }
+        if rest.starts_with('/') && !out.iter().any(|path| path == rest) {
+            out.push(rest.to_owned());
+        }
+    }
+    out
+}
+
+/// The name prefix of a node's private parent of its sessions' temporary
+/// directories (`common::NodeTmp`).
+const NODE_TMP_PREFIX: &str = "pirc-n-";
+
+/// Whether `path` lies in a node's private temporary parent
+/// ([`NODE_TMP_PREFIX`], a directory this uid owns): a session's proxy
+/// socket, or a probe's. Not hidden: each answers only its session's
+/// credentials, and they come and go with sessions, so one hidden at plan
+/// time could be gone before bubblewrap mounts on it, failing the start
+/// (see the accepted gaps). The node's own parent is a private dir anyway.
+fn in_node_tmp(path: &str) -> bool {
+    let uid = nix::unistd::getuid().as_raw();
+    Path::new(path).ancestors().skip(1).any(|dir| {
+        dir.file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with(NODE_TMP_PREFIX))
+            && std::fs::symlink_metadata(dir).is_ok_and(|meta| meta.is_dir() && meta.uid() == uid)
+    })
+}
+
+/// The Unix sockets bound on the host that the plan hides: each path of
+/// [`PROC_NET_UNIX`] that is a socket in the node's view, at its
+/// canonical path, but `allowed` (canonical paths) and the sessions' proxy
+/// sockets ([`in_node_tmp`]). The list covers the
+/// node's network namespace only: a socket file a daemon in another one
+/// bound (a container's, bind-mounted out) is not listed, and stays
+/// reachable unless a rule hides it (`LINUX_HOST_SOCKETS`). Sockets bound
+/// after the plan stay visible too (see the accepted gaps).
+pub fn host_unix_sockets(proc_text: &str, allowed: &[String]) -> Vec<String> {
+    use std::os::unix::fs::FileTypeExt;
+    let mut out: Vec<String> = Vec::new();
+    for path in parse_proc_net_unix(proc_text) {
+        let Ok(real) = std::fs::canonicalize(&path) else {
+            continue;
+        };
+        if !std::fs::metadata(&real).is_ok_and(|meta| meta.file_type().is_socket()) {
+            continue;
+        }
+        let real = text(&real);
+        if !allowed.contains(&real)
+            && !kernel_path(&real)
+            && !in_node_tmp(&real)
+            && !out.contains(&real)
+        {
+            out.push(real);
+        }
+    }
+    out
 }
 
 /// What a path's mount gives the agent.
@@ -432,6 +532,15 @@ pub struct Options {
     /// (`pirc_policy::session::linux_host_sockets`): `deny_read` entries
     /// whose links are not checked (their targets are still hidden).
     pub host_sockets: Vec<String>,
+    /// With [`Options::host_rules`], [`PROC_NET_UNIX`]'s text: every Unix
+    /// socket it lists is hidden ([`host_unix_sockets`]) but
+    /// [`Options::allowed_sockets`]. The caller reads it, and refuses to
+    /// start when it cannot (nothing would be hidden). `None` for the
+    /// probe: it checks the stack, and a socket gone before bubblewrap
+    /// mounts on it would fail it (and its result is cached).
+    pub bound_sockets: Option<String>,
+    /// The Unix sockets the agent may reach ([`Options::bound_sockets`]).
+    pub allowed_sockets: Vec<String>,
 }
 
 /// A protected path the plan cannot protect: it is reached through a
@@ -586,6 +695,23 @@ pub fn plan(paths: &PathPolicy, options: &Options) -> Result<Plan, Refusal> {
         for dir in ssh_agent_dirs(SSH_AGENT_TMP, nix::unistd::getuid().as_raw()) {
             if !effective.deny_read.contains(&dir) {
                 effective.deny_read.push(dir);
+            }
+        }
+    }
+    if options.host_rules
+        && let Some(listed) = &options.bound_sockets
+    {
+        // Every other socket bound on the host, unless the policy hides it
+        // already (a socket in a hidden directory needs no mount of its own).
+        let allowed: Vec<String> = options
+            .allowed_sockets
+            .iter()
+            .filter_map(|socket| std::fs::canonicalize(socket).ok())
+            .map(|socket| text(&socket))
+            .collect();
+        for socket in host_unix_sockets(listed, &allowed) {
+            if access(&effective, &socket) != Access::Hidden {
+                effective.deny_read.push(socket);
             }
         }
     }
@@ -1622,6 +1748,83 @@ mod tests {
         assert_eq!(ssh_agent_dirs(&root, uid), [p("ssh-AbC123"), p("ssh-x")]);
         assert!(ssh_agent_dirs(&root, uid + 1).is_empty());
         assert!(ssh_agent_dirs(&p("missing"), uid).is_empty());
+    }
+
+    #[test]
+    fn proc_net_unix_lists_each_bound_path_once() {
+        let text = "Num       RefCount Protocol Flags    Type St Inode Path\n\
+            0000000000000000: 00000002 00000000 00010000 0001 01 1001 /run/a.sock\n\
+            0000000000000000: 00000003 00000000 00000000 0001 03 1002 /run/a.sock\n\
+            0000000000000000: 00000002 00000000 00010000 0001 01 1003 @abstract\n\
+            0000000000000000: 00000002 00000000 00000000 0002 01 1004 /tmp/with space\n\
+            0000000000000000: 00000003 00000000 00000000 0001 03 1005\n";
+        assert_eq!(
+            parse_proc_net_unix(text),
+            ["/run/a.sock", "/tmp/with space"]
+        );
+    }
+
+    /// Listed paths that are sockets now are hidden at their canonical
+    /// path, but allowed ones and sessions' proxy sockets; a listed path
+    /// that is gone or a file now (a socket bound in another mount
+    /// namespace) is not.
+    #[test]
+    fn host_unix_sockets_are_the_listed_sockets_but_the_allowed() {
+        let (_dir, root) = temp();
+        let p = |rest: &str| format!("{root}/{rest}");
+        let _a = std::os::unix::net::UnixListener::bind(p("a.sock")).unwrap();
+        let _b = std::os::unix::net::UnixListener::bind(p("b.sock")).unwrap();
+        fs::create_dir_all(p("pirc-n-A/p")).unwrap();
+        let _proxy = std::os::unix::net::UnixListener::bind(p("pirc-n-A/p/s")).unwrap();
+        symlink(p("a.sock"), p("link.sock")).unwrap();
+        fs::write(p("file"), "").unwrap();
+        let line = |path: &str| format!("0: 00000002 00000000 00010000 0001 01 1 {path}\n");
+        let text = ["Num RefCount Protocol Flags Type St Inode Path\n".to_owned()]
+            .into_iter()
+            .chain(
+                [
+                    "link.sock",
+                    "a.sock",
+                    "b.sock",
+                    "file",
+                    "gone.sock",
+                    "pirc-n-A/p/s",
+                ]
+                .map(|name| line(&p(name))),
+            )
+            .collect::<String>();
+        assert_eq!(host_unix_sockets(&text, &[]), [p("a.sock"), p("b.sock")]);
+        assert_eq!(host_unix_sockets(&text, &[p("b.sock")]), [p("a.sock")]);
+    }
+
+    /// The plan hides the host's sockets with `/dev/null`, but the allowed
+    /// ones, and a socket inside a hidden directory needs no mount. Linux
+    /// only: the list is the kernel's `/proc/net/unix`.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn host_rules_hide_bound_sockets_but_the_allowed() {
+        let (_dir, root) = temp();
+        let p = |rest: &str| format!("{root}/{rest}");
+        fs::create_dir_all(p("hidden")).unwrap();
+        let _a = std::os::unix::net::UnixListener::bind(p("a.sock")).unwrap();
+        let _b = std::os::unix::net::UnixListener::bind(p("b.sock")).unwrap();
+        let _c = std::os::unix::net::UnixListener::bind(p("hidden/c.sock")).unwrap();
+        let paths = PathPolicy {
+            deny_read: vec![p("hidden")],
+            ..PathPolicy::default()
+        };
+        let options = Options {
+            host_rules: true,
+            bound_sockets: Some(fs::read_to_string(PROC_NET_UNIX).unwrap()),
+            allowed_sockets: vec![p("b.sock")],
+            ..Options::default()
+        };
+        let args = plan(&paths, &options).unwrap().args;
+        let mounted = |path: &str| args.iter().any(|arg| *arg == path);
+        let at = args.iter().position(|arg| *arg == p("a.sock")).unwrap();
+        assert_eq!(args[at - 1], "/dev/null");
+        assert!(!mounted(&p("b.sock")));
+        assert!(!mounted(&p("hidden/c.sock")));
     }
 
     /// A link the agent cannot replace that leads through one it can (or

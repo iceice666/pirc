@@ -17,6 +17,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::AbortHandle;
 
+use pirc_agent::features::memory::workspace::WorkspaceLedger;
+
 use super::framing::{JsonlParser, line};
 use super::reducer::ReducedState;
 use crate::error::{ApiError, ApiResult};
@@ -710,6 +712,9 @@ pub(super) struct Spawn {
     pub session: SessionRow,
     pub workspace: Workspace,
     pub prepared: Prepared,
+    /// The workspace-memory ledger the node chose (directory workspaces):
+    /// the agent is told its key, and its sandbox opens only that file.
+    pub ledger: Option<WorkspaceLedger>,
 }
 
 /// `new PiRunner(...)`: spawn the agent and wire its pipes. The runner is
@@ -720,6 +725,7 @@ fn spawn_child(
     session: &SessionRow,
     workspace: &Workspace,
     prepared: &Prepared,
+    ledger: Option<&WorkspaceLedger>,
 ) -> ApiResult<(tokio::process::Child, i64)> {
     let (epoch, trust) = {
         let db = node.db.lock();
@@ -785,6 +791,16 @@ fn spawn_child(
             .to_string_lossy()
             .into_owned(),
     );
+    // Only when the sandbox opened it (the node may have refused a planted
+    // file): without the key the agent asks git, and its sandbox refuses.
+    let opened = |ledger: &&WorkspaceLedger| {
+        let file = pirc_policy::real_resolve(&ledger.file.to_string_lossy());
+        prepared.policy.paths.allow_write.contains(&file)
+    };
+    if let Some(ledger) = ledger.filter(opened) {
+        set("PIRC_WORKSPACE_MEMORY_KEY", ledger.key.clone());
+        set("PIRC_WORKSPACE_MEMORY_ROOT", ledger.root.clone());
+    }
     set(
         "PIRC_BROWSER",
         if node.browser.enabled() { "1" } else { "0" }.into(),
@@ -819,14 +835,16 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
         session,
         workspace,
         prepared,
+        ledger,
     } = spawn;
-    let (mut child, epoch) = match spawn_child(node, &session, &workspace, &prepared) {
-        Ok(spawned) => spawned,
-        Err(error) => {
-            prepared.cleanup();
-            return Err(error);
-        }
-    };
+    let (mut child, epoch) =
+        match spawn_child(node, &session, &workspace, &prepared, ledger.as_ref()) {
+            Ok(spawned) => spawned,
+            Err(error) => {
+                prepared.cleanup();
+                return Err(error);
+            }
+        };
     let pid = child.id();
     let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
     let (exited, _) = watch::channel(false);

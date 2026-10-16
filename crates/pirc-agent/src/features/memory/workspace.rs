@@ -9,7 +9,7 @@ use std::io::Write as _;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use indexmap::IndexMap;
 use serde_json::{Map, Value, json};
@@ -218,12 +218,179 @@ pub fn resolve_workspace(cwd: &str) -> (String, String) {
         }
         None => safe_realpath(cwd),
     };
-    let key: String = Sha256::digest(root.as_bytes())
+    (ledger_key(&root), root)
+}
+
+/// A ledger's key: the first 8 bytes of the root's SHA-256, in hex.
+fn ledger_key(root: &str) -> String {
+    Sha256::digest(root.as_bytes())
         .iter()
         .take(8)
         .map(|b| format!("{b:02x}"))
-        .collect();
-    (key, root)
+        .collect()
+}
+
+/// Git files read by [`resolve_workspace_from_files`] are small; a larger
+/// one is not a git file.
+const GIT_FILE_MAX_BYTES: u64 = 64 * 1024;
+
+/// A regular file's text, at most [`GIT_FILE_MAX_BYTES`]; never through a
+/// symlink (the node reads with its own rights what an agent may have
+/// planted in its workspace), never blocks on a FIFO and never takes a
+/// terminal as the controlling one.
+fn read_git_file(path: &Path) -> Option<String> {
+    use nix::fcntl::OFlag;
+    use std::io::Read;
+    if !std::fs::symlink_metadata(path).ok()?.is_file() {
+        return None;
+    }
+    let file = std::fs::File::options()
+        .read(true)
+        .custom_flags((OFlag::O_NOFOLLOW | OFlag::O_NONBLOCK | OFlag::O_NOCTTY).bits())
+        .open(path)
+        .ok()?;
+    let meta = file.metadata().ok()?;
+    if !meta.is_file() || meta.len() > GIT_FILE_MAX_BYTES {
+        return None;
+    }
+    let mut text = String::new();
+    file.take(GIT_FILE_MAX_BYTES)
+        .read_to_string(&mut text)
+        .ok()?;
+    Some(text)
+}
+
+/// A git file holding one path (`commondir`, a worktree's `gitdir`, or
+/// `gitdir: <path>` with `prefix`): that path, resolved against `base`
+/// and canonical. `None` for anything else (more lines, control
+/// characters, a path that does not exist).
+fn git_file_path(file: &Path, prefix: &str, base: &Path) -> Option<PathBuf> {
+    let text = read_git_file(file)?;
+    let mut lines = text.lines().filter(|line| !line.trim().is_empty());
+    let line = lines.next()?;
+    if lines.next().is_some() {
+        return None;
+    }
+    let path = line.strip_prefix(prefix)?.trim();
+    if path.is_empty() || path.chars().any(char::is_control) {
+        return None;
+    }
+    std::fs::canonicalize(base.join(path)).ok()
+}
+
+/// A git directory: a directory holding a `HEAD` file.
+fn is_git_dir(dir: &Path) -> bool {
+    dir.is_dir() && std::fs::symlink_metadata(dir.join("HEAD")).is_ok_and(|meta| meta.is_file())
+}
+
+/// `core.worktree` in a git config file (sections and keys compared
+/// case-insensitively; no includes followed).
+fn core_worktree(config: &str) -> Option<String> {
+    let mut in_core = false;
+    for line in config.lines() {
+        let line = line.trim();
+        if let Some(section) = line.strip_prefix('[') {
+            in_core = section
+                .trim_end_matches(']')
+                .trim()
+                .eq_ignore_ascii_case("core");
+            continue;
+        }
+        if !in_core {
+            continue;
+        }
+        if let Some((key, value)) = line.split_once('=')
+            && key.trim().eq_ignore_ascii_case("worktree")
+        {
+            return Some(value.trim().trim_matches('"').to_owned());
+        }
+    }
+    None
+}
+
+/// The common git directory of the repository whose `.git` file in
+/// `dir` names `git_dir`, when `git_dir` names `dir` back: a worktree's
+/// (`<git_dir>/gitdir` is `<dir>/.git`, then its `commondir`) or a
+/// submodule's (`core.worktree` in `<git_dir>/config` is `dir`). Without
+/// the link back a `.git` file could name any repository (an agent can
+/// write one in a workspace with none), and that repository's ledger
+/// would open to the session.
+fn linked_common_dir(dir: &Path, git_dir: &Path) -> Option<PathBuf> {
+    let dir = std::fs::canonicalize(dir).ok()?;
+    if std::fs::symlink_metadata(git_dir.join("commondir")).is_ok() {
+        let back = git_file_path(&git_dir.join("gitdir"), "", git_dir)?;
+        if back != std::fs::canonicalize(dir.join(".git")).ok()? {
+            return None;
+        }
+        let common = git_file_path(&git_dir.join("commondir"), "", git_dir)?;
+        return is_git_dir(&common).then_some(common);
+    }
+    let worktree = core_worktree(&read_git_file(&git_dir.join("config"))?)?;
+    let worktree = std::fs::canonicalize(git_dir.join(worktree)).ok()?;
+    (worktree == dir).then(|| git_dir.to_path_buf())
+}
+
+/// [`resolve_workspace`] without running git, for the node: it decides the
+/// key before the agent starts (the sandbox opens that one ledger only),
+/// and git on the host runs whatever an agent-writable config says
+/// (security audit S8). git's discovery, as far as it matters here: the
+/// nearest `.git` at or above `cwd` on the same file system, a directory
+/// holding `HEAD` (its own common dir), or a `gitdir:` file of a worktree
+/// or a submodule whose git directory names it back ([`linked_common_dir`]).
+/// Every path is canonical before it counts, and nothing is read through
+/// a symlink: what is not a plain repository, worktree or submodule (a
+/// `.git` symlink, a `.git` file without its link back, a broken one) is
+/// keyed by `cwd`, as outside git. Not followed either: `GIT_DIR` and
+/// `GIT_CEILING_DIRECTORIES`, a bare repository as the workspace, a
+/// `--separate-git-dir` repository, and git's ownership check (git refusing
+/// a repository another user owns keyed it by `cwd`).
+pub fn resolve_workspace_from_files(cwd: &str) -> (String, String) {
+    use std::os::unix::fs::MetadataExt;
+    let start = safe_realpath(cwd);
+    let device = std::fs::metadata(&start).ok().map(|meta| meta.dev());
+    let mut common = None;
+    for dir in Path::new(&start).ancestors() {
+        if std::fs::metadata(dir).ok().map(|meta| meta.dev()) != device {
+            break;
+        }
+        let dot_git = dir.join(".git");
+        let Ok(meta) = std::fs::symlink_metadata(&dot_git) else {
+            continue;
+        };
+        if meta.is_dir() {
+            if !is_git_dir(&dot_git) {
+                continue;
+            }
+            common = std::fs::canonicalize(&dot_git).ok();
+        } else if meta.is_file() {
+            common = git_file_path(&dot_git, "gitdir:", dir)
+                .filter(|git_dir| is_git_dir(git_dir))
+                .and_then(|git_dir| linked_common_dir(dir, &git_dir));
+        }
+        break;
+    }
+    let root = match common {
+        Some(common) => {
+            let canonical = common.display().to_string();
+            if js::basename(&canonical) == ".git" {
+                js::dirname(&canonical)
+            } else {
+                canonical
+            }
+        }
+        None => start,
+    };
+    (ledger_key(&root), root)
+}
+
+/// The ledger the node chose for this session (`PIRC_WORKSPACE_MEMORY_KEY`
+/// and `_ROOT`, from [`resolve_workspace_from_files`]): its sandbox opens
+/// only that file.
+fn node_assigned_ledger(env: &dyn Fn(&str) -> Option<String>) -> Option<(String, String)> {
+    let key = env("PIRC_WORKSPACE_MEMORY_KEY")?;
+    let root = env("PIRC_WORKSPACE_MEMORY_ROOT")?;
+    let hex = key.len() == 16 && key.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+    (hex && !root.is_empty()).then_some((key, root))
 }
 
 /// `gitState(cwd)`.
@@ -357,17 +524,11 @@ pub struct WorkspaceLedger {
     pub key: String,
     pub root: String,
     pub file: PathBuf,
-    lock_file: PathBuf,
 }
 
-/// Holds a ledger's lock file; removes it when dropped.
-pub struct LedgerLock(PathBuf);
-
-impl Drop for LedgerLock {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-    }
-}
+/// Holds a ledger's lock (`flock` on the ledger file itself); released
+/// when dropped, or when the process dies.
+pub struct LedgerLock(#[allow(dead_code)] nix::fcntl::Flock<std::fs::File>);
 
 fn create_dir(dir: &str) -> Result<(), String> {
     std::fs::DirBuilder::new()
@@ -380,20 +541,49 @@ fn create_dir(dir: &str) -> Result<(), String> {
 impl WorkspaceLedger {
     pub fn new(dir: String, key: String, root: String) -> Self {
         let file = Path::new(&dir).join(format!("{key}.jsonl"));
-        let lock_file = Path::new(&dir).join(format!("{key}.lock"));
         Self {
             dir,
             key,
             root,
             file,
-            lock_file,
         }
     }
 
-    /// `WorkspaceLedger.forCwd`.
+    /// `WorkspaceLedger.forCwd`: the node's choice when it made one
+    /// ([`node_assigned_ledger`]), else git's.
     pub fn for_cwd(cwd: &str) -> Self {
-        let (key, root) = resolve_workspace(cwd);
+        let (key, root) = node_assigned_ledger(&|name| std::env::var(name).ok())
+            .unwrap_or_else(|| resolve_workspace(cwd));
         Self::new(workspace_memory_dir(), key, root)
+    }
+
+    /// The ledger the node opens for a session in `cwd`
+    /// ([`resolve_workspace_from_files`]).
+    pub fn for_node(dir: String, cwd: &str) -> Self {
+        let (key, root) = resolve_workspace_from_files(cwd);
+        Self::new(dir, key, root)
+    }
+
+    /// The ledger file opened for appending (and locking), created with
+    /// its directory when missing. In a sandbox only the file is reachable
+    /// (the node made it), so the directory is touched only when it is not
+    /// there.
+    fn open(&self) -> Result<std::fs::File, String> {
+        let open = || {
+            std::fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .mode(0o600)
+                .open(&self.file)
+        };
+        match open() {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                create_dir(&self.dir)?;
+                open()
+            }
+            other => other,
+        }
+        .map_err(|error| mjs::node_error(&error, "open", Some(&self.file)))
     }
 
     pub fn lines(&self) -> Result<Vec<WorkspaceLine>, String> {
@@ -409,58 +599,27 @@ impl WorkspaceLedger {
 
     /// Append one line (`JSON.stringify(line)`).
     pub fn append(&self, line: &Value) -> Result<(), String> {
-        create_dir(&self.dir)?;
-        let mut file = std::fs::OpenOptions::new()
-            .append(true)
-            .create(true)
-            .mode(0o600)
-            .open(&self.file)
-            .map_err(|error| mjs::node_error(&error, "open", Some(&self.file)))?;
+        let mut file = self.open()?;
         file.write_all(format!("{}\n", js::stringify(line)).as_bytes())
             .map_err(|error| mjs::node_error(&error, "write", Some(&self.file)))
     }
 
     /// `withLock`: an exclusive cross-process lock, or `None` when another
-    /// holder is active (a lock older than ten minutes is stale).
+    /// holder is active. A `flock` on the ledger file itself (it used to
+    /// be a `<key>.lock` file beside it, which needed the whole directory
+    /// writable): the sandbox opens only this file, and the kernel drops
+    /// the lock of a process that dies, so nothing goes stale.
     pub fn try_lock(&self) -> Result<Option<LedgerLock>, String> {
-        create_dir(&self.dir)?;
-        let open = || {
-            std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .mode(0o600)
-                .open(&self.lock_file)
-        };
-        let mut file = match open() {
-            Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                let fresh = std::fs::metadata(&self.lock_file)
-                    .and_then(|meta| meta.modified())
-                    .map(|modified| {
-                        SystemTime::now()
-                            .duration_since(modified)
-                            .unwrap_or_default()
-                            < Duration::from_secs(600)
-                    });
-                match fresh {
-                    Ok(false) => {}
-                    _ => return Ok(None),
-                }
-                if std::fs::remove_file(&self.lock_file).is_err() {
-                    return Ok(None);
-                }
-                match open() {
-                    Ok(file) => file,
-                    Err(_) => return Ok(None),
-                }
-            }
-            Err(error) => {
-                return Err(mjs::node_error(&error, "open", Some(&self.lock_file)));
-            }
-        };
-        let lock = LedgerLock(self.lock_file.clone());
-        let _ = file.write_all(std::process::id().to_string().as_bytes());
-        Ok(Some(lock))
+        use nix::fcntl::{Flock, FlockArg};
+        match Flock::lock(self.open()?, FlockArg::LockExclusiveNonblock) {
+            Ok(lock) => Ok(Some(LedgerLock(lock))),
+            Err((_, nix::errno::Errno::EWOULDBLOCK)) => Ok(None),
+            Err((_, errno)) => Err(mjs::node_error(
+                &std::io::Error::from(errno),
+                "flock",
+                Some(&self.file),
+            )),
+        }
     }
 }
 

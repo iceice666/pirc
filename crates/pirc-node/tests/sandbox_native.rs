@@ -114,6 +114,21 @@ struct Fixture {
     sandbox: NativeSandbox,
     /// `TMPDIR`.
     tmp: tempfile::TempDir,
+    /// Released after the fixture's directory is removed ([`serial`]).
+    _serial: std::sync::MutexGuard<'static, ()>,
+}
+
+/// One fixture at a time in this binary: a plan hides every Unix socket
+/// bound on the host, the other tests' included, and a fixture removed
+/// (its sockets with it) while another test's sandbox starts would fail
+/// that start (an accepted gap of `plan`, which a node meets only with
+/// sockets that vanish within the moment between a plan and its mounts).
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 impl Drop for Fixture {
@@ -151,6 +166,7 @@ fn fixture_env(
         eprintln!("skipped: bwrap is not on PATH, so the native sandbox cannot be tested here");
         return None;
     }
+    let guard = serial();
     let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("sandbox-native-{name}"));
     let _ = fs::remove_dir_all(&root);
     let config_rel = if home_writable {
@@ -229,6 +245,7 @@ fn fixture_env(
         config,
         sandbox,
         tmp: tmp_dir,
+        _serial: guard,
     })
 }
 
@@ -267,6 +284,7 @@ impl Fixture {
                 session_dir,
                 inference_socket,
                 protected_paths,
+                workspace_memory_file: None,
             })
             .await
     }
@@ -843,6 +861,98 @@ async fn a_linked_ssh_agent_socket_is_hidden_and_refuses_nothing() {
     assert!(result.starts_with("unreachable"), "{result}");
     assert!(child.wait().await.unwrap().success());
     prepared.cleanup();
+}
+
+/// Unix sockets bound on the host are hidden but the allowed ones (here
+/// the inference socket).
+#[tokio::test]
+async fn host_unix_sockets_are_hidden_but_the_allowed() {
+    let Some(f) = fixture("host-sockets") else {
+        return;
+    };
+    let serve = |name: &str| {
+        let path = f.root.join("outside").join(name);
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        std::thread::spawn(move || {
+            for mut stream in listener.incoming().flatten() {
+                let _ = stream.write_all(b"pong");
+            }
+        });
+        path
+    };
+    let (other, inference) = (serve("other.sock"), serve("inference.sock"));
+    let prepared = f
+        .prepare_with("pi_sockets", Some(inference.clone()), Vec::new())
+        .await;
+    let mut command = client(
+        &prepared,
+        &format!("unix:{} unix:{}", other.display(), inference.display()),
+    );
+    let mut child = command.spawn().unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let hidden = next_result(&mut lines).await;
+    assert!(hidden.starts_with("unreachable"), "{hidden}");
+    stdin.write_all(b"\n").await.unwrap();
+    assert_eq!(next_result(&mut lines).await, "pong");
+    drop(stdin);
+    assert!(child.wait().await.unwrap().success());
+    prepared.cleanup();
+}
+
+/// A session reads, appends to and locks its own workspace-memory ledger
+/// (the node makes it), and reaches no other file of the directory.
+#[tokio::test]
+async fn opens_only_its_own_workspace_memory_ledger() {
+    let Some(f) = fixture("ledger") else {
+        return;
+    };
+    let dir = f.config.workspace_memory_dir.clone();
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("other.jsonl"), "other\n").unwrap();
+    let ledger = dir.join("0123456789abcdef.jsonl");
+    let session_dir = f.config.sessions_dir.join("pi_ledger");
+    fs::create_dir_all(&session_dir).unwrap();
+    let prepared = f
+        .sandbox
+        .prepare(PrepareInput {
+            session_id: "pi_ledger".to_owned(),
+            workspace_root: f.root.join("workspace"),
+            session_dir,
+            inference_socket: None,
+            protected_paths: Vec::new(),
+            workspace_memory_file: Some(ledger.clone()),
+        })
+        .await
+        .unwrap();
+    let (dir_text, ledger_text) = (dir.display().to_string(), ledger.display().to_string());
+    let script = format!(
+        r#"printf 'line\n' >> '{ledger_text}' || exit 1
+        cat '{ledger_text}' >/dev/null || exit 2
+        cat '{dir_text}/other.jsonl' 2>/dev/null && exit 3
+        printf x 2>/dev/null >> '{dir_text}/other.jsonl' && exit 4
+        touch '{dir_text}/0123456789abcdef.lock' 2>/dev/null && exit 5
+        if command -v flock >/dev/null; then flock -n '{ledger_text}' true || exit 6; fi
+        exit 0"#
+    );
+    let mut command = prepared.command().unwrap();
+    command
+        .args(["-c", &script])
+        .envs(prepared.env.iter().map(|(k, v)| (k, v)))
+        .current_dir(f.root.join("workspace"))
+        .stdin(Stdio::null())
+        .kill_on_drop(true);
+    let status = tokio::time::timeout(Duration::from_secs(30), command.status())
+        .await
+        .unwrap()
+        .unwrap();
+    prepared.cleanup();
+    assert_eq!(status.code(), Some(0));
+    assert_eq!(fs::read_to_string(&ledger).unwrap(), "line\n");
+    assert_eq!(
+        fs::read_to_string(dir.join("other.jsonl")).unwrap(),
+        "other\n"
+    );
 }
 
 /// Protected paths that do not exist yet get placeholders, so the agent

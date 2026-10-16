@@ -64,6 +64,7 @@ mod tests {
                 session_dir: "/s".into(),
                 inference_socket: None,
                 protected_paths: Vec::new(),
+                workspace_memory_file: None,
             })
             .await
             .err()

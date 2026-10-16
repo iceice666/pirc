@@ -273,6 +273,7 @@ impl Fixture {
                 session_dir,
                 inference_socket,
                 protected_paths,
+                workspace_memory_file: None,
             })
             .await
             .unwrap()
@@ -436,6 +437,62 @@ async fn confines_the_agent_to_the_session_policy() {
     assert_eq!(
         fs::read_to_string(f.workspace.join(".git/config")).unwrap(),
         "[core]"
+    );
+}
+
+/// A session reads, appends to and locks its own workspace-memory ledger
+/// (the node makes it), and reaches no other file of the directory.
+#[tokio::test]
+async fn opens_only_its_own_workspace_memory_ledger() {
+    let f = fixture("ledger");
+    let dir = f.config.workspace_memory_dir.clone();
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("other.jsonl"), "other\n").unwrap();
+    let ledger = dir.join("0123456789abcdef.jsonl");
+    let session_dir = f.config.sessions_dir.join("pi_ledger");
+    fs::create_dir_all(&session_dir).unwrap();
+    let prepared = f
+        .sandbox
+        .prepare(PrepareInput {
+            session_id: "pi_ledger".to_owned(),
+            workspace_root: f.workspace.clone(),
+            session_dir,
+            inference_socket: None,
+            protected_paths: Vec::new(),
+            workspace_memory_file: Some(ledger.clone()),
+        })
+        .await
+        .unwrap();
+    let (dir_text, ledger_text) = (dir.display().to_string(), ledger.display().to_string());
+    // flock(2) through perl, which macOS ships (it has no flock(1)).
+    let script = format!(
+        r#"printf 'line\n' >> '{ledger_text}' || exit 1
+        cat '{ledger_text}' >/dev/null || exit 2
+        cat '{dir_text}/other.jsonl' 2>/dev/null && exit 3
+        printf x 2>/dev/null >> '{dir_text}/other.jsonl' && exit 4
+        touch '{dir_text}/0123456789abcdef.lock' 2>/dev/null && exit 5
+        /usr/bin/perl -e 'use Fcntl ":flock"; open(F, ">>", $ARGV[0]) or exit 1; flock(F, LOCK_EX|LOCK_NB) or exit 1' '{ledger_text}' || exit 6
+        exit 0"#
+    );
+    let mut command = prepared.command().unwrap();
+    command
+        .args(["-c", &script])
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+        .envs(prepared.env.iter().map(|(k, v)| (k, v)))
+        .current_dir(&f.workspace)
+        .stdin(Stdio::null())
+        .kill_on_drop(true);
+    let status = tokio::time::timeout(Duration::from_secs(30), command.status())
+        .await
+        .unwrap()
+        .unwrap();
+    prepared.cleanup();
+    assert_eq!(status.code(), Some(0));
+    assert_eq!(fs::read_to_string(&ledger).unwrap(), "line\n");
+    assert_eq!(
+        fs::read_to_string(dir.join("other.jsonl")).unwrap(),
+        "other\n"
     );
 }
 

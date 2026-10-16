@@ -95,20 +95,21 @@ expression: t.into_value()
           "allowRead": [
             "<tmp>/workspace",
             "<tmp>/node-state/sessions/pi_<uuid:5>",
-            "<tmp>/node-state/workspace-memory",
+            "<tmp>/node-state/workspace-memory/<hex16:1>.jsonl",
             "<tmp>/node-state/i-<random>",
             "<tmp>/node-state/sandbox/bin"
           ],
           "allowWrite": [
             "<tmp>/workspace",
             "<tmp>/node-state/sessions/pi_<uuid:5>",
-            "<tmp>/node-state/workspace-memory"
+            "<tmp>/node-state/workspace-memory/<hex16:1>.jsonl"
           ],
           "denyRead": [
             "<tmp>/node-state",
             "<tmp>/node-state/sessions",
             "<tmp>/node-state/uploads",
-            "<tmp>/node-state/browser"
+            "<tmp>/node-state/browser",
+            "<tmp>/node-state/workspace-memory"
           ],
           "denyWrite": [
             "<tmp>/workspace/.pirc",

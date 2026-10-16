@@ -94,6 +94,158 @@ fn shares_one_key_across_git_worktrees_and_records_git_state() {
     assert_eq!(git_state(&plain), None);
 }
 
+/// The node's key (read from files) is git's for a repository, a
+/// directory inside it, a worktree and a submodule, and a plain
+/// directory's own path.
+#[test]
+fn the_nodes_key_from_files_is_gits() {
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+    let (_repo_dir, repo) = tmp();
+    init_repo(&repo);
+    let sub = format!("{repo}/sub/dir");
+    std::fs::create_dir_all(&sub).unwrap();
+    let (_wt_dir, wt_root) = tmp();
+    let worktree = format!("{wt_root}/feature");
+    git_cmd(
+        &repo,
+        &["worktree", "add", "-q", "-b", "feature", &worktree],
+    );
+    let (_outer_dir, outer) = tmp();
+    init_repo(&outer);
+    git_cmd(
+        &outer,
+        &[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            "-q",
+            &repo,
+            "inner",
+        ],
+    );
+    let submodule = format!("{outer}/inner");
+    let (_plain_dir, plain) = tmp();
+    for cwd in [&repo, &sub, &worktree, &submodule, &plain] {
+        assert_eq!(
+            resolve_workspace_from_files(cwd),
+            resolve_workspace(cwd),
+            "{cwd}"
+        );
+    }
+    assert_eq!(resolve_workspace_from_files(&worktree).1, repo);
+    // A `.git` directory that is not a repository is not git's either.
+    let (_fake_dir, fake) = tmp();
+    std::fs::create_dir(format!("{fake}/.git")).unwrap();
+    assert_eq!(resolve_workspace_from_files(&fake).1, fake);
+}
+
+/// What an agent can write in its workspace never keys it to another
+/// repository, nor brings a file the node reads into the root: a `.git`
+/// file naming another repository (no link back), a `.git` symlink, a
+/// `commondir` beside a repository's `.git`, a `commondir` symlink.
+#[test]
+fn the_nodes_key_ignores_planted_git_files() {
+    use std::os::unix::fs::symlink;
+    let (_other_dir, other) = tmp();
+    std::fs::create_dir_all(format!("{other}/.git")).unwrap();
+    std::fs::write(format!("{other}/.git/HEAD"), "ref: refs/heads/main\n").unwrap();
+    let (_secret_dir, secret_root) = tmp();
+    let secret = format!("{secret_root}/token");
+    std::fs::write(&secret, "s3cret-token\n").unwrap();
+
+    let (_a_dir, a) = tmp();
+    std::fs::write(format!("{a}/.git"), format!("gitdir: {other}/.git\n")).unwrap();
+    assert_eq!(
+        resolve_workspace_from_files(&a).1,
+        a,
+        "a .git file without its link back"
+    );
+
+    let (_b_dir, b) = tmp();
+    symlink(format!("{other}/.git"), format!("{b}/.git")).unwrap();
+    assert_eq!(resolve_workspace_from_files(&b).1, b, "a .git symlink");
+
+    let (_c_dir, c) = tmp();
+    std::fs::create_dir_all(format!("{c}/.git")).unwrap();
+    std::fs::write(format!("{c}/.git/HEAD"), "ref: refs/heads/main\n").unwrap();
+    std::fs::write(format!("{c}/.git/commondir"), format!("{other}/.git\n")).unwrap();
+    assert_eq!(
+        resolve_workspace_from_files(&c).1,
+        c,
+        "commondir beside a .git directory"
+    );
+
+    // A worktree whose `commondir` became a symlink to a secret: the
+    // secret never reaches the root, and the key falls back to the path.
+    let (_main_dir, main) = tmp();
+    let worktrees = format!("{main}/.git/worktrees/wt");
+    std::fs::create_dir_all(&worktrees).unwrap();
+    std::fs::write(format!("{main}/.git/HEAD"), "ref: refs/heads/main\n").unwrap();
+    std::fs::write(format!("{worktrees}/HEAD"), "ref: refs/heads/wt\n").unwrap();
+    let (_wt_dir, wt) = tmp();
+    std::fs::write(format!("{wt}/.git"), format!("gitdir: {worktrees}\n")).unwrap();
+    std::fs::write(format!("{worktrees}/gitdir"), format!("{wt}/.git\n")).unwrap();
+    std::fs::write(format!("{worktrees}/commondir"), "../..\n").unwrap();
+    assert_eq!(
+        resolve_workspace_from_files(&wt).1,
+        main,
+        "a well-formed worktree"
+    );
+    std::fs::remove_file(format!("{worktrees}/commondir")).unwrap();
+    symlink(&secret, format!("{worktrees}/commondir")).unwrap();
+    let (_, root) = resolve_workspace_from_files(&wt);
+    assert!(!root.contains("s3cret"), "{root}");
+    assert_eq!(root, wt);
+    // A worktree whose link back names another checkout.
+    std::fs::remove_file(format!("{worktrees}/commondir")).unwrap();
+    std::fs::write(format!("{worktrees}/commondir"), "../..\n").unwrap();
+    std::fs::write(format!("{worktrees}/gitdir"), format!("{a}/.git\n")).unwrap();
+    assert_eq!(resolve_workspace_from_files(&wt).1, wt);
+}
+
+#[test]
+fn the_node_assigned_ledger_needs_a_key_and_a_root() {
+    let env = |key: &'static str, root: &'static str| {
+        move |name: &str| match name {
+            "PIRC_WORKSPACE_MEMORY_KEY" => Some(key.to_owned()),
+            "PIRC_WORKSPACE_MEMORY_ROOT" => Some(root.to_owned()),
+            _ => None,
+        }
+    };
+    assert_eq!(
+        node_assigned_ledger(&env("0123456789abcdef", "/r")),
+        Some(("0123456789abcdef".to_owned(), "/r".to_owned()))
+    );
+    assert_eq!(node_assigned_ledger(&env("../../etc/passwd", "/r")), None);
+    assert_eq!(node_assigned_ledger(&env("0123456789ABCDEF", "/r")), None);
+    assert_eq!(node_assigned_ledger(&env("0123456789abcdef", "")), None);
+    assert_eq!(node_assigned_ledger(&|_| None), None);
+}
+
+/// The lock is the ledger file's `flock`: no `.lock` file beside it, so a
+/// sandbox that opens only the ledger can take it.
+#[test]
+fn the_lock_is_on_the_ledger_file() {
+    let (_dir, dir) = tmp();
+    let ledger = WorkspaceLedger::new(format!("{dir}/new"), "k".to_owned(), "/r".to_owned());
+    let held = ledger.try_lock().unwrap();
+    assert!(held.is_some());
+    let names: Vec<String> = std::fs::read_dir(format!("{dir}/new"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, ["k.jsonl"]);
+    ledger.append(&json!({"type": "x"})).unwrap();
+    // Another open of the file (another process's) does not get it.
+    let other = WorkspaceLedger::new(format!("{dir}/new"), "k".to_owned(), "/r".to_owned());
+    assert!(other.try_lock().unwrap().is_none());
+    drop(held);
+    assert!(ledger.try_lock().unwrap().is_some());
+}
+
 #[test]
 fn folds_recorded_retired_and_cleared_lines() {
     let (a, b, c) = (

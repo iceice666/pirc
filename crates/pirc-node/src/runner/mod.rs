@@ -590,6 +590,7 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
     let started = async {
         let workspace = node.db.lock().get_workspace(&session.workspace_id)?;
         let root = crate::chat::session_root(&workspace, session_id)?;
+        let ledger = workspace_ledger(node, &workspace, &root).await;
         let prepared = node
             .sandbox
             .prepare(crate::sandbox::PrepareInput {
@@ -604,6 +605,7 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
                 protected_paths: crate::chat::project_instructions_path(&workspace)
                     .into_iter()
                     .collect(),
+                workspace_memory_file: ledger.as_ref().map(|ledger| ledger.file.clone()),
             })
             .await?;
         process::spawn(
@@ -612,6 +614,7 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
                 session: session.clone(),
                 workspace,
                 prepared,
+                ledger,
             },
         )
     }
@@ -624,6 +627,30 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
             .set_runner_state(session_id, RunnerState::Failed);
     }
     started
+}
+
+/// The workspace-memory ledger of a directory workspace's session in
+/// `root`, keyed from the repository's files (never by running git on the
+/// host), off the async runtime. Chats keep no workspace memory.
+async fn workspace_ledger(
+    node: &Node,
+    workspace: &crate::store::Workspace,
+    root: &std::path::Path,
+) -> Option<pirc_agent::features::memory::workspace::WorkspaceLedger> {
+    if workspace.kind != crate::store::WorkspaceKind::Directory {
+        return None;
+    }
+    let dir = node
+        .config
+        .workspace_memory_dir
+        .to_string_lossy()
+        .into_owned();
+    let root = root.to_string_lossy().into_owned();
+    tokio::task::spawn_blocking(move || {
+        pirc_agent::features::memory::workspace::WorkspaceLedger::for_node(dir, &root)
+    })
+    .await
+    .ok()
 }
 
 /// The RPC command of a payload, and the run a prompt opens.

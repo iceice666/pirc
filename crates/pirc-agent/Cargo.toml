@@ -13,8 +13,9 @@ hmac = "0.12"
 # NFKC for the assistant's quote check (`String.prototype.normalize`), as the gateway's memory.
 icu_normalizer = { version = "2", default-features = false, features = ["compiled_data"] }
 indexmap.workspace = true
-# kill(2) of a shell command's process group, without unsafe code.
-nix = { version = "0.31", features = ["signal"] }
+# kill(2) of a shell command's process group, and the workspace ledger's
+# flock(2), without unsafe code.
+nix = { version = "0.31", features = ["fs", "signal"] }
 regex-lite = "0.1"
 # ECMAScript regular expressions: grep patterns, hook matchers, the
 # auto-mode deny-list and schema patterns are JavaScript regexes.
