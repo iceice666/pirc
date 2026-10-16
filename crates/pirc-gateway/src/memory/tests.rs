@@ -214,7 +214,7 @@ fn notes_from_fetched_content_are_marked_in_the_context() {
     // The user's own words count more than a page they asked about.
     write("quoted", json!(["assistant", "tool:web_fetch", "user"]));
     let context = store.context(ME, None).unwrap();
-    let fetched: Vec<(&str, bool)> = context["notes"]
+    let mut fetched: Vec<(&str, bool)> = context["notes"]
         .as_array()
         .unwrap()
         .iter()
@@ -225,11 +225,13 @@ fn notes_from_fetched_content_are_marked_in_the_context() {
             )
         })
         .collect();
+    // Notes written in the same millisecond come in id order: sort.
+    fetched.sort();
     assert_eq!(
         fetched,
         [
-            ("fetched", true),
             ("browsed", true),
+            ("fetched", true),
             ("local", false),
             ("quoted", false),
         ]
