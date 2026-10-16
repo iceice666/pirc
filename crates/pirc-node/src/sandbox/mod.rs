@@ -60,6 +60,7 @@
 
 pub mod bridge;
 mod common;
+pub mod fds;
 pub mod linux;
 pub mod macos;
 pub mod proxy;

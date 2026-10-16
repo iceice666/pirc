@@ -43,6 +43,9 @@ pub fn run(args: Vec<String>) -> ExitCode {
         return usage();
     }
     let socket = PathBuf::from(socket);
+    // Only stdio is meant to reach the agent: the node closed what it
+    // inherited at start-up; this is the second line (`super::fds`).
+    super::fds::close_inherited();
     for port in [BRIDGE_PORT, BRIDGE_SOCKS_PORT] {
         // srt's socat listened on IPv4 only.
         let listener = match TcpListener::bind(("127.0.0.1", port)) {

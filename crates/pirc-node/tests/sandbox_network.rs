@@ -335,6 +335,42 @@ async fn the_hosts_resolver_sockets_are_hidden() {
     readonly.cleanup();
 }
 
+/// A descriptor bubblewrap is handed without close-on-exec (one the node
+/// inherited and did not close: a PTY whose shell is outside the sandbox,
+/// say) stops at the in-sandbox bridge: the agent gets stdio only, and
+/// cannot write through it.
+#[tokio::test]
+async fn an_inherited_descriptor_does_not_reach_the_agent() {
+    use std::os::fd::AsRawFd as _;
+
+    use nix::fcntl::{FcntlArg, FdFlag, OFlag, fcntl};
+    let Some(f) = fixture("inherited-fd", &["localhost"], &[]) else {
+        return;
+    };
+    let (reader, writer) = std::io::pipe().unwrap();
+    let writer = std::os::fd::OwnedFd::from(writer);
+    let fd = writer.as_raw_fd();
+    fcntl(&writer, FcntlArg::F_SETFD(FdFlag::empty())).unwrap();
+    let prepared = f.prepare("pi_inherited_fd").await;
+    let script = format!(
+        "[ -e /dev/fd/{fd} ] && echo 'open {fd}'; echo escaped >&{fd} 2>/dev/null; ls /proc/self/fd >&2; exit 0"
+    );
+    let run = f.run(&prepared, &script).await;
+    drop(writer);
+    // Non-blocking: another test's child may hold the write end too.
+    fcntl(&reader, FcntlArg::F_SETFL(OFlag::O_NONBLOCK)).unwrap();
+    let mut buffer = [0u8; 64];
+    let read = std::io::Read::read(&mut &reader, &mut buffer).unwrap_or(0);
+    let written = String::from_utf8_lossy(&buffer[..read]).into_owned();
+    assert_eq!(
+        (run.code, run.stdout.as_str(), written.as_str()),
+        (0, "", ""),
+        "{}",
+        run.stderr
+    );
+    prepared.cleanup();
+}
+
 /// Every session runs as the node's uid with `/tmp` writable: the node's
 /// private parent of the temp directories keeps one session from another's
 /// files and proxy socket.

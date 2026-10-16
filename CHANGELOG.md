@@ -4,6 +4,10 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+### Security
+
+- A node no longer passes file descriptors it was started with to its agents: it closes every one but stdin, stdout and stderr at start-up, and the Linux sandbox's bridge closes any other before it runs the agent. A terminal's PTY left open by whatever launched the node reached the agent, and a command written to it ran outside the sandbox.
+
 ## [0.5.0] - 2026-10-16
 
 The gateway's database moves to schema 1003 on first start (automatic: four columns, one table and one index); a 0.4.x gateway refuses it afterwards, so keep a backup to downgrade. Same node protocol (10); upgrade the gateway and every node together as usual.

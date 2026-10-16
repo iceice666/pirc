@@ -8,9 +8,10 @@
 //! [`super::bridge`]) that exposes it as `127.0.0.1:3128` and `:1080` and
 //! then runs the agent. The proxy's allowlist is shared with the session's
 //! [`super::NetworkControl`], so an approval widens it in place (no
-//! control fd). The agent's stdio passes through
-//! unchanged; `--die-with-parent`, and the agent runs in its own PID
-//! namespace, so killing bubblewrap (the runner's process group) ends
+//! control fd). The agent's stdio passes through unchanged, and no other
+//! descriptor: the node closed what it inherited at start-up and the
+//! bridge closes the rest ([`super::fds`]). `--die-with-parent`, and the
+//! agent runs in its own PID namespace, so killing bubblewrap (the runner's process group) ends
 //! everything inside.
 //!
 //! Parts, each ported from sandbox-runtime 0.0.78 (Apache-2.0, see

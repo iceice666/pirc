@@ -81,6 +81,9 @@ use pirc_protocol::NodeRole;
 /// Run the node in `role` until it is told to stop: load the configuration
 /// (a bad one is printed and exits 1), then [`node::run`].
 pub fn run_role(role: NodeRole) -> ExitCode {
+    // Before any thread or child: nothing the node was started with (a
+    // terminal's PTY, say) reaches what it spawns (`sandbox::fds`).
+    sandbox::fds::close_inherited();
     let env = Env::from_process();
     let config = match NodeConfig::load(&env, role) {
         Ok(config) => config,

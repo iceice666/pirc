@@ -4,7 +4,7 @@ Both are node-side concerns: the node starts every agent inside an OS sandbox, a
 
 ## The native agent sandbox
 
-Each `pirc-node agent` process (for either role) runs under the native sandbox: Seatbelt on macOS, bubblewrap on Linux, with a filtering HTTP/SOCKS5 network proxy on both. The filesystem algorithm was ported from srt 0.0.78 with additional protections. The Linux agent sandbox does not use seccomp (matching the previous allow-all-Unix-sockets configuration); the separate PTC guest does use a seccomp allowlist and resource limits. Everything the agent starts (tools, `bash`, `ptc` scripts, hooks, teammates, subagents) is inside. A `ptc` script's interpreter process gets an empty environment and talks only to its agent. Side-panel terminals are **not**.
+Each `pirc-node agent` process (for either role) runs under the native sandbox: Seatbelt on macOS, bubblewrap on Linux, with a filtering HTTP/SOCKS5 network proxy on both. The filesystem algorithm was ported from srt 0.0.78 with additional protections. The Linux agent sandbox does not use seccomp (matching the previous allow-all-Unix-sockets configuration); the separate PTC guest does use a seccomp allowlist and resource limits. Everything the agent starts (tools, `bash`, `ptc` scripts, hooks, teammates, subagents) is inside. A `ptc` script's interpreter process gets an empty environment and talks only to its agent. Side-panel terminals are **not**. The node closes every file descriptor it was started with besides stdin, stdout and stderr (a terminal's PTY left open by whatever launched it would otherwise reach the agent, and a command written to it runs outside the sandbox), and the in-sandbox bridge closes any other one again before it runs the agent.
 
 ### Host dependencies
 
