@@ -58,6 +58,11 @@ pirc-protocol = { path = "../pirc-protocol" }
 # `pirc-node ptc-guest`: the QuickJS process of one `ptc` script.
 pirc-ptc = { path = "../pirc-ptc" }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# The Linux sandbox's seccomp filter (`sandbox::linux::seccomp`), as the
+# PTC guest's.
+seccompiler = "0.5"
+
 [dev-dependencies]
 tempfile = "3"
 tokio = { version = "1", features = ["full", "test-util"] }

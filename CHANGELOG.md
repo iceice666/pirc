@@ -8,6 +8,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 - A node no longer passes file descriptors it was started with to its agents: it closes every one but stdin, stdout and stderr at start-up, and the Linux sandbox's bridge closes any other before it runs the agent. A terminal's PTY left open by whatever launched the node reached the agent, and a command written to it ran outside the sandbox.
 - On WSL, the Linux sandbox hides the interop directory `/run/WSL` whole. Interop sockets bound after a session started (each new WSL terminal binds one) stayed reachable, and through one the agent could run Windows programs outside the sandbox, past the network allowlist.
+- The Linux sandbox refuses vsock sockets (`EPERM`) with a seccomp filter: they bypass the sandbox's network namespace, and on WSL 2 the Windows host listens on them. The filter also refuses io_uring, whose rings can open sockets unseen (programs fall back to plain system calls), and stops 32-bit x86 programs in the sandbox. bubblewrap must support `--seccomp` (every release since 0.1), and the kernel seccomp filters (a node without them refuses to start agents).
 
 ## [0.5.0] - 2026-10-16
 

@@ -28,6 +28,8 @@
 //! - [`caps`]: uid 0 without `CAP_SETFCAP`, reported by the probe instead
 //!   of a bubblewrap failure on every start.
 //! - `args`: profiles past bubblewrap's or the kernel's argument limits.
+//! - [`seccomp`]: the filter bubblewrap installs (`--seccomp`): no vsock,
+//!   no io_uring. Not srt's.
 //!
 //! [`Sandbox::prepare_readonly`] runs one host command (panel git) under
 //! bubblewrap with the read-only policy, `--unshare-net` and no proxy (the
@@ -38,8 +40,10 @@
 //! - `network`: see [`super::proxy`].
 //!   `allowLocalBinding` has no effect: the agent has its own network
 //!   namespace (its localhost is its own). Unix sockets are filtered by
-//!   the read rules only (no seccomp, as with srt's `allowAllUnixSockets`):
-//!   `allowUnixSockets` names the ones left visible (below).
+//!   the read rules only (seccomp cannot tell their paths apart, as with
+//!   srt's `allowAllUnixSockets`): `allowUnixSockets` names the ones left
+//!   visible (below). The [`seccomp`] filter refuses vsock, which no
+//!   network namespace covers, and io_uring.
 //! - Unix sockets of host daemons bound after the plan. The read rules
 //!   hide the policy's `LINUX_HOST_SOCKETS` and, beyond srt, the host's
 //!   name-service sockets (`plan::RESOLVER_SOCKETS`: nscd,
@@ -81,6 +85,7 @@ mod args;
 pub mod caps;
 pub mod plan;
 pub mod scan;
+pub mod seccomp;
 mod status;
 
 use std::ffi::OsString;
@@ -160,6 +165,7 @@ pub fn bwrap_args(
     let mut args: Vec<String> = ["--new-session", "--die-with-parent", "--unshare-net"]
         .map(String::from)
         .to_vec();
+    args.extend(seccomp::args());
     let mut setenv: Vec<(String, String)> = vec![
         ("SANDBOX_RUNTIME".to_owned(), "1".to_owned()),
         ("TMPDIR".to_owned(), tmp.to_owned()),
@@ -190,6 +196,7 @@ pub fn readonly_bwrap_args(filesystem: Vec<String>, tmp: &str) -> BwrapArgs {
         .map(String::from)
         .to_vec();
     args.extend(["--json-status-fd".to_owned(), status::STATUS_FD.to_string()]);
+    args.extend(seccomp::args());
     for (name, value) in [
         ("SANDBOX_RUNTIME", "1"),
         ("TMPDIR", tmp),
@@ -409,6 +416,12 @@ impl NativeSandbox {
                 );
                 let mut command = tokio::process::Command::new(&bwrap);
                 command.args(args);
+                // The filter too: a kernel without seccomp fails the probe.
+                if let Err(error) = seccomp::pass(&mut command) {
+                    return SandboxStatus::Unavailable {
+                        reason: format!("bubblewrap: cannot pass the seccomp filter: {error}"),
+                    };
+                }
                 common::run_probe(
                     "bubblewrap",
                     command,
@@ -623,9 +636,9 @@ struct NativeControl {
 }
 
 impl NetworkControl for NativeControl {
+    /// bubblewrap's seccomp filter on its descriptor ([`seccomp::mapping`]).
     fn prepare_command(&self, command: &mut tokio::process::Command) -> std::io::Result<()> {
-        let _ = command;
-        Ok(())
+        seccomp::pass(command)
     }
 
     fn is_open(&self) -> bool {
@@ -668,6 +681,7 @@ mod tests {
             ["--new-session", "--die-with-parent", "--unshare-net"]
         );
         assert_eq!(args[mounts], ["--ro-bind", "/", "/"]);
+        assert_eq!(args[3..3 + seccomp::args().len()], seccomp::args()[..]);
         let position = |item: &str| args.iter().position(|arg| arg == item).unwrap();
         assert!(position("--setenv") < position("--ro-bind"));
         assert!(position("--ro-bind") < position("--bind"));
@@ -711,6 +725,8 @@ mod tests {
         );
         assert_eq!(args[mounts.clone()], ["--ro-bind", "/", "/"]);
         assert_eq!(args[3..5], ["--json-status-fd", "3"]);
+        let seccomp = seccomp::args();
+        assert_eq!(args[5..5 + seccomp.len()], seccomp[..]);
         assert!(
             !args
                 .iter()

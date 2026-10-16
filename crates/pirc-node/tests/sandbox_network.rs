@@ -407,6 +407,69 @@ async fn an_inherited_descriptor_does_not_reach_the_agent() {
     prepared.cleanup();
 }
 
+/// Set in the sandboxed half of [`vsock_is_refused_in_the_sandbox`].
+const VSOCK_CHILD: &str = "PIRC_TEST_VSOCK_CHILD";
+
+/// The sandboxed half: what `socket(AF_VSOCK)` gives, and the process's
+/// seccomp mode.
+#[test]
+#[ignore = "run inside the sandbox by vsock_is_refused_in_the_sandbox"]
+fn vsock_child() {
+    use nix::sys::socket::{AddressFamily, SockFlag, SockType, socket};
+    if std::env::var_os(VSOCK_CHILD).is_none() {
+        return;
+    }
+    let vsock = socket(
+        AddressFamily::Vsock,
+        SockType::Stream,
+        SockFlag::empty(),
+        None,
+    );
+    println!("@@ vsock {:?}", vsock.map(drop).map_err(|e| e as i32));
+    let status = fs::read_to_string("/proc/self/status").unwrap();
+    let mode = status
+        .lines()
+        .find(|l| l.starts_with("Seccomp:"))
+        .unwrap_or_default();
+    println!(
+        "@@ {}",
+        mode.split_whitespace().collect::<Vec<_>>().join(" ")
+    );
+}
+
+/// vsock is outside every network namespace: on WSL 2 the Windows host
+/// listens there, and a VM's hypervisor too. The sandbox's seccomp filter
+/// refuses the socket (`EPERM`), wherever the kernel has vsock or not.
+#[tokio::test]
+async fn vsock_is_refused_in_the_sandbox() {
+    let Some(f) = fixture("vsock", &["localhost"], &[]) else {
+        return;
+    };
+    let exe = std::env::current_exe().unwrap();
+    let script = format!(
+        "{VSOCK_CHILD}=1 '{}' --exact vsock_child --ignored --nocapture --test-threads 1",
+        exe.display()
+    );
+    let prepared = f.prepare("pi_vsock").await;
+    let run = f.run(&prepared, &script).await;
+    let lines: Vec<&str> = run
+        .stdout
+        .lines()
+        .filter_map(|l| l.split_once("@@ ").map(|(_, rest)| rest))
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            format!("vsock Err({})", nix::libc::EPERM).as_str(),
+            "Seccomp: 2"
+        ],
+        "{}{}",
+        run.stdout,
+        run.stderr
+    );
+    prepared.cleanup();
+}
+
 /// Every session runs as the node's uid with `/tmp` writable: the node's
 /// private parent of the temp directories keeps one session from another's
 /// files and proxy socket.

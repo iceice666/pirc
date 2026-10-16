@@ -25,13 +25,18 @@ pub struct JsonStatus {
 }
 
 impl WrapperStatus for JsonStatus {
+    /// The status pipe, and the read-only sandbox's seccomp filter in the
+    /// same mapping (`command-fds` keeps mappings of separate calls from
+    /// colliding only within each call).
     fn prepare_command(&self, command: &mut tokio::process::Command) -> std::io::Result<()> {
         let (reader, writer) = std::io::pipe()?;
+        let mut mappings = vec![FdMapping {
+            parent_fd: writer.into(),
+            child_fd: STATUS_FD,
+        }];
+        mappings.extend(super::seccomp::mapping()?);
         command
-            .fd_mappings(vec![FdMapping {
-                parent_fd: writer.into(),
-                child_fd: STATUS_FD,
-            }])
+            .fd_mappings(mappings)
             .map_err(std::io::Error::other)?;
         *self.reader.lock().unwrap_or_else(|p| p.into_inner()) = Some(reader);
         Ok(())

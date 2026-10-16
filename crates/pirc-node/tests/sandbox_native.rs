@@ -484,6 +484,8 @@ fn client(prepared: &Prepared, targets: &str) -> tokio::process::Command {
     let at = args.iter().rposition(|a| a == "/bin/sh").unwrap();
     args[at] = std::env::current_exe().unwrap().into_os_string();
     let mut client = tokio::process::Command::new(command.as_std().get_program());
+    // The descriptor mapping is not copied with the arguments.
+    pirc_node::sandbox::linux::seccomp::pass(&mut client).unwrap();
     client
         .args(&args)
         .args([
