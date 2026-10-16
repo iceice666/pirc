@@ -44,11 +44,15 @@ Project-isolation E2 (OM config diagnostics) needs no action: it was ported to R
 
 ## Phase 4 — Decisions to take with the user
 
-Assistant (leanings recorded 2026-09-29):
+**Decision session 2026-10-16.** The assistant and security decisions below were taken with the user; implementation is listed in phase 5 under "Apply phase 4 decisions". Android and project-isolation decisions are still open.
 
-- [ ] **Auto mode in delegated sessions.** Today a dangerous command waits for the user in the delegated session. Leaning: keep the default and offer a checkbox on the delegation confirmation, "treat this task as my request for auto mode", counting the task as a `recentUserRequest` for that run only.
-- [ ] **Settling delegated sessions** after the result is delivered. Leaning: leave them, but show delegation status in the session list.
-- [ ] **Retention.** `memory_log`, `delegations` and `memory_records` grow without bound. Proposal: keep forgotten entries only as tombstones (already), prune `delegations` older than 90 days that are not the target of a `follows`, keep records as long as the ledger has them.
+**Deployment model: pirc has a single user.** Every allowed user of a gateway is treated as the same person; per-user ownership, quotas and limits are not built.
+
+Assistant (leanings recorded 2026-09-29, accepted 2026-10-16):
+
+- [x] **Auto mode in delegated sessions.** Decided: keep the default (a dangerous command waits for the user in the delegated session) and offer a checkbox on the delegation confirmation, "treat this task as my request for auto mode", counting the task as a `recentUserRequest` for that run only.
+- [x] **Settling delegated sessions** after the result is delivered. Decided: leave them, and show delegation status in the session list.
+- [x] **Retention.** `memory_log`, `delegations` and `memory_records` grow without bound. Decided: keep forgotten entries only as tombstones (already), prune `delegations` older than 90 days that are not the target of a `follows`, keep records as long as the ledger has them.
 
 Android (deferred with the rewrite):
 
@@ -58,18 +62,27 @@ Android (deferred with the rewrite):
 
 Security findings that each need a decision. All were re-checked against the Rust code on 2026-10-15 and are still open; evidence is in the [re-audit](../docs/history/security-audit.md#re-audit-against-the-rust-code-2026-10-15).
 
-- [ ] **L5** workspaces have no owner (`schema.sql` has no owner column): capabilities, instructions and the new project links routes, and schedule creation, check only the workspace kind. Any allowed user can change another user's chat project. Record and enforce an owner, or document the single-tenant/shared model. _Most material for multi-user deployments._
-- [ ] **L12** an untrusted project `.pirc/config.json` still sets `defaultModel` (`pirc-agent/src/config.rs`): the H3 trust gate covers hooks/env/allowedPaths only, and its warning does not mention the model. Bring the model under the trust gate or warn.
-- [ ] **L14** with auto mode `enabled:false`, every non-read verdict including **danger** becomes `write` and runs without approval (deny-list still holds); `useModel:false` makes unknowns `write`. Decide: keep danger approvals when disabled, or show a persistent UI warning.
-- [ ] **L11** before-prompt hook stdout and gateway `deliver` content become `Custom` messages sent as plain user text (`pirc-providers/src/pi.rs`); team events are labelled, these are not. New: session-start hook stdout goes into the **system prompt**.
-- [ ] **L13** skill descriptions from the repository enter the system prompt, escaped but introduced as "installed by the user"; label repository skills as untrusted.
-- [ ] **L10** `schedule pause/resume/delete` run without approval (by design; prompt injection can pause or delete schedules). Keep, or gate delete.
-- [ ] **L6** push: HTTPS-only, no userinfo and no redirects hold, but there is no private-address filtering after resolution, no per-user subscription cap and no throttle on `/api/push/test`.
-- [ ] **L3** build caches (`~/.cache`, `~/.npm`, `~/.cargo/registry`, `~/.cargo/git`, `go/pkg/mod`, `~/.gradle/caches`) are writable by default and get no write lease; documented in `docs/deploy/sandbox-and-browser.md`. Keep documented, or make opt-in.
-- [ ] **I4** every chat agent's `assistant.context` lists all directory workspaces of all users (no owner filter); same root cause as L5.
-- [ ] **I9** provider backend URLs accept `http://` (`pirc-providers/src/backends/schema.rs`). Require HTTPS except loopback, or keep.
-- [ ] **I1** panel terminals are unsandboxed login shells, on by default (`PIRC_TERMINALS`, documented in `docs/deploy/node.md`). Keep the default or flip it.
-- [ ] **I8** tracked examples use `homolab`, `m5pro`, `mac` (`.env.example`, `nix/example.nix`, `docs/deploy/nixos.md`, `docs/deploy/macos-node.md`, `apps/web/src/lib/mock.ts`). Confirm they are not real host names, or replace them with neutral placeholders.
+- [x] **L5** workspaces have no owner (`schema.sql` has no owner column): capabilities, instructions and the new project links routes, and schedule creation, check only the workspace kind. Decided: single-user model; document it, no owner column.
+- [x] **L12** an untrusted project `.pirc/config.json` still sets `defaultModel` (`pirc-agent/src/config.rs`): the H3 trust gate covers hooks/env/allowedPaths only. Decided: bring `defaultModel` under the trust gate (ignored until the project is trusted) and name the model in the warning.
+- [x] **L14** with auto mode `enabled:false`, every non-read verdict including **danger** becomes `write` and runs without approval (deny-list still holds). Decided: replace `enabled` with three approval modes, see "Approval modes" below.
+- [x] **L11** before-prompt hook stdout and gateway `deliver` content become `Custom` messages sent as plain user text (`pirc-providers/src/pi.rs`); session-start hook stdout goes into the **system prompt**. Decided: label them like team events ("data, not user instructions"); take session-start hook output out of the system prompt or fence it in a labelled block.
+- [x] **L13** skill descriptions from the repository enter the system prompt introduced as "installed by the user". Decided: introduce repository skills separately, labelled as from the repository and untrusted.
+- [x] **L10** `schedule pause/resume/delete` run without approval. Decided: pause/resume stay as they are; **delete** goes through a proposal the user approves.
+- [x] **L6** push: no private-address filtering after resolution, no per-user subscription cap, no throttle on `/api/push/test`. Decided: accepted; only the single user can register endpoints.
+- [x] **L3** build caches are writable by default and get no write lease; documented in `docs/deploy/sandbox-and-browser.md`. Decided: keep documented.
+- [x] **I4** every chat agent's `assistant.context` lists all directory workspaces (no owner filter). Decided: accepted under the single-user model (same as L5).
+- [x] **I9** provider backend URLs accept `http://` (`pirc-providers/src/backends/schema.rs`). Decided: keep (LAN/tailnet backends; only the user configures them).
+- [x] **I1** panel terminals are unsandboxed login shells, on by default (`PIRC_TERMINALS`). Decided: keep the default.
+- [x] **I8** tracked examples use `homolab`, `m5pro`, `mac`. Decided: they are real host names but generic enough to reveal nothing useful; keep them.
+
+**Approval modes (L14, decided 2026-10-16).** Modelled on Codex:
+
+- `read-only`: only `read` verdicts run; `write` and `danger` need the user's approval; headless teammates/subagents are refused.
+- `auto` (default): today's behaviour (rules, then the classifier; `danger` needs approval). `useModel` applies only here; unclear stays `write`.
+- `full-access`: no classification gate; a warning when switching to it and a persistent indicator while active.
+- In every mode the user's deny-list still means "ask me", the write lease is still taken, and the OS sandbox is unchanged (it stays a node setting, independent of the mode).
+- The node config sets the default; the web UI can switch a single session. Delegated sessions start in the default mode, never inheriting a chat's `full-access` (the delegation checkbox above still applies); teammates and subagents follow their parent session.
+- Migration: `enabled:false` maps to `full-access` (so it now shows the warning), `enabled:true` to `auto`.
 
 Project isolation (needed before phase 8):
 
@@ -84,11 +97,18 @@ Re-audited against Rust on 2026-10-15; see the [re-audit](../docs/history/securi
 - [x] **M13 gap** done 2026-10-15: node→browser stream messages are capped at 4 MiB (`pirc-gateway/src/sockets.rs` `relay_verdict`; the 64 KiB/1 MiB caps were browser→node only). An oversized message closes a terminal socket with `1009` and is dropped from the live view, so one message overshoots the backlog by at most 4 MiB, not 16 MiB.
 - [x] **Recording read follows symlinks** done 2026-10-15: `read_recording_chunk` (`pirc-node/src/panels/inspect.rs`) resolves the path with `resolve_inside`, like other panel reads (an escape is a 404), and takes size and bytes from one open file.
 - [x] **I2** done 2026-10-15: node-side writes into `.pirc/uploads` (`runner/mod.rs`) and `.pirc/recordings` (`browser/manager/ops.rs`, `browser/recording.rs`) go through `pirc-node/src/private_dir.rs`: each directory below the session root is opened with `O_NOFOLLOW`, files are created with `O_EXCL|O_NOFOLLOW`, and ffmpeg writes WebM to the node's descriptor (`/dev/fd/3`) instead of a path.
-- [x] **L7** done 2026-10-15 (per node): `MAX_PENDING_REQUESTS` and `MAX_TERMINAL_STREAMS` count only the target node (`pirc-gateway/src/nodes.rs` `requests_on`/`streams_on`). Not per user: node requests carry no user at the registry, and the per-user split is part of the L5 ownership decision.
-- [x] **L8** done 2026-10-15 (limits; no rate limiter): JSON bodies are capped at 4 MiB (`pirc-gateway/src/http.rs` `JSON_BODY_MAX_BYTES`; uploads keep `upload_max_bytes`), and command payloads keep only the node's keys with bounded values before they are stored and forwarded (`routes.rs` `command_payload`). A request rate limiter is still open and needs a decision on limits.
+- [x] **L7** done 2026-10-15 (per node): `MAX_PENDING_REQUESTS` and `MAX_TERMINAL_STREAMS` count only the target node (`pirc-gateway/src/nodes.rs` `requests_on`/`streams_on`). Not per user: node requests carry no user at the registry, and the single-user model (L5) makes a per-user split unnecessary.
+- [x] **L8** done 2026-10-15 (limits; no rate limiter): JSON bodies are capped at 4 MiB (`pirc-gateway/src/http.rs` `JSON_BODY_MAX_BYTES`; uploads keep `upload_max_bytes`), and command payloads keep only the node's keys with bounded values before they are stored and forwarded (`routes.rs` `command_payload`). A request rate limiter is not needed under the single-user model (decided 2026-10-16).
 - [x] **I3** done 2026-10-15: mirrored memory records have a per-node quota of 200,000 rows (tombstones included) and 64 MiB of note text (`memory_records.rs` `Quota`; rows past it are not kept, and a warning is logged), and event replay is bounded by 8 MiB per session as well as by count (`events.rs` `REPLAY_MAX_BYTES`).
 - [x] **L15** done 2026-10-15: no source maps in the web build; dev/preview bind localhost; `check.yml`/`android.yml` actions pinned by commit SHA (tag in a comment); NixOS units gain `CapabilityBoundingSet=`, `RestrictRealtime=`, `RestrictAddressFamilies=` (both), and `SystemCallFilter=@system-service`, `SystemCallArchitectures=native`, `ProtectProc=invisible`, `RestrictNamespaces=` (gateway only; the node keeps namespaces and mount calls for bubblewrap). Checked: the gateway under those filters in a user `systemd-run`, bubblewrap under the node's address-family and realtime limits, module evaluation. Not checked: a real NixOS host (see manual validation).
-- [ ] Apply phase 4 security decisions.
+- [ ] Apply phase 4 decisions (2026-10-16):
+  - [ ] Approval modes `read-only`/`auto`/`full-access` (L14), with config migration, per-session switch and web warning.
+  - [ ] L12 `defaultModel` under the trust gate.
+  - [ ] L11 label hook/`deliver` content; session-start hook output out of the system prompt or fenced.
+  - [ ] L13 label repository skills as untrusted.
+  - [ ] L10 schedule delete through a proposal.
+  - [ ] Document the single-user model (L5, I4) in the deploy docs; record the accepted items (L3, L6, L8 rate limiter, I1, I8, I9) in the [re-audit](../docs/history/security-audit.md#re-audit-against-the-rust-code-2026-10-15).
+  - [ ] Assistant: auto-mode checkbox on the delegation confirmation; delegation status in the session list; prune `delegations` after 90 days unless followed.
 - [ ] Sandbox limitations to revisit (all confirmed): Linux allows every Unix socket not on the known-host-socket list (`sandbox/linux.rs`; move inference off Unix sockets or bind-mount narrowly); the whole workspace-memory directory is a writable root, so an agent can append to other repositories' ledgers (`pirc-policy/src/session.rs`); domain approvals are session-only.
 - [ ] Accepted PTC limitation, partly addressed by phase 3: a `bash` operation that names a network fetcher or URL now fences the `ptc` result as untrusted; other `bash` output, `memory_search`, `delegation_status` and `agent_inbox` results are still not marked untrusted (`ptc/registry.rs`).
 
