@@ -81,6 +81,10 @@ impl Db {
     pub fn open(path: &Path) -> Result<Self, String> {
         let describe = |error: rusqlite::Error| format!("{}: {error}", path.display());
         let connection = Connection::open(path).map_err(describe)?;
+        // Another process may hold the write lock (opening, migrating).
+        connection
+            .busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(describe)?;
         // Push keys, device-token hashes and memory live here. SQLite gives
         // the WAL and shm files the main file's mode, so this covers them.
         restrict_mode(path)?;
@@ -162,8 +166,24 @@ fn restrict_mode(path: &Path) -> Result<(), String> {
 }
 
 /// Create the schema in a new database; refuse one from the TS gateway or a
-/// newer Rust gateway.
+/// newer Rust gateway. The version is read and acted on under one
+/// `BEGIN IMMEDIATE` write lock, so two processes opening the same database
+/// cannot both create or migrate it; any failure rolls the whole chain back.
 fn create_schema(connection: &Connection, path: &Path) -> Result<(), String> {
+    let describe = |error: rusqlite::Error| format!("{}: {error}", path.display());
+    connection
+        .execute_batch("BEGIN IMMEDIATE")
+        .map_err(describe)?;
+    let result = apply_schema(connection, path)
+        .and_then(|()| connection.execute_batch("COMMIT").map_err(describe));
+    if result.is_err() {
+        let _ = connection.execute_batch("ROLLBACK");
+    }
+    result
+}
+
+/// [`create_schema`]'s body, inside its transaction.
+fn apply_schema(connection: &Connection, path: &Path) -> Result<(), String> {
     let describe = |error: rusqlite::Error| format!("{}: {error}", path.display());
     let version: i64 = connection
         .pragma_query_value(None, "user_version", |row| row.get(0))
@@ -194,17 +214,16 @@ fn create_schema(connection: &Connection, path: &Path) -> Result<(), String> {
     }
     connection
         .execute_batch(&format!(
-            "BEGIN; {SCHEMA}\nPRAGMA user_version = {SCHEMA_VERSION}; COMMIT;"
+            "{SCHEMA}\nPRAGMA user_version = {SCHEMA_VERSION};"
         ))
         .map_err(describe)
 }
 
-/// Bring an older Rust schema up to date, one migration per transaction.
+/// Bring an older Rust schema up to date, inside [`create_schema`]'s
+/// transaction.
 fn migrate(connection: &Connection, from: i64) -> rusqlite::Result<()> {
     for (version, sql) in MIGRATIONS.iter().filter(|(version, _)| *version > from) {
-        connection.execute_batch(&format!(
-            "BEGIN; {sql}\nPRAGMA user_version = {version}; COMMIT;"
-        ))?;
+        connection.execute_batch(&format!("{sql}\nPRAGMA user_version = {version};"))?;
     }
     Ok(())
 }
@@ -1383,6 +1402,45 @@ mod tests {
         db.lock()
             .sync_remote_workspaces("n1", &[("w".into(), "W".into(), Some(WorkspaceKind::Chat))])
             .unwrap();
+    }
+
+    #[test]
+    fn concurrent_opens_create_the_schema_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("gateway.sqlite");
+        let barrier = std::sync::Barrier::new(8);
+        std::thread::scope(|scope| {
+            let opens: Vec<_> = (0..8)
+                .map(|_| {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        Db::open(&path).map(drop)
+                    })
+                })
+                .collect();
+            for open in opens {
+                open.join().unwrap().unwrap();
+            }
+        });
+        let db = Db::open(&path).unwrap();
+        let version: i64 = db
+            .lock()
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        let fresh = Db::memory();
+        let tables = |db: &Db| -> Vec<String> {
+            let connection = db.lock();
+            let mut statement = connection
+                .prepare("SELECT name FROM sqlite_master ORDER BY name")
+                .unwrap();
+            statement
+                .query_map([], |row| row.get(0))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap()
+        };
+        assert_eq!(tables(&db), tables(&fresh));
     }
 
     #[test]
