@@ -214,6 +214,7 @@ class _RenderDocumentGrid extends RenderBox
     }
     final widths = _trackSizes(tracks, width, columnGap);
     final heights = <int, double>{}, offsets = <double>[0];
+    final autoHeightFixedRows = <int, double>{};
     for (final track in widths) {
       offsets.add(offsets.last + track + columnGap);
     }
@@ -222,11 +223,16 @@ class _RenderDocumentGrid extends RenderBox
         columnGap * (span - 1);
 
     // A finite maximum alone does not make an auto-height grid definite.
-    // Explicit row tracks (and percentage-height items in them) resolve only
-    // when the grid receives a tight height allocation.
+    // Resolve percentage/fractional row tracks only with a tight height. In an
+    // auto-height grid, fixed rows retain their size and fractional minmax
+    // rows retain their declared floor while their content can still grow it.
     List<double>? rowSizes;
-    if (rowTemplate != null && constraints.hasTightHeight) {
-      var rowTracks = rowTemplate!.expand(constraints.maxHeight, rowGap);
+    if (rowTemplate != null) {
+      final definiteHeight = constraints.hasTightHeight;
+      var rowTracks = rowTemplate!.expand(
+        definiteHeight ? constraints.maxHeight : 0,
+        rowGap,
+      );
       if (rowTemplate!.collapseEmpty) {
         final occupiedRows = placement.fold<int>(
           0,
@@ -234,9 +240,24 @@ class _RenderDocumentGrid extends RenderBox
         );
         rowTracks = rowTracks.take(occupiedRows).toList();
       }
-      rowSizes = _trackSizes(rowTracks, constraints.maxHeight, rowGap);
-      for (var row = 0; row < rowSizes.length; row++) {
-        heights[row] = rowSizes[row];
+      if (definiteHeight) {
+        rowSizes = _trackSizes(rowTracks, constraints.maxHeight, rowGap);
+        for (var row = 0; row < rowSizes.length; row++) {
+          heights[row] = rowSizes[row];
+        }
+      } else {
+        for (var row = 0; row < rowTracks.length; row++) {
+          final track = rowTracks[row];
+          if (track.isFixedPixel) {
+            autoHeightFixedRows[row] = track.fixedPx;
+            heights[row] = track.fixedPx;
+          } else if (track.fraction > 0 && track.minimumPx > 0) {
+            // This is only the minmax floor. The first child-measure pass is
+            // unconstrained vertically, so max-content can grow the row.
+            // Indefinite fractional space is not distributed among rows.
+            heights[row] = track.minimumPx;
+          }
+        }
       }
     }
 
@@ -248,7 +269,7 @@ class _RenderDocumentGrid extends RenderBox
           childIndex >= stretchRows.length || stretchRows[childIndex];
       final cellHeight = rowSizes != null && row < rowSizes.length
           ? rowSizes[row]
-          : null;
+          : autoHeightFixedRows[row];
       final box = _itemConstraints(
         width: cellWidth(column, span),
         stretchWidth: stretchWidth,
@@ -287,7 +308,7 @@ class _RenderDocumentGrid extends RenderBox
             childIndex >= stretchRows.length || stretchRows[childIndex];
         final rowArea = rowSizes != null && row < rowSizes.length
             ? rowSizes[row]
-            : null;
+            : autoHeightFixedRows[row];
         // An explicit item height in an auto row must stay unconstrained so
         // its percentage remains unresolved. With an explicit row area, the
         // loose maximum is the percentage basis even when the item is smaller.

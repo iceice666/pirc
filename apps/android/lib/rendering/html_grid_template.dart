@@ -13,13 +13,26 @@ class NativeGridTrack {
     required this.fixedPercent,
     required this.fraction,
     required this.minimumPx,
+    required this.isFixedPixel,
   });
 
   const NativeGridTrack.pixels(double value)
-    : this._(fixedPx: value, fixedPercent: 0, fraction: 0, minimumPx: 0);
+    : this._(
+        fixedPx: value,
+        fixedPercent: 0,
+        fraction: 0,
+        minimumPx: 0,
+        isFixedPixel: true,
+      );
 
   const NativeGridTrack.percent(double value)
-    : this._(fixedPx: 0, fixedPercent: value, fraction: 0, minimumPx: 0);
+    : this._(
+        fixedPx: 0,
+        fixedPercent: value,
+        fraction: 0,
+        minimumPx: 0,
+        isFixedPixel: false,
+      );
 
   const NativeGridTrack.fraction(double value, {double minimumPx = 0})
     : this._(
@@ -27,12 +40,14 @@ class NativeGridTrack {
         fixedPercent: 0,
         fraction: value,
         minimumPx: minimumPx,
+        isFixedPixel: false,
       );
 
   final double fixedPx;
   final double fixedPercent;
   final double fraction;
   final double minimumPx;
+  final bool isFixedPixel;
 
   @override
   bool operator ==(Object other) =>
@@ -40,10 +55,12 @@ class NativeGridTrack {
       other.fixedPx == fixedPx &&
       other.fixedPercent == fixedPercent &&
       other.fraction == fraction &&
-      other.minimumPx == minimumPx;
+      other.minimumPx == minimumPx &&
+      other.isFixedPixel == isFixedPixel;
 
   @override
-  int get hashCode => Object.hash(fixedPx, fixedPercent, fraction, minimumPx);
+  int get hashCode =>
+      Object.hash(fixedPx, fixedPercent, fraction, minimumPx, isFixedPixel);
 }
 
 /// The subset of `grid-template-columns` understood by the native renderer.

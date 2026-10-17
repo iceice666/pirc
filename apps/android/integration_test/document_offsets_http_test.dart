@@ -21,12 +21,17 @@ padding:7px 9px;border:4px solid;overflow:auto}
 #percent-outer{width:300px;border:1px solid}
 #percent-parent{position:relative;width:200px;margin-top:5%}
 #percent-child{width:30px;height:10px;margin-top:10%}
+#relative-parent{position:relative;left:30px;top:20px;width:180px;height:70px;border:3px solid;padding:4px}
+#relative-target{position:relative;left:-7.5px;top:5px;width:90px;height:30px}
 </style></head><body id="body"><div id="parent"><div id="content">
 <div id="target"></div></div></div><pre id="probe">WAIT</pre>
 <button type="button" id="scroll">Scroll</button><button type="button" id="read">Read</button><button type="button" id="change">Change</button>
-<button type="button" id="percent">Percent</button>
+<button type="button" id="percent">Percent</button><button type="button" id="relative">Relative</button>
 <div id="percent-outer"><div id="percent-parent"><div id="percent-child"></div></div></div>
+<div id="relative-parent"><div id="relative-target"><button type="button" id="moved">Moved</button></div></div>
 <script>
+window.relativeHits=0;window.relativeMutation=null;
+window.readRelative=function(){var p=document.getElementById('relative-parent'),c=document.getElementById('relative-target'),r=p.getBoundingClientRect(),q=c.getBoundingClientRect();return {parentX:r.x,gapX:q.x-r.x,gapY:q.y-r.y,top:c.offsetTop,left:c.offsetLeft,parentIdentity:c.offsetParent===p,hits:window.relativeHits,stale:window.relativeMutation}};
 window.readPercent=function(){var p=document.getElementById('percent-parent'),c=document.getElementById('percent-child'),o=document.getElementById('percent-outer');return {
  gap:p.getBoundingClientRect().y-o.getBoundingClientRect().y,
  childGap:c.getBoundingClientRect().y-p.getBoundingClientRect().y,
@@ -40,7 +45,7 @@ window.readOffsets=function(){var e=document.getElementById('target');return {
  rootParent:document.documentElement.offsetParent,bodyParent:document.body.offsetParent,
  bodyTop:document.body.offsetTop,bodyLeft:document.body.offsetLeft,
  scrollTop:document.getElementById('parent').scrollTop,
- scrollLeft:document.getElementById('parent').scrollLeft,percent:readPercent()
+ scrollLeft:document.getElementById('parent').scrollLeft,percent:readPercent(),relative:readRelative()
 }};
 window.offsetMutation=null;window.percentMutation=null;window.initialOffsets=readOffsets();
 document.addEventListener('DOMContentLoaded',function(){
@@ -53,6 +58,14 @@ document.getElementById('read').onclick=function(){
 document.getElementById('change').onclick=function(){
  var target=document.getElementById('target');target.style.marginLeft='100px';
  try{target.offsetLeft;window.offsetMutation='NO_ERROR'}catch(e){window.offsetMutation=e.name}
+};
+document.getElementById('relative').onclick=function(){
+ document.getElementById('relative-parent').style.left='50px';
+ try{document.getElementById('relative-target').offsetLeft;window.relativeMutation='NO_ERROR'}catch(e){window.relativeMutation=e.name}
+};
+document.getElementById('moved').onclick=function(){
+ window.relativeHits++;
+ document.getElementById('probe').textContent=JSON.stringify(readOffsets());
 };
 document.getElementById('percent').onclick=function(){
  document.getElementById('percent-parent').style.width='300px';
@@ -179,6 +192,13 @@ void main() {
       expect(obj(initial['percent']), containsPair('width', 200));
       expect(obj(initial['percent']), containsPair('height', 10));
       expect(obj(initial['percent']), containsPair('parentIdentity', true));
+      final initialRelative = obj(initial['relative']);
+      expect(initialRelative['parentX'], 30);
+      expect(initialRelative['gapX'], -.5);
+      expect(initialRelative['gapY'], 12);
+      expect(initialRelative['top'], 9);
+      expect(initialRelative['left'], -3);
+      expect(initialRelative['parentIdentity'], true);
       final parentScriptId = html
           .parse(document.scripts!.content!.text)
           .getElementById('parent')!
@@ -247,10 +267,38 @@ void main() {
       expect(percentChanged['height'], 10);
       expect(percentChanged['parentIdentity'], true);
       expect(percentChanged['stale'].toString(), contains('NotSupportedError'));
+      await t.tap(find.text('Relative', findRichText: true));
+      await ready(
+        () =>
+            html
+                .parse(document!.scripts!.content!.text)
+                .getElementById('relative-parent')
+                ?.attributes['style']
+                ?.contains('50px') ==
+            true,
+      );
+      await t.tap(find.text('Read', findRichText: true));
+      await ready(() => obj(observation()['relative'])['parentX'] == 50);
+      final relativeChanged = obj(observation()['relative']);
+      expect(relativeChanged['gapX'], -.5);
+      expect(relativeChanged['gapY'], 12);
+      expect(relativeChanged['top'], 9);
+      expect(relativeChanged['left'], -3);
+      expect(relativeChanged['parentIdentity'], true);
+      expect(
+        relativeChanged['stale'].toString(),
+        contains('NotSupportedError'),
+      );
+      await t.tap(find.text('Moved', findRichText: true));
+      await ready(() => obj(observation()['relative'])['hits'] == 1);
+      final moved = obj(observation()['relative']);
+      expect(moved['parentX'], 50);
+      expect(moved['top'], 9);
+      expect(moved['left'], -3);
       expect(failures, isEmpty);
       expect(t.takeException(), isNull);
       debugPrintSynchronously(
-        'PIRC_OFFSET_ACCEPTANCE ${jsonEncode({'initial': initial, 'scrolled': scrolled, 'changed': changed, 'parentScriptId': parentScriptId, 'stale': stale, 'percentChanged': percentChanged, 'failures': failures})}',
+        'PIRC_OFFSET_ACCEPTANCE ${jsonEncode({'initial': initial, 'scrolled': scrolled, 'changed': changed, 'parentScriptId': parentScriptId, 'stale': stale, 'percentChanged': percentChanged, 'relativeChanged': relativeChanged, 'moved': moved, 'failures': failures})}',
       );
     } finally {
       await t.pumpWidget(const SizedBox.shrink());

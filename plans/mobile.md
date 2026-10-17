@@ -27,8 +27,10 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** signed/font-relative/empty-block and bottom-edge
-      margin collapse, positioned/transformed/zoomed/table offset geometry,
+- [ ] **Dynamic content compatibility:** `window.getComputedStyle()` and used-style
+      values for common libraries; signed/font-relative/empty-block and bottom-edge
+      margin collapse, absolute/fixed/sticky positioning, unsupported relative-inset
+      units and inline fragments, transformed/zoomed/table offset geometry,
       inline-fragment geometry and image/resize/chart/framework flows. A DOM write followed immediately by a geometry read still needs a
       matching native frame; unsupported reads fail explicitly. Native Canvas event
       callbacks have measured geometry for their synchronous dispatch.
@@ -60,6 +62,11 @@ outside the agreed scope.
 - Basic `display:flow-root` box sizing and the margin barrier are covered;
   float placement/containment and negative percentage/auto flex margins remain
   outside the tested subset.
+- Relative positioning supports native block/flex/grid/flow-root surfaces,
+  signed pixel/percentage physical insets and zero values in CSS length units.
+  Nonzero font/viewport-relative units, calc(), logical insets, inline fragments,
+  and absolute/fixed/sticky positioning remain unsupported. A nonzero relative
+  inline inset does not acquire offset metadata merely because its syntax parses.
 - Some inserted classic-script lexical-scope behavior differs from the browser.
 - Two root-height fixtures retain extra trailing blank scroll space: 8 px with
   the default body margin, and 17 px with nested content-box edges. Their element
@@ -67,6 +74,12 @@ outside the agreed scope.
 - Root horizontal scrolling, scrollend/Promise semantics, mixed window/element
   event order, RTL, scroll snap/anchoring and nested touch scroll chaining need
   wider coverage. Smooth scroll timing follows Flutter.
+- `window.getComputedStyle` is currently undefined in the shipped native script
+  runtime (confirmed with the production bundle). Inline `element.style` values
+  remain available. Libraries that read computed/cascaded/used styles can fail;
+  providing that API with native style/layout state is the next compatibility
+  priority. The new positioning oracle records browser computed insets for
+  reference but its native assertions cover geometry, offsets and scrolling.
 - Arbitrary websites/frameworks, third-party cookie policies and full browser API
   coverage are not guaranteed. Preserve explicit unsupported errors and record
   real failures before expanding compatibility.
@@ -219,9 +232,11 @@ Full HTML pages now expose measured `offsetTop`, `offsetLeft` and the actual DOM
 Native measurements preserve the browser's root/body origins, parent border
 insets, signed rounding and unscrolled coordinates. Missing, ambiguous or stale
 measurements remain explicit errors; detached and unrendered elements report
-zero offsets and a null parent. Absolute/fixed/sticky positioning, relative
-insets, transforms, zoom, table offsets and fragmented inline geometry still
-need native layout support and are not claimed as implemented.
+zero offsets and a null parent. Common block relative insets are covered by
+the follow-up below. Absolute/fixed/sticky positioning, unsupported relative
+inset units/logical properties, transforms, zoom, table offsets and fragmented
+inline geometry still need native layout support and are not claimed as
+implemented.
 
 Normal block negative horizontal margins and fixed flex-item margins now
 contribute to native layout and flex allocation. Negative vertical block margins,
@@ -309,3 +324,48 @@ a fixed delay had allowed an old observation to be read on Android.
 
 Browser captures use only synthetic local HTML in the dedicated headless shell.
 Physical-device, real-account/provider and remote-push acceptance remain pending.
+
+## Native relative positioning and grid rows follow-up
+
+Common `position:relative` blocks keep their normal-flow allocation while their
+border box, descendants, paint transforms, hit testing and accessibility geometry
+move together. Physical top/right/bottom/left insets support signed px and
+percentages, auto, the inset shorthand and both overconstrained-axis rules.
+Horizontal percentages use the actual containing-block content width; vertical
+percentages use a definite content height and otherwise behave as auto. When
+both horizontal sides are specified, the containing block's direction chooses
+the winning side, including when the child has the opposite direction.
+
+Offset metadata is exposed only for relative surfaces implemented by the native
+renderer. Measured offset-parent identity, unscrolled offsets and signed rounding
+are retained. The root/body special offset rules remain distinct. Relative
+placement does not change following sibling slots or intrinsic/flow baselines.
+Input edits and page scroll position survive viewport resizing; native links hit
+at their shifted positions and clipped overflow becomes reachable by scrolling.
+
+The dedicated Chromium 153 reference covers 36 viewport records and 40 geometry
+states across 18 cases at 390 × 844 and 768 × 1024. It compares border-box
+positions/sizes, offsets and parent identity, plus element scroll positions and
+extents, with no named geometry exemptions. Cases include negative/fractional
+positions, axis precedence, nested relative boxes, body/root origins,
+border/padding, overflow:auto/hidden, margin collapse, flex/grid slots, indented
+inline grid items and resize.
+The capture reproduced byte for byte using synthetic HTML and the dedicated
+test shell with network requests aborted.
+
+The reference also exposed an existing auto-height grid bug: fixed pixel rows
+were ignored unless height was tight. Fixed rows now retain their authored track
+sizes and gaps with auto container height. Track identity preserves the unit so
+zero percent rows are not mistaken for fixed zero-pixel rows. Fractional minmax
+tracks retain their pixel floor while still growing to fit content. Direct inline
+grid children are blockified and get separate native boxes, position/hit surfaces
+and measured offset metadata. General cyclic percentage/fractional intrinsic
+track sizing remains outside the tested subset.
+
+Final gates for this follow-up: **4,692 Flutter unit/widget tests**, **519
+JavaScript tests**, clean Flutter analysis and formatting. The Android local-HTTP
+integration passed with the shipped JavaScript sandbox and native renderer:
+relative parent movement from 30 to 50 px, unchanged child-relative offsets,
+stale-read rejection and a successful button click after the move. It also
+retains the previous two-axis-scroll and percentage-margin checks. Physical
+phone/tablet, real-provider and remote-push acceptance remain pending.

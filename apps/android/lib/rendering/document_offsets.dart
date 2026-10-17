@@ -1,3 +1,5 @@
+import 'dart:ui' show TextDirection;
+import 'document_relative_position.dart';
 import 'package:html/dom.dart' as dom;
 
 enum NativeDocumentOffsetOrigin {
@@ -44,21 +46,15 @@ Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
     final position = value(element, 'position', 'static');
     if (position != 'static' && position != 'relative') return false;
     if (position == 'relative') {
-      for (final entry in css.entries) {
-        if (const {
-              'top',
-              'left',
-              'right',
-              'bottom',
-              'inset',
-            }.contains(entry.key) ||
-            entry.key.startsWith('inset-')) {
-          if (!RegExp(
-            r'^(?:auto|[+-]?0(?:\.0+)?(?:px|%|em|rem)?)$',
-          ).hasMatch(entry.value.trim().toLowerCase())) {
-            return false;
-          }
-        }
+      final spec = NativeDocumentRelativePositionSpec.parse(
+        css,
+        direction: TextDirection.ltr,
+      );
+      if (spec == null) return false;
+      // Nonzero relative insets need the same native block surface that the
+      // renderer wraps. Zero/auto inline positioning retains its old behavior.
+      if (!spec.isNoOp && !_hasNativeRelativeBox(element, stylesByElement)) {
+        return false;
       }
     }
     for (final property in const [
@@ -167,4 +163,70 @@ Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
     );
   }
   return result;
+}
+
+// The HTML core supplies these default block displays. Explicit native block,
+// flex/grid and flow-root surfaces use NativeDocumentBox; inline fragments do
+// not gain offset support merely because their inset syntax is recognized.
+bool _hasNativeRelativeBox(
+  dom.Element element,
+  Map<dom.Element, Map<String, String>> stylesByElement,
+) {
+  final display = stylesByElement[element]?['display']?.trim().toLowerCase();
+  if (const {'block', 'flex', 'grid', 'flow-root'}.contains(display)) {
+    return true;
+  }
+  final parent = element.parent;
+  if (const {'inline', 'inline-block', null}.contains(display) &&
+      parent != null &&
+      const {'flex', 'grid'}.contains(stylesByElement[parent]?['display']) &&
+      !const {
+        'img',
+        'canvas',
+        'audio',
+        'video',
+        'input',
+        'select',
+        'textarea',
+      }.contains(element.localName)) {
+    return true;
+  }
+  if (display == null || display.isEmpty) {
+    return const {
+      'html',
+      'body',
+      'div',
+      'section',
+      'article',
+      'header',
+      'footer',
+      'main',
+      'nav',
+      'aside',
+      'address',
+      'form',
+      'p',
+      'pre',
+      'blockquote',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'ul',
+      'ol',
+      'dl',
+      'dt',
+      'dd',
+      'figure',
+      'figcaption',
+      'details',
+      'summary',
+      'fieldset',
+      'legend',
+      'hr',
+    }.contains(element.localName);
+  }
+  return false;
 }

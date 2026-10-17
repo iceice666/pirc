@@ -6,7 +6,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
-- Android full-page HTML content resolves viewport heights and measured element offsets, handles common fixed and percentage block/flex margins, and keeps overflowing content reachable.
+- Android full-page HTML content improves viewport sizing, offsets, common margins, relative positioning and grid rows, while keeping overflowing content reachable.
 - Gateway and node startup retry brief SQLite WAL-mode lock conflicts when processes open the same database concurrently.
 - PTC scripts that exhaust their JavaScript heap report an out-of-memory error reliably, including when the engine cannot allocate an error object.
 

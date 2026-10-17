@@ -91,11 +91,43 @@ void main() {
     expect(parent['child']!.parentId, 'parent');
     expect(parent['child']!.origin, NativeDocumentOffsetOrigin.paddingEdge);
   });
+  for (final insets in [
+    'top:1px',
+    'right:-7.5px;bottom:12px',
+    'left:10%;top:20%',
+    'inset:1px 2% auto -4px',
+  ]) {
+    test(
+      'relative native block insets expose measured offset metadata: $insets',
+      () {
+        final specs = _specs('#parent{position:relative;$insets}');
+        expect(specs['parent']!.parentId, 'body');
+        expect(specs['child']!.parentId, 'parent');
+      },
+    );
+  }
+  test('direct grid inline items expose native relative box metadata', () {
+    final specs = _specs(
+      'body{display:grid}#parent{display:inline;position:relative;left:10px}',
+    );
+    expect(specs['parent']!.parentId, 'body');
+    expect(specs['child']!.parentId, 'parent');
+  });
+  test(
+    'nonzero relative inline insets do not claim native fragment support',
+    () {
+      final specs = _specs('#parent{display:inline;position:relative;top:1px}');
+      expect(specs.containsKey('parent'), isFalse);
+      expect(specs.containsKey('child'), isFalse);
+      expect(specs.containsKey('other'), isTrue);
+    },
+  );
   for (final css in [
     'position:absolute',
     'position:fixed',
     'position:sticky',
-    'position:relative;top:1px',
+    'position:relative;top:1em',
+    'position:relative;left:calc(1px + 2%)',
     'position:relative;inset-inline-start:1px',
     'transform:translateX(1px)',
     'translate:1px',

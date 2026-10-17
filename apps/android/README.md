@@ -69,6 +69,11 @@ flow-root barriers and scroll preservation during provisional or failed layout.
 Remaining limits are recorded in the plan. `document_offsets_http_test.dart`
 checks the shipped JavaScript runtime, scrolling, percentage geometry and style
 mutation over local HTTP on Android.
+`document_relative_position_oracle_test.dart` compares physical relative insets,
+root/body offsets, flex/grid flow slots and scroller extents with Chromium.
+The relative fetched-page tests check shifted link hits, clipped scrolling,
+resizing and retained input state; the renderer tests also verify semantics and
+flow baselines. Fixed grid rows retain their sizes in auto-height containers.
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see
 [the test browser guide](tool/parity/TEST_BROWSER.md).

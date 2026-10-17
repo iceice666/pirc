@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import 'html_document_flex.dart';
+import 'document_relative_position.dart';
 import 'document_margin_collapse.dart';
 
 class _DocumentContainingBlock {
@@ -457,6 +458,159 @@ class _RenderNativeDocumentContainingBlock extends RenderProxyBox {
   @override
   double computeMaxIntrinsicHeight(double width) =>
       child?.getMaxIntrinsicHeight(width) ?? 0;
+}
+
+/// Applies CSS relative-position painting without changing the child's flow
+/// size or baseline. Its percentage insets use the nearest active native
+/// containing-block context.
+class NativeDocumentRelativePosition extends SingleChildRenderObjectWidget {
+  const NativeDocumentRelativePosition({
+    super.key,
+    required super.child,
+    required this.spec,
+    required this.direction,
+  });
+
+  final NativeDocumentRelativePositionSpec spec;
+  final TextDirection direction;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderNativeDocumentRelativePosition(spec, direction);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant RenderObject renderObject,
+  ) {
+    (renderObject as _RenderNativeDocumentRelativePosition).update(
+      spec,
+      direction,
+    );
+  }
+}
+
+class _RenderNativeDocumentRelativePosition extends RenderProxyBox {
+  _RenderNativeDocumentRelativePosition(this._spec, this._direction);
+
+  NativeDocumentRelativePositionSpec _spec;
+  TextDirection _direction;
+  Offset _paintOffset = Offset.zero;
+
+  void update(
+    NativeDocumentRelativePositionSpec spec,
+    TextDirection direction,
+  ) {
+    if (identical(_spec, spec) && _direction == direction) return;
+    _spec = spec;
+    _direction = direction;
+    markNeedsLayout();
+  }
+
+  Offset _resolveOffset({required bool dry}) {
+    var containingBlock = _findDocumentContainingBlock(parent);
+    if (dry && !(containingBlock?.isActive ?? false)) {
+      containingBlock = null;
+    }
+    return _spec.resolve(
+      containingWidth: containingBlock?.width,
+      containingHeight: containingBlock?.height,
+      direction: _direction,
+    );
+  }
+
+  @override
+  void performLayout() {
+    _paintOffset = _resolveOffset(dry: false);
+    final currentChild = child;
+    if (currentChild == null) {
+      size = constraints.smallest;
+      return;
+    }
+    currentChild.layout(constraints, parentUsesSize: true);
+    size = constraints.constrain(currentChild.size);
+  }
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) => constraints.constrain(
+    child?.getDryLayout(constraints) ?? constraints.smallest,
+  );
+
+  @override
+  double? computeDryBaseline(
+    BoxConstraints constraints,
+    TextBaseline baseline,
+  ) => child?.getDryBaseline(constraints, baseline);
+
+  @override
+  double? computeDistanceToActualBaseline(TextBaseline baseline) =>
+      child?.getDistanceToActualBaseline(baseline) ??
+      super.computeDistanceToActualBaseline(baseline);
+
+  @override
+  double computeMinIntrinsicWidth(double height) =>
+      child?.getMinIntrinsicWidth(height) ?? 0;
+
+  @override
+  double computeMaxIntrinsicWidth(double height) =>
+      child?.getMaxIntrinsicWidth(height) ?? 0;
+
+  @override
+  double computeMinIntrinsicHeight(double width) =>
+      child?.getMinIntrinsicHeight(width) ?? 0;
+
+  @override
+  double computeMaxIntrinsicHeight(double width) =>
+      child?.getMaxIntrinsicHeight(width) ?? 0;
+
+  @override
+  Rect get paintBounds {
+    final currentChild = child;
+    final ownBounds = Offset.zero & size;
+    if (currentChild == null) return ownBounds;
+    return ownBounds.expandToInclude(
+      currentChild.paintBounds.shift(_paintOffset),
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final currentChild = child;
+    if (currentChild != null) {
+      context.paintChild(currentChild, offset + _paintOffset);
+    }
+  }
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    if (!hasSize) return false;
+    if (hitTestChildren(result, position: position)) {
+      result.add(BoxHitTestEntry(this, position));
+      return true;
+    }
+    if (size.contains(position) && hitTestSelf(position)) {
+      result.add(BoxHitTestEntry(this, position));
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    final currentChild = child;
+    if (currentChild == null) return false;
+    return result.addWithPaintOffset(
+      offset: _paintOffset,
+      position: position,
+      hitTest: (result, transformed) =>
+          currentChild.hitTest(result, position: transformed),
+    );
+  }
+
+  @override
+  void applyPaintTransform(RenderObject child, Matrix4 transform) {
+    transform.translateByDouble(_paintOffset.dx, _paintOffset.dy, 0, 1);
+  }
 }
 
 class _RenderDocumentBox extends RenderProxyBox {
