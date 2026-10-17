@@ -2731,6 +2731,37 @@
     return true;
   }
 
+  function installComputedStyleGlobal(view, layout, installGlobal) {
+    if (!view || !layout || typeof layout.getComputedStyle !== 'function') {
+      throw new TypeError('Computed-style installation requires a window and document layout');
+    }
+    const getter = function getComputedStyle(element, pseudoElement) {
+      return layout.getComputedStyle(element, pseudoElement);
+    };
+    let installedOnWindow = false;
+    try {
+      Object.defineProperty(view, 'getComputedStyle', {
+        value: getter,
+        enumerable: true,
+        configurable: false,
+        writable: false,
+      });
+      installedOnWindow = view.getComputedStyle === getter;
+    } catch (_) {
+      try {
+        view.getComputedStyle = getter;
+        installedOnWindow = view.getComputedStyle === getter;
+      } catch (ignored) {
+        installedOnWindow = false;
+      }
+    }
+    if (!installedOnWindow) throw new TypeError('Could not install window.getComputedStyle');
+    if (typeof installGlobal === 'function' && installGlobal('getComputedStyle', getter, false) === false) {
+      throw new TypeError('Could not install the getComputedStyle global');
+    }
+    return getter;
+  }
+
   function installDomGlobals(view, document) {
     defineGlobal('window', view, false);
     defineGlobal('self', view, false);
@@ -2760,6 +2791,7 @@
       installNativeScrollPositionGlobals(view, globalThis, activeState.layout);
     defineGlobal('DOMRect', activeState.layout.DOMRect, false);
     defineGlobal('DOMRectReadOnly', activeState.layout.DOMRectReadOnly, false);
+    installComputedStyleGlobal(view, activeState.layout, defineGlobal);
     // A trusted native pointer callback may use its exact host-measured canvas
     // rect for the synchronous event scope (including compatibility events).
     // All other reads use the same revisioned layout source as other elements.

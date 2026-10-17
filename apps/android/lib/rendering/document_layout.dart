@@ -1,5 +1,7 @@
 import 'dart:collection';
+import 'dart:convert';
 import 'document_offsets.dart';
+import 'document_computed_styles.dart';
 import 'html_document_box.dart';
 import 'document_element_scroll.dart';
 
@@ -57,6 +59,7 @@ class NativeDocumentLayoutController extends ChangeNotifier {
     final known = root.knownIds.toList()..sort();
     final boxes = <Map<String, dynamic>>[];
 
+    final styleSurfaces = <String, RenderBox>{};
     for (final id in known) {
       if (root.noBoxIds.contains(id)) {
         boxes.add(<String, dynamic>{'id': id, 'kind': 'none'});
@@ -116,6 +119,7 @@ class NativeDocumentLayoutController extends ChangeNotifier {
         'offsetWidth': surface.size.width.round(),
         'offsetHeight': surface.size.height.round(),
       };
+      styleSurfaces[id] = surface;
       final offset = _offsetMetrics(element, surface, root);
       if (offset != null) entry['offset'] = offset;
       final client = _clientMetrics(surface);
@@ -125,6 +129,7 @@ class NativeDocumentLayoutController extends ChangeNotifier {
       boxes.add(entry);
     }
 
+    _attachComputedStyles(boxes, root.computedStyles, styleSurfaces, viewport);
     return <String, dynamic>{
       'revision': revision,
       'generation': generation,
@@ -285,14 +290,20 @@ class NativeDocumentLayoutRoot extends SingleChildRenderObjectWidget {
     required this.revision,
     required Set<String> knownIds,
     Set<String> noBoxIds = const <String>{},
+    Map<String, NativeDocumentComputedStyleSpec> computedStyles = const {},
     required super.child,
   }) : knownIds = Set<String>.unmodifiable(knownIds),
-       noBoxIds = Set<String>.unmodifiable(noBoxIds);
+       noBoxIds = Set<String>.unmodifiable(noBoxIds),
+       computedStyles =
+           Map<String, NativeDocumentComputedStyleSpec>.unmodifiable(
+             computedStyles,
+           );
 
   final NativeDocumentLayoutController controller;
   final int revision;
   final Set<String> knownIds;
   final Set<String> noBoxIds;
+  final Map<String, NativeDocumentComputedStyleSpec> computedStyles;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
@@ -301,6 +312,7 @@ class NativeDocumentLayoutRoot extends SingleChildRenderObjectWidget {
         revision: revision,
         knownIds: knownIds,
         noBoxIds: noBoxIds,
+        computedStyles: computedStyles,
       );
 
   @override
@@ -313,6 +325,7 @@ class NativeDocumentLayoutRoot extends SingleChildRenderObjectWidget {
       revision: revision,
       knownIds: knownIds,
       noBoxIds: noBoxIds,
+      computedStyles: computedStyles,
     );
   }
 }
@@ -323,12 +336,14 @@ class _RenderNativeDocumentLayoutRoot extends RenderProxyBox {
     required this.revision,
     required this.knownIds,
     required this.noBoxIds,
+    required this.computedStyles,
   });
 
   NativeDocumentLayoutController controller;
   int revision;
   Set<String> knownIds;
   Set<String> noBoxIds;
+  Map<String, NativeDocumentComputedStyleSpec> computedStyles;
   int? laidOutRevision;
   bool pendingLayout = true;
 
@@ -337,12 +352,14 @@ class _RenderNativeDocumentLayoutRoot extends RenderProxyBox {
     required int revision,
     required Set<String> knownIds,
     required Set<String> noBoxIds,
+    required Map<String, NativeDocumentComputedStyleSpec> computedStyles,
   }) {
     final ownerChanged = !identical(this.controller, controller);
     final changed =
         this.revision != revision ||
         !_sameIds(this.knownIds, knownIds) ||
-        !_sameIds(this.noBoxIds, noBoxIds);
+        !_sameIds(this.noBoxIds, noBoxIds) ||
+        !identical(this.computedStyles, computedStyles);
     if (!ownerChanged && !changed) return;
 
     if (ownerChanged) this.controller._detachRoot(this);
@@ -350,6 +367,7 @@ class _RenderNativeDocumentLayoutRoot extends RenderProxyBox {
     this.revision = revision;
     this.knownIds = Set<String>.unmodifiable(knownIds);
     this.noBoxIds = Set<String>.unmodifiable(noBoxIds);
+    this.computedStyles = computedStyles;
     laidOutRevision = null;
     if (ownerChanged && attached) controller._attachRoot(this);
     markNeedsLayout();
@@ -595,4 +613,214 @@ bool _sameIds(Set<String> left, Set<String> right) {
   if (identical(left, right)) return true;
   if (left.length != right.length) return false;
   return left.containsAll(right);
+}
+
+// Styles are optional alongside geometry: a large document must keep working
+// when its computed declarations exceed the scripting packet's style budget.
+void _attachComputedStyles(
+  List<Map<String, dynamic>> boxes,
+  Map<String, NativeDocumentComputedStyleSpec> specs,
+  Map<String, RenderBox> surfaces,
+  Size viewport,
+) {
+  var remaining = 2 * 1024 * 1024;
+  for (final box in boxes) {
+    final id = box['id'] as String;
+    final spec = specs[id];
+    if (spec == null || !spec.available) continue;
+    final values = _resolvedComputedStyles(
+      spec,
+      surfaces[id],
+      viewport,
+      noBox: box['kind'] == 'none',
+    );
+    if (values.length > 256) continue;
+    final accepted = <String, String>{};
+    var valid = true;
+    var size = 0;
+    for (final entry in values.entries) {
+      if (entry.key.length > 128 ||
+          entry.value.length > 4096 ||
+          RegExp(r'[\x00-\x08\x0b\x0e-\x1f\x7f]').hasMatch(entry.value) ||
+          !RegExp(
+            r'^(?:--[a-zA-Z0-9_-]+|-?[a-z][a-z0-9-]*)$',
+          ).hasMatch(entry.key)) {
+        valid = false;
+        break;
+      }
+      final cost = entry.key.length + entry.value.length;
+      if (size + cost > 16 * 1024) {
+        valid = false;
+        break;
+      }
+      accepted[entry.key] = entry.value;
+      size += cost;
+    }
+    // Never truncate a declaration: dropping a custom property would make
+    // its read incorrectly look like an unset property instead of unavailable.
+    if (!valid) continue;
+    // Count encoded bytes too: non-ASCII custom values and JSON escapes must
+    // not push the complete host response beyond its 4 MiB envelope.
+    final encodedSize = utf8.encode(jsonEncode(accepted)).length;
+    final cost = encodedSize > size ? encodedSize : size;
+    if (cost > remaining) continue;
+    remaining -= cost;
+    box['computedStyle'] = accepted;
+  }
+}
+
+Map<String, String> _resolvedComputedStyles(
+  NativeDocumentComputedStyleSpec spec,
+  RenderBox? surface,
+  Size viewport, {
+  required bool noBox,
+}) {
+  final values = Map<String, String>.of(spec.values);
+  final metrics = surface == null
+      ? null
+      : nativeDocumentComputedBoxMetrics(surface);
+  double? length(String raw, {double? basis}) {
+    final value = nativeComputedCssLength(
+      raw,
+      fontSize: spec.fontSize,
+      rootFontSize: spec.rootFontSize,
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height,
+      percentageBasis: basis,
+    );
+    return value != null && value.isFinite && value.abs() <= 9007199254740990
+        ? value
+        : null;
+  }
+
+  String px(double value) {
+    final rounded = (value * 1000000).roundToDouble() / 1000000;
+    return '${rounded == rounded.truncateToDouble() ? rounded.toInt() : rounded}px';
+  }
+
+  String? computedLength(
+    String raw, {
+    double? basis,
+    bool preservePercent = false,
+  }) {
+    final normalized = raw.trim().toLowerCase();
+    if (normalized == 'auto' || normalized == 'none') return normalized;
+    if (preservePercent &&
+        normalized.endsWith('%') &&
+        double.tryParse(normalized.substring(0, normalized.length - 1)) !=
+            null) {
+      return normalized;
+    }
+    final resolved = length(raw, basis: basis);
+    return resolved == null ||
+            !resolved.isFinite ||
+            resolved.abs() > 9007199254740990
+        ? null
+        : px(resolved);
+  }
+
+  final display = values['display'];
+  final usesComputedDimensions =
+      noBox || display == 'inline' || display == 'contents';
+  for (final entry in spec.lengths.entries) {
+    final name = entry.key;
+    if (const {'top', 'right', 'bottom', 'left'}.contains(name)) continue;
+    final dimension = name == 'width' || name == 'height';
+    if (dimension && !usesComputedDimensions) continue;
+    final isMarginOrPadding =
+        name.startsWith('margin-') || name.startsWith('padding-');
+    if (!noBox && name.startsWith('margin-') && entry.value == 'auto') continue;
+    final basis = isMarginOrPadding ? metrics?.containingWidth : null;
+    final value = computedLength(
+      entry.value,
+      basis: basis,
+      preservePercent: noBox || !isMarginOrPadding,
+    );
+    if (value != null) values[name] = value;
+  }
+  // Real border-box dimensions include native constraints, min/max sizes,
+  // flex/grid allocation, and fractional padding. Never use authored width
+  // as a substitute for the result of layout.
+  if (!noBox && metrics != null && surface != null) {
+    final borderBox = values['box-sizing'] == 'border-box';
+    final borders = <String, double?>{
+      for (final side in const ['top', 'right', 'bottom', 'left'])
+        side: values['border-$side-width'] == null
+            ? null
+            : length(values['border-$side-width']!),
+    };
+    final padding = <String, double?>{
+      for (final side in const ['top', 'right', 'bottom', 'left'])
+        side: values['padding-$side'] == null
+            ? null
+            : length(values['padding-$side']!),
+    };
+    // Core HTML applies UA padding (for example the list's 40px indent)
+    // outside the author's sizing declarations. Include those known edges
+    // when turning the measured border box into a CSS content-box dimension.
+    final knownEdges =
+        padding.values.every((value) => value != null) &&
+        borders.values.every((value) => value != null);
+    final horizontalEdges = knownEdges
+        ? borders['left']! +
+              borders['right']! +
+              padding['left']! +
+              padding['right']!
+        : metrics.horizontalEdges;
+    final verticalEdges = knownEdges
+        ? borders['top']! +
+              borders['bottom']! +
+              padding['top']! +
+              padding['bottom']!
+        : metrics.verticalEdges;
+    final width = surface.size.width - (borderBox ? 0 : horizontalEdges);
+    final height = surface.size.height - (borderBox ? 0 : verticalEdges);
+    if (width.isFinite) values['width'] = px(width.clamp(0, double.infinity));
+    if (height.isFinite) {
+      values['height'] = px(height.clamp(0, double.infinity));
+    }
+  }
+  final relative = values['position'] == 'relative' && !noBox;
+  for (final pair in const [
+    ['left', 'right'],
+    ['top', 'bottom'],
+  ]) {
+    if (!spec.lengths.containsKey(pair[0]) ||
+        !spec.lengths.containsKey(pair[1])) {
+      continue;
+    }
+    final basis = pair.first == 'left'
+        ? metrics?.containingWidth
+        : metrics?.usedContainingHeight;
+    double? resolved(String name) {
+      final raw = spec.lengths[name] ?? 'auto';
+      return raw == 'auto' ? null : length(raw, basis: basis);
+    }
+
+    if (relative) {
+      final first = resolved(pair[0]);
+      final second = resolved(pair[1]);
+      // CSSOM resolves percentage insets against the containing block
+      // used height, even when CSS2 paint displacement treats it as auto.
+      // Unsupported syntax stays unavailable.
+      bool supported(String name) {
+        final raw = spec.lengths[name] ?? 'auto';
+        return raw == 'auto' || length(raw, basis: basis) != null;
+      }
+
+      if (supported(pair[0]) && supported(pair[1])) {
+        values[pair[0]] = px(first ?? (second == null ? 0 : -second));
+        values[pair[1]] = px(second ?? (first == null ? 0 : -first));
+      }
+    } else {
+      for (final name in pair) {
+        final value = computedLength(
+          spec.lengths[name] ?? 'auto',
+          preservePercent: true,
+        );
+        if (value != null) values[name] = value;
+      }
+    }
+  }
+  return values;
 }
