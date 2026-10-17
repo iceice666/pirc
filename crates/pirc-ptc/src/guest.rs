@@ -672,6 +672,11 @@ fn execute(start: &Json, input: &mut impl BufRead) -> Result<(), String> {
                 }),
             }
         });
+        // Reading the settled value can itself allocate in QuickJS (for
+        // example, converting a UTF-16 string). Preserve the same OOM report.
+        if oom.load(Ordering::Acquire) {
+            return finish(failure("out of memory"));
+        }
         match outcome {
             Some(outcome) => finish(outcome),
             None => {

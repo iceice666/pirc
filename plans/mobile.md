@@ -81,18 +81,38 @@ version 0.6.1 and Android build 68:
 - These integration checks use local synthetic models/accounts. They do not
   establish physical-device, real-provider subscription or remote-push acceptance.
 
-The full Rust workspace gate is **not green on this host**: two PTC heap-exhaustion
-checks report `Uncaught null`, and the browser corpus expects OOPIF targets that
-Headless Shell 153 does not report. Those implementation/test sources are
-unchanged from 0.6.0; retain these findings rather than weakening the assertions.
+At the 0.6.1 release, the full Rust workspace gate was **not green on this host**:
+two PTC heap-exhaustion checks reported `Uncaught null`, and the browser corpus
+expected OOPIF targets that Headless Shell 153 did not report. These were retained
+as findings rather than weakening the assertions; see the follow-up below.
 Linux black-box conformance remains a CI check; full Nix package builds were not
 run locally. The 0.6.1 CI Nix dependency hashes/evaluation passed.
 
-The Linux sandbox CI test `a_real_agent_is_confined` also fails with
+The release-time Linux sandbox CI test `a_real_agent_is_confined` also failed with
 `bwrap: Can't read seccomp data: Resource temporarily unavailable`. This is the
 same failure recorded by the [0.6.0 baseline CI](https://github.com/iceice666/pirc/actions/runs/39009632614),
-and remains a backend follow-up; do not report the whole repository as green.
+and is addressed by the follow-up below.
 
 Raw logs, synthetic state, screenshots, generated captures and APKs remain in
 ignored local output. Only the Android and web clients are published under
 `apps/`; the native transport and its tests are part of the Flutter Android tree.
+
+## Backend CI follow-up
+
+[PR #4](https://github.com/iceice666/pirc/pull/4) integrates the project-files
+update (`1acc4371`) and fixes the release-time backend failures:
+
+- Retry only SQLite WAL-mode lock conflicts before the existing schema
+  transaction; deterministic lock-release tests cover gateway and node.
+- Use the production sandbox command in the real-agent test so its seccomp
+  descriptor is passed. The complete Linux sandbox CI job passes.
+- Track actual QuickJS allocation failures within the existing 128 MiB cap.
+  PTC allocator/unit tests and all 34 runtime cases pass, including ordinary
+  `throw null`, heap exhaustion and a busy loop after catching exhaustion.
+- Gateway/node API, protocol and schema versions remain unchanged. Consult the
+  PR for final CI and Android integration results against the updated backend.
+
+With dedicated Chrome for Testing 153.0.8010.47, the local OOPIF cases pass.
+The macOS keyboard corpus still differs at step 14 by the active-focus marker;
+its expected data remains unchanged. This local platform finding is separate
+from the Linux CI gate and the Android client.
