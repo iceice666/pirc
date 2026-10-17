@@ -337,7 +337,9 @@ fn workspace_on_node(
             return Err(ApiError::new(
                 400,
                 "invalid_input",
-                if kind == WorkspaceKind::Chat {
+                if kind == WorkspaceKind::Chat && rest.starts_with("/files") {
+                    "Only chat projects have project files"
+                } else if kind == WorkspaceKind::Chat {
                     "Only chat projects have instructions"
                 } else {
                     "Only directory workspaces have a project config"
@@ -397,6 +399,99 @@ pub async fn patch_instructions(
             Some(json!({ "text": text })),
         )
         .await?,
+    ))
+}
+
+/// A chat project's files: the node keeps them; the gateway relays.
+pub async fn get_project_files(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Path(workspace_id): Path<String>,
+) -> Handled {
+    let (node_id, url) = workspace_on_node(&app, &workspace_id, WorkspaceKind::Chat, "/files")?;
+    Ok(forward(
+        app.relay(&node_id, &identity, HttpMethod::Get, url, None)
+            .await?,
+    ))
+}
+
+/// The one non-empty value of `name` in the query.
+fn query_value(uri: &Uri, name: &str) -> Result<String, ApiError> {
+    match query_map(uri).get(name).map(Vec::as_slice) {
+        Some([value]) => {
+            length_within(value, 1, 1000)?;
+            Ok(value.clone())
+        }
+        _ => Err(ApiError::invalid_input()),
+    }
+}
+
+/// `POST /api/workspaces/:id/files?filename=…`, raw bytes: add or replace a
+/// project file on the project's node.
+pub async fn upload_project_file(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Path(workspace_id): Path<String>,
+    uri: Uri,
+    ReqBody(body): ReqBody,
+) -> Handled {
+    let filename = query_value(&uri, "filename")?;
+    let (node_id, url) = workspace_on_node(
+        &app,
+        &workspace_id,
+        WorkspaceKind::Chat,
+        &format!("/files?filename={}", urlencoding_component(&filename)),
+    )?;
+    let Body::Raw {
+        bytes,
+        content_type,
+    } = body
+    else {
+        return Err(ApiError::new(400, "invalid_input", "Upload body must be raw bytes").into());
+    };
+    if bytes.is_empty() || bytes.len() > app.config.upload_max_bytes {
+        return Err(
+            ApiError::new(413, "payload_too_large", "Upload exceeds configured limit").into(),
+        );
+    }
+    let content_type = content_type
+        .as_deref()
+        .map(|value| value.split(';').next().unwrap_or_default().to_owned())
+        .unwrap_or_else(|| "application/octet-stream".to_owned());
+    let response = app
+        .nodes
+        .request(
+            &node_id,
+            NodeHttpRequest {
+                method: HttpMethod::Post,
+                url,
+                user: identity.user.clone(),
+                payload: None,
+                body_base64: Some(STANDARD.encode(&bytes)),
+                content_type: Some(content_type),
+            },
+        )
+        .await?;
+    Ok(forward(response))
+}
+
+/// `DELETE /api/workspaces/:id/files?name=…`.
+pub async fn delete_project_file(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Path(workspace_id): Path<String>,
+    uri: Uri,
+) -> Handled {
+    let name = query_value(&uri, "name")?;
+    let (node_id, url) = workspace_on_node(
+        &app,
+        &workspace_id,
+        WorkspaceKind::Chat,
+        &format!("/files?name={}", urlencoding_component(&name)),
+    )?;
+    Ok(forward(
+        app.relay(&node_id, &identity, HttpMethod::Delete, url, None)
+            .await?,
     ))
 }
 

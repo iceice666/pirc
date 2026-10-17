@@ -156,6 +156,9 @@ pub struct AgentConfig {
     pub role_dirs: Vec<RoleDir>,
     pub system_prompt: Vec<PromptSection>,
     pub workspace_kind: WorkspaceKind,
+    /// A chat project's files directory, read-only (`PIRC_PROJECT_FILES`,
+    /// set by the node when the sandbox opened it).
+    pub project_files: Option<String>,
 }
 
 /// `defaultConfigDir(env)`: `$PIRC_CONFIG_DIR`, default `~/.config/.pirc`.
@@ -732,7 +735,11 @@ pub fn load_agent_config(
     {
         protected_paths.push(js::path_resolve(&[&file]));
     }
+    let project_files = (workspace_kind == WorkspaceKind::Chat)
+        .then(|| truthy_env(env, "PIRC_PROJECT_FILES"))
+        .flatten();
     Ok(AgentConfig {
+        project_files,
         role_dirs: crate::roles::role_dirs(&config_dir, &project_root),
         config_dir,
         workspace: workspace.to_owned(),

@@ -784,6 +784,13 @@ fn spawn_child(
             instructions.to_string_lossy().into_owned(),
         );
     }
+    // The project's files, when the sandbox opened them (read-only).
+    if let Some(dir) = crate::project_files::existing_files_dir(workspace) {
+        let real = pirc_policy::real_resolve(&dir.to_string_lossy());
+        if prepared.policy.paths.allow_read.contains(&real) {
+            set("PIRC_PROJECT_FILES", real);
+        }
+    }
     set(
         "PIRC_WORKSPACE_MEMORY_DIR",
         node.config

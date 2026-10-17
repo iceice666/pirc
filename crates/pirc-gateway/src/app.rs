@@ -283,6 +283,12 @@ pub fn router(app: AppState) -> Router {
             get(routes::get_instructions).patch(routes::patch_instructions),
         )
         .route(
+            "/api/workspaces/{workspace_id}/files",
+            get(routes::get_project_files)
+                .post(routes::upload_project_file)
+                .delete(routes::delete_project_file),
+        )
+        .route(
             "/api/workspaces/{workspace_id}/project-config",
             get(routes::project_config),
         )
@@ -361,6 +367,9 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("PUT", "/api/workspaces/{workspace_id}/links"),
     ("GET", "/api/workspaces/{workspace_id}/instructions"),
     ("PATCH", "/api/workspaces/{workspace_id}/instructions"),
+    ("GET", "/api/workspaces/{workspace_id}/files"),
+    ("POST", "/api/workspaces/{workspace_id}/files"),
+    ("DELETE", "/api/workspaces/{workspace_id}/files"),
     ("GET", "/api/workspaces/{workspace_id}/project-config"),
     ("POST", "/api/workspaces/{workspace_id}/project-trust"),
     ("GET", "/api/workspaces/{workspace_id}/deletion"),

@@ -38,6 +38,7 @@ pub fn config(workspace: &str, features: Value) -> AgentConfig {
         role_dirs: Vec::new(),
         system_prompt: Vec::new(),
         workspace_kind: WorkspaceKind::Directory,
+        project_files: None,
     }
 }
 

@@ -59,6 +59,7 @@ pub mod models;
 pub mod node;
 pub mod panels;
 pub mod private_dir;
+pub mod project_files;
 pub mod recap;
 pub mod repo;
 pub mod router;

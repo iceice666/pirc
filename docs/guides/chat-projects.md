@@ -1,4 +1,4 @@
-# Chat projects: capabilities, instructions and linked workspaces
+# Chat projects: capabilities, instructions, files and linked workspaces
 
 [User guides](README.md) · [All documentation](../README.md)
 
@@ -6,6 +6,7 @@ A chat project is a chat workspace on the chat node (`pirc-node chat`): the top-
 
 - **Capabilities** turn off assistant features for every chat in the project. The gateway enforces them.
 - **Instructions** are text that every new chat in the project gets in its system prompt. The node stores them.
+- **Project files** are files every chat in the project can read. The node stores them.
 - **Linked workspaces** (projects only, not the top-level Chats) name the repositories the project is about. The gateway stores them.
 
 Directory workspaces (repositories) have none of these settings.
@@ -114,6 +115,47 @@ They come after `SOUL.md` (or the built-in identity), the fixed environment desc
 - **In the [agent sandbox](agent.md#agent-sandbox)**, which every agent runs in, the node's state directory can be neither read nor written. The instructions file is also on the sandbox's write-deny list, so bash, `ptc` scripts and hooks cannot change it either, even if your `sandbox.filesystem.allowWrite` includes the state directory.
 - **Agent processes** never run without the sandbox: a chat node where the native sandbox cannot work starts no agents. See [Agent sandbox](agent.md#agent-sandbox) for requirements, such as bubblewrap and user namespaces on Linux.
 
+## Project files
+
+Project files are files you keep for every chat in a project: notes, documents, data the assistant should know about. Unlike an attachment, which belongs to one message of one chat, a project file is there for every chat in the project, including the ones already open.
+
+### Managing them
+
+In the web app, open the project, then its **Settings** tab. **Project files** lists the files with their sizes; **Upload files** adds one or more, and **Remove…** removes one after you confirm. Uploading a file with the name of an existing one replaces it. The top-level Chats workspace has project files too.
+
+Through the API:
+
+```sh
+curl 'https://pirc.example.org/api/workspaces/chat%3Aworkspace_1234/files' \
+  -H 'Authorization: Bearer pirc_dev_…'
+
+curl -X POST 'https://pirc.example.org/api/workspaces/chat%3Aworkspace_1234/files?filename=budget.csv' \
+  -H 'Authorization: Bearer pirc_dev_…' \
+  -H 'Content-Type: application/octet-stream' \
+  --data-binary @budget.csv
+
+curl -X DELETE 'https://pirc.example.org/api/workspaces/chat%3Aworkspace_1234/files?name=budget.csv' \
+  -H 'Authorization: Bearer pirc_dev_…'
+```
+
+`GET` returns `{"files": [{"name", "byteSize", "modifiedAt"}], "maxFiles": 50, "maxBytes": …}`, by name (`modifiedAt` in milliseconds since the epoch). `POST` takes the raw bytes (send `application/octet-stream`: a JSON body is parsed, not stored) and returns `201` with `{"file": {…}}`. `DELETE` returns `204`, or `404` when there is no such file.
+
+- **Names:** the last `/`-separated part of `filename`, trimmed, at most 255 bytes, not starting with `.`, without control characters. Anything else is `400`.
+- **Limits:** at most 50 files per project (`409` for one more; replacing one still works), each within the node's upload limit (`413`).
+- **The node must be online.** Otherwise the gateway answers `503`. Directory workspaces have no project files (`400`).
+
+### How chats see them
+
+The chat node stores them in `<stateDir>/chat/<workspaceId>/files/`, files `0600` in a `0700` directory, beside the project's instructions. The gateway relays uploads and stores nothing.
+
+A chat that starts while the project has that directory gets it **read-only** in its [sandbox](agent.md#agent-sandbox) and a `## Project files` section in its system prompt, after the project instructions, naming the directory. The assistant reads the files with its file tools or `bash` when they are relevant. Its file tools and the sandbox refuse to write there, so it cannot add, change or remove them, and the rest of the project's directory (its instructions, the other chats' directories) stays closed.
+
+The directory is **shared, not copied**: unlike instructions, project files are not frozen when a chat starts. A file you upload, replace or remove is what every chat reads from then on, also in chats already running. The prompt names only the directory, not the files in it, so the assistant lists it to see what is there now.
+
+The first upload creates the directory. Chats that started before the project ever had a file are not given it (their sandbox was set up without it); start a new chat to use the files. Removing every file keeps the (empty) directory, so later uploads still reach every chat.
+
+Deleting the project deletes its files with it (see [Deleting a project](#deleting-a-project)). Copies the assistant made elsewhere (in a chat's working files, or written into memory) follow those places' rules.
+
 ## Linked workspaces
 
 A project is usually about one or a few repositories. Linking them tells the project's assistant so, without you naming the workspace every time:
@@ -193,7 +235,7 @@ A project's page → Settings → **Delete project…** deletes the project with
 Deleted:
 
 - Every chat in the project, as [Deleting a chat](#deleting-a-chat) describes: messages, working files, private transcripts and observational memory, terminals and browser.
-- Files uploaded in the project's chats (originals included), and the project's browser profile.
+- Files uploaded in the project's chats (originals included), the project's files, and the project's browser profile.
 - The project's instructions, capability settings and links, the schedules that run in it with their history, and the records of delegations its chats started.
 - The memory its chats wrote. Each entry is judged by the chat each logged version's text came from:
   - every version from the project: the entry is forgotten;

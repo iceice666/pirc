@@ -533,6 +533,26 @@ fn protects_a_chat_projects_instructions_file() {
 }
 
 #[test]
+fn reads_a_chat_projects_files_directory() {
+    let setup = workspace_with(json!({}));
+    let dir = "/state/chat/p/files";
+    let chat = load(
+        &setup,
+        &setup.workspace,
+        &[("PIRC_WORKSPACE_KIND", "chat"), ("PIRC_PROJECT_FILES", dir)],
+    );
+    assert_eq!(chat.project_files.as_deref(), Some(dir));
+    let empty = load(
+        &setup,
+        &setup.workspace,
+        &[("PIRC_WORKSPACE_KIND", "chat"), ("PIRC_PROJECT_FILES", "")],
+    );
+    assert_eq!(empty.project_files, None);
+    let directory = load(&setup, &setup.workspace, &[("PIRC_PROJECT_FILES", dir)]);
+    assert_eq!(directory.project_files, None);
+}
+
+#[test]
 fn adds_skill_locations_as_readable_protected_configuration() {
     let setup = workspace_with(json!({}));
     let skills = setup.config_dir.join("skills");

@@ -110,6 +110,9 @@ pub struct PrepareInput {
     /// The workspace-memory ledger the session may read and append to
     /// (made here when missing); the rest of the directory stays closed.
     pub workspace_memory_file: Option<PathBuf>,
+    /// A chat project's files, which the session may read but never write
+    /// (the node changes them while the session runs).
+    pub project_files_dir: Option<PathBuf>,
 }
 
 /// A host command to run read-only ([`Sandbox::prepare_readonly`]).
