@@ -13,9 +13,16 @@ The node protocol moves to 11: upgrade the gateway and every node together (a no
 ### Changed
 
 - An upload can only be attached in the workspace it was uploaded in (`403` "Upload belongs to another workspace" elsewhere), so deleting a project can delete its uploads. Uploads made before this version can still be attached anywhere, and are not deleted with a project.
+- Runs and commands a node interrupts when it starts again now say "node restarted" instead of "gateway restarted".
+- The gateway logs why a models file reload (`SIGHUP`) failed, and logs a warning for each failed or timed-out model request with the node, provider/model and the same fixed classification the session shows (an HTTP status when known; never the provider's response).
+
+### Fixed
+
+- Two gateway or node processes opening the same database at once no longer race to create or migrate its schema: it is now done under one write lock, and a failed migration is rolled back whole.
 
 ### Security
 
+- A `ptc` script that called `memory_search`, `delegation_status`, `agent_inbox` or `board_read` has its result fenced and labelled as data written by other sessions or agents, not instructions, as a script reading web content already was; values it stores keep the label for later scripts.
 - A node no longer passes file descriptors it was started with to its agents: it closes every one but stdin, stdout and stderr at start-up, and the Linux sandbox's bridge closes any other before it runs the agent. A terminal's PTY left open by whatever launched the node reached the agent, and a command written to it ran outside the sandbox.
 - On WSL, the Linux sandbox hides the interop directory `/run/WSL` whole. Interop sockets bound after a session started (each new WSL terminal binds one) stayed reachable, and through one the agent could run Windows programs outside the sandbox, past the network allowlist.
 - The Linux sandbox refuses vsock sockets (`EPERM`) with a seccomp filter: they bypass the sandbox's network namespace, and on WSL 2 the Windows host listens on them. The filter also refuses io_uring, whose rings can open sockets unseen (programs fall back to plain system calls), and stops 32-bit x86 programs in the sandbox. bubblewrap must support `--seccomp` (every release since 0.1), and the kernel seccomp filters (a node without them refuses to start agents).
