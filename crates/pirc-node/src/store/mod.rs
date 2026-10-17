@@ -19,6 +19,7 @@
 
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 pub use pirc_protocol::WorkspaceKind;
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -63,13 +64,11 @@ impl Db {
         let connection = Connection::open(path).map_err(describe)?;
         // Another process may hold the write lock (opening, migrating).
         connection
-            .busy_timeout(std::time::Duration::from_secs(5))
+            .busy_timeout(SQLITE_BUSY_TIMEOUT)
             .map_err(describe)?;
         // SQLite gives the WAL and shm files the main file's mode.
         restrict_mode(path)?;
-        connection
-            .pragma_update(None, "journal_mode", "WAL")
-            .map_err(describe)?;
+        enable_wal_mode_with_retry(&connection, path, || {})?;
         for suffix in ["-wal", "-shm"] {
             let mut name = path.as_os_str().to_owned();
             name.push(suffix);
@@ -141,6 +140,59 @@ fn restrict_mode(path: &Path) -> Result<(), String> {
         }
         _ => Ok(()),
     }
+}
+
+const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
+const WAL_BUSY_TIMEOUT: Duration = Duration::from_millis(50);
+const WAL_BUSY_RETRY_WINDOW: Duration = Duration::from_secs(5);
+const WAL_BUSY_RETRY_INTERVAL: Duration = Duration::from_millis(10);
+
+/// WAL mode changes can return SQLITE_BUSY without invoking SQLite's busy
+/// handler when multiple connections switch the same new database at once.
+/// Retry only that pragma; schema transactions and other errors keep their
+/// existing behavior.
+fn enable_wal_mode_with_retry(
+    connection: &Connection,
+    path: &Path,
+    mut on_busy: impl FnMut(),
+) -> Result<(), String> {
+    let describe = |error: rusqlite::Error| format!("{}: {error}", path.display());
+    connection
+        .busy_timeout(WAL_BUSY_TIMEOUT)
+        .map_err(&describe)?;
+
+    let deadline = Instant::now() + WAL_BUSY_RETRY_WINDOW;
+    let result = loop {
+        match connection.pragma_update(None, "journal_mode", "WAL") {
+            Ok(()) => break Ok(()),
+            Err(error) if is_busy_or_locked(&error) && Instant::now() < deadline => {
+                on_busy();
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                std::thread::sleep(WAL_BUSY_RETRY_INTERVAL.min(remaining));
+            }
+            Err(error) => break Err(describe(error)),
+        }
+    };
+
+    let restore_timeout = connection
+        .busy_timeout(SQLITE_BUSY_TIMEOUT)
+        .map_err(&describe);
+    match (result, restore_timeout) {
+        (Err(error), _) => Err(error),
+        (Ok(()), Err(error)) => Err(error),
+        (Ok(()), Ok(())) => Ok(()),
+    }
+}
+
+fn is_busy_or_locked(error: &rusqlite::Error) -> bool {
+    matches!(
+        error,
+        rusqlite::Error::SqliteFailure(failure, _)
+            if matches!(
+                failure.code,
+                rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+            )
+    )
 }
 
 /// Create the schema in a new store; refuse a TS-era one, a gateway's, or
@@ -1615,6 +1667,47 @@ impl Store for Connection {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wal_mode_retries_until_a_concurrent_write_transaction_finishes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("node.sqlite");
+        let blocker = Connection::open(&path).unwrap();
+        let connection = Connection::open(&path).unwrap();
+        blocker.execute_batch("BEGIN IMMEDIATE").unwrap();
+
+        let (busy_tx, busy_rx) = std::sync::mpsc::channel();
+        let release = std::thread::spawn(move || {
+            busy_rx
+                .recv()
+                .expect("WAL switch attempted while the write lock is held");
+            blocker.execute_batch("ROLLBACK").unwrap();
+        });
+        let mut busy_seen = false;
+        let result = enable_wal_mode_with_retry(&connection, &path, || {
+            busy_seen = true;
+            let _ = busy_tx.send(());
+        });
+        // Unblock the holder if initialization failed before reaching its retry
+        // callback.
+        let _ = busy_tx.send(());
+        release.join().unwrap();
+        result.unwrap();
+        assert!(
+            busy_seen,
+            "the held SQLite write lock must trigger the bounded retry"
+        );
+
+        let mode: String = connection
+            .pragma_query_value(None, "journal_mode", |row| row.get(0))
+            .unwrap();
+        assert_eq!(mode, "wal");
+
+        let busy_timeout: i64 = connection
+            .pragma_query_value(None, "busy_timeout", |row| row.get(0))
+            .unwrap();
+        assert_eq!(busy_timeout, SQLITE_BUSY_TIMEOUT.as_millis() as i64);
+    }
 
     #[test]
     fn concurrent_opens_create_the_schema_once() {
