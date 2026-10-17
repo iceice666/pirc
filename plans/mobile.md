@@ -27,7 +27,7 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** percentage/signed/empty-block and bottom-edge
+- [ ] **Dynamic content compatibility:** signed/font-relative/empty-block and bottom-edge
       margin collapse, positioned/transformed/zoomed/table offset geometry,
       inline-fragment geometry and image/resize/chart/framework flows. A DOM write followed immediately by a geometry read still needs a
       matching native frame; unsupported reads fail explicitly. Native Canvas event
@@ -48,13 +48,18 @@ outside the agreed scope.
 - Small visual differences, uncommon syntax and the old audit's fine-grained
   layout/style items. The frozen visual corpus is web revision `bd3d909`; newly
   added 0.6.x features are tracked separately rather than claimed as visual parity.
-- Eight percentage top-margin cases retain parent/child margin-collapse gaps.
-  Negative and font-relative top margins, empty-block collapse-through and
-  parent/bottom-edge collapse need wider native layout support. The common
-  nonnegative pixel top-margin cases now match their browser references.
-- `display:flow-root` still has an unsupported parent box in the new margin
-  corpus. In that control, native child y/offsetTop and ancestor heights are
-  4 px short at both viewport widths; the oracle asserts the exact difference.
+- Negative and font-relative top margins, empty-block collapse-through and
+  parent/bottom-edge collapse need wider native layout support. Common
+  nonnegative pixel and percentage parent/first-child top margins now match
+  their browser references, including the previous eight percentage findings.
+- Percentage margin settling uses actual containing-block widths, with at most
+  eight native layout passes. Missing bases or a nonconverging layout withhold
+  geometry packets and retain committed scroll dimensions. Arbitrary standalone
+  dry/intrinsic queries at hypothetical widths and cyclic intrinsic sizing are
+  not a general browser sizing implementation.
+- Basic `display:flow-root` box sizing and the margin barrier are covered;
+  float placement/containment and negative percentage/auto flex margins remain
+  outside the tested subset.
 - Some inserted classic-script lexical-scope behavior differs from the browser.
 - Two root-height fixtures retain extra trailing blank scroll space: 8 px with
   the default body margin, and 17 px with nested content-box edges. Their element
@@ -220,8 +225,8 @@ need native layout support and are not claimed as implemented.
 
 Normal block negative horizontal margins and fixed flex-item margins now
 contribute to native layout and flex allocation. Negative vertical block margins,
-percentage/auto flex margins and full CSS margin collapsing still need wider
-support.
+negative percentage/auto flex margins and full CSS margin collapsing still
+need wider support.
 
 The dedicated Chromium 153 reference has 36 observations across 18 cases at
 390×844 and 768×1024, including nested and window scroll states. All 18 cases now
@@ -252,14 +257,15 @@ the parent’s actual border box/background moves with the collapsed edge.
 Computed styles retain their authored values. Root margins never collapse;
 body default margins, visibility:hidden and fixed parent heights are covered.
 Borders, padding, inline content, clearance, floats, flex/grid items and new
-formatting contexts stop the relevant collapse. Percentage, signed,
-font-relative, empty-block and bottom-edge groups remain outside this subset.
+formatting contexts stop the relevant collapse. Signed, font-relative,
+empty-block and bottom-edge groups remain outside this subset. Percentage
+support is described in the next follow-up.
 
 The prior five offset findings now match Chromium, including scroll-content
 parent bounds and a body shifted by a 1000 px first-child margin. A separate
 32-observation reference across 16 cases and both viewport widths checks actual
-x/y/width/height and offsets. Fifteen cases match; the flow-root control keeps
-its named unsupported parent and exact 4 px geometry differences. Production
+x/y/width/height and offsets. All sixteen cases now match, including the
+flow-root control after the native block sizing correction below. Production
 fetched-page widget tests cover fixed heights, following siblings, resize and
 large body-margin scrolling. Browser capture tools use the dedicated test shell.
 
@@ -267,3 +273,39 @@ Final gates: 4,575 Flutter tests and 519 JavaScript tests pass; Flutter analysis
 and formatting are clean. The 32-observation Chromium margin capture reproduces
 without geometry changes. This follow-up uses production-path host/widget tests;
 physical-device and remote-push acceptance remain pending.
+
+## Percentage top margins and flex sizing follow-up
+
+Percentage parent/first-child top-margin groups retain each contribution's
+original element identity. Native layout resolves each percentage against that
+element's actual containing-block content width, then collapses the resolved
+values. A bounded synchronous layout loop applies those margins before exposing
+geometry. Authored DOM styles and cascade values remain intact. Provisional or
+failed passes cannot clamp nested or page scroll offsets; only settled metrics
+are committed. Resizing retains form state and page scroll position.
+
+A new dedicated Chromium reference covers 30 observations across 15 cases at
+390 × 844 and 768 × 1024: distinct parent/child bases, nested pixel/percentage
+chains, body defaults, fixed heights, viewport resize, borders/padding/overflow,
+flow-root and flex/grid barriers, flex wrapping and competing margin sizes.
+The previous eight percentage-collapse findings and the fixed-margin flow-root
+finding are resolved. All 48 original percentage observations and all 32 fixed
+margin observations also match their expected geometry.
+
+Positive percentage flex margins participate in sizing and shrink allocation
+using the container's content width. Auto-height column regression coverage
+checks that the margin is counted once. Hypothetical dry queries cannot poison
+the next actual viewport layout. Unsettled geometry fails explicitly rather
+than being reported as current. Remaining intrinsic/cyclic sizing, signed,
+font-relative, empty-block and bottom-edge limits are listed above.
+
+Final gates for this follow-up: **4,622 Flutter tests** and **519 JavaScript
+tests** passed; Flutter analysis and formatting are clean. The local-HTTP Android
+integration passed with the shipped JavaScript sandbox and native renderer:
+offset-parent identity, two-axis scrolling, stale-read rejection and percentage
+margin recomputation after a 200-to-300 px parent-width mutation. Its scroll
+assertion waits for the native result and then the fresh script observation;
+a fixed delay had allowed an old observation to be read on Android.
+
+Browser captures use only synthetic local HTML in the dedicated headless shell.
+Physical-device, real-account/provider and remote-push acceptance remain pending.

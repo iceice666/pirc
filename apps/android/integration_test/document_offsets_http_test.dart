@@ -10,6 +10,7 @@ import 'package:pirc_mobile/live/document_navigation.dart';
 import 'package:pirc_mobile/live/document_navigation_state.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/rendering/html_form_submission.dart';
+import 'package:pirc_mobile/rendering/native_html.dart';
 import 'package:pirc_mobile/theme.dart';
 
 const _page = r'''<!doctype html><html id="root"><head><style>
@@ -17,10 +18,21 @@ html,body{margin:0;padding:0}#parent{position:relative;width:180px;height:120px;
 padding:7px 9px;border:4px solid;overflow:auto}
 #content{width:400px;height:600px;padding-top:60px}
 #target{width:20px;height:10px;margin-left:80px}
+#percent-outer{width:300px;border:1px solid}
+#percent-parent{position:relative;width:200px;margin-top:5%}
+#percent-child{width:30px;height:10px;margin-top:10%}
 </style></head><body id="body"><div id="parent"><div id="content">
 <div id="target"></div></div></div><pre id="probe">WAIT</pre>
 <button type="button" id="scroll">Scroll</button><button type="button" id="read">Read</button><button type="button" id="change">Change</button>
+<button type="button" id="percent">Percent</button>
+<div id="percent-outer"><div id="percent-parent"><div id="percent-child"></div></div></div>
 <script>
+window.readPercent=function(){var p=document.getElementById('percent-parent'),c=document.getElementById('percent-child'),o=document.getElementById('percent-outer');return {
+ gap:p.getBoundingClientRect().y-o.getBoundingClientRect().y,
+ childGap:c.getBoundingClientRect().y-p.getBoundingClientRect().y,
+ top:c.offsetTop,parentIdentity:c.offsetParent===p,width:p.offsetWidth,height:p.offsetHeight,
+ stale:window.percentMutation
+}};
 window.readOffsets=function(){var e=document.getElementById('target');return {
  top:e.offsetTop,left:e.offsetLeft,parent:e.offsetParent.id,stale:window.offsetMutation,
  parentIdentity:e.offsetParent===document.getElementById('parent'),
@@ -28,9 +40,9 @@ window.readOffsets=function(){var e=document.getElementById('target');return {
  rootParent:document.documentElement.offsetParent,bodyParent:document.body.offsetParent,
  bodyTop:document.body.offsetTop,bodyLeft:document.body.offsetLeft,
  scrollTop:document.getElementById('parent').scrollTop,
- scrollLeft:document.getElementById('parent').scrollLeft
+ scrollLeft:document.getElementById('parent').scrollLeft,percent:readPercent()
 }};
-window.offsetMutation=null;window.initialOffsets=readOffsets();
+window.offsetMutation=null;window.percentMutation=null;window.initialOffsets=readOffsets();
 document.addEventListener('DOMContentLoaded',function(){
  document.getElementById('probe').textContent=JSON.stringify(initialOffsets);
 });
@@ -41,6 +53,10 @@ document.getElementById('read').onclick=function(){
 document.getElementById('change').onclick=function(){
  var target=document.getElementById('target');target.style.marginLeft='100px';
  try{target.offsetLeft;window.offsetMutation='NO_ERROR'}catch(e){window.offsetMutation=e.name}
+};
+document.getElementById('percent').onclick=function(){
+ document.getElementById('percent-parent').style.width='300px';
+ try{document.getElementById('percent-child').offsetTop;window.percentMutation='NO_ERROR'}catch(e){window.percentMutation=e.name}
 };
 </script></body></html>''';
 
@@ -157,15 +173,32 @@ void main() {
       expect(initial['bodyParent'], isNull);
       expect(initial['bodyTop'], 0);
       expect(initial['bodyLeft'], 0);
+      expect(obj(initial['percent']), containsPair('gap', 21));
+      expect(obj(initial['percent']), containsPair('childGap', 0));
+      expect(obj(initial['percent']), containsPair('top', 0));
+      expect(obj(initial['percent']), containsPair('width', 200));
+      expect(obj(initial['percent']), containsPair('height', 10));
+      expect(obj(initial['percent']), containsPair('parentIdentity', true));
       final parentScriptId = html
           .parse(document.scripts!.content!.text)
           .getElementById('parent')!
           .attributes['data-pirc-script-id']!;
       await t.tap(find.text('Scroll', findRichText: true));
-      await t.pump(const Duration(milliseconds: 300));
-      await ready();
+      await ready(() {
+        final renderer = t.widget<NativeHtmlDocument>(
+          find.byType(NativeHtmlDocument),
+        );
+        final metrics = renderer.elementScrollController?.metricsFor(
+          parentScriptId,
+        );
+        return metrics?['top'] == 40 && metrics?['left'] == 60;
+      });
       await t.tap(find.text('Read', findRichText: true));
-      await ready();
+      await ready(
+        () =>
+            observation()['scrollTop'] == 40 &&
+            observation()['scrollLeft'] == 60,
+      );
       final scrolled = observation();
       expect(scrolled['top'], initial['top']);
       expect(scrolled['left'], initial['left']);
@@ -195,10 +228,29 @@ void main() {
       expect(changed['left'], 109);
       final stale = changed['stale'];
       expect(stale.toString(), contains('NotSupportedError'));
+      await t.tap(find.text('Percent', findRichText: true));
+      await ready(
+        () =>
+            html
+                .parse(document!.scripts!.content!.text)
+                .getElementById('percent-parent')
+                ?.attributes['style']
+                ?.contains('300px') ==
+            true,
+      );
+      await t.tap(find.text('Read', findRichText: true));
+      await ready(() => obj(observation()['percent'])['gap'] == 31);
+      final percentChanged = obj(observation()['percent']);
+      expect(percentChanged['childGap'], 0);
+      expect(percentChanged['top'], 0);
+      expect(percentChanged['width'], 300);
+      expect(percentChanged['height'], 10);
+      expect(percentChanged['parentIdentity'], true);
+      expect(percentChanged['stale'].toString(), contains('NotSupportedError'));
       expect(failures, isEmpty);
       expect(t.takeException(), isNull);
       debugPrintSynchronously(
-        'PIRC_OFFSET_ACCEPTANCE ${jsonEncode({'initial': initial, 'scrolled': scrolled, 'changed': changed, 'parentScriptId': parentScriptId, 'stale': stale, 'failures': failures})}',
+        'PIRC_OFFSET_ACCEPTANCE ${jsonEncode({'initial': initial, 'scrolled': scrolled, 'changed': changed, 'parentScriptId': parentScriptId, 'stale': stale, 'percentChanged': percentChanged, 'failures': failures})}',
       );
     } finally {
       await t.pumpWidget(const SizedBox.shrink());

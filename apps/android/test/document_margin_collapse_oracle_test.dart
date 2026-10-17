@@ -181,18 +181,8 @@ void main() {
   }
 }
 
-const _knownDifferences = <String, Map<String, dynamic>>{
-  'flow_root_stops_first_child_collapse': {
-    '#html border-box height': {'native': 58.0, 'browser': 62},
-    '#body border-box height': {'native': 58.0, 'browser': 62},
-    '#outer border-box height': {'native': 58.0, 'browser': 62},
-    '#child border-box y': {'native': 47.0, 'browser': 51},
-    '#child offsetTop': {'native': 47, 'browser': 51},
-  },
-};
-const _knownUnsupportedIds = <String, Set<String>>{
-  'flow_root_stops_first_child_collapse': {'parent'},
-};
+const _knownDifferences = <String, Map<String, dynamic>>{};
+const _knownUnsupportedIds = <String, Set<String>>{};
 
 class _PreparedDocument {
   const _PreparedDocument({

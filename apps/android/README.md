@@ -63,9 +63,12 @@ bottom-link interaction and the viewport remaining below app chrome. The two
 known trailing-space differences are listed in [the mobile plan](../../plans/mobile.md).
 `document_offsets_oracle_test.dart` compares offsets and fixed flex margins with
 Chromium. `document_margin_collapse_oracle_test.dart` and the fetched-page tests
-cover common parent/first-child top margins; remaining percentage/flow-root
-differences are recorded in the plan. `document_offsets_http_test.dart` checks
-the shipped JavaScript runtime, scrolling and style mutation over local HTTP on Android.
+cover common parent/first-child top margins. The percentage-margin oracle and
+layout/view tests cover distinct containing-block widths, resizing, flex sizing,
+flow-root barriers and scroll preservation during provisional or failed layout.
+Remaining limits are recorded in the plan. `document_offsets_http_test.dart`
+checks the shipped JavaScript runtime, scrolling, percentage geometry and style
+mutation over local HTTP on Android.
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see
 [the test browser guide](tool/parity/TEST_BROWSER.md).
