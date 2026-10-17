@@ -90,7 +90,7 @@ Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
     }
     if (value(element, 'writing-mode', 'horizontal-tb') != 'horizontal-tb' ||
         value(element, 'float', 'none') != 'none' ||
-        !const {'auto', '1'}.contains(value(element, 'column-count', 'auto')) ||
+        value(element, 'column-count', 'auto') != 'auto' ||
         value(element, 'column-width', 'auto') != 'auto') {
       return false;
     }

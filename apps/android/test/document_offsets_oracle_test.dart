@@ -10,6 +10,7 @@ import 'package:pirc_mobile/rendering/document_element_scroll.dart';
 import 'package:pirc_mobile/rendering/document_layout.dart';
 import 'package:pirc_mobile/rendering/document_layout_visibility.dart';
 import 'package:pirc_mobile/rendering/document_offsets.dart';
+import 'package:pirc_mobile/rendering/document_margin_collapse.dart';
 import 'package:pirc_mobile/rendering/html_document_styles.dart';
 import 'package:pirc_mobile/rendering/html_syntax.dart';
 import 'package:pirc_mobile/rendering/native_html.dart';
@@ -21,15 +22,6 @@ const _revision = 1;
 
 final Map<String, dynamic> _fixture =
     jsonDecode(File(_fixturePath).readAsStringSync()) as Map<String, dynamic>;
-
-final Map<String, dynamic> _knownDifferences =
-    (jsonDecode(
-              File(
-                'tool/parity/fixtures/document-offset-known-differences.json',
-              ).readAsStringSync(),
-            )
-            as Map<String, dynamic>)['cases']
-        as Map<String, dynamic>;
 
 void main() {
   for (final raw in _fixture['cases'] as List) {
@@ -89,6 +81,7 @@ void main() {
                       layoutKnownIds: ids,
                       layoutNoBoxIds: prepared.noBoxIds,
                       layoutOffsetSpecs: prepared.offsetSpecs,
+                      documentTopMargins: prepared.topMargins,
                     ),
                   ),
                 ),
@@ -245,15 +238,9 @@ void main() {
             }
           }
 
-          // Keep the browser oracle intact and assert every named discrepancy
-          // separately. These are existing parent/child margin-collapse gaps;
-          // offsets reflect actual native boxes, not invented CSS positions.
-          final known = _knownDifferences[name] as Map<String, dynamic>?;
-          expect(
-            differences,
-            known?['differences'] ?? const <String, dynamic>{},
-            reason: known?['reason'] as String? ?? name,
-          );
+          // Compare actual native border origins against the unchanged browser
+          // oracle. The previously named top-margin gaps now match as well.
+          expect(differences, isEmpty, reason: name);
           expect(tester.takeException(), isNull, reason: name);
         } finally {
           await tester.pumpWidget(const SizedBox.shrink());
@@ -269,12 +256,14 @@ class _PreparedDocument {
     required this.stylesByKey,
     required this.noBoxIds,
     required this.offsetSpecs,
+    required this.topMargins,
   });
 
   final String markup;
   final Map<String, Map<String, String>> stylesByKey;
   final Set<String> noBoxIds;
   final Map<String, NativeDocumentOffsetSpec> offsetSpecs;
+  final Map<String, double> topMargins;
 }
 
 _PreparedDocument _prepareDocument(Map<String, dynamic> capture) {
@@ -345,6 +334,10 @@ _PreparedDocument _prepareDocument(Map<String, dynamic> capture) {
     stylesByKey: stylesByKey,
     noBoxIds: noBoxIds,
     offsetSpecs: offsetSpecs,
+    topMargins: nativeDocumentCollapsedTopMargins(
+      document: document,
+      stylesByElement: stylesByElement,
+    ),
   );
 }
 

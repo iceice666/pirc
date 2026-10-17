@@ -110,6 +110,7 @@ void main() {
     'display:contents',
     'writing-mode:vertical-rl',
     'float:left',
+    'column-count:1',
     'column-count:2',
   ]) {
     test('unsupported ancestor geometry stays explicit: $css', () {
