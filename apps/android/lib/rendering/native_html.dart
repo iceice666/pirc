@@ -12,6 +12,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'svg_dimensions.dart';
 import 'document_canvas.dart';
 import 'document_layout.dart';
+import 'document_computed_styles.dart';
 import 'document_offsets.dart';
 import 'document_relative_position.dart';
 import 'document_margin_collapse.dart';
@@ -222,6 +223,7 @@ class NativeHtmlDocument extends StatefulWidget {
     this.layoutRevision = 0,
     this.layoutKnownIds = const {},
     this.layoutNoBoxIds = const {},
+    this.layoutComputedStyles = const {},
     this.layoutOffsetSpecs = const {},
     this.documentTopMargins = const {},
     this.documentPercentTopMargins = const {},
@@ -294,6 +296,7 @@ class NativeHtmlDocument extends StatefulWidget {
   final NativeDocumentElementScrollController? elementScrollController;
   final int layoutRevision;
   final Set<String> layoutKnownIds, layoutNoBoxIds;
+  final Map<String, NativeDocumentComputedStyleSpec> layoutComputedStyles;
   final Map<String, NativeDocumentOffsetSpec> layoutOffsetSpecs;
   final Map<String, double> documentTopMargins;
   final Map<String, NativeDocumentTopMarginGroup> documentPercentTopMargins;
@@ -2457,6 +2460,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
                 revision: widget.layoutRevision,
                 knownIds: widget.layoutKnownIds,
                 noBoxIds: widget.layoutNoBoxIds,
+                computedStyles: widget.layoutComputedStyles,
                 child: documentRoot,
               )
             : documentRoot,

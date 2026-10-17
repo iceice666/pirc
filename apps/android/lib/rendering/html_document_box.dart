@@ -1439,3 +1439,59 @@ RenderBox? nativeDocumentBoxSurface(RenderBox marker, {Object? owner}) {
   if (box.spec.applySizing && box.child != null) return box.child;
   return box;
 }
+
+/// Captures the containing block and applied box edges of an owned sizing box.
+/// The surface must be the exact child returned by [nativeDocumentBoxSurface];
+/// walking to an arbitrary ancestor could expose another DOM node's metrics.
+({
+  double? containingWidth,
+  double? containingHeight,
+  double? usedContainingHeight,
+  double horizontalEdges,
+  double verticalEdges,
+})?
+nativeDocumentComputedBoxMetrics(RenderBox surface) {
+  final box = surface.parent;
+  if (box is! _RenderDocumentBox ||
+      !identical(box.child, surface) ||
+      !box.spec.applySizing ||
+      !box.attached ||
+      !box.hasSize) {
+    return null;
+  }
+  final width = box.containingBlockWidth;
+  final percentageWidth = width != null && width.isFinite ? width : 0.0;
+  double? usedContainingHeight;
+  RenderObject? ancestor = box.parent;
+  while (ancestor != null) {
+    if (ancestor is _RenderDocumentBox) {
+      final child = ancestor.child;
+      if (child != null && child.attached && child.hasSize) {
+        final parentWidth = ancestor.containingBlockWidth ?? 0;
+        usedContainingHeight = math.max(
+          0,
+          child.size.height -
+              ancestor.spec.verticalEdges -
+              ancestor.spec.percentagePadding.vertical * parentWidth,
+        );
+      }
+      break;
+    }
+    if (ancestor is _RenderNativeDocumentContainingBlock) {
+      usedContainingHeight = ancestor.contentHeight;
+      break;
+    }
+    ancestor = ancestor.parent;
+  }
+  return (
+    containingWidth: width,
+    containingHeight: box.containingBlockHeight,
+    usedContainingHeight: usedContainingHeight,
+    horizontalEdges:
+        box.spec.horizontalEdges +
+        box.spec.percentagePadding.horizontal * percentageWidth,
+    verticalEdges:
+        box.spec.verticalEdges +
+        box.spec.percentagePadding.vertical * percentageWidth,
+  );
+}

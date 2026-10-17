@@ -17,11 +17,14 @@ const _page = r'''<!doctype html><html id="root"><head><style>
 html,body{margin:0;padding:0}#parent{position:relative;width:180px;height:120px;
 padding:7px 9px;border:4px solid;overflow:auto}
 #content{width:400px;height:600px;padding-top:60px}
-#target{width:20px;height:10px;margin-left:80px}
+#target{width:20px;height:10px;margin-left:80px;font-size:20px;color:#123456}
 #percent-outer{width:300px;border:1px solid}
 #percent-parent{position:relative;width:200px;margin-top:5%}
 #percent-child{width:30px;height:10px;margin-top:10%}
 #relative-parent{position:relative;left:30px;top:20px;width:180px;height:70px;border:3px solid;padding:4px}
+#relative-parent.changed{color:rgb(60,40,20)}
+#flex{display:flex;width:200px;height:20px}#flex-child{width:40px;height:10px}
+#grid{display:grid;grid-template-columns:100px 100px;width:200px;height:20px}#grid-child{height:10px}
 #relative-target{position:relative;left:-7.5px;top:5px;width:90px;height:30px}
 </style></head><body id="body"><div id="parent"><div id="content">
 <div id="target"></div></div></div><pre id="probe">WAIT</pre>
@@ -29,8 +32,12 @@ padding:7px 9px;border:4px solid;overflow:auto}
 <button type="button" id="percent">Percent</button><button type="button" id="relative">Relative</button>
 <div id="percent-outer"><div id="percent-parent"><div id="percent-child"></div></div></div>
 <div id="relative-parent"><div id="relative-target"><button type="button" id="moved">Moved</button></div></div>
+<div id="flex"><span id="flex-child"></span></div>
+<div id="grid"><span id="grid-child"></span><span></span></div>
 <script>
-window.relativeHits=0;window.relativeMutation=null;
+window.relativeHits=0;window.relativeMutation=null;window.computedMutation=null;
+window.retainedRelativeStyle=getComputedStyle(document.getElementById('relative-parent'));
+window.readComputed=function(){var e=document.getElementById('target'),s=getComputedStyle(e),r=window.retainedRelativeStyle,readonly='NO_ERROR';try{r.setProperty('left','99px')}catch(error){readonly=error.name}return {width:s.width,height:s.height,flexDisplay:getComputedStyle(document.getElementById('flex-child')).display,flexWidth:getComputedStyle(document.getElementById('flex-child')).width,gridDisplay:getComputedStyle(document.getElementById('grid-child')).display,gridWidth:getComputedStyle(document.getElementById('grid-child')).width,fontSize:s.fontSize,color:s.color,marginLeft:s.marginLeft,parentWidth:r.width,parentHeight:r.height,parentColor:r.color,childColor:getComputedStyle(document.getElementById('relative-target')).color,paddingLeft:r.paddingLeft,borderLeft:r.borderLeftWidth,left:r.left,right:r.right,cssText:r.cssText,distinct:r!==getComputedStyle(document.getElementById('relative-parent')),readonly:readonly,stale:window.computedMutation}};
 window.readRelative=function(){var p=document.getElementById('relative-parent'),c=document.getElementById('relative-target'),r=p.getBoundingClientRect(),q=c.getBoundingClientRect();return {parentX:r.x,gapX:q.x-r.x,gapY:q.y-r.y,top:c.offsetTop,left:c.offsetLeft,parentIdentity:c.offsetParent===p,hits:window.relativeHits,stale:window.relativeMutation}};
 window.readPercent=function(){var p=document.getElementById('percent-parent'),c=document.getElementById('percent-child'),o=document.getElementById('percent-outer');return {
  gap:p.getBoundingClientRect().y-o.getBoundingClientRect().y,
@@ -45,7 +52,7 @@ window.readOffsets=function(){var e=document.getElementById('target');return {
  rootParent:document.documentElement.offsetParent,bodyParent:document.body.offsetParent,
  bodyTop:document.body.offsetTop,bodyLeft:document.body.offsetLeft,
  scrollTop:document.getElementById('parent').scrollTop,
- scrollLeft:document.getElementById('parent').scrollLeft,percent:readPercent(),relative:readRelative()
+ scrollLeft:document.getElementById('parent').scrollLeft,percent:readPercent(),relative:readRelative(),computed:readComputed()
 }};
 window.offsetMutation=null;window.percentMutation=null;window.initialOffsets=readOffsets();
 document.addEventListener('DOMContentLoaded',function(){
@@ -61,6 +68,8 @@ document.getElementById('change').onclick=function(){
 };
 document.getElementById('relative').onclick=function(){
  document.getElementById('relative-parent').style.left='50px';
+ document.getElementById('relative-parent').classList.add('changed');
+ try{window.retainedRelativeStyle.left;window.computedMutation='NO_ERROR'}catch(e){window.computedMutation=e.name}
  try{document.getElementById('relative-target').offsetLeft;window.relativeMutation='NO_ERROR'}catch(e){window.relativeMutation=e.name}
 };
 document.getElementById('moved').onclick=function(){
@@ -192,6 +201,30 @@ void main() {
       expect(obj(initial['percent']), containsPair('width', 200));
       expect(obj(initial['percent']), containsPair('height', 10));
       expect(obj(initial['percent']), containsPair('parentIdentity', true));
+      final initialComputed = obj(initial['computed']);
+      expect(initialComputed, containsPair('width', '20px'));
+      expect(initialComputed, containsPair('height', '10px'));
+      expect(initialComputed, containsPair('flexDisplay', 'block'));
+      expect(initialComputed, containsPair('flexWidth', '40px'));
+      expect(initialComputed, containsPair('gridDisplay', 'block'));
+      expect(initialComputed, containsPair('gridWidth', '100px'));
+      expect(initialComputed, containsPair('fontSize', '20px'));
+      expect(initialComputed, containsPair('color', 'rgb(18, 52, 86)'));
+      expect(initialComputed, containsPair('marginLeft', '80px'));
+      expect(initialComputed, containsPair('parentWidth', '180px'));
+      expect(initialComputed, containsPair('parentHeight', '70px'));
+      expect(initialComputed, containsPair('parentColor', 'rgb(0, 0, 0)'));
+      expect(initialComputed, containsPair('childColor', 'rgb(0, 0, 0)'));
+      expect(initialComputed, containsPair('paddingLeft', '4px'));
+      expect(initialComputed, containsPair('borderLeft', '3px'));
+      expect(initialComputed, containsPair('left', '30px'));
+      expect(initialComputed, containsPair('right', '-30px'));
+      expect(initialComputed, containsPair('cssText', ''));
+      expect(initialComputed, containsPair('distinct', true));
+      expect(
+        initialComputed,
+        containsPair('readonly', 'NoModificationAllowedError'),
+      );
       final initialRelative = obj(initial['relative']);
       expect(initialRelative['parentX'], 30);
       expect(initialRelative['gapX'], -.5);
@@ -279,6 +312,13 @@ void main() {
       );
       await t.tap(find.text('Read', findRichText: true));
       await ready(() => obj(observation()['relative'])['parentX'] == 50);
+      final changedComputed = obj(observation()['computed']);
+      expect(changedComputed, containsPair('marginLeft', '100px'));
+      expect(changedComputed, containsPair('left', '50px'));
+      expect(changedComputed, containsPair('parentColor', 'rgb(60, 40, 20)'));
+      expect(changedComputed, containsPair('childColor', 'rgb(60, 40, 20)'));
+      expect(changedComputed, containsPair('right', '-50px'));
+      expect(changedComputed['stale'], 'NotSupportedError');
       final relativeChanged = obj(observation()['relative']);
       expect(relativeChanged['gapX'], -.5);
       expect(relativeChanged['gapY'], 12);
@@ -298,7 +338,7 @@ void main() {
       expect(failures, isEmpty);
       expect(t.takeException(), isNull);
       debugPrintSynchronously(
-        'PIRC_OFFSET_ACCEPTANCE ${jsonEncode({'initial': initial, 'scrolled': scrolled, 'changed': changed, 'parentScriptId': parentScriptId, 'stale': stale, 'percentChanged': percentChanged, 'relativeChanged': relativeChanged, 'moved': moved, 'failures': failures})}',
+        'PIRC_OFFSET_ACCEPTANCE ${jsonEncode({'initial': initial, 'scrolled': scrolled, 'changed': changed, 'parentScriptId': parentScriptId, 'stale': stale, 'percentChanged': percentChanged, 'relativeChanged': relativeChanged, 'computedChanged': changedComputed, 'moved': moved, 'failures': failures})}',
       );
     } finally {
       await t.pumpWidget(const SizedBox.shrink());

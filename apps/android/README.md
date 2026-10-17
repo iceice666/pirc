@@ -74,6 +74,11 @@ root/body offsets, flex/grid flow slots and scroller extents with Chromium.
 The relative fetched-page tests check shifted link hits, clipped scrolling,
 resizing and retained input state; the renderer tests also verify semantics and
 flow baselines. Fixed grid rows retain their sizes in auto-height containers.
+`document_computed_styles_oracle_test.dart` compares the supported style values
+with the dedicated Chromium reference. The production runtime and Android HTTP
+checks cover live read-only declarations, native dimensions and mutation fences.
+Computed styles are a supported subset; absent standard properties and stale
+frames fail explicitly. The detailed boundaries remain in the mobile plan.
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see
 [the test browser guide](tool/parity/TEST_BROWSER.md).

@@ -27,8 +27,9 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** `window.getComputedStyle()` and used-style
-      values for common libraries; signed/font-relative/empty-block and bottom-edge
+- [ ] **Dynamic content compatibility:** extend the supported computed-style
+      properties, list-item/inline-fragment measurements and common-library coverage;
+      signed/font-relative/empty-block and bottom-edge
       margin collapse, absolute/fixed/sticky positioning, unsupported relative-inset
       units and inline fragments, transformed/zoomed/table offset geometry,
       inline-fragment geometry and image/resize/chart/framework flows. A DOM write followed immediately by a geometry read still needs a
@@ -74,12 +75,19 @@ outside the agreed scope.
 - Root horizontal scrolling, scrollend/Promise semantics, mixed window/element
   event order, RTL, scroll snap/anchoring and nested touch scroll chaining need
   wider coverage. Smooth scroll timing follows Flutter.
-- `window.getComputedStyle` is currently undefined in the shipped native script
-  runtime (confirmed with the production bundle). Inline `element.style` values
-  remain available. Libraries that read computed/cascaded/used styles can fail;
-  providing that API with native style/layout state is the next compatibility
-  priority. The new positioning oracle records browser computed insets for
-  reference but its native assertions cover geometry, offsets and scrolling.
+- `window.getComputedStyle()` now reads the native cascade and completed layout
+  snapshot for a supported property subset. Declarations are read-only and live
+  across accepted frames. Enumeration includes the supplied subset, rather than
+  Chromium's full property list; omitted recognized properties, pseudo-elements,
+  stale frames and unavailable declarations fail explicitly. Inline `element.style`
+  remains independent. DOM writes followed immediately by style/geometry reads
+  still need a matching native frame, so arbitrary framework flows are unverified.
+- Computed-style dimensions use measured native boxes and original containing
+  blocks. Inline-fragment dimensions, auto margins, platform form-control UA
+  properties, CSS font shorthand, transforms and unimplemented length expressions
+  remain outside this initial surface. Generic native font-family names can differ
+  from Chromium's resolved UA family names. Per-element and packet limits withhold
+  complete declarations rather than truncate custom properties or discard geometry.
 - Arbitrary websites/frameworks, third-party cookie policies and full browser API
   coverage are not guaranteed. Preserve explicit unsupported errors and record
   real failures before expanding compatibility.
@@ -369,3 +377,65 @@ relative parent movement from 30 to 50 px, unchanged child-relative offsets,
 stale-read rejection and a successful button click after the move. It also
 retains the previous two-axis-scroll and percentage-margin checks. Physical
 phone/tablet, real-provider and remote-push acceptance remain pending.
+
+## Native computed-style follow-up
+
+`getComputedStyle()` is available on both the window and script global. It reads
+supported properties from the winning native cascade and completed layout for
+the same document revision. Each call returns a fresh declaration object;
+retained declarations read the latest accepted frame. CSS property methods,
+camel-case getters, indexed/subset iteration, empty computed `cssText`, detached
+empty declarations and read-only mutation errors are covered. Inline authored
+`element.style` remains independent.
+
+Measured block dimensions include the original containing-block basis,
+content-box/border-box edges, percentage padding/margins and resolved relative
+insets. Common colors, inherited typography, font-relative lengths, custom
+properties, stylesheet/class changes and blockified flex/grid items are covered. Unknown standard-property
+values are explicitly unavailable, rather than copied from inline declarations.
+CSSOM percentage inset reads in auto-height parents use the parent's actual used
+height, separately from the CSS2 paint displacement's definite-height rule.
+
+Declarations are bounded to 256 properties, 128-character names, 4,096-character
+values and 16 KiB of names/values per node. Aggregate style data also has a 2 MiB
+budget, counting encoded bytes. Inheritance is bounded while collecting custom
+properties, so an oversized root scope is not copied into every descendant.
+An oversized/unavailable declaration is withheld
+whole; geometry remains available and custom properties are never silently
+truncated into apparently unset values. Custom-property names currently use the
+ASCII subset. The full browser CSSStyleDeclaration prototype/property surface,
+pseudo-elements, font shorthand serialization, unmeasured list-item/inline
+fragment dimensions, auto margins and unsupported expressions remain outside
+this initial API. Arbitrary frameworks are still unverified.
+
+The Chromium 153 capture has 12 cases at two viewports (24 records). Every sampled
+property is matched or has a named boundary in the native oracle. The following
+existing UA layout differences remain in the default text/list fixture, at both
+viewport widths; native computed heights report the actual native boxes:
+
+| Element   | Native height | Chromium height |
+| --------- | ------------: | --------------: |
+| html      |     197.88 px |      184.875 px |
+| body      |     173.88 px |      152.875 px |
+| paragraph |         16 px |           18 px |
+| heading   |         32 px |           37 px |
+| list      |         16 px |           18 px |
+
+The paragraph/heading/list line boxes differ with native font metrics; the root
+and body also retain measured flow/margin differences. Generic UA font-family
+names (`serif` versus Chromium `Times`) and custom-property comma whitespace
+normalization are recorded separately. Platform form-control UA defaults are
+excluded explicitly. These boundaries do not exempt explicit block sizes,
+percentage edges, relative inset values or list content width from comparison.
+
+Verification: **4,733 Flutter tests** passed in the full regression run, then
+**42 final focused tests** passed after the bounded-inheritance and unknown-basis
+follow-ups. All **527 JavaScript tests**, Flutter analysis/formatting, repository
+formatting and the Android local-HTTP integration passed. The Android test uses
+the shipped JavaScriptSandbox runtime and native renderer to verify initial
+reads, retained declarations after class/inline changes, inherited color, native
+content/border dimensions, blockified flex/grid widths, read-only errors and
+stale-frame rejection. Existing scroll, percentage-margin, relative-offset and
+moved-button checks remain covered. Browser references reproduced byte for byte
+in the dedicated test shell with network requests aborted. Physical-device,
+real-account/provider and remote-push acceptance remain pending.
