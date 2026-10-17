@@ -1,9 +1,11 @@
 import 'dart:math' as math;
 
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import 'html_document_flex.dart';
+import 'document_margin_collapse.dart';
 
 class _DocumentContainingBlock {
   const _DocumentContainingBlock({
@@ -43,6 +45,210 @@ void _markLayoutSubtree(RenderObject node) {
   node.visitChildren(_markLayoutSubtree);
 }
 
+/// Scroll viewports defer dimension commits while percentage margin groups
+/// settle, so provisional content sizes cannot clamp the user's scroll offset.
+abstract interface class NativeDocumentLayoutMetricsCommitParticipant {
+  void commitDocumentLayoutMetrics();
+}
+
+int _marginProvisionalLayoutDepth = 0;
+int _nativeDocumentBoxLayoutDepth = 0;
+bool get nativeDocumentMarginLayoutIsProvisional =>
+    _marginProvisionalLayoutDepth > 0;
+
+bool nativeDocumentMarginsAreSettled(RenderObject root) {
+  var ready = true;
+  void visit(RenderObject object) {
+    if (object is _RenderDocumentMarginCollapseRoot && !object.settled) {
+      ready = false;
+    }
+    object.visitChildren(visit);
+  }
+
+  visit(root);
+  return ready;
+}
+
+/// Keep the previous committed dimensions until this viewport's enclosing and
+/// nested document margin groups have all completed their real layout passes.
+bool nativeDocumentMarginMetricsCanCommit(RenderObject viewport) {
+  if (nativeDocumentMarginLayoutIsProvisional) return false;
+  RenderObject? ancestor = viewport.parent;
+  while (ancestor != null) {
+    if (ancestor is _RenderDocumentMarginCollapseRoot && !ancestor.settled) {
+      return false;
+    }
+    ancestor = ancestor.parent;
+  }
+  return nativeDocumentMarginsAreSettled(viewport);
+}
+
+void _invalidateMarginLayoutOwner(RenderObject object) {
+  RenderObject? ancestor = object.parent;
+  while (ancestor != null) {
+    if (ancestor is _RenderDocumentMarginCollapseRoot) {
+      ancestor.invalidateFromDescendant();
+      return;
+    }
+    ancestor = ancestor.parent;
+  }
+}
+
+/// Resolve percentage top-margin groups before painting or exposing geometry.
+/// Each pass uses actual native containing-block widths. A changed group is
+/// applied through a new real layout, clearing descendant dry/intrinsic caches.
+class NativeDocumentMarginCollapseRoot extends SingleChildRenderObjectWidget {
+  const NativeDocumentMarginCollapseRoot({
+    super.key,
+    required super.child,
+    this.maximumPasses = 8,
+  });
+  final int maximumPasses;
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderDocumentMarginCollapseRoot(maximumPasses);
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant RenderObject renderObject,
+  ) {
+    (renderObject as _RenderDocumentMarginCollapseRoot)
+      ..maximumPasses = maximumPasses
+      ..markNeedsLayout();
+  }
+}
+
+class _RenderDocumentMarginCollapseRoot extends RenderProxyBox {
+  _RenderDocumentMarginCollapseRoot(this._maximumPasses);
+  int _maximumPasses;
+  int get maximumPasses => _maximumPasses;
+  set maximumPasses(int value) {
+    if (_maximumPasses == value) return;
+    _maximumPasses = value;
+    markNeedsLayout();
+  }
+
+  bool settled = false;
+  bool _settling = false;
+  bool _reflowScheduled = false;
+  void invalidateFromDescendant() {
+    if (_settling) return;
+    settled = false;
+    if (_nativeDocumentBoxLayoutDepth == 0) {
+      markNeedsLayout();
+    } else if (!_reflowScheduled) {
+      _reflowScheduled = true;
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        _reflowScheduled = false;
+        if (attached) markNeedsLayout();
+      });
+    }
+  }
+
+  @override
+  void markNeedsLayout() {
+    settled = false;
+    super.markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    _settling = true;
+    try {
+      _performMarginLayout();
+    } finally {
+      _settling = false;
+    }
+  }
+
+  void _performMarginLayout() {
+    settled = false;
+    final current = child;
+    if (current == null) {
+      size = constraints.smallest;
+      settled = true;
+      return;
+    }
+    final outermost = _marginProvisionalLayoutDepth == 0;
+    _marginProvisionalLayoutDepth++;
+    try {
+      // Hypothetical dry queries must not poison the current viewport pass.
+      invokeLayoutCallback<BoxConstraints>((_) => _markLayoutSubtree(current));
+      for (var pass = 0; pass < math.max(1, maximumPasses); pass++) {
+        current.layout(constraints, parentUsesSize: true);
+        final boxes = <String, List<_RenderDocumentBox>>{};
+        final margins = <_RenderNativeDocumentPercentageMargin>[];
+        void collect(RenderObject object) {
+          if (object is _RenderDocumentMarginCollapseRoot) return;
+          if (object is _RenderDocumentBox &&
+              object.spec.geometryOwnerId != null) {
+            boxes
+                .putIfAbsent(object.spec.geometryOwnerId!, () => [])
+                .add(object);
+          }
+          if (object is _RenderNativeDocumentPercentageMargin &&
+              (object._collapsedTop?.contributions.isNotEmpty ?? false)) {
+            margins.add(object);
+          }
+          object.visitChildren(collect);
+        }
+
+        collect(current);
+        var valid = true;
+        final changed = <_RenderNativeDocumentPercentageMargin, double>{};
+        for (final margin in margins) {
+          var top = 0.0;
+          for (final term in margin._collapsedTop!.contributions) {
+            double value = term.value;
+            if (term.percentage) {
+              final origins = boxes[term.originId];
+              final width = origins?.length == 1
+                  ? origins!.single.containingBlockWidth
+                  : null;
+              if (width == null || !width.isFinite || width < 0) {
+                valid = false;
+                break;
+              }
+              value = value / 100 * width;
+            }
+            top = math.max(top, value);
+          }
+          if ((top - margin._resolvedTop).abs() > 0.0000001) {
+            changed[margin] = top;
+          }
+        }
+        if (!valid) break;
+        if (changed.isEmpty) {
+          settled = true;
+          break;
+        }
+        // Never publish a value that has not gone through layout on cap.
+        if (pass + 1 >= math.max(1, maximumPasses)) break;
+        invokeLayoutCallback<BoxConstraints>((_) {
+          for (final entry in changed.entries) {
+            entry.key._resolvedTop = entry.value;
+          }
+          _markLayoutSubtree(current);
+        });
+      }
+      size = constraints.constrain(current.size);
+    } finally {
+      _marginProvisionalLayoutDepth--;
+    }
+    if (outermost && nativeDocumentMarginsAreSettled(this)) {
+      void commit(RenderObject object) {
+        object.visitChildren(commit);
+        if (object is NativeDocumentLayoutMetricsCommitParticipant) {
+          (object as NativeDocumentLayoutMetricsCommitParticipant)
+              .commitDocumentLayoutMetrics();
+        }
+      }
+
+      invokeLayoutCallback<BoxConstraints>((_) => commit(current));
+    }
+  }
+}
+
 /// CSS dimensions for an ordinary block box.
 ///
 /// [horizontalEdges] and [verticalEdges] are the element's fixed padding and
@@ -72,6 +278,7 @@ class NativeDocumentBox extends SingleChildRenderObjectWidget {
     this.verticalEdges = 0,
     this.percentagePadding = EdgeInsets.zero,
     this.geometryOwner,
+    this.geometryOwnerId,
   });
 
   final NativeFlexLength? width;
@@ -98,6 +305,7 @@ class NativeDocumentBox extends SingleChildRenderObjectWidget {
   /// Optional identity used by the geometry collector to select this
   /// element's own sizing surface through nested native boxes.
   final Object? geometryOwner;
+  final String? geometryOwnerId;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
@@ -255,6 +463,11 @@ class _RenderDocumentBox extends RenderProxyBox {
   _RenderDocumentBox(this.spec);
 
   NativeDocumentBox spec;
+  @override
+  void markNeedsLayout() {
+    _invalidateMarginLayoutOwner(this);
+    super.markNeedsLayout();
+  }
 
   /// The content dimensions this box publishes to its descendants.
   double? contentWidth;
@@ -559,6 +772,15 @@ class _RenderDocumentBox extends RenderProxyBox {
 
   @override
   void performLayout() {
+    _nativeDocumentBoxLayoutDepth++;
+    try {
+      _performBoxLayout();
+    } finally {
+      _nativeDocumentBoxLayoutDepth--;
+    }
+  }
+
+  void _performBoxLayout() {
     final cbWidth = _percentWidthForDescendants(constraints);
     final cbHeight = _percentHeightForDescendants(constraints);
     final childConstraints = spec.applySizing
@@ -750,6 +972,7 @@ class NativeDocumentPercentageMargin extends SingleChildRenderObjectWidget {
     required super.child,
     required this.fractions,
     this.fixed = EdgeInsets.zero,
+    this.collapsedTop,
   });
 
   /// Fractions where `0.1` represents `10%`.
@@ -758,10 +981,11 @@ class NativeDocumentPercentageMargin extends SingleChildRenderObjectWidget {
   /// Fixed signed insets supplement percentage margins (for negative CSS
   /// horizontal margins, which the HTML core clamps to zero).
   final EdgeInsets fixed;
+  final NativeDocumentTopMarginGroup? collapsedTop;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      _RenderNativeDocumentPercentageMargin(fractions, fixed);
+      _RenderNativeDocumentPercentageMargin(fractions, fixed, collapsedTop);
 
   @override
   void updateRenderObject(
@@ -770,13 +994,31 @@ class NativeDocumentPercentageMargin extends SingleChildRenderObjectWidget {
   ) {
     (renderObject as _RenderNativeDocumentPercentageMargin)
       ..fractions = fractions
-      ..fixed = fixed;
+      ..fixed = fixed
+      ..collapsedTop = collapsedTop;
   }
 }
 
 class _RenderNativeDocumentPercentageMargin extends RenderShiftedBox {
-  _RenderNativeDocumentPercentageMargin(this._fractions, this._fixed)
-    : super(null);
+  _RenderNativeDocumentPercentageMargin(
+    this._fractions,
+    this._fixed,
+    this._collapsedTop,
+  ) : super(null);
+
+  NativeDocumentTopMarginGroup? _collapsedTop;
+  double _resolvedTop = 0;
+  set collapsedTop(NativeDocumentTopMarginGroup? value) {
+    if (identical(_collapsedTop, value)) return;
+    _collapsedTop = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void markNeedsLayout() {
+    _invalidateMarginLayoutOwner(this);
+    super.markNeedsLayout();
+  }
 
   EdgeInsets _fixed;
   set fixed(EdgeInsets value) {
@@ -816,7 +1058,10 @@ class _RenderNativeDocumentPercentageMargin extends RenderShiftedBox {
 
   @override
   void performLayout() {
-    final margin = _margin();
+    final rawMargin = _margin();
+    final margin = _collapsedTop == null
+        ? rawMargin
+        : rawMargin.copyWith(top: _resolvedTop);
     if (child == null) {
       size = constraints.constrain(
         Size(math.max(0.0, margin.horizontal), math.max(0.0, margin.vertical)),
@@ -838,7 +1083,10 @@ class _RenderNativeDocumentPercentageMargin extends RenderShiftedBox {
 
   @override
   Size computeDryLayout(BoxConstraints constraints) {
-    final margin = _margin(dry: true);
+    final rawMargin = _margin(dry: true);
+    final margin = _collapsedTop == null
+        ? rawMargin
+        : rawMargin.copyWith(top: _resolvedTop);
     final childSize = child?.getDryLayout(constraints.deflate(margin));
     return constraints.constrain(
       Size(
@@ -853,7 +1101,10 @@ class _RenderNativeDocumentPercentageMargin extends RenderShiftedBox {
     BoxConstraints constraints,
     TextBaseline baseline,
   ) {
-    final margin = _margin(dry: true);
+    final rawMargin = _margin(dry: true);
+    final margin = _collapsedTop == null
+        ? rawMargin
+        : rawMargin.copyWith(top: _resolvedTop);
     final value = child?.getDryBaseline(constraints.deflate(margin), baseline);
     return value == null ? null : value + margin.top;
   }
@@ -868,11 +1119,13 @@ class _RenderNativeDocumentPercentageMargin extends RenderShiftedBox {
 
   @override
   double computeMinIntrinsicHeight(double width) =>
-      child?.getMinIntrinsicHeight(width) ?? 0;
+      (child?.getMinIntrinsicHeight(width) ?? 0) +
+      (_collapsedTop == null ? 0 : _resolvedTop);
 
   @override
   double computeMaxIntrinsicHeight(double width) =>
-      child?.getMaxIntrinsicHeight(width) ?? 0;
+      (child?.getMaxIntrinsicHeight(width) ?? 0) +
+      (_collapsedTop == null ? 0 : _resolvedTop);
 }
 
 /// Returns actual padding from the latest completed native layout.

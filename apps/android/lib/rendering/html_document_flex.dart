@@ -31,6 +31,8 @@ class NativeFlexItem {
     this.crossEdges = 0,
     this.mainMargins = 0,
     this.crossMargins = 0,
+    this.mainMarginPercentage = 0,
+    this.crossMarginPercentage = 0,
     this.borderBox = false,
     this.stretchCross = true,
     this.preferredCross,
@@ -41,11 +43,54 @@ class NativeFlexItem {
   });
   final double grow, shrink, mainEdges, crossEdges;
   final double mainMargins, crossMargins;
+
+  /// Percentage margin sums as fractions of the flex container's inline
+  /// content width, regardless of whether they lie on its main or cross axis.
+  final double mainMarginPercentage, crossMarginPercentage;
   final NativeFlexLength? basis, preferredMain, minimumMain, maximumMain;
   final NativeFlexLength? preferredCross, minimumCross, maximumCross;
   final bool automaticMinimum, borderBox, stretchCross;
   final CrossAxisAlignment? align;
   final int order;
+
+  NativeFlexItem _resolvePercentageMargins(double? inlineContentWidth) {
+    final width = inlineContentWidth;
+    if (width == null || !width.isFinite || width < 0) return this;
+    double resolve(double fixed, double fraction) {
+      if (!fraction.isFinite) return fixed;
+      final value = fixed + width * fraction;
+      return value.isFinite ? value : fixed;
+    }
+
+    final resolvedMainMargins = resolve(mainMargins, mainMarginPercentage);
+    final resolvedCrossMargins = resolve(crossMargins, crossMarginPercentage);
+    if (resolvedMainMargins == mainMargins &&
+        resolvedCrossMargins == crossMargins) {
+      return this;
+    }
+    return NativeFlexItem(
+      grow: grow,
+      shrink: shrink,
+      basis: basis,
+      preferredMain: preferredMain,
+      minimumMain: minimumMain,
+      maximumMain: maximumMain,
+      automaticMinimum: automaticMinimum,
+      mainEdges: mainEdges,
+      crossEdges: crossEdges,
+      mainMargins: resolvedMainMargins,
+      crossMargins: resolvedCrossMargins,
+      mainMarginPercentage: 0,
+      crossMarginPercentage: 0,
+      borderBox: borderBox,
+      stretchCross: stretchCross,
+      preferredCross: preferredCross,
+      minimumCross: minimumCross,
+      maximumCross: maximumCross,
+      align: align,
+      order: order,
+    );
+  }
 }
 
 enum NativeFlexWrap { nowrap, wrap, wrapReverse }
@@ -242,7 +287,10 @@ class _RenderDocumentFlex extends RenderBox
     final contributions = <double>[];
     var child = firstChild, index = 0;
     while (child != null) {
-      final spec = specification(child, index);
+      final spec = specification(
+        child,
+        index,
+      )._resolvePercentageMargins(width ? null : extent);
       final intrinsic = width
           ? maximum
                 ? child.getMaxIntrinsicWidth(extent)
@@ -418,6 +466,12 @@ class _RenderDocumentFlex extends RenderBox
         ),
       );
     }
+    // NativeDocumentFlex receives the flex container's content box after its
+    // border and padding have been applied by the surrounding document boxes.
+    // CSS percentage margins on every side resolve against this inline width.
+    final inlineContentWidth = constraints.maxWidth.isFinite
+        ? constraints.maxWidth
+        : null;
     final maxMain = horizontal ? constraints.maxWidth : constraints.maxHeight;
     final maxCross = horizontal ? constraints.maxHeight : constraints.maxWidth;
     final definiteMain = horizontal
@@ -436,7 +490,10 @@ class _RenderDocumentFlex extends RenderBox
     }
 
     while (child != null) {
-      final spec = specification(child, index);
+      final spec = specification(
+        child,
+        index,
+      )._resolvePercentageMargins(inlineContentWidth);
       final preferredCross = spec.preferredCross?.resolve(definiteCross);
       final probeCross = preferredCross == null
           ? null

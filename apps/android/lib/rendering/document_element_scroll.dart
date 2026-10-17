@@ -764,7 +764,8 @@ class _NativeDocumentElementScrollViewport
   }
 }
 
-class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox {
+class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox
+    implements NativeDocumentLayoutMetricsCommitParticipant {
   _RenderNativeDocumentElementScrollViewportRender({
     required this._attachment,
     required this._revision,
@@ -869,9 +870,6 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox {
       size = constraints.constrain(child!.size);
     }
 
-    _horizontalOffset.applyViewportDimension(size.width);
-    _verticalOffset.applyViewportDimension(size.height);
-
     Rect? measuredBounds;
     invokeLayoutCallback<BoxConstraints>((_) {
       measuredBounds = _measureContentBounds();
@@ -882,15 +880,31 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox {
       size = constraints.constrain(
         Size(size.width, math.max(size.height, _contentBounds.bottom)),
       );
-      _verticalOffset.applyViewportDimension(size.height);
     }
     _scrollWidth = math.max(size.width, _contentBounds.right);
     _scrollHeight = math.max(size.height, _contentBounds.bottom);
+    _laidOutViewportSize = size;
+    _metricsDeferred = true;
+    if (nativeDocumentMarginMetricsCanCommit(this)) {
+      commitDocumentLayoutMetrics();
+    }
+  }
+
+  bool _metricsDeferred = false;
+  Size _laidOutViewportSize = Size.zero;
+  @override
+  void commitDocumentLayoutMetrics() {
+    if (!_metricsDeferred || !nativeDocumentMarginMetricsCanCommit(this)) {
+      return;
+    }
+    _metricsDeferred = false;
+    _horizontalOffset.applyViewportDimension(_laidOutViewportSize.width);
+    _verticalOffset.applyViewportDimension(_laidOutViewportSize.height);
     final horizontalMax = _scrollsX
-        ? math.max(0.0, _scrollWidth - size.width)
+        ? math.max(0.0, _scrollWidth - _laidOutViewportSize.width)
         : 0.0;
     final verticalMax = _scrollsY
-        ? math.max(0.0, _scrollHeight - size.height)
+        ? math.max(0.0, _scrollHeight - _laidOutViewportSize.height)
         : 0.0;
 
     _applyDimensions(_horizontalOffset, horizontalMax);

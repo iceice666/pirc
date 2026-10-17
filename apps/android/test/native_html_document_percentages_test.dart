@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html;
 import 'package:pirc_mobile/rendering/document_layout.dart';
+import 'package:pirc_mobile/rendering/document_margin_collapse.dart';
 import 'package:pirc_mobile/rendering/html_document_styles.dart';
 import 'package:pirc_mobile/rendering/html_syntax.dart';
 import 'package:pirc_mobile/rendering/native_html.dart';
@@ -68,6 +69,9 @@ void main() {
                   styles: fm.MarkdownStyleSheet(),
                   builders: const {},
                   markdownStyles: false,
+                  imageViewport: Size(width, height),
+                  documentTopMargins: prepared.topMargins,
+                  documentPercentTopMargins: prepared.percentTopMargins,
                   authorStylesBuilder: (element) =>
                       prepared.stylesByKey[element
                           .attributes['data-pirc-document-style']],
@@ -123,11 +127,15 @@ class _PreparedDocument {
     required this.markup,
     required this.stylesByKey,
     required this.noBoxIds,
+    required this.topMargins,
+    required this.percentTopMargins,
   });
 
   final String markup;
   final Map<String, Map<String, String>> stylesByKey;
   final Set<String> noBoxIds;
+  final Map<String, double> topMargins;
+  final Map<String, NativeDocumentTopMarginGroup> percentTopMargins;
 }
 
 _PreparedDocument _prepareDocument(Map<String, dynamic> capture) {
@@ -197,6 +205,14 @@ _PreparedDocument _prepareDocument(Map<String, dynamic> capture) {
         '<div${_attributes(root)}><div${_attributes(body)}>${body.innerHtml}</div></div>',
     stylesByKey: stylesByKey,
     noBoxIds: noBoxIds,
+    topMargins: nativeDocumentCollapsedTopMargins(
+      document: document,
+      stylesByElement: cascade.stylesByElement,
+    ),
+    percentTopMargins: nativeDocumentPercentTopMarginGroups(
+      document: document,
+      stylesByElement: cascade.stylesByElement,
+    ),
   );
 }
 
@@ -227,18 +243,6 @@ void _expectChromiumGeometry(
   expect(clientRects, hasLength(1), reason: '$caseName #$id browser fragments');
 
   for (final key in ['x', 'y', 'width', 'height']) {
-    if (key == 'y' &&
-        id == 'parent' &&
-        const {
-          'percentage_edges_content_box',
-          'percentage_edges_border_box',
-        }.contains(caseName)) {
-      // Named browser difference: positive percentage top margins currently
-      // remain inside the parent rather than collapsing through its top edge.
-      expect(rect[key], 15);
-      expect(actual[key], 0);
-      continue;
-    }
     expect(
       (actual[key] as num).toDouble(),
       closeTo((rect[key] as num).toDouble(), .25),

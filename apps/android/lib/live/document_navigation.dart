@@ -1945,6 +1945,10 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       layoutRevision: _scripts?.layoutRevision ?? 0,
       layoutKnownIds: _scripts?.layoutElementIds ?? const {},
       layoutNoBoxIds: noBoxIds,
+      documentPercentTopMargins: nativeDocumentPercentTopMarginGroups(
+        document: styled,
+        stylesByElement: result.stylesByElement,
+      ),
       documentTopMargins: nativeDocumentCollapsedTopMargins(
         document: styled,
         stylesByElement: result.stylesByElement,

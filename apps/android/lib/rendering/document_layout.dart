@@ -1,5 +1,6 @@
 import 'dart:collection';
 import 'document_offsets.dart';
+import 'html_document_box.dart';
 import 'document_element_scroll.dart';
 
 import 'package:flutter/rendering.dart';
@@ -52,6 +53,7 @@ class NativeDocumentLayoutController extends ChangeNotifier {
       return null;
     }
 
+    if (!nativeDocumentMarginsAreSettled(root)) return null;
     final known = root.knownIds.toList()..sort();
     final boxes = <Map<String, dynamic>>[];
 

@@ -1,16 +1,72 @@
 import 'dart:math' as math;
 import 'package:html/dom.dart' as dom;
 
-/// Render-only top-margin overrides keyed by the original DOM's stable style
-/// IDs. Author/computed styles remain unchanged. Root margins never collapse.
-/// This supports nonempty in-flow block chains and nonnegative pixel margins.
-/// Signed/percentage/font-relative margins, empty blocks and bottom-edge
-/// collapse need a richer used-value/formatting-context model.
+/// A contribution retains the width basis of its original element even when
+/// its margin collapses through multiple ancestors.
+class NativeDocumentTopMarginContribution {
+  const NativeDocumentTopMarginContribution({
+    required this.originId,
+    required this.value,
+    this.percentage = false,
+  });
+  final String originId;
+  final double value;
+  final bool percentage;
+}
+
+class NativeDocumentTopMarginGroup {
+  const NativeDocumentTopMarginGroup(this.contributions);
+  final List<NativeDocumentTopMarginContribution> contributions;
+}
+
+/// Fixed-pixel groups keep their existing rendering path.
 Map<String, double> nativeDocumentCollapsedTopMargins({
   required dom.Document document,
   required Map<dom.Element, Map<String, String>> stylesByElement,
+}) =>
+    _collapseTopMargins(
+      document: document,
+      stylesByElement: stylesByElement,
+      percentages: false,
+    ).map(
+      (key, terms) => MapEntry(
+        key,
+        terms.fold<double>(0, (value, term) => math.max(value, term.value)),
+      ),
+    );
+
+/// Percentage groups are resolved by the native document layout root using
+/// each original element's actual containing-block width. Empty entries mark
+/// members whose top margin is carried by the outermost group owner.
+Map<String, NativeDocumentTopMarginGroup> nativeDocumentPercentTopMarginGroups({
+  required dom.Document document,
+  required Map<dom.Element, Map<String, String>> stylesByElement,
 }) {
-  final overrides = <String, double>{};
+  final plan = _collapseTopMargins(
+    document: document,
+    stylesByElement: stylesByElement,
+    percentages: true,
+  );
+  final result = <String, NativeDocumentTopMarginGroup>{};
+  for (final entry in plan.entries) {
+    if (!entry.value.any((term) => term.percentage)) continue;
+    for (final term in entry.value) {
+      result[term.originId] = const NativeDocumentTopMarginGroup([]);
+    }
+    result[entry.key] = NativeDocumentTopMarginGroup(entry.value);
+  }
+  return result;
+}
+
+/// Resolve only eligible, nonempty in-flow top edges from the original DOM.
+/// Signed/font-relative margins, empty blocks and bottom-edge collapse still
+/// need wider formatting-context support. Author/computed styles are untouched.
+Map<String, List<NativeDocumentTopMarginContribution>> _collapseTopMargins({
+  required dom.Document document,
+  required Map<dom.Element, Map<String, String>> stylesByElement,
+  required bool percentages,
+}) {
+  final overrides = <String, List<NativeDocumentTopMarginContribution>>{};
   final root = document.documentElement;
   if (root == null) return overrides;
   const blockTags = {
@@ -83,15 +139,38 @@ Map<String, double> nativeDocumentCollapsedTopMargins({
         : null;
   }
 
-  double? top(dom.Element element) {
+  List<NativeDocumentTopMarginContribution>? top(dom.Element element) {
     final key = element.attributes['data-pirc-document-style'];
-    if (key != null && overrides.containsKey(key)) return overrides[key];
+    if (key == null) return null;
+    if (overrides.containsKey(key)) return overrides[key];
     final css = styles(element);
     final source =
         css['margin-top'] ?? css['margin']?.trim().split(RegExp(r'\s+')).first;
-    if (source != null) return pixels(source);
-    if (identical(element, document.body)) return 8;
-    return defaultMarginTags.contains(element.localName) ? null : 0;
+    double? number;
+    var percentage = false;
+    if (source != null) {
+      if (percentages && source.trim().endsWith('%')) {
+        final raw = source.trim();
+        number = double.tryParse(raw.substring(0, raw.length - 1));
+        if (number == null || !number.isFinite || number < 0) return null;
+        percentage = true;
+      } else {
+        number = pixels(source);
+      }
+    } else if (identical(element, document.body)) {
+      number = 8;
+    } else if (!defaultMarginTags.contains(element.localName)) {
+      number = 0;
+    }
+    return number == null
+        ? null
+        : [
+            NativeDocumentTopMarginContribution(
+              originId: key,
+              value: number,
+              percentage: percentage,
+            ),
+          ];
   }
 
   bool zeroTopEdge(dom.Element element) {
@@ -103,6 +182,18 @@ Map<String, double> nativeDocumentCollapsedTopMargins({
 
   bool ordinaryBlock(dom.Element element) =>
       display(element) == 'block' &&
+      !const {
+        'img',
+        'canvas',
+        'input',
+        'button',
+        'textarea',
+        'select',
+        'video',
+        'audio',
+        'svg',
+        'iframe',
+      }.contains(element.localName) &&
       const {
         'static',
         'relative',
@@ -166,9 +257,27 @@ Map<String, double> nativeDocumentCollapsedTopMargins({
         !css.keys.any((key) => key.startsWith('margin-block'));
   }
 
+  bool positiveHeight(dom.Element element, String property) {
+    final source = value(
+      element,
+      property,
+      property == 'height' ? 'auto' : '0',
+    );
+    final fixed = pixels(source);
+    if (fixed != null) return fixed > 0;
+    if (!source.endsWith('%')) return false;
+    final percent = double.tryParse(source.substring(0, source.length - 1));
+    final parent = element.parent;
+    return percent != null &&
+        percent.isFinite &&
+        percent > 0 &&
+        parent != null &&
+        positiveHeight(parent, 'height');
+  }
+
   bool hasContent(dom.Element element) {
-    if ((pixels(value(element, 'height', 'auto')) ?? 0) > 0 ||
-        (pixels(value(element, 'min-height', '0')) ?? 0) > 0) {
+    if (positiveHeight(element, 'height') ||
+        positiveHeight(element, 'min-height')) {
       return true;
     }
     for (final node in element.nodes) {
@@ -224,9 +333,13 @@ Map<String, double> nativeDocumentCollapsedTopMargins({
     final childKey = child.attributes['data-pirc-document-style'];
     if (parentKey == null || childKey == null) return;
     final parentTop = top(element), childTop = top(child);
-    if (parentTop == null || childTop == null || childTop == 0) return;
-    overrides[parentKey] = math.max(parentTop, childTop);
-    overrides[childKey] = 0;
+    if (parentTop == null ||
+        childTop == null ||
+        childTop.every((term) => term.value == 0)) {
+      return;
+    }
+    overrides[parentKey] = [...parentTop, ...childTop];
+    overrides[childKey] = [];
   }
 
   visit(root);

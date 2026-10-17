@@ -13,6 +13,7 @@ import 'svg_dimensions.dart';
 import 'document_canvas.dart';
 import 'document_layout.dart';
 import 'document_offsets.dart';
+import 'document_margin_collapse.dart';
 import 'document_element_scroll.dart';
 import 'document_canvas_pointer.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -222,6 +223,7 @@ class NativeHtmlDocument extends StatefulWidget {
     this.layoutNoBoxIds = const {},
     this.layoutOffsetSpecs = const {},
     this.documentTopMargins = const {},
+    this.documentPercentTopMargins = const {},
   });
   final List<md.Node> nodes;
   final TextStyle style;
@@ -293,6 +295,7 @@ class NativeHtmlDocument extends StatefulWidget {
   final Set<String> layoutKnownIds, layoutNoBoxIds;
   final Map<String, NativeDocumentOffsetSpec> layoutOffsetSpecs;
   final Map<String, double> documentTopMargins;
+  final Map<String, NativeDocumentTopMarginGroup> documentPercentTopMargins;
   @override
   State<NativeHtmlDocument> createState() => _NativeHtmlDocumentState();
 }
@@ -1985,6 +1988,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             widget.layoutController,
             widget.layoutOffsetSpecs,
             widget.documentTopMargins,
+            widget.documentPercentTopMargins,
             widget.elementScrollController,
             widget.layoutRevision,
             account,
@@ -2034,6 +2038,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
                 Theme.of(context).brightness == Brightness.dark,
             () => widget.layoutController,
             () => widget.layoutOffsetSpecs,
+            () => widget.documentPercentTopMargins,
             () => widget.layoutRevision,
             () => _elementScroll,
           ),
@@ -2069,7 +2074,12 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
               final topMargin =
                   widget.documentTopMargins[element
                       .attributes['data-pirc-document-style']];
-              if (widget.imageViewport != null && topMargin != null) {
+              final percentGroup =
+                  widget.documentPercentTopMargins[element
+                      .attributes['data-pirc-document-style']];
+              if (widget.imageViewport != null && percentGroup != null) {
+                styles['margin-top'] = '0px';
+              } else if (widget.imageViewport != null && topMargin != null) {
                 styles['margin-top'] = '${topMargin}px';
               }
               // The document cascade emits physical border longhands. The HTML
@@ -2430,7 +2440,9 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
               overflowX: NativeDocumentOverflow.visible,
               overflowY: NativeDocumentOverflow.visible,
               expandVisibleOverflow: true,
-              child: document,
+              child: widget.documentPercentTopMargins.isEmpty
+                  ? document
+                  : NativeDocumentMarginCollapseRoot(child: document),
             ),
           )
         : document;
@@ -2484,6 +2496,7 @@ class _NativeHtmlFactory extends WidgetFactory {
     this.imageDark,
     this.layoutController,
     this.layoutOffsetSpecs,
+    this.documentPercentTopMargins,
     this.layoutRevision,
     this.elementScroll,
   );
@@ -2495,6 +2508,8 @@ class _NativeHtmlFactory extends WidgetFactory {
   final bool Function() imageDark;
   final NativeDocumentLayoutController? Function() layoutController;
   final Map<String, NativeDocumentOffsetSpec> Function() layoutOffsetSpecs;
+  final Map<String, NativeDocumentTopMarginGroup> Function()
+  documentPercentTopMargins;
   final int Function() layoutRevision;
   final NativeDocumentElementScrollController Function() elementScroll;
   final _geometryBlockWrapped = Expando<bool>();
@@ -3022,6 +3037,23 @@ class _NativeHtmlFactory extends WidgetFactory {
       });
     }
 
+    double marginPercentage(List<String> sides) {
+      if (!hasDocumentViewport()) return 0;
+      return sides.fold<double>(0, (sum, side) {
+        final value = styles['margin-$side']?.trim() ?? '';
+        final negative = value.startsWith('-');
+        if (negative) {
+          return sum; // Signed percentage insets need physical support.
+        }
+        final length = _flexLength(
+          negative ? value.substring(1) : value,
+          fontSize,
+        );
+        if (length == null || !length.percentage) return sum;
+        return sum + (negative ? -1 : 1) * length.value / 100;
+      });
+    }
+
     final main = horizontal ? 'width' : 'height';
     final cross = horizontal ? 'height' : 'width';
     final overflow =
@@ -3046,6 +3078,12 @@ class _NativeHtmlFactory extends WidgetFactory {
       crossEdges: edges(horizontal ? ['top', 'bottom'] : ['left', 'right']),
       mainMargins: margins(horizontal ? ['left', 'right'] : ['top', 'bottom']),
       crossMargins: margins(horizontal ? ['top', 'bottom'] : ['left', 'right']),
+      mainMarginPercentage: marginPercentage(
+        horizontal ? ['left', 'right'] : ['top', 'bottom'],
+      ),
+      crossMarginPercentage: marginPercentage(
+        horizontal ? ['top', 'bottom'] : ['left', 'right'],
+      ),
       borderBox: _documentUsesBorderBox(element),
       stretchCross: length(cross) == null,
       align: _flexAlign(styles['align-self']),
@@ -3232,7 +3270,15 @@ class _NativeHtmlFactory extends WidgetFactory {
       'right',
     ].any((side) => negativeMargin(side, 16) != 0);
     final ownsFlexMargins = _ownsFixedFlexMargins(tree.element);
-    if (margin != EdgeInsets.zero || hasNegativeMargin || ownsFlexMargins) {
+    final collapsedTop = hasDocumentViewport()
+        ? documentPercentTopMargins()[tree
+              .element
+              .attributes['data-pirc-document-style']]
+        : null;
+    if (margin != EdgeInsets.zero ||
+        hasNegativeMargin ||
+        ownsFlexMargins ||
+        (collapsedTop?.contributions.isNotEmpty ?? false)) {
       tree.register(
         BuildOp(
           debugLabel: 'native-document-percentage-margin',
@@ -3244,6 +3290,7 @@ class _NativeHtmlFactory extends WidgetFactory {
                 final fontSize = resolved.get<TextStyle>()?.fontSize ?? 16;
                 return NativeDocumentPercentageMargin(
                   fractions: margin,
+                  collapsedTop: collapsedTop,
                   fixed: ownsFlexMargins
                       ? EdgeInsets.fromLTRB(
                           _fixedMargin(styles, 'left', fontSize),
@@ -3278,6 +3325,8 @@ class _NativeHtmlFactory extends WidgetFactory {
 
               return NativeDocumentBox(
                 geometryOwner: parsed.element,
+                geometryOwnerId:
+                    parsed.element.attributes['data-pirc-document-style'],
                 tightAllocationIsAuthoritative:
                     flexItem ||
                     _flexChildStyles(
@@ -3317,7 +3366,8 @@ class _NativeHtmlFactory extends WidgetFactory {
           'textarea',
         }.contains(tree.element.localName);
     if (!markdownStyles &&
-        (const {'block', 'flex', 'grid'}.contains(display) || blockified)) {
+        (const {'block', 'flex', 'grid', 'flow-root'}.contains(display) ||
+            blockified)) {
       _documentSizing(tree);
     }
     if (!markdownStyles && const {'flex', 'grid'}.contains(display)) {
@@ -3511,7 +3561,8 @@ class _NativeHtmlFactory extends WidgetFactory {
       );
       return;
     }
-    if (!markdownStyles && (display == 'block' || blockified)) {
+    if (!markdownStyles &&
+        (display == 'block' || display == 'flow-root' || blockified)) {
       tree.register(
         BuildOp(
           debugLabel: 'native-document-block-display',
@@ -3532,7 +3583,7 @@ class _NativeHtmlFactory extends WidgetFactory {
     final display = tree.getStyle('display')?.term;
     final nativeBlock =
         !markdownStyles &&
-        (const {'block', 'flex', 'grid'}.contains(display) ||
+        (const {'block', 'flex', 'grid', 'flow-root'}.contains(display) ||
             (_directDocumentFlexItem(tree.element) &&
                 const {'inline', 'inline-block', null}.contains(display) &&
                 !const {
