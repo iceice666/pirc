@@ -216,17 +216,19 @@ async fn a_real_agent_is_confined() {
     ]));
 
     let session = "pi_agent";
-    let prepared = sandbox
+    let mut prepared = sandbox
         .prepare(f.input(session, Some(socket.clone())))
         .await
         .unwrap();
-    let mut args = prepared.args.clone();
-    let end_of_options = args.iter().position(|a| a == "--").unwrap();
-    args.splice(end_of_options..end_of_options, bin_bash_args());
+    let end_of_options = prepared.args.iter().position(|a| a == "--").unwrap();
+    prepared
+        .args
+        .splice(end_of_options..end_of_options, bin_bash_args());
     let session_dir = f.config.sessions_dir.join(session);
-    let mut command = tokio::process::Command::new(&prepared.program);
+    // Keep the production descriptor mappings, including bubblewrap's seccomp
+    // filter; reconstructing just the program/args can read an unrelated fd.
+    let mut command = prepared.command().unwrap();
     command
-        .args(&args)
         .args(["--mode", "rpc", "--session-dir"])
         .arg(&session_dir)
         .env_clear()
