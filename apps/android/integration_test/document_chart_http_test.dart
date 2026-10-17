@@ -909,45 +909,21 @@ void main() {
           final earlyResize = obj(
             obj(resized['timing'])['afterTwoAnimationFrames'],
           );
-          // Keep the authored early read in the audit: a caught stale-layout
-          // exception is still a parity gap, even when settled paint is correct.
-          final hasResizeLayoutGap = resizeDiagnostics.isNotEmpty;
-          if (earlyResize['error'] == null) {
-            final referenceEarly = obj(
-              obj(
-                obj(expectedCase['resizeProbe'])['timing'],
-              )['afterTwoAnimationFrames'],
-            );
-            expect(referenceEarly['error'], isNull);
-            compare(obj(earlyResize['state']), obj(referenceEarly['state']));
-          }
-          if (hasResizeLayoutGap) {
-            // The frame boundary can repair the probe even while Chart's own
-            // callback still needs synchronous parent geometry after a write.
-            if (earlyResize['error'] != null) {
-              expect(earlyResize['error'], contains('stale'));
-              expect(earlyResize['state'], isNull);
-            } else {
-              expect(earlyResize['state'], isNotNull);
-            }
-            expect(
-              resizeDiagnostics,
-              everyElement(
-                isIn(const [
-                  'Native document geometry is unavailable until the matching layout is measured.',
-                  'Document geometry is stale after a document mutation',
-                ]),
-              ),
-            );
-          } else {
-            expect(earlyResize['error'], isNull);
-          }
+          // These authored block/reset cases now require clean stock resize,
+          // including the same-callback parent clientWidth read after writes.
+          expect(resizeDiagnostics, isEmpty);
+          expect(earlyResize['error'], isNull);
+          final referenceEarly = obj(
+            obj(
+              obj(expectedCase['resizeProbe'])['timing'],
+            )['afterTwoAnimationFrames'],
+          );
+          expect(referenceEarly['error'], isNull);
+          compare(obj(earlyResize['state']), obj(referenceEarly['state']));
           acceptance.add({
             'caseId': expectedCase['caseId'],
             'mode': mode,
-            'status': hasResizeLayoutGap
-                ? 'initial-accepted-resize-layout-gap'
-                : 'accepted',
+            'status': 'accepted',
             'initial': initial,
             'resized': resized,
             'diagnostics': document.scripts?.diagnostics,
@@ -966,10 +942,7 @@ void main() {
         acceptance.where(
           (item) =>
               item['mode'] == 'percent_width_reset_styles' &&
-              const [
-                'accepted',
-                'initial-accepted-resize-layout-gap',
-              ].contains(item['status']),
+              item['status'] == 'accepted',
         ),
         hasLength(4),
       );

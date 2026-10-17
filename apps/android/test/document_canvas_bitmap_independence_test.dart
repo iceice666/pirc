@@ -178,11 +178,83 @@ void main() {
       expect(spec.canvasEquivalentStyleWrites, isFalse, reason: source);
     }
   });
+
+  test(
+    'ordinary fixed blocks retain clientWidth under descendant size changes',
+    () {
+      for (final style in [
+        'width:350px',
+        'width:350px;padding:8px;border:3px solid;box-sizing:content-box',
+        'width:350px;padding:8px;border:3px solid;box-sizing:border-box;overflow:hidden',
+      ]) {
+        final spec = _specFor(
+          '<div id="parent" style="$style"><div style="width:100px;height:40px"></div></div>',
+        )['parent']!;
+        expect(
+          spec.clientWidthIndependentOfDescendantSizes,
+          isTrue,
+          reason: style,
+        );
+      }
+    },
+  );
+  test(
+    'clientWidth proof excludes intrinsic, scrollbar and unsupported sizing',
+    () {
+      for (final style in [
+        'width:auto',
+        'width:100%',
+        'width:350px;min-width:100px',
+        'width:350px;max-width:400px',
+        'width:350px;padding-left:10%',
+        'width:350px;display:inline-block',
+        'width:350px;display:flex',
+        'width:350px;display:grid',
+        'width:350px;position:absolute',
+        'width:350px;overflow:auto',
+        'width:350px;overflow:scroll',
+        'width:350px;overflow-x:hidden;overflow-y:visible',
+        'width:350px;columns:2',
+        'width:350px;aspect-ratio:1',
+      ]) {
+        final spec = _specFor(
+          '<div id="parent" style="$style"><div></div></div>',
+        )['parent']!;
+        expect(
+          spec.clientWidthIndependentOfDescendantSizes,
+          isFalse,
+          reason: style,
+        );
+      }
+      for (final wrapper in [
+        'display:flex',
+        'display:grid',
+        'display:inline-block',
+        'float:left',
+        'position:absolute',
+        'width:min-content',
+      ]) {
+        final spec = _specFor(
+          '<div style="$wrapper"><div id="parent" style="width:350px"></div></div>',
+        )['parent']!;
+        expect(
+          spec.clientWidthIndependentOfDescendantSizes,
+          isFalse,
+          reason: wrapper,
+        );
+      }
+      final dependent = _specFor(
+        '<div id="parent" style="width:350px"></div>',
+        canvasBitmapAttributesIndependent: false,
+      )['parent']!;
+      expect(dependent.clientWidthIndependentOfDescendantSizes, isFalse);
+    },
+  );
 }
 
 Map<String, NativeDocumentComputedStyleSpec> _specFor(
   String source, {
-  bool canvasBitmapAttributesIndependent = true,
+  bool? canvasBitmapAttributesIndependent,
 }) {
   final document = html.parse(source);
   final testIdsByScriptId = <String, String>{};
@@ -201,7 +273,9 @@ Map<String, NativeDocumentComputedStyleSpec> _specFor(
     stylesByElement: styles.stylesByElement,
     viewportWidth: 390,
     viewportHeight: 844,
-    canvasBitmapAttributesIndependent: canvasBitmapAttributesIndependent,
+    canvasBitmapAttributesIndependent:
+        canvasBitmapAttributesIndependent ??
+        styles.canvasBitmapAttributesIndependent,
   );
   return {
     for (final entry in testIdsByScriptId.entries)

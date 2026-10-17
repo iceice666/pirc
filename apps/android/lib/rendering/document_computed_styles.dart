@@ -27,6 +27,7 @@ class NativeDocumentComputedStyleSpec {
     this.resizeSupported = true,
     this.canvasBitmapSizeIndependent = false,
     this.canvasEquivalentStyleWrites = false,
+    this.clientWidthIndependentOfDescendantSizes = false,
   }) : values = Map<String, String>.unmodifiable(values),
        lengths = Map<String, String>.unmodifiable(lengths);
 
@@ -50,6 +51,10 @@ class NativeDocumentComputedStyleSpec {
   /// box-sizing, and numeric-pixel width/height. It does not authorize arbitrary
   /// style mutations: those values must still match the native computed style.
   final bool canvasEquivalentStyleWrites;
+
+  /// A fixed-width ordinary block without scrollbar/intrinsic sizing can retain
+  /// its measured clientWidth when only strict descendants' dimensions change.
+  final bool clientWidthIndependentOfDescendantSizes;
 
   /// False when custom-property data exceeded the helper's memory budget.
   /// Consumers should treat the computed-style declaration as unavailable.
@@ -492,6 +497,34 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
               (hasPercentWidthPixelHeight && ordinaryBlockCanvasPath)),
       canvasEquivalentStyleWrites:
           canvasBitmapAttributesIndependent && ordinaryBlockCanvasPath,
+      clientWidthIndependentOfDescendantSizes:
+          canvasBitmapAttributesIndependent &&
+          available &&
+          resizeSupported &&
+          element.namespaceUri == 'http://www.w3.org/1999/xhtml' &&
+          !_canvasSpecialLayoutAncestors.contains(name) &&
+          !const {
+            'html',
+            'body',
+            'progress',
+            'meter',
+            'marquee',
+          }.contains(name) &&
+          values['display'] == 'block' &&
+          _isNormalFlowPosition(values['position']) &&
+          _isNonNegativePixelLength(author['width']) &&
+          _hasNonFloatingCanvasAuthor(author) &&
+          !_hasUnsupportedCanvasSizingDeclarations(author) &&
+          _hasSimplePreferredCanvasSizes(author) &&
+          const {'visible', 'hidden', 'clip'}.contains(values['overflow-x']) &&
+          values['overflow-x'] == values['overflow-y'] &&
+          const [
+            'padding-left',
+            'padding-right',
+            'border-left-width',
+            'border-right-width',
+          ].every((property) => _isNonNegativePixelLength(lengths[property])) &&
+          _hasOrdinaryBlockAncestors(element, byElement, stylesByElement),
     );
     byElement[element] = spec;
     fontSizeReliableByElement[element] = fontSizeResult.supported;
@@ -509,6 +542,33 @@ bool _isNonNegativePixelLength(String? source) {
   }
   final number = double.tryParse(value.substring(0, value.length - 2));
   return number != null && number.isFinite && number >= 0;
+}
+
+bool _hasOrdinaryBlockAncestors(
+  dom.Element element,
+  Map<dom.Element, NativeDocumentComputedStyleSpec> computed,
+  Map<dom.Element, Map<String, String>> styles,
+) {
+  var ancestor = element.parent;
+  while (ancestor is dom.Element) {
+    final spec = computed[ancestor];
+    final author = styles[ancestor] ?? const <String, String>{};
+    if (_canvasSpecialLayoutAncestors.contains(ancestor.localName) ||
+        const {'progress', 'meter', 'marquee'}.contains(ancestor.localName) ||
+        ancestor.namespaceUri != 'http://www.w3.org/1999/xhtml' ||
+        spec == null ||
+        !spec.available ||
+        !spec.resizeSupported ||
+        spec.values['display'] != 'block' ||
+        !_isNormalFlowPosition(spec.values['position']) ||
+        !_hasNonFloatingCanvasAuthor(author) ||
+        _hasUnsupportedCanvasSizingDeclarations(author) ||
+        !_hasSimplePreferredCanvasSizes(author)) {
+      return false;
+    }
+    ancestor = ancestor.parent;
+  }
+  return true;
 }
 
 bool _isNonNegativePercentage(String? source) {

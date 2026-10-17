@@ -480,17 +480,69 @@ void main() {
     expect(fontStyle['font-family'], 'inherit');
     expect(fontStyle['font-size'], 'inherit');
     expect(fontStyle['line-height'], 'inherit');
+    expect(targetStyle['border-image-source'], 'none');
+    expect(targetStyle['border-image-slice'], '100%');
+    expect(targetStyle['border-image-width'], '1');
+    expect(targetStyle['border-image-outset'], '0');
+    expect(targetStyle['border-image-repeat'], 'stretch');
     expect(
-      result.diagnostics,
-      contains(
-        isA<NativeDocumentStyleDiagnostic>().having(
-          (diagnostic) => diagnostic.code,
-          'code',
-          'partial-shorthand-reset',
-        ),
-      ),
+      result.diagnostics.where((d) => d.code == 'partial-shorthand-reset'),
+      isEmpty,
     );
   });
+
+  test(
+    'border image resets obey cascade rank and preserve CSS-wide values',
+    () {
+      final document = html.parse('''
+      <div id="reset"></div><div id="later"></div><div id="important"></div>
+      <div id="specific"></div><div id="side"></div><div id="wide"></div>
+    ''');
+      final result = NativeDocumentStyleEngine(
+        stylesheets: [
+          NativeDocumentStylesheet('''
+          #reset { border-image-source: url(old.png); border-image-slice: 23;
+            border-image-width: 4; border-image-outset: 2;
+            border-image-repeat: round; border: 3px solid; }
+          #later { border: 3px solid; border-image-slice: 23; }
+          #important { border-image-slice: 23 !important; border: 3px solid; }
+          #important { border: 4px solid !important; border-image-slice: 42; }
+          #specific { border-image-slice: 23; }
+          div { border: 3px solid; }
+          #side { border-image-slice: 23; border-left: 4px dashed; }
+          #wide { border: inherit; }
+        ''', baseUrl: 'https://example.test/style.css'),
+        ],
+        viewportWidth: 390,
+        dark: false,
+      ).apply(document);
+      Map<String, String> style(String id) =>
+          result.stylesByElement[document.getElementById(id)]!;
+      expect(style('reset')['border-image-source'], 'none');
+      expect(style('reset')['border-image-slice'], '100%');
+      expect(style('reset')['border-image-width'], '1');
+      expect(style('reset')['border-image-outset'], '0');
+      expect(style('reset')['border-image-repeat'], 'stretch');
+      expect(style('later')['border-image-slice'], '23');
+      expect(style('important')['border-image-slice'], '100%');
+      expect(style('specific')['border-image-slice'], '23');
+      expect(style('side')['border-image-slice'], '23');
+      // CSS-wide values follow the existing explicit pass-through diagnostic;
+      // they must never silently become the initial border-image values.
+      for (final name in ['source', 'slice', 'width', 'outset', 'repeat']) {
+        final property = 'border-image-$name';
+        expect(style('wide')[property], 'inherit');
+        expect(
+          result.diagnostics.any(
+            (d) =>
+                d.code == 'unsupported-css-wide-keyword' &&
+                d.property == property,
+          ),
+          isTrue,
+        );
+      }
+    },
+  );
 
   test(
     'invalid color declarations do not replace earlier valid declarations',

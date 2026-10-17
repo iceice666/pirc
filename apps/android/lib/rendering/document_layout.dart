@@ -743,6 +743,13 @@ void _attachComputedStyles(
         spec.canvasBitmapSizeIndependent) {
       box['canvasBitmapSizeIndependent'] = true;
     }
+    if (box['kind'] == 'box' &&
+        surfaces.containsKey(id) &&
+        spec.available &&
+        spec.clientWidthIndependentOfDescendantSizes &&
+        box['clientWidth'] is num) {
+      box['clientWidthIndependentOfDescendantSizes'] = true;
+    }
     final exactDimensions = <String, double>{};
     final values = _resolvedComputedStyles(
       spec,

@@ -433,6 +433,15 @@ const _defaultBorderValues = <String, String>{
   'style': 'none',
   'color': 'currentcolor',
 };
+// `border` resets these longhands even though they cannot be set by its
+// syntax. Side-specific border shorthands leave them alone.
+const _initialBorderImageValues = <String, String>{
+  'border-image-source': 'none',
+  'border-image-slice': '100%',
+  'border-image-width': '1',
+  'border-image-outset': '0',
+  'border-image-repeat': 'stretch',
+};
 const _cssSystemColors = <String>{
   'accentcolor',
   'accentcolortext',
@@ -1590,15 +1599,25 @@ class _Cascade {
         );
       }
       if (property == 'border') {
-        _diagnostics.add(
-          NativeDocumentStyleDiagnostic(
-            code: 'partial-shorthand-reset',
-            message:
-                'Border shorthand does not reset border-image longhands in this engine.',
-            baseUrl: baseUrl,
-            property: property,
-          ),
-        );
+        final keyword = _expressionText(expression).toLowerCase();
+        final cssWide = _cssWideKeywords.contains(keyword);
+        for (final (index, entry)
+            in _initialBorderImageValues.entries.indexed) {
+          _offer(
+            element,
+            entry.key,
+            _Candidate(
+              valueExpression: cssWide ? expression : null,
+              value: cssWide ? keyword : entry.value,
+              important: declaration.important,
+              isInline: isInline,
+              specificity: specificity,
+              order: order,
+              suborder: targets.length + index,
+              baseUrl: baseUrl,
+            ),
+          );
+        }
       }
       return;
     }

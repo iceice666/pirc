@@ -37143,6 +37143,9 @@ function createPircDocumentLayout(options) {
   let revisionValue = 1;
   let lastGeneration = 0;
   let layoutSnapshot = null;
+  // A nonempty set can certify only an unaffected parent's clientWidth.
+  // null means an unproved mutation forbids every partial read until layout.
+  let pendingSizeMutationTargets = new Set();
   let installed = false;
   let observer = null;
   let scrollActionQueue = null;
@@ -37452,6 +37455,27 @@ function createPircDocumentLayout(options) {
     return true;
   }
 
+  function isSizeOnlyMutation(record, afterValue) {
+    const target = record?.target;
+    if (record?.type !== 'attributes' || record.attributeNamespace != null ||
+        target?.namespaceURI !== 'http://www.w3.org/1999/xhtml' || !isConnected(target)) return false;
+    if ((record.attributeName === 'width' || record.attributeName === 'height') &&
+        ['canvas', 'img'].includes(target.localName)) return true;
+    if (record.attributeName !== 'style') return false;
+    const before = simpleInlineDeclarations(record.oldValue);
+    const after = simpleInlineDeclarations(afterValue);
+    if (!before || !after) return false;
+    const beforeNames = [...before.keys()];
+    const afterExistingNames = [...after.keys()].filter(name => before.has(name));
+    if (beforeNames.length !== afterExistingNames.length ||
+        beforeNames.some((name, index) => name !== afterExistingNames[index])) return false;
+    for (const name of new Set([...before.keys(), ...after.keys()])) {
+      if (before.get(name) === after.get(name)) continue;
+      if ((name !== 'width' && name !== 'height') || !after.has(name)) return false;
+    }
+    return true;
+  }
+
   function consumeMutationRecords(records) {
     if (internalMutationDepth > 0 || !records || records.length === 0) return;
     // MutationRecord carries oldValue only. Recover each write's real successor
@@ -37462,8 +37486,7 @@ function createPircDocumentLayout(options) {
       const record = records[index];
       if (record?.type !== 'attributes' || record.attributeName !== 'style' ||
           record.attributeNamespace != null ||
-          record.target?.namespaceURI !== 'http://www.w3.org/1999/xhtml' ||
-          record.target?.localName !== 'canvas') continue;
+          record.target?.namespaceURI !== 'http://www.w3.org/1999/xhtml') continue;
       styleAfter.set(record,nextStyleBefore.has(record.target) ? nextStyleBefore.get(record.target) :
         readAttribute.call(record.target,'style'));
       nextStyleBefore.set(record.target,record.oldValue);
@@ -37485,7 +37508,11 @@ function createPircDocumentLayout(options) {
               readAttribute.call(record.target, record.attributeName)) === record.oldValue) continue;
       }
       relevant = true;
-      break;
+      if (pendingSizeMutationTargets !== null) {
+        if (isSizeOnlyMutation(record, styleAfter.get(record)) && pendingSizeMutationTargets.size < 5000) {
+          pendingSizeMutationTargets.add(record.target);
+        } else pendingSizeMutationTargets = null;
+      }
     }
     if (relevant) advanceRevision();
   }
@@ -37924,6 +37951,18 @@ function createPircDocumentLayout(options) {
   }
 
   function metric(element, name) {
+    if (name === 'clientWidth' && enabled && isConnected(element)) {
+      const current = currentRevision();
+      if (layoutSnapshot && layoutSnapshot.revision !== current &&
+          pendingSizeMutationTargets?.size > 0) {
+        const id = ownIdForElement(element), box = layoutSnapshot.boxes.get(id);
+        if (box?.element === element && box.kind === 'box' &&
+            box.clientWidthIndependentOfDescendantSizes === true &&
+            [...pendingSizeMutationTargets].every(target => target !== element && element.contains(target))) {
+          return box.metrics.clientWidth;
+        }
+      }
+    }
     const result = requireBox(element);
     if (result.detached || result.box.kind === 'none') return 0;
     if (element === documentRef.documentElement) {
@@ -38187,6 +38226,18 @@ function createPircDocumentLayout(options) {
         canvasEquivalentStyleWrites = source.canvasEquivalentStyleWrites;
       }
 
+      let clientWidthIndependentOfDescendantSizes = false;
+      if (Object.prototype.hasOwnProperty.call(source, 'clientWidthIndependentOfDescendantSizes')) {
+        if (typeof source.clientWidthIndependentOfDescendantSizes !== 'boolean' ||
+            source.kind !== 'box' || element.namespaceURI !== 'http://www.w3.org/1999/xhtml' ||
+            element === documentRef.documentElement || element === documentRef.body ||
+            !Object.prototype.hasOwnProperty.call(source, 'clientWidth') ||
+            !Number.isFinite(source.clientWidth) || source.clientWidth < 0) {
+          throw new TypeError(`${id}.clientWidthIndependentOfDescendantSizes requires a measured HTML box with clientWidth`);
+        }
+        clientWidthIndependentOfDescendantSizes = source.clientWidthIndependentOfDescendantSizes;
+      }
+
       const bounds = {};
       for (const name of ['x', 'y', 'width', 'height']) {
         if (Object.prototype.hasOwnProperty.call(source, name) || source.kind === 'box') {
@@ -38245,7 +38296,7 @@ function createPircDocumentLayout(options) {
         stagedBoxes.set(id, Object.freeze({
           id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset,
           ...(computedStyle === undefined ? {} : { computedStyle }), resize, element, revision,
-          canvasBitmapSizeIndependent, canvasEquivalentStyleWrites,
+          canvasBitmapSizeIndependent, canvasEquivalentStyleWrites, clientWidthIndependentOfDescendantSizes,
         }));
       } else {
         if (Object.prototype.hasOwnProperty.call(source, 'scroll')) {
@@ -38366,6 +38417,7 @@ function createPircDocumentLayout(options) {
     });
     for (const [id, element] of staged.elements) knownElements.set(id, element);
     lastGeneration = staged.generation;
+    pendingSizeMutationTargets = new Set();
     return {
       ok: true, revision: staged.revision, generation: staged.generation,
       scrollEvents: staged.scrollEvents.slice(), scrollChanges,
@@ -38428,7 +38480,10 @@ function createPircDocumentLayout(options) {
   const api = {
     install,
     revision: currentRevision,
-    invalidate: advanceRevision,
+    invalidate() {
+      pendingSizeMutationTargets = null;
+      return advanceRevision();
+    },
     runWithoutMutationInvalidation,
     needsLayout: layoutIsNeeded,
     status,

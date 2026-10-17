@@ -145,9 +145,9 @@ The same command also audits 16 responsive sizing cases from
 HTML and driver used by the browser. Four cases with `width:100%`, pixel height,
 and author `display:block;box-sizing:border-box` initialize without diagnostics
 and match native geometry and bar pixels even with omitted backing attributes.
-Container-only resizing reaches the expected final geometry and paint, but its
-the stock resize callback still raises a native layout error; it is recorded as a known
-gap, not full resize acceptance. The other 12 cases (initial inline display or
+Container-only resizing now requires matching early and settled geometry and
+paint without script diagnostics, including Chart's same-callback parent-width
+read after changing descendant sizes. The other 12 cases (initial inline display or
 no authored canvas size) retain the synchronous layout initialization gap.
 Recreate this separate browser reference with
 `node apps/android/tool/parity/capture_document_chart_responsive_layout_chromium153.mjs`.
@@ -166,8 +166,18 @@ DPR 1/3, light/dark. It checks Promise jobs, cancellation, nested frames, frame
 timestamps and actual native dimensions after earlier callbacks change width.
 Recreate its reference with
 `node apps/android/tool/parity/capture_document_frame_steps_chromium153.mjs`.
-This repairs layout between callbacks; synchronous writes and reads inside one
-callback remain a separate gap, including Chart.js's resize parent-width check.
+This repairs layout between callbacks. Within one callback, a measured fixed-width
+ordinary block can also retain its `clientWidth` after strict descendants' size
+changes when CSS cannot depend on those attributes and no scrollbar or intrinsic
+sizing is involved. Other metrics and newly changed geometry still require native
+layout; arbitrary synchronous writes and reads remain a separate gap.
+
+With the same server and define, `integration_test/document_layout_dependencies_test.dart`
+compares 32 browser/native cases: ordinary/nested blocks, content-box/border-box,
+phone/tablet, DPR 1/3 and light/dark. It reads parent `clientWidth` immediately
+after resizing a descendant, then compares actual native rectangles on the next
+frame. Recreate the reference with
+`node apps/android/tool/parity/capture_document_layout_dependencies_chromium153.mjs`.
 
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see
