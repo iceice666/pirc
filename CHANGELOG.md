@@ -4,6 +4,8 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-17
+
 The node protocol moves to 11: upgrade the gateway and every node together (a node on protocol 10 is refused, and a protocol 11 node by an older gateway). The gateway's database moves to schema 1004 and each node's to 2001 on first start (automatic); older versions refuse them afterwards, so keep a backup to downgrade. See [Upgrades](docs/deploy/upgrades.md).
 
 ### Added
@@ -202,7 +204,8 @@ This is the first tagged release. Earlier development used 0.1.0 without a publi
 - Linux/x86_64 binaries are not published or newly runtime-validated as part of this release. Nix packaging is retained.
 - Token allocations are estimates scaled to matching provider input usage, not exact per-section tokenizer counts.
 
-[Unreleased]: https://github.com/iceice666/pirc/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/iceice666/pirc/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/iceice666/pirc/releases/tag/v0.6.0
 [0.5.0]: https://github.com/iceice666/pirc/releases/tag/v0.5.0
 [0.4.1]: https://github.com/iceice666/pirc/releases/tag/v0.4.1
 [0.3.0]: https://github.com/iceice666/pirc/releases/tag/v0.3.0
