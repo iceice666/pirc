@@ -2584,6 +2584,66 @@ class _NativeHtmlFactory extends WidgetFactory {
       left.fontStyle == right.fontStyle &&
       left.fontFamily == right.fontFamily;
 
+  bool _canRelaxInlineReplacedWidth(BuildTree tree) {
+    // Percentages and deferred expressions need the original containing-block
+    // constraints. RichText's replaced-element path relaxes both inline axes,
+    // so retain normal paragraph constraints whenever one of these lengths
+    // could depend on that containing block.
+    for (final property in const [
+      'width',
+      'height',
+      'min-width',
+      'max-width',
+      'min-height',
+      'max-height',
+      'margin',
+      'margin-top',
+      'margin-right',
+      'margin-bottom',
+      'margin-left',
+      'padding',
+      'padding-top',
+      'padding-right',
+      'padding-bottom',
+      'padding-left',
+    ]) {
+      final expression = tree.getStyle(property)?.expression;
+      if (expression == null) continue;
+      final printer = css.CssPrinter();
+      expression.visit(printer);
+      final value = printer.toString().trim().toLowerCase();
+      if (value.isEmpty) continue;
+      if (value == 'inherit') return false;
+      if (value.contains('%') ||
+          value.contains('calc(') ||
+          value.contains('var(') ||
+          value.contains('min(') ||
+          value.contains('max(') ||
+          value.contains('clamp(')) {
+        return false;
+      }
+      for (final token in value.split(RegExp(r'\s+'))) {
+        if (const {
+          'auto',
+          'none',
+          'initial',
+          'inherit',
+          'unset',
+          'revert',
+          'revert-layer',
+        }.contains(token)) {
+          continue;
+        }
+        if (_flexLength(token, 16) == null) return false;
+      }
+    }
+    return true;
+  }
+
+  bool _hasRawInlineReplacedElement(dom.Element element) =>
+      const {'img', 'canvas'}.contains(element.localName) ||
+      element.querySelector('img, canvas') != null;
+
   List<dom.Element> _inlineWidgetElements(dom.Element root) {
     bool isInlineWidget(dom.Element element) {
       final sourceId = element.attributes['data-pirc-native'];
@@ -3163,7 +3223,15 @@ class _NativeHtmlFactory extends WidgetFactory {
     return 'native-static-${path.reversed.join('-')}';
   }
 
-  void _documentSizing(BuildTree tree) {
+  bool _ownsInlineReplacedBorderBox(BuildTree tree) =>
+      !markdownStyles &&
+      const {'img', 'canvas'}.contains(tree.element.localName) &&
+      !const {'block', 'flex', 'grid', 'flow-root'}.contains(
+        _flexChildStyles(tree.element)['display']?.trim().toLowerCase(),
+      ) &&
+      _documentUsesBorderBox(tree.element);
+
+  void _documentSizing(BuildTree tree, {bool inlineReplaced = false}) {
     const properties = [
       'width',
       'height',
@@ -3179,6 +3247,26 @@ class _NativeHtmlFactory extends WidgetFactory {
       final printer = css.CssPrinter();
       declaration.expression?.visit(printer);
       authored[property] = printer.toString().trim();
+    }
+    if (inlineReplaced) {
+      // parse() precedes the core style pass. Read the winning author map
+      // directly instead of caching an incomplete BuildTree style view.
+      final inlineStyles = _flexChildStyles(tree.element);
+      for (final property in properties) {
+        if (inlineStyles.containsKey(property)) {
+          authored[property] = inlineStyles[property]!;
+        }
+      }
+      // The core image/canvas defaults are registered after parse() begins.
+      // Preserve HTML dimensions when no author declaration overrides them.
+      for (final property in const ['width', 'height']) {
+        final attribute = int.tryParse(tree.element.attributes[property] ?? '');
+        if (!authored.containsKey(property) &&
+            attribute != null &&
+            attribute >= 0) {
+          authored[property] = '${attribute}px';
+        }
+      }
     }
     final styles = _flexChildStyles(tree.element);
     double fraction(String side, [String property = 'padding']) {
@@ -3292,6 +3380,18 @@ class _NativeHtmlFactory extends WidgetFactory {
               child: child,
             ),
           ),
+          onRenderInline: inlineReplaced
+              ? (parsed) {
+                  final bits = parsed.bits.whereType<WidgetBit>().toList();
+                  if (bits.length != 1) return;
+                  bits.single.child.wrapWith(
+                    (_, child) => NativeDocumentPercentagePadding(
+                      fractions: padding,
+                      child: child,
+                    ),
+                  );
+                }
+              : null,
         ),
       );
     }
@@ -3347,43 +3447,61 @@ class _NativeHtmlFactory extends WidgetFactory {
         ),
       );
     }
+    Widget sizedBox(BuildTree parsed, BuildContext context, Widget child) {
+      final resolved = parsed.inheritanceResolvers.resolve(context);
+      final fontSize = resolved.get<TextStyle>()?.fontSize ?? 16;
+      final item = _flexItem(parsed.element, true, fontSize);
+      NativeFlexLength? length(String property) =>
+          _flexLength(authored[property], fontSize);
+
+      return NativeDocumentBox(
+        geometryOwner: parsed.element,
+        geometryOwnerId: parsed.element.attributes['data-pirc-document-style'],
+        tightAllocationIsAuthoritative:
+            flexItem ||
+            _flexChildStyles(
+                  parsed.element.parent ?? parsed.element,
+                )['display'] ==
+                'grid',
+        lengthsAreContentBox: !borderBox,
+        intrinsicWidthIsMinimum: const {
+          'img',
+          'canvas',
+        }.contains(parsed.element.localName),
+        percentagePadding: padding,
+        fillWidth:
+            !inlineReplaced &&
+            !flexItem &&
+            !const {'img', 'canvas'}.contains(parsed.element.localName),
+        width: length('width'),
+        height: length('height'),
+        minWidth: length('min-width'),
+        maxWidth: length('max-width'),
+        minHeight: length('min-height'),
+        maxHeight: length('max-height'),
+        horizontalEdges: item.mainEdges,
+        verticalEdges: item.crossEdges,
+        child: child,
+      );
+    }
+
     tree.register(
       BuildOp(
         debugLabel: 'native-document-sizing',
         alwaysRenderBlock: false,
         priority: 5000005500000000,
-        onRenderBlock: (parsed, placeholder) =>
-            placeholder.wrapWith((context, child) {
-              final resolved = parsed.inheritanceResolvers.resolve(context);
-              final fontSize = resolved.get<TextStyle>()?.fontSize ?? 16;
-              final item = _flexItem(parsed.element, true, fontSize);
-              NativeFlexLength? length(String property) =>
-                  _flexLength(authored[property], fontSize);
-
-              return NativeDocumentBox(
-                geometryOwner: parsed.element,
-                geometryOwnerId:
-                    parsed.element.attributes['data-pirc-document-style'],
-                tightAllocationIsAuthoritative:
-                    flexItem ||
-                    _flexChildStyles(
-                          parsed.element.parent ?? parsed.element,
-                        )['display'] ==
-                        'grid',
-                lengthsAreContentBox: !borderBox,
-                percentagePadding: padding,
-                fillWidth: !flexItem,
-                width: length('width'),
-                height: length('height'),
-                minWidth: length('min-width'),
-                maxWidth: length('max-width'),
-                minHeight: length('min-height'),
-                maxHeight: length('max-height'),
-                horizontalEdges: item.mainEdges,
-                verticalEdges: item.crossEdges,
-                child: child,
-              );
-            }),
+        onRenderBlock: (parsed, placeholder) => placeholder.wrapWith(
+          (context, child) => sizedBox(parsed, context, child),
+        ),
+        onRenderInline: inlineReplaced
+            ? (parsed) {
+                final bits = parsed.bits.whereType<WidgetBit>().toList();
+                if (bits.length != 1) return;
+                bits.single.child.wrapWith(
+                  (context, child) => sizedBox(parsed, context, child),
+                );
+              }
+            : null,
       ),
     );
   }
@@ -3659,7 +3777,7 @@ class _NativeHtmlFactory extends WidgetFactory {
         _ownsFixedFlexMargins(tree.element)) {
       return;
     }
-    if (nativeBlock &&
+    if ((nativeBlock || _ownsInlineReplacedBorderBox(tree)) &&
         const {
           'width',
           'height',
@@ -3976,8 +4094,44 @@ class _NativeHtmlFactory extends WidgetFactory {
 
   @override
   void parse(BuildTree tree) {
-    if (!markdownStyles &&
-        const {'img', 'canvas'}.contains(tree.element.localName)) {
+    final rawReplacedElement =
+        !markdownStyles &&
+        const {'img', 'canvas'}.contains(tree.element.localName);
+    if (rawReplacedElement) {
+      tree.register(
+        BuildOp(
+          debugLabel: 'native-document-atomic-replaced-box',
+          alwaysRenderBlock: false,
+          // Use the same atomic build path as core's bordered inline boxes.
+          // Replaced elements own one padding/border/margin box, even when
+          // padding or margins alone would otherwise become sibling spacers.
+          priority: 5000002500000000,
+          onParsed: (parsed) {
+            if (parsed.isInline != true) return parsed;
+            final built = WidgetPlaceholder(
+              child: parsed.build(),
+              builder: (_, child) {
+                final baseline = NativeHtmlReplacedBaseline(child: child);
+                return _canRelaxInlineReplacedWidth(parsed)
+                    ? NativeHtmlInlineIntrinsicOverflow(
+                        intrinsicSize: Size.zero,
+                        useChildIntrinsicSize: true,
+                        child: baseline,
+                      )
+                    : baseline;
+              },
+            );
+            return parsed.parent.sub()
+              ..append(WidgetBit.inline(parsed, built))
+              // Retain a real line box for a sole inline replacement. The
+              // core shortcut would otherwise flatten it to a block widget.
+              ..append(WidgetBit.inline(parsed, const SizedBox.shrink()));
+          },
+        ),
+      );
+      if (_ownsInlineReplacedBorderBox(tree)) {
+        _documentSizing(tree, inlineReplaced: true);
+      }
       tree.register(
         BuildOp(
           debugLabel: 'native-document-replaced-bottom-baseline',
@@ -3990,6 +4144,28 @@ class _NativeHtmlFactory extends WidgetFactory {
             // its decoded image/error widget contains text with a top baseline.
             bits.single.child.wrapWith(
               (_, child) => NativeHtmlReplacedBaseline(child: child),
+            );
+          },
+        ),
+      );
+      tree.register(
+        BuildOp(
+          debugLabel: 'native-document-replaced-intrinsic-overflow',
+          alwaysRenderBlock: false,
+          // Atomic inline baselines include the outer margin box. Measure
+          // geometry inside margins, but expose overflow outside that box.
+          priority: 5000006100000000,
+          onRenderInline: (parsed) {
+            // Style defaults and the winning cascade are now fully parsed.
+            if (!_canRelaxInlineReplacedWidth(parsed)) return;
+            final bits = parsed.bits.whereType<WidgetBit>().toList();
+            if (bits.length != 1) return;
+            bits.single.child.wrapWith(
+              (_, child) => NativeHtmlInlineIntrinsicOverflow(
+                intrinsicSize: Size.zero,
+                useChildIntrinsicSize: true,
+                child: child,
+              ),
             );
           },
         ),
@@ -4761,6 +4937,9 @@ class _NativeHtmlFactory extends WidgetFactory {
             .any(
               (element) => element.attributes['type']?.toLowerCase() == 'file',
             );
+    final hasRawInlineReplacedElement =
+        !markdownStyles && _hasRawInlineReplacedElement(tree.element);
+    final hasInlineOverflow = hasFileControl || hasRawInlineReplacedElement;
     final clipping =
         [
           tree.getStyle('overflow')?.term,
@@ -4888,18 +5067,26 @@ class _NativeHtmlFactory extends WidgetFactory {
         .toList(growable: false);
 
     Widget processRichText(RichText source) {
+      // Flutter wraps an oversized first placeholder onto a second line.
+      // A paragraph containing only one atomic replaced element has no text
+      // wrap opportunity; retain its intrinsic width without an empty line.
+      final singleReplaced =
+          hasRawInlineReplacedElement &&
+          _inlineWidgetElements(tree.element).length == 1 &&
+          source.text.toPlainText(includePlaceholders: false).trim().isEmpty;
       final overflow =
-          hasFileControl && !clipping && source.overflow == TextOverflow.clip
+          hasInlineOverflow && !clipping && source.overflow == TextOverflow.clip
           ? TextOverflow.visible
           : null;
       if (!mathSlots.any((slot) => slot.buildMarker != null)) {
         // Keep the established no-math path for ordinary HTML and file
         // controls. In particular, do not put unrelated file placeholders
         // inside the TeX paragraph adapter.
-        return hasFileControl
+        return hasInlineOverflow
             ? NativeHtmlInlineOverflowRichText.fromRichText(
                 source,
                 overflow: overflow,
+                softWrap: singleReplaced ? false : null,
               )
             : source;
       }
@@ -4915,7 +5102,7 @@ class _NativeHtmlFactory extends WidgetFactory {
             ),
       );
       if (adapted is NativeMathParagraphContent) return adapted;
-      if (adapted is! RichText || !hasFileControl) return adapted;
+      if (adapted is! RichText || !hasInlineOverflow) return adapted;
       return NativeHtmlInlineOverflowRichText.fromRichText(
         adapted,
         overflow: overflow,

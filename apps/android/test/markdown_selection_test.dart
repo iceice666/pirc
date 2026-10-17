@@ -316,4 +316,65 @@ void main() {
     await t.pumpWidget(const SizedBox());
     expect(t.takeException(), isNull);
   });
+  testWidgets('selection survives an asynchronous inline image reflow', (
+    t,
+  ) async {
+    const pngBase64 =
+        'iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAYAAACinX6EAAAAQUlEQVR42u3QMQEAAAQAMGW0UlM+erBjBRbZNZ+FAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAAECBAgQcN8Cap6pADGo7g8AAAAASUVORK5CYII=';
+    final png = base64Decode(pngBase64);
+    var imageDecoded = false;
+    final revealImage = ValueNotifier<bool>(false);
+    addTearDown(revealImage.dispose);
+    final markdown = NativeMarkdown(
+      source: 'Before ![chart](images/chart.png) after\n\nTail paragraph',
+      imageBuilder: (_, _, _) => ValueListenableBuilder<bool>(
+        valueListenable: revealImage,
+        builder: (context, reveal, _) => Image.memory(
+          png,
+          frameBuilder: (context, child, frame, synchronous) {
+            if (frame != null) imageDecoded = true;
+            return reveal ? child : const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+    await t.pumpWidget(
+      MaterialApp(
+        theme: theme.build(Brightness.light),
+        home: Scaffold(
+          body: Padding(padding: const EdgeInsets.all(20), child: markdown),
+        ),
+      ),
+    );
+    await t.pumpAndSettle();
+
+    for (var turn = 0; turn < 20 && !imageDecoded; turn++) {
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 25)),
+      );
+      await t.pump();
+    }
+    await t.pumpAndSettle();
+    expect(imageDecoded, isTrue);
+
+    final region = t.state<SelectableRegionState>(
+      find.byType(SelectableRegion),
+    );
+    region.selectAll(SelectionChangedCause.keyboard);
+    await t.pump();
+    expect(
+      region.contextMenuButtonItems.map((item) => item.type),
+      contains(ContextMenuButtonType.copy),
+    );
+    revealImage.value = true;
+    await t.pumpAndSettle();
+    expect(find.byType(RawImage), findsOneWidget);
+    expect(t.getSize(find.byType(RawImage)), const Size(64, 32));
+    final copied = await copy(t, all: false);
+    expect(copied, contains('Before'));
+    expect(copied, contains('after'));
+    expect(copied, contains('Tail paragraph'));
+    expect(copied, isNot(contains('\uFFFC')));
+    expect(t.takeException(), isNull);
+  });
 }

@@ -27,7 +27,9 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** extend the supported computed-style
+- [ ] **Dynamic content compatibility:** implement real Canvas text measurement,
+      synchronous write/read layout support and resize observation for charts; extend
+      the supported computed-style
       properties, list-item/inline-fragment measurements and common-library coverage;
       signed/font-relative/empty-block and bottom-edge
       margin collapse, absolute/fixed/sticky positioning, unsupported relative-inset
@@ -88,6 +90,12 @@ outside the agreed scope.
   remain outside this initial surface. Generic native font-family names can differ
   from Chromium's resolved UA family names. Per-element and packet limits withhold
   complete declarations rather than truncate custom properties or discard geometry.
+- An actual Chart.js 4.5.1 production-runtime probe loads the library, but even
+  a fixed-size bar chart stops at unsupported Canvas `measureText`. Its default
+  responsive mode separately stops at a stale computed-style read after changing
+  canvas dimensions; `ResizeObserver` is also absent. These probes supply
+  synthetic native layout packets, so they establish script compatibility
+  blockers, not native rendering success. Chart.js support remains incomplete.
 - Arbitrary websites/frameworks, third-party cookie policies and full browser API
   coverage are not guaranteed. Preserve explicit unsupported errors and record
   real failures before expanding compatibility.
@@ -439,3 +447,61 @@ stale-frame rejection. Existing scroll, percentage-margin, relative-offset and
 moved-button checks remain covered. Browser references reproduced byte for byte
 in the dedicated test shell with network requests aborted. Physical-device,
 real-account/provider and remote-push acceptance remain pending.
+
+## Native image and canvas sizing follow-up
+
+Computed dimensions for atomic inline `img`, `canvas` and SVG roots use their
+actual native border boxes, with content-box edges removed where appropriate.
+Unmeasured replaced elements do not acquire dimensions from author declarations.
+Their percentage padding/margin reads use the real containing block when there
+is no owned sizing wrapper.
+
+Raw HTML image/canvas sizing now keeps natural dimensions in narrow containers,
+including `display:block`. Explicit dimensions and percentage `max-width` still
+control fitting; inline `border-box` no longer adds padding and borders twice.
+The inline overflow marker reads the child's live intrinsic size after image
+decode and retains bounded constraints for percentage/deferred expressions.
+Single replaced-element paragraphs avoid an artificial empty leading line.
+Auto-width block images/canvases derive height-constrained sizes from their actual
+intrinsic content ratio. Intrinsic dependencies are restored after containing-block
+invalidation, so an asynchronously decoded image can grow from its initial empty
+box even when its CSS height makes the child a tight relayout boundary.
+Markdown image fitting retains its existing path.
+
+The dedicated Chromium 153 capture covers eight cases at 390×844 and 768×1024
+(16 records), including real 64×32 PNG decoding, HTML dimensions, inline/block content/border
+boxes, padded percentage parents, hidden elements, intrinsic overflow, explicit
+max-width fitting, block auto sizing, height/max-height aspect ratios and
+replacements mixed with text and horizontal edges. Image/canvas dimensions, offsets and rectangles are compared
+directly. Atomic inline boxes keep their complete padding/border/margin model;
+CSS edge spacers cannot silently discard sizing or geometry capture.
+
+The remaining text-flow rounding differences are named in the oracle: three
+Arial line-flow parents have native content heights 76/194/104 px versus
+Chromium's 77/195/105 px. Their image/canvas dimensions and horizontal positions
+match. The first inline baseline differs by about 0.058 px; later vertical
+positions also inherit the preceding one-pixel line-height differences. These
+user-deferred details do not widen tolerances for other geometry or dimensions.
+The earlier fitted-image one-pixel line-box difference is fixed by the atomic
+baseline path.
+
+Image reflow can leave a paragraph briefly awaiting layout during selection
+registration. Selection ordering now catches only that specific layout
+assertion, keeps a temporary transform-based order and retries after layout,
+with bounded retries and selection endpoints retained by identity. Other
+assertions still propagate. The decoded-image reflow regression verifies a
+selection exists before the image is revealed and can still be copied afterward.
+
+Chart.js remains blocked by the separately recorded `measureText`, synchronous
+write/read and resize-observation gaps; these sizing fixes do not establish
+third-party chart-library compatibility. Physical-device/real-account acceptance
+and remote push remain pending as listed above.
+
+Verification for this follow-up: **4,753 Flutter tests** passed on the final
+source, including the 16 Chromium sizing records and the decoded-image selection
+regression. The final targeted sizing/selection run passed **48 tests**. Android
+local-HTTP acceptance passed with the shipped JavaScriptSandbox runtime and
+production fetched-document renderer: real PNG decoding, initial/content/border
+box dimensions, percentages, height-driven aspect ratios, retained computed
+styles, scroll/offset changes and moved-button interaction. This acceptance uses
+synthetic local data; it does not replace the real-account/physical-device checks.

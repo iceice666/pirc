@@ -79,6 +79,14 @@ with the dedicated Chromium reference. The production runtime and Android HTTP
 checks cover live read-only declarations, native dimensions and mutation fences.
 Computed styles are a supported subset; absent standard properties and stale
 frames fail explicitly. The detailed boundaries remain in the mobile plan.
+`document_replaced_styles_oracle_test.dart` compares decoded PNG/canvas intrinsic
+sizes, HTML dimensions, border-box edges, percentages, overflow and max-width
+fitting and height-driven aspect ratios with eight Chromium cases at two viewports. Small text-flow rounding
+differences are named in the test and mobile plan. The Android HTTP
+integration also reads canvas/image styles and rectangles through the shipped
+runtime after actual image decoding. Chart.js support remains incomplete; the
+concrete API blockers are recorded in the plan.
+
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see
 [the test browser guide](tool/parity/TEST_BROWSER.md).

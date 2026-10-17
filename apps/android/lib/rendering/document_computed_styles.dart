@@ -23,6 +23,7 @@ class NativeDocumentComputedStyleSpec {
     required this.fontSize,
     required this.rootFontSize,
     this.available = true,
+    this.isReplaced = false,
   }) : values = Map<String, String>.unmodifiable(values),
        lengths = Map<String, String>.unmodifiable(lengths);
 
@@ -30,6 +31,9 @@ class NativeDocumentComputedStyleSpec {
   final Map<String, String> lengths;
   final double fontSize;
   final double rootFontSize;
+
+  /// Atomic image/canvas/SVG roots have used dimensions even when inline.
+  final bool isReplaced;
 
   /// False when custom-property data exceeded the helper's memory budget.
   /// Consumers should treat the computed-style declaration as unavailable.
@@ -428,6 +432,7 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
       fontSize: fontSize,
       rootFontSize: rootFontSize,
       available: available,
+      isReplaced: const {'img', 'canvas', 'svg'}.contains(name),
     );
     byElement[element] = spec;
     fontSizeReliableByElement[element] = fontSizeResult.supported;

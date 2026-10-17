@@ -14,11 +14,13 @@ NativeDocumentComputedStyleSpec _spec({
     'box-sizing': 'content-box',
   },
   Map<String, String> lengths = const {},
+  bool isReplaced = false,
 }) => NativeDocumentComputedStyleSpec(
   values: values,
   lengths: lengths,
   fontSize: 16,
   rootFontSize: 16,
+  isReplaced: isReplaced,
 );
 
 void main() {
@@ -84,6 +86,75 @@ void main() {
     expect(styles['height'], '40px');
     expect(styles['margin-left'], '20px');
     expect(styles['padding-top'], '10px');
+  });
+
+  testWidgets('inline replaced sizes use the measured box and parent basis', (
+    tester,
+  ) async {
+    final controller = NativeDocumentLayoutController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      Align(
+        alignment: Alignment.topLeft,
+        child: NativeDocumentLayoutRoot(
+          controller: controller,
+          revision: 1,
+          knownIds: const {'image', 'missing'},
+          computedStyles: {
+            'image': _spec(
+              isReplaced: true,
+              values: {
+                'display': 'inline',
+                'box-sizing': 'content-box',
+                for (final side in ['top', 'right', 'bottom', 'left'])
+                  'border-$side-width': '0px',
+              },
+              lengths: {
+                'width': '999px',
+                'height': '999px',
+                for (final side in ['top', 'right', 'bottom', 'left'])
+                  'padding-$side': '5%',
+                'margin-left': '10%',
+              },
+            ),
+            'missing': _spec(
+              isReplaced: true,
+              values: {'display': 'inline'},
+              lengths: {'width': '900px', 'height': '999px'},
+            ),
+          },
+          child: NativeDocumentContainingBlock(
+            width: 200,
+            height: 100,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: NativeDocumentLayoutElement(
+                controller: controller,
+                revision: 1,
+                id: 'image',
+                child: const SizedBox(width: 100, height: 50),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final packet = controller.capture(
+      revision: 1,
+      generation: 1,
+      viewport: const Size(400, 300),
+    )!;
+    final boxes = {
+      for (final raw in packet['boxes'] as List) (raw as Map)['id']: raw,
+    };
+    final styles = boxes['image']!['computedStyle'] as Map;
+    expect(styles['width'], '80px');
+    expect(styles['height'], '30px');
+    expect(styles['padding-top'], '10px');
+    expect(styles['margin-left'], '20px');
+    expect(boxes['missing']!['kind'], 'unsupported');
+    expect(boxes['missing']!['computedStyle'], isNot(contains('width')));
+    expect(boxes['missing']!['computedStyle'], isNot(contains('height')));
   });
 
   testWidgets(

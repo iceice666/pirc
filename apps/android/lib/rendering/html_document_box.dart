@@ -273,6 +273,7 @@ class NativeDocumentBox extends SingleChildRenderObjectWidget {
     this.maxHeight,
     this.applySizing = true,
     this.fillWidth = true,
+    this.intrinsicWidthIsMinimum = false,
     this.tightAllocationIsAuthoritative = false,
     this.lengthsAreContentBox = false,
     this.horizontalEdges = 0,
@@ -291,6 +292,10 @@ class NativeDocumentBox extends SingleChildRenderObjectWidget {
   final double horizontalEdges;
   final double verticalEdges;
   final bool fillWidth;
+
+  /// Replaced elements keep their natural width unless CSS constrains it.
+  /// Core's min-width:0 wrapper must not turn them into shrink-to-fit text.
+  final bool intrinsicWidthIsMinimum;
   final bool applySizing;
   final bool tightAllocationIsAuthoritative;
   final bool lengthsAreContentBox;
@@ -766,8 +771,50 @@ class _RenderDocumentBox extends RenderProxyBox {
       // A flex item's automatic cross size is shrink-to-fit. Core's inner
       // block sizing can otherwise fill the entire loose width before its
       // decoration is measured, even when the parent requests flex-start.
-      final minimum = child!.getMinIntrinsicWidth(double.infinity);
-      final preferred = child!.getMaxIntrinsicWidth(double.infinity);
+      double? intrinsicHeight;
+      if (spec.intrinsicWidthIsMinimum) {
+        final edges = _verticalEdges(containingWidth);
+        intrinsicHeight = _outerLength(spec.height, containingHeight, edges);
+        if (intrinsicHeight == null &&
+            (spec.minHeight != null || spec.maxHeight != null)) {
+          final naturalHeight = child!.getMaxIntrinsicHeight(double.infinity);
+          if (naturalHeight.isFinite) {
+            final lower = math.max(
+              edges,
+              _outerLength(spec.minHeight, containingHeight, edges) ?? 0,
+            );
+            final upper = math.max(
+              lower,
+              _outerLength(spec.maxHeight, containingHeight, edges) ??
+                  double.infinity,
+            );
+            intrinsicHeight = naturalHeight.clamp(lower, upper).toDouble();
+          }
+        }
+      }
+      // Query natural dimensions independently. Image-provider and clipping
+      // wrappers may ignore a finite-height intrinsic-width query (or return
+      // zero), so derive the replaced content ratio from their real intrinsic
+      // axes and keep the owned padding/border edges outside that ratio.
+      var preferred = child!.getMaxIntrinsicWidth(double.infinity);
+      if (spec.intrinsicWidthIsMinimum && intrinsicHeight != null) {
+        final naturalHeight = child!.getMaxIntrinsicHeight(double.infinity);
+        final horizontal = _horizontalEdges(containingWidth);
+        final vertical = _verticalEdges(containingWidth);
+        if (preferred.isFinite &&
+            naturalHeight.isFinite &&
+            preferred >= horizontal &&
+            naturalHeight > vertical) {
+          preferred =
+              horizontal +
+              (preferred - horizontal) *
+                  math.max(0.0, intrinsicHeight - vertical) /
+                  (naturalHeight - vertical);
+        }
+      }
+      final minimum = spec.intrinsicWidthIsMinimum
+          ? preferred
+          : child!.getMinIntrinsicWidth(double.infinity);
       final available = constraints.maxWidth;
       final fit = math.min(math.max(minimum, available), preferred);
       if (fit.isFinite) width = NativeFlexLength.pixels(fit);
@@ -965,6 +1012,14 @@ class _RenderDocumentBox extends RenderProxyBox {
       } else {
         child!.layout(childConstraints, parentUsesSize: true);
         size = constraints.constrain(child!.size);
+        if (spec.intrinsicWidthIsMinimum && spec.width == null) {
+          // Publishing a changed containing block invalidates child caches.
+          // Restore the intrinsic dependency after that invalidation/layout:
+          // a later image decode must resize this auto-width box even when
+          // its initially empty image received tight width/height constraints.
+          child!.getMaxIntrinsicWidth(double.infinity);
+          child!.getMaxIntrinsicHeight(double.infinity);
+        }
       }
     } finally {
       _layoutContextActive = false;
@@ -1461,32 +1516,11 @@ nativeDocumentComputedBoxMetrics(RenderBox surface) {
   }
   final width = box.containingBlockWidth;
   final percentageWidth = width != null && width.isFinite ? width : 0.0;
-  double? usedContainingHeight;
-  RenderObject? ancestor = box.parent;
-  while (ancestor != null) {
-    if (ancestor is _RenderDocumentBox) {
-      final child = ancestor.child;
-      if (child != null && child.attached && child.hasSize) {
-        final parentWidth = ancestor.containingBlockWidth ?? 0;
-        usedContainingHeight = math.max(
-          0,
-          child.size.height -
-              ancestor.spec.verticalEdges -
-              ancestor.spec.percentagePadding.vertical * parentWidth,
-        );
-      }
-      break;
-    }
-    if (ancestor is _RenderNativeDocumentContainingBlock) {
-      usedContainingHeight = ancestor.contentHeight;
-      break;
-    }
-    ancestor = ancestor.parent;
-  }
+  final containing = nativeDocumentContainingBlockMetrics(box);
   return (
     containingWidth: width,
     containingHeight: box.containingBlockHeight,
-    usedContainingHeight: usedContainingHeight,
+    usedContainingHeight: containing?.usedHeight,
     horizontalEdges:
         box.spec.horizontalEdges +
         box.spec.percentagePadding.horizontal * percentageWidth,
@@ -1494,4 +1528,50 @@ nativeDocumentComputedBoxMetrics(RenderBox surface) {
         box.spec.verticalEdges +
         box.spec.percentagePadding.vertical * percentageWidth,
   );
+}
+
+/// Reads the real containing block of an atomic inline surface that has no
+/// owned sizing wrapper. This supplies percentage bases only; it never borrows
+/// another element's box edges or substitutes ancestor dimensions for its own.
+({double? width, double? height, double? usedHeight})?
+nativeDocumentContainingBlockMetrics(RenderBox surface) {
+  RenderObject? ancestor = surface.parent;
+  while (ancestor != null) {
+    if (ancestor is _RenderDocumentBox) {
+      final child = ancestor.child;
+      if (!ancestor.attached ||
+          !ancestor.hasSize ||
+          child == null ||
+          !child.attached ||
+          !child.hasSize) {
+        return null;
+      }
+      final parentWidth = ancestor.containingBlockWidth ?? 0;
+      final usedHeight = math.max(
+        0.0,
+        child.size.height -
+            ancestor.spec.verticalEdges -
+            ancestor.spec.percentagePadding.vertical * parentWidth,
+      );
+      return (
+        width: ancestor.contentWidth,
+        height: ancestor.contentHeight,
+        usedHeight: usedHeight,
+      );
+    }
+    if (ancestor is _RenderNativeDocumentContainingBlock) {
+      if (!ancestor.attached || !ancestor.hasSize) return null;
+      return (
+        width: ancestor.contentWidth,
+        height: ancestor.contentHeight,
+        usedHeight:
+            ancestor.contentHeight ??
+            ((ancestor.child?.hasSize ?? false)
+                ? ancestor.child!.size.height
+                : null),
+      );
+    }
+    ancestor = ancestor.parent;
+  }
+  return null;
 }

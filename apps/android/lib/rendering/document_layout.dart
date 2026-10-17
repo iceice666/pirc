@@ -679,6 +679,12 @@ Map<String, String> _resolvedComputedStyles(
   final metrics = surface == null
       ? null
       : nativeDocumentComputedBoxMetrics(surface);
+  final containing = metrics == null && spec.isReplaced && surface != null
+      ? nativeDocumentContainingBlockMetrics(surface)
+      : null;
+  final containingWidth = metrics?.containingWidth ?? containing?.width;
+  final usedContainingHeight =
+      metrics?.usedContainingHeight ?? containing?.usedHeight;
   double? length(String raw, {double? basis}) {
     final value = nativeComputedCssLength(
       raw,
@@ -721,7 +727,9 @@ Map<String, String> _resolvedComputedStyles(
 
   final display = values['display'];
   final usesComputedDimensions =
-      noBox || display == 'inline' || display == 'contents';
+      noBox ||
+      (display == 'inline' && !spec.isReplaced) ||
+      display == 'contents';
   for (final entry in spec.lengths.entries) {
     final name = entry.key;
     if (const {'top', 'right', 'bottom', 'left'}.contains(name)) continue;
@@ -730,7 +738,7 @@ Map<String, String> _resolvedComputedStyles(
     final isMarginOrPadding =
         name.startsWith('margin-') || name.startsWith('padding-');
     if (!noBox && name.startsWith('margin-') && entry.value == 'auto') continue;
-    final basis = isMarginOrPadding ? metrics?.containingWidth : null;
+    final basis = isMarginOrPadding ? containingWidth : null;
     final value = computedLength(
       entry.value,
       basis: basis,
@@ -741,7 +749,7 @@ Map<String, String> _resolvedComputedStyles(
   // Real border-box dimensions include native constraints, min/max sizes,
   // flex/grid allocation, and fractional padding. Never use authored width
   // as a substitute for the result of layout.
-  if (!noBox && metrics != null && surface != null) {
+  if (!noBox && surface != null && (metrics != null || spec.isReplaced)) {
     final borderBox = values['box-sizing'] == 'border-box';
     final borders = <String, double?>{
       for (final side in const ['top', 'right', 'bottom', 'left'])
@@ -766,18 +774,22 @@ Map<String, String> _resolvedComputedStyles(
               borders['right']! +
               padding['left']! +
               padding['right']!
-        : metrics.horizontalEdges;
+        : metrics?.horizontalEdges;
     final verticalEdges = knownEdges
         ? borders['top']! +
               borders['bottom']! +
               padding['top']! +
               padding['bottom']!
-        : metrics.verticalEdges;
-    final width = surface.size.width - (borderBox ? 0 : horizontalEdges);
-    final height = surface.size.height - (borderBox ? 0 : verticalEdges);
-    if (width.isFinite) values['width'] = px(width.clamp(0, double.infinity));
-    if (height.isFinite) {
-      values['height'] = px(height.clamp(0, double.infinity));
+        : metrics?.verticalEdges;
+    if (borderBox || horizontalEdges != null) {
+      final width = surface.size.width - (borderBox ? 0 : horizontalEdges!);
+      if (width.isFinite) values['width'] = px(width.clamp(0, double.infinity));
+    }
+    if (borderBox || verticalEdges != null) {
+      final height = surface.size.height - (borderBox ? 0 : verticalEdges!);
+      if (height.isFinite) {
+        values['height'] = px(height.clamp(0, double.infinity));
+      }
     }
   }
   final relative = values['position'] == 'relative' && !noBox;
@@ -789,9 +801,7 @@ Map<String, String> _resolvedComputedStyles(
         !spec.lengths.containsKey(pair[1])) {
       continue;
     }
-    final basis = pair.first == 'left'
-        ? metrics?.containingWidth
-        : metrics?.usedContainingHeight;
+    final basis = pair.first == 'left' ? containingWidth : usedContainingHeight;
     double? resolved(String name) {
       final raw = spec.lengths[name] ?? 'auto';
       return raw == 'auto' ? null : length(raw, basis: basis);

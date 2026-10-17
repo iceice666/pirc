@@ -13,7 +13,11 @@ import 'package:pirc_mobile/rendering/html_form_submission.dart';
 import 'package:pirc_mobile/rendering/native_html.dart';
 import 'package:pirc_mobile/theme.dart';
 
-const _page = r'''<!doctype html><html id="root"><head><style>
+const _replacedPng =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAYAAACinX6EAAAAQUlEQVR42u3QMQEAAAQAMGW0UlM+erBjBRbZNZ+FAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAAECBAgQcN8Cap6pADGo7g8AAAAASUVORK5CYII=';
+
+final _page =
+    r'''<!doctype html><html id="root"><head><style>
 html,body{margin:0;padding:0}#parent{position:relative;width:180px;height:120px;
 padding:7px 9px;border:4px solid;overflow:auto}
 #content{width:400px;height:600px;padding-top:60px}
@@ -26,6 +30,10 @@ padding:7px 9px;border:4px solid;overflow:auto}
 #flex{display:flex;width:200px;height:20px}#flex-child{width:40px;height:10px}
 #grid{display:grid;grid-template-columns:100px 100px;width:200px;height:20px}#grid-child{height:10px}
 #relative-target{position:relative;left:-7.5px;top:5px;width:90px;height:30px}
+#replaced-content-canvas{width:100px;height:50px;padding:4px;border:2px solid;margin:0}
+#replaced-border-image{box-sizing:border-box;width:120px;height:60px;padding:5px;border:3px solid;margin:0}
+#replaced-percentage-parent{width:200px;height:100px;padding:10px;border:2px solid;margin:0}
+#replaced-percentage-image{width:50%;height:50%;margin:0}
 </style></head><body id="body"><div id="parent"><div id="content">
 <div id="target"></div></div></div><pre id="probe">WAIT</pre>
 <button type="button" id="scroll">Scroll</button><button type="button" id="read">Read</button><button type="button" id="change">Change</button>
@@ -34,10 +42,19 @@ padding:7px 9px;border:4px solid;overflow:auto}
 <div id="relative-parent"><div id="relative-target"><button type="button" id="moved">Moved</button></div></div>
 <div id="flex"><span id="flex-child"></span></div>
 <div id="grid"><span id="grid-child"></span><span></span></div>
+<div id="replaced-cases"><canvas id="replaced-default-canvas"></canvas>
+<canvas id="replaced-content-canvas"></canvas>
+<img id="replaced-border-image" src="__REPLACED_PNG__">
+<div id="replaced-percentage-parent"><img id="replaced-percentage-image" src="__REPLACED_PNG__"></div>
+<canvas id="replaced-height-canvas" style="display:block;height:100px"></canvas>
+<img id="replaced-height-image" src="__REPLACED_PNG__" style="display:block;height:50px">
+</div>
 <script>
 window.relativeHits=0;window.relativeMutation=null;window.computedMutation=null;
 window.retainedRelativeStyle=getComputedStyle(document.getElementById('relative-parent'));
-window.readComputed=function(){var e=document.getElementById('target'),s=getComputedStyle(e),r=window.retainedRelativeStyle,readonly='NO_ERROR';try{r.setProperty('left','99px')}catch(error){readonly=error.name}return {width:s.width,height:s.height,flexDisplay:getComputedStyle(document.getElementById('flex-child')).display,flexWidth:getComputedStyle(document.getElementById('flex-child')).width,gridDisplay:getComputedStyle(document.getElementById('grid-child')).display,gridWidth:getComputedStyle(document.getElementById('grid-child')).width,fontSize:s.fontSize,color:s.color,marginLeft:s.marginLeft,parentWidth:r.width,parentHeight:r.height,parentColor:r.color,childColor:getComputedStyle(document.getElementById('relative-target')).color,paddingLeft:r.paddingLeft,borderLeft:r.borderLeftWidth,left:r.left,right:r.right,cssText:r.cssText,distinct:r!==getComputedStyle(document.getElementById('relative-parent')),readonly:readonly,stale:window.computedMutation}};
+window.readReplaced=function(){function details(id,isImage){var e=document.getElementById(id),s=getComputedStyle(e),r=e.getBoundingClientRect();return {width:s.width,height:s.height,boxSizing:s.boxSizing,paddingLeft:s.paddingLeft,borderLeftWidth:s.borderLeftWidth,rect:r.toJSON(),offsetWidth:e.offsetWidth,offsetHeight:e.offsetHeight,complete:isImage?e.complete:null,naturalWidth:isImage?e.naturalWidth:null,naturalHeight:isImage?e.naturalHeight:null}}return {defaultCanvas:details('replaced-default-canvas',false),contentCanvas:details('replaced-content-canvas',false),borderBoxImage:details('replaced-border-image',true),percentageParent:details('replaced-percentage-parent',false),percentageImage:details('replaced-percentage-image',true),heightCanvas:details('replaced-height-canvas',false),heightImage:details('replaced-height-image',true)}};
+window.replacedImagesReady=function(){var a=document.getElementById('replaced-border-image'),b=document.getElementById('replaced-percentage-image'),c=document.getElementById('replaced-height-image');return c.complete&&c.naturalWidth===64&&c.naturalHeight===32&&a.complete&&a.naturalWidth===64&&a.naturalHeight===32&&b.complete&&b.naturalWidth===64&&b.naturalHeight===32};
+window.readComputed=function(){var e=document.getElementById('target'),s=getComputedStyle(e),r=window.retainedRelativeStyle,readonly='NO_ERROR';try{r.setProperty('left','99px')}catch(error){readonly=error.name}return {width:s.width,height:s.height,flexDisplay:getComputedStyle(document.getElementById('flex-child')).display,flexWidth:getComputedStyle(document.getElementById('flex-child')).width,gridDisplay:getComputedStyle(document.getElementById('grid-child')).display,gridWidth:getComputedStyle(document.getElementById('grid-child')).width,fontSize:s.fontSize,color:s.color,marginLeft:s.marginLeft,parentWidth:r.width,parentHeight:r.height,parentColor:r.color,childColor:getComputedStyle(document.getElementById('relative-target')).color,paddingLeft:r.paddingLeft,borderLeft:r.borderLeftWidth,left:r.left,right:r.right,cssText:r.cssText,distinct:r!==getComputedStyle(document.getElementById('relative-parent')),readonly:readonly,stale:window.computedMutation,replaced:window.replacedImagesReady()?window.readReplaced():null,imageErrors:window.replacedImageErrors}};
 window.readRelative=function(){var p=document.getElementById('relative-parent'),c=document.getElementById('relative-target'),r=p.getBoundingClientRect(),q=c.getBoundingClientRect();return {parentX:r.x,gapX:q.x-r.x,gapY:q.y-r.y,top:c.offsetTop,left:c.offsetLeft,parentIdentity:c.offsetParent===p,hits:window.relativeHits,stale:window.relativeMutation}};
 window.readPercent=function(){var p=document.getElementById('percent-parent'),c=document.getElementById('percent-child'),o=document.getElementById('percent-outer');return {
  gap:p.getBoundingClientRect().y-o.getBoundingClientRect().y,
@@ -55,6 +72,10 @@ window.readOffsets=function(){var e=document.getElementById('target');return {
  scrollLeft:document.getElementById('parent').scrollLeft,percent:readPercent(),relative:readRelative(),computed:readComputed()
 }};
 window.offsetMutation=null;window.percentMutation=null;window.initialOffsets=readOffsets();
+window.replacedImageErrors=[];
+document.getElementById('replaced-border-image').decode().catch(function(e){window.replacedImageErrors.push(e.name+': '+e.message)});
+document.getElementById('replaced-percentage-image').decode().catch(function(e){window.replacedImageErrors.push(e.name+': '+e.message)});
+document.getElementById('replaced-height-image').decode().catch(function(e){window.replacedImageErrors.push(e.name+': '+e.message)});
 document.addEventListener('DOMContentLoaded',function(){
  document.getElementById('probe').textContent=JSON.stringify(initialOffsets);
 });
@@ -80,7 +101,8 @@ document.getElementById('percent').onclick=function(){
  document.getElementById('percent-parent').style.width='300px';
  try{document.getElementById('percent-child').offsetTop;window.percentMutation='NO_ERROR'}catch(e){window.percentMutation=e.name}
 };
-</script></body></html>''';
+</script></body></html>'''
+        .replaceAll('__REPLACED_PNG__', _replacedPng);
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -185,7 +207,43 @@ void main() {
               .text,
         ),
       );
+      bool imagesAreDecoded(Json values) {
+        for (final id in ['borderBoxImage', 'percentageImage', 'heightImage']) {
+          final image = obj(values[id]);
+          if (image['complete'] != true ||
+              image['naturalWidth'] != 64 ||
+              image['naturalHeight'] != 32) {
+            return false;
+          }
+        }
+        return true;
+      }
+
+      bool computedImagesDecoded() {
+        try {
+          return imagesAreDecoded(
+            obj(obj(observation()['computed'])['replaced']),
+          );
+        } catch (_) {
+          return false;
+        }
+      }
+
       await ready();
+      // Image completion can arrive before its native layout frame. Read only
+      // in separate user turns after pumping; a load callback must not perform
+      // synchronous geometry reads against a potentially stale frame.
+      for (var attempt = 0; attempt < 100; attempt++) {
+        await t.tap(find.text('Read', findRichText: true));
+        await t.pump(const Duration(milliseconds: 100));
+        if (computedImagesDecoded()) break;
+      }
+      expect(
+        computedImagesDecoded(),
+        isTrue,
+        reason:
+            'Both runtime PNGs decode before measuring replaced boxes: ${jsonEncode(observation())}; diagnostics=${document.scripts?.diagnostics}',
+      );
       final initial = observation();
       expect(initial['parent'], 'parent');
       expect(initial['parentIdentity'], true);
@@ -225,6 +283,57 @@ void main() {
         initialComputed,
         containsPair('readonly', 'NoModificationAllowedError'),
       );
+      expect(initialComputed['imageErrors'], isEmpty);
+      final replaced = obj(initialComputed['replaced']);
+      final defaultCanvas = obj(replaced['defaultCanvas']);
+      expect(defaultCanvas['width'], '300px');
+      expect(defaultCanvas['height'], '150px');
+      expect(obj(defaultCanvas['rect'])['width'], 300);
+      expect(obj(defaultCanvas['rect'])['height'], 150);
+      final contentCanvas = obj(replaced['contentCanvas']);
+      expect(contentCanvas['width'], '100px');
+      expect(contentCanvas['height'], '50px');
+      expect(contentCanvas['boxSizing'], 'content-box');
+      expect(contentCanvas['paddingLeft'], '4px');
+      expect(contentCanvas['borderLeftWidth'], '2px');
+      expect(obj(contentCanvas['rect'])['width'], 112);
+      expect(obj(contentCanvas['rect'])['height'], 62);
+      final borderBoxImage = obj(replaced['borderBoxImage']);
+      expect(borderBoxImage['width'], '120px');
+      expect(borderBoxImage['height'], '60px');
+      expect(borderBoxImage['boxSizing'], 'border-box');
+      expect(borderBoxImage['paddingLeft'], '5px');
+      expect(borderBoxImage['borderLeftWidth'], '3px');
+      expect(obj(borderBoxImage['rect'])['width'], 120);
+      expect(obj(borderBoxImage['rect'])['height'], 60);
+      expect(borderBoxImage['complete'], true);
+      expect(borderBoxImage['naturalWidth'], 64);
+      expect(borderBoxImage['naturalHeight'], 32);
+      final heightCanvas = obj(replaced['heightCanvas']);
+      expect(heightCanvas['width'], '200px');
+      expect(heightCanvas['height'], '100px');
+      expect(obj(heightCanvas['rect'])['width'], 200);
+      expect(obj(heightCanvas['rect'])['height'], 100);
+      final heightImage = obj(replaced['heightImage']);
+      expect(heightImage['width'], '100px');
+      expect(heightImage['height'], '50px');
+      expect(obj(heightImage['rect'])['width'], 100);
+      expect(obj(heightImage['rect'])['height'], 50);
+      final percentageParent = obj(replaced['percentageParent']);
+      expect(percentageParent['width'], '200px');
+      expect(percentageParent['height'], '100px');
+      expect(percentageParent['paddingLeft'], '10px');
+      expect(percentageParent['borderLeftWidth'], '2px');
+      expect(obj(percentageParent['rect'])['width'], 224);
+      expect(obj(percentageParent['rect'])['height'], 124);
+      final percentageImage = obj(replaced['percentageImage']);
+      expect(percentageImage['width'], '100px');
+      expect(percentageImage['height'], '50px');
+      expect(obj(percentageImage['rect'])['width'], 100);
+      expect(obj(percentageImage['rect'])['height'], 50);
+      expect(percentageImage['complete'], true);
+      expect(percentageImage['naturalWidth'], 64);
+      expect(percentageImage['naturalHeight'], 32);
       final initialRelative = obj(initial['relative']);
       expect(initialRelative['parentX'], 30);
       expect(initialRelative['gapX'], -.5);
@@ -338,7 +447,7 @@ void main() {
       expect(failures, isEmpty);
       expect(t.takeException(), isNull);
       debugPrintSynchronously(
-        'PIRC_OFFSET_ACCEPTANCE ${jsonEncode({'initial': initial, 'scrolled': scrolled, 'changed': changed, 'parentScriptId': parentScriptId, 'stale': stale, 'percentChanged': percentChanged, 'relativeChanged': relativeChanged, 'computedChanged': changedComputed, 'moved': moved, 'failures': failures})}',
+        'PIRC_OFFSET_ACCEPTANCE ${jsonEncode({'initial': initial, 'replaced': replaced, 'scrolled': scrolled, 'changed': changed, 'parentScriptId': parentScriptId, 'stale': stale, 'percentChanged': percentChanged, 'relativeChanged': relativeChanged, 'computedChanged': changedComputed, 'moved': moved, 'failures': failures})}',
       );
     } finally {
       await t.pumpWidget(const SizedBox.shrink());

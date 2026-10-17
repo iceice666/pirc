@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 
 import 'document_element_scroll.dart';
 
-/// A marker for an inline file control whose natural width may exceed the
+/// A marker for an atomic inline element whose natural width may exceed the
 /// paragraph's line width.
 ///
 /// This widget still obeys every constraint passed to it. The companion
@@ -17,6 +17,7 @@ class NativeHtmlInlineIntrinsicOverflow extends SingleChildRenderObjectWidget {
     super.key,
     required this.intrinsicSize,
     this.baselineFromTop,
+    this.useChildIntrinsicSize = false,
     required super.child,
   });
 
@@ -26,10 +27,21 @@ class NativeHtmlInlineIntrinsicOverflow extends SingleChildRenderObjectWidget {
   /// Alphabetic baseline distance from the top of [intrinsicSize].
   final double? baselineFromTop;
 
+  /// Use the child's live intrinsic dimensions instead of the fixed fallback.
+  ///
+  /// Raw HTML replaced elements use this so CSS sizing remains authoritative:
+  /// an image can report its decoded natural size, while a CSS sizing wrapper
+  /// can still apply explicit width, height, or max-width constraints.
+  final bool useChildIntrinsicSize;
+
   @override
   RenderNativeHtmlInlineOverflowMarker createRenderObject(
     BuildContext context,
-  ) => RenderNativeHtmlInlineOverflowMarker(intrinsicSize, baselineFromTop);
+  ) => RenderNativeHtmlInlineOverflowMarker(
+    intrinsicSize,
+    baselineFromTop,
+    useChildIntrinsicSize,
+  );
 
   @override
   void updateRenderObject(
@@ -38,11 +50,12 @@ class NativeHtmlInlineIntrinsicOverflow extends SingleChildRenderObjectWidget {
   ) {
     renderObject
       ..intrinsicSize = intrinsicSize
-      ..baselineFromTop = baselineFromTop;
+      ..baselineFromTop = baselineFromTop
+      ..useChildIntrinsicSize = useChildIntrinsicSize;
   }
 }
 
-/// Lets a marked file control lay out at its natural width inside a parent
+/// Lets a marked atomic element lay out at its natural width inside a parent
 /// whose own width remains constrained by normal CSS layout.
 ///
 /// When [child] contains a [NativeHtmlInlineIntrinsicOverflow], this host
@@ -123,7 +136,7 @@ bool _containsOverflowMarker(RenderObject root) {
   return found;
 }
 
-/// Makes visible, marked file controls reachable when a nested CSS layout box
+/// Makes visible, marked atomic elements reachable when a nested CSS layout box
 /// is narrower than the control, while retaining ordinary clipping behavior.
 ///
 /// Layout and paint are delegated unchanged. During hit testing, the wrapper
@@ -206,10 +219,12 @@ class RenderNativeHtmlInlineOverflowMarker extends RenderProxyBox {
   RenderNativeHtmlInlineOverflowMarker(
     this._intrinsicSize,
     this._baselineFromTop,
+    this._useChildIntrinsicSize,
   );
 
   Size _intrinsicSize;
   double? _baselineFromTop;
+  bool _useChildIntrinsicSize;
 
   set intrinsicSize(Size value) {
     if (_intrinsicSize == value) return;
@@ -223,37 +238,79 @@ class RenderNativeHtmlInlineOverflowMarker extends RenderProxyBox {
     markNeedsLayout();
   }
 
-  @override
-  double computeMinIntrinsicWidth(double height) => _intrinsicSize.width;
+  set useChildIntrinsicSize(bool value) {
+    if (_useChildIntrinsicSize == value) return;
+    _useChildIntrinsicSize = value;
+    markNeedsLayout();
+  }
 
   @override
-  double computeMaxIntrinsicWidth(double height) => _intrinsicSize.width;
+  double computeMinIntrinsicWidth(double height) =>
+      _childIntrinsicWidth(height, minimum: true);
 
   @override
-  double computeMinIntrinsicHeight(double width) => _intrinsicSize.height;
+  double computeMaxIntrinsicWidth(double height) =>
+      _childIntrinsicWidth(height, minimum: false);
 
   @override
-  double computeMaxIntrinsicHeight(double width) => _intrinsicSize.height;
+  double computeMinIntrinsicHeight(double width) =>
+      _childIntrinsicHeight(width, minimum: true);
 
   @override
-  Size computeDryLayout(BoxConstraints constraints) =>
-      constraints.constrain(_intrinsicSize);
+  double computeMaxIntrinsicHeight(double width) =>
+      _childIntrinsicHeight(width, minimum: false);
+
+  double _childIntrinsicWidth(double height, {required bool minimum}) {
+    final currentChild = child;
+    if (_useChildIntrinsicSize && currentChild != null) {
+      final width = minimum
+          ? currentChild.getMinIntrinsicWidth(height)
+          : currentChild.getMaxIntrinsicWidth(height);
+      if (width.isFinite && width >= 0) return width;
+    }
+    return _intrinsicSize.width;
+  }
+
+  double _childIntrinsicHeight(double width, {required bool minimum}) {
+    final currentChild = child;
+    if (_useChildIntrinsicSize && currentChild != null) {
+      final height = minimum
+          ? currentChild.getMinIntrinsicHeight(width)
+          : currentChild.getMaxIntrinsicHeight(width);
+      if (height.isFinite && height >= 0) return height;
+    }
+    return _intrinsicSize.height;
+  }
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    final currentChild = child;
+    if (_useChildIntrinsicSize && currentChild != null) {
+      return constraints.constrain(currentChild.getDryLayout(constraints));
+    }
+    return constraints.constrain(_intrinsicSize);
+  }
 
   @override
   double? computeDryBaseline(
     BoxConstraints constraints,
     TextBaseline baseline,
   ) {
-    final height = constraints.constrain(_intrinsicSize).height;
+    final height = computeDryLayout(constraints).height;
     return _baselineDistance(height);
   }
 
   @override
-  double? computeDistanceToActualBaseline(TextBaseline baseline) =>
-      _baselineDistance(size.height);
+  double? computeDistanceToActualBaseline(TextBaseline baseline) {
+    return _baselineDistance(size.height);
+  }
 
-  double _baselineDistance(double height) =>
-      (_baselineFromTop ?? _intrinsicSize.height).clamp(0.0, height).toDouble();
+  double _baselineDistance(double height) {
+    if (_useChildIntrinsicSize && _baselineFromTop == null) return height;
+    return (_baselineFromTop ?? _intrinsicSize.height)
+        .clamp(0.0, height)
+        .toDouble();
+  }
 
   @override
   void performLayout() {
@@ -267,7 +324,7 @@ class RenderNativeHtmlInlineOverflowMarker extends RenderProxyBox {
   }
 }
 
-/// A [RichText] replacement that lets marked file controls use their natural
+/// A [RichText] replacement that lets marked atomic elements use their natural
 /// inline width while retaining the source widget's text and selection setup.
 ///
 /// Use this as a drop-in replacement for framework-generated [RichText]
@@ -277,12 +334,13 @@ class NativeHtmlInlineOverflowRichText extends RichText {
   NativeHtmlInlineOverflowRichText.fromRichText(
     RichText source, {
     TextOverflow? overflow,
+    bool? softWrap,
   }) : super(
          key: source.key,
          text: source.text,
          textAlign: source.textAlign,
          textDirection: source.textDirection,
-         softWrap: source.softWrap,
+         softWrap: softWrap ?? source.softWrap,
          overflow: overflow ?? source.overflow,
          textScaler: source.textScaler,
          maxLines: source.maxLines,

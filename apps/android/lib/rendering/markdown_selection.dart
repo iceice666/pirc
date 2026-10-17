@@ -9,6 +9,7 @@ import 'package:flutter/gestures.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 /// One selection gesture can cross native text, code and table cells. Reuse an
@@ -77,7 +78,117 @@ class _JoinedSelection extends StaticSelectionContainerDelegate {
   TextGranularity? _dragAnchorGranularity, _dragFocusGranularity;
   Selectable? _dragAnchorSelectable, _dragFocusSelectable;
   bool _recordingPointerEdge = false;
+  bool _layoutOrderPending = false;
+  bool _orderRepairScheduled = false;
+  bool _disposed = false;
+  int _orderRepairAttempts = 0;
   bool get _emptyCell => tableCell != null && selectables.isEmpty;
+
+  static const _maxOrderRepairAttempts = 8;
+
+  bool _isParagraphAwaitingLayout(AssertionError error) {
+    final message = error.toString();
+    return message.contains('rendering/paragraph.dart') &&
+        message.contains("'!debugNeedsLayout': is not true.");
+  }
+
+  int _compareByTransformOrigin(Selectable a, Selectable b) {
+    final pointA = MatrixUtils.transformPoint(
+      a.getTransformTo(null),
+      Offset.zero,
+    );
+    final pointB = MatrixUtils.transformPoint(
+      b.getTransformTo(null),
+      Offset.zero,
+    );
+    if ((pointA.dy - pointB.dy).abs() > 0.5) {
+      return pointA.dy.compareTo(pointB.dy);
+    }
+    return pointA.dx.compareTo(pointB.dx);
+  }
+
+  int _compareByPaintedBoxes(
+    Selectable a,
+    Selectable b,
+    Comparator<Selectable> fallback,
+  ) {
+    final transformA = a.getTransformTo(null);
+    final transformB = b.getTransformTo(null);
+    // Use the first painted boxes instead of multi-line unions. A text
+    // fragment wrapping after a placeholder can otherwise sort before the
+    // glyphs inside that placeholder. Overlapping boxes share a visual row.
+    final boxesA = a.boundingBoxes;
+    final boxesB = b.boundingBoxes;
+    if (boxesA.isNotEmpty && boxesB.isNotEmpty) {
+      final firstA = MatrixUtils.transformRect(transformA, boxesA.first);
+      final firstB = MatrixUtils.transformRect(transformB, boxesB.first);
+      if (firstA.bottom <= firstB.top + 0.5) return -1;
+      if (firstB.bottom <= firstA.top + 0.5) return 1;
+      if ((firstA.left - firstB.left).abs() > 0.5) {
+        return firstA.left.compareTo(firstB.left);
+      }
+    }
+    return fallback(a, b);
+  }
+
+  void _sortCurrentSelectablesByPaintedBoxes(Comparator<Selectable> fallback) {
+    final ordered = List<Selectable>.of(selectables);
+    final selectedStart =
+        currentSelectionStartIndex >= 0 &&
+            currentSelectionStartIndex < selectables.length
+        ? selectables[currentSelectionStartIndex]
+        : null;
+    final selectedEnd =
+        currentSelectionEndIndex >= 0 &&
+            currentSelectionEndIndex < selectables.length
+        ? selectables[currentSelectionEndIndex]
+        : null;
+    ordered.sort((a, b) => _compareByPaintedBoxes(a, b, fallback));
+    selectables
+      ..clear()
+      ..addAll(ordered);
+    currentSelectionStartIndex = selectedStart == null
+        ? -1
+        : selectables.indexOf(selectedStart);
+    currentSelectionEndIndex = selectedEnd == null
+        ? -1
+        : selectables.indexOf(selectedEnd);
+    layoutDidChange();
+  }
+
+  void _scheduleOrderRepair() {
+    if (_disposed ||
+        !_layoutOrderPending ||
+        _orderRepairScheduled ||
+        _orderRepairAttempts >= _maxOrderRepairAttempts) {
+      return;
+    }
+    _orderRepairScheduled = true;
+    final fallback = super.compareOrder;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _orderRepairScheduled = false;
+      if (_disposed || !_layoutOrderPending) return;
+
+      try {
+        _sortCurrentSelectablesByPaintedBoxes(fallback);
+      } on AssertionError catch (error) {
+        if (!_isParagraphAwaitingLayout(error)) rethrow;
+        _orderRepairAttempts++;
+        _scheduleOrderRepair();
+        WidgetsBinding.instance.ensureVisualUpdate();
+        return;
+      }
+      _layoutOrderPending = false;
+      _orderRepairAttempts = 0;
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
 
   void _clearDragTracking() {
     _dragAnchor = _dragFocus = null;
@@ -369,6 +480,8 @@ class _JoinedSelection extends StaticSelectionContainerDelegate {
   @override
   void didChangeSelectables() {
     super.didChangeSelectables();
+    if (_layoutOrderPending) _orderRepairAttempts = 0;
+    _scheduleOrderRepair();
     // Registration can propagate through several groups after the frame. The
     // SDK queues another post-frame update without requesting that frame; an
     // idle document would otherwise remain unselectable until another repaint.
@@ -408,28 +521,27 @@ class _JoinedSelection extends StaticSelectionContainerDelegate {
   @override
   Comparator<Selectable> get compareOrder {
     final fallback = super.compareOrder;
-    return (a, b) {
-      final transformA = a.getTransformTo(null);
-      final transformB = b.getTransformTo(null);
-      // Use the first painted boxes instead of multi-line unions. A text
-      // fragment wrapping after a placeholder can otherwise sort before the
-      // glyphs inside that placeholder. Overlapping boxes share a visual row.
-      if (a.boundingBoxes.isNotEmpty && b.boundingBoxes.isNotEmpty) {
-        final firstA = MatrixUtils.transformRect(
-          transformA,
-          a.boundingBoxes.first,
-        );
-        final firstB = MatrixUtils.transformRect(
-          transformB,
-          b.boundingBoxes.first,
-        );
-        if (firstA.bottom <= firstB.top + 0.5) return -1;
-        if (firstB.bottom <= firstA.top + 0.5) return 1;
-        if ((firstA.left - firstB.left).abs() > 0.5) {
-          return firstA.left.compareTo(firstB.left);
+    if (_layoutOrderPending) {
+      final binding = WidgetsBinding.instance;
+      if (binding.schedulerPhase == SchedulerPhase.idle &&
+          !binding.hasScheduledFrame) {
+        // A later idle selection action may retry after the bounded repair
+        // window was exhausted while layout kept changing.
+        if (_orderRepairAttempts >= _maxOrderRepairAttempts) {
+          _orderRepairAttempts = 0;
         }
       }
-      return fallback(a, b);
+      _scheduleOrderRepair();
+    }
+    return (a, b) {
+      try {
+        return _compareByPaintedBoxes(a, b, fallback);
+      } on AssertionError catch (error) {
+        if (!_isParagraphAwaitingLayout(error)) rethrow;
+        _layoutOrderPending = true;
+        _scheduleOrderRepair();
+        return _compareByTransformOrigin(a, b);
+      }
     };
   }
 
