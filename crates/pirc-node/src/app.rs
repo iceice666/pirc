@@ -5,6 +5,7 @@
 //!   directories under `$HOME` elsewhere, never around the node's state or
 //!   a credential store), `DELETE /api/workspaces/:id` (chat projects only,
 //!   fenced, idempotent), `GET`/`PATCH /api/workspaces/:id/instructions`,
+//!   `GET`/`POST`/`DELETE /api/workspaces/:id/files` (`project_files`),
 //!   `GET /api/workspaces/:id/project-config`,
 //!   `POST /api/workspaces/:id/project-trust`; on the chat node
 //!   `GET /api/assistant/prompts`, `PUT /api/assistant/prompts/:name`.
@@ -41,6 +42,7 @@ use serde_json::{Map, Value, json};
 use crate::assistant_prompts::{self, PromptName};
 use crate::chat;
 use crate::error::{ApiError, ApiResult};
+use crate::project_files;
 use crate::router::{Body, Request, Response, Route, delete, get, parse, patch, post, put};
 use crate::runner::{CommandPayload, Delivery};
 use crate::services::Node;
@@ -59,6 +61,9 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
         }),
         get("/api/workspaces/:id/instructions", read_instructions),
         patch("/api/workspaces/:id/instructions", write_instructions),
+        get("/api/workspaces/:id/files", list_project_files),
+        post("/api/workspaces/:id/files", upload_project_file),
+        delete("/api/workspaces/:id/files", remove_project_file),
         get("/api/workspaces/:id/project-config", project_config),
         post("/api/workspaces/:id/project-trust", project_trust),
         post("/api/sessions", create_session),
@@ -403,6 +408,61 @@ async fn write_instructions(node: Node, request: Request) -> ApiResult<Response>
     let workspace = chat_project(&node, &request)?;
     let text = text_body(request.json())?;
     instructions(chat::write_project_instructions(&workspace, &text)?)
+}
+
+fn project_files_body(node: &Node, workspace: &Workspace) -> ApiResult<Value> {
+    let files: Vec<Value> = project_files::list(workspace)?
+        .iter()
+        .map(project_files::ProjectFile::json)
+        .collect();
+    Ok(json!({
+        "files": files,
+        "maxFiles": project_files::MAX_FILES,
+        "maxBytes": node.config.upload_max_bytes,
+    }))
+}
+
+/// `GET /api/workspaces/:id/files`: the project's files, by name.
+async fn list_project_files(node: Node, request: Request) -> ApiResult<Response> {
+    let workspace = node.db.lock().get_workspace(param(&request, "id"))?;
+    Ok(Response::json(project_files_body(&node, &workspace)?))
+}
+
+/// `POST /api/workspaces/:id/files?filename=…`, raw bytes: add or replace
+/// one file.
+async fn upload_project_file(node: Node, request: Request) -> ApiResult<Response> {
+    let workspace = node.db.lock().get_workspace(param(&request, "id"))?;
+    let Body::Raw { bytes, .. } = &request.body else {
+        return Err(ApiError::bad_request("Upload body must be raw bytes"));
+    };
+    if bytes.is_empty() || bytes.len() > node.config.upload_max_bytes {
+        return Err(ApiError::new(
+            413,
+            "payload_too_large",
+            "Upload exceeds configured limit",
+        ));
+    }
+    let query = request.query_object();
+    let filename = string(object(&query)?, "filename", false, 1, 1000)?;
+    let file = project_files::write(&workspace, &filename, bytes)?;
+    // The project may have been fenced for deletion while the bytes were
+    // written: keep nothing then (its deletion removes the directory too).
+    if let Err(error) = node.db.lock().get_workspace(&workspace.id) {
+        if let Some(dir) = project_files::files_dir(&workspace) {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+        return Err(error);
+    }
+    created(json!({ "file": file.json() }))
+}
+
+/// `DELETE /api/workspaces/:id/files?name=…`.
+async fn remove_project_file(node: Node, request: Request) -> ApiResult<Response> {
+    let workspace = node.db.lock().get_workspace(param(&request, "id"))?;
+    let query = request.query_object();
+    let name = string(object(&query)?, "name", false, 1, 1000)?;
+    project_files::remove(&workspace, &name)?;
+    Ok(Response::empty(204))
 }
 
 /// `directoryWorkspace`: the workspace, which must be a directory.

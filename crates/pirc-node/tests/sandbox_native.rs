@@ -285,6 +285,7 @@ impl Fixture {
                 inference_socket,
                 protected_paths,
                 workspace_memory_file: None,
+                project_files_dir: None,
             })
             .await
     }
@@ -924,6 +925,7 @@ async fn opens_only_its_own_workspace_memory_ledger() {
             inference_socket: None,
             protected_paths: Vec::new(),
             workspace_memory_file: Some(ledger.clone()),
+            project_files_dir: None,
         })
         .await
         .unwrap();

@@ -4,6 +4,12 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+Same node protocol (11) and database schemas; upgrade the gateway and every node together as usual (an older node answers the new project-file routes with 404).
+
+### Added
+
+- Chat projects (and the top-level Chats) have project files: files every chat in the project can read, such as notes, documents or data (project page → Settings → Project files, or `GET`/`POST`/`DELETE /api/workspaces/:id/files`). The chat node keeps them in `<stateDir>/chat/<workspaceId>/files`; chats get that directory read-only in their sandbox and its path in their system prompt (`## Project files`), and the assistant cannot change them. They are shared, not copied: an upload, a replacement (same name) or a removal reaches chats already running. Chats started before the project's first file are not given them; start a new chat. At most 50 files per project, each within the node's upload limit. Deleting a project deletes its files.
+
 ## [0.6.1] - 2026-10-17
 
 ### Changed

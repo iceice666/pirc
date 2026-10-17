@@ -26,6 +26,7 @@
   import type { SessionSummary, Workspace } from '../types';
   import { watch } from '../watch.svelte';
   import { foldRecent, isRunning, needsInput, pinnedFirst } from '../work';
+  import ProjectFiles from './ProjectFiles.svelte';
   import ProjectInstructions from './ProjectInstructions.svelte';
   import ProjectLinks from './ProjectLinks.svelte';
   import ProjectSettings from './ProjectSettings.svelte';
@@ -257,13 +258,15 @@
             <p class="note">Settings are gone with the project's deletion.</p>
           {:else if chat}
             {#if app.usingDemo}
-              <p class="note">Project instructions are unavailable in demo mode.</p>
+              <p class="note">Project instructions and files are unavailable in demo mode.</p>
             {:else if !online}
               <p class="note">
-                The project's node is offline: its instructions can be changed once it is back.
+                The project's node is offline: its instructions and files can be changed once it is
+                back.
               </p>
             {:else}
               <ProjectInstructions workspaceId={workspace.id} />
+              <ProjectFiles workspaceId={workspace.id} />
             {/if}
             {#if !topLevel}
               <ProjectLinks

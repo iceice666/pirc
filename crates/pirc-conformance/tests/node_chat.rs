@@ -814,3 +814,255 @@ async fn node_chat_startup() {
 
     insta::assert_json_snapshot!("node_chat_startup", t.into_value());
 }
+
+/// A project's files as recorded: `modifiedAt` only as "a time".
+fn files_view(body: &Value) -> Value {
+    let files: Vec<Value> = body["files"]
+        .as_array()
+        .map(|files| {
+            files
+                .iter()
+                .map(|file| {
+                    json!({ "name": file["name"], "byteSize": file["byteSize"],
+                        "modifiedAt is a time": file["modifiedAt"].as_i64().is_some_and(|ms| ms > 0) })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    json!({ "files": files, "maxFiles": body["maxFiles"],
+        "maxBytes is a number": body["maxBytes"].is_u64() })
+}
+
+/// The last tool result in a model request, as JSON text.
+fn tool_text(request: &Value) -> String {
+    request["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .rev()
+        .find(|message| message["role"] == "tool")
+        .map(|message| message["content"].to_string())
+        .unwrap_or_default()
+}
+
+/// A chat project's files: uploaded, listed, replaced and removed through
+/// the gateway, kept in `<state>/chat/<project>/files`, read (never
+/// written) by the project's chats, also when added while a chat runs, and
+/// removed with the project.
+#[tokio::test(flavor = "multi_thread")]
+async fn node_chat_project_files() {
+    let Some(cluster) = Cluster::start_with(GatewayOptions {
+        chat_node: true,
+        ..Default::default()
+    })
+    .await
+    else {
+        return;
+    };
+    let root = cluster.dir.path().canonicalize().unwrap();
+    let state = root.join("node-state");
+    let api = cluster.api();
+    let mut t = Transcript::new(cluster.volatile());
+    let mut ids = Ids::default();
+    let mut r = Recorder {
+        api: api.clone(),
+        t: &mut t,
+        ids: &mut ids,
+    };
+    let created = r
+        .send(
+            "create a chat project",
+            "POST",
+            "/api/workspaces",
+            Some(json!({ "nodeId": NODE_ID, "kind": "chat", "displayName": "Trip" })),
+        )
+        .await;
+    let project = created["workspace"]["id"].as_str().unwrap().to_owned();
+    let local = project.strip_prefix("test:").unwrap().to_owned();
+    let files = format!("/api/workspaces/{}/files", encode(&project));
+    let dir = state.join("chat").join(&local).join("files");
+
+    let listed = api.send("GET", &files, &browser_headers(), None).await;
+    r.note(
+        "a new project has no files, and no files directory",
+        json!({ "status": listed.status, "body": files_view(&listed.body),
+            "directory exists": dir.exists() }),
+    );
+    let upload = |name: &str, content: &[u8]| {
+        let (api, path) = (api.clone(), format!("{files}?filename={name}"));
+        let content = content.to_vec();
+        async move {
+            api.send_bytes(
+                "POST",
+                &path,
+                &browser_headers(),
+                Some("text/plain"),
+                content,
+            )
+            .await
+        }
+    };
+    let added = upload("notes%2Fa.txt", b"alpha").await;
+    r.note(
+        "upload a.txt (the name's last path component is kept): 201",
+        json!({ "status": added.status, "name": added.body["file"]["name"],
+            "byteSize": added.body["file"]["byteSize"] }),
+    );
+    r.note(
+        "kept on the node in <state>/chat/<project>/files",
+        json!({ "files": entries(&dir),
+            "a.txt": fs::read_to_string(dir.join("a.txt")).ok() }),
+    );
+    for (step, name, body) in [
+        ("a hidden name: 400", ".env", b"x".to_vec()),
+        ("an empty name: 400", "", b"x".to_vec()),
+        ("an empty body: 413", "empty.txt", Vec::new()),
+    ] {
+        let refused = upload(name, &body).await;
+        r.note(
+            step,
+            json!({ "status": refused.status, "body": refused.body }),
+        );
+    }
+    let json_body = api
+        .send(
+            "POST",
+            &format!("{files}?filename=x.json"),
+            &browser_headers(),
+            Some(json!({})),
+        )
+        .await;
+    r.note(
+        "a JSON body: 400",
+        json!({ "status": json_body.status, "body": json_body.body }),
+    );
+    let listed = api.send("GET", &files, &browser_headers(), None).await;
+    r.note("listed", files_view(&listed.body));
+    r.send(
+        "the top-level chats have project files too (none)",
+        "GET",
+        &format!("/api/workspaces/{}/files", encode(CHATS_WORKSPACE_ID)),
+        None,
+    )
+    .await;
+    r.send(
+        "files of an unknown workspace: 404",
+        "GET",
+        "/api/workspaces/test%3Anope/files",
+        None,
+    )
+    .await;
+
+    // A chat in the project reads them, cannot write them, and sees a file
+    // added while it runs.
+    let mut chat = open_chat(&api, &project).await;
+    let dir_text = dir.display().to_string();
+    let read = |name: &str| {
+        format!(
+            "const r = await tools.read({{ path: {} }}); return JSON.stringify(r);",
+            json!(format!("{dir_text}/{name}"))
+        )
+    };
+    let write = format!(
+        "try {{ await tools.write({{ path: {}, content: \"x\" }}); return \"written\"; }} catch (error) {{ return \"refused\"; }}",
+        json!(format!("{dir_text}/a.txt"))
+    );
+    cluster.llm.push([
+        Reply::Tool {
+            id: "read-a".to_owned(),
+            name: "ptc".to_owned(),
+            args: json!({ "code": read("a.txt") }),
+        },
+        Reply::Tool {
+            id: "write-a".to_owned(),
+            name: "ptc".to_owned(),
+            args: json!({ "code": write }),
+        },
+        Reply::Text("Read it.".to_owned()),
+    ]);
+    chat.prompt(&api, "command-files", "What is in my files?")
+        .await;
+    chat.live.until(settled).await;
+    let requests = cluster.llm.requests();
+    let prompt = system_prompt(&requests[requests.len() - 3]);
+    r.note(
+        "the chat's system prompt names the directory, read-only",
+        json!({
+            "heading": prompt.contains("## Project files"),
+            "the directory": prompt.contains(&format!("`{dir_text}`")),
+            "read-only": prompt.contains("They are read-only"),
+        }),
+    );
+    r.note(
+        "the agent reads a.txt, and cannot write it",
+        json!({
+            "read": tool_text(&requests[requests.len() - 2]).contains("alpha"),
+            "write": tool_text(&requests[requests.len() - 1]).contains("refused"),
+            "a.txt unchanged": fs::read_to_string(dir.join("a.txt")).ok(),
+        }),
+    );
+    let added = upload("b.txt", b"beta").await;
+    let replaced = upload("a.txt", b"alpha 2").await;
+    r.note(
+        "while the chat runs: add b.txt, replace a.txt",
+        json!({ "b.txt": added.status, "a.txt": replaced.status }),
+    );
+    cluster.llm.push([
+        Reply::Tool {
+            id: "read-b".to_owned(),
+            name: "ptc".to_owned(),
+            args: json!({ "code": read("b.txt") }),
+        },
+        Reply::Tool {
+            id: "read-a2".to_owned(),
+            name: "ptc".to_owned(),
+            args: json!({ "code": read("a.txt") }),
+        },
+        Reply::Text("Read them.".to_owned()),
+    ]);
+    chat.prompt(&api, "command-files-2", "And now?").await;
+    chat.live.until(settled).await;
+    let requests = cluster.llm.requests();
+    r.note(
+        "the running chat reads the new file and the replaced one",
+        json!({
+            "b.txt": tool_text(&requests[requests.len() - 2]).contains("beta"),
+            "a.txt": tool_text(&requests[requests.len() - 1]).contains("alpha 2"),
+        }),
+    );
+
+    r.send(
+        "remove b.txt: 204",
+        "DELETE",
+        &format!("{files}?name=b.txt"),
+        None,
+    )
+    .await;
+    r.send(
+        "remove it again: 404",
+        "DELETE",
+        &format!("{files}?name=b.txt"),
+        None,
+    )
+    .await;
+    r.send("remove without a name: 400", "DELETE", &files, None)
+        .await;
+    r.note("left on the node", json!(entries(&dir)));
+
+    // Deleting the project removes its files.
+    r.send(
+        "delete the project: 204",
+        "POST",
+        &format!("/api/workspaces/{}/deletion", encode(&project)),
+        Some(json!({ "decisions": [] })),
+    )
+    .await;
+    r.note(
+        "the project's directory is gone, files included",
+        json!(state.join("chat").join(&local).exists()),
+    );
+    r.send("files of the deleted project: 404", "GET", &files, None)
+        .await;
+
+    insta::assert_json_snapshot!("node_chat_project_files", t.into_value());
+}

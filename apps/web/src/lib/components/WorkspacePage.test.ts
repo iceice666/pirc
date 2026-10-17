@@ -52,32 +52,34 @@ beforeEach(() => {
         ? new Response(JSON.stringify({ instructions: { text: 'Be brief', maxChars: 8000 } }))
         : String(url).endsWith('/links')
           ? new Response(JSON.stringify({ links: [] }))
-          : String(url).endsWith('/project-config')
-            ? new Response(
-                JSON.stringify({
-                  project: {
-                    hooks: { sessionStart: [{ command: 'make setup', timeoutMs: 10000 }] },
-                    env: {},
-                    allowedPaths: [],
-                    hash: 'a'.repeat(64),
-                    trustedHash: null,
-                    trusted: false,
-                    empty: false,
-                  },
-                }),
-              )
-            : new Response(
-                JSON.stringify({
-                  capabilities: {
-                    version: 1,
-                    delegation: true,
-                    memory_search: true,
-                    remote_recall: true,
-                    schedules: true,
-                    web_search: true,
-                  },
-                }),
-              ),
+          : String(url).endsWith('/files')
+            ? new Response(JSON.stringify({ files: [], maxFiles: 50, maxBytes: 1024 }))
+            : String(url).endsWith('/project-config')
+              ? new Response(
+                  JSON.stringify({
+                    project: {
+                      hooks: { sessionStart: [{ command: 'make setup', timeoutMs: 10000 }] },
+                      env: {},
+                      allowedPaths: [],
+                      hash: 'a'.repeat(64),
+                      trustedHash: null,
+                      trusted: false,
+                      empty: false,
+                    },
+                  }),
+                )
+              : new Response(
+                  JSON.stringify({
+                    capabilities: {
+                      version: 1,
+                      delegation: true,
+                      memory_search: true,
+                      remote_recall: true,
+                      schedules: true,
+                      web_search: true,
+                    },
+                  }),
+                ),
     ),
   );
 });
@@ -203,6 +205,8 @@ describe('WorkspacePage', () => {
       expect.anything(),
     );
     expect(fetch).toHaveBeenCalledWith('/api/workspaces/home%3Atrip/links', expect.anything());
+    expect(fetch).toHaveBeenCalledWith('/api/workspaces/home%3Atrip/files', expect.anything());
+    expect(target.textContent).toContain('Project files');
     expect(target.querySelector('textarea')!.value).toBe('Be brief');
     expect(target.querySelectorAll('[role="switch"]')).toHaveLength(5);
     // The directory workspaces it can be linked to.

@@ -42,6 +42,43 @@ export const instructionsApi = {
 };
 
 /**
+ * A chat project's file, kept by its node and readable (never writable) by
+ * the project's chats (docs/guides/chat-projects.md#project-files).
+ */
+export interface ProjectFile {
+  name: string;
+  byteSize: number;
+  /** Milliseconds since the epoch. */
+  modifiedAt: number;
+}
+export interface ProjectFiles {
+  files: ProjectFile[];
+  maxFiles: number;
+  maxBytes: number;
+}
+const filesPath = (workspaceId: string) =>
+  `/api/workspaces/${encodeURIComponent(workspaceId)}/files`;
+
+export const projectFilesApi = {
+  list: (workspaceId: string) => request<ProjectFiles>(filesPath(workspaceId)),
+  /** Adds `file`, or replaces the project's file of the same name. */
+  upload: (workspaceId: string, file: File) =>
+    request<{ file: ProjectFile }>(
+      `${filesPath(workspaceId)}?filename=${encodeURIComponent(file.name)}`,
+      {
+        method: 'POST',
+        // Always raw bytes: a JSON file must not be parsed by the gateway.
+        headers: { 'content-type': 'application/octet-stream' },
+        body: file,
+      },
+    ),
+  remove: (workspaceId: string, name: string) =>
+    request<void>(`${filesPath(workspaceId)}?name=${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    }),
+};
+
+/**
  * A directory workspace a chat project is linked to
  * (docs/history/assistant.md): a default and an ordering for its assistant, never a permission.
  */

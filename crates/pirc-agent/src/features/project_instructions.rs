@@ -10,6 +10,11 @@
 //! The agent never writes it: the file is outside every session directory
 //! and protected from the file tools and the sandbox
 //! (`PIRC_PROJECT_INSTRUCTIONS`).
+//!
+//! The project's files (`PIRC_PROJECT_FILES`, a directory the sandbox
+//! opens read-only) are announced next to them. Only the directory is
+//! named, not its contents: the user can change them while the chat runs,
+//! so the agent lists the directory when it needs them.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -76,6 +81,16 @@ pub fn render_instructions(text: &str) -> String {
     .join("\n")
 }
 
+/// The section naming the project's files directory.
+pub fn render_project_files(dir: &str) -> String {
+    [
+        "## Project files",
+        "",
+        &format!("The user keeps files for every chat in this project in `{dir}`. Read them with your file tools or bash when they are relevant to the conversation. They are read-only: you cannot add, change or remove them, and the user manages them in the project's settings. The user can change them at any time, also during this chat, so list the directory to see what is there now instead of relying on an earlier listing."),
+    ]
+    .join("\n")
+}
+
 /// `projectInstructionsFeature()`.
 pub fn feature() -> Rc<dyn Feature> {
     Rc::new(ProjectInstructionsFeature::default())
@@ -109,18 +124,30 @@ impl Feature for ProjectInstructionsFeature {
                     section
                 }
             };
-            if section.is_empty() {
+            let mut sections = Vec::new();
+            if !section.is_empty() {
+                let mut prompt = PromptSection::new(
+                    "project-instructions",
+                    "Project instructions",
+                    "node:project-instructions",
+                    section,
+                );
+                prompt.frozen = Some(true);
+                sections.push(prompt);
+            }
+            if let Some(dir) = agent.config().project_files.as_deref() {
+                sections.push(PromptSection::new(
+                    "project-files",
+                    "Project files",
+                    "node:project-files",
+                    render_project_files(dir),
+                ));
+            }
+            if sections.is_empty() {
                 return Ok(None);
             }
-            let mut prompt = PromptSection::new(
-                "project-instructions",
-                "Project instructions",
-                "node:project-instructions",
-                section,
-            );
-            prompt.frozen = Some(true);
             Ok(Some(BeforeStart {
-                system_prompt: Some(PromptAddition::Sections(vec![prompt])),
+                system_prompt: Some(PromptAddition::Sections(sections)),
                 messages: Vec::new(),
             }))
         })
@@ -138,5 +165,13 @@ mod tests {
             render_instructions("Be brief."),
             "## Project instructions\n\nThe user wrote these for every chat in this project. Follow them unless the user says otherwise in this chat.\n\nBe brief."
         );
+    }
+
+    #[test]
+    fn renders_the_project_files_directory() {
+        let section = render_project_files("/state/chat/p/files");
+        assert!(section.starts_with("## Project files\n\n"));
+        assert!(section.contains("`/state/chat/p/files`"));
+        assert!(section.contains("read-only"));
     }
 }

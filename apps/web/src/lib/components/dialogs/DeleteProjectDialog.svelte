@@ -130,7 +130,7 @@
           private transcripts
         </li>
         <li>
-          The project's instructions, capability settings{#if preview.links}
+          The project's instructions, files, capability settings{#if preview.links}
             and its links to {plural(preview.links, 'workspace')}{/if}
         </li>
         {#if preview.schedules.length}

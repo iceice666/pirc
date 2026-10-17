@@ -606,6 +606,8 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
                     .into_iter()
                     .collect(),
                 workspace_memory_file: ledger.as_ref().map(|ledger| ledger.file.clone()),
+                // Read-only and shared: uploads reach the running session.
+                project_files_dir: crate::project_files::existing_files_dir(&workspace),
             })
             .await?;
         process::spawn(
