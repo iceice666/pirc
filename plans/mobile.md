@@ -28,7 +28,7 @@ outside the agreed scope.
 ## Remaining work, in priority order
 
 - [ ] **Dynamic content compatibility:** extend Canvas font/ink coverage,
-      synchronous write/read layout support and broader chart-library acceptance; extend
+      synchronous write/read layout within one callback and broader chart-library acceptance; extend
       the supported computed-style
       properties, list-item/inline-fragment measurements and common-library coverage;
       signed/font-relative/empty-block and bottom-edge
@@ -843,14 +843,14 @@ The new pinned Chromium 153 reference runs the same stock Chart.js 4.5.1 driver
 and authored HTML in 16 cases (four sizing modes, phone/tablet, DPR 1/3), with no
 external requests or page errors. Native acceptance distinguishes these results:
 
-| Authored sizing                                           | Native initialization                                                                                                 | Container-only +20 px resize                                                                                           |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `width:100%`, pixel height, block/border-box author reset | Four cases match geometry and actual painted bars without diagnostics; default 300×150 backing attributes are allowed | Final geometry and paint match, but early reads still produce stale/unavailable-layout diagnostics: not fully accepted |
-| Explicit pixel sizes, initial inline display              | Still requires synchronous layout after Chart changes display                                                         | Not accepted                                                                                                           |
-| Percentage width/pixel height, initial inline display     | Same initialization gap                                                                                               | Not accepted                                                                                                           |
-| Container size only, no canvas CSS dimensions             | Intrinsic size and display changes still require synchronous layout                                                   | Not accepted                                                                                                           |
+| Authored sizing                                           | Native initialization                                                                                                 | Container-only +20 px resize                                                                                                                  |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `width:100%`, pixel height, block/border-box author reset | Four cases match geometry and actual painted bars without diagnostics; default 300×150 backing attributes are allowed | Final geometry and paint match, but Chart's same-callback parent read still produces stale/unavailable-layout diagnostics: not fully accepted |
+| Explicit pixel sizes, initial inline display              | Still requires synchronous layout after Chart changes display                                                         | Not accepted                                                                                                                                  |
+| Percentage width/pixel height, initial inline display     | Same initialization gap                                                                                               | Not accepted                                                                                                                                  |
+| Container size only, no canvas CSS dimensions             | Intrinsic size and display changes still require synchronous layout                                                   | Not accepted                                                                                                                                  |
 
-The audit retains the caught early read errors and the final successful resize
+The audit retains the layout errors and the final successful resize
 state. It does not convert those errors into a claimed responsive pass. General
 synchronous DOM write/read support and unrestricted Chart initialization remain
 priority gaps. Existing four fixed-pixel chart cases still require clean
@@ -869,3 +869,43 @@ audit records four accepted initializations with an early-resize-read gap and
 12 unsupported initializations; those recorded gaps are not conformance passes.
 Static analysis and formatting pass. Compact evidence stays in ignored build
 output; disposable builds and emulator disk images are cleaned after testing.
+
+## Animation frame callback checkpoints
+
+Native frame callbacks now return control to the host individually. The engine
+runs Promise jobs before the next selected callback; the host reads a fresh VM
+snapshot and measures genuine DOM changes with Flutter before continuing.
+Callbacks selected for one frame retain the same timestamp and order. Cancelled
+handles are skipped, and callbacks added during a frame wait for the next frame.
+The final callback's Promise/layout checkpoint precedes ResizeObserver delivery.
+Timers cannot replace a paused frame. Existing lifecycle and task budgets still
+suspend and resume the owned continuation without replaying its first callback.
+A task-budget checkpoint yields Flutter/UI work while retaining the same guest
+operation; queued clicks wait until the selected frame callbacks finish. A
+140-step host regression queues a click at step 128 and verifies it runs only
+after step 140.
+
+A separate dedicated Chromium 153 capture and native fetched-document acceptance
+cover eight combinations of phone/tablet, DPR 1/3 and light/dark theme. The same
+original HTML verifies Promise ordering, cancellation, nested-frame selection,
+equal/advancing frame timestamps and real 100 → 160 → 180 px native widths.
+The capture makes no external requests. JS regressions cover error recovery,
+missing measurements, callback selection and observer ordering; host tests cover
+post-result Promise mutations, detach/resume and the task-budget yield.
+
+This does not provide synchronous layout in the middle of a single JS callback.
+The responsive chart audit still records 12 initialization failures and four
+initialization-only passes with a stock resize-callback error. Chart.js's resize
+RAF callback reads its parent clientWidth, changes canvas CSS/backing sizes, then
+reads parent clientWidth again before returning. The second read still requires
+synchronous layout. The later cross-callback probe now succeeds, but this does
+not turn the stock callback error into full responsive acceptance. The existing
+four fixed-pixel chart configurations remain required to finish without errors.
+
+Verification: 583 JavaScript cases, 104 distinct targeted Flutter cases (including
+three host lifecycle/budget cases), eight new native frame cases, four existing
+clean chart configurations and 28 native HTTP layout cases pass. The separate
+16-case chart sizing audit still records its initialization and stock callback
+gaps; these remain failed parity requirements. Static analysis and formatting
+pass. Compact evidence remains ignored; disposable test and emulator output is
+removed while keeping the published preview APK unchanged.

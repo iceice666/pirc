@@ -146,13 +146,28 @@ HTML and driver used by the browser. Four cases with `width:100%`, pixel height,
 and author `display:block;box-sizing:border-box` initialize without diagnostics
 and match native geometry and bar pixels even with omitted backing attributes.
 Container-only resizing reaches the expected final geometry and paint, but its
-early geometry reads still raise native layout errors; it is recorded as a known
+the stock resize callback still raises a native layout error; it is recorded as a known
 gap, not full resize acceptance. The other 12 cases (initial inline display or
 no authored canvas size) retain the synchronous layout initialization gap.
 Recreate this separate browser reference with
 `node apps/android/tool/parity/capture_document_chart_responsive_layout_chromium153.mjs`.
 The capture records both the early two-frame and settled resize observations;
 the native audit keeps failures visible rather than substituting fixed sizes.
+
+With the same fixture server, run from `apps/android`:
+
+```sh
+flutter test integration_test/document_frame_steps_test.dart -d emulator-5554 \
+  --dart-define=PIRC_CHART_FIXTURE_ORIGIN=http://127.0.0.1:19261
+```
+
+It compares native frame callbacks with eight frozen Chromium cases: phone/tablet,
+DPR 1/3, light/dark. It checks Promise jobs, cancellation, nested frames, frame
+timestamps and actual native dimensions after earlier callbacks change width.
+Recreate its reference with
+`node apps/android/tool/parity/capture_document_frame_steps_chromium153.mjs`.
+This repairs layout between callbacks; synchronous writes and reads inside one
+callback remain a separate gap, including Chart.js's resize parent-width check.
 
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see

@@ -912,9 +912,24 @@ void main() {
           // Keep the authored early read in the audit: a caught stale-layout
           // exception is still a parity gap, even when settled paint is correct.
           final hasResizeLayoutGap = resizeDiagnostics.isNotEmpty;
+          if (earlyResize['error'] == null) {
+            final referenceEarly = obj(
+              obj(
+                obj(expectedCase['resizeProbe'])['timing'],
+              )['afterTwoAnimationFrames'],
+            );
+            expect(referenceEarly['error'], isNull);
+            compare(obj(earlyResize['state']), obj(referenceEarly['state']));
+          }
           if (hasResizeLayoutGap) {
-            expect(earlyResize['error'], contains('stale'));
-            expect(earlyResize['state'], isNull);
+            // The frame boundary can repair the probe even while Chart's own
+            // callback still needs synchronous parent geometry after a write.
+            if (earlyResize['error'] != null) {
+              expect(earlyResize['error'], contains('stale'));
+              expect(earlyResize['state'], isNull);
+            } else {
+              expect(earlyResize['state'], isNotNull);
+            }
             expect(
               resizeDiagnostics,
               everyElement(

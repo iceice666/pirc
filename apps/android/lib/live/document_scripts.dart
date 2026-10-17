@@ -1421,7 +1421,10 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         _lastPumpWasFrame = frame;
         if (frame) _nextFrameAt = now + 1000 / 60;
         await _run(
-          '__pircDocument.pump(${jsonEncode({'now': now, 'animationFrame': frame})})',
+          '__pircDocument.pump(${jsonEncode({'now': now, 'animationFrame': frame, 'nativeFrameSteps': _hostLayoutEnabled})})',
+          // Promise jobs may mutate DOM after the previous serialized result.
+          // Refresh from the current VM state before entering another task.
+          checkLayoutFirst: _hostLayoutEnabled,
         );
       } catch (error) {
         await _failInteraction(error);
@@ -1797,6 +1800,19 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     return id;
   }
 
+  int? _frameContinuationId(Json response) {
+    final raw = response['frameContinuation'];
+    if (raw == null) return null;
+    if (raw is! Map) {
+      throw const FormatException('Invalid native animation frame descriptor.');
+    }
+    final id = raw['id'];
+    if (id is! int || id <= 0 || id > _maxSafeScriptId) {
+      throw const FormatException('Invalid native animation frame identity.');
+    }
+    return id;
+  }
+
   bool _classicScriptOwnerCurrent(int identity, String owner) =>
       !_disposed && _id == identity && _owner == owner;
 
@@ -1828,6 +1844,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       'now',
       'scheduler',
       'classicScript',
+      'frameContinuation',
       'layout',
     };
     return Map.fromEntries(
@@ -1934,6 +1951,13 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     var current = response;
     var processed = false;
     while (true) {
+      if (_frameContinuationId(current) != null) {
+        // The preceding callback's serialized result predates its Promise jobs.
+        // Read the VM again before deciding whether native layout is current.
+        current = await _classicScriptControl('snapshot', {});
+        _validateResult(current);
+        _rememberClassicScriptResponse(responses, current);
+      }
       final prepared = await _prepareLayout(
         current,
         responses,
@@ -1951,6 +1975,41 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         );
       }
       final id = _classicScriptId(current);
+      final frameId = _frameContinuationId(current);
+      if (id == null && frameId != null) {
+        if (taskCount >= _maxClassicScriptsPerTurn) {
+          return _ClassicScriptDrain(
+            active: true,
+            processed: processed,
+            yielded: true,
+            taskCount: taskCount,
+          );
+        }
+        if (!_classicScriptActivityCurrent(identity, owner)) {
+          return _ClassicScriptDrain(
+            active: false,
+            processed: processed,
+            yielded: false,
+            taskCount: taskCount,
+          );
+        }
+        taskCount++;
+        current = await _classicScriptControl('continueAnimationFrame', {
+          'id': frameId,
+        });
+        if (!_classicScriptOwnerCurrent(identity, owner)) {
+          return _ClassicScriptDrain(
+            active: false,
+            processed: true,
+            yielded: false,
+            taskCount: taskCount,
+          );
+        }
+        _validateResult(current);
+        _rememberClassicScriptResponse(responses, current);
+        processed = true;
+        continue;
+      }
       if (id == null) {
         return _ClassicScriptDrain(
           active: true,
@@ -2081,6 +2140,43 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<_ClassicScriptDrain> _drainScriptTasks(
+    Json response, {
+    required List<Json> responses,
+    required int identity,
+    required String owner,
+    required int taskCount,
+    required _NativeLayoutTurn layoutTurn,
+  }) async {
+    var drained = await _drainClassicScripts(
+      response,
+      responses: responses,
+      identity: identity,
+      owner: owner,
+      taskCount: taskCount,
+      layoutTurn: layoutTurn,
+    );
+    while ((drained.yielded || (!drained.active && layoutTurn.frames >= 128)) &&
+        _frameContinuationId(responses.last) != null &&
+        _classicScriptActivityCurrent(identity, owner)) {
+      // Yield Flutter/UI work without ending this guest frame's owning tail
+      // operation. Queued clicks/resources must not enter between selected RAF
+      // callbacks just because a bounded host chunk has finished.
+      await Future<void>.delayed(Duration.zero);
+      if (!_classicScriptActivityCurrent(identity, owner)) break;
+      layoutTurn.frames = 0;
+      drained = await _drainClassicScripts(
+        responses.last,
+        responses: responses,
+        identity: identity,
+        owner: owner,
+        taskCount: 0,
+        layoutTurn: layoutTurn,
+      );
+    }
+    return drained;
+  }
+
   static Json _mergeClassicScriptResponses(Iterable<Json> responses) {
     final merged = <String, dynamic>{};
     for (final response in responses) {
@@ -2115,6 +2211,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     int? expectedFocusEpoch,
     bool allowPopups = false,
     bool refreshLayoutFirst = false,
+    bool checkLayoutFirst = false,
   }) async {
     final actionGeneration = expectedActionGeneration ?? _formActionGeneration;
     final focusEpoch = expectedFocusEpoch ?? _focusActionEpoch;
@@ -2129,7 +2226,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     }
     final responses = <Json>[];
     final layoutTurn = _NativeLayoutTurn();
-    if (refreshLayoutFirst &&
+    if ((refreshLayoutFirst || checkLayoutFirst) &&
         _hostLayoutEnabled &&
         ready &&
         _layoutCapture != null) {
@@ -2144,7 +2241,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         identity,
         owner,
         layoutTurn,
-        force: true,
+        force: refreshLayoutFirst,
       );
       if (!prepared.$2) {
         final committed = await _commitResponses(
@@ -2164,7 +2261,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     onInitialResult?.call(result);
     _validateResult(result);
     var taskCount = 0;
-    final initialDrain = await _drainClassicScripts(
+    final initialDrain = await _drainScriptTasks(
       result,
       responses: responses,
       identity: identity,
@@ -2199,7 +2296,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         final decoded = obj(jsonDecode(snapshotValue));
         _validateResult(decoded);
         _rememberClassicScriptResponse(responses, decoded);
-        final drain = await _drainClassicScripts(
+        final drain = await _drainScriptTasks(
           decoded,
           responses: responses,
           identity: identity,

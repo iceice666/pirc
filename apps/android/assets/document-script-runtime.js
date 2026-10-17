@@ -39659,7 +39659,7 @@ function createPircDocumentLayout(options) {
     if (!state)
       return { timerDelayMs: null, animationFrame: false };
 
-    let earliest = (state.classicScriptTasks.length || layoutNeedsUpdate()) ? state.now :
+    let earliest = (state.classicScriptTasks.length || state.nativeAnimationFrame || layoutNeedsUpdate()) ? state.now :
       state.modulePreparations > 0 ? state.now + 16 : Infinity;
     for (const timer of state.timers.values())
       if (timer.due < earliest) earliest = timer.due;
@@ -42887,6 +42887,8 @@ function createPircDocumentLayout(options) {
       diagnostics: activeState ? activeState.diagnostics.slice() : [],
       now: activeState ? activeState.now : 0,
       scheduler: schedulerSnapshot(),
+      frameContinuation: activeState?.nativeAnimationFrame
+        ? {id: activeState.nativeAnimationFrame.id} : null,
       classicScript: activeState && activeState.classicScriptTasks.length
         ? {id: activeState.classicScriptTasks[0].id} : null,
       cookieWrites: activeState && activeState.cookies ? activeState.cookies.drain() : [],
@@ -43593,6 +43595,8 @@ function createPircDocumentLayout(options) {
       nextTaskId: 1,
       timers: new Map(),
       animationFrames: new Map(),
+      nativeAnimationFrame: null,
+      nextNativeAnimationFrameId: 1,
       currentTimerNesting: null,
       pumping: false,
       document: null,
@@ -43766,6 +43770,41 @@ function createPircDocumentLayout(options) {
     return submitter;
   }
 
+  // Native evaluations finish between callbacks, providing a real engine
+  // microtask checkpoint and allowing Flutter to measure any resulting writes.
+  // The selected handles and timestamp stay frozen for the whole browser frame.
+  function advanceNativeAnimationFrame(state) {
+    const batch = state.nativeAnimationFrame;
+    while (batch.index < batch.callbacks.length) {
+      const frame = batch.callbacks[batch.index++];
+      if (state.animationFrames.get(frame.id) !== frame) continue;
+      state.animationFrames.delete(frame.id);
+      invokeScheduledCallback(frame.callback, [batch.timestamp],
+        {id: frame.id, kind: 'animationFrame'}, state.window);
+      // Keep a final continuation even after the last callback, so its Promise
+      // jobs and layout finish before delivering ResizeObserver notifications.
+      return;
+    }
+    state.nativeAnimationFrame = null;
+    state.resizeObservers?.deliver();
+  }
+
+  function continueAnimationFrame(input) {
+    const state = activeState;
+    if (!state?.nativeAnimationFrame || input?.id !== state.nativeAnimationFrame.id)
+      throw new TypeError('No matching native animation frame continuation');
+    if (state.pumping) throw new TypeError('Cannot resume a running animation frame');
+    if (layoutNeedsUpdate()) return response({now: state.now});
+    state.pumping = true;
+    try {
+      advanceNativeAnimationFrame(state);
+    } finally {
+      state.pumping = false;
+    }
+    decorateTree(state.document);
+    return response({now: state.now});
+  }
+
   function pump(input) {
     const state = activeState;
     if (!state || !state.document) {
@@ -43793,9 +43832,18 @@ function createPircDocumentLayout(options) {
       );
       return response({ now: state.now });
     }
+    // A budget/lifecycle yield cannot start a new frame or interleave a timer
+    // with the still-selected callbacks of the current frame.
+    if (state.nativeAnimationFrame) return response({now: state.now});
     state.pumping = true;
     try {
-      if (request.animationFrame === true && state.animationFrames.size > 0) {
+      if (request.animationFrame === true && request.nativeFrameSteps === true) {
+        state.nativeAnimationFrame = {
+          id: state.nextNativeAnimationFrameId++, timestamp: state.now,
+          callbacks: Array.from(state.animationFrames.values()), index: 0,
+        };
+        advanceNativeAnimationFrame(state);
+      } else if (request.animationFrame === true && state.animationFrames.size > 0) {
         const frameBatch = Array.from(state.animationFrames.values());
         for (const frame of frameBatch) {
           if (state.animationFrames.get(frame.id) !== frame)
@@ -43841,7 +43889,7 @@ function createPircDocumentLayout(options) {
           }
         }
       }
-      if (request.animationFrame === true) state.resizeObservers?.deliver();
+      if (request.animationFrame === true && request.nativeFrameSteps !== true) state.resizeObservers?.deliver();
     } finally {
       state.pumping = false;
     }
@@ -44424,6 +44472,7 @@ function createPircDocumentLayout(options) {
     finishClassicScript: finishClassicScript,
     dispatch: dispatch,
     pump: pump,
+    continueAnimationFrame: continueAnimationFrame,
     snapshot: snapshot,
     filePickerResult: filePickerResult,
     completeResource: completeResource,

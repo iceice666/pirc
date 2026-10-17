@@ -45,6 +45,8 @@ function configuredPort() {
   return port;
 }
 
+const frameSteps = readFileSync(path.join(scriptDirectory, 'fixtures/document-frame-steps-chromium153.json'));
+
 const requestedPort = configuredPort();
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -73,6 +75,11 @@ const server = createServer((request, response) => {
       'content-type': 'application/json; charset=utf-8',
     });
     response.end(interactions);
+    return;
+  }
+  if (pathname === '/frame-steps.json') {
+    response.writeHead(200, {'cache-control':'no-store','content-type':'application/json; charset=utf-8'});
+    response.end(frameSteps);
     return;
   }
   if (pathname === '/responsive-layout.json') {
