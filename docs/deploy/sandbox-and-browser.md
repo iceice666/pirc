@@ -148,6 +148,8 @@ Add `~/.local/pirc-ssh/id_ed25519.pub` to each repository as a deploy key with w
 
 A node gives its agents one Chromium per workspace through its native CDP pipe driver, with a persistent profile under `$PIRC_STATE_DIR/browser/` (a login made once serves every session in that workspace). The web and Android side panels show a live screencast, let you take over, and record videos to `<workspace>/.pirc/recordings/`.
 
+Chromium runs as the node account, outside the agents' bubblewrap or Seatbelt sandbox, and is started with `--no-sandbox`, so Chromium's own renderer sandbox is off too, on every platform. Its private-host filtering (`PIRC_BROWSER_ALLOW_PRIVATE` below) limits where it goes; it is not process isolation. A page that exploits the browser runs with the node account's rights, so run the node under an account that holds nothing else.
+
 | Variable                    | Default                                                     | Meaning                                                      |
 | --------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------ |
 | `PIRC_BROWSER`              | `true`                                                      | Enable the browser (unavailable when none is found).         |
