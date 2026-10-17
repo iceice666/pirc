@@ -112,12 +112,12 @@ class NativeDocumentBox extends SingleChildRenderObjectWidget {
   }
 }
 
-/// Establishes a definite grid-area containing block for percentage children.
+/// Establishes a definite viewport or grid-area basis for percentage children.
 ///
-/// Unless explicitly provided, width and height use the finite maximum
-/// constraint supplied by the grid item placement. A finite height here is a
-/// definite grid area; ordinary NativeDocumentBox auto heights remain
-/// indefinite.
+/// Full documents supply their viewport explicitly. Grid items can instead use
+/// the finite maximum constraints supplied by their placement. This publishes
+/// the containing block without sizing the child; ordinary NativeDocumentBox
+/// auto heights remain indefinite.
 class NativeDocumentContainingBlock extends SingleChildRenderObjectWidget {
   const NativeDocumentContainingBlock({
     super.key,

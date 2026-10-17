@@ -582,6 +582,7 @@ class NativeDocumentElementScroll extends StatefulWidget {
     required this.revision,
     required this.overflowX,
     required this.overflowY,
+    this.expandVisibleOverflow = false,
     required this.child,
   });
 
@@ -590,6 +591,10 @@ class NativeDocumentElementScroll extends StatefulWidget {
   final int revision;
   final NativeDocumentOverflow overflowX;
   final NativeDocumentOverflow overflowY;
+
+  /// Only the full document root exposes visible vertical overflow as its
+  /// outer scroll extent. Nested elements keep their CSS border-box heights.
+  final bool expandVisibleOverflow;
   final Widget child;
 
   @override
@@ -653,6 +658,7 @@ class _NativeDocumentElementScrollState
           revision: widget.revision,
           overflowX: widget.overflowX,
           overflowY: widget.overflowY,
+          expandVisibleOverflow: widget.expandVisibleOverflow,
           horizontalOffset: horizontal,
           verticalOffset: vertical,
           child: widget.child,
@@ -707,6 +713,7 @@ class _NativeDocumentElementScrollViewport
     required this.revision,
     required this.overflowX,
     required this.overflowY,
+    required this.expandVisibleOverflow,
     required this.horizontalOffset,
     required this.verticalOffset,
     required super.child,
@@ -716,6 +723,7 @@ class _NativeDocumentElementScrollViewport
   final int revision;
   final NativeDocumentOverflow overflowX;
   final NativeDocumentOverflow overflowY;
+  final bool expandVisibleOverflow;
   final ViewportOffset horizontalOffset;
   final ViewportOffset verticalOffset;
 
@@ -726,6 +734,7 @@ class _NativeDocumentElementScrollViewport
         revision: revision,
         overflowX: overflowX,
         overflowY: overflowY,
+        expandVisibleOverflow: expandVisibleOverflow,
         horizontalOffset: horizontalOffset,
         verticalOffset: verticalOffset,
       );
@@ -740,6 +749,7 @@ class _NativeDocumentElementScrollViewport
       revision: revision,
       overflowX: overflowX,
       overflowY: overflowY,
+      expandVisibleOverflow: expandVisibleOverflow,
       horizontalOffset: horizontalOffset,
       verticalOffset: verticalOffset,
     );
@@ -752,6 +762,7 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox {
     required this._revision,
     required this._overflowX,
     required this._overflowY,
+    required this._expandVisibleOverflow,
     required this._horizontalOffset,
     required this._verticalOffset,
   });
@@ -760,6 +771,7 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox {
   int _revision;
   NativeDocumentOverflow _overflowX;
   NativeDocumentOverflow _overflowY;
+  bool _expandVisibleOverflow;
   ViewportOffset _horizontalOffset;
   ViewportOffset _verticalOffset;
   Rect _contentBounds = Rect.zero;
@@ -775,6 +787,7 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox {
     required int revision,
     required NativeDocumentOverflow overflowX,
     required NativeDocumentOverflow overflowY,
+    required bool expandVisibleOverflow,
     required ViewportOffset horizontalOffset,
     required ViewportOffset verticalOffset,
   }) {
@@ -786,6 +799,7 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox {
         _revision != revision ||
         _overflowX != overflowX ||
         _overflowY != overflowY ||
+        _expandVisibleOverflow != expandVisibleOverflow ||
         offsetsChanged;
     if (!changed) return;
 
@@ -811,6 +825,7 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox {
     _revision = revision;
     _overflowX = overflowX;
     _overflowY = overflowY;
+    _expandVisibleOverflow = expandVisibleOverflow;
     markNeedsLayout();
   }
 
@@ -855,6 +870,12 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox {
     });
     _contentBounds =
         measuredBounds ?? Rect.fromLTWH(0, 0, size.width, size.height);
+    if (_expandVisibleOverflow && !_clipsY && !constraints.hasBoundedHeight) {
+      size = constraints.constrain(
+        Size(size.width, math.max(size.height, _contentBounds.bottom)),
+      );
+      _verticalOffset.applyViewportDimension(size.height);
+    }
     _scrollWidth = math.max(size.width, _contentBounds.right);
     _scrollHeight = math.max(size.height, _contentBounds.bottom);
     final horizontalMax = _scrollsX
